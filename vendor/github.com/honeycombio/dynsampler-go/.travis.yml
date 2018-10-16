@@ -1,0 +1,17 @@
+os:
+  - linux
+
+language: go
+
+dist: trusty
+
+go:
+    - 1.8
+
+script:
+    - set -e
+    - go get github.com/stretchr/testify/assert
+    - go test -race github.com/honeycombio/dynsampler-go/...
+
+install:
+        - true # HACK: fixes travis-CI lack of support for vendor/ + godeps

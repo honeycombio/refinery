@@ -1,0 +1,9 @@
+{"timestamp":"2018-10-19T05:05:06.123Z","method":"GET","endpoint":"/one","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id2","trace.parent_id":"id1"}
+{"timestamp":"2018-10-19T05:05:07.123Z","method":"GET","endpoint":"/baz","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id3","trace.parent_id":"id2"}
+{"timestamp":"2018-10-19T05:05:06.123Z","method":"GET","endpoint":"/one","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id4","trace.parent_id":"id1"}
+{"timestamp":"2018-10-19T05:05:07.123Z","method":"GET","endpoint":"/one","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id5","trace.parent_id":"id4"}
+{"timestamp":"2018-10-19T05:05:08.123Z","method":"GET","endpoint":"/bar","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id6","trace.parent_id":"id5"}
+{"timestamp":"2018-10-19T05:05:08.123Z","method":"GET","endpoint":"/one","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id7","trace.parent_id":"id1"}
+{"timestamp":"2018-10-19T05:05:08.123Z","method":"GET","endpoint":"/one","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id8","trace.parent_id":"id7"}
+{"timestamp":"2018-10-19T05:05:08.123Z","method":"GET","endpoint":"/bar","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id9","trace.parent_id":"id7"}
+{"timestamp":"2018-10-19T05:05:06.123Z","method":"GET","endpoint":"/one","shard":"users","duration_ms":32,"trace.trace_id":"eyedee","trace.span_id":"id1"}
