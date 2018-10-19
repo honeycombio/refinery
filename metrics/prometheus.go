@@ -8,7 +8,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/honeycombio/malinois/config"
+	"github.com/honeycombio/samproxy/config"
 )
 
 type PromMetrics struct {

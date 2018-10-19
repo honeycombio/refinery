@@ -3,7 +3,7 @@ package logger
 import (
 	"github.com/sirupsen/logrus"
 
-	"github.com/honeycombio/malinois/config"
+	"github.com/honeycombio/samproxy/config"
 )
 
 // LogrusLogger is a Logger implementation that sends all logs to stdout using

@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/honeycombio/malinois/config"
+	"github.com/honeycombio/samproxy/config"
 )
 
-// Shard repreesents a single instance of Malinois.
+// Shard repreesents a single instance of Samproxy.
 type Shard interface {
 	Equals(Shard) bool
 	// GetAddress returns a string suitable for use in building a URL, eg
-	// http://malinois-1234:8080 or https://10.2.3.4
+	// http://samproxy-1234:8080 or https://10.2.3.4
 	GetAddress() string
 }
 

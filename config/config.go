@@ -11,7 +11,7 @@ type Config interface {
 
 	// ReloadConfigs requests the configuration implementation to re-read
 	// configs from whatever backs the source. Triggered by sending a USR1
-	// signal to Malinois
+	// signal to Samproxy
 	ReloadConfig()
 
 	// RegisterReloadCallback takes a name and a function that will be called

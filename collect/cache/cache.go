@@ -3,8 +3,8 @@ package cache
 import (
 	"sync"
 
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/types"
 )
 
 type Cache interface {

@@ -13,13 +13,13 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/honeycombio/malinois/collect"
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/sharder"
-	"github.com/honeycombio/malinois/transmit"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/collect"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/sharder"
+	"github.com/honeycombio/samproxy/transmit"
+	"github.com/honeycombio/samproxy/types"
 )
 
 type Router struct {

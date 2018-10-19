@@ -12,8 +12,8 @@ import (
 
 	libhoney "github.com/honeycombio/libhoney-go"
 
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
 )
 
 type HoneycombMetrics struct {
@@ -81,7 +81,7 @@ func (h *HoneycombMetrics) Start() error {
 		// Logger:    &libhoney.DefaultLogger{},
 	}
 	libhoney.Init(libhConfig)
-	libhoney.UserAgentAddition = "malinois/" + h.Version
+	libhoney.UserAgentAddition = "samproxy/" + h.Version
 	h.builder = libhoney.NewBuilder()
 	h.builder.APIHost = mc.MetricsHoneycombAPI
 	h.builder.WriteKey = mc.MetricsAPIKey

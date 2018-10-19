@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/honeycombio/malinois/config"
+	"github.com/honeycombio/samproxy/config"
 )
 
 type Metrics interface {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/types"
 )
 
 type Sampler interface {

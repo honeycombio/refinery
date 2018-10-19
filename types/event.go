@@ -23,7 +23,7 @@ type Event struct {
 	Data       map[string]interface{}
 }
 
-// Trace isn't something that shows up on the wire; it gets created within Malinois
+// Trace isn't something that shows up on the wire; it gets created within Samproxy
 type Trace struct {
 	APIHost string
 	APIKey  string
@@ -43,7 +43,7 @@ type Trace struct {
 	Sent bool
 
 	// StartTime is the server time when the first span arrived for this trace.
-	// Used to calculate how long traces spend sitting in Malinois
+	// Used to calculate how long traces spend sitting in Samproxy
 	StartTime time.Time
 	// FinishTime is when a trace is prepared for sending; it does not include
 	// any additional delay imposed by the DelaySend config option.

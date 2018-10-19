@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/types"
 )
 
 func (r *Router) apiKeyChecker(next http.Handler) http.Handler {

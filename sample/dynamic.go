@@ -7,10 +7,10 @@ import (
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/types"
 )
 
 type DynamicSampler struct {

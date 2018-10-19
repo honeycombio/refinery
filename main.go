@@ -12,14 +12,14 @@ import (
 	flag "github.com/jessevdk/go-flags"
 	"github.com/sirupsen/logrus"
 
-	"github.com/honeycombio/malinois/app"
-	"github.com/honeycombio/malinois/collect"
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/sample"
-	"github.com/honeycombio/malinois/sharder"
-	"github.com/honeycombio/malinois/transmit"
+	"github.com/honeycombio/samproxy/app"
+	"github.com/honeycombio/samproxy/collect"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/sample"
+	"github.com/honeycombio/samproxy/sharder"
+	"github.com/honeycombio/samproxy/transmit"
 )
 
 // set by travis.

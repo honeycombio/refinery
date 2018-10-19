@@ -1,5 +1,5 @@
 #####################
-## Malinois Config ##
+## Samproxy Config ##
 #####################
 
 # ListenAddr is the IP and port on which to listen for incoming events. Incoming
@@ -12,7 +12,7 @@ ListenAddr = "0.0.0.0:8080"
 # only applies to events - other Honeycomb API actions will fall through to the
 # upstream API directly.
 # Adding keys here causes two things to happen:
-# * on startup, Malinois will validate the API keys against the Honeycomb API
+# * on startup, Samproxy will validate the API keys against the Honeycomb API
 # * during operation, events arriving with API keys not in this list will be
 # rejected with an HTTP 401 error If an API key that is a literal '*' is in the
 # list, all API keys are accepted.
@@ -31,7 +31,7 @@ APIKeys = [
 Peers = [
 	"http://127.0.0.1:8080",
 	# "http://10.1.2.3.4:8080",
-	# "http://malinois-1231:8080",
+	# "http://samproxy-1231:8080",
 	# "http://peer-3.fqdn" // assumes port 80
 ]
 
@@ -40,7 +40,7 @@ Peers = [
 HoneycombAPI = "https://api.honeycomb.io"
 
 # SendDelay is a short timer that will be triggered when a trace is complete.
-# Malinois will wait this duration before actually sending the trace.  The
+# Samproxy will wait this duration before actually sending the trace.  The
 # reason for this short delay is to allow for small network delays or clock
 # jitters to elapse and any final spans to arrive before actually sending the
 # trace. This timer is in seconds. Set to 0 for immediate
@@ -69,7 +69,7 @@ LoggingLevel = "info"
 ## Implementation Choices ##
 ############################
 
-# Each of the config options below chooses an implementation of a Malinois
+# Each of the config options below chooses an implementation of a Samproxy
 # component to use. Depending on the choice there may be more configuration
 # required below in the section for that choice. Changing implementation choices
 # requires a process restart; these changes will not be picked up by a live
@@ -89,12 +89,12 @@ Collector = "InMemCollector"
 # the frequency of the values contained in those fields.
 Sampler = "DynamicSampler"
 
-# Logger describes which logger to use for Malinois logs. Valid options are
+# Logger describes which logger to use for Samproxy logs. Valid options are
 # "logrus" and "honeycomb". The logrus option will write logs to STDOUT and the
 # honeycomb option will send them to a Honeycomb dataset.
 Logger = "logrus"
 
-# Metrics describes which service to use for Malinois metrics. Valid options are
+# Metrics describes which service to use for Samproxy metrics. Valid options are
 # "prometheus" and "honeycomb". The prometheus option starts a listener that
 # will reply to a request for /metrics. The honeycomb option will send summary
 # metrics to a Honeycomb dataset.
@@ -195,7 +195,7 @@ AddSampleRateKeyToTrace = true
 # AddSampleRateKeyToTraceField is the name of the field the sampler will use
 # when adding the sample rate key to the trace. This setting is only used when
 # AddSampleRateKeyToTrace is true.
-AddSampleRateKeyToTraceField = "meta.malinois.dynsampler_key"
+AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
 
 
 ###################
@@ -230,9 +230,9 @@ LoggerHoneycombAPI = "https://api.honeycomb.io"
 # Eligible for live reload.
 LoggerAPIKey = "abcd1234"
 
-# LoggerDataset is the name of the dataset to which to send Malinois logs
+# LoggerDataset is the name of the dataset to which to send Samproxy logs
 # Eligible for live reload.
-LoggerDataset = "Malinois Logs"
+LoggerDataset = "Samproxy Logs"
 
 
 #######################
@@ -256,9 +256,9 @@ MetricsHoneycombAPI = "https://api.honeycomb.io"
 # Eligible for live reload.
 MetricsAPIKey = "abcd1234"
 
-# MetricsDataset is the name of the dataset to which to send Malinois metrics
+# MetricsDataset is the name of the dataset to which to send Samproxy metrics
 # Eligible for live reload.
-MetricsDataset = "Malinois Metrics"
+MetricsDataset = "Samproxy Metrics"
 
 # MetricsReportingInterval is the frequency (in seconds) to send metric events
 # to Honeycomb. Between 1 and 60 is recommended.
@@ -273,7 +273,7 @@ MetricsReportingInterval = 3
 [PrometheusMetrics]
 
 # MetricsListenAddr determines the interface and port on which Prometheus will
-# listen for requests for /metrics. Must be different from the main Malinois
+# listen for requests for /metrics. Must be different from the main Samproxy
 # listener.
 # Not eligible for live reload.
 MetricsListenAddr = "localhost:2112"

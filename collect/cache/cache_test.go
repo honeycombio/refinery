@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/types"
 )
 
 // TestCacheSetGet sets a value then fetches it back

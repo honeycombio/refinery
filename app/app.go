@@ -6,11 +6,11 @@ import (
 	"syscall"
 
 	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/malinois/collect"
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/route"
+	"github.com/honeycombio/samproxy/collect"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/route"
 	"github.com/pkg/errors"
 )
 

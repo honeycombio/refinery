@@ -5,9 +5,9 @@ import (
 
 	libhoney "github.com/honeycombio/libhoney-go"
 
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/types"
 )
 
 type Transmission interface {
@@ -38,7 +38,7 @@ func (d *DefaultTransmission) Start() error {
 		// Logger:    &libhoney.DefaultLogger{},
 	}
 	libhoney.Init(libhConfig)
-	libhoney.UserAgentAddition = "malinois/" + d.Version
+	libhoney.UserAgentAddition = "samproxy/" + d.Version
 	d.builder = libhoney.NewBuilder()
 
 	// listen for config reloads

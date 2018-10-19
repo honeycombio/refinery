@@ -7,8 +7,8 @@ import (
 	"net"
 	"net/url"
 
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
 	"github.com/pkg/errors"
 )
 

@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/honeycombio/malinois/collect/cache"
-	"github.com/honeycombio/malinois/config"
-	"github.com/honeycombio/malinois/logger"
-	"github.com/honeycombio/malinois/metrics"
-	"github.com/honeycombio/malinois/sample"
-	"github.com/honeycombio/malinois/transmit"
-	"github.com/honeycombio/malinois/types"
+	"github.com/honeycombio/samproxy/collect/cache"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/sample"
+	"github.com/honeycombio/samproxy/transmit"
+	"github.com/honeycombio/samproxy/types"
 )
 
 type Collector interface {
