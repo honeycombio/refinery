@@ -1,6 +1,7 @@
+
 # Samproxy - the Honeycomb Sampling Proxy
 
-**Alpha Release** This is the initial draft. Please expect and help find bugs! :)
+**Alpha Release** This is the initial draft. Please expect and help find bugs! :)  samproxy [![Build Status](https://travis-ci.org/honeycombio/samproxy.svg?branch=master)](https://travis-ci.org/honeycombio/samproxy)
 
 ## Purpose
 
