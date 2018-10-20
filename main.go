@@ -27,7 +27,7 @@ var BuildID string
 var version string
 
 type Options struct {
-	ConfiFile string `short:"c" long:"config" description:"Path to config file" default:"./config.toml"`
+	ConfiFile string `short:"c" long:"config" description:"Path to config file" default:"/etc/samproxy/samproxy.toml"`
 	Version   bool   `short:"v" long:"version" description:"Print version number and exit"`
 }
 

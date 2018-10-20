@@ -1,0 +1,13 @@
+[Unit]
+Description=Samproxy Honeycomb Trace-Aware Sampling Proxy
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/samproxy -c /etc/samproxy/samproxy.conf
+KillMode=process
+Restart=on-failure
+User=honeycomb
+Group=honeycomb
+
+[Install]
+Alias=samproxy samproxy.service

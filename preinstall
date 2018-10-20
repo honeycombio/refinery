@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+USER="honeycomb"
+GROUP="honeycomb"
+
+# Create service group and user if they doesn't already exist
+if ! getent group $GROUP >/dev/null
+then
+    if type "groupadd" > /dev/null 2>&1; then
+        groupadd --system $GROUP >/dev/null
+    else
+        addgroup --system $GROUP >/dev/null
+    fi
+fi
+
+if ! getent passwd $USER >/dev/null
+then
+        useradd \
+          --system \
+          -g $GROUP \
+          --home /nonexistent \
+          --shell /bin/false \
+          $USER >/dev/null
+fi
+
+usermod -a -G adm honeycomb
