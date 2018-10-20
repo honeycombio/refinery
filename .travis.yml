@@ -22,7 +22,7 @@ script:
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t deb; fi
     - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then ./build-pkg.sh -v "1.${TRAVIS_BUILD_NUMBER}" -t rpm; fi
     # Check that packages install
-    - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then pkg-test/test.sh "1.${TRAVIS_BUILD_NUMBER}"; fi
+    # - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then pkg-test/test.sh "1.${TRAVIS_BUILD_NUMBER}"; fi
 
 before_install:
     # Install fpm for deb/rpm package building
