@@ -79,9 +79,10 @@ func (a *App) validateAPIKeys() error {
 			return nil
 		}
 	}
+	apiHost, _ := a.Config.GetHoneycombAPI()
 	// ok, go ahead and actually validate keys
 	for _, key := range keys {
-		libhConfig := libhoney.Config{WriteKey: key}
+		libhConfig := libhoney.Config{WriteKey: key, APIHost: apiHost}
 		team, err := libhoney.VerifyWriteKey(libhConfig)
 		if err != nil {
 			return errors.Wrapf(err, "failed to validate API key: %s", key)
