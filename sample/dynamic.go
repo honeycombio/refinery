@@ -15,9 +15,9 @@ import (
 )
 
 type DynamicSampler struct {
-	Config  config.Config   `inject:""`
-	Logger  logger.Logger   `inject:""`
-	Metrics metrics.Metrics `inject:""`
+	Config  config.Config
+	Logger  logger.Logger
+	Metrics metrics.Metrics
 
 	sampleRate        int64
 	fieldList         []string

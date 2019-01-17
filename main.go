@@ -17,6 +17,7 @@ import (
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/sample"
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
 )
@@ -59,6 +60,7 @@ func main() {
 	collector := collect.GetCollectorImplementation(c)
 	metricsr := metrics.GetMetricsImplementation(c)
 	shrdr := sharder.GetSharderImplementation(c)
+	samplerFactory := &sample.SamplerFactory{}
 
 	// set log level
 	logLevel, err := c.GetLoggingLevel()
@@ -92,7 +94,7 @@ func main() {
 		&inject.Object{Value: collector},
 		&inject.Object{Value: metricsr},
 		&inject.Object{Value: version, Name: "version"},
-
+		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &a},
 	)
 	if err != nil {

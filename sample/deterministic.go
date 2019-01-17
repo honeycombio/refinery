@@ -11,8 +11,8 @@ import (
 )
 
 type DeterministicSampler struct {
-	Config config.Config `inject:""`
-	Logger logger.Logger `inject:""`
+	Config config.Config
+	Logger logger.Logger
 
 	sampleRate int
 	upperBound uint32

@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
 )
 
@@ -14,35 +16,46 @@ type Sampler interface {
 	GetSampleRate(trace *types.Trace) (rate uint, keep bool)
 }
 
+// SamplerFactory is used to create new samplers with common (injected) resources
+type SamplerFactory struct {
+	Config  config.Config   `inject:""`
+	Logger  logger.Logger   `inject:""`
+	Metrics metrics.Metrics `inject:""`
+}
+
 // GetDefaultSamplerImplementation returns the default sampler implementation
 // or exits fatally if not defined
-func GetDefaultSamplerImplementation(c config.Config) Sampler {
-	samplerType, err := c.GetDefaultSamplerType()
+func (s *SamplerFactory) GetDefaultSamplerImplementation() Sampler {
+	samplerType, err := s.Config.GetDefaultSamplerType()
 	if err != nil {
 		fmt.Printf("unable to get default sampler type from config: %v\n", err)
 		os.Exit(1)
 	}
 
-	return getSamplerForType(samplerType, defaultConfigName)
+	return s.getSamplerForType(samplerType, defaultConfigName)
 }
 
 // GetSamplerImplementationForDataset returns the sampler implementation for the dataset,
 // or nil if it is not defined
-func GetSamplerImplementationForDataset(c config.Config, dataset string) Sampler {
-	samplerType, err := c.GetSamplerTypeForDataset(dataset)
+func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Sampler {
+	samplerType, err := s.Config.GetSamplerTypeForDataset(dataset)
 	if err != nil {
 		return nil
 	}
-	return getSamplerForType(samplerType, dataset)
+	return s.getSamplerForType(samplerType, dataset)
 }
 
-func getSamplerForType(samplerType, configName string) Sampler {
+func (s *SamplerFactory) getSamplerForType(samplerType, configName string) Sampler {
 	var sampler Sampler
 	switch samplerType {
 	case "DeterministicSampler":
-		sampler = &DeterministicSampler{configName: configName}
+		ds := &DeterministicSampler{configName: configName, Config: s.Config, Logger: s.Logger}
+		ds.Start()
+		sampler = ds
 	case "DynamicSampler":
-		sampler = &DynamicSampler{configName: configName}
+		ds := &DynamicSampler{configName: configName, Config: s.Config, Logger: s.Logger, Metrics: s.Metrics}
+		ds.Start()
+		sampler = ds
 	default:
 		fmt.Printf("unknown sampler type %s. Exiting.\n", samplerType)
 		os.Exit(1)
