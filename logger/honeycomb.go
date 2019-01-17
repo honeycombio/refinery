@@ -95,6 +95,16 @@ func (h *HoneycombLogger) Debugf(f string, args ...interface{}) {
 	ev.Send()
 }
 
+func (h *HoneycombLogger) Infof(f string, args ...interface{}) {
+	if h.loggerConfig.level > InfoLevel {
+		return
+	}
+	ev := h.builder.NewEvent()
+	ev.AddField("level", "info")
+	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Send()
+}
+
 func (h *HoneycombLogger) Errorf(f string, args ...interface{}) {
 	if h.loggerConfig.level > ErrorLevel {
 		return
