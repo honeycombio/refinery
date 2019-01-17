@@ -17,7 +17,6 @@ import (
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/sample"
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
 )
@@ -58,7 +57,6 @@ func main() {
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
-	sampler := sample.GetSamplerImplementation(c)
 	metricsr := metrics.GetMetricsImplementation(c)
 	shrdr := sharder.GetSharderImplementation(c)
 
@@ -92,7 +90,6 @@ func main() {
 		&inject.Object{Value: &transmit.DefaultTransmission{}},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
-		&inject.Object{Value: sampler},
 		&inject.Object{Value: metricsr},
 		&inject.Object{Value: version, Name: "version"},
 

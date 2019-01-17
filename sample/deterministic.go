@@ -2,6 +2,7 @@ package sample
 
 import (
 	"crypto/sha1"
+	"fmt"
 	"math"
 
 	"github.com/honeycombio/samproxy/config"
@@ -15,6 +16,7 @@ type DeterministicSampler struct {
 
 	sampleRate int
 	upperBound uint32
+	configName string
 }
 
 type DetSamplerConfig struct {
@@ -38,7 +40,8 @@ func (d *DeterministicSampler) Start() error {
 
 func (d *DeterministicSampler) loadConfigs() error {
 	dsConfig := DetSamplerConfig{}
-	err := d.Config.GetOtherConfig("DeterministicSampler", &dsConfig)
+	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
+	err := d.Config.GetOtherConfig(configKey, &dsConfig)
 	if err != nil {
 		return err
 	}
