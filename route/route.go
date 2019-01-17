@@ -43,20 +43,23 @@ func (r *Router) LnS() {
 	muxxer := mux.NewRouter()
 
 	muxxer.Use(r.setResponseHeaders)
+	muxxer.Use(r.requestLogger)
+	muxxer.Use(r.panicCatcher)
 
 	// answer a basic health check locally
-	muxxer.HandleFunc("/alive", r.alive)
+	muxxer.HandleFunc("/alive", r.alive).Name("local health")
+	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 
 	// require an auth header for events and batches
-	authedMuxxer := muxxer.NewRoute().Methods("POST").Subrouter()
+	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
 	authedMuxxer.Use(r.apiKeyChecker)
 
 	// handle events and batches
-	authedMuxxer.HandleFunc("/1/events/{datasetName}", r.event)
-	authedMuxxer.HandleFunc("/1/batch/{datasetName}", r.batch)
+	authedMuxxer.HandleFunc("/events/{datasetName}", r.event).Name("event")
+	authedMuxxer.HandleFunc("/batch/{datasetName}", r.batch).Name("batch")
 
 	// pass everything else through unmolested
-	muxxer.NotFoundHandler = http.HandlerFunc(r.proxy)
+	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	listenAddr, err := r.Config.GetListenAddr()
 	if err != nil {
@@ -64,7 +67,7 @@ func (r *Router) LnS() {
 		return
 	}
 
-	r.Logger.Debugf("Listening on %s", listenAddr)
+	r.Logger.Infof("Listening on %s", listenAddr)
 	err = http.ListenAndServe(listenAddr, muxxer)
 	if err != nil {
 		r.Logger.Errorf("failed to ListenAndServe: %s", err)
@@ -72,7 +75,11 @@ func (r *Router) LnS() {
 }
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte(`{"alive":true}`))
+	w.Write([]byte(`{"source":"samproxy","alive":true}`))
+}
+
+func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
+	panic("panic? never!")
 }
 
 // event is handler for /1/event/

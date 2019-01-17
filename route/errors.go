@@ -22,6 +22,7 @@ type handlerError struct {
 var ErrGenericMessage = "unexpected error!"
 
 var (
+	ErrCaughtPanic         = handlerError{nil, "caught panic", http.StatusInternalServerError, false, false}
 	ErrJSONFailed          = handlerError{nil, "failed to parse JSON", http.StatusBadRequest, false, true}
 	ErrJSONBuildFailed     = handlerError{nil, "failed to build JSON response", http.StatusInternalServerError, false, true}
 	ErrPostBody            = handlerError{nil, "failed to read request body", http.StatusInternalServerError, false, false}
@@ -46,6 +47,6 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	if !he.friendly {
 		errmsg = ErrGenericMessage
 	}
-	jsonErrMsg := []byte(`{"error":"` + errmsg + `"}`)
+	jsonErrMsg := []byte(`{"source":"samproxy","error":"` + errmsg + `"}`)
 	w.Write(jsonErrMsg)
 }
