@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/honeycombio/samproxy/config"
@@ -28,10 +27,10 @@ type SamplerFactory struct {
 func (s *SamplerFactory) GetDefaultSamplerImplementation() Sampler {
 	samplerType, err := s.Config.GetDefaultSamplerType()
 	if err != nil {
-		fmt.Printf("unable to get default sampler type from config: %v\n", err)
+		s.Logger.Errorf("unable to get default sampler type from config: %s", err.Error())
 		os.Exit(1)
 	}
-
+	s.Logger.Debugf("creating default sampler implementation")
 	return s.getSamplerForType(samplerType, defaultConfigName)
 }
 
@@ -42,6 +41,7 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 	if err != nil {
 		return nil
 	}
+	s.Logger.Debugf("creating sampler implementation for %s", dataset)
 	return s.getSamplerForType(samplerType, dataset)
 }
 
@@ -57,8 +57,9 @@ func (s *SamplerFactory) getSamplerForType(samplerType, configName string) Sampl
 		ds.Start()
 		sampler = ds
 	default:
-		fmt.Printf("unknown sampler type %s. Exiting.\n", samplerType)
+		s.Logger.Errorf("unknown sampler type %s. Exiting.", samplerType)
 		os.Exit(1)
 	}
+
 	return sampler
 }

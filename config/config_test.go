@@ -57,5 +57,5 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, "DeterministicSampler", typ)
 
 	typ, err = c.GetSamplerTypeForDataset("dataset3")
-	assert.Equal(t, "failed to find config tree", err.Error())
+	assert.Equal(t, "failed to find config tree for SamplerConfig.dataset3", err.Error())
 }

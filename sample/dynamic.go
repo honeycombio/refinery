@@ -39,7 +39,8 @@ type DynSamplerConfig struct {
 
 func (d *DynamicSampler) Start() error {
 	dsConfig := DynSamplerConfig{}
-	err := d.Config.GetOtherConfig("DynamicSampler", &dsConfig)
+	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
+	err := d.Config.GetOtherConfig(configKey, &dsConfig)
 	if err != nil {
 		return err
 	}

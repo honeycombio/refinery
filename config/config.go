@@ -203,7 +203,7 @@ func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
 	if subConfTree, ok := subConf.(*toml.Tree); ok {
 		return subConfTree.Unmarshal(iface)
 	}
-	return fmt.Errorf("failed to find config tree")
+	return fmt.Errorf("failed to find config tree for %s", name)
 }
 
 // MockConfig will respond with whatever config it's set to do during
