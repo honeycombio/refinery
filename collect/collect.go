@@ -121,7 +121,6 @@ func (i *InMemCollector) reloadConfigs() {
 }
 
 func (i *InMemCollector) AddSpan(sp *types.Span) {
-	i.Logger.Debugf("accepted span for collection: %+v", sp.Data)
 	trace := i.Cache.Get(sp.TraceID)
 	if trace == nil {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -147,18 +146,17 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	// rest and obey the existing sample / send decision
 	if trace.GetSent() {
 		if trace.KeepSample {
-			i.Logger.Debugf("Obeying previous decision to send trace %s", sp.TraceID)
+			i.Logger.Debugf("Sending span because of previous decision to send trace %s", sp.TraceID)
 			sp.SampleRate *= trace.SampleRate
 			i.Transmission.EnqueueSpan(sp)
 			return
 		}
-		i.Logger.Debugf("Obeying previous decision to drop trace %s", sp.TraceID)
+		i.Logger.Debugf("Dropping span because of previous decision to drop trace %s", sp.TraceID)
 		return
 	}
 
 	// if this is a root span, send the trace
 	if isRootSpan(sp) {
-		i.Logger.Debugf("found root span; sending trace: %+v", sp.Data)
 		go i.pauseAndSend(trace)
 	}
 }
@@ -191,7 +189,6 @@ func (i *InMemCollector) timeoutThenSend(ctx context.Context, trace *types.Trace
 		trace.FinishTime = time.Now()
 		i.send(trace)
 	case <-ctx.Done():
-		i.Logger.Debugf("trace timeout cancelled for trace ID %s", trace.TraceID)
 		// someone canceled our timeout. just bail
 		return
 	}
@@ -224,11 +221,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		return
 	}
 
-	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
-	i.Metrics.Histogram("trace_duration_ms", traceDur)
-
 	// hey, we're sending the trace! we should cancel the timeout goroutine.
 	defer trace.CancelSending()
+
+	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
+	i.Metrics.Histogram("trace_duration_ms", traceDur)
 
 	// make sampling decision and update the trace
 	rate, shouldSend := i.Sampler.GetSampleRate(trace)
@@ -238,12 +235,12 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// if we're supposed to drop this trace, then we're done.
 	if !shouldSend {
-		i.Logger.Debugf("Dropping trace because of sampling, trace ID %s", trace.TraceID)
+		i.Logger.Infof("Dropping trace because of sampling, trace ID %s", trace.TraceID)
 		return
 	}
 
 	// ok, we're not dropping this trace; send all the spans
-	i.Logger.Debugf("Handing off trace spans to transmission, trace ID %s", trace.TraceID)
+	i.Logger.Infof("Sending trace ID %s", trace.TraceID)
 	for _, sp := range trace.Spans {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1

@@ -84,7 +84,6 @@ func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
-	r.Logger.Debugf("handling POST to /1/event")
 	defer req.Body.Close()
 	reqBod, _ := ioutil.ReadAll(req.Body)
 	var trEv eventWithTraceID
@@ -95,6 +94,9 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// get out request ID for logging
+	reqID := req.Context().Value(types.RequestIDContextKey{})
+
 	// not part of a trace. send along upstream
 	if trEv.TraceID == "" {
 		r.Metrics.IncrementCounter("router_event")
@@ -103,7 +105,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			r.handlerReturnWithError(w, ErrReqToEvent, err)
 			return
 		}
-		r.Logger.Debugf("received a non-trace event. sending along")
+		r.Logger.Debugf("sending event %s to %s %s", reqID, ev.APIHost, ev.Dataset)
 		r.Transmission.EnqueueEvent(ev)
 		return
 	}
@@ -111,9 +113,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	// ok, we're a span. Figure out if we should handle locally or pass on to a
 	// peer
 	targetShard := r.Sharder.WhichShard(trEv.TraceID)
-	r.Logger.Debugf("got target shard of %s and my shard is %s", targetShard, r.Sharder.MyShard())
 	if !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Logger.Debugf("Sending span to my peer %s", targetShard)
 		r.Metrics.IncrementCounter("router_peer")
 		ev, err := r.requestToEvent(req, reqBod)
 		if err != nil {
@@ -121,6 +121,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		ev.APIHost = targetShard.GetAddress()
+		r.Logger.Debugf("Sending span %s with trace ID %s to my peer %s", reqID, trEv.TraceID, targetShard)
 		r.Transmission.EnqueueEvent(ev)
 		return
 	}
@@ -135,6 +136,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		TraceID: trEv.TraceID,
 	}
 	r.Metrics.IncrementCounter("router_span")
+	r.Logger.Debugf("Accepting span %s with trace ID %s for collection into a trace", reqID, trEv.TraceID)
 	r.Collector.AddSpan(span)
 }
 
@@ -193,7 +195,6 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Logger.Debugf("handling POST to /1/batch")
 	r.Metrics.IncrementCounter("router_batch")
 	defer req.Body.Close()
 	bodyReader, err := getMaybeGzippedBody(req)
@@ -216,6 +217,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	reqID := req.Context().Value(types.RequestIDContextKey{})
+
 	for _, bev := range batchedEvents {
 		// extract trace ID, route to self or peer, pass on to collector
 		var traceID string
@@ -230,19 +233,18 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
 				batchedResponses = append(batchedResponses, http.StatusBadRequest)
-				r.Logger.Debugf("batch element failed to convert to event: %s", err.Error())
+				r.Logger.Debugf("event from batch %s failed to convert to event: %s", reqID, err.Error())
 				continue
 			}
-			r.Logger.Debugf("received a non-trace event. sending along")
 			batchedResponses = append(batchedResponses, http.StatusAccepted)
+			r.Logger.Debugf("sending event from batch %s to %s %s", reqID, ev.APIHost, ev.Dataset)
 			r.Transmission.EnqueueEvent(ev)
 			continue
 		}
 		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
 		targetShard := r.Sharder.WhichShard(traceID)
-		r.Logger.Debugf("got target shard of %s and my shard is %s", targetShard, r.Sharder.MyShard())
 		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Logger.Debugf("Sending span to my peer %s", targetShard)
+			r.Logger.Debugf("Sending span from batch %s with trace ID %s to my peer %s", reqID, traceID, targetShard)
 			r.Metrics.IncrementCounter("router_peer")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
@@ -265,7 +267,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			TraceID: traceID,
 		}
 		r.Metrics.IncrementCounter("router_span")
-		r.Logger.Debugf("handing off span to collector: %+v", span.Data)
+		r.Logger.Debugf("Accepting span from batch %s with trace ID %s for collection into a trace", reqID, traceID, targetShard)
 		batchedResponses = append(batchedResponses, http.StatusAccepted)
 		r.Collector.AddSpan(span)
 	}

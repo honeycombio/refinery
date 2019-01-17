@@ -18,9 +18,9 @@ ListenAddr = "0.0.0.0:8080"
 # list, all API keys are accepted.
 # Eligible for live reload.
 APIKeys = [
-	"replace-me",
+	# "replace-me",
 	# "more-optional-keys",
-	# "*",                   # wildcard accept all keys
+	"*",                   # wildcard accept all keys
 	]
 
 # Peers is the list of other servers participating in this proxy cluster. Events
@@ -59,10 +59,10 @@ TraceTimeout = 60
 
 # LoggingLevel is the level above which we should log. Debug is very verbose,
 # and should only be used in pre-production environments. Info is the
-# recommended level. Valid options are "debug", "info", "warn", "error", and
+# recommended level. Valid options are "debug", "info", "error", and
 # "panic"
 # Not eligible for live reload.
-LoggingLevel = "info"
+LoggingLevel = "debug"
 
 
 ############################

@@ -1,14 +1,21 @@
 package route
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/samproxy/types"
 )
+
+// for generating request IDs
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -69,8 +76,11 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 		remoteIP := req.RemoteAddr
 		url := req.URL.String()
 		method := req.Method
-
 		route := mux.CurrentRoute(req)
+
+		// generate a request ID and put it in the context for logging
+		reqID := randStringBytes(8)
+		req = req.WithContext(context.WithValue(req.Context(), types.RequestIDContextKey{}, reqID))
 
 		// go ahead and process the request
 		wrapped := statusRecorder{w, 200}
@@ -80,7 +90,7 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 		dur := float64(time.Since(arrivalTime)) / float64(time.Millisecond)
 
 		// log that we did so TODO better formatted http log line
-		r.Logger.Debugf("handled %s request %s %s %s %f %d", route.GetName(), remoteIP, method, url, dur, wrapped.status)
+		r.Logger.Debugf("handled %s request %s %s %s %s %f %d", route.GetName(), reqID, remoteIP, method, url, dur, wrapped.status)
 	})
 }
 
@@ -95,4 +105,15 @@ func (r *Router) setResponseHeaders(next http.Handler) http.Handler {
 		next.ServeHTTP(w, req)
 
 	})
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+// randStringBytes makes us a request ID for logging.
+func randStringBytes(n int) string {
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letterBytes[rand.Int63()%int64(len(letterBytes))]
+	}
+	return string(b)
 }

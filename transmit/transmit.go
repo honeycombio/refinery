@@ -57,7 +57,7 @@ func (d *DefaultTransmission) reloadTransmissionBuilder() {
 }
 
 func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
-	d.Logger.Debugf("sending event to %s: %+v", ev.APIHost, ev.Data)
+	d.Logger.Debugf("sending event %s to %s %s", ev.Context.Value(types.RequestIDContextKey{}), ev.APIHost, ev.Dataset)
 	libhEv := d.builder.NewEvent()
 	libhEv.APIHost = ev.APIHost
 	libhEv.WriteKey = ev.APIKey
