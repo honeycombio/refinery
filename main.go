@@ -58,9 +58,9 @@ func main() {
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
-	sampler := sample.GetSamplerImplementation(c)
 	metricsr := metrics.GetMetricsImplementation(c)
 	shrdr := sharder.GetSharderImplementation(c)
+	samplerFactory := &sample.SamplerFactory{}
 
 	// set log level
 	logLevel, err := c.GetLoggingLevel()
@@ -92,10 +92,9 @@ func main() {
 		&inject.Object{Value: &transmit.DefaultTransmission{}},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
-		&inject.Object{Value: sampler},
 		&inject.Object{Value: metricsr},
 		&inject.Object{Value: version, Name: "version"},
-
+		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &a},
 	)
 	if err != nil {

@@ -120,83 +120,83 @@ Metrics = "honeycomb"
 # temporary odd sampling decisions).
 CacheCapacity = 1000
 
+[[SamplerConfig]]
 
-###########################
-## Deterministic Sampler ##
-###########################
+	[SamplerConfig._default]
 
-# DeterministicSampler is a section of the config for manipulating the
-# Deterministic Sampler implementation. This is the simplest sampling algorithm
-# - it is a static sample rate, choosing traces randomly to either keep or send
-# (at the appropriate rate). It is not influenced by the contents of the trace.
-[DeterministicSampler]
+		# DeterministicSampler is a section of the config for manipulating the
+		# Deterministic Sampler implementation. This is the simplest sampling algorithm
+		# - it is a static sample rate, choosing traces randomly to either keep or send
+		# (at the appropriate rate). It is not influenced by the contents of the trace.
+		Sampler = "DeterministicSampler"
 
-# SampleRate is the rate at which to sample. It indicates a ratio, where one
-# sample trace is kept for every n traces seen. For example, a SampleRate of 30
-# will keep 1 out of every 30 traces. The choice on whether to keep any specific
-# trace is random, so the rate is approximate.
-# Eligible for live reload.
-SampleRate = 2
+		# SampleRate is the rate at which to sample. It indicates a ratio, where one
+		# sample trace is kept for every n traces seen. For example, a SampleRate of 30
+		# will keep 1 out of every 30 traces. The choice on whether to keep any specific
+		# trace is random, so the rate is approximate.
+		# Eligible for live reload.
+		SampleRate = 2
 
+	[SamplerConfig.dataset1]
 
-###########################
-## Dynamic Sampler ##
-###########################
+		# DynamicSampler is a section of the config for manipulating the Dynamic Sampler
+		# implementation. This sampler collects the values of a number of fields from a
+		# trace and uses them to form a key. This key is handed to the standard dynamic
+		# sampler algorithm which generates a sample rate based on the frequency with
+		# which that key has appeared in the previous 30 seconds. See
+		# https://github.com/honeycombio/dynsampler-go for more detail on the mechanics
+		# of the dynamic sampler.  This sampler uses the AvgSampleRate algorithm from
+		# that package.
+		Sampler = "DynamicSampler"
 
-# DynamicSampler is a section of the config for manipulating the Dynamic Sampler
-# implementation. This sampler collects the values of a number of fields from a
-# trace and uses them to form a key. This key is handed to the standard dynamic
-# sampler algorithm which generates a sample rate based on the frequency with
-# which that key has appeared in the previous 30 seconds. See
-# https://github.com/honeycombio/dynsampler-go for more detail on the mechanics
-# of the dynamic sampler.  This sampler uses the AvgSampleRate algorithm from
-# that package.
-[DynamicSampler]
+		# SampleRate is the goal rate at which to sample. It indicates a ratio, where
+		# one sample trace is kept for every n traces seen. For example, a SampleRate of
+		# 30 will keep 1 out of every 30 traces. This rate is handed to the dynamic
+		# sampler, who assigns a sample rate for each trace based on the fields selected
+		# from that trace.
+		# Eligible for live reload.
+		SampleRate = 2
 
-# SampleRate is the goal rate at which to sample. It indicates a ratio, where
-# one sample trace is kept for every n traces seen. For example, a SampleRate of
-# 30 will keep 1 out of every 30 traces. This rate is handed to the dynamic
-# sampler, who assigns a sample rate for each trace based on the fields selected
-# from that trace.
-# Eligible for live reload.
-SampleRate = 2
+		# FieldList is a list of all the field names to use to form the key that will be
+		# handed to the dynamic sampler. The cardinality of the combination of values
+		# from all of these keys should be reasonable in the face of the frequency of
+		# those keys. If the combination of fields in these keys essentially makes them
+		# unique, the dynamic sampler will do no sampling.  If the keys have too few
+		# values, you won't get samples of the most interesting traces. A good key
+		# selection will have consistent values for high frequency boring traffic and
+		# unique values for outliers and interesting traffic. Including an error field
+		# (or something like HTTP status code) is an excellent choice. As an example,
+		# assuming 30 or so endpoints, a combination of HTTP endpoint and status code
+		# would be a good set of keys in order to let you see accurately use of all
+		# endpoints and call out when there is failing traffic to any endpoint. Field
+		# names may come from any span in the trace.
+		# Eligible for live reload.
+		FieldList = ["request.method","response.status_code"]
 
-# FieldList is a list of all the field names to use to form the key that will be
-# handed to the dynamic sampler. The cardinality of the combination of values
-# from all of these keys should be reasonable in the face of the frequency of
-# those keys. If the combination of fields in these keys essentially makes them
-# unique, the dynamic sampler will do no sampling.  If the keys have too few
-# values, you won't get samples of the most interesting traces. A good key
-# selection will have consistent values for high frequency boring traffic and
-# unique values for outliers and interesting traffic. Including an error field
-# (or something like HTTP status code) is an excellent choice. As an example,
-# assuming 30 or so endpoints, a combination of HTTP endpoint and status code
-# would be a good set of keys in order to let you see accurately use of all
-# endpoints and call out when there is failing traffic to any endpoint. Field
-# names may come from any span in the trace.
-# Eligible for live reload.
-FieldList = ["request.method","response.status_code"]
+		# UseTraceLength will add the number of spans in the trace in to the dynamic
+		# sampler as part of the key. The number of spans is exact, so if there are
+		# normally small variations in trace length you may want to leave this off. If
+		# traces are consistent lengths and changes in trace length is a useful
+		# indicator of traces you'd like to see in Honeycomb, set this to true.
+		# Eligible for live reload.
+		UseTraceLength = true
 
-# UseTraceLength will add the number of spans in the trace in to the dynamic
-# sampler as part of the key. The number of spans is exact, so if there are
-# normally small variations in trace length you may want to leave this off. If
-# traces are consistent lengths and changes in trace length is a useful
-# indicator of traces you'd like to see in Honeycomb, set this to true.
-# Eligible for live reload.
-UseTraceLength = true
+		# AddSampleRateKeyToTrace when this is set to true, the sampler will add a field
+		# to the root span of the trace containing the key used by the sampler to decide
+		# the sample rate. This can be helpful in understanding why the sampler is
+		# making certain decisions about sample rate and help you understand how to
+		# better choose the sample rate key (aka the FieldList setting above) to use.
+		AddSampleRateKeyToTrace = true
 
-# AddSampleRateKeyToTrace when this is set to true, the sampler will add a field
-# to the root span of the trace containing the key used by the sampler to decide
-# the sample rate. This can be helpful in understanding why the sampler is
-# making certain decisions about sample rate and help you understand how to
-# better choose the sample rate key (aka the FieldList setting above) to use.
-AddSampleRateKeyToTrace = true
+		# AddSampleRateKeyToTraceField is the name of the field the sampler will use
+		# when adding the sample rate key to the trace. This setting is only used when
+		# AddSampleRateKeyToTrace is true.
+		AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
 
-# AddSampleRateKeyToTraceField is the name of the field the sampler will use
-# when adding the sample rate key to the trace. This setting is only used when
-# AddSampleRateKeyToTrace is true.
-AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
+	[SamplerConfig.dataset2]
 
+		Sampler = "DeterministicSampler"
+		SampleRate = 10
 
 ###################
 ## Logrus Logger ##

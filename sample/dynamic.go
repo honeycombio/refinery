@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -14,15 +15,16 @@ import (
 )
 
 type DynamicSampler struct {
-	Config  config.Config   `inject:""`
-	Logger  logger.Logger   `inject:""`
-	Metrics metrics.Metrics `inject:""`
+	Config  config.Config
+	Logger  logger.Logger
+	Metrics metrics.Metrics
 
 	sampleRate        int64
 	fieldList         []string
 	useTraceLength    bool
 	addDynsampleKey   bool
 	addDynsampleField string
+	configName        string
 
 	dynsampler dynsampler.Sampler
 }
@@ -37,7 +39,8 @@ type DynSamplerConfig struct {
 
 func (d *DynamicSampler) Start() error {
 	dsConfig := DynSamplerConfig{}
-	err := d.Config.GetOtherConfig("DynamicSampler", &dsConfig)
+	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
+	err := d.Config.GetOtherConfig(configKey, &dsConfig)
 	if err != nil {
 		return err
 	}
@@ -80,7 +83,8 @@ func (d *DynamicSampler) reloadConfigs() {
 	var configChanged bool
 
 	dsConfig := DynSamplerConfig{}
-	err := d.Config.GetOtherConfig("DynamicSampler", &dsConfig)
+	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
+	err := d.Config.GetOtherConfig(configKey, &dsConfig)
 	if err != nil {
 		d.Logger.Errorf("Failed to get dynsampler settings when reloading configs:", err)
 	}

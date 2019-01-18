@@ -43,14 +43,16 @@ func GetCollectorImplementation(c config.Config) Collector {
 }
 
 type InMemCollector struct {
-	Config       config.Config         `inject:""`
-	Logger       logger.Logger         `inject:""`
-	Transmission transmit.Transmission `inject:""`
-	Sampler      sample.Sampler        `inject:""`
-	Metrics      metrics.Metrics       `inject:""`
+	Config         config.Config          `inject:""`
+	Logger         logger.Logger          `inject:""`
+	Transmission   transmit.Transmission  `inject:""`
+	Metrics        metrics.Metrics        `inject:""`
+	SamplerFactory *sample.SamplerFactory `inject:""`
 
-	cacheLock sync.Mutex
-	Cache     cache.Cache
+	cacheLock       sync.Mutex
+	Cache           cache.Cache
+	datasetSamplers map[string]sample.Sampler
+	defaultSampler  sample.Sampler
 }
 
 type imcConfig struct {
@@ -58,6 +60,7 @@ type imcConfig struct {
 }
 
 func (i *InMemCollector) Start() error {
+	i.defaultSampler = i.SamplerFactory.GetDefaultSamplerImplementation()
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
 	if err != nil {
@@ -227,8 +230,26 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
 	i.Metrics.Histogram("trace_duration_ms", traceDur)
 
+  var sampler sample.Sampler
+	var found bool
+
+	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
+		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
+		// no dataset sampler found, use default sampler
+		if sampler == nil {
+			sampler = i.defaultSampler
+		}
+
+		if i.datasetSamplers == nil {
+			i.datasetSamplers = make(map[string]sample.Sampler)
+		}
+
+		// save sampler for later
+		i.datasetSamplers[trace.Dataset] = sampler
+	}
+
 	// make sampling decision and update the trace
-	rate, shouldSend := i.Sampler.GetSampleRate(trace)
+	rate, shouldSend := sampler.GetSampleRate(trace)
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
 	trace.Sent = true

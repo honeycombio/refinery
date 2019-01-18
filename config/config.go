@@ -61,9 +61,12 @@ type Config interface {
 	// are in the collect package
 	GetCollectorType() (string, error)
 
-	// GetSamplerType returns the type of sampler to use. Valid types are in the
-	// sample package
-	GetSamplerType() (string, error)
+	// GetDefaultSamplerType returns the sampler type to use for all datasets
+	// not explicitly defined
+	GetDefaultSamplerType() (string, error)
+
+	// GetSamplerTypeForDataset returns the sampler type to use for the given dataset
+	GetSamplerTypeForDataset(string) (string, error)
 
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
@@ -90,6 +93,12 @@ type confContents struct {
 	Metrics              string
 	SendDelay            int
 	TraceTimeout         int
+}
+
+// Used to marshall in the sampler type in SamplerConfig definitions
+// other fields are ignored
+type samplerConfigType struct {
+	Sampler string
 }
 
 // Start reads the config initially
@@ -159,8 +168,22 @@ func (f *FileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *FileConfig) GetSamplerType() (string, error) {
-	return f.conf.Sampler, nil
+func (f *FileConfig) GetDefaultSamplerType() (string, error) {
+	t := samplerConfigType{}
+	err := f.GetOtherConfig("SamplerConfig._default", &t)
+	if err != nil {
+		return "", err
+	}
+	return t.Sampler, nil
+}
+
+func (f *FileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
+	t := samplerConfigType{}
+	err := f.GetOtherConfig("SamplerConfig."+dataset, &t)
+	if err != nil {
+		return "", err
+	}
+	return t.Sampler, nil
 }
 
 func (f *FileConfig) GetMetricsType() (string, error) {
@@ -180,7 +203,7 @@ func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
 	if subConfTree, ok := subConf.(*toml.Tree); ok {
 		return subConfTree.Unmarshal(iface)
 	}
-	return fmt.Errorf("failed to find config tree")
+	return fmt.Errorf("failed to find config tree for %s", name)
 }
 
 // MockConfig will respond with whatever config it's set to do during
@@ -200,17 +223,17 @@ type MockConfig struct {
 	GetLoggingLevelVal  string
 	GetOtherConfigErr   error
 	// GetOtherConfigVal must be a JSON representation of the config struct to be populated.
-	GetOtherConfigVal  string
-	GetPeersErr        error
-	GetPeersVal        []string
-	GetSamplerTypeErr  error
-	GetSamplerTypeVal  string
-	GetMetricsTypeErr  error
-	GetMetricsTypeVal  string
-	GetSendDelayErr    error
-	GetSendDelayVal    int
-	GetTraceTimeoutErr error
-	GetTraceTimeoutVal int
+	GetOtherConfigVal        string
+	GetPeersErr              error
+	GetPeersVal              []string
+	GetDefaultSamplerTypeErr error
+	GetDefaultSamplerTypeVal string
+	GetMetricsTypeErr        error
+	GetMetricsTypeVal        string
+	GetSendDelayErr          error
+	GetSendDelayVal          int
+	GetTraceTimeoutErr       error
+	GetTraceTimeoutVal       int
 }
 
 func (m *MockConfig) ReloadConfig()                 {}
@@ -234,8 +257,15 @@ func (m *MockConfig) GetOtherConfig(name string, iface interface{}) error {
 	}
 	return m.GetOtherConfigErr
 }
-func (m *MockConfig) GetPeers() ([]string, error)     { return m.GetPeersVal, m.GetPeersErr }
-func (m *MockConfig) GetSamplerType() (string, error) { return m.GetSamplerTypeVal, m.GetSamplerTypeErr }
+func (m *MockConfig) GetPeers() ([]string, error) { return m.GetPeersVal, m.GetPeersErr }
+func (m *MockConfig) GetDefaultSamplerType() (string, error) {
+	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
+}
 func (m *MockConfig) GetMetricsType() (string, error) { return m.GetMetricsTypeVal, m.GetMetricsTypeErr }
 func (m *MockConfig) GetSendDelay() (int, error)      { return m.GetSendDelayVal, m.GetSendDelayErr }
 func (m *MockConfig) GetTraceTimeout() (int, error)   { return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr }
+
+// TODO: allow per-dataset mock values
+func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
+	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
+}
