@@ -20,15 +20,21 @@ import (
 func TestAddRootSpan(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:          0,
+		GetTraceTimeoutVal:       60,
+		GetDefaultSamplerTypeVal: "DeterministicSampler",
+	}
 	coll := &InMemCollector{
-		Config: &config.MockConfig{
-			GetSendDelayVal:    0,
-			GetTraceTimeoutVal: 60,
+		Config:         conf,
+		Logger:         &logger.NullLogger{},
+		Transmission:   transmission,
+		defaultSampler: &sample.DeterministicSampler{},
+		Metrics:        &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
 		},
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Sampler:      &sample.DeterministicSampler{},
-		Metrics:      &metrics.NullMetrics{},
 	}
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{
@@ -62,15 +68,21 @@ func TestAddRootSpan(t *testing.T) {
 func TestAddSpan(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:          0,
+		GetTraceTimeoutVal:       60,
+		GetDefaultSamplerTypeVal: "DeterministicSampler",
+	}
 	coll := &InMemCollector{
-		Config: &config.MockConfig{
-			GetSendDelayVal:    0,
-			GetTraceTimeoutVal: 60,
+		Config:         conf,
+		Logger:         &logger.NullLogger{},
+		Transmission:   transmission,
+		defaultSampler: &sample.DeterministicSampler{},
+		Metrics:        &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
 		},
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Sampler:      &sample.DeterministicSampler{},
-		Metrics:      &metrics.NullMetrics{},
 	}
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{
