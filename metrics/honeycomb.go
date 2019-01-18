@@ -306,5 +306,4 @@ func (h *HoneycombMetrics) Histogram(name string, obs float64) {
 	histogram.lock.Lock()
 	defer histogram.lock.Unlock()
 	histogram.vals = append(histogram.vals, obs)
-	// fmt.Printf("appending %f to %s\n", obs, name)
 }
