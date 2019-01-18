@@ -9,6 +9,7 @@ import (
 
 type Logger interface {
 	Debugf(f string, args ...interface{})
+	Infof(f string, args ...interface{})
 	Errorf(f string, args ...interface{})
 	// SetLevel sets the logging level (debug, info, warn, error)
 	SetLevel(level string) error

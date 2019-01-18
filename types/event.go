@@ -12,6 +12,9 @@ const (
 	TimestampHeader  = "X-Honeycomb-Event-Time"
 )
 
+// used to put a request ID into the request context for logging
+type RequestIDContextKey struct{}
+
 // event is not part of a trace - it's an event that showed up with no trace ID
 type Event struct {
 	Context    context.Context

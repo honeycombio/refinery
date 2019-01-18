@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"net/http"
 	"runtime"
@@ -184,7 +183,6 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			// context canceled? we're being asked to stop this so it can be restarted.
 			return
 		case <-tick.C:
-			h.Logger.Debugf("sending Honeycomb metrics")
 			ev := h.builder.NewEvent()
 			h.countersLock.Lock()
 			for _, count := range h.counters {
@@ -308,5 +306,4 @@ func (h *HoneycombMetrics) Histogram(name string, obs float64) {
 	histogram.lock.Lock()
 	defer histogram.lock.Unlock()
 	histogram.vals = append(histogram.vals, obs)
-	fmt.Printf("appending %f to %s\n", obs, name)
 }

@@ -25,6 +25,9 @@ func (l *LogrusLogger) Start() error {
 func (l *LogrusLogger) Debugf(f string, args ...interface{}) {
 	l.logger.Debugf(f, args...)
 }
+func (l *LogrusLogger) Infof(f string, args ...interface{}) {
+	l.logger.Infof(f, args...)
+}
 func (l *LogrusLogger) Errorf(f string, args ...interface{}) {
 	l.logger.Errorf(f, args...)
 }
