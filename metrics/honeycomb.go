@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"net/http"
+	"os"
 	"runtime"
 	"sort"
 	"sync"
@@ -88,6 +89,9 @@ func (h *HoneycombMetrics) Start() error {
 
 	// add some general go metrics to every report
 	// goroutines
+	if hostname, err := os.Hostname(); err == nil {
+		h.builder.AddField("hostname", hostname)
+	}
 	h.builder.AddDynamicField("num_goroutines",
 		func() interface{} { return runtime.NumGoroutine() })
 	ctx, cancel := context.WithCancel(context.Background())
