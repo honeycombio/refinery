@@ -3,6 +3,7 @@ package logger
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -56,6 +57,10 @@ func (h *HoneycombLogger) Start() error {
 	}
 	h.builder = libhoney.NewBuilder()
 	h.builder.Dataset = h.loggerConfig.LoggerDataset
+
+	if hostname, err := os.Hostname(); err == nil {
+		h.builder.AddField("hostname", hostname)
+	}
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)

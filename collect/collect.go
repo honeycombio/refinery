@@ -220,7 +220,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	if trace.Sent == true {
 		// someone else already sent this. Return doing nothing.
-		i.Logger.Debugf("skipping send because someone else already sent, trace ID %s", trace.TraceID)
+		i.Logger.Debugf("skipping send because someone else already sent, trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
 		return
 	}
 
@@ -256,12 +256,12 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// if we're supposed to drop this trace, then we're done.
 	if !shouldSend {
-		i.Logger.Infof("Dropping trace because of sampling, trace ID %s", trace.TraceID)
+		i.Logger.Infof("Dropping trace because of sampling, trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
 		return
 	}
 
 	// ok, we're not dropping this trace; send all the spans
-	i.Logger.Infof("Sending trace ID %s", trace.TraceID)
+	i.Logger.Infof("Sending trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
 	for _, sp := range trace.Spans {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
