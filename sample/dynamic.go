@@ -167,14 +167,6 @@ func (d *DynamicSampler) buildKey(trace *types.Trace) string {
 	spans := trace.GetSpans()
 	for _, field := range d.fieldList {
 		for _, span := range spans {
-			if span == nil {
-				d.Logger.Errorf("span is nil for trace %s. Trace %+v", trace.TraceID, trace)
-				return ""
-			}
-			if span.Data == nil {
-				d.Logger.Errorf("span.Data is nil for trace %s. Span %+v", trace.TraceID, span)
-				return ""
-			}
 			if val, ok := span.Data[field]; ok {
 				switch val := val.(type) {
 				case string:
