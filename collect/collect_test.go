@@ -59,7 +59,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	assert.Equal(t, traceID, coll.Cache.Get(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-	assert.Equal(t, 1, len(transmission.Events), "adding a non-root span should not yet send the span")
+	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 }
 
@@ -118,7 +118,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(10 * time.Millisecond)
-	assert.Equal(t, 2, len(coll.Cache.Get(traceID).Spans), "after adding a leaf and root span, we should have a two spans in the cache")
+	assert.Equal(t, 2, len(coll.Cache.Get(traceID).GetSpans()), "after adding a leaf and root span, we should have a two spans in the cache")
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 
 }

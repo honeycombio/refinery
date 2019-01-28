@@ -111,7 +111,6 @@ func (i *InMemCollector) reloadConfigs() {
 				if i > capacity {
 					break
 				}
-				fmt.Printf(".")
 				c.Set(trace)
 			}
 			i.Cache = c
@@ -127,34 +126,20 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	trace := i.Cache.Get(sp.TraceID)
 	if trace == nil {
 		ctx, cancel := context.WithCancel(context.Background())
-		spans := make([]*types.Span, 0, 1)
-		spans = append(spans, sp)
 		trace = &types.Trace{
 			APIHost:       sp.APIHost,
 			APIKey:        sp.APIKey,
 			Dataset:       sp.Dataset,
 			TraceID:       sp.TraceID,
-			Spans:         spans,
 			StartTime:     time.Now(),
 			CancelSending: cancel,
 		}
 		i.Cache.Set(trace)
 		go i.timeoutThenSend(ctx, trace)
-	} else {
-		// we found a trace; add this span to it
-		trace.Spans = append(trace.Spans, sp)
 	}
-
-	// if this trace has already gotten sent (aka we're a straggler), skip the
-	// rest and obey the existing sample / send decision
-	if trace.GetSent() {
-		if trace.KeepSample {
-			i.Logger.Debugf("Sending span because of previous decision to send trace %s", sp.TraceID)
-			sp.SampleRate *= trace.SampleRate
-			i.Transmission.EnqueueSpan(sp)
-			return
-		}
-		i.Logger.Debugf("Dropping span because of previous decision to drop trace %s", sp.TraceID)
+	err := trace.AddSpan(sp)
+	if err == types.TraceAlreadySent {
+		i.dealWithSentTrace(trace, sp)
 		return
 	}
 
@@ -162,6 +147,18 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	if isRootSpan(sp) {
 		go i.pauseAndSend(trace)
 	}
+}
+
+func (i *InMemCollector) dealWithSentTrace(tr *types.Trace, sp *types.Span) {
+	if tr.KeepSample {
+		i.Logger.Debugf("Sending span because of previous decision to send trace %s", sp.TraceID)
+		sp.SampleRate *= tr.SampleRate
+		i.Transmission.EnqueueSpan(sp)
+		return
+	}
+	i.Logger.Debugf("Dropping span because of previous decision to drop trace %s", sp.TraceID)
+	return
+
 }
 
 func isRootSpan(sp *types.Span) bool {
@@ -230,7 +227,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
 	i.Metrics.Histogram("trace_duration_ms", traceDur)
 
-  var sampler sample.Sampler
+	var sampler sample.Sampler
 	var found bool
 
 	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
@@ -262,7 +259,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// ok, we're not dropping this trace; send all the spans
 	i.Logger.Infof("Sending trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
-	for _, sp := range trace.Spans {
+	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
 		}
