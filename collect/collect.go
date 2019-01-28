@@ -111,7 +111,6 @@ func (i *InMemCollector) reloadConfigs() {
 				if i > capacity {
 					break
 				}
-				fmt.Printf(".")
 				c.Set(trace)
 			}
 			i.Cache = c

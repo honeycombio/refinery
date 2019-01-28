@@ -59,7 +59,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	assert.Equal(t, traceID, coll.Cache.Get(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-	assert.Equal(t, 1, len(transmission.Events), "adding a non-root span should not yet send the span")
+	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 }
 

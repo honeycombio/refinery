@@ -96,7 +96,7 @@ func (t *Trace) AddSpan(sp *Span) error {
 func (t *Trace) GetSpans() []*Span {
 	t.spanListLock.Lock()
 	defer t.spanListLock.Unlock()
-	spans := make([]*Span, 0, len(t.spans))
+	spans := make([]*Span, len(t.spans))
 	copy(spans, t.spans)
 	return spans
 
