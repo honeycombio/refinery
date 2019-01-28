@@ -85,9 +85,6 @@ func (t *Trace) AddSpan(sp *Span) error {
 	}
 	t.spanListLock.Lock()
 	defer t.spanListLock.Unlock()
-	if t.spans == nil {
-		t.spans = make([]*Span, 0, 1)
-	}
 	t.spans = append(t.spans, sp)
 	return nil
 }
@@ -96,9 +93,9 @@ func (t *Trace) AddSpan(sp *Span) error {
 func (t *Trace) GetSpans() []*Span {
 	t.spanListLock.Lock()
 	defer t.spanListLock.Unlock()
-	spans := make([]*Span, len(t.spans))
-	copy(spans, t.spans)
-	return spans
+	// since we only ever append to this list, we can return a new reference to
+	// the slice as it exists now and it will be safe for concurrent reads.
+	return t.spans[:]
 
 }
 
