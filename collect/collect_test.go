@@ -118,7 +118,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(10 * time.Millisecond)
-	assert.Equal(t, 2, len(coll.Cache.Get(traceID).Spans), "after adding a leaf and root span, we should have a two spans in the cache")
+	assert.Equal(t, 2, len(coll.Cache.Get(traceID).GetSpans()), "after adding a leaf and root span, we should have a two spans in the cache")
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 
 }

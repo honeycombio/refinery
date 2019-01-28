@@ -164,8 +164,9 @@ func (d *DynamicSampler) buildKey(trace *types.Trace) string {
 	fieldCollector := map[string][]string{}
 
 	// for each field, for each span, get the value of that field
+	spans := trace.GetSpans()
 	for _, field := range d.fieldList {
-		for _, span := range trace.Spans {
+		for _, span := range spans {
 			if span == nil {
 				d.Logger.Errorf("span is nil for trace %s. Trace %+v", trace.TraceID, trace)
 				return ""
@@ -205,7 +206,7 @@ func (d *DynamicSampler) buildKey(trace *types.Trace) string {
 		key += ","
 	}
 	if d.useTraceLength {
-		key += strconv.FormatInt(int64(len(trace.Spans)), 10)
+		key += strconv.FormatInt(int64(len(spans)), 10)
 	}
 
 	// if we should add the key used by the dynsampler to the root span, let's
@@ -225,7 +226,7 @@ func (d *DynamicSampler) buildKey(trace *types.Trace) string {
 // findRootSpan selects the root span from the list of spans in a trace. If it
 // can't find a root span it returns nil.
 func findRootSpan(trace *types.Trace) *types.Span {
-	for _, span := range trace.Spans {
+	for _, span := range trace.GetSpans() {
 		if isRootSpan(span) {
 			return span
 		}
