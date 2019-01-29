@@ -146,6 +146,9 @@ func (d *DynamicSampler) reloadConfigs() {
 func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
 	key := d.buildKey(trace)
 	rate := d.dynsampler.GetSampleRate(key)
+	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
+		rate = 1
+	}
 	shouldKeep := rand.Intn(int(rate)) == 0
 	d.Logger.Debugf("using key %s got sample rate %d and keep %v for trace %s", key, rate, shouldKeep, trace.TraceID)
 	if shouldKeep {
