@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
@@ -30,6 +31,11 @@ type Router struct {
 	Sharder      sharder.Sharder       `inject:""`
 	Collector    collect.Collector     `inject:""`
 	Metrics      metrics.Metrics       `inject:""`
+}
+
+type BatchResponse struct {
+	Status int    `json:"status"`
+	Error  string `json:"error,omitempty"`
 }
 
 func (r *Router) LnS() {
@@ -210,7 +216,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	batchedEvents := make([]batchedEvent, 0)
-	batchedResponses := make([]int, 0)
+	batchedResponses := make([]*BatchResponse, 0)
 	err = json.Unmarshal(reqBod, &batchedEvents)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -232,11 +238,20 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			r.Metrics.IncrementCounter("router_event")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
-				batchedResponses = append(batchedResponses, http.StatusBadRequest)
-				r.Logger.Debugf("event from batch %s failed to convert to event: %s", reqID, err.Error())
+				batchedResponses = append(
+					batchedResponses,
+					&BatchResponse{
+						Status: http.StatusBadRequest,
+						Error:  fmt.Sprintf("failed to convert to event: %s", err.Error()),
+					},
+				)
+				r.Logger.Debugf("event from batch %s failed to process event: %s", reqID, err.Error())
 				continue
 			}
-			batchedResponses = append(batchedResponses, http.StatusAccepted)
+			batchedResponses = append(
+				batchedResponses,
+				&BatchResponse{Status: http.StatusAccepted},
+			)
 			r.Logger.Debugf("sending event from batch %s to %s %s", reqID, ev.APIHost, ev.Dataset)
 			r.Transmission.EnqueueEvent(ev)
 			continue
@@ -248,7 +263,13 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			r.Metrics.IncrementCounter("router_peer")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
-				batchedResponses = append(batchedResponses, http.StatusBadRequest)
+				batchedResponses = append(
+					batchedResponses,
+					&BatchResponse{
+						Status: http.StatusBadRequest,
+						Error:  fmt.Sprintf("failed to process event: %s", err.Error()),
+					},
+				)
 				continue
 			}
 			ev.APIHost = targetShard.GetAddress()
@@ -258,7 +279,13 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		// we're supposed to handle it
 		ev, err := r.batchedEventToEvent(req, bev)
 		if err != nil {
-			batchedResponses = append(batchedResponses, http.StatusBadRequest)
+			batchedResponses = append(
+				batchedResponses,
+				&BatchResponse{
+					Status: http.StatusBadRequest,
+					Error:  fmt.Sprintf("failed to process event: %s", err.Error()),
+				},
+			)
 			continue
 		}
 
@@ -268,7 +295,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		}
 		r.Metrics.IncrementCounter("router_span")
 		r.Logger.Debugf("Accepting span from batch %s with trace ID %s for collection into a trace", reqID, traceID, targetShard)
-		batchedResponses = append(batchedResponses, http.StatusAccepted)
+		batchedResponses = append(
+			batchedResponses,
+			&BatchResponse{Status: http.StatusAccepted},
+		)
 		r.Collector.AddSpan(span)
 	}
 	response, err := json.Marshal(batchedResponses)
