@@ -15,25 +15,41 @@ Samproxy is designed to sit within your infrastructure where all sources of Hone
 
 Within your application (or other Honeycomb event sources) you would configure the `API Host` to be http(s)://load-balancer/. Everything else remains the same (api key, dataset name, etc. - all that lives with the originating client).
 
+### Builds
+
+Samproxy is built by [Travis-CI](https://travis-ci.org/honeycombio/samproxy). Build artifacts are uploaded to S3 and available for download. The download URL is listed at the bottom of the build record.
+
 ## Configuration
 
 There are a few vital configuration options:
 
 - API Keys: Samproxy itself needs to be configured with a list of your API keys. This lets it respond with a 401/Unauthorized if an unexpected api key is used. You can configure Samproxy to accept all API keys by setting it to `*` but then you will lose the authentication feedback to your application. Samproxy will accept all events even if those events will eventually be rejected by the Honeycomb API due to an API key issue.
 
-- Goal Sample Rate and a list of fields to use to generate the keys off which sample rate is chosen. This is where the power of the proxy comes in - being able to dynamically choose sample rates based on the contents of the traces as they go by.
+- Goal Sample Rate and a list of fields to use to generate the keys off which sample rate is chosen. This is where the power of the proxy comes in - being able to dynamically choose sample rates based on the contents of the traces as they go by. There is an overall default and dataset-specific sections for this configuration, so that different datasets can have different sets of fields and goal sample rates.
 
 - Trace timeout - it should be set higher (maybe double?) the longest expected trace. If all of your traces complete in under 10 seconds, 30 is a good value here.  If you have traces that can last minutes, it should be raised accordingly. Note that the trace doesn't *have* to complete before this timer expires - but the sampling decision will be made at that time. So any spans that contain fields that you want to use to compute the sample rate should arrive before this timer expires. Additional spans that arrive after the timer has expired will be sent or dropped according to the sampling decision made when the timer expired.
 
 - Peer list: this is a list of all the other servers participating in this Samproxy cluster. Traces are evenly distributed across all available servers, and any one trace must be concentrated on one server, regardless of which server handled the incoming spans. The peer list lets the cluster move spans around to the server that is handling the trace.
 
+- Buffer size: The `InMemCollector`'s `CacheCapacity` setting determines how many in-flight traces you can have. This should be large enough to avoid overflow. Some multiple (2x, 3x) the total number of in-flight traces you expect is a good place to start. If it's too low you will see the `collect_cache_buffer_overrun` metric increment. If you see that, you should increase the size of the buffer.
+
 There are a few components of Samproxy with multiple implementations; the config file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level config item that lets you choose which implementation to use and then a section further down with additional config options for that choice (for example, the Honeycomb logger requires an API key).
 
 When configuration changes, send Samproxy a USR1 signal and it will re-read the configuration.
 
+## How sampling decisions are made
+
+In the configuration file, there is a place to choose a sampling method and some options for each. The `DynamicSampler` is the most interesting and most commonly used, so that's the one that gets described here. It uses the `AvgSampleRate` algorithm from the [`dynsampler-go`](https://github.com/honeycombio/dynsampler-go) package. Briefly described, you configure samproxy to examine the trace for a set of fields (for example, `request.status_code` and `request.method`). It collects all the values found in those fields anywhere in the trace (eg "200" and "GET") together in to a key it hands to the dynsampler. The dynsampler code will look at the frequency that key appears during the previous 30 seconds and use that to hand back a desired sample rate. More frequent keys are sampled more heavily, so that an even distribution of traffic across the keyspace is represented in Honeycomb.
+
+By selecting fields well, you can drop significant amounts of traffic while still retaining good visibility into the areas of traffic that interest you. For example, if you want to make sure you have a complete list of all URL handlers invoked, you would add the URL (or a normalized form) as one of the fields to include. Be careful in your selection though, because if the combination of fields cretes a unique key each time, you won't sample out any traffic. Because of this it is not effective to use fields that have unique values (like a UUID) as one of the sampling fields. Each field included should ideally have values that appear many times within any given 30 second window in order to effectively turn in to a sample rate.
+
+For more detail on how this algorithm works, please refer to the `dynsampler` package itself.
+
 ## Scaling Up
 
 Samproxy uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have stastics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces.  All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing.  The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (eg traces / second started) and multiply that by the maximum duration of a trace (say, 3 seconds), then multiply that by some large buffer (maybe 10x). This will give you good headroom.
+
+Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2G of memory to handle 5000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
 
 ## Understanding Regular Operation
 
