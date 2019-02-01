@@ -127,7 +127,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		ev.APIHost = targetShard.GetAddress()
-		r.Logger.Debugf("Sending span %s with trace ID %s to my peer %s", reqID, trEv.TraceID, targetShard)
+		r.Logger.Debugf("Sending span %s with trace ID %s for dataset %s to my peer %s", reqID, trEv.TraceID, ev.Dataset, targetShard.GetAddress())
 		r.Transmission.EnqueueEvent(ev)
 		return
 	}
@@ -142,7 +142,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		TraceID: trEv.TraceID,
 	}
 	r.Metrics.IncrementCounter("router_span")
-	r.Logger.Debugf("Accepting span %s with trace ID %s for collection into a trace", reqID, trEv.TraceID)
+	r.Logger.Debugf("Accepting span %s with trace ID %s for dataset %s for collection into a trace", reqID, trEv.TraceID, ev.Dataset)
 	r.Collector.AddSpan(span)
 }
 
@@ -259,7 +259,6 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
 		targetShard := r.Sharder.WhichShard(traceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Logger.Debugf("Sending span from batch %s with trace ID %s to my peer %s", reqID, traceID, targetShard)
 			r.Metrics.IncrementCounter("router_peer")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
@@ -272,6 +271,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 				)
 				continue
 			}
+			r.Logger.Debugf("Sending span from batch %s with trace ID %s for dataset %s to my peer %s", reqID, traceID, ev.Dataset, targetShard.GetAddress())
 			batchedResponses = append(
 				batchedResponses,
 				&BatchResponse{Status: http.StatusAccepted},
@@ -298,7 +298,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			TraceID: traceID,
 		}
 		r.Metrics.IncrementCounter("router_span")
-		r.Logger.Debugf("Accepting span from batch %s with trace ID %s for collection into a trace", reqID, traceID, targetShard)
+		r.Logger.Debugf("Accepting span from batch %s with trace ID %s for dataset %s for collection into a trace", reqID, traceID, ev.Dataset)
 		batchedResponses = append(
 			batchedResponses,
 			&BatchResponse{Status: http.StatusAccepted},
