@@ -8,7 +8,9 @@ import (
 )
 
 type Cache interface {
-	Set(trace *types.Trace)
+	// Set adds the trace to the cache. If it is kicking out a trace from the cache
+	// that has not yet been sent, it will return that trace. Otherwise returns nil.
+	Set(trace *types.Trace) *types.Trace
 	Get(traceID string) *types.Trace
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
@@ -57,13 +59,19 @@ func (d *DefaultInMemCache) GetCacheSize() int {
 	return d.Config.CacheCapacity
 }
 
-func (d *DefaultInMemCache) Set(trace *types.Trace) {
+// Set adds the trace to the ring. If it is kicking out a trace from the ring
+// that has not yet been sent, it will return that trace. Otherwise returns nil.
+func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
+	// set retTrace to a trace if it is getting kicked out without having been
+	// sent. Leave it nil if we're not kicking out an unsent trace.
+	var retTrace *types.Trace
+
 	// we need to dereference the trace ID so skip bad inserts to avoid panic
 	if trace == nil {
-		return
+		return nil
 	}
 
 	// increment the trace pointer when we're done
@@ -81,13 +89,17 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) {
 	oldTrace := d.insertionOrder[d.insertPoint]
 	if oldTrace != nil {
 		delete(d.cache, oldTrace.TraceID)
-		// and record if we're overrunning the circle
 		if !oldTrace.GetSent() {
+			// if it hasn't already been sent,
+			// record that we're overrunning the buffer
 			d.Metrics.IncrementCounter("collect_cache_buffer_overrun")
+			// and return the trace so it can be sent.
+			retTrace = oldTrace
 		}
 	}
 	// record the trace in the insertion ring
 	d.insertionOrder[d.insertPoint] = trace
+	return retTrace
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/honeycombio/samproxy/collect/cache"
@@ -42,8 +43,12 @@ func TestAddRootSpan(t *testing.T) {
 		},
 		Metrics: &metrics.NullMetrics{},
 	}
-	c.Start()
+	err := c.Start()
+	assert.NoError(t, err, "in-mem cache should start")
 	coll.Cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
 
 	var traceID = "mytrace"
 
@@ -92,6 +97,9 @@ func TestAddSpan(t *testing.T) {
 	}
 	c.Start()
 	coll.Cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
 
 	var traceID = "mytrace"
 
