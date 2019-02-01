@@ -26,12 +26,10 @@ github.com/gogo/protobuf v0.0.0-20180509162441-30cf7ac33676 h1:sWRRbFwmt+HjaUAHN
 github.com/gogo/protobuf v0.0.0-20180509162441-30cf7ac33676/go.mod h1:r8qH/GZQm5c6nD/R0oafs1akxWv10x8SbQlK7atdtwQ=
 github.com/golang/protobuf v0.0.0-20180417204537-fae8ec697c5d h1:f+fLK46veTAL01RsTUuNjPB+g6SQjS+HwxbfjOH3GTo=
 github.com/golang/protobuf v0.0.0-20180417204537-fae8ec697c5d/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
-github.com/gorilla/context v1.1.1 h1:AWwleXJkX/nhcU9bZSnZoi3h/qGYqQAGhq6zZe/aQW8=
-github.com/gorilla/context v1.1.1/go.mod h1:kBGZzfjB9CEq2AlWe17Uuf7NDRt0dE0s8S51q0aT7Yg=
-github.com/gorilla/mux v1.6.2 h1:Pgr17XVTNXAk3q/r4CpKzC5xBM/qW1uVLV+IhRZpIIk=
-github.com/gorilla/mux v1.6.2/go.mod h1:1lud6UwP+6orDFRuTfBEV8e9/aOM/c4fVVCaMa2zaAs=
 github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d h1:mksP7mUlZu0fpgMVMfDnaVvErqRL05HM3Kk+rBkZK54=
 github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d/go.mod h1:1lud6UwP+6orDFRuTfBEV8e9/aOM/c4fVVCaMa2zaAs=
+github.com/hashicorp/golang-lru v0.5.0 h1:CL2msUPvZTLb5O648aiLNJw3hnBxN2+1Jq8rCOH9wdo=
+github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f h1:CavWxcRtxHoNGHiz8KvjCOaXTM0rUwh9w9qT+ytfK/E=
 github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f/go.mod h1:BOeTUPT6fCRH5X/+QqF6Kza3IyLp9uSq/rWgEtI4aZI=
 github.com/honeycombio/libhoney-go v1.8.1 h1:ZNa8QacttKO/628Nm4Bb0H6ur7i9dy7z/BUuA36VJKk=

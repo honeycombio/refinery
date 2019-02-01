@@ -14,8 +14,8 @@ require (
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
 	github.com/gogo/protobuf v0.0.0-20180509162441-30cf7ac33676 // indirect
 	github.com/golang/protobuf v0.0.0-20180417204537-fae8ec697c5d // indirect
-	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
+	github.com/hashicorp/golang-lru v0.5.0
 	github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f
 	github.com/honeycombio/libhoney-go v1.8.1
 	github.com/jessevdk/go-flags v1.4.0
