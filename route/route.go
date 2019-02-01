@@ -272,6 +272,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 				)
 				continue
 			}
+			batchedResponses = append(
+				batchedResponses,
+				&BatchResponse{Status: http.StatusAccepted},
+			)
 			ev.APIHost = targetShard.GetAddress()
 			r.Transmission.EnqueueEvent(ev)
 			continue
