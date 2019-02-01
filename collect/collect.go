@@ -55,7 +55,12 @@ type InMemCollector struct {
 	datasetSamplers map[string]sample.Sampler
 	defaultSampler  sample.Sampler
 
+	// sentTraceCache holds the record of our past sampling decisions
 	sentTraceCache *lru.Cache
+
+	// traceTimeouts holds traces until they've timed out and are ready to send
+	traceTimeouts chan *types.Trace
+	cancelers     []context.CancelFunc
 }
 
 type imcConfig struct {
@@ -94,12 +99,25 @@ func (i *InMemCollector) Start() error {
 	i.Config.RegisterReloadCallback(i.reloadConfigs)
 
 	i.Metrics.Register("trace_duration", "histogram")
+	i.Metrics.Register("trace_timeout_buffer_overrun", "counter")
 
 	stc, err := lru.New(capacity * 5) // keep 5x ring buffer size
 	if err != nil {
 		return err
 	}
 	i.sentTraceCache = stc
+
+	// make the trace timout channel.  We really don't want to block or drop
+	// traces from this channel so let's make it really big and be careful to
+	// scream if we overrun it.
+	i.traceTimeouts = make(chan *types.Trace, capacity*10)
+	// pass in a cancellable context so we can flush all the traces in the
+	// channel on shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	i.cancelers = append(i.cancelers, cancel)
+
+	// start up the goroutine that will consume from the trace timeout channel
+	go i.handleTimedOutTraces(ctx)
 
 	return nil
 }
@@ -153,21 +171,29 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 		}
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
-		ctx, cancel := context.WithCancel(context.Background())
 		trace = &types.Trace{
-			APIHost:       sp.APIHost,
-			APIKey:        sp.APIKey,
-			Dataset:       sp.Dataset,
-			TraceID:       sp.TraceID,
-			StartTime:     time.Now(),
-			CancelSending: cancel,
+			APIHost:   sp.APIHost,
+			APIKey:    sp.APIKey,
+			Dataset:   sp.Dataset,
+			TraceID:   sp.TraceID,
+			StartTime: time.Now(),
 		}
 		// push this into the cache and if we eject an unsent trace, send it.
+		// This might happen before the 60sec timeout
 		ejectedTrace := i.Cache.Set(trace)
 		if ejectedTrace != nil {
 			go i.send(ejectedTrace)
 		}
-		go i.timeoutThenSend(ctx, trace)
+		// add the trace to the timeout channel for eventual sending
+		select {
+		case i.traceTimeouts <- trace:
+		default:
+			// this is bad - we filled the timeout channel. This trace will
+			// never timeout; it's only opportunity for getting sent is
+			// overrunning the cache buffer.
+			i.Metrics.IncrementCounter("trace_timeout_buffer_overrun")
+			i.Logger.Errorf("trace ID %s overflowed timeout channel", trace.TraceID)
+		}
 	}
 	err := trace.AddSpan(sp)
 	if err == types.TraceAlreadySent {
@@ -205,24 +231,50 @@ func isRootSpan(sp *types.Span) bool {
 	return false
 }
 
-// timeoutThenSend will wait for the trace timeout to expire then send (if it
-// has not already been sent). It should be called in a goroutine, not
-// synchronously.
-func (i *InMemCollector) timeoutThenSend(ctx context.Context, trace *types.Trace) {
+// handleTimedOutTraces reads from the channel of potentially old traces. It
+// considers each one and sends it if it's more than 60sec old. They're inserted
+// in arrival order, so if it's less than 60sec old, the function sleeps until
+// it is (since everything that will come after it is necessarily newer). It
+// sends anything that needs to be sent and discards those already sent. This is
+// the method by which traces will get sent eventually even if no root span ever
+// arrives.
+func (i *InMemCollector) handleTimedOutTraces(ctx context.Context) {
+	done := ctx.Done()
 	traceTimeout, err := i.Config.GetTraceTimeout()
 	if err != nil {
 		i.Logger.Errorf("failed to get trace timeout. pausing for 60 seconds")
 		traceTimeout = 60
 	}
-	timeout := time.NewTimer(time.Duration(traceTimeout) * time.Second)
-	select {
-	case <-timeout.C:
-		i.Logger.Debugf("trace timeout for trace ID %s", trace.TraceID)
-		trace.FinishTime = time.Now()
-		i.send(trace)
-	case <-ctx.Done():
-		// someone canceled our timeout. just bail
-		return
+	for {
+		select {
+		case <-done:
+			return
+		case tr := <-i.traceTimeouts:
+			// if we've already sent the trace, carry on.
+			if tr.GetSent() {
+				i.Logger.Debugf("queued trace already sent")
+				continue
+			}
+			// if the trace's start time plus 60sec is before now, we've timed out.
+			if tr.StartTime.Add(time.Duration(traceTimeout) * time.Second).Before(time.Now()) {
+				i.Logger.Debugf("trace timeout for trace ID %s", tr.TraceID)
+				go i.pauseAndSend(tr)
+				continue
+			}
+			// the trace hasn't been sent, but it also hasn't timed out we
+			// should sleep until it's timeout then send it. If it's already
+			// been sent by then, sending will return with a noop.
+			i.Logger.Debugf("got trhough queue")
+			timeTillExpire := tr.StartTime.Add(time.Duration(traceTimeout) * time.Second).Sub(time.Now())
+			if timeTillExpire < 0 {
+				timeTillExpire = 0
+			}
+			time.Sleep(timeTillExpire)
+			if !tr.GetSent() { // send if not already sent
+				i.Logger.Debugf("queued trace sent after sleep")
+				go i.pauseAndSend(tr)
+			}
+		}
 	}
 }
 
@@ -252,9 +304,6 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		i.Logger.Debugf("skipping send because someone else already sent, trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
 		return
 	}
-
-	// hey, we're sending the trace! we should cancel the timeout goroutine.
-	trace.CancelSending()
 
 	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
 	i.Metrics.Histogram("trace_duration_ms", traceDur)
@@ -316,6 +365,10 @@ func (i *InMemCollector) Stop() error {
 		if !trace.GetSent() {
 			i.send(trace)
 		}
+	}
+	// cancel all the contexts that need canceling
+	for _, cancel := range i.cancelers {
+		cancel()
 	}
 	i.Transmission.Flush()
 	return nil

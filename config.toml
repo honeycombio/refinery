@@ -135,7 +135,7 @@ CacheCapacity = 1000
 		# will keep 1 out of every 30 traces. The choice on whether to keep any specific
 		# trace is random, so the rate is approximate.
 		# Eligible for live reload.
-		SampleRate = 2
+		SampleRate = 1
 
 	[SamplerConfig.dataset1]
 

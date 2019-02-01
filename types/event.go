@@ -54,12 +54,6 @@ type Trace struct {
 	// any additional delay imposed by the DelaySend config option.
 	FinishTime time.Time
 
-	// CanceSending is a cancel function to abort the trace timeout if we send
-	// or sample this trace so that we're not sitting around with tons of
-	// goroutines waiting a full minute (or whatever the trace timeout is) then
-	// doing nothing.
-	CancelSending context.CancelFunc
-
 	// spanListLock protects multiple accessors to the list of spans in this
 	// trace
 	spanListLock sync.Mutex
