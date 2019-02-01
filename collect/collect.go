@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/honeycombio/samproxy/collect/cache"
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
@@ -53,10 +54,20 @@ type InMemCollector struct {
 	Cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 	defaultSampler  sample.Sampler
+
+	sentTraceCache *lru.Cache
 }
 
 type imcConfig struct {
 	CacheCapacity int
+}
+
+// traceSentRecord is the bit we leave behind when sending a trace to remember
+// our decision for the future, so any delinquent spans that show up later can
+// be dropped or passed along.
+type traceSentRecord struct {
+	keep bool // true if the trace was kept, false if it was dropped
+	rate uint // sample rate used when sending the trace
 }
 
 func (i *InMemCollector) Start() error {
@@ -83,6 +94,12 @@ func (i *InMemCollector) Start() error {
 	i.Config.RegisterReloadCallback(i.reloadConfigs)
 
 	i.Metrics.Register("trace_duration", "histogram")
+
+	stc, err := lru.New(capacity * 5) // keep 5x ring buffer size
+	if err != nil {
+		return err
+	}
+	i.sentTraceCache = stc
 
 	return nil
 }
@@ -120,11 +137,22 @@ func (i *InMemCollector) reloadConfigs() {
 	} else {
 		i.Logger.Errorf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
+	// TODO add resizing the LRU sent trace cache on config reload
 }
 
 func (i *InMemCollector) AddSpan(sp *types.Span) {
 	trace := i.Cache.Get(sp.TraceID)
 	if trace == nil {
+		// if the trace has already been sent, just pass along the span
+		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
+			if sr, ok := sentRecord.(*traceSentRecord); ok {
+				// TODO add a metric saying we pulled this trace from the sent cache
+				i.dealWithSentTrace(sr.keep, sr.rate, sp)
+				return
+			}
+		}
+		// trace hasn't already been sent (or this span is really old); let's
+		// create a new trace to hold it
 		ctx, cancel := context.WithCancel(context.Background())
 		trace = &types.Trace{
 			APIHost:       sp.APIHost,
@@ -134,12 +162,16 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 			StartTime:     time.Now(),
 			CancelSending: cancel,
 		}
-		i.Cache.Set(trace)
+		// push this into the cache and if we eject an unsent trace, send it.
+		ejectedTrace := i.Cache.Set(trace)
+		if ejectedTrace != nil {
+			go i.send(ejectedTrace)
+		}
 		go i.timeoutThenSend(ctx, trace)
 	}
 	err := trace.AddSpan(sp)
 	if err == types.TraceAlreadySent {
-		i.dealWithSentTrace(trace, sp)
+		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
 		return
 	}
 
@@ -149,16 +181,16 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	}
 }
 
-func (i *InMemCollector) dealWithSentTrace(tr *types.Trace, sp *types.Span) {
-	if tr.KeepSample {
+//
+func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types.Span) {
+	if keep {
 		i.Logger.Debugf("Sending span because of previous decision to send trace %s", sp.TraceID)
-		sp.SampleRate *= tr.SampleRate
+		sp.SampleRate *= sampleRate
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
 	i.Logger.Debugf("Dropping span because of previous decision to drop trace %s", sp.TraceID)
 	return
-
 }
 
 func isRootSpan(sp *types.Span) bool {
@@ -222,7 +254,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 
 	// hey, we're sending the trace! we should cancel the timeout goroutine.
-	defer trace.CancelSending()
+	trace.CancelSending()
 
 	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
 	i.Metrics.Histogram("trace_duration_ms", traceDur)
@@ -250,6 +282,13 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
 	trace.Sent = true
+
+	// record this decision in the sent record LRU for future spans
+	sentRecord := traceSentRecord{
+		keep: shouldSend,
+		rate: rate,
+	}
+	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
 
 	// if we're supposed to drop this trace, then we're done.
 	if !shouldSend {
