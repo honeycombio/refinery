@@ -53,6 +53,7 @@ type InMemCollector struct {
 	cacheLock       sync.Mutex
 	Cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
+	dsLock          sync.Mutex
 	defaultSampler  sample.Sampler
 
 	sentTraceCache *lru.Cache
@@ -262,6 +263,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	var sampler sample.Sampler
 	var found bool
 
+	i.dsLock.Lock()
 	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
 		// no dataset sampler found, use default sampler
@@ -276,6 +278,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		// save sampler for later
 		i.datasetSamplers[trace.Dataset] = sampler
 	}
+	i.dsLock.Unlock()
 
 	// make sampling decision and update the trace
 	rate, shouldSend := sampler.GetSampleRate(trace)
