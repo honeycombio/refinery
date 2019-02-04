@@ -40,11 +40,17 @@ const (
 )
 
 func (h *HoneycombLogger) Start() error {
+	// logLevel is defined outside the HoneycombLogger section
+	// and is set independently, before Start() is called, so we need to
+	// preserve it.
+	// TODO: make LogLevel part of the HoneycombLogger/LogrusLogger sections?
+	logLevel := h.loggerConfig.level
 	loggerConfig := HoneycombLoggerConfig{}
 	err := h.Config.GetOtherConfig("HoneycombLogger", &loggerConfig)
 	if err != nil {
 		return err
 	}
+	loggerConfig.level = logLevel
 	h.loggerConfig = loggerConfig
 	if h.loggerConfig.LoggerAPIKey != "" {
 		libhConf := libhoney.Config{
@@ -69,6 +75,8 @@ func (h *HoneycombLogger) Start() error {
 }
 
 func (h *HoneycombLogger) reloadBuilder() {
+	// preseve log level
+	logLevel := h.loggerConfig.level
 	loggerConfig := HoneycombLoggerConfig{}
 	err := h.Config.GetOtherConfig("HoneycombLogger", &loggerConfig)
 	if err != nil {
@@ -78,6 +86,7 @@ func (h *HoneycombLogger) reloadBuilder() {
 		h.Errorf("failed to reload configs for Honeycomb logger: %+v", err)
 		return
 	}
+	loggerConfig.level = logLevel
 	h.loggerConfig = loggerConfig
 	h.builder.APIHost = h.loggerConfig.LoggerHoneycombAPI
 	h.builder.WriteKey = h.loggerConfig.LoggerAPIKey
