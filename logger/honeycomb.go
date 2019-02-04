@@ -165,21 +165,13 @@ func (h *HoneycombLogger) SetLevel(level string) error {
 }
 
 func (h *HoneycombEntry) WithField(key string, value interface{}) Entry {
-	entry := &HoneycombEntry{
-		loggerConfig: h.loggerConfig,
-		builder:      h.builder.Clone(),
-	}
-	entry.builder.AddField(key, value)
-	return entry
+	h.builder.AddField(key, value)
+	return h
 }
 
 func (h *HoneycombEntry) WithFields(fields map[string]interface{}) Entry {
-	entry := &HoneycombEntry{
-		loggerConfig: h.loggerConfig,
-		builder:      h.builder.Clone(),
-	}
-	entry.builder.Add(fields)
-	return entry
+	h.builder.Add(fields)
+	return h
 }
 
 func (h *HoneycombEntry) Debugf(f string, args ...interface{}) {
