@@ -150,7 +150,12 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
-	d.Logger.Debugf("using key %s got sample rate %d and keep %v for trace %s", key, rate, shouldKeep, trace.TraceID)
+	d.Logger.WithFields(map[string]interface{}{
+		"sample_key":  key,
+		"sample_rate": rate,
+		"sample_keep": shouldKeep,
+		"trace_id":    trace.TraceID,
+	}).Debugf("got sample rate and decision")
 	if shouldKeep {
 		d.Metrics.IncrementCounter("dynsampler_num_kept")
 	} else {
@@ -211,7 +216,7 @@ func (d *DynamicSampler) buildKey(trace *types.Trace) string {
 		if span != nil {
 			span.Data[d.addDynsampleField] = key
 		} else {
-			d.Logger.Debugf("no root span found; not adding dynsampler key to the trace for trace ID %s.", trace.TraceID)
+			d.Logger.WithField("trace_id", trace.TraceID).Debugf("no root span found; not adding dynsampler key to the trace")
 		}
 	}
 

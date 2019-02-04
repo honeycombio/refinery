@@ -27,7 +27,7 @@ type SamplerFactory struct {
 func (s *SamplerFactory) GetDefaultSamplerImplementation() Sampler {
 	samplerType, err := s.Config.GetDefaultSamplerType()
 	if err != nil {
-		s.Logger.Errorf("unable to get default sampler type from config: %s", err.Error())
+		s.Logger.WithField("error", err).Errorf("unable to get default sampler type from config")
 		os.Exit(1)
 	}
 	s.Logger.Debugf("creating default sampler implementation")
@@ -41,7 +41,7 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 	if err != nil {
 		return nil
 	}
-	s.Logger.Debugf("creating sampler implementation for %s", dataset)
+	s.Logger.WithField("dataset", dataset).Debugf("creating sampler implementation")
 	return s.getSamplerForType(samplerType, dataset)
 }
 

@@ -80,6 +80,7 @@ func (d *DeterministicSharder) Start() error {
 	for i, peerShard := range d.peers {
 		peerIPList, err := net.LookupHost(peerShard.ipOrHost)
 		if err != nil {
+			// TODO something better than fail to start if peer is missing
 			return errors.Wrap(err, fmt.Sprintf("couldn't resolve peer hostname %s", peerShard.ipOrHost))
 		}
 		for _, peerIP := range peerIPList {
@@ -90,7 +91,7 @@ func (d *DeterministicSharder) Start() error {
 				}
 				if peerIP == ipAddr.String() {
 					if peerShard.port == localPort {
-						d.Logger.Debugf("Found myself in peer list: %+v", peerShard)
+						d.Logger.WithField("peer", peerShard).Debugf("Found myself in peer list")
 						found = true
 						selfIndexIntoPeerList = i
 					}

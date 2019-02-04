@@ -23,6 +23,6 @@ func (s *SingleServerSharder) MyShard() Shard {
 }
 
 func (s *SingleServerSharder) WhichShard(traceID string) Shard {
-	s.Logger.Debugf("single server sharder; choosing self for trace ID %s", traceID)
+	s.Logger.WithField("trace_id", traceID).Debugf("single server sharder; choosing self for trace")
 	return &selfShard
 }

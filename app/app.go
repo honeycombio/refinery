@@ -40,7 +40,7 @@ func (a *App) Start() error {
 	// Validate configuration
 	err := a.validateAPIKeys()
 	if err != nil {
-		a.Logger.Errorf("Failed to validate API key: %s", err)
+		a.Logger.WithField("error", err).Errorf("Failed to validate API key")
 		return err
 	}
 
@@ -87,7 +87,7 @@ func (a *App) validateAPIKeys() error {
 		if err != nil {
 			return errors.Wrapf(err, "failed to validate API key: %s", key)
 		}
-		a.Logger.Debugf("validated API key %s to be team %s", key, team)
+		a.Logger.WithField("api_key", key).WithField("team", team).Debugf("validated API key")
 	}
 	return nil
 }
