@@ -292,12 +292,12 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// if we're supposed to drop this trace, then we're done.
 	if !shouldSend {
-		i.Logger.WithField("trace_id", dataset.TraceID).WithField("dataset", dataset.Dataset).Infof("Dropping trace because of sampling, trace to dataset")
+		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Dropping trace because of sampling, trace to dataset")
 		return
 	}
 
 	// ok, we're not dropping this trace; send all the spans
-	i.Logger.WithField("trace_id", dataset.TraceID).WithField("dataset", dataset.Dataset).Infof("Sending trace to dataset")
+	i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
