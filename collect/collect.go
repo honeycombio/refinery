@@ -109,13 +109,13 @@ func (i *InMemCollector) reloadConfigs() {
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
 	if err != nil {
-		i.Logger.Errorf("Failed to reload InMemCollector section when reloading configs:", err)
+		i.Logger.WithField("error", err).Errorf("Failed to reload InMemCollector section when reloading configs")
 	}
 	capacity := imcConfig.CacheCapacity
 
 	if existingCache, ok := i.Cache.(*cache.DefaultInMemCache); ok {
 		if capacity != existingCache.GetCacheSize() {
-			i.Logger.Debugf("refreshing the cache because it changed size from %d to %d", existingCache.GetCacheSize(), capacity)
+			i.Logger.WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", capacity).Debugf("refreshing the cache because it changed size")
 			c := &cache.DefaultInMemCache{
 				Config: cache.CacheConfig{
 					CacheCapacity: capacity,
@@ -136,7 +136,7 @@ func (i *InMemCollector) reloadConfigs() {
 			i.Logger.Debugf("skipping reloading the cache on config reload because it hasn't changed capacity")
 		}
 	} else {
-		i.Logger.Errorf("skipping reloading the cache on config reload because it's not an in-memory cache")
+		i.Logger.WithField("cache", i.Cache.(*cache.DefaultInMemCache)).Errorf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
 	// TODO add resizing the LRU sent trace cache on config reload
 }
@@ -185,12 +185,12 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 //
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types.Span) {
 	if keep {
-		i.Logger.Debugf("Sending span because of previous decision to send trace %s", sp.TraceID)
+		i.Logger.WithField("trace_id", sp.TraceID).Debugf("Sending span because of previous decision to send trace")
 		sp.SampleRate *= sampleRate
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
-	i.Logger.Debugf("Dropping span because of previous decision to drop trace %s", sp.TraceID)
+	i.Logger.WithField("trace_id", sp.TraceID).Debugf("Dropping span because of previous decision to drop trace")
 	return
 }
 
@@ -218,7 +218,7 @@ func (i *InMemCollector) timeoutThenSend(ctx context.Context, trace *types.Trace
 	timeout := time.NewTimer(time.Duration(traceTimeout) * time.Second)
 	select {
 	case <-timeout.C:
-		i.Logger.Debugf("trace timeout for trace ID %s", trace.TraceID)
+		i.Logger.WithField("trace_id", trace.TraceID).Debugf("trace timeout for trace")
 		trace.FinishTime = time.Now()
 		i.send(trace)
 	case <-ctx.Done():
@@ -250,7 +250,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	if trace.Sent == true {
 		// someone else already sent this. Return doing nothing.
-		i.Logger.Debugf("skipping send because someone else already sent, trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
+		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Debugf("skipping send because someone else already sent trace to dataset")
 		return
 	}
 
@@ -295,12 +295,12 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// if we're supposed to drop this trace, then we're done.
 	if !shouldSend {
-		i.Logger.Infof("Dropping trace because of sampling, trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
+		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Dropping trace because of sampling, trace to dataset")
 		return
 	}
 
 	// ok, we're not dropping this trace; send all the spans
-	i.Logger.Infof("Sending trace ID %s to dataset %s", trace.TraceID, trace.Dataset)
+	i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1

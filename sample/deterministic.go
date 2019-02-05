@@ -31,7 +31,7 @@ func (d *DeterministicSampler) Start() error {
 	// listen for config reloads with an errorless version of the reload
 	d.Config.RegisterReloadCallback(func() {
 		if err := d.loadConfigs(); err != nil {
-			d.Logger.Errorf("failed to reload deterministic sampler configs: %+v", err)
+			d.Logger.WithField("error", err).Errorf("failed to reload deterministic sampler configs")
 		}
 	})
 
@@ -46,7 +46,7 @@ func (d *DeterministicSampler) loadConfigs() error {
 		return err
 	}
 	if dsConfig.SampleRate < 1 {
-		d.Logger.Debugf("configured sample rate for deterministic sampler was %d; forcing to 1", dsConfig.SampleRate)
+		d.Logger.WithField("sample_rate", dsConfig.SampleRate).Debugf("configured sample rate for deterministic sampler was less than 1; forcing to 1")
 		dsConfig.SampleRate = 1
 	}
 	d.sampleRate = dsConfig.SampleRate

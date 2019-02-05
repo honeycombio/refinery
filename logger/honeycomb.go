@@ -28,6 +28,11 @@ type HoneycombLoggerConfig struct {
 	level HoneycombLevel
 }
 
+type HoneycombEntry struct {
+	loggerConfig HoneycombLoggerConfig
+	builder      *libhoney.Builder
+}
+
 type HoneycombLevel int
 
 const (
@@ -99,6 +104,24 @@ func (h *HoneycombLogger) Stop() error {
 	return nil
 }
 
+func (h *HoneycombLogger) WithField(key string, value interface{}) Entry {
+	entry := &HoneycombEntry{
+		loggerConfig: h.loggerConfig,
+		builder:      h.builder.Clone(),
+	}
+	entry.builder.AddField(key, value)
+	return entry
+}
+
+func (h *HoneycombLogger) WithFields(fields map[string]interface{}) Entry {
+	entry := &HoneycombEntry{
+		loggerConfig: h.loggerConfig,
+		builder:      h.builder.Clone(),
+	}
+	entry.builder.Add(fields)
+	return entry
+}
+
 func (h *HoneycombLogger) Debugf(f string, args ...interface{}) {
 	if h.loggerConfig.level > DebugLevel {
 		return
@@ -148,4 +171,44 @@ func (h *HoneycombLogger) SetLevel(level string) error {
 	}
 	h.loggerConfig.level = lvl
 	return nil
+}
+
+func (h *HoneycombEntry) WithField(key string, value interface{}) Entry {
+	h.builder.AddField(key, value)
+	return h
+}
+
+func (h *HoneycombEntry) WithFields(fields map[string]interface{}) Entry {
+	h.builder.Add(fields)
+	return h
+}
+
+func (h *HoneycombEntry) Debugf(f string, args ...interface{}) {
+	if h.loggerConfig.level > DebugLevel {
+		return
+	}
+	ev := h.builder.NewEvent()
+	ev.AddField("level", "debug")
+	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Send()
+}
+
+func (h *HoneycombEntry) Infof(f string, args ...interface{}) {
+	if h.loggerConfig.level > InfoLevel {
+		return
+	}
+	ev := h.builder.NewEvent()
+	ev.AddField("level", "info")
+	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Send()
+}
+
+func (h *HoneycombEntry) Errorf(f string, args ...interface{}) {
+	if h.loggerConfig.level > ErrorLevel {
+		return
+	}
+	ev := h.builder.NewEvent()
+	ev.AddField("level", "error")
+	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Send()
 }

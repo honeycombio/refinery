@@ -102,6 +102,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 
 	// get out request ID for logging
 	reqID := req.Context().Value(types.RequestIDContextKey{})
+	logger := r.Logger.WithField("request_id", reqID)
 
 	// not part of a trace. send along upstream
 	if trEv.TraceID == "" {
@@ -111,7 +112,10 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			r.handlerReturnWithError(w, ErrReqToEvent, err)
 			return
 		}
-		r.Logger.Debugf("sending event %s to %s %s", reqID, ev.APIHost, ev.Dataset)
+		logger.WithFields(map[string]interface{}{
+			"api_host": ev.APIHost,
+			"dataset":  ev.Dataset,
+		}).Debugf("sending non-trace event")
 		r.Transmission.EnqueueEvent(ev)
 		return
 	}
@@ -127,7 +131,12 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		ev.APIHost = targetShard.GetAddress()
-		r.Logger.Debugf("Sending span %s with trace ID %s for dataset %s to my peer %s", reqID, trEv.TraceID, ev.Dataset, targetShard.GetAddress())
+		logger.WithFields(map[string]interface{}{
+			"api_host": ev.APIHost,
+			"dataset":  ev.Dataset,
+			"trace_id": trEv.TraceID,
+			"peer":     targetShard.GetAddress(),
+		}).Debugf("Sending span to my peer")
 		r.Transmission.EnqueueEvent(ev)
 		return
 	}
@@ -142,7 +151,11 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		TraceID: trEv.TraceID,
 	}
 	r.Metrics.IncrementCounter("router_span")
-	r.Logger.Debugf("Accepting span %s with trace ID %s for dataset %s for collection into a trace", reqID, trEv.TraceID, ev.Dataset)
+	logger.WithFields(map[string]interface{}{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+		"trace_id": trEv.TraceID,
+	}).Debugf("Accepting span for collection into a trace")
 	r.Collector.AddSpan(span)
 }
 
@@ -224,6 +237,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	reqID := req.Context().Value(types.RequestIDContextKey{})
+	logger := r.Logger.WithField("request_id", reqID)
 
 	for _, bev := range batchedEvents {
 		// extract trace ID, route to self or peer, pass on to collector
@@ -245,14 +259,17 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 						Error:  fmt.Sprintf("failed to convert to event: %s", err.Error()),
 					},
 				)
-				r.Logger.Debugf("event from batch %s failed to process event: %s", reqID, err.Error())
+				logger.WithField("error", err).Debugf("event from batch failed to process event")
 				continue
 			}
 			batchedResponses = append(
 				batchedResponses,
 				&BatchResponse{Status: http.StatusAccepted},
 			)
-			r.Logger.Debugf("sending event from batch %s to %s %s", reqID, ev.APIHost, ev.Dataset)
+			logger.WithFields(map[string]interface{}{
+				"api_host": ev.APIHost,
+				"dataset":  ev.Dataset,
+			}).Debugf("sending non-trace event from batch")
 			r.Transmission.EnqueueEvent(ev)
 			continue
 		}
@@ -271,7 +288,12 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 				)
 				continue
 			}
-			r.Logger.Debugf("Sending span from batch %s with trace ID %s for dataset %s to my peer %s", reqID, traceID, ev.Dataset, targetShard.GetAddress())
+			logger.WithFields(map[string]interface{}{
+				"api_host": ev.APIHost,
+				"dataset":  ev.Dataset,
+				"trace_id": traceID,
+				"peer":     targetShard.GetAddress(),
+			}).Debugf("Sending span from batch to my peer")
 			batchedResponses = append(
 				batchedResponses,
 				&BatchResponse{Status: http.StatusAccepted},
@@ -298,7 +320,11 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			TraceID: traceID,
 		}
 		r.Metrics.IncrementCounter("router_span")
-		r.Logger.Debugf("Accepting span from batch %s with trace ID %s for dataset %s for collection into a trace", reqID, traceID, ev.Dataset)
+		logger.WithFields(map[string]interface{}{
+			"api_host": ev.APIHost,
+			"dataset":  ev.Dataset,
+			"trace_id": span.TraceID,
+		}).Debugf("Accepting span from batch for collection into a trace")
 		batchedResponses = append(
 			batchedResponses,
 			&BatchResponse{Status: http.StatusAccepted},
@@ -339,6 +365,8 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 		sampleRate = 1
 	}
 	eventTime := getEventTime(bev.Timestamp)
+	// TODO move the following 3 lines outside of this loop; they could be done
+	// once for the entire batch instead of in every event.
 	vars := mux.Vars(req)
 	dataset := vars["datasetName"]
 	apiHost, err := r.Config.GetHoneycombAPI()
