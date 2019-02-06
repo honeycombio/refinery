@@ -95,6 +95,12 @@ func (i *InMemCollector) Start() error {
 	i.Config.RegisterReloadCallback(i.reloadConfigs)
 
 	i.Metrics.Register("trace_duration", "histogram")
+	i.Metrics.Register("trace_num_spans", "histogram")
+	i.Metrics.Register("trace_sent_cache_hit", "counter")
+	i.Metrics.Register("trace_accepted", "counter")
+	i.Metrics.Register("trace_send", "counter")
+	i.Metrics.Register("trace_send_kept", "counter")
+	i.Metrics.Register("trace_send_dropped", "counter")
 
 	stc, err := lru.New(capacity * 5) // keep 5x ring buffer size
 	if err != nil {
@@ -147,13 +153,14 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 		// if the trace has already been sent, just pass along the span
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
-				// TODO add a metric saying we pulled this trace from the sent cache
+				i.Metrics.IncrementCounter("trace_sent_cache_hit")
 				i.dealWithSentTrace(sr.keep, sr.rate, sp)
 				return
 			}
 		}
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
+		i.Metrics.IncrementCounter("trace_accepted")
 		ctx, cancel := context.WithCancel(context.Background())
 		trace = &types.Trace{
 			APIHost:       sp.APIHost,
@@ -254,6 +261,10 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		return
 	}
 
+	// we're sending this trace, bump the counter
+	i.Metrics.IncrementCounter("trace_sent")
+	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
+
 	// hey, we're sending the trace! we should cancel the timeout goroutine.
 	trace.CancelSending()
 
@@ -295,9 +306,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// if we're supposed to drop this trace, then we're done.
 	if !shouldSend {
+		i.Metrics.IncrementCounter("trace_send_dropped")
 		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Dropping trace because of sampling, trace to dataset")
 		return
 	}
+	i.Metrics.IncrementCounter("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Sending trace to dataset")
