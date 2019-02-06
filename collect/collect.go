@@ -263,7 +263,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// we're sending this trace, bump the counter
 	i.Metrics.IncrementCounter("trace_sent")
-	i.Metrics.Histogram("trace_span_count", len(trace.GetSpans()))
+	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
 
 	// hey, we're sending the trace! we should cancel the timeout goroutine.
 	trace.CancelSending()
