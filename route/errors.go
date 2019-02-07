@@ -38,7 +38,11 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	if err != nil {
 		he.err = err
 	}
-	r.Logger.Errorf("returning error %+v, %s\n", he, he.err.Error())
+	r.Logger.WithFields(map[string]interface{}{
+		"error.err":         he.err.Error(),
+		"error.msg":         he.msg,
+		"error.status_code": he.status,
+	}).Errorf("handler returning error")
 	w.WriteHeader(he.status)
 	errmsg := he.msg
 	if he.detailed {
