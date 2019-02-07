@@ -47,6 +47,8 @@ func (d *DefaultTransmission) Start() error {
 		APIHost:   upstreamAPI,
 		Transport: d.HTTPClient.Transport,
 		// Logger:    &libhoney.DefaultLogger{},
+		BlockOnResponse: true,
+		BlockOnSend:     true,
 	}
 	libhoney.Init(libhConfig)
 	libhoney.UserAgentAddition = "samproxy/" + d.Version

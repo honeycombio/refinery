@@ -190,6 +190,10 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			return
 		case <-tick.C:
 			ev := h.builder.NewEvent()
+			ev.Metadata = map[string]string{
+				"api_host": ev.APIHost,
+				"dataset":  ev.Dataset,
+			}
 			h.countersLock.Lock()
 			for _, count := range h.counters {
 				count.lock.Lock()

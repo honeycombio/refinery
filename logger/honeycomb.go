@@ -63,6 +63,8 @@ func (h *HoneycombLogger) Start() error {
 			WriteKey: h.loggerConfig.LoggerAPIKey,
 			// Output:   &libhoney.WriterOutput{},
 			// Logger: &libhoney.DefaultLogger{},
+			BlockOnSend:     true,
+			BlockOnResponse: true,
 		}
 		libhoney.Init(libhConf)
 	}
@@ -129,6 +131,10 @@ func (h *HoneycombLogger) Debugf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	ev.AddField("level", "debug")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Metadata = map[string]string{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 	ev.Send()
 }
 
@@ -139,6 +145,10 @@ func (h *HoneycombLogger) Infof(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	ev.AddField("level", "info")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Metadata = map[string]string{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 	ev.Send()
 }
 
@@ -149,6 +159,10 @@ func (h *HoneycombLogger) Errorf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	ev.AddField("level", "error")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Metadata = map[string]string{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 	ev.Send()
 }
 
@@ -190,6 +204,10 @@ func (h *HoneycombEntry) Debugf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	ev.AddField("level", "debug")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Metadata = map[string]string{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 	ev.Send()
 }
 
@@ -200,6 +218,10 @@ func (h *HoneycombEntry) Infof(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	ev.AddField("level", "info")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Metadata = map[string]string{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 	ev.Send()
 }
 
@@ -210,5 +232,9 @@ func (h *HoneycombEntry) Errorf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	ev.AddField("level", "error")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
+	ev.Metadata = map[string]string{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 	ev.Send()
 }
