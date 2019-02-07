@@ -79,6 +79,7 @@ func (h *HoneycombMetrics) Start() error {
 		APIHost:   mc.MetricsHoneycombAPI,
 		Transport: h.HTTPClient.Transport,
 		// Logger:    &libhoney.DefaultLogger{},
+		BlockOnSend: true,
 	}
 	libhoney.Init(libhConfig)
 	libhoney.UserAgentAddition = "samproxy/" + h.Version
