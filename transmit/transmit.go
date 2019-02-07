@@ -105,7 +105,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 			"request_id": ev.Context.Value(types.RequestIDContextKey{}),
 			"dataset":    ev.Dataset,
 			"api_host":   ev.APIHost,
-		}).Errorf("failed to enque event")
+		}).Errorf("failed to enqueue event")
 	}
 }
 
@@ -140,10 +140,10 @@ func (d *DefaultTransmission) processResponses(ctx context.Context) {
 				}
 				d.Logger.WithFields(map[string]interface{}{
 					"status_code": r.StatusCode,
-					"error":       r.Err,
+					"error":       r.Err.Error(),
 					"api_host":    apiHost,
 					"dataset":     dataset,
-				}).Infof("non-20x response when sending event")
+				}).Errorf("non-20x response when sending event")
 				if honeycombAPI == apiHost {
 					// if the API host matches the configured honeycomb API,
 					// count it as an API error
