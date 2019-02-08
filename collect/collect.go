@@ -98,7 +98,6 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_num_spans", "histogram")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
-	i.Metrics.Register("trace_send", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
 	i.Metrics.Register("trace_send_dropped", "counter")
 
