@@ -34,6 +34,7 @@ github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f h1:CavWx
 github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f/go.mod h1:BOeTUPT6fCRH5X/+QqF6Kza3IyLp9uSq/rWgEtI4aZI=
 github.com/honeycombio/libhoney-go v1.8.1 h1:ZNa8QacttKO/628Nm4Bb0H6ur7i9dy7z/BUuA36VJKk=
 github.com/honeycombio/libhoney-go v1.8.1/go.mod h1:jdLxh51fcBTy6XIpx1efuJmHePs2xUfVkw25lr+hsmg=
+github.com/honeycombio/libhoney-go v1.8.2 h1:stYQJi/21p37Qan2DlSkXDuIrup9zxOul2UyeqMAqX0=
 github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/konsorten/go-windows-terminal-sequences v0.0.0-20180402223658-b729f2633dfe h1:CHRGQ8V7OlCYtwaKPJi3iA7J+YdNKdo8j7nG5IgDhjs=

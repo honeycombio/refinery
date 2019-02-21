@@ -11,16 +11,17 @@ import (
 	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
 )
 
 type HoneycombMetrics struct {
-	Config     config.Config `inject:""`
-	Logger     logger.Logger `inject:""`
-	HTTPClient *http.Client  `inject:"upstreamClient"`
-	Version    string        `inject:"version"`
+	Config            config.Config   `inject:""`
+	Logger            logger.Logger   `inject:""`
+	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
+	Version           string          `inject:"version"`
 
 	countersLock   sync.Mutex
 	counters       map[string]*counter
@@ -105,17 +106,20 @@ func (h *HoneycombMetrics) reloadBuilder() {
 }
 
 func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) {
-	libhConfig := libhoney.Config{
+	metricsTx := transmission.Honeycomb{
+		// metrics are always sent as a single event, so don't wait for the timeout
+		MaxBatchSize:      1,
+		BlockOnSend:       true,
+		UserAgentAddition: "samproxy/" + h.Version + " (metrics)",
+		Transport:         h.UpstreamTransport,
+	}
+	libhClientConfig := libhoney.ClientConfig{
 		APIHost:   mc.MetricsHoneycombAPI,
 		WriteKey:  mc.MetricsAPIKey,
 		Dataset:   mc.MetricsDataset,
-		Transport: h.HTTPClient.Transport,
-		// Logger:    &libhoney.DefaultLogger{},
-		BlockOnSend:       false,
-		BlockOnResponse:   false,
-		UserAgentAddition: "samproxy/" + h.Version,
+		Transport: metricsTx,
 	}
-	libhClient, err := libhoney.NewClient(libhConfig)
+	libhClient, err := libhoney.NewClient(libhClientConfig)
 	if err != nil {
 		return err
 	}
