@@ -24,13 +24,16 @@ import (
 )
 
 type Router struct {
-	Config       config.Config         `inject:""`
-	Logger       logger.Logger         `inject:""`
-	HTTPClient   *http.Client          `inject:"upstreamClient"`
-	Transmission transmit.Transmission `inject:""`
-	Sharder      sharder.Sharder       `inject:""`
-	Collector    collect.Collector     `inject:""`
-	Metrics      metrics.Metrics       `inject:""`
+	Config               config.Config         `inject:""`
+	Logger               logger.Logger         `inject:""`
+	HTTPTransport        *http.Transport       `inject:"upstreamTransport"`
+	UpstreamTransmission transmit.Transmission `inject:"upstreamTransmission"`
+	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
+	Sharder              sharder.Sharder       `inject:""`
+	Collector            collect.Collector     `inject:""`
+	Metrics              metrics.Metrics       `inject:""`
+
+	proxyClient *http.Client
 }
 
 type BatchResponse struct {
@@ -39,6 +42,10 @@ type BatchResponse struct {
 }
 
 func (r *Router) LnS() {
+	r.proxyClient = &http.Client{
+		Timeout:   time.Second * 10,
+		Transport: r.HTTPTransport,
+	}
 
 	r.Metrics.Register("router_proxied", "counter")
 	r.Metrics.Register("router_event", "counter")
@@ -116,7 +123,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			"api_host": ev.APIHost,
 			"dataset":  ev.Dataset,
 		}).Debugf("sending non-trace event")
-		r.Transmission.EnqueueEvent(ev)
+		r.UpstreamTransmission.EnqueueEvent(ev)
 		return
 	}
 
@@ -137,7 +144,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			"trace_id": trEv.TraceID,
 			"peer":     targetShard.GetAddress(),
 		}).Debugf("Sending span to my peer")
-		r.Transmission.EnqueueEvent(ev)
+		r.PeerTransmission.EnqueueEvent(ev)
 		return
 	}
 	// we're supposed to handle it
@@ -270,7 +277,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 				"api_host": ev.APIHost,
 				"dataset":  ev.Dataset,
 			}).Debugf("sending non-trace event from batch")
-			r.Transmission.EnqueueEvent(ev)
+			r.UpstreamTransmission.EnqueueEvent(ev)
 			continue
 		}
 		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
@@ -299,7 +306,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 				&BatchResponse{Status: http.StatusAccepted},
 			)
 			ev.APIHost = targetShard.GetAddress()
-			r.Transmission.EnqueueEvent(ev)
+			r.PeerTransmission.EnqueueEvent(ev)
 			continue
 		}
 		// we're supposed to handle it

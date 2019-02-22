@@ -43,7 +43,7 @@ func (r *Router) proxy(w http.ResponseWriter, req *http.Request) {
 		upstreamReq.Header.Set("X-Forwarded-For", req.RemoteAddr)
 	}
 	// call the upstream service
-	resp, err := r.HTTPClient.Do(upstreamReq)
+	resp, err := r.proxyClient.Do(upstreamReq)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrUpstreamUnavailable, err)
 		return

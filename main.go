@@ -7,6 +7,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
+
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	flag "github.com/jessevdk/go-flags"
@@ -89,13 +92,48 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
+	userAgentAddition := "samproxy/" + version
+	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
+		Transmission: &transmission.Honeycomb{
+			MaxBatchSize:         libhoney.DefaultMaxBatchSize,
+			BatchTimeout:         libhoney.DefaultBatchTimeout,
+			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
+			PendingWorkCapacity:  libhoney.DefaultPendingWorkCapacity,
+			UserAgentAddition:    userAgentAddition,
+			Transport:            upstreamTransport,
+		},
+	})
+	if err != nil {
+		fmt.Printf("unable to initialize upstream libhoney client")
+		os.Exit(1)
+	}
+
+	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
+		Transmission: &transmission.Honeycomb{
+			MaxBatchSize:         libhoney.DefaultMaxBatchSize,
+			BatchTimeout:         libhoney.DefaultBatchTimeout,
+			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
+			PendingWorkCapacity:  libhoney.DefaultPendingWorkCapacity,
+			UserAgentAddition:    userAgentAddition,
+			Transport:            upstreamTransport,
+			// gzip compression is expensive, and peers are most likely close to each other
+			// so we can turn off gzip when forwarding to peers
+			DisableGzipCompression: true,
+		},
+	})
+	if err != nil {
+		fmt.Printf("unable to initialize upstream libhoney client")
+		os.Exit(1)
+	}
+
 	var g inject.Graph
 	err = g.Provide(
 		&inject.Object{Value: c},
 		&inject.Object{Value: lgr},
 		&inject.Object{Value: upstreamTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: peerTransport, Name: "peerTransport"},
-		&inject.Object{Value: &transmit.DefaultTransmission{}},
+		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: upstreamClient}, Name: "upstreamTransmission"},
+		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: peerClient}, Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
 		&inject.Object{Value: metricsr},
