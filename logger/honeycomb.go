@@ -20,8 +20,9 @@ import (
 type HoneycombLogger struct {
 	Config            config.Config   `inject:""`
 	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
+	Version           string          `inject:"version"`
 	loggerConfig      HoneycombLoggerConfig
-	libhClient        libhoney.Client
+	libhClient        *libhoney.Client
 	builder           *libhoney.Builder
 }
 
@@ -66,7 +67,7 @@ func (h *HoneycombLogger) Start() error {
 	if h.loggerConfig.LoggerAPIKey == "" {
 		loggerTx = &transmission.DiscardSender{}
 	} else {
-		loggerTx = transmission.Honeycomb{
+		loggerTx = &transmission.Honeycomb{
 			// logs are often sent in flurries; flush every half second
 			MaxBatchSize:      100,
 			BatchTimeout:      500 * time.Millisecond,
@@ -77,10 +78,10 @@ func (h *HoneycombLogger) Start() error {
 	}
 
 	libhClientConfig := libhoney.ClientConfig{
-		APIHost:   h.loggerConfig.LoggerHoneycombAPI,
-		APIKey:    h.loggerConfig.LoggerAPIKey,
-		Dataset:   h.loggerConfig.LoggerDataset,
-		Transport: loggerTx,
+		APIHost:      h.loggerConfig.LoggerHoneycombAPI,
+		APIKey:       h.loggerConfig.LoggerAPIKey,
+		Dataset:      h.loggerConfig.LoggerDataset,
+		Transmission: loggerTx,
 	}
 	libhClient, err := libhoney.NewClient(libhClientConfig)
 	if err != nil {

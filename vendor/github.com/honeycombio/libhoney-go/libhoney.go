@@ -20,17 +20,20 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/alexcesaro/statsd.v2"
+	"github.com/honeycombio/libhoney-go/transmission"
+	statsd "gopkg.in/alexcesaro/statsd.v2"
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+	transmission.Version = version
 }
 
 const (
 	defaultSampleRate = 1
 	defaultAPIHost    = "https://api.honeycomb.io/"
-	version           = "1.8.1"
+	defaultDataset    = "libhoney-go dataset"
+	version           = "1.9.1"
 
 	// DefaultMaxBatchSize how many events to collect in a batch
 	DefaultMaxBatchSize = 50
@@ -48,23 +51,20 @@ var (
 
 // globals to support default/singleton-like behavior
 var (
-	tx     Output
-	txOnce sync.Once
+	// singleton-like client used if you use package-level functions
+	dc = &Client{}
 
-	logger Logger = &nullLogger{}
+	// responses is the interim channel to avoid breaking the API while
+	// switching types to transmission.Response
+	transitionResponses chan Response
 
-	blockOnResponses = false
-	sd, _            = statsd.New(statsd.Mute(true)) // init working default, to be overridden
-	responses        = make(chan Response, 2*DefaultPendingWorkCapacity)
-	defaultBuilder   = &Builder{
-		APIHost:    defaultAPIHost,
-		SampleRate: defaultSampleRate,
-		dynFields:  make([]dynamicField, 0, 0),
-		fieldHolder: fieldHolder{
-			data: make(map[string]interface{}),
-		},
-	}
+	// oneResp protects the transitional responses channel from racing on
+	// creation if multiple goroutines ask for the responses channel
+	oneResp sync.Once
 )
+
+// default is a mute statsd; intended to be overridden
+var sd, _ = statsd.New(statsd.Mute(true))
 
 // UserAgentAddition is a variable set at compile time via -ldflags to allow you
 // to augment the "User-Agent" header that libhoney sends along with each event.
@@ -76,10 +76,14 @@ var UserAgentAddition string
 // Config specifies settings for initializing the library.
 type Config struct {
 
-	// WriteKey is the Honeycomb authentication token. If it is specified during
-	// libhoney initialization, it will be used as the default write key for all
-	// events. If absent, write key must be explicitly set on a builder or
-	// event. Find your team write key at https://ui.honeycomb.io/account
+	// APIKey is the Honeycomb authentication token. If it is specified during
+	// libhoney initialization, it will be used as the default API key for all
+	// events. If absent, API key must be explicitly set on a builder or
+	// event. Find your team's API keys at https://ui.honeycomb.io/account
+	APIKey string
+
+	// WriteKey is the deprecated name for the Honeycomb authentication token.
+	// Use APIKey instead. If both are set, APIKey takes precedence.
 	WriteKey string
 
 	// Dataset is the name of the Honeycomb dataset to which to send these events.
@@ -97,8 +101,6 @@ type Config struct {
 	// event. default: https://api.honeycomb.io/
 	APIHost string
 
-	// TODO add logger in an agnostic way
-
 	// BlockOnSend determines if libhoney should block or drop packets that exceed
 	// the size of the send channel (set by PendingWorkCapacity). Defaults to
 	// False - events overflowing the send channel will be dropped.
@@ -111,12 +113,16 @@ type Config struct {
 	// channel it will be ok.
 	BlockOnResponse bool
 
-	// Output allows you to override what happens to events after you call
+	// Output is the deprecated method of manipulating how libhoney sends
+	// events. Please use Transmission instead.
+	Output Output
+
+	// Transmission allows you to override what happens to events after you call
 	// Send() on them. By default, events are asynchronously sent to the
 	// Honeycomb API. You can use the MockOutput included in this package in
-	// unit tests, or use the WriterOutput to write events to STDOUT or to a
-	// file when developing locally.
-	Output Output
+	// unit tests, or use the transmission.WriterSender to write events to
+	// STDOUT or to a file when developing locally.
+	Transmission transmission.Sender
 
 	// Configuration for the underlying sender. It is safe (and recommended) to
 	// leave these values at their defaults. You cannot change these values
@@ -126,9 +132,8 @@ type Config struct {
 	MaxConcurrentBatches uint          // how many batches can be inflight simultaneously. Overrides DefaultMaxConcurrentBatches.
 	PendingWorkCapacity  uint          // how many events to allow to pile up. Overrides DefaultPendingWorkCapacity
 
-	// Transport can be provided to the http.Client attempting to talk to
-	// Honeycomb servers. Intended for use in tests in order to assert on
-	// expected behavior.
+	// Transport is deprecated and should not be used. To set the HTTP Transport
+	// set the Transport elements on the Transmission Sender instead.
 	Transport http.RoundTripper
 
 	// Logger defaults to nil and the SDK is silent. If you supply a logger here
@@ -138,13 +143,150 @@ type Config struct {
 	Logger Logger
 }
 
-// VerifyWriteKey calls out to the Honeycomb API to validate the write key, so
-// we can exit immediately if desired instead of happily sending events that
-// are all rejected.
+// Init is called on app initialization and passed a Config struct, which
+// configures default behavior. Use of package-level functions (e.g. SendNow())
+// require that WriteKey and Dataset are defined.
+//
+// Otherwise, if WriteKey and DataSet are absent or a Config is not provided,
+// they may be specified later, either on a Builder or an Event. WriteKey,
+// Dataset, SampleRate, and APIHost can all be overridden on a per-Builder or
+// per-Event basis.
+//
+// Make sure to call Close() to flush buffers.
+func Init(conf Config) error {
+
+	// populate a client config to spin up the default package-level Client
+	clientConf := ClientConfig{}
+
+	// Use whichever one is set, but APIKey wins if both are set.
+	switch {
+	case conf.APIKey != "":
+		clientConf.APIKey = conf.APIKey
+	case conf.WriteKey != "":
+		clientConf.APIKey = conf.WriteKey
+	default:
+	}
+
+	clientConf.Dataset = conf.Dataset
+	clientConf.SampleRate = conf.SampleRate
+	clientConf.APIHost = conf.APIHost
+
+	// set up default Logger because we're going to use it for the transmission
+	if conf.Logger == nil {
+		conf.Logger = &nullLogger{}
+	}
+	clientConf.Logger = conf.Logger
+
+	// set up defaults for the Transmission
+	if conf.MaxBatchSize == 0 {
+		conf.MaxBatchSize = DefaultMaxBatchSize
+	}
+	if conf.SendFrequency == 0 {
+		conf.SendFrequency = DefaultBatchTimeout
+	}
+	if conf.MaxConcurrentBatches == 0 {
+		conf.MaxConcurrentBatches = DefaultMaxConcurrentBatches
+	}
+	if conf.PendingWorkCapacity == 0 {
+		conf.PendingWorkCapacity = DefaultPendingWorkCapacity
+	}
+
+	// If both transmission and output are set, use transmission. If only one is
+	// set, use it. If neither is set, use the Honeycomb transmission
+	var t transmission.Sender
+	switch {
+	case conf.Transmission != nil:
+		t = conf.Transmission
+	case conf.Output != nil:
+		t = &transitionOutput{
+			Output:          conf.Output,
+			blockOnResponse: conf.BlockOnResponse,
+			responses:       make(chan transmission.Response, 2*conf.PendingWorkCapacity),
+		}
+	default:
+		t = &transmission.Honeycomb{
+			MaxBatchSize:         conf.MaxBatchSize,
+			BatchTimeout:         conf.SendFrequency,
+			MaxConcurrentBatches: conf.MaxConcurrentBatches,
+			PendingWorkCapacity:  conf.PendingWorkCapacity,
+			BlockOnSend:          conf.BlockOnSend,
+			BlockOnResponse:      conf.BlockOnResponse,
+			Transport:            conf.Transport,
+			UserAgentAddition:    UserAgentAddition,
+			Logger:               clientConf.Logger,
+			Metrics:              sd,
+		}
+	}
+	clientConf.Transmission = t
+	var err error
+	dc, err = NewClient(clientConf)
+	return err
+}
+
+// Output is deprecated; use Transmission instead. OUtput was responsible for
+// handling events after Send() is called. Implementations of Add() must be safe
+// for concurrent calls.
+type Output interface {
+	Add(ev *Event)
+	Start() error
+	Stop() error
+}
+
+// transitionOutput allows us to use an Output as the transmission.Sender needed
+// by the Client by adding the additional methods required to implement the
+// Sender interface and embedding the original Output to handle its capabilities
+type transitionOutput struct {
+	Output
+	blockOnResponse bool
+	responses       chan transmission.Response
+}
+
+func (to *transitionOutput) Add(ev *transmission.Event) {
+	origEvent := &Event{
+		APIHost:     ev.APIHost,
+		WriteKey:    ev.APIKey,
+		Dataset:     ev.Dataset,
+		SampleRate:  ev.SampleRate,
+		Timestamp:   ev.Timestamp,
+		Metadata:    ev.Metadata,
+		fieldHolder: fieldHolder{data: ev.Data},
+	}
+	to.Output.Add(origEvent)
+}
+
+func (to *transitionOutput) TxResponses() chan transmission.Response {
+	return to.responses
+}
+func (to *transitionOutput) SendResponse(r transmission.Response) bool {
+	if to.blockOnResponse {
+		to.responses <- r
+	} else {
+		select {
+		case to.responses <- r:
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+// VerifyWriteKey is the deprecated call to validate a Honeycomb API key. Please
+// use VerifyAPIKey instead.
 func VerifyWriteKey(config Config) (team string, err error) {
-	defer func() { logger.Printf("verify write key got back %s with err=%s", team, err) }()
-	if config.WriteKey == "" {
-		return team, errors.New("Write key is empty")
+	return VerifyAPIKey(config)
+}
+
+// VerifyAPIKey calls out to the Honeycomb API to validate the API key so we can
+// exit immediately if desired instead of happily sending events that are all
+// rejected.
+func VerifyAPIKey(config Config) (team string, err error) {
+	dc.ensureLogger()
+	defer func() { dc.logger.Printf("verify write key got back %s with err=%s", team, err) }()
+	if config.APIKey == "" {
+		if config.WriteKey == "" {
+			return team, errors.New("config.APIKey and config.WriteKey are both empty; can't verify empty ke")
+		}
+		config.APIKey = config.WriteKey
 	}
 	if config.APIHost == "" {
 		config.APIHost = defaultAPIHost
@@ -159,7 +301,7 @@ func VerifyWriteKey(config Config) (team string, err error) {
 		return team, err
 	}
 	req.Header.Set("User-Agent", UserAgentAddition)
-	req.Header.Add("X-Honeycomb-Team", config.WriteKey)
+	req.Header.Add("X-Honeycomb-Team", config.APIKey)
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -180,6 +322,11 @@ Response body: %s`, resp.StatusCode, string(body))
 	}
 
 	return ret["team_slug"], nil
+}
+
+// Response is deprecated; please use transmission.Response instead.
+type Response struct {
+	transmission.Response
 }
 
 // Event is used to hold data that can be sent to Honeycomb. It can also
@@ -203,30 +350,15 @@ type Event struct {
 
 	// fieldHolder contains fields (and methods) common to both events and builders
 	fieldHolder
-}
 
-// Marshaling an Event for batching up to the Honeycomb servers. Omits fields
-// that aren't specific to this particular event, and allows for behavior like
-// omitempty'ing a zero'ed out time.Time.
-func (e *Event) MarshalJSON() ([]byte, error) {
-	e.lock.RLock()
-	defer e.lock.RUnlock()
-	tPointer := &(e.Timestamp)
-	if e.Timestamp.IsZero() {
-		tPointer = nil
-	}
+	// client is the Client to use to send events generated from this builder
+	client *Client
 
-	// don't include sample rate if it's 1; this is the default
-	sampleRate := e.SampleRate
-	if sampleRate == 1 {
-		sampleRate = 0
-	}
-
-	return json.Marshal(struct {
-		Data       marshallableMap `json:"data"`
-		SampleRate uint            `json:"samplerate,omitempty"`
-		Timestamp  *time.Time      `json:"time,omitempty"`
-	}{e.data, sampleRate, tPointer})
+	// sent is a bool indicating whether the event has been sent.  Once it's
+	// been sent, all changes to the event should be ignored - any calls to Add
+	// should just return immediately taking no action.
+	sent     bool
+	sendLock sync.Mutex
 }
 
 // Builder is used to create templates for new events, specifying default fields
@@ -247,6 +379,9 @@ type Builder struct {
 	// any dynamic fields to apply to each generated event
 	dynFields     []dynamicField
 	dynFieldsLock sync.RWMutex
+
+	// client is the Client to use to send events generated from this builder
+	client *Client
 }
 
 type fieldHolder struct {
@@ -257,6 +392,8 @@ type fieldHolder struct {
 // Wrapper type for custom JSON serialization: individual values that can't be
 // marshalled (or are null pointers) will be skipped, instead of causing
 // marshalling to raise an error.
+
+// TODO XMIT stop using this type and do the nil checks on Add instead of on marshal
 type marshallableMap map[string]interface{}
 
 func (m marshallableMap) MarshalJSON() ([]byte, error) {
@@ -313,91 +450,10 @@ type dynamicField struct {
 	fn   func() interface{}
 }
 
-// Init is called on app initialization and passed a Config struct, which
-// configures default behavior. Use of package-level functions (e.g. SendNow())
-// require that WriteKey and Dataset are defined.
-//
-// Otherwise, if WriteKey and DataSet are absent or a Config is not provided,
-// they may be specified later, either on a Builder or an Event. WriteKey,
-// Dataset, SampleRate, and APIHost can all be overridden on a per-Builder or
-// per-Event basis.
-//
-// Make sure to call Close() to flush buffers.
-func Init(config Config) error {
-	// Default sample rate should be 1. 0 is invalid.
-	if config.SampleRate == 0 {
-		config.SampleRate = defaultSampleRate
-	}
-	if config.APIHost == "" {
-		config.APIHost = defaultAPIHost
-	}
-	if config.MaxBatchSize == 0 {
-		config.MaxBatchSize = DefaultMaxBatchSize
-	}
-	if config.SendFrequency == 0 {
-		config.SendFrequency = DefaultBatchTimeout
-	}
-	if config.MaxConcurrentBatches == 0 {
-		config.MaxConcurrentBatches = DefaultMaxConcurrentBatches
-	}
-	if config.PendingWorkCapacity == 0 {
-		config.PendingWorkCapacity = DefaultPendingWorkCapacity
-	}
-	if config.Logger == nil {
-		config.Logger = &nullLogger{}
-	}
-
-	blockOnResponses = config.BlockOnResponse
-
-	logger = config.Logger
-	logger.Printf("initializing libhoney")
-	logger.Printf("libhoney configuration: %+v", config)
-
-	if config.Output == nil {
-		logger.Printf("Using default transmission client")
-		// reset the global transmission
-		tx = &txDefaultClient{
-			maxBatchSize:         config.MaxBatchSize,
-			batchTimeout:         config.SendFrequency,
-			maxConcurrentBatches: config.MaxConcurrentBatches,
-			pendingWorkCapacity:  config.PendingWorkCapacity,
-			blockOnSend:          config.BlockOnSend,
-			blockOnResponses:     config.BlockOnResponse,
-			transport:            config.Transport,
-		}
-	} else {
-		tx = config.Output
-	}
-	if err := tx.Start(); err != nil {
-		logger.Printf("transmission client failed to start: %s", err.Error())
-		return err
-	}
-
-	sd, _ = statsd.New(statsd.Prefix("libhoney"))
-	responses = make(chan Response, config.PendingWorkCapacity*2)
-
-	defaultBuilder = &Builder{
-		WriteKey:   config.WriteKey,
-		Dataset:    config.Dataset,
-		SampleRate: config.SampleRate,
-		APIHost:    config.APIHost,
-		dynFields:  make([]dynamicField, 0, 0),
-		fieldHolder: fieldHolder{
-			data: make(map[string]interface{}),
-		},
-	}
-
-	return nil
-}
-
 // Close waits for all in-flight messages to be sent. You should
 // call Close() before app termination.
 func Close() {
-	logger.Printf("closing libhoney")
-	if tx != nil {
-		tx.Stop()
-	}
-	close(responses)
+	dc.Close()
 }
 
 // Flush closes and reopens the Output interface, ensuring events
@@ -408,11 +464,7 @@ func Close() {
 // Flush is not thread safe - use it only when you are sure that no other
 // parts of your program are calling Send
 func Flush() {
-	logger.Printf("flushing libhoney")
-	if tx != nil {
-		tx.Stop()
-		tx.Start()
-	}
+	dc.Flush()
 }
 
 // SendNow is deprecated and may be removed in a future major release.
@@ -423,19 +475,40 @@ func Flush() {
 //   ev.Add(data)
 //   ev.Send()
 func SendNow(data interface{}) error {
+	dc.ensureLogger()
 	ev := NewEvent()
 	if err := ev.Add(data); err != nil {
 		return err
 	}
 	err := ev.Send()
-	logger.Printf("SendNow enqueued event, err=%v", err)
+	dc.logger.Printf("SendNow enqueued event, err=%v", err)
 	return err
 }
 
 // Responses returns the channel from which the caller can read the responses
-// to sent events.
+// to sent events. Responses is deprecated; please use TxResponses instead.
 func Responses() chan Response {
-	return responses
+	oneResp.Do(func() {
+		if transitionResponses == nil {
+			txResponses := dc.TxResponses()
+			transitionResponses = make(chan Response, cap(txResponses))
+			go func() {
+				for txResp := range txResponses {
+					resp := Response{}
+					resp.Response = txResp
+					transitionResponses <- resp
+				}
+				close(transitionResponses)
+			}()
+		}
+	})
+	return transitionResponses
+}
+
+// TxResponses returns the channel from which the caller can read the responses
+// to sent events.
+func TxResponses() chan transmission.Response {
+	return dc.TxResponses()
 }
 
 // AddDynamicField takes a field name and a function that will generate values
@@ -443,26 +516,32 @@ func Responses() chan Response {
 // created and added as a field (with name as the key) to the newly created
 // event.
 func AddDynamicField(name string, fn func() interface{}) error {
-	return defaultBuilder.AddDynamicField(name, fn)
+	return dc.AddDynamicField(name, fn)
 }
 
 // AddField adds a Field to the global scope. This metric will be inherited by
 // all builders and events.
 func AddField(name string, val interface{}) {
-	defaultBuilder.AddField(name, val)
+	dc.AddField(name, val)
 }
 
 // Add adds its data to the global scope. It adds all fields in a struct or all
 // keys in a map as individual Fields. These metrics will be inherited by all
 // builders and events.
 func Add(data interface{}) error {
-	return defaultBuilder.Add(data)
+	return dc.Add(data)
 }
 
 // NewEvent creates a new event prepopulated with any Fields present in the
 // global scope.
 func NewEvent() *Event {
-	return defaultBuilder.NewEvent()
+	return dc.NewEvent()
+}
+
+// NewBuilder creates a new event builder. The builder inherits any
+// Dynamic or Static Fields present in the global scope.
+func NewBuilder() *Builder {
+	return dc.NewBuilder()
 }
 
 // AddField adds an individual metric to the event or builder on which it is
@@ -580,6 +659,54 @@ func (f *fieldHolder) Fields() map[string]interface{} {
 	return f.data
 }
 
+// mask the add functions on an event so that we can test the sent lock and noop
+// if the event has been sent.
+
+// AddField adds an individual metric to the event on which it is called. Note
+// that if you add a value that cannot be serialized to JSON (eg a function or
+// channel), the event will fail to send.
+//
+// Adds to an event that happen after it has been sent will return without
+// having any effect.
+func (e *Event) AddField(key string, val interface{}) {
+	e.sendLock.Lock()
+	defer e.sendLock.Unlock()
+	if e.sent == true {
+		return
+	}
+	e.fieldHolder.AddField(key, val)
+}
+
+// Add adds a complex data type to the event on which it's called.
+// For structs, it adds each exported field. For maps, it adds each key/value.
+// Add will error on all other types.
+//
+// Adds to an event that happen after it has been sent will return without
+// having any effect.
+func (e *Event) Add(data interface{}) error {
+	e.sendLock.Lock()
+	defer e.sendLock.Unlock()
+	if e.sent == true {
+		return nil
+	}
+	return e.fieldHolder.Add(data)
+}
+
+// AddFunc takes a function and runs it repeatedly, adding the return values
+// as fields.
+// The function should return error when it has exhausted its values
+//
+// Adds to an event that happen after it has been sent will return without
+// having any effect.
+func (e *Event) AddFunc(fn func() (string, interface{}, error)) error {
+	e.sendLock.Lock()
+	defer e.sendLock.Unlock()
+	if e.sent == true {
+		return nil
+	}
+	return e.fieldHolder.AddFunc(fn)
+}
+
 // Send dispatches the event to be sent to Honeycomb, sampling if necessary.
 //
 // If you have sampling enabled
@@ -592,11 +719,15 @@ func (f *fieldHolder) Fields() map[string]interface{} {
 // fields are specified in neither Config nor the Event, Send will return an
 // error.  Required fields are APIHost, WriteKey, and Dataset. Values specified
 // in an Event override Config.
+//
+// Once you Send an event, any addition calls to add data to that event will
+// return without doing anything. Once the event is sent, it becomes immutable.
 func (e *Event) Send() error {
+	e.client.ensureLogger()
 	if shouldDrop(e.SampleRate) {
-		logger.Printf("dropping event due to sampling")
+		e.client.logger.Printf("dropping event due to sampling")
 		sd.Increment("sampled")
-		sendDroppedResponse(e, "event dropped due to sampling")
+		e.client.sendDroppedResponse(e, "event dropped due to sampling")
 		return nil
 	}
 	return e.SendPresampled()
@@ -613,13 +744,29 @@ func (e *Event) Send() error {
 // required fields are specified in neither Config nor the Event, Send will
 // return an error.  Required fields are APIHost, WriteKey, and Dataset. Values
 // specified in an Event override Config.
+//
+// Once you Send an event, any addition calls to add data to that event will
+// return without doing anything. Once the event is sent, it becomes immutable.
 func (e *Event) SendPresampled() (err error) {
-	defer func() { logger.Printf("Send enqueued event with fields %+v; err=%v", e.Fields(), err) }()
+	if e.client == nil {
+		e.client = &Client{}
+	}
+	e.client.ensureLogger()
+	defer func() {
+		if err != nil {
+			e.client.logger.Printf("Failed to send event. err: %s, event: %+v", err, e)
+		} else {
+			e.client.logger.Printf("Send enqueued event: %+v", e)
+		}
+	}()
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	if len(e.data) == 0 {
 		return errors.New("No metrics added to event. Won't send empty event.")
 	}
+	// Consider making these restrictions optional; for non-Honeycomb based
+	// Sender implementations (eg STDOUT) it's totally possible to send events
+	// without an API key etc.
 	if e.APIHost == "" {
 		return errors.New("No APIHost for Honeycomb. Can't send to the Great Unknown.")
 	}
@@ -630,40 +777,28 @@ func (e *Event) SendPresampled() (err error) {
 		return errors.New("No Dataset for Honeycomb. Can't send datasetless.")
 	}
 
-	txOnce.Do(func() {
-		if tx == nil {
-			tx = &txDefaultClient{
-				maxBatchSize:         DefaultMaxBatchSize,
-				batchTimeout:         DefaultBatchTimeout,
-				maxConcurrentBatches: DefaultMaxConcurrentBatches,
-				pendingWorkCapacity:  DefaultPendingWorkCapacity,
-			}
-			tx.Start()
-		}
-	})
+	// lock the sent bool and then mark the event as sent. No more changes!
+	e.sendLock.Lock()
+	defer e.sendLock.Unlock()
+	e.sent = true
 
-	tx.Add(e)
-	return nil
-}
-
-// sendResponse sends a dropped event response down the response channel
-func sendDroppedResponse(e *Event, message string) {
-	r := Response{
-		Err:      errors.New(message),
-		Metadata: e.Metadata,
+	e.client.ensureTransmission()
+	txEvent := &transmission.Event{
+		APIHost:    e.APIHost,
+		APIKey:     e.WriteKey,
+		Dataset:    e.Dataset,
+		SampleRate: e.SampleRate,
+		Timestamp:  e.Timestamp,
+		Metadata:   e.Metadata,
+		Data:       e.data,
 	}
-	writeToResponse(r, blockOnResponses)
+	e.client.transmission.Add(txEvent)
+	return nil
 }
 
 // returns true if the sample should be dropped
 func shouldDrop(rate uint) bool {
 	return rand.Intn(int(rate)) != 0
-}
-
-// NewBuilder creates a new event builder. The builder inherits any
-// Dynamic or Static Fields present in the global scope.
-func NewBuilder() *Builder {
-	return defaultBuilder.Clone()
 }
 
 // AddDynamicField adds a dynamic field to the builder. Any events
@@ -704,6 +839,7 @@ func (b *Builder) NewEvent() *Event {
 		SampleRate: b.SampleRate,
 		APIHost:    b.APIHost,
 		Timestamp:  time.Now(),
+		client:     b.client,
 	}
 	e.data = make(map[string]interface{})
 
@@ -730,6 +866,7 @@ func (b *Builder) Clone() *Builder {
 		SampleRate: b.SampleRate,
 		APIHost:    b.APIHost,
 		dynFields:  make([]dynamicField, 0, len(b.dynFields)),
+		client:     b.client,
 	}
 	newB.data = make(map[string]interface{})
 	b.lock.RLock()

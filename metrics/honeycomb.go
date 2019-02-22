@@ -30,7 +30,7 @@ type HoneycombMetrics struct {
 	histogramsLock sync.Mutex
 	histograms     map[string]*histogram
 
-	libhClient libhoney.Client
+	libhClient *libhoney.Client
 
 	latestMemStatsLock sync.RWMutex
 	latestMemStats     runtime.MemStats
@@ -76,13 +76,13 @@ func (h *HoneycombMetrics) Start() error {
 	}
 	h.reportingFreq = mc.MetricsReportingInterval
 
-	h.initLibhoney(mc)
+	if err = h.initLibhoney(mc); err != nil {
+		return err
+	}
 
 	h.counters = make(map[string]*counter)
 	h.gauges = make(map[string]*gauge)
 	h.histograms = make(map[string]*histogram)
-
-	go h.reportToHoneycommb(ctx)
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
@@ -105,8 +105,8 @@ func (h *HoneycombMetrics) reloadBuilder() {
 	h.initLibhoney(mc)
 }
 
-func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) {
-	metricsTx := transmission.Honeycomb{
+func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) error {
+	metricsTx := &transmission.Honeycomb{
 		// metrics are always sent as a single event, so don't wait for the timeout
 		MaxBatchSize:      1,
 		BlockOnSend:       true,
@@ -114,10 +114,10 @@ func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) {
 		Transport:         h.UpstreamTransport,
 	}
 	libhClientConfig := libhoney.ClientConfig{
-		APIHost:   mc.MetricsHoneycombAPI,
-		WriteKey:  mc.MetricsAPIKey,
-		Dataset:   mc.MetricsDataset,
-		Transport: metricsTx,
+		APIHost:      mc.MetricsHoneycombAPI,
+		APIKey:       mc.MetricsAPIKey,
+		Dataset:      mc.MetricsDataset,
+		Transmission: metricsTx,
 	}
 	libhClient, err := libhoney.NewClient(libhClientConfig)
 	if err != nil {
@@ -145,6 +145,8 @@ func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) {
 	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
 		return time.Now().Sub(startTime) / time.Second
 	})
+	go h.reportToHoneycommb(ctx)
+	return nil
 }
 
 // refreshMemStats caches memory statistics to avoid blocking sending honeycomb
