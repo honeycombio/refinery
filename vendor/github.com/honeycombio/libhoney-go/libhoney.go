@@ -33,7 +33,7 @@ const (
 	defaultSampleRate = 1
 	defaultAPIHost    = "https://api.honeycomb.io/"
 	defaultDataset    = "libhoney-go dataset"
-	version           = "1.9.1"
+	version           = "1.9.2"
 
 	// DefaultMaxBatchSize how many events to collect in a batch
 	DefaultMaxBatchSize = 50

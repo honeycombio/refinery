@@ -115,7 +115,7 @@ func main() {
 			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:  libhoney.DefaultPendingWorkCapacity,
 			UserAgentAddition:    userAgentAddition,
-			Transport:            upstreamTransport,
+			Transport:            peerTransport,
 			// gzip compression is expensive, and peers are most likely close to each other
 			// so we can turn off gzip when forwarding to peers
 			DisableGzipCompression: true,

@@ -32,13 +32,8 @@ github.com/hashicorp/golang-lru v0.5.0 h1:CL2msUPvZTLb5O648aiLNJw3hnBxN2+1Jq8rCO
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f h1:CavWxcRtxHoNGHiz8KvjCOaXTM0rUwh9w9qT+ytfK/E=
 github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f/go.mod h1:BOeTUPT6fCRH5X/+QqF6Kza3IyLp9uSq/rWgEtI4aZI=
-github.com/honeycombio/libhoney-go v1.8.1 h1:ZNa8QacttKO/628Nm4Bb0H6ur7i9dy7z/BUuA36VJKk=
-github.com/honeycombio/libhoney-go v1.8.1/go.mod h1:jdLxh51fcBTy6XIpx1efuJmHePs2xUfVkw25lr+hsmg=
-github.com/honeycombio/libhoney-go v1.8.2 h1:stYQJi/21p37Qan2DlSkXDuIrup9zxOul2UyeqMAqX0=
-github.com/honeycombio/libhoney-go v1.9.0 h1:EFJE1mh9Ewb3XO4C067S2sb2+P8MtzV3vveppba3Pgw=
-github.com/honeycombio/libhoney-go v1.9.0/go.mod h1:jdLxh51fcBTy6XIpx1efuJmHePs2xUfVkw25lr+hsmg=
-github.com/honeycombio/libhoney-go v1.9.1 h1:1AbIs9nzXn7aLztyUthr8yAJgKdBfYMkVwVc3Z92alE=
-github.com/honeycombio/libhoney-go v1.9.1/go.mod h1:jdLxh51fcBTy6XIpx1efuJmHePs2xUfVkw25lr+hsmg=
+github.com/honeycombio/libhoney-go v1.9.2 h1:fd5bSpnVB30hKI1pUCWRK/5UhipUK8DYnR8YsDM57VA=
+github.com/honeycombio/libhoney-go v1.9.2/go.mod h1:jdLxh51fcBTy6XIpx1efuJmHePs2xUfVkw25lr+hsmg=
 github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/konsorten/go-windows-terminal-sequences v0.0.0-20180402223658-b729f2633dfe h1:CHRGQ8V7OlCYtwaKPJi3iA7J+YdNKdo8j7nG5IgDhjs=

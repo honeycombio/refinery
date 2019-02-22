@@ -58,6 +58,9 @@ type Honeycomb struct {
 }
 
 func (h *Honeycomb) Start() error {
+	if h.Logger == nil {
+		h.Logger = &nullLogger{}
+	}
 	h.Logger.Printf("default transmission starting")
 	h.responses = make(chan Response, h.PendingWorkCapacity*2)
 	h.muster.MaxBatchSize = h.MaxBatchSize

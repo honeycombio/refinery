@@ -17,7 +17,7 @@ require (
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
 	github.com/hashicorp/golang-lru v0.5.0
 	github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f
-	github.com/honeycombio/libhoney-go v1.9.1
+	github.com/honeycombio/libhoney-go v1.9.2
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
