@@ -11,16 +11,17 @@ import (
 	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
 )
 
 type HoneycombMetrics struct {
-	Config     config.Config `inject:""`
-	Logger     logger.Logger `inject:""`
-	HTTPClient *http.Client  `inject:"upstreamClient"`
-	Version    string        `inject:"version"`
+	Config            config.Config   `inject:""`
+	Logger            logger.Logger   `inject:""`
+	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
+	Version           string          `inject:"version"`
 
 	countersLock   sync.Mutex
 	counters       map[string]*counter
@@ -29,7 +30,7 @@ type HoneycombMetrics struct {
 	histogramsLock sync.Mutex
 	histograms     map[string]*histogram
 
-	builder *libhoney.Builder
+	libhClient *libhoney.Client
 
 	latestMemStatsLock sync.RWMutex
 	latestMemStats     runtime.MemStats
@@ -75,46 +76,13 @@ func (h *HoneycombMetrics) Start() error {
 	}
 	h.reportingFreq = mc.MetricsReportingInterval
 
-	libhConfig := libhoney.Config{
-		APIHost:   mc.MetricsHoneycombAPI,
-		Transport: h.HTTPClient.Transport,
-		// Logger:    &libhoney.DefaultLogger{},
-		BlockOnSend:     true,
-		BlockOnResponse: true,
+	if err = h.initLibhoney(mc); err != nil {
+		return err
 	}
-	libhoney.Init(libhConfig)
-	libhoney.UserAgentAddition = "samproxy/" + h.Version
-	h.builder = libhoney.NewBuilder()
-	h.builder.APIHost = mc.MetricsHoneycombAPI
-	h.builder.WriteKey = mc.MetricsAPIKey
-	h.builder.Dataset = mc.MetricsDataset
-
-	// add some general go metrics to every report
-	// goroutines
-	if hostname, err := os.Hostname(); err == nil {
-		h.builder.AddField("hostname", hostname)
-	}
-	h.builder.AddDynamicField("num_goroutines",
-		func() interface{} { return runtime.NumGoroutine() })
-	ctx, cancel := context.WithCancel(context.Background())
-	h.reportingCancelFunc = cancel
-	go h.refreshMemStats(ctx)
-	getAlloc := func() interface{} {
-		var mem runtime.MemStats
-		h.readMemStats(&mem)
-		return mem.Alloc
-	}
-	h.builder.AddDynamicField("memory_inuse", getAlloc)
-	startTime := time.Now()
-	h.builder.AddDynamicField("process_uptime_seconds", func() interface{} {
-		return time.Now().Sub(startTime) / time.Second
-	})
 
 	h.counters = make(map[string]*counter)
 	h.gauges = make(map[string]*gauge)
 	h.histograms = make(map[string]*histogram)
-
-	go h.reportToHoneycommb(ctx)
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
@@ -131,19 +99,54 @@ func (h *HoneycombMetrics) reloadBuilder() {
 		h.Logger.Errorf("failed to reload configs for Honeycomb metrics: %+v\n", err)
 		return
 	}
-	h.builder.APIHost = mc.MetricsHoneycombAPI
-	h.builder.WriteKey = mc.MetricsAPIKey
-	h.builder.Dataset = mc.MetricsDataset
-	if h.reportingFreq != mc.MetricsReportingInterval {
-		// changed reporting interval
-		h.reportingFreq = mc.MetricsReportingInterval
-		// cancel the two reporting goroutines and restart them
-		h.reportingCancelFunc()
-		ctx, cancel := context.WithCancel(context.Background())
-		h.reportingCancelFunc = cancel
-		go h.refreshMemStats(ctx)
-		go h.reportToHoneycommb(ctx)
+	h.libhClient.Close()
+	// cancel the two reporting goroutines and restart them
+	h.reportingCancelFunc()
+	h.initLibhoney(mc)
+}
+
+func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) error {
+	metricsTx := &transmission.Honeycomb{
+		// metrics are always sent as a single event, so don't wait for the timeout
+		MaxBatchSize:      1,
+		BlockOnSend:       true,
+		UserAgentAddition: "samproxy/" + h.Version + " (metrics)",
+		Transport:         h.UpstreamTransport,
 	}
+	libhClientConfig := libhoney.ClientConfig{
+		APIHost:      mc.MetricsHoneycombAPI,
+		APIKey:       mc.MetricsAPIKey,
+		Dataset:      mc.MetricsDataset,
+		Transmission: metricsTx,
+	}
+	libhClient, err := libhoney.NewClient(libhClientConfig)
+	if err != nil {
+		return err
+	}
+	h.libhClient = libhClient
+
+	// add some general go metrics to every report
+	// goroutines
+	if hostname, err := os.Hostname(); err == nil {
+		h.libhClient.AddField("hostname", hostname)
+	}
+	h.libhClient.AddDynamicField("num_goroutines",
+		func() interface{} { return runtime.NumGoroutine() })
+	ctx, cancel := context.WithCancel(context.Background())
+	h.reportingCancelFunc = cancel
+	go h.refreshMemStats(ctx)
+	getAlloc := func() interface{} {
+		var mem runtime.MemStats
+		h.readMemStats(&mem)
+		return mem.Alloc
+	}
+	h.libhClient.AddDynamicField("memory_inuse", getAlloc)
+	startTime := time.Now()
+	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
+		return time.Now().Sub(startTime) / time.Second
+	})
+	go h.reportToHoneycommb(ctx)
+	return nil
 }
 
 // refreshMemStats caches memory statistics to avoid blocking sending honeycomb
@@ -189,7 +192,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			// context canceled? we're being asked to stop this so it can be restarted.
 			return
 		case <-tick.C:
-			ev := h.builder.NewEvent()
+			ev := h.libhClient.NewEvent()
 			ev.Metadata = map[string]string{
 				"api_host": ev.APIHost,
 				"dataset":  ev.Dataset,

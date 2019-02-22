@@ -73,22 +73,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	// upstreamClient is the http client used to send things on to Honeycomb
-	upstreamClient := &http.Client{
-		Timeout: time.Second * 10,
-		Transport: &http.Transport{
-			Dial: (&net.Dialer{
-				Timeout: 5 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout: 6 * time.Second,
-		},
+	// upstreamTransport is the http transport used to send things on to Honeycomb
+	upstreamTransport := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout: 10 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 15 * time.Second,
+	}
+
+	// peerTransport is the http transport used to send things to a local peer
+	peerTransport := &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout: 1 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
 	var g inject.Graph
 	err = g.Provide(
 		&inject.Object{Value: c},
 		&inject.Object{Value: lgr},
-		&inject.Object{Value: upstreamClient, Name: "upstreamClient"},
+		&inject.Object{Value: upstreamTransport, Name: "upstreamTransport"},
+		&inject.Object{Value: peerTransport, Name: "peerTransport"},
 		&inject.Object{Value: &transmit.DefaultTransmission{}},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},

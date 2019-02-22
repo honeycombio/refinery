@@ -3,10 +3,13 @@ package logger
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
 
 	"github.com/honeycombio/samproxy/config"
 )
@@ -15,9 +18,12 @@ import (
 // dataset. It requires a HoneycombLogger section of the config to exist with
 // three keys, LoggerHoneycombAPI, LoggerAPIKey, and LoggerDataset.
 type HoneycombLogger struct {
-	Config       config.Config `inject:""`
-	loggerConfig HoneycombLoggerConfig
-	builder      *libhoney.Builder
+	Config            config.Config   `inject:""`
+	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
+	Version           string          `inject:"version"`
+	loggerConfig      HoneycombLoggerConfig
+	libhClient        *libhoney.Client
+	builder           *libhoney.Builder
 }
 
 type HoneycombLoggerConfig struct {
@@ -57,23 +63,41 @@ func (h *HoneycombLogger) Start() error {
 	}
 	loggerConfig.level = logLevel
 	h.loggerConfig = loggerConfig
-	if h.loggerConfig.LoggerAPIKey != "" {
-		libhConf := libhoney.Config{
-			APIHost:  h.loggerConfig.LoggerHoneycombAPI,
-			WriteKey: h.loggerConfig.LoggerAPIKey,
-			// Output:   &libhoney.WriterOutput{},
-			// Logger: &libhoney.DefaultLogger{},
-			BlockOnSend:     true,
-			BlockOnResponse: true,
+	var loggerTx transmission.Sender
+	if h.loggerConfig.LoggerAPIKey == "" {
+		loggerTx = &transmission.DiscardSender{}
+	} else {
+		loggerTx = &transmission.Honeycomb{
+			// logs are often sent in flurries; flush every half second
+			MaxBatchSize:      100,
+			BatchTimeout:      500 * time.Millisecond,
+			BlockOnSend:       true,
+			UserAgentAddition: "samproxy/" + h.Version + " (metrics)",
+			Transport:         h.UpstreamTransport,
 		}
-		libhoney.Init(libhConf)
 	}
-	h.builder = libhoney.NewBuilder()
-	h.builder.Dataset = h.loggerConfig.LoggerDataset
+
+	libhClientConfig := libhoney.ClientConfig{
+		APIHost:      h.loggerConfig.LoggerHoneycombAPI,
+		APIKey:       h.loggerConfig.LoggerAPIKey,
+		Dataset:      h.loggerConfig.LoggerDataset,
+		Transmission: loggerTx,
+	}
+	libhClient, err := libhoney.NewClient(libhClientConfig)
+	if err != nil {
+		return err
+	}
+	h.libhClient = libhClient
 
 	if hostname, err := os.Hostname(); err == nil {
-		h.builder.AddField("hostname", hostname)
+		h.libhClient.AddField("hostname", hostname)
 	}
+	startTime := time.Now()
+	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
+		return time.Now().Sub(startTime) / time.Second
+	})
+
+	h.builder = h.libhClient.NewBuilder()
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
