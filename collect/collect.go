@@ -46,7 +46,7 @@ func GetCollectorImplementation(c config.Config) Collector {
 type InMemCollector struct {
 	Config         config.Config          `inject:""`
 	Logger         logger.Logger          `inject:""`
-	Transmission   transmit.Transmission  `inject:""`
+	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
@@ -326,12 +326,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 func (i *InMemCollector) Stop() error {
 	// purge the collector of any in-flight traces
-	traces := i.Cache.GetAll()
-	for _, trace := range traces {
-		if !trace.GetSent() {
-			i.send(trace)
+	if i.Cache != nil {
+		traces := i.Cache.GetAll()
+		for _, trace := range traces {
+			if !trace.GetSent() {
+				i.send(trace)
+			}
 		}
 	}
-	i.Transmission.Flush()
+	if i.Transmission != nil {
+		i.Transmission.Flush()
+	}
 	return nil
 }

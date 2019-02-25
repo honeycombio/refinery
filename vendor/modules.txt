@@ -23,7 +23,7 @@ github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
 # github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f
 github.com/honeycombio/dynsampler-go
-# github.com/honeycombio/libhoney-go v1.9.1
+# github.com/honeycombio/libhoney-go v1.9.2
 github.com/honeycombio/libhoney-go
 github.com/honeycombio/libhoney-go/transmission
 # github.com/jessevdk/go-flags v1.4.0

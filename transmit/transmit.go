@@ -2,7 +2,6 @@ package transmit
 
 import (
 	"context"
-	"net/http"
 
 	libhoney "github.com/honeycombio/libhoney-go"
 
@@ -30,29 +29,22 @@ const (
 type DefaultTransmission struct {
 	Config     config.Config   `inject:""`
 	Logger     logger.Logger   `inject:""`
-	HTTPClient *http.Client    `inject:"upstreamClient"`
 	Metrics    metrics.Metrics `inject:""`
-	Version    string          `inject:"version"`
+	LibhClient *libhoney.Client
 
 	builder          *libhoney.Builder
 	responseCanceler context.CancelFunc
 }
 
 func (d *DefaultTransmission) Start() error {
+	// upstreamAPI doesn't get set when the client is initialized, because
+	// it can be reloaded from the config file while live
 	upstreamAPI, err := d.Config.GetHoneycombAPI()
 	if err != nil {
 		return err
 	}
-	libhConfig := libhoney.Config{
-		APIHost:   upstreamAPI,
-		Transport: d.HTTPClient.Transport,
-		// Logger:    &libhoney.DefaultLogger{},
-		BlockOnResponse: true,
-		BlockOnSend:     true,
-	}
-	libhoney.Init(libhConfig)
-	libhoney.UserAgentAddition = "samproxy/" + d.Version
-	d.builder = libhoney.NewBuilder()
+	d.builder = d.LibhClient.NewBuilder()
+	d.builder.APIHost = upstreamAPI
 
 	d.Metrics.Register(counterEnqueueErrors, "counter")
 	d.Metrics.Register(counterResponse20x, "counter")
@@ -74,7 +66,7 @@ func (d *DefaultTransmission) reloadTransmissionBuilder() {
 		// log and skip reload
 		d.Logger.Errorf("Failed to reload Honeycomb API when reloading configs:", err)
 	}
-	builder := libhoney.NewBuilder()
+	builder := d.LibhClient.NewBuilder()
 	builder.APIHost = upstreamAPI
 }
 
@@ -117,14 +109,16 @@ func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
 }
 
 func (d *DefaultTransmission) Flush() {
-	libhoney.Flush()
+	d.LibhClient.Flush()
 }
 
 func (d *DefaultTransmission) Stop() error {
 	// signal processResponses to stop
-	d.responseCanceler()
+	if d.responseCanceler != nil {
+		d.responseCanceler()
+	}
 	// purge the queue of any in-flight events
-	libhoney.Flush()
+	d.LibhClient.Flush()
 	return nil
 }
 
