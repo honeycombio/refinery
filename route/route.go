@@ -191,6 +191,9 @@ func (ev *eventWithTraceID) UnmarshalJSON(b []byte) error {
 func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event, error) {
 	// get necessary bits out of the incoming event
 	apiKey := req.Header.Get(types.APIKeyHeader)
+	if apiKey == "" {
+		apiKey = req.Header.Get(types.APIKeyHeaderShort)
+	}
 	sampleRate, err := strconv.Atoi(req.Header.Get(types.SampleRateHeader))
 	if err != nil {
 		sampleRate = 1
@@ -367,6 +370,10 @@ func getMaybeGzippedBody(req *http.Request) (io.Reader, error) {
 
 func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*types.Event, error) {
 	apiKey := req.Header.Get(types.APIKeyHeader)
+	if apiKey == "" {
+		apiKey = req.Header.Get(types.APIKeyHeaderShort)
+	}
+
 	sampleRate := bev.SampleRate
 	if sampleRate == 0 {
 		sampleRate = 1
