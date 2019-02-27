@@ -8,9 +8,11 @@ import (
 )
 
 const (
-	APIKeyHeader     = "X-Honeycomb-Team"
-	SampleRateHeader = "X-Honeycomb-Samplerate"
-	TimestampHeader  = "X-Honeycomb-Event-Time"
+	APIKeyHeader = "X-Honeycomb-Team"
+	// libhoney-js uses this
+	APIKeyHeaderShort = "X-Hny-Team"
+	SampleRateHeader  = "X-Honeycomb-Samplerate"
+	TimestampHeader   = "X-Honeycomb-Event-Time"
 )
 
 // used to put a request ID into the request context for logging
