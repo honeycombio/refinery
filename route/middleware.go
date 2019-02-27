@@ -21,6 +21,9 @@ func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		apiKey := req.Header.Get(types.APIKeyHeader)
 		if apiKey == "" {
+			apiKey = req.Header.Get(types.APIKeyHeaderShort)
+		}
+		if apiKey == "" {
 			err := errors.New("no " + types.APIKeyHeader + " header found from within authing middleware")
 			r.handlerReturnWithError(w, ErrAuthNeeded, err)
 			return
