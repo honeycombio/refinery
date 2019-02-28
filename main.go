@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/honeycombio/libhoney-go"
+	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 
 	"github.com/facebookgo/inject"
@@ -107,6 +107,7 @@ func main() {
 		fmt.Printf("unable to initialize upstream libhoney client")
 		os.Exit(1)
 	}
+	go readResponses(upstreamClient, lgr)
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
@@ -125,6 +126,7 @@ func main() {
 		fmt.Printf("unable to initialize upstream libhoney client")
 		os.Exit(1)
 	}
+	go readResponses(peerClient, lgr)
 
 	var g inject.Graph
 	err = g.Provide(
@@ -161,5 +163,37 @@ func main() {
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
+	}
+}
+
+// readResponses reads the responses from the libhoney responses queue and logs
+// any errors that come down it
+func readResponses(libhC *libhoney.Client, lgr logger.Logger) {
+	resps := libhC.TxResponses()
+	for resp := range resps {
+		if resp.Err != nil || resp.StatusCode > 202 {
+			log := lgr.WithFields(map[string]interface{}{
+				"status_code": resp.StatusCode,
+				"body":        string(resp.Body),
+				"duration":    resp.Duration,
+			})
+			// what kind of event was this? Metadat should be "peer" or "upstream"
+			evDetail, ok := resp.Metadata.(map[string]string)
+			if ok {
+				log.WithFields(map[string]interface{}{
+					"type":     evDetail["type"],
+					"target":   evDetail["target"],
+					"api_host": evDetail["api_host"],
+					"dataset":  evDetail["dataset"],
+				})
+			}
+			// read response, log if there's an error
+			switch {
+			case resp.Err != nil:
+				log.WithField("error", resp.Err.Error()).Errorf("got an error back trying to send span")
+			case resp.StatusCode > 202:
+				log.Errorf("got an unexpected status code back trying to send span")
+			}
+		}
 	}
 }

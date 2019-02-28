@@ -119,6 +119,8 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			r.handlerReturnWithError(w, ErrReqToEvent, err)
 			return
 		}
+		ev.Type = types.EventTypeEvent
+		ev.Target = types.TargetUpstream
 		logger.WithFields(map[string]interface{}{
 			"api_host": ev.APIHost,
 			"dataset":  ev.Dataset,
@@ -137,6 +139,8 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			r.handlerReturnWithError(w, ErrReqToEvent, err)
 			return
 		}
+		ev.Type = types.EventTypeSpan
+		ev.Target = types.TargetPeer
 		ev.APIHost = targetShard.GetAddress()
 		logger.WithFields(map[string]interface{}{
 			"api_host": ev.APIHost,
@@ -153,6 +157,8 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
+	ev.Type = types.EventTypeSpan
+	ev.Target = types.TargetUpstream
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: trEv.TraceID,
