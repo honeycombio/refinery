@@ -71,7 +71,6 @@ func (h *HoneycombLogger) Start() error {
 			// logs are often sent in flurries; flush every half second
 			MaxBatchSize:      100,
 			BatchTimeout:      500 * time.Millisecond,
-			BlockOnSend:       true,
 			UserAgentAddition: "samproxy/" + h.Version + " (metrics)",
 			Transport:         h.UpstreamTransport,
 		}
