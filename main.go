@@ -101,6 +101,7 @@ func main() {
 			PendingWorkCapacity:  libhoney.DefaultPendingWorkCapacity,
 			UserAgentAddition:    userAgentAddition,
 			Transport:            upstreamTransport,
+			BlockOnSend:          true,
 		},
 	})
 	if err != nil {
@@ -116,6 +117,7 @@ func main() {
 			PendingWorkCapacity:  libhoney.DefaultPendingWorkCapacity,
 			UserAgentAddition:    userAgentAddition,
 			Transport:            peerTransport,
+			BlockOnSend:          true,
 			// gzip compression is expensive, and peers are most likely close to each other
 			// so we can turn off gzip when forwarding to peers
 			DisableGzipCompression: true,
