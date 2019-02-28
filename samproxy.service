@@ -8,6 +8,7 @@ KillMode=process
 Restart=on-failure
 User=honeycomb
 Group=honeycomb
+LimitNOFILE=infinity
 
 [Install]
 Alias=samproxy samproxy.service
