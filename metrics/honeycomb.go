@@ -135,6 +135,7 @@ func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	h.reportingCancelFunc = cancel
 	go h.refreshMemStats(ctx)
+	go h.readResponses(ctx)
 	getAlloc := func() interface{} {
 		var mem runtime.MemStats
 		h.readMemStats(&mem)
@@ -169,7 +170,36 @@ func (h *HoneycombMetrics) refreshMemStats(ctx context.Context) {
 			h.latestMemStatsLock.Unlock()
 		case <-ctx.Done():
 			// context canceled? we're being asked to stop this so it can be restarted.
-			h.Logger.Debugf("restarting refreshMemStats goroutine")
+			h.Logger.Debugf("restarting honeycomb metrics refreshMemStats goroutine")
+			return
+		}
+	}
+}
+
+// readResponses reads the responses from the libhoney responses queue and logs
+// any errors that come down it
+func (h *HoneycombMetrics) readResponses(ctx context.Context) {
+	resps := h.libhClient.TxResponses()
+	for {
+		select {
+		case resp := <-resps:
+			log := h.Logger.WithFields(map[string]interface{}{
+				"status_code": resp.StatusCode,
+				"body":        string(resp.Body),
+				"duration":    resp.Duration,
+			})
+			// read response, log if there's an error
+			switch {
+			case resp.Err != nil:
+				log.WithField("error", resp.Err.Error()).Errorf("Metrics reporter got an error back from Honeycomb")
+			case resp.StatusCode > 202:
+				log.Errorf("Metrics reporter got an unexpected status code back from Honeycomb")
+			}
+
+		case <-ctx.Done():
+			// bail out; we're refreshing the config and will launch a new
+			// response reader.
+			h.Logger.Debugf("restarting honeycomb metrics read libhoney responses goroutine")
 			return
 		}
 	}

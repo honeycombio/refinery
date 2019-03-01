@@ -98,10 +98,28 @@ func (h *HoneycombLogger) Start() error {
 
 	h.builder = h.libhClient.NewBuilder()
 
+	// listen for responses from honeycomb, log to STDOUT if something unusual
+	// comes back
+	go h.readResponses()
+
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
 
 	return nil
+}
+
+func (h *HoneycombLogger) readResponses() {
+	resps := h.libhClient.TxResponses()
+	for resp := range resps {
+		respString := fmt.Sprintf("Response: status: %d, duration: %dms", resp.StatusCode, resp.Duration)
+		// read response, log if there's an error
+		switch {
+		case resp.Err != nil:
+			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an error back from Honeycomb while trying to send a log line: %s, error: %s, body: %s\n", respString, resp.Err.Error(), string(resp.Body))
+		case resp.StatusCode > 202:
+			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an unexpected status code back from Honeycomb while trying to send a log line: %s, %s\n", respString, string(resp.Body))
+		}
+	}
 }
 
 func (h *HoneycombLogger) reloadBuilder() {

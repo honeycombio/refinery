@@ -8,6 +8,7 @@ import (
 )
 
 type Metrics interface {
+	// Register declares a metric; metricType should be one of counter, gauge, histogram
 	Register(name string, metricType string)
 	IncrementCounter(name string)
 	Gauge(name string, val float64)
