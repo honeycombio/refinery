@@ -116,9 +116,9 @@ func (h *HoneycombLogger) readResponses() {
 		// read response, log if there's an error
 		switch {
 		case resp.Err != nil:
-			fmt.Printf("Honeycomb Logger got an error back from Honeycomb while trying to send a log line: %s, error: %s, body: %s\n", respString, resp.Err.Error(), string(resp.Body))
+			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an error back from Honeycomb while trying to send a log line: %s, error: %s, body: %s\n", respString, resp.Err.Error(), string(resp.Body))
 		case resp.StatusCode > 202:
-			fmt.Printf("Honeycomb Logger got an unexpected status code back from Honeycomb while trying to send a log line: %s, %s\n", respString, string(resp.Body))
+			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an unexpected status code back from Honeycomb while trying to send a log line: %s, %s\n", respString, string(resp.Body))
 		}
 	}
 }
