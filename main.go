@@ -23,6 +23,7 @@ import (
 	"github.com/honeycombio/samproxy/sample"
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
+	"github.com/honeycombio/samproxy/types"
 )
 
 // set by travis.
@@ -169,9 +170,9 @@ func main() {
 // readResponses reads the responses from the libhoney responses queue and logs
 // any errors that come down it
 func readResponses(libhC *libhoney.Client, lgr logger.Logger, metricsr metrics.Metrics) {
-	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetUnknown), "counter")
-	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetPeer), "counter")
-	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetUpstream), "counter")
+	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetUnknown), "counter")
+	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetPeer), "counter")
+	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetUpstream), "counter")
 	resps := libhC.TxResponses()
 	for resp := range resps {
 		if resp.Err != nil || resp.StatusCode > 202 {
@@ -191,7 +192,7 @@ func readResponses(libhC *libhoney.Client, lgr logger.Logger, metricsr metrics.M
 				})
 				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", evDetail["target"]))
 			} else {
-				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetUnknown))
+				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetUnknown))
 			}
 			// read response, log if there's an error
 			switch {
