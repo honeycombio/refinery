@@ -107,7 +107,7 @@ func main() {
 		fmt.Printf("unable to initialize upstream libhoney client")
 		os.Exit(1)
 	}
-	go readResponses(upstreamClient, lgr)
+	go readResponses(upstreamClient, lgr, metricsr)
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
@@ -126,7 +126,7 @@ func main() {
 		fmt.Printf("unable to initialize upstream libhoney client")
 		os.Exit(1)
 	}
-	go readResponses(peerClient, lgr)
+	go readResponses(peerClient, lgr, metricsr)
 
 	var g inject.Graph
 	err = g.Provide(
@@ -168,7 +168,10 @@ func main() {
 
 // readResponses reads the responses from the libhoney responses queue and logs
 // any errors that come down it
-func readResponses(libhC *libhoney.Client, lgr logger.Logger) {
+func readResponses(libhC *libhoney.Client, lgr logger.Logger, metricsr metrics.Metrics) {
+	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetUnknown), "counter")
+	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetPeer), "counter")
+	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetUpstream), "counter")
 	resps := libhC.TxResponses()
 	for resp := range resps {
 		if resp.Err != nil || resp.StatusCode > 202 {
@@ -186,6 +189,9 @@ func readResponses(libhC *libhoney.Client, lgr logger.Logger) {
 					"api_host": evDetail["api_host"],
 					"dataset":  evDetail["dataset"],
 				})
+				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", evDetail["target"]))
+			} else {
+				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", event.TargetUnknown))
 			}
 			// read response, log if there's an error
 			switch {
