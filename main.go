@@ -87,7 +87,7 @@ func main() {
 	// peerTransport is the http transport used to send things to a local peer
 	peerTransport := &http.Transport{
 		Dial: (&net.Dialer{
-			Timeout: 1 * time.Second,
+			Timeout: 3 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
