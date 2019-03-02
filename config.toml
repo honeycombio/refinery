@@ -30,6 +30,7 @@ APIKeys = [
 # Eligible for live reload.
 Peers = [
 	"http://127.0.0.1:8080",
+	"http://127.0.0.1:8081",
 	# "http://10.1.2.3.4:8080",
 	# "http://samproxy-1231:8080",
 	# "http://peer-3.fqdn" // assumes port 80

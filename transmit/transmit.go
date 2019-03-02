@@ -130,22 +130,29 @@ func (d *DefaultTransmission) Stop() error {
 
 func (d *DefaultTransmission) processResponses(ctx context.Context) {
 	honeycombAPI, _ := d.Config.GetHoneycombAPI()
-	responses := libhoney.Responses()
+	responses := d.LibhClient.TxResponses()
 	for {
 		select {
 		case r := <-responses:
-			if r.StatusCode != 200 && r.StatusCode != 202 {
-				var apiHost, dataset string
+			if r.Err != nil || r.StatusCode > 202 {
+				var apiHost, dataset, evType, target string
 				if metadata, ok := r.Metadata.(map[string]string); ok {
 					apiHost = metadata["api_host"]
 					dataset = metadata["dataset"]
+					evType = metadata["type"]
+					target = metadata["target"]
 				}
-				d.Logger.WithFields(map[string]interface{}{
+				log := d.Logger.WithFields(map[string]interface{}{
 					"status_code": r.StatusCode,
-					"error":       r.Err.Error(),
 					"api_host":    apiHost,
 					"dataset":     dataset,
-				}).Errorf("non-20x response when sending event")
+					"event_type":  evType,
+					"target":      target,
+				})
+				if r.Err != nil {
+					log = log.WithField("error", r.Err.Error())
+				}
+				log.Errorf("non-20x response when sending event")
 				if honeycombAPI == apiHost {
 					// if the API host matches the configured honeycomb API,
 					// count it as an API error

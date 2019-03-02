@@ -23,7 +23,6 @@ import (
 	"github.com/honeycombio/samproxy/sample"
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
-	"github.com/honeycombio/samproxy/types"
 )
 
 // set by travis.
@@ -109,7 +108,6 @@ func main() {
 		fmt.Printf("unable to initialize upstream libhoney client")
 		os.Exit(1)
 	}
-	go readResponses(upstreamClient, lgr, metricsr)
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
@@ -129,7 +127,6 @@ func main() {
 		fmt.Printf("unable to initialize upstream libhoney client")
 		os.Exit(1)
 	}
-	go readResponses(peerClient, lgr, metricsr)
 
 	var g inject.Graph
 	err = g.Provide(
@@ -166,43 +163,5 @@ func main() {
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
-	}
-}
-
-// readResponses reads the responses from the libhoney responses queue and logs
-// any errors that come down it
-func readResponses(libhC *libhoney.Client, lgr logger.Logger, metricsr metrics.Metrics) {
-	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetUnknown), "counter")
-	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetPeer), "counter")
-	metricsr.Register(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetUpstream), "counter")
-	resps := libhC.TxResponses()
-	for resp := range resps {
-		if resp.Err != nil || resp.StatusCode > 202 {
-			log := lgr.WithFields(map[string]interface{}{
-				"status_code": resp.StatusCode,
-				"body":        string(resp.Body),
-				"duration":    resp.Duration,
-			})
-			// what kind of event was this? Metadat should be "peer" or "upstream"
-			evDetail, ok := resp.Metadata.(map[string]string)
-			if ok {
-				log.WithFields(map[string]interface{}{
-					"type":     evDetail["type"],
-					"target":   evDetail["target"],
-					"api_host": evDetail["api_host"],
-					"dataset":  evDetail["dataset"],
-				})
-				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", evDetail["target"]))
-			} else {
-				metricsr.IncrementCounter(fmt.Sprintf("libhoney_transmit_failure.%s", types.TargetUnknown))
-			}
-			// read response, log if there's an error
-			switch {
-			case resp.Err != nil:
-				log.WithField("error", resp.Err.Error()).Errorf("got an error back trying to send span")
-			case resp.StatusCode > 202:
-				log.Errorf("got an unexpected status code back trying to send span")
-			}
-		}
 	}
 }
