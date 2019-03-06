@@ -43,7 +43,7 @@ func TestInitializationFromConfigFile(t *testing.T) {
 		[SamplerConfig._default]
 			Sampler = "DeterministicSampler"
 			SampleRate = 2
-	
+
 		[SamplerConfig.dataset1]
 			Sampler = "DynamicSampler"
 			SampleRate = 2
@@ -51,9 +51,9 @@ func TestInitializationFromConfigFile(t *testing.T) {
 			UseTraceLength = true
 			AddSampleRateKeyToTrace = true
 			AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
-	
+
 		[SamplerConfig.dataset2]
-	
+
 			Sampler = "DeterministicSampler"
 			SampleRate = 10
 	`)
