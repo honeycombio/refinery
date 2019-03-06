@@ -9,6 +9,7 @@ import (
 
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
+	statsd "gopkg.in/alexcesaro/statsd.v2"
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
@@ -92,6 +93,9 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
+	sdUpstream, _ := statsd.New(statsd.Prefix("samproxy.upstream"))
+	sdPeer, _ := statsd.New(statsd.Prefix("samproxy.peer"))
+
 	userAgentAddition := "samproxy/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
@@ -102,6 +106,7 @@ func main() {
 			UserAgentAddition:    userAgentAddition,
 			Transport:            upstreamTransport,
 			BlockOnSend:          true,
+			Metrics:              sdUpstream,
 		},
 	})
 	if err != nil {
@@ -121,6 +126,7 @@ func main() {
 			// gzip compression is expensive, and peers are most likely close to each other
 			// so we can turn off gzip when forwarding to peers
 			DisableGzipCompression: true,
+			Metrics:                sdPeer,
 		},
 	})
 	if err != nil {
