@@ -50,6 +50,9 @@ func TestAddRootSpan(t *testing.T) {
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
+	coll.incoming = make(chan *types.Span, 5)
+	go coll.collect()
+
 	var traceID = "mytrace"
 
 	span := &types.Span{
@@ -66,6 +69,7 @@ func TestAddRootSpan(t *testing.T) {
 	assert.Equal(t, traceID, coll.Cache.Get(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	coll.Stop()
 }
 
 // TestAddSpan tests that adding a span winds up with a trace object in the
@@ -100,6 +104,9 @@ func TestAddSpan(t *testing.T) {
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	go coll.collect()
 
 	var traceID = "mytrace"
 

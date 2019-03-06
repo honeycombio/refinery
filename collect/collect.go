@@ -57,6 +57,8 @@ type InMemCollector struct {
 	defaultSampler  sample.Sampler
 
 	sentTraceCache *lru.Cache
+
+	incoming chan *types.Span
 }
 
 type imcConfig struct {
@@ -107,6 +109,12 @@ func (i *InMemCollector) Start() error {
 	}
 	i.sentTraceCache = stc
 
+	// spin up 8 cancellable span accumulators (because c5.2xl have 8 CPUs)
+	i.incoming = make(chan *types.Span, capacity)
+	for iter := 0; iter < 8; iter++ {
+		go i.collect()
+	}
+
 	return nil
 }
 
@@ -146,45 +154,54 @@ func (i *InMemCollector) reloadConfigs() {
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
+// AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) {
-	trace := i.Cache.Get(sp.TraceID)
-	if trace == nil {
-		// if the trace has already been sent, just pass along the span
-		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
-			if sr, ok := sentRecord.(*traceSentRecord); ok {
-				i.Metrics.IncrementCounter("trace_sent_cache_hit")
-				i.dealWithSentTrace(sr.keep, sr.rate, sp)
-				return
-			}
-		}
-		// trace hasn't already been sent (or this span is really old); let's
-		// create a new trace to hold it
-		i.Metrics.IncrementCounter("trace_accepted")
-		ctx, cancel := context.WithCancel(context.Background())
-		trace = &types.Trace{
-			APIHost:       sp.APIHost,
-			APIKey:        sp.APIKey,
-			Dataset:       sp.Dataset,
-			TraceID:       sp.TraceID,
-			StartTime:     time.Now(),
-			CancelSending: cancel,
-		}
-		// push this into the cache and if we eject an unsent trace, send it.
-		ejectedTrace := i.Cache.Set(trace)
-		if ejectedTrace != nil {
-			go i.send(ejectedTrace)
-		}
-		go i.timeoutThenSend(ctx, trace)
-	}
-	err := trace.AddSpan(sp)
-	if err == types.TraceAlreadySent {
-		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
-		return
-	}
+	// TODO protect against sending on a closed channel during shutdown
+	i.incoming <- sp
+}
 
-	// if this is a root span, send the trace
-	if isRootSpan(sp) {
-		go i.pauseAndSend(trace)
+// collect handles all spans that have been added to the incoming channel
+func (i *InMemCollector) collect() {
+	for sp := range i.incoming {
+		trace := i.Cache.Get(sp.TraceID)
+		if trace == nil {
+			// if the trace has already been sent, just pass along the span
+			if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
+				if sr, ok := sentRecord.(*traceSentRecord); ok {
+					i.Metrics.IncrementCounter("trace_sent_cache_hit")
+					i.dealWithSentTrace(sr.keep, sr.rate, sp)
+					return
+				}
+			}
+			// trace hasn't already been sent (or this span is really old); let's
+			// create a new trace to hold it
+			i.Metrics.IncrementCounter("trace_accepted")
+			ctx, cancel := context.WithCancel(context.Background())
+			trace = &types.Trace{
+				APIHost:       sp.APIHost,
+				APIKey:        sp.APIKey,
+				Dataset:       sp.Dataset,
+				TraceID:       sp.TraceID,
+				StartTime:     time.Now(),
+				CancelSending: cancel,
+			}
+			// push this into the cache and if we eject an unsent trace, send it.
+			ejectedTrace := i.Cache.Set(trace)
+			if ejectedTrace != nil {
+				go i.send(ejectedTrace)
+			}
+			go i.timeoutThenSend(ctx, trace)
+		}
+		err := trace.AddSpan(sp)
+		if err == types.TraceAlreadySent {
+			i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
+			return
+		}
+
+		// if this is a root span, send the trace
+		if isRootSpan(sp) {
+			go i.pauseAndSend(trace)
+		}
 	}
 }
 
@@ -325,12 +342,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 }
 
 func (i *InMemCollector) Stop() error {
+	// close the incoming channel and (TODO) wait for all collectors to finish
+	close(i.incoming)
 	// purge the collector of any in-flight traces
 	if i.Cache != nil {
 		traces := i.Cache.GetAll()
 		for _, trace := range traces {
-			if !trace.GetSent() {
-				i.send(trace)
+			if trace != nil {
+				if !trace.GetSent() {
+					i.send(trace)
+				}
 			}
 		}
 	}
