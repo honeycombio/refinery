@@ -10,6 +10,10 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
+// shardingSalt is a random bit to make sure we don't shard the same as any
+// other sharding that uses the trace ID (eg deterministic sharding)
+const shardingSalt = "5VQ8l2jE5aJLPVqk"
+
 type DeterministicSampler struct {
 	Config config.Config
 	Logger logger.Logger
@@ -62,7 +66,7 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	if d.sampleRate <= 1 {
 		return 1, true
 	}
-	sum := sha1.Sum([]byte(trace.TraceID))
+	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
 	v := bytesToUint32be(sum[:4])
 	return uint(d.sampleRate), v <= d.upperBound
 }

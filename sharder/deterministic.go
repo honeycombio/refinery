@@ -12,6 +12,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// shardingSalt is a random bit to make sure we don't shard the same as any
+// other sharding that uses the trace ID (eg deterministic sampling)
+const shardingSalt = "gf4LqTwcJ6PEj2vO"
+
 // DetShard implements Shard
 type DetShard struct {
 	scheme   string
@@ -138,7 +142,9 @@ func (d *DeterministicSharder) MyShard() Shard {
 
 func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 
-	sum := sha1.Sum([]byte(traceID))
+	// add in the sharding salt to ensure the sh1sum is spread differently from
+	// others that use the same algorithm
+	sum := sha1.Sum([]byte(traceID + shardingSalt))
 	v := bytesToUint32be(sum[:4])
 
 	portion := math.MaxUint32 / len(d.peers)
