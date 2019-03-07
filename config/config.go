@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/honeycombio/libhoney-go"
+
 	toml "github.com/pelletier/go-toml"
 )
 
@@ -71,6 +73,13 @@ type Config interface {
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
 	GetMetricsType() (string, error)
+
+	// GetUpstreamBufferSize returns the size of the libhoney buffer to use for the upstream
+	// libhoney client
+	GetUpstreamBufferSize() int
+	// GetPeerBufferSize returns the size of the libhoney buffer to use for the peer forwarding
+	// libhoney client
+	GetPeerBufferSize() int
 }
 
 type FileConfig struct {
@@ -93,6 +102,8 @@ type confContents struct {
 	Metrics              string
 	SendDelay            int
 	TraceTimeout         int
+	UpstreamBufferSize   int
+	PeerBufferSize       int
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
@@ -206,6 +217,20 @@ func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
 	return fmt.Errorf("failed to find config tree for %s", name)
 }
 
+func (f *FileConfig) GetUpstreamBufferSize() int {
+	if f.conf.UpstreamBufferSize == 0 {
+		return libhoney.DefaultPendingWorkCapacity
+	}
+	return f.conf.UpstreamBufferSize
+}
+
+func (f *FileConfig) GetPeerBufferSize() int {
+	if f.conf.PeerBufferSize == 0 {
+		return libhoney.DefaultPendingWorkCapacity
+	}
+	return f.conf.PeerBufferSize
+}
+
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
@@ -234,6 +259,8 @@ type MockConfig struct {
 	GetSendDelayVal          int
 	GetTraceTimeoutErr       error
 	GetTraceTimeoutVal       int
+	GetUpstreamBufferSizeVal int
+	GetPeerBufferSizeVal     int
 }
 
 func (m *MockConfig) ReloadConfig()                 {}
@@ -268,4 +295,11 @@ func (m *MockConfig) GetTraceTimeout() (int, error)   { return m.GetTraceTimeout
 // TODO: allow per-dataset mock values
 func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
 	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
+}
+
+func (m *MockConfig) GetUpstreamBufferSize() int {
+	return m.GetUpstreamBufferSizeVal
+}
+func (m *MockConfig) GetPeerBufferSize() int {
+	return m.GetPeerBufferSizeVal
 }

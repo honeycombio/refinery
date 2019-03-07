@@ -66,6 +66,12 @@ TraceTimeout = 60
 LoggingLevel = "debug"
 
 
+# UpstreamBufferSize and PeerBufferSize control how large of an event queue to use
+# when buffering events that will be forwarded to peers or the upstream API.
+UpstreamBufferSize = 10000
+PeerBufferSize = 10000
+
+
 ############################
 ## Implementation Choices ##
 ############################
