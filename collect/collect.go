@@ -157,7 +157,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) {
-	i.Metrics.Histogram("collector_incoming_queue", len(i.incoming))
+	i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 	// TODO protect against sending on a closed channel during shutdown
 	i.incoming <- sp
 }
