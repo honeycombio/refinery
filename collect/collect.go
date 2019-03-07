@@ -111,7 +111,7 @@ func (i *InMemCollector) Start() error {
 	i.sentTraceCache = stc
 
 	// spin up 8 cancellable span accumulators (because c5.2xl have 8 CPUs)
-	i.incoming = make(chan *types.Span, capacity)
+	i.incoming = make(chan *types.Span, capacity*3)
 	for iter := 0; iter < 8; iter++ {
 		go i.collect()
 	}
