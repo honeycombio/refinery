@@ -99,7 +99,7 @@ func main() {
 	userAgentAddition := "samproxy/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         libhoney.DefaultMaxBatchSize,
+			MaxBatchSize:         500,
 			BatchTimeout:         libhoney.DefaultBatchTimeout,
 			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:  uint(c.GetUpstreamBufferSize()),
@@ -116,7 +116,7 @@ func main() {
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         libhoney.DefaultMaxBatchSize,
+			MaxBatchSize:         500,
 			BatchTimeout:         libhoney.DefaultBatchTimeout,
 			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:  uint(c.GetPeerBufferSize()),
