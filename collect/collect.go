@@ -98,6 +98,7 @@ func (i *InMemCollector) Start() error {
 
 	i.Metrics.Register("trace_duration", "histogram")
 	i.Metrics.Register("trace_num_spans", "histogram")
+	i.Metrics.Register("collector_incoming_queue", "histogram")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
@@ -156,6 +157,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) {
+	i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 	// TODO protect against sending on a closed channel during shutdown
 	i.incoming <- sp
 }
@@ -170,7 +172,7 @@ func (i *InMemCollector) collect() {
 				if sr, ok := sentRecord.(*traceSentRecord); ok {
 					i.Metrics.IncrementCounter("trace_sent_cache_hit")
 					i.dealWithSentTrace(sr.keep, sr.rate, sp)
-					return
+					continue
 				}
 			}
 			// trace hasn't already been sent (or this span is really old); let's
@@ -195,7 +197,7 @@ func (i *InMemCollector) collect() {
 		err := trace.AddSpan(sp)
 		if err == types.TraceAlreadySent {
 			i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
-			return
+			continue
 		}
 
 		// if this is a root span, send the trace
