@@ -292,6 +292,9 @@ func (i *InMemCollector) sendAfterTraceTimeout(trace *types.Trace) {
 // X seconds" this function will cancel all outstanding send timers and start a
 // new one. To prevent infinitely postponed traces, there is still the (TODO)
 // total number of spans cap and a (TODO) gloabal time since first seen cap.
+//
+// TODO this is not yet actually implemented, but leaving the function here as a
+// reminder that it'd be an interesting config to add.
 func (i *InMemCollector) sendAfterIdleTimeout(trace *types.Trace) {
 	// cancel all outstanding sending timers
 	close(trace.CancelSending)
