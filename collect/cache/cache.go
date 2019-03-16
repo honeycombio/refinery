@@ -1,12 +1,11 @@
 package cache
 
 import (
-	"sync"
-
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
 )
 
+// Cache is a non-threadsafe cache. It must not be used for concurrent access.
 type Cache interface {
 	// Set adds the trace to the cache. If it is kicking out a trace from the cache
 	// that has not yet been sent, it will return that trace. Otherwise returns nil.
@@ -24,7 +23,6 @@ type DefaultInMemCache struct {
 	Config  CacheConfig
 	Metrics metrics.Metrics
 
-	lock  sync.Mutex
 	cache map[string]*types.Trace
 
 	// insertionOrder is a circular buffer of currently stored traces
@@ -62,8 +60,6 @@ func (d *DefaultInMemCache) GetCacheSize() int {
 // Set adds the trace to the ring. If it is kicking out a trace from the ring
 // that has not yet been sent, it will return that trace. Otherwise returns nil.
 func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
-	d.lock.Lock()
-	defer d.lock.Unlock()
 
 	// set retTrace to a trace if it is getting kicked out without having been
 	// sent. Leave it nil if we're not kicking out an unsent trace.
@@ -103,15 +99,11 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
-	d.lock.Lock()
-	defer d.lock.Unlock()
 	return d.cache[traceID]
 }
 
 // GetAll is not thread safe and should only be used when that's ok
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
-	d.lock.Lock()
-	defer d.lock.Unlock()
 	// make a copy so it doesn't get modified for the poor soul trying to use
 	// this list after it's returned
 	tmp := make([]*types.Trace, len(d.insertionOrder))

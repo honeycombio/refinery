@@ -1,12 +1,10 @@
 package collect
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
 	"os"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -43,6 +41,7 @@ func GetCollectorImplementation(c config.Config) Collector {
 	return collector
 }
 
+// InMemCollector is a single threaded collector
 type InMemCollector struct {
 	Config         config.Config          `inject:""`
 	Logger         logger.Logger          `inject:""`
@@ -50,15 +49,20 @@ type InMemCollector struct {
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
-	cacheLock       sync.Mutex
 	Cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
-	dsLock          sync.Mutex
 	defaultSampler  sample.Sampler
 
 	sentTraceCache *lru.Cache
 
 	incoming chan *types.Span
+	toSend   chan *sendSignal
+	reload   chan struct{}
+}
+
+// sendSignal is an indicator that it's time to send a trace.
+type sendSignal struct {
+	trace *types.Trace
 }
 
 type imcConfig struct {
@@ -94,7 +98,7 @@ func (i *InMemCollector) Start() error {
 	i.Cache = c
 
 	// listen for config reloads
-	i.Config.RegisterReloadCallback(i.reloadConfigs)
+	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
 	i.Metrics.Register("trace_duration", "histogram")
 	i.Metrics.Register("trace_num_spans", "histogram")
@@ -110,13 +114,17 @@ func (i *InMemCollector) Start() error {
 	}
 	i.sentTraceCache = stc
 
-	// spin up 8 cancellable span accumulators (because c5.2xl have 8 CPUs)
 	i.incoming = make(chan *types.Span, capacity*3)
-	for iter := 0; iter < 8; iter++ {
-		go i.collect()
-	}
+	i.toSend = make(chan *sendSignal, capacity)
+	// spin up one collector because this is a single threaded collector
+	go i.collect()
 
 	return nil
+}
+
+// instruct
+func (i *InMemCollector) sendReloadSignal() {
+	i.reload <- struct{}{}
 }
 
 func (i *InMemCollector) reloadConfigs() {
@@ -139,7 +147,6 @@ func (i *InMemCollector) reloadConfigs() {
 			c.Start()
 			// pull the old cache contents into the new cache
 			for i, trace := range existingCache.GetAll() {
-
 				if i > capacity {
 					break
 				}
@@ -162,52 +169,85 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	i.incoming <- sp
 }
 
-// collect handles all spans that have been added to the incoming channel
+// collect handles both accepting spans that have been handed to it and sending
+// the complete traces. These are done with channels in order to keep collecting
+// single threaded so we don't need any locks. Actions taken from this select
+// block is the only place we are allowed to modify any running data
+// structures.
 func (i *InMemCollector) collect() {
-	for sp := range i.incoming {
-		trace := i.Cache.Get(sp.TraceID)
-		if trace == nil {
-			// if the trace has already been sent, just pass along the span
-			if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
-				if sr, ok := sentRecord.(*traceSentRecord); ok {
-					i.Metrics.IncrementCounter("trace_sent_cache_hit")
-					i.dealWithSentTrace(sr.keep, sr.rate, sp)
-					continue
-				}
-			}
-			// trace hasn't already been sent (or this span is really old); let's
-			// create a new trace to hold it
-			i.Metrics.IncrementCounter("trace_accepted")
-			ctx, cancel := context.WithCancel(context.Background())
-			trace = &types.Trace{
-				APIHost:       sp.APIHost,
-				APIKey:        sp.APIKey,
-				Dataset:       sp.Dataset,
-				TraceID:       sp.TraceID,
-				StartTime:     time.Now(),
-				CancelSending: cancel,
-			}
-			// push this into the cache and if we eject an unsent trace, send it.
-			ejectedTrace := i.Cache.Set(trace)
-			if ejectedTrace != nil {
-				go i.send(ejectedTrace)
-			}
-			go i.timeoutThenSend(ctx, trace)
+	// make sure we send all pending traces when we finish
+	defer func() {
+		for sig := range i.toSend {
+			i.send(sig.trace)
 		}
-		err := trace.AddSpan(sp)
-		if err == types.TraceAlreadySent {
-			i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
-			continue
-		}
-
-		// if this is a root span, send the trace
-		if isRootSpan(sp) {
-			go i.pauseAndSend(trace)
+	}()
+	for {
+		select {
+		case sp, ok := <-i.incoming:
+			if !ok {
+				// channel's been closed; we should shut down.
+				return
+			}
+			i.processSpan(sp)
+		case sig := <-i.toSend:
+			i.send(sig.trace)
+		case <-i.reload:
+			i.reloadConfigs()
 		}
 	}
 }
 
-//
+// processSpan does all the stuff necessary to take an incoming span and add it
+// to (or create a new placeholder for) a trace.
+func (i *InMemCollector) processSpan(sp *types.Span) {
+	trace := i.Cache.Get(sp.TraceID)
+	if trace == nil {
+		// if the trace has already been sent, just pass along the span
+		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
+			if sr, ok := sentRecord.(*traceSentRecord); ok {
+				i.Metrics.IncrementCounter("trace_sent_cache_hit")
+				i.dealWithSentTrace(sr.keep, sr.rate, sp)
+				return
+			}
+		}
+		// trace hasn't already been sent (or this span is really old); let's
+		// create a new trace to hold it
+		i.Metrics.IncrementCounter("trace_accepted")
+		cancel := make(chan struct{})
+		trace = &types.Trace{
+			APIHost:       sp.APIHost,
+			APIKey:        sp.APIKey,
+			Dataset:       sp.Dataset,
+			TraceID:       sp.TraceID,
+			StartTime:     time.Now(),
+			CancelSending: cancel,
+		}
+		// push this into the cache and if we eject an unsent trace, send it ASAP
+		ejectedTrace := i.Cache.Set(trace)
+		if ejectedTrace != nil {
+			i.sendASAP(ejectedTrace)
+		}
+		// start up the overall trace timeout
+		i.sendAfterTraceTimeout(trace)
+	}
+	// if the trace we got back from the cache has already been sent, deal with the
+	// span.
+	if trace.Sent == true {
+		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
+	}
+
+	// great! trace is live. add the span.
+	trace.AddSpan(sp)
+
+	// if this is a root span, send the trace
+	if isRootSpan(sp) {
+		i.sendAfterRootDelay(trace)
+	}
+}
+
+// dealWithSentTrace handles a span that has arrived after the sampling decision
+// on the trace has already been made, and it obeys that decision by either
+// sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types.Span) {
 	if keep {
 		i.Logger.WithField("trace_id", sp.TraceID).Debugf("Sending span because of previous decision to send trace")
@@ -216,7 +256,6 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types
 		return
 	}
 	i.Logger.WithField("trace_id", sp.TraceID).Debugf("Dropping span because of previous decision to drop trace")
-	return
 }
 
 func isRootSpan(sp *types.Span) bool {
@@ -231,60 +270,93 @@ func isRootSpan(sp *types.Span) bool {
 	return false
 }
 
-// timeoutThenSend will wait for the trace timeout to expire then send (if it
-// has not already been sent). It should be called in a goroutine, not
+// sendASAP sends a trace as soon as possible, aka no delay.
+func (i *InMemCollector) sendASAP(trace *types.Trace) {
+	go i.pauseAndSend(0, trace)
+}
+
+// sendAfterTraceTimeout will wait for the trace timeout to expire then send (if
+// it has not already been sent). It should be called in a goroutine, not
 // synchronously.
-func (i *InMemCollector) timeoutThenSend(ctx context.Context, trace *types.Trace) {
+func (i *InMemCollector) sendAfterTraceTimeout(trace *types.Trace) {
 	traceTimeout, err := i.Config.GetTraceTimeout()
 	if err != nil {
 		i.Logger.Errorf("failed to get trace timeout. pausing for 60 seconds")
 		traceTimeout = 60
 	}
-	timeout := time.NewTimer(time.Duration(traceTimeout) * time.Second)
-	select {
-	case <-timeout.C:
-		i.Logger.WithField("trace_id", trace.TraceID).Debugf("trace timeout for trace")
-		trace.FinishTime = time.Now()
-		i.send(trace)
-	case <-ctx.Done():
-		// someone canceled our timeout. just bail
-		return
-	}
+	dur := time.Duration(traceTimeout) * time.Second
+	go i.pauseAndSend(dur, trace)
 }
 
-// pauseAndSend will block for a short time then send. It should be called in a
-// goroutine, not synchronously.
-func (i *InMemCollector) pauseAndSend(trace *types.Trace) {
-	if trace.GetSent() == true {
-		// someone else already sent this trace, we can just bail.
-		return
+// if the configuration says "send the trace when no new spans have come in for
+// X seconds" this function will cancel all outstanding send timers and start a
+// new one. To prevent infinitely postponed traces, there is still the (TODO)
+// total number of spans cap and a (TODO) gloabal time since first seen cap.
+func (i *InMemCollector) sendAfterIdleTimeout(trace *types.Trace) {
+	// cancel all outstanding sending timers
+	close(trace.CancelSending)
+
+	// get the configured delay
+	spanSeenDelay, err := i.Config.GetSpanSeenDelay()
+	if err != nil {
+		i.Logger.Errorf("failed to get send delay. pausing for 2 seconds")
+		spanSeenDelay = 2
 	}
-	trace.FinishTime = time.Now()
+
+	// make a new cancel sending channel and then wait on it
+	trace.CancelSending = make(chan struct{})
+	dur := time.Duration(spanSeenDelay) * time.Second
+	go i.pauseAndSend(dur, trace)
+}
+
+// sendAfterRootDelay waits the SendDelay timeout then registers the trace to be
+// sent.
+func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
 	sendDelay, err := i.Config.GetSendDelay()
 	if err != nil {
 		i.Logger.Errorf("failed to get send delay. pausing for 2 seconds")
 		sendDelay = 2
 	}
-	time.Sleep(time.Duration(sendDelay) * time.Second)
-	i.send(trace)
+	dur := time.Duration(sendDelay) * time.Second
+	go i.pauseAndSend(dur, trace)
+}
+
+// pauseAndSend will block for pause time and then send the trace.
+func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
+	select {
+	case <-time.After(pause):
+		// TODO fix FinishTime to be the time of the last span + its duration rather
+		// than whenever the timer goes off.
+		trace.FinishTime = time.Now()
+		// close the channel so all other timers expire
+		close(trace.CancelSending)
+		i.Logger.
+			WithField("trace_id", trace.TraceID).
+			WithField("pause_dur", pause).
+			Debugf("pauseAndSend wait finished; sending trace.")
+		i.toSend <- &sendSignal{trace}
+	case <-trace.CancelSending:
+		// CancelSending channel is closed, meaning someone else sent the trace.
+		// Let's stop waiting and bail.
+	}
 }
 
 func (i *InMemCollector) send(trace *types.Trace) {
-	trace.SendSampleLock.Lock()
-	defer trace.SendSampleLock.Unlock()
-
 	if trace.Sent == true {
-		// someone else already sent this. Return doing nothing.
-		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Debugf("skipping send because someone else already sent trace to dataset")
+		// someone else already sent this so we shouldn't also send it. This happens
+		// when two timers race and two signals for the same trace are sent down the
+		// toSend channel
+		i.Logger.
+			WithField("trace_id", trace.TraceID).
+			WithField("dataset", trace.Dataset).
+			Debugf("skipping send because someone else already sent trace to dataset")
 		return
 	}
+	trace.Sent = true
 
 	// we're sending this trace, bump the counter
 	i.Metrics.IncrementCounter("trace_sent")
 	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
-
-	// hey, we're sending the trace! we should cancel the timeout goroutine.
-	trace.CancelSending()
 
 	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
 	i.Metrics.Histogram("trace_duration_ms", traceDur)
@@ -292,7 +364,6 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	var sampler sample.Sampler
 	var found bool
 
-	i.dsLock.Lock()
 	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
 		// no dataset sampler found, use default sampler
@@ -307,13 +378,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		// save sampler for later
 		i.datasetSamplers[trace.Dataset] = sampler
 	}
-	i.dsLock.Unlock()
 
 	// make sampling decision and update the trace
 	rate, shouldSend := sampler.GetSampleRate(trace)
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
-	trace.Sent = true
 
 	// record this decision in the sent record LRU for future spans
 	sentRecord := traceSentRecord{

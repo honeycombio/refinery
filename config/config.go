@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/honeycombio/libhoney-go"
+	libhoney "github.com/honeycombio/libhoney-go"
 
 	toml "github.com/pelletier/go-toml"
 )
@@ -48,6 +48,12 @@ type Config interface {
 	// not complete. This should be longer than the longest expected trace
 	// duration.
 	GetTraceTimeout() (int, error)
+
+	// GetSpanSeenDelay is a timer that bumps out sending the trace every time a
+	// span is received. This one is used if you have traces of widely variable
+	// duration, but don't want them to get sent until all spans arrive. Use with
+	// care - if a trace continues to accumulate spans it may never get sent.
+	GetSpanSeenDelay() (int, error)
 
 	// GetOtherConfig attempts to fill the passed in struct with the contents of
 	// a subsection of the config.   This is used by optional configurations to
@@ -101,6 +107,7 @@ type confContents struct {
 	Sampler              string
 	Metrics              string
 	SendDelay            int
+	SpanSeenDelay        int
 	TraceTimeout         int
 	UpstreamBufferSize   int
 	PeerBufferSize       int
@@ -205,6 +212,10 @@ func (f *FileConfig) GetSendDelay() (int, error) {
 	return f.conf.SendDelay, nil
 }
 
+func (f *FileConfig) GetSpanSeenDelay() (int, error) {
+	return f.conf.SpanSeenDelay, nil
+}
+
 func (f *FileConfig) GetTraceTimeout() (int, error) {
 	return f.conf.TraceTimeout, nil
 }
@@ -257,6 +268,8 @@ type MockConfig struct {
 	GetMetricsTypeVal        string
 	GetSendDelayErr          error
 	GetSendDelayVal          int
+	GetSpanSeenDelayErr      error
+	GetSpanSeenDelayVal      int
 	GetTraceTimeoutErr       error
 	GetTraceTimeoutVal       int
 	GetUpstreamBufferSizeVal int
@@ -290,6 +303,7 @@ func (m *MockConfig) GetDefaultSamplerType() (string, error) {
 }
 func (m *MockConfig) GetMetricsType() (string, error) { return m.GetMetricsTypeVal, m.GetMetricsTypeErr }
 func (m *MockConfig) GetSendDelay() (int, error)      { return m.GetSendDelayVal, m.GetSendDelayErr }
+func (m *MockConfig) GetSpanSeenDelay() (int, error)  { return m.GetSpanSeenDelayVal, m.GetSpanSeenDelayErr }
 func (m *MockConfig) GetTraceTimeout() (int, error)   { return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr }
 
 // TODO: allow per-dataset mock values

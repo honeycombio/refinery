@@ -2,8 +2,6 @@ package types
 
 import (
 	"context"
-	"errors"
-	"sync"
 	"time"
 )
 
@@ -17,8 +15,6 @@ const (
 
 // used to put a request ID into the request context for logging
 type RequestIDContextKey struct{}
-
-var TraceAlreadySent = errors.New("Can't add span; trace has already been sent.")
 
 type EventType int
 
@@ -73,17 +69,15 @@ type Event struct {
 	Data       map[string]interface{}
 }
 
-// Trace isn't something that shows up on the wire; it gets created within Samproxy
+// Trace isn't something that shows up on the wire; it gets created within
+// Samproxy. Traces are not thread-safe; only one goroutine should be working
+// with a trace object at a time.
 type Trace struct {
 	APIHost string
 	APIKey  string
 	Dataset string
 	TraceID string
 
-	// SendSampleLock protects the SampleRate and KeepSample attributes of the
-	// trace because they should be modified together. It is accessed from here
-	// and from within the collector.
-	SendSampleLock sync.Mutex
 	// SampleRate should only be changed if the changer holds the SendSampleLock
 	SampleRate uint
 	// KeepSample should only be changed if the changer holds the SendSampleLock
@@ -98,15 +92,11 @@ type Trace struct {
 	// any additional delay imposed by the DelaySend config option.
 	FinishTime time.Time
 
-	// CanceSending is a cancel function to abort the trace timeout if we send
-	// or sample this trace so that we're not sitting around with tons of
-	// goroutines waiting a full minute (or whatever the trace timeout is) then
-	// doing nothing.
-	CancelSending context.CancelFunc
-
-	// spanListLock protects multiple accessors to the list of spans in this
-	// trace
-	spanListLock sync.Mutex
+	// CanceSending is a channel used to abort the trace timeout if we send or
+	// sample this trace so that we're not sitting around with tons of goroutines
+	// waiting a full minute (or whatever the trace timeout is) then doing nothing.
+	// Closing this channel will cause any still-waiting send timers to exit.
+	CancelSending chan struct{}
 
 	// spans is the list of spans in this trace, protected by the list lock
 	spans []*Span
@@ -115,31 +105,17 @@ type Trace struct {
 // GetSent returns true if this trace has already been sent, false if it has not
 // yet been sent.
 func (t *Trace) GetSent() bool {
-	t.SendSampleLock.Lock()
-	defer t.SendSampleLock.Unlock()
 	return t.Sent
 }
 
 // AddSpan adds a span to this trace
-func (t *Trace) AddSpan(sp *Span) error {
-	t.SendSampleLock.Lock()
-	defer t.SendSampleLock.Unlock()
-	if t.Sent {
-		return TraceAlreadySent
-	}
-	t.spanListLock.Lock()
-	defer t.spanListLock.Unlock()
+func (t *Trace) AddSpan(sp *Span) {
 	t.spans = append(t.spans, sp)
-	return nil
 }
 
 // GetSpans returns the list of spans in this trace
 func (t *Trace) GetSpans() []*Span {
-	t.spanListLock.Lock()
-	defer t.spanListLock.Unlock()
-	// since we only ever append to this list, we can return a new reference to
-	// the slice as it exists now and it will be safe for concurrent reads.
-	return t.spans[:]
+	return t.spans
 
 }
 
