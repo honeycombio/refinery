@@ -51,6 +51,7 @@ func TestAddRootSpan(t *testing.T) {
 	coll.sentTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
+	coll.toSend = make(chan *sendSignal, 5)
 	go coll.collect()
 
 	var traceID = "mytrace"
@@ -106,6 +107,7 @@ func TestAddSpan(t *testing.T) {
 	coll.sentTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
+	coll.toSend = make(chan *sendSignal, 5)
 	go coll.collect()
 
 	var traceID = "mytrace"
