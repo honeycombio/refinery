@@ -34,6 +34,10 @@ type Router struct {
 	Metrics              metrics.Metrics       `inject:""`
 
 	proxyClient *http.Client
+
+	// type indicates whether this should listen for incoming events or content
+	// redirected from a peer
+	incomingOrPeer string
 }
 
 type BatchResponse struct {
@@ -41,7 +45,9 @@ type BatchResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func (r *Router) LnS() {
+func (r *Router) LnS(incomingOrPeer string) {
+	r.incomingOrPeer = incomingOrPeer
+
 	r.proxyClient = &http.Client{
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
@@ -74,10 +80,20 @@ func (r *Router) LnS() {
 	// pass everything else through unmolested
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
-	listenAddr, err := r.Config.GetListenAddr()
-	if err != nil {
-		r.Logger.Errorf("failed to get listen addr config: %s", err)
-		return
+	var listenAddr string
+	var err error
+	if r.incomingOrPeer == "incoming" {
+		listenAddr, err = r.Config.GetListenAddr()
+		if err != nil {
+			r.Logger.Errorf("failed to get listen addr config: %s", err)
+			return
+		}
+	} else {
+		listenAddr, err = r.Config.GetPeerListenAddr()
+		if err != nil {
+			r.Logger.Errorf("failed to get peer listen addr config: %s", err)
+			return
+		}
 	}
 
 	r.Logger.Infof("Listening on %s", listenAddr)
@@ -169,7 +185,11 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		"dataset":  ev.Dataset,
 		"trace_id": trEv.TraceID,
 	}).Debugf("Accepting span for collection into a trace")
-	r.Collector.AddSpan(span)
+	if r.incomingOrPeer == "incoming" {
+		r.Collector.AddSpan(span)
+	} else {
+		r.Collector.AddSpanFromPeer(span)
+	}
 }
 
 type eventWithTraceID struct {

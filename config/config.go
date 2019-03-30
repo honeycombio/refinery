@@ -27,6 +27,10 @@ type Config interface {
 	// incoming events
 	GetListenAddr() (string, error)
 
+	// GetPeerListenAddr returns the address and port on which to listen for
+	// peer traffic
+	GetPeerListenAddr() (string, error)
+
 	// GetAPIKeys returns a list of Honeycomb API keys
 	GetAPIKeys() ([]string, error)
 
@@ -97,6 +101,7 @@ type FileConfig struct {
 
 type confContents struct {
 	ListenAddr           string
+	PeerListenAddr       string
 	APIKeys              []string
 	Peers                []string
 	HoneycombAPI         string
@@ -160,6 +165,10 @@ func (f *FileConfig) RegisterReloadCallback(cb func()) {
 
 func (f *FileConfig) GetListenAddr() (string, error) {
 	return f.conf.ListenAddr, nil
+}
+
+func (f *FileConfig) GetPeerListenAddr() (string, error) {
+	return f.conf.PeerListenAddr, nil
 }
 
 func (f *FileConfig) GetAPIKeys() ([]string, error) {
@@ -245,19 +254,21 @@ func (f *FileConfig) GetPeerBufferSize() int {
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	GetAPIKeysErr       error
-	GetAPIKeysVal       []string
-	GetCollectorTypeErr error
-	GetCollectorTypeVal string
-	GetHoneycombAPIErr  error
-	GetHoneycombAPIVal  string
-	GetListenAddrErr    error
-	GetListenAddrVal    string
-	GetLoggerTypeErr    error
-	GetLoggerTypeVal    string
-	GetLoggingLevelErr  error
-	GetLoggingLevelVal  string
-	GetOtherConfigErr   error
+	GetAPIKeysErr        error
+	GetAPIKeysVal        []string
+	GetCollectorTypeErr  error
+	GetCollectorTypeVal  string
+	GetHoneycombAPIErr   error
+	GetHoneycombAPIVal   string
+	GetListenAddrErr     error
+	GetListenAddrVal     string
+	GetPeerListenAddrErr error
+	GetPeerListenAddrVal string
+	GetLoggerTypeErr     error
+	GetLoggerTypeVal     string
+	GetLoggingLevelErr   error
+	GetLoggingLevelVal   string
+	GetOtherConfigErr    error
 	// GetOtherConfigVal must be a JSON representation of the config struct to be populated.
 	GetOtherConfigVal        string
 	GetPeersErr              error
@@ -286,6 +297,9 @@ func (m *MockConfig) GetHoneycombAPI() (string, error) {
 	return m.GetHoneycombAPIVal, m.GetHoneycombAPIErr
 }
 func (m *MockConfig) GetListenAddr() (string, error) { return m.GetListenAddrVal, m.GetListenAddrErr }
+func (m *MockConfig) GetPeerListenAddr() (string, error) {
+	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
+}
 func (m *MockConfig) GetLoggerType() (string, error) { return m.GetLoggerTypeVal, m.GetLoggerTypeErr }
 func (m *MockConfig) GetLoggingLevel() (string, error) {
 	return m.GetLoggingLevelVal, m.GetLoggingLevelErr
@@ -303,8 +317,10 @@ func (m *MockConfig) GetDefaultSamplerType() (string, error) {
 }
 func (m *MockConfig) GetMetricsType() (string, error) { return m.GetMetricsTypeVal, m.GetMetricsTypeErr }
 func (m *MockConfig) GetSendDelay() (int, error)      { return m.GetSendDelayVal, m.GetSendDelayErr }
-func (m *MockConfig) GetSpanSeenDelay() (int, error)  { return m.GetSpanSeenDelayVal, m.GetSpanSeenDelayErr }
-func (m *MockConfig) GetTraceTimeout() (int, error)   { return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr }
+func (m *MockConfig) GetSpanSeenDelay() (int, error) {
+	return m.GetSpanSeenDelayVal, m.GetSpanSeenDelayErr
+}
+func (m *MockConfig) GetTraceTimeout() (int, error) { return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr }
 
 // TODO: allow per-dataset mock values
 func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {

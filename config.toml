@@ -8,6 +8,12 @@
 # Not eligible for live reload.
 ListenAddr = "0.0.0.0:8080"
 
+# PeerListenAddr is the IP and port on which to listen for traffic being
+# rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
+# put something like nginx in front to do the decryption. Not eligible for live
+# reload.
+PeerListenAddr = "0.0.0.0:8081"
+
 # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
 # only applies to events - other Honeycomb API actions will fall through to the
 # upstream API directly.

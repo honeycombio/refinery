@@ -22,6 +22,7 @@ type Collector interface {
 	// Once the trace is "complete", it'll be passed off to the sampler then
 	// scheduled for transmission.
 	AddSpan(*types.Span)
+	AddSpanFromPeer(*types.Span)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -56,6 +57,7 @@ type InMemCollector struct {
 	sentTraceCache *lru.Cache
 
 	incoming chan *types.Span
+	fromPeer chan *types.Span
 	toSend   chan *sendSignal
 	reload   chan struct{}
 }
@@ -103,6 +105,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_duration", "histogram")
 	i.Metrics.Register("trace_num_spans", "histogram")
 	i.Metrics.Register("collector_incoming_queue", "histogram")
+	i.Metrics.Register("collector_peer_queue", "histogram")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
@@ -169,6 +172,13 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	i.incoming <- sp
 }
 
+// AddSpan accepts the incoming span to a queue and returns immediately
+func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
+	i.Metrics.Histogram("collector_peer_queue", float64(len(i.incoming)))
+	// TODO protect against sending on a closed channel during shutdown
+	i.fromPeer <- sp
+}
+
 // collect handles both accepting spans that have been handed to it and sending
 // the complete traces. These are done with channels in order to keep collecting
 // single threaded so we don't need any locks. Actions taken from this select
@@ -182,6 +192,20 @@ func (i *InMemCollector) collect() {
 		}
 	}()
 	for {
+		// always process all peer traffic first so that we can apply backpressure
+		// upstream but not to peers
+		select {
+		case sp, ok := <-i.fromPeer:
+			if !ok {
+				// channel's been closed; we should shut down.
+				return
+			}
+			i.processSpan(sp)
+			continue
+		default:
+		}
+
+		// ok, the peer queue is empty, let's deal with something fresh from our client
 		select {
 		case sp, ok := <-i.incoming:
 			if !ok {
@@ -189,11 +213,16 @@ func (i *InMemCollector) collect() {
 				return
 			}
 			i.processSpan(sp)
+			continue
 		case sig := <-i.toSend:
 			i.send(sig.trace)
 		case <-i.reload:
 			i.reloadConfigs()
+		default:
 		}
+
+		// both peer and incoming queues are empty; let's pause for 50ms
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

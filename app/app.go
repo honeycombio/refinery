@@ -45,7 +45,8 @@ func (a *App) Start() error {
 	}
 
 	// launch our main router to listen for incoming event traffic
-	go a.Router.LnS()
+	go a.Router.LnS("incoming")
+	go a.Router.LnS("peer")
 
 	// block on our signal handler to exit
 	sig := <-sigsToExit
