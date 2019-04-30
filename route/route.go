@@ -45,6 +45,10 @@ type BatchResponse struct {
 	Error  string `json:"error,omitempty"`
 }
 
+// LnS spins up the Listen and Serve portion of the router. A router is
+// initialized as being for either incoming traffic from clients or traffic from
+// a peer. They listen on different addresses so peer traffic can be
+// prioritized.
 func (r *Router) LnS(incomingOrPeer string) {
 	r.incomingOrPeer = incomingOrPeer
 
@@ -53,11 +57,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Transport: r.HTTPTransport,
 	}
 
-	r.Metrics.Register("router_proxied", "counter")
-	r.Metrics.Register("router_event", "counter")
-	r.Metrics.Register("router_batch", "counter")
-	r.Metrics.Register("router_span", "counter")
-	r.Metrics.Register("router_peer", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_proxied", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_event", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_batch", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_span", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_peer", "counter")
 
 	muxxer := mux.NewRouter()
 
@@ -129,7 +133,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 
 	// not part of a trace. send along upstream
 	if trEv.TraceID == "" {
-		r.Metrics.IncrementCounter("router_event")
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
 		ev, err := r.requestToEvent(req, reqBod)
 		if err != nil {
 			r.handlerReturnWithError(w, ErrReqToEvent, err)
@@ -149,7 +153,8 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	// peer
 	targetShard := r.Sharder.WhichShard(trEv.TraceID)
 	if !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Metrics.IncrementCounter("router_peer")
+		// it's not for us; send to the peer
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
 		ev, err := r.requestToEvent(req, reqBod)
 		if err != nil {
 			r.handlerReturnWithError(w, ErrReqToEvent, err)
@@ -179,7 +184,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		Event:   *ev,
 		TraceID: trEv.TraceID,
 	}
-	r.Metrics.IncrementCounter("router_span")
+	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
 	logger.WithFields(map[string]interface{}{
 		"api_host": ev.APIHost,
 		"dataset":  ev.Dataset,
@@ -250,7 +255,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.IncrementCounter("router_batch")
+	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
 	bodyReader, err := getMaybeGzippedBody(req)
 	if err != nil {
@@ -285,7 +290,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		}
 		if traceID == "" {
 			// not part of a trace. send along upstream
-			r.Metrics.IncrementCounter("router_event")
+			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
 				batchedResponses = append(
@@ -312,7 +317,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
 		targetShard := r.Sharder.WhichShard(traceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.IncrementCounter("router_peer")
+			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
 				batchedResponses = append(
@@ -355,7 +360,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			Event:   *ev,
 			TraceID: traceID,
 		}
-		r.Metrics.IncrementCounter("router_span")
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
 		logger.WithFields(map[string]interface{}{
 			"api_host": ev.APIHost,
 			"dataset":  ev.Dataset,

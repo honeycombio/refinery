@@ -78,7 +78,8 @@ func (d *DeterministicSharder) Start() error {
 	}
 
 	// go through peer list, resolve each address, see if any of them match any
-	// local interface
+	// local interface. Note that this assumes only one instance of samproxy per
+	// host can run.
 	var selfIndexIntoPeerList int
 	var found bool
 	for i, peerShard := range d.peers {

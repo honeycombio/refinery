@@ -15,11 +15,12 @@ import (
 )
 
 type App struct {
-	Config    config.Config     `inject:""`
-	Logger    logger.Logger     `inject:""`
-	Router    route.Router      `inject:"inline"`
-	Collector collect.Collector `inject:""`
-	Metrics   metrics.Metrics   `inject:""`
+	Config         config.Config     `inject:""`
+	Logger         logger.Logger     `inject:""`
+	IncomingRouter route.Router      `inject:"inline"`
+	PeerRouter     route.Router      `inject:"inline"`
+	Collector      collect.Collector `inject:""`
+	Metrics        metrics.Metrics   `inject:""`
 }
 
 // Start on the App obect should block until the proxy is shutting down. After
@@ -44,9 +45,10 @@ func (a *App) Start() error {
 		return err
 	}
 
-	// launch our main router to listen for incoming event traffic
-	go a.Router.LnS("incoming")
-	go a.Router.LnS("peer")
+	// launch our main routers to listen for incoming event traffic from both peers
+	// and external sources
+	go a.IncomingRouter.LnS("incoming")
+	go a.PeerRouter.LnS("peer")
 
 	// block on our signal handler to exit
 	sig := <-sigsToExit

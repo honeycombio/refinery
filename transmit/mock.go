@@ -1,6 +1,8 @@
 package transmit
 
-import "github.com/honeycombio/samproxy/types"
+import (
+	"github.com/honeycombio/samproxy/types"
+)
 
 type MockTransmission struct {
 	Events []*types.Event

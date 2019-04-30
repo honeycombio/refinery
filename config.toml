@@ -29,13 +29,14 @@ APIKeys = [
 	"*",                   # wildcard accept all keys
 	]
 
-# Peers is the list of other servers participating in this proxy cluster. Events
+# Peers is the list of all servers participating in this proxy cluster. Events
 # will be sharded evenly across all peers based on the Trace ID. Values here
 # should be the base URL used to access the peer, and should include scheme,
-# hostname (or ip address) and port (if it's non-standard).
+# hostname (or ip address) and port (if it's non-standard). All servers in the
+# cluster should be in this list, including this host.
 # Eligible for live reload.
 Peers = [
-	"http://127.0.0.1:8080",
+	"http://127.0.0.1:8081",
 	# "http://127.0.0.1:8081",
 	# "http://10.1.2.3.4:8080",
 	# "http://samproxy-1231:8080",

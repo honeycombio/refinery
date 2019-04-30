@@ -191,22 +191,48 @@ func (i *InMemCollector) collect() {
 			i.send(sig.trace)
 		}
 	}()
+
+	peerChanSize := cap(i.fromPeer)
+
 	for {
-		// always process all peer traffic first so that we can apply backpressure
-		// upstream but not to peers
+		// process traces that are ready to send first to make sure we can clear out
+		// any stuck queues that are eligible for clearing
 		select {
+		case sig, ok := <-i.toSend:
+			if ok {
+				i.send(sig.trace)
+			}
+		default:
+		}
+
+		// process peer traffic at 2/1 ratio to incoming traffic. By processing peer
+		// traffic preferentially we avoid the situation where the cluster essentially
+		// deadlocks because peers are waiting to get their events handed off to each
+		// other.
+		select {
+		case sig := <-i.toSend:
+			i.send(sig.trace)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
 			}
 			i.processSpan(sp)
-			continue
+			// additionally, if the peer channel is more than 80% full, restart this
+			// loop to make sure it stays empty enough. We _really_ want to avoid
+			// blocking peer traffic.
+			if len(i.fromPeer)*100/peerChanSize > 80 {
+				continue
+			}
 		default:
 		}
 
-		// ok, the peer queue is empty, let's deal with something fresh from our client
+		// ok, the peer queue is low enough, let's wait for new events from anywhere
 		select {
+		case sig, ok := <-i.toSend:
+			if ok {
+				i.send(sig.trace)
+			}
 		case sp, ok := <-i.incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -214,15 +240,17 @@ func (i *InMemCollector) collect() {
 			}
 			i.processSpan(sp)
 			continue
-		case sig := <-i.toSend:
-			i.send(sig.trace)
+		case sp, ok := <-i.fromPeer:
+			if !ok {
+				// channel's been closed; we should shut down.
+				return
+			}
+			i.processSpan(sp)
+			continue
 		case <-i.reload:
 			i.reloadConfigs()
-		default:
 		}
 
-		// both peer and incoming queues are empty; let's pause for 50ms
-		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -367,6 +395,7 @@ func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
 			WithField("pause_dur", pause).
 			Debugf("pauseAndSend wait finished; sending trace.")
 		i.toSend <- &sendSignal{trace}
+
 	case <-trace.CancelSending:
 		// CancelSending channel is closed, meaning someone else sent the trace.
 		// Let's stop waiting and bail.
