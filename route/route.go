@@ -282,6 +282,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	for _, bev := range batchedEvents {
 		// extract trace ID, route to self or peer, pass on to collector
+		// TODO make trace ID field configurable
 		var traceID string
 		if trID, ok := bev.Data["trace.trace_id"]; ok {
 			traceID = trID.(string)
@@ -370,7 +371,11 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			batchedResponses,
 			&BatchResponse{Status: http.StatusAccepted},
 		)
-		r.Collector.AddSpan(span)
+		if r.incomingOrPeer == "incoming" {
+			r.Collector.AddSpan(span)
+		} else {
+			r.Collector.AddSpanFromPeer(span)
+		}
 	}
 	response, err := json.Marshal(batchedResponses)
 	if err != nil {
