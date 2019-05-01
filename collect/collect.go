@@ -174,7 +174,7 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
-	i.Metrics.Histogram("collector_peer_queue", float64(len(i.incoming)))
+	i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
 	// TODO protect against sending on a closed channel during shutdown
 	i.fromPeer <- sp
 }
