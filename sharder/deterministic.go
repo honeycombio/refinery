@@ -60,8 +60,8 @@ func (d *DeterministicSharder) Start() error {
 		return err
 	}
 
-	// get my listen address for the Port number
-	listenAddr, err := d.Config.GetListenAddr()
+	// get my listen address for peer traffic for the Port number
+	listenAddr, err := d.Config.GetPeerListenAddr()
 	if err != nil {
 		return errors.Wrap(err, "failed to get listen addr config")
 	}
@@ -69,7 +69,7 @@ func (d *DeterministicSharder) Start() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to parse listen addr into host:port")
 	}
-	d.Logger.Debugf("picked up local port of %s", localPort)
+	d.Logger.Debugf("picked up local peer port of %s", localPort)
 
 	// get my local interfaces
 	localAddrs, err := net.InterfaceAddrs()
@@ -83,6 +83,7 @@ func (d *DeterministicSharder) Start() error {
 	var selfIndexIntoPeerList int
 	var found bool
 	for i, peerShard := range d.peers {
+		d.Logger.WithField("peer", peerShard).WithField("self", localAddrs).Debugf("Considering peer looking for self")
 		peerIPList, err := net.LookupHost(peerShard.ipOrHost)
 		if err != nil {
 			// TODO something better than fail to start if peer is missing
