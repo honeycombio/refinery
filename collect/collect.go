@@ -110,6 +110,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
 	i.Metrics.Register("trace_send_dropped", "counter")
+	i.Metrics.Register("peer_queue_too_large", "counter")
 
 	stc, err := lru.New(capacity * 5) // keep 5x ring buffer size
 	if err != nil {
@@ -118,6 +119,7 @@ func (i *InMemCollector) Start() error {
 	i.sentTraceCache = stc
 
 	i.incoming = make(chan *types.Span, capacity*3)
+	i.fromPeer = make(chan *types.Span, capacity*3)
 	i.toSend = make(chan *sendSignal, capacity)
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
@@ -225,6 +227,7 @@ func (i *InMemCollector) collect() {
 			// loop to make sure it stays empty enough. We _really_ want to avoid
 			// blocking peer traffic.
 			if len(i.fromPeer)*100/peerChanSize > 80 {
+				i.Metrics.IncrementCounter("peer_queue_too_large")
 				continue
 			}
 		default:
