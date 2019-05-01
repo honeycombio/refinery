@@ -8,6 +8,12 @@
 # Not eligible for live reload.
 ListenAddr = "0.0.0.0:8080"
 
+# PeerListenAddr is the IP and port on which to listen for traffic being
+# rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
+# put something like nginx in front to do the decryption. Not eligible for live
+# reload.
+PeerListenAddr = "0.0.0.0:8081"
+
 # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
 # only applies to events - other Honeycomb API actions will fall through to the
 # upstream API directly.
@@ -23,13 +29,14 @@ APIKeys = [
 	"*",                   # wildcard accept all keys
 	]
 
-# Peers is the list of other servers participating in this proxy cluster. Events
+# Peers is the list of all servers participating in this proxy cluster. Events
 # will be sharded evenly across all peers based on the Trace ID. Values here
 # should be the base URL used to access the peer, and should include scheme,
-# hostname (or ip address) and port (if it's non-standard).
+# hostname (or ip address) and port (if it's non-standard). All servers in the
+# cluster should be in this list, including this host.
 # Eligible for live reload.
 Peers = [
-	"http://127.0.0.1:8080",
+	"http://127.0.0.1:8081",
 	# "http://127.0.0.1:8081",
 	# "http://10.1.2.3.4:8080",
 	# "http://samproxy-1231:8080",

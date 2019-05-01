@@ -22,6 +22,7 @@ type Collector interface {
 	// Once the trace is "complete", it'll be passed off to the sampler then
 	// scheduled for transmission.
 	AddSpan(*types.Span)
+	AddSpanFromPeer(*types.Span)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -56,6 +57,7 @@ type InMemCollector struct {
 	sentTraceCache *lru.Cache
 
 	incoming chan *types.Span
+	fromPeer chan *types.Span
 	toSend   chan *sendSignal
 	reload   chan struct{}
 }
@@ -103,6 +105,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_duration", "histogram")
 	i.Metrics.Register("trace_num_spans", "histogram")
 	i.Metrics.Register("collector_incoming_queue", "histogram")
+	i.Metrics.Register("collector_peer_queue", "histogram")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
@@ -169,6 +172,13 @@ func (i *InMemCollector) AddSpan(sp *types.Span) {
 	i.incoming <- sp
 }
 
+// AddSpan accepts the incoming span to a queue and returns immediately
+func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
+	i.Metrics.Histogram("collector_peer_queue", float64(len(i.incoming)))
+	// TODO protect against sending on a closed channel during shutdown
+	i.fromPeer <- sp
+}
+
 // collect handles both accepting spans that have been handed to it and sending
 // the complete traces. These are done with channels in order to keep collecting
 // single threaded so we don't need any locks. Actions taken from this select
@@ -181,19 +191,66 @@ func (i *InMemCollector) collect() {
 			i.send(sig.trace)
 		}
 	}()
+
+	peerChanSize := cap(i.fromPeer)
+
 	for {
+		// process traces that are ready to send first to make sure we can clear out
+		// any stuck queues that are eligible for clearing
 		select {
+		case sig, ok := <-i.toSend:
+			if ok {
+				i.send(sig.trace)
+			}
+		default:
+		}
+
+		// process peer traffic at 2/1 ratio to incoming traffic. By processing peer
+		// traffic preferentially we avoid the situation where the cluster essentially
+		// deadlocks because peers are waiting to get their events handed off to each
+		// other.
+		select {
+		case sig := <-i.toSend:
+			i.send(sig.trace)
+		case sp, ok := <-i.fromPeer:
+			if !ok {
+				// channel's been closed; we should shut down.
+				return
+			}
+			i.processSpan(sp)
+			// additionally, if the peer channel is more than 80% full, restart this
+			// loop to make sure it stays empty enough. We _really_ want to avoid
+			// blocking peer traffic.
+			if len(i.fromPeer)*100/peerChanSize > 80 {
+				continue
+			}
+		default:
+		}
+
+		// ok, the peer queue is low enough, let's wait for new events from anywhere
+		select {
+		case sig, ok := <-i.toSend:
+			if ok {
+				i.send(sig.trace)
+			}
 		case sp, ok := <-i.incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
 			}
 			i.processSpan(sp)
-		case sig := <-i.toSend:
-			i.send(sig.trace)
+			continue
+		case sp, ok := <-i.fromPeer:
+			if !ok {
+				// channel's been closed; we should shut down.
+				return
+			}
+			i.processSpan(sp)
+			continue
 		case <-i.reload:
 			i.reloadConfigs()
 		}
+
 	}
 }
 
@@ -338,6 +395,7 @@ func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
 			WithField("pause_dur", pause).
 			Debugf("pauseAndSend wait finished; sending trace.")
 		i.toSend <- &sendSignal{trace}
+
 	case <-trace.CancelSending:
 		// CancelSending channel is closed, meaning someone else sent the trace.
 		// Let's stop waiting and bail.
