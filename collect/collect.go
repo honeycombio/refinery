@@ -167,14 +167,12 @@ func (i *InMemCollector) reloadConfigs() {
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) {
-	i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 	// TODO protect against sending on a closed channel during shutdown
 	i.incoming <- sp
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
-	i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
 	// TODO protect against sending on a closed channel during shutdown
 	i.fromPeer <- sp
 }
@@ -195,6 +193,11 @@ func (i *InMemCollector) collect() {
 	peerChanSize := cap(i.fromPeer)
 
 	for {
+		// record channel lengths
+		i.Metrics.Histogram("collector_tosend_queue", float64(len(i.toSend)))
+		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
+		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
+
 		// process traces that are ready to send first to make sure we can clear out
 		// any stuck queues that are eligible for clearing
 		select {
