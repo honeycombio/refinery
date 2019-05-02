@@ -12,6 +12,7 @@ require (
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
 	github.com/facebookgo/structtag v0.0.0-20150214074306-217e25fb9691 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
+	github.com/garyburd/redigo v1.6.0
 	github.com/gogo/protobuf v0.0.0-20180509162441-30cf7ac33676 // indirect
 	github.com/golang/protobuf v0.0.0-20180417204537-fae8ec697c5d // indirect
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
@@ -31,7 +32,7 @@ require (
 	github.com/stretchr/testify v1.2.2
 	golang.org/x/net v0.0.0-20170726083632-f5079bd7f6f7 // indirect
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f // indirect
-	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
+	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/yaml.v2 v2.2.1 // indirect
 )

@@ -6,6 +6,8 @@ import (
 	"math"
 	"net"
 	"net/url"
+	"sort"
+	"sync"
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
@@ -33,9 +35,40 @@ func (d *DetShard) Equals(other Shard) bool {
 	return d == otherDetshard
 }
 
+type SortableShardList []*DetShard
+
+func (s SortableShardList) Len() int      { return len(s) }
+func (s SortableShardList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s SortableShardList) Less(i, j int) bool {
+	if s[i].ipOrHost != s[j].ipOrHost {
+		return s[i].ipOrHost < s[j].ipOrHost
+	}
+	if s[i].scheme != s[j].scheme {
+		return s[i].scheme < s[j].scheme
+	}
+	return s[i].port < s[j].port
+}
+
+func (s SortableShardList) Equals(other SortableShardList) bool {
+	if len(s) != len(other) {
+		return false
+	}
+	for i, shard := range s {
+		if !shard.Equals(other[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // GetAddress returns the Shard's address in a usable form
 func (d *DetShard) GetAddress() string {
 	return fmt.Sprintf("%s://%s:%s", d.scheme, d.ipOrHost, d.port)
+}
+
+func (d *DetShard) String() string {
+	return d.GetAddress()
 }
 
 type DeterministicSharder struct {
@@ -44,6 +77,8 @@ type DeterministicSharder struct {
 
 	myShard *DetShard
 	peers   []*DetShard
+
+	peerLock sync.RWMutex
 }
 
 func (d *DeterministicSharder) Start() error {
@@ -106,6 +141,7 @@ func (d *DeterministicSharder) Start() error {
 		}
 	}
 	if !found {
+		d.Logger.Debugf("list of current peers: %+v", d.peers)
 		return errors.New("failed to find self in the peer list")
 	}
 	d.myShard = d.peers[selfIndexIntoPeerList]
@@ -113,6 +149,9 @@ func (d *DeterministicSharder) Start() error {
 	return nil
 }
 
+// loadPeerList will run every time any config changes (not only when the list
+// of peers changes). Because of this, it only updates the in-memory peer list
+// after verifying that it actually changed.
 func (d *DeterministicSharder) loadPeerList() error {
 	d.Logger.Debugf("loading peer list")
 	// get my peers
@@ -122,7 +161,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	}
 
 	// turn my peer list into a list of shards
-	d.peers = make([]*DetShard, 0, len(peerList))
+	newPeers := make([]*DetShard, 0, len(peerList))
 	for _, peer := range peerList {
 		peerURL, err := url.Parse(peer)
 		if err != nil {
@@ -133,7 +172,22 @@ func (d *DeterministicSharder) loadPeerList() error {
 			ipOrHost: peerURL.Hostname(),
 			port:     peerURL.Port(),
 		}
-		d.peers = append(d.peers, peerShard)
+		newPeers = append(newPeers, peerShard)
+	}
+
+	// the redis peer discovery already sorts its content. Does every backend?
+	// well, it's not too much work, let's sort it one more time.
+	sort.Sort(SortableShardList(newPeers))
+
+	// if the peer list changed, load the new list
+	d.peerLock.RLock()
+	if !SortableShardList(d.peers).Equals(newPeers) {
+		d.peerLock.RUnlock()
+		d.peerLock.Lock()
+		d.peers = newPeers
+		d.peerLock.Unlock()
+	} else {
+		d.peerLock.RUnlock()
 	}
 	return nil
 }
@@ -143,6 +197,8 @@ func (d *DeterministicSharder) MyShard() Shard {
 }
 
 func (d *DeterministicSharder) WhichShard(traceID string) Shard {
+	d.peerLock.RLock()
+	defer d.peerLock.RUnlock()
 
 	// add in the sharding salt to ensure the sh1sum is spread differently from
 	// others that use the same algorithm

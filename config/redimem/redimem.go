@@ -1,0 +1,181 @@
+package redimem
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/garyburd/redigo/redis"
+	"github.com/sirupsen/logrus"
+)
+
+// Membership allows services to register themselves as members of a group and
+// the list of all members can be retrieved by any member in the group.
+type Membership interface {
+	// Register adds name to the list of available servers. The registration lasts
+	// for timeout duration. Register should be called again before timeout expires
+	// in order to remain a member of the group.
+	Register(ctx context.Context, memberName string, timeout time.Duration) error
+
+	// GetMembers retrieves the list of all currently registered members. Members
+	// that have registered but timed out will not be returned.
+	GetMembers(ctx context.Context) ([]string, error)
+}
+
+const (
+	globalPrefix       = "redimem"
+	defaultRepeatCount = 2
+)
+
+// RedisMembership implements the Membership interface using Redis as the backend
+type RedisMembership struct {
+	// Prefix is a way of namespacing your group membership
+	Prefix string
+	// Pool should be an already-initialized redis pool
+	Pool *redis.Pool
+	// RepeatCount is the number of times GetMembers should ask Redis for the list
+	// of members in the pool. As seen in the Redis docs "The SCAN family of
+	// commands only offer limited guarantees about the returned elements"
+	// (https://redis.io/commands/scan). In order to overcome some of these
+	// limitations and gain confidence that the list of members is complete (and
+	// preferring to get older members than miss current members), you can
+	// configure RedisMembership to repeat the request for all members and union
+	// the results, returning a potentially more complete list. This option
+	// determines how many times RedisMembership asks Redis for the list of members
+	// in the pool before taking the union of results and returning. Defaults to
+	// 2.
+	RepeatCount int
+}
+
+func (rm *RedisMembership) validateDefaults() error {
+	if rm.RepeatCount == 0 {
+		rm.RepeatCount = defaultRepeatCount
+	}
+	if rm.Pool == nil {
+		// TODO put a mute pool in here or something that will safely noop and not panic
+		return errors.New("can't use RedisMembership with an unitialized Redis pool")
+	}
+	return nil
+}
+
+func (rm *RedisMembership) Register(ctx context.Context, memberName string, timeout time.Duration) error {
+	err := rm.validateDefaults()
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s•%s•%s", globalPrefix, rm.Prefix, memberName)
+	timeoutSec := int64(timeout) / int64(time.Second)
+	conn, err := rm.Pool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.Do("SET", key, "present", "EX", timeoutSec)
+	if err != nil {
+		logrus.WithField("name", memberName).
+			WithField("timeoutSec", timeoutSec).
+			WithField("err", err).
+			Error("registration failed")
+	}
+	return nil
+}
+
+func (rm *RedisMembership) GetMembers(ctx context.Context) ([]string, error) {
+	err := rm.validateDefaults()
+	if err != nil {
+		return nil, err
+	}
+	// get the list of members multiple times
+	allMembers := make([]string, 0)
+	for i := 0; i < rm.RepeatCount; i++ {
+		mems, err := rm.getMembersOnce(ctx)
+		if err != nil {
+			return nil, err
+		}
+		allMembers = append(allMembers, mems...)
+	}
+
+	// then sort and compact the list so we get the union of all the previous
+	// member requests
+	sort.Strings(allMembers)
+	members := make([]string, 0, len(allMembers)/rm.RepeatCount)
+	var prevMember string
+	for _, member := range allMembers {
+		if member == prevMember {
+			continue
+		}
+		members = append(members, member)
+		prevMember = member
+	}
+	return members, nil
+}
+
+func (rm *RedisMembership) getMembersOnce(ctx context.Context) ([]string, error) {
+	keyPrefix := fmt.Sprintf("%s•%s•*", globalPrefix, rm.Prefix)
+	conn, err := rm.Pool.GetContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	keysChan, _ := rm.scan(conn, keyPrefix, "10")
+	memberList := make([]string, 0)
+	for key := range keysChan {
+		name := strings.Split(key, "•")[2]
+		memberList = append(memberList, name)
+	}
+	return memberList, nil
+}
+
+// scan returns two channels and handles all the iteration necessary to get all
+// keys from Redis when using the Scan verb by abstracting away the iterator.
+func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string) (<-chan string, <-chan error) {
+	keyChan := make(chan string)
+	errChan := make(chan error)
+
+	go func() {
+		cursor := "0"
+		for {
+			values, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", pattern, "COUNT", count))
+			if err != nil {
+				errChan <- err
+				break
+			}
+			if len(values) != 2 {
+				errChan <- errors.New("unexpected response format from redis")
+				break
+			}
+
+			cursor, err = redis.String(values[0], nil)
+			if err != nil {
+				errChan <- err
+				break
+			}
+
+			keys, err := redis.Strings(values[1], nil)
+			if err != nil {
+				errChan <- err
+				break
+			}
+
+			if keys != nil {
+				for _, key := range keys {
+					keyChan <- key
+				}
+			}
+
+			// redis will return 0 when we have iterated over the entire set
+			if cursor == "0" {
+				break
+			}
+		}
+
+		close(errChan)
+		close(keyChan)
+
+	}()
+
+	return keyChan, errChan
+}
