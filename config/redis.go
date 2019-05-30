@@ -43,6 +43,7 @@ type RedisPeerFileConfig struct {
 }
 
 const (
+	RedisHostEnvVarName  = "SAMPROXY_REDIS_HOST"
 	refreshCacheInterval = 5 * time.Second
 	peerEntryTimeout     = 30 * time.Second
 )
@@ -130,7 +131,7 @@ func (rc *RedisPeerFileConfig) GetPeers() ([]string, error) {
 // the config file if the environment variable is not set. Returns empty string
 // if neither is set.
 func (rc *RedisPeerFileConfig) GetRedisHost() (string, error) {
-	envRedisHost := os.Getenv("SAMPROXY_REDIS_HOST")
+	envRedisHost := os.Getenv(RedisHostEnvVarName)
 	if envRedisHost != "" {
 		return envRedisHost, nil
 	}
