@@ -153,21 +153,30 @@ func (rc *RedisPeerFileConfig) watchPeers() {
 	oldPeerList := rc.peers
 	sort.Strings(oldPeerList)
 	tk := time.NewTicker(refreshCacheInterval)
+
+	defer func() {
+		fmt.Printf("leaving watchPeers\n")
+	}()
+
 	for range tk.C {
+		fmt.Printf("watchPeers: starting tick\n")
 		currentPeers, err := rc.peerStore.GetMembers(context.TODO())
 		if err != nil {
+			fmt.Printf("watchPeers: got error %+v|n", err)
 			// TODO maybe do something better here?
 			continue
 		}
 		sort.Strings(currentPeers)
 		if !equal(oldPeerList, currentPeers) {
 			// update peer list and trigger callbacks saying the peer list has changed
+			fmt.Printf("peer list has changed; new peer list +%v\n", currentPeers)
 			rc.peerLock.Lock()
 			rc.peers = currentPeers
 			oldPeerList = currentPeers
 			rc.peerLock.Unlock()
 			for _, callback := range rc.callbacks {
-				callback()
+				// don't block on any of the callbacks.
+				go callback()
 			}
 		}
 	}

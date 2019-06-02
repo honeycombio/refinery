@@ -129,10 +129,12 @@ func (i *InMemCollector) Start() error {
 
 // instruct
 func (i *InMemCollector) sendReloadSignal() {
+	i.Logger.Debugf("sending collect reload signal")
 	i.reload <- struct{}{}
 }
 
 func (i *InMemCollector) reloadConfigs() {
+	i.Logger.Debugf("reloading in-mem collect config")
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
 	if err != nil {

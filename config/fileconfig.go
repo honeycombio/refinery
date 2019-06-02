@@ -60,7 +60,7 @@ func (f *FileConfig) reloadConfig() error {
 	}
 	// notify everybody that we've reloaded the config
 	for _, callback := range f.callbacks {
-		callback()
+		go callback()
 	}
 	return nil
 }

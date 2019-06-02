@@ -64,6 +64,7 @@ func (d *DefaultTransmission) Start() error {
 }
 
 func (d *DefaultTransmission) reloadTransmissionBuilder() {
+	d.Logger.Debugf("reloading transmission config")
 	upstreamAPI, err := d.Config.GetHoneycombAPI()
 	if err != nil {
 		// log and skip reload
