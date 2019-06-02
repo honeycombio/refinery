@@ -55,7 +55,11 @@ func main() {
 	}
 
 	c := &config.FileConfig{Path: opts.ConfiFile}
-	c.Start()
+	err := c.Start()
+	if err != nil {
+		fmt.Printf("unable to load config: %+v\n", err)
+		os.Exit(1)
+	}
 
 	a := app.App{}
 
