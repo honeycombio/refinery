@@ -43,9 +43,22 @@ type RedisPeerFileConfig struct {
 }
 
 const (
-	RedisHostEnvVarName  = "SAMPROXY_REDIS_HOST"
-	refreshCacheInterval = 5 * time.Second
-	peerEntryTimeout     = 30 * time.Second
+	RedisHostEnvVarName = "SAMPROXY_REDIS_HOST"
+
+	// refreshCacheInterval is how frequently this host will re-register itself
+	// with Redis. This should happen about 3x during each timeout phase in order
+	// to allow multiple timeouts to fail and yet still keep the host in the mix.
+	// Falling out of Redis will result in re-hashing the host-trace afinity and
+	// will cause broken traces for those that fall on both sides of the rehashing.
+	// This is why it's important to ensure hosts stay in the pool.
+	refreshCacheInterval = 3 * time.Second
+
+	// peerEntryTimeout is how long redis will wait before expiring a peer that
+	// doesn't check in. The ratio of refresh to peer timout should be 1/3. Redis
+	// timeouts are in seconds and entries can last up to 2 seconds longer than
+	// their expected timeout (in my load testing), so the lower bound for this
+	// timer should be ... 5sec?
+	peerEntryTimeout = 10 * time.Second
 )
 
 // Start reads the config initially and spins up some goroutines to manage peer
