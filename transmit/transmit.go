@@ -32,6 +32,9 @@ type DefaultTransmission struct {
 	Metrics    metrics.Metrics `inject:""`
 	LibhClient *libhoney.Client
 
+	// Type is peer or upstream, and used only for naming metrics
+	Name string
+
 	builder          *libhoney.Builder
 	responseCanceler context.CancelFunc
 }
@@ -46,10 +49,10 @@ func (d *DefaultTransmission) Start() error {
 	d.builder = d.LibhClient.NewBuilder()
 	d.builder.APIHost = upstreamAPI
 
-	d.Metrics.Register(counterEnqueueErrors, "counter")
-	d.Metrics.Register(counterResponse20x, "counter")
-	d.Metrics.Register(counterResponseErrorsAPI, "counter")
-	d.Metrics.Register(counterResponseErrorsPeer, "counter")
+	d.Metrics.Register(d.Name+counterEnqueueErrors, "counter")
+	d.Metrics.Register(d.Name+counterResponse20x, "counter")
+	d.Metrics.Register(d.Name+counterResponseErrorsAPI, "counter")
+	d.Metrics.Register(d.Name+counterResponseErrorsPeer, "counter")
 
 	processCtx, canceler := context.WithCancel(context.Background())
 	d.responseCanceler = canceler
@@ -97,7 +100,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 
 	err := libhEv.SendPresampled()
 	if err != nil {
-		d.Metrics.IncrementCounter(counterEnqueueErrors)
+		d.Metrics.IncrementCounter(d.Name + counterEnqueueErrors)
 		d.Logger.WithFields(map[string]interface{}{
 			"error":      err.Error(),
 			"request_id": ev.Context.Value(types.RequestIDContextKey{}),
@@ -156,13 +159,13 @@ func (d *DefaultTransmission) processResponses(ctx context.Context) {
 				if honeycombAPI == apiHost {
 					// if the API host matches the configured honeycomb API,
 					// count it as an API error
-					d.Metrics.IncrementCounter(counterResponseErrorsAPI)
+					d.Metrics.IncrementCounter(d.Name + counterResponseErrorsAPI)
 				} else {
 					// otherwise, it's probably a peer error
-					d.Metrics.IncrementCounter(counterResponseErrorsPeer)
+					d.Metrics.IncrementCounter(d.Name + counterResponseErrorsPeer)
 				}
 			} else {
-				d.Metrics.IncrementCounter(counterResponse20x)
+				d.Metrics.IncrementCounter(d.Name + counterResponse20x)
 			}
 		case <-ctx.Done():
 			return
