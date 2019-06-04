@@ -121,16 +121,22 @@ func (i *InMemCollector) Start() error {
 	i.incoming = make(chan *types.Span, capacity*3)
 	i.fromPeer = make(chan *types.Span, capacity*3)
 	i.toSend = make(chan *sendSignal, capacity)
+	i.reload = make(chan struct{}, 1)
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
 
 	return nil
 }
 
-// instruct
+// sendReloadSignal will trigger the collector reloading its config, eventually.
 func (i *InMemCollector) sendReloadSignal() {
-	i.Logger.Debugf("sending collect reload signal")
-	i.reload <- struct{}{}
+	// non-blocking insert of the signal here so we don't leak goroutines
+	select {
+	case i.reload <- struct{}{}:
+		i.Logger.Debugf("sending collect reload signal")
+	default:
+		i.Logger.Debugf("collect already waiting to reload; skipping additional signal")
+	}
 }
 
 func (i *InMemCollector) reloadConfigs() {
