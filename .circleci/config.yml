@@ -32,14 +32,13 @@ jobs:
             - buildevents/berun:
                 bename: go_build
                 becommand: |
-                  cd cmd/samproxy
                   if [ -z "${CIRCLE_TAG}" ] ; then
                     CIRCLE_TAG="unset"
                   fi
-                  go build -ldflags "-X main.Version=${CIRCLE_TAG}"
+                  go install -ldflags "-X main.Version=${CIRCLE_TAG}" ./...
             - run: |
                 mkdir artifacts
-                cp cmd/samproxy/samproxy artifacts
+                cp $GOPATH/bin/samproxy artifacts
             - persist_to_workspace:
                 root: artifacts
                 paths:
