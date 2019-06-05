@@ -31,13 +31,22 @@ jobs:
             - buildevents/berun:
                 bename: go_build
                 becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:-unset}" ./...
+            - buildevents/berun:
+                bename: build_deb
+                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:-unset}" -t deb
+            - buildevents/berun:
+                bename: build_rpm
+                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:-unset}" -t rpm
             - run: |
                 mkdir artifacts
-                cp $GOPATH/bin/samproxy artifacts
+                cp $GOPATH/bin/samproxy* artifacts
+                find artifacts -ls
             - persist_to_workspace:
                 root: artifacts
                 paths:
                   - samproxy
+                  - samproxy_${CIRCLE_TAG:-unset}_amd64.deb
+                  - samproxy-${CIRCLE_TAG:-unset}-1.x86_64.rpm
 
   publish:
     docker:
@@ -50,6 +59,7 @@ jobs:
             - run:
                 name: "Publish Release on GitHub"
                 command: |
+                  echo "about to publish to tag ${CIRCLE_TAG}"
                   ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
 
 workflows:
