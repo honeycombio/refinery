@@ -30,7 +30,7 @@ jobs:
                 becommand: go test -v ./...
             - buildevents/berun:
                 bename: go_build
-                becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:-unset}" ./...
+                becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:1:20}" ./...
             - buildevents/berun:
                 bename: apt_get_update
                 becommand: sudo apt-get -qq update
@@ -42,10 +42,10 @@ jobs:
                 becommand: sudo gem install fpm
             - buildevents/berun:
                 bename: build_deb
-                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:-unset}" -t deb
+                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t deb
             - buildevents/berun:
                 bename: build_rpm
-                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:-unset}" -t rpm
+                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t rpm
             - run: |
                 mkdir artifacts
                 cp $GOPATH/bin/samproxy* artifacts
@@ -71,8 +71,8 @@ jobs:
                   tar -xvf artifacts/samproxies.tar
                   ls -l *
                   ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:-unset}_amd64.deb
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:-unset}-1.x86_64.rpm
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
 
 workflows:
   build:
