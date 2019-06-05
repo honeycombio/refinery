@@ -14,6 +14,9 @@ github.com/facebookgo/muster
 github.com/facebookgo/startstop
 # github.com/facebookgo/structtag v0.0.0-20150214074306-217e25fb9691
 github.com/facebookgo/structtag
+# github.com/garyburd/redigo v1.6.0
+github.com/garyburd/redigo/redis
+github.com/garyburd/redigo/internal
 # github.com/golang/protobuf v0.0.0-20180417204537-fae8ec697c5d
 github.com/golang/protobuf/proto
 # github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d

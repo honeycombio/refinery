@@ -6,6 +6,9 @@ import (
 	"math"
 	"net"
 	"net/url"
+	"sort"
+	"sync"
+	"time"
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
@@ -33,9 +36,40 @@ func (d *DetShard) Equals(other Shard) bool {
 	return d == otherDetshard
 }
 
+type SortableShardList []*DetShard
+
+func (s SortableShardList) Len() int      { return len(s) }
+func (s SortableShardList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+
+func (s SortableShardList) Less(i, j int) bool {
+	if s[i].ipOrHost != s[j].ipOrHost {
+		return s[i].ipOrHost < s[j].ipOrHost
+	}
+	if s[i].scheme != s[j].scheme {
+		return s[i].scheme < s[j].scheme
+	}
+	return s[i].port < s[j].port
+}
+
+func (s SortableShardList) Equals(other SortableShardList) bool {
+	if len(s) != len(other) {
+		return false
+	}
+	for i, shard := range s {
+		if !shard.Equals(other[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // GetAddress returns the Shard's address in a usable form
 func (d *DetShard) GetAddress() string {
 	return fmt.Sprintf("%s://%s:%s", d.scheme, d.ipOrHost, d.port)
+}
+
+func (d *DetShard) String() string {
+	return d.GetAddress()
 }
 
 type DeterministicSharder struct {
@@ -44,68 +78,80 @@ type DeterministicSharder struct {
 
 	myShard *DetShard
 	peers   []*DetShard
+
+	peerLock sync.RWMutex
 }
 
 func (d *DeterministicSharder) Start() error {
 
 	d.Config.RegisterReloadCallback(func() {
+		d.Logger.Debugf("reloading deterministic sharder config")
 		// make an error-less version of the peer reloader
 		if err := d.loadPeerList(); err != nil {
 			d.Logger.Errorf("failed to reload peer list: %+v", err)
 		}
 	})
 
-	err := d.loadPeerList()
-	if err != nil {
-		return err
-	}
-
-	// get my listen address for peer traffic for the Port number
-	listenAddr, err := d.Config.GetPeerListenAddr()
-	if err != nil {
-		return errors.Wrap(err, "failed to get listen addr config")
-	}
-	_, localPort, err := net.SplitHostPort(listenAddr)
-	if err != nil {
-		return errors.Wrap(err, "failed to parse listen addr into host:port")
-	}
-	d.Logger.Debugf("picked up local peer port of %s", localPort)
-
-	// get my local interfaces
-	localAddrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return errors.Wrap(err, "failed to get local interface list to initialize sharder")
-	}
-
-	// go through peer list, resolve each address, see if any of them match any
-	// local interface. Note that this assumes only one instance of samproxy per
-	// host can run.
-	var selfIndexIntoPeerList int
+	// Try up to 5 times to find myself in the peer list before giving up
 	var found bool
-	for i, peerShard := range d.peers {
-		d.Logger.WithField("peer", peerShard).WithField("self", localAddrs).Debugf("Considering peer looking for self")
-		peerIPList, err := net.LookupHost(peerShard.ipOrHost)
+	var selfIndexIntoPeerList int
+	for j := 0; j < 5; j++ {
+		err := d.loadPeerList()
 		if err != nil {
-			// TODO something better than fail to start if peer is missing
-			return errors.Wrap(err, fmt.Sprintf("couldn't resolve peer hostname %s", peerShard.ipOrHost))
+			return err
 		}
-		for _, peerIP := range peerIPList {
-			for _, localIP := range localAddrs {
-				ipAddr, _, err := net.ParseCIDR(localIP.String())
-				if err != nil {
-					return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", localIP.String()))
-				}
-				if peerIP == ipAddr.String() {
-					if peerShard.port == localPort {
-						d.Logger.WithField("peer", peerShard).Debugf("Found myself in peer list")
-						found = true
-						selfIndexIntoPeerList = i
+
+		// get my listen address for peer traffic for the Port number
+		listenAddr, err := d.Config.GetPeerListenAddr()
+		if err != nil {
+			return errors.Wrap(err, "failed to get listen addr config")
+		}
+		_, localPort, err := net.SplitHostPort(listenAddr)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse listen addr into host:port")
+		}
+		d.Logger.Debugf("picked up local peer port of %s", localPort)
+
+		// get my local interfaces
+		localAddrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return errors.Wrap(err, "failed to get local interface list to initialize sharder")
+		}
+
+		// go through peer list, resolve each address, see if any of them match any
+		// local interface. Note that this assumes only one instance of samproxy per
+		// host can run.
+		for i, peerShard := range d.peers {
+			d.Logger.WithField("peer", peerShard).WithField("self", localAddrs).Debugf("Considering peer looking for self")
+			peerIPList, err := net.LookupHost(peerShard.ipOrHost)
+			if err != nil {
+				// TODO something better than fail to start if peer is missing
+				return errors.Wrap(err, fmt.Sprintf("couldn't resolve peer hostname %s", peerShard.ipOrHost))
+			}
+			for _, peerIP := range peerIPList {
+				for _, localIP := range localAddrs {
+					ipAddr, _, err := net.ParseCIDR(localIP.String())
+					if err != nil {
+						return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", localIP.String()))
+					}
+					if peerIP == ipAddr.String() {
+						if peerShard.port == localPort {
+							d.Logger.WithField("peer", peerShard).Debugf("Found myself in peer list")
+							found = true
+							selfIndexIntoPeerList = i
+						}
 					}
 				}
 			}
 		}
+		if found {
+			break
+		}
+		d.Logger.Debugf("Failed to find self in peer list; waiting 1sec and trying again")
+		time.Sleep(1 * time.Second)
 	}
 	if !found {
+		d.Logger.Debugf("list of current peers: %+v", d.peers)
 		return errors.New("failed to find self in the peer list")
 	}
 	d.myShard = d.peers[selfIndexIntoPeerList]
@@ -113,6 +159,9 @@ func (d *DeterministicSharder) Start() error {
 	return nil
 }
 
+// loadPeerList will run every time any config changes (not only when the list
+// of peers changes). Because of this, it only updates the in-memory peer list
+// after verifying that it actually changed.
 func (d *DeterministicSharder) loadPeerList() error {
 	d.Logger.Debugf("loading peer list")
 	// get my peers
@@ -122,7 +171,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	}
 
 	// turn my peer list into a list of shards
-	d.peers = make([]*DetShard, 0, len(peerList))
+	newPeers := make([]*DetShard, 0, len(peerList))
 	for _, peer := range peerList {
 		peerURL, err := url.Parse(peer)
 		if err != nil {
@@ -133,7 +182,23 @@ func (d *DeterministicSharder) loadPeerList() error {
 			ipOrHost: peerURL.Hostname(),
 			port:     peerURL.Port(),
 		}
-		d.peers = append(d.peers, peerShard)
+		newPeers = append(newPeers, peerShard)
+	}
+
+	// the redis peer discovery already sorts its content. Does every backend?
+	// well, it's not too much work, let's sort it one more time.
+	sort.Sort(SortableShardList(newPeers))
+
+	// if the peer list changed, load the new list
+	d.peerLock.RLock()
+	if !SortableShardList(d.peers).Equals(newPeers) {
+		d.Logger.Infof("Peer list has changed. New peer list: %+v", newPeers)
+		d.peerLock.RUnlock()
+		d.peerLock.Lock()
+		d.peers = newPeers
+		d.peerLock.Unlock()
+	} else {
+		d.peerLock.RUnlock()
 	}
 	return nil
 }
@@ -143,6 +208,8 @@ func (d *DeterministicSharder) MyShard() Shard {
 }
 
 func (d *DeterministicSharder) WhichShard(traceID string) Shard {
+	d.peerLock.RLock()
+	defer d.peerLock.RUnlock()
 
 	// add in the sharding salt to ensure the sh1sum is spread differently from
 	// others that use the same algorithm

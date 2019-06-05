@@ -1,13 +1,11 @@
 package config
 
-import (
-	"encoding/json"
-	"fmt"
-
-	libhoney "github.com/honeycombio/libhoney-go"
-
-	toml "github.com/pelletier/go-toml"
-)
+// Config defines the interface the rest of the code uses to get items from the
+// config. There are different implementations of the config using different
+// backends to store the config. FileConfig is the default and uses a
+// TOML-formatted config file. RedisPeerFileConfig uses a redis cluster to store
+// the list of peers and then falls back to a filesystem config file for all
+// other config elements.
 
 type Config interface {
 
@@ -36,6 +34,11 @@ type Config interface {
 
 	// GetPeers returns a list of other servers participating in this proxy cluster
 	GetPeers() ([]string, error)
+
+	// GetRedisHost returns the address of a Redis instance to use for peer
+	// management. Only valid when the command line flag 'peer_type' is set to
+	// 'redis'
+	GetRedisHost() (string, error)
 
 	// GetHoneycombAPI returns the base URL (protocol, hostname, and port) of
 	// the upstream Honeycomb API server
@@ -90,246 +93,4 @@ type Config interface {
 	// GetPeerBufferSize returns the size of the libhoney buffer to use for the peer forwarding
 	// libhoney client
 	GetPeerBufferSize() int
-}
-
-type FileConfig struct {
-	Path      string
-	conf      confContents
-	rawConf   *toml.Tree
-	callbacks []func()
-}
-
-type confContents struct {
-	ListenAddr           string
-	PeerListenAddr       string
-	APIKeys              []string
-	Peers                []string
-	HoneycombAPI         string
-	CollectCacheCapacity int
-	Logger               string
-	LoggingLevel         string
-	Collector            string
-	Sampler              string
-	Metrics              string
-	SendDelay            int
-	SpanSeenDelay        int
-	TraceTimeout         int
-	UpstreamBufferSize   int
-	PeerBufferSize       int
-}
-
-// Used to marshall in the sampler type in SamplerConfig definitions
-// other fields are ignored
-type samplerConfigType struct {
-	Sampler string
-}
-
-// Start reads the config initially
-func (f *FileConfig) Start() error {
-	return f.reloadConfig()
-}
-
-// reloadConfig re-reads the config file for up-to-date config options. It is
-// called when a USR1 signal hits the process.
-func (f *FileConfig) reloadConfig() error {
-	config, err := toml.LoadFile(f.Path)
-	if err != nil {
-		return err
-	}
-	f.rawConf = config
-	f.conf = confContents{}
-	err = config.Unmarshal(&f.conf)
-	if err != nil {
-		return err
-	}
-	// notify everybody that we've reloaded the config
-	for _, callback := range f.callbacks {
-		callback()
-	}
-	return nil
-}
-
-func (f *FileConfig) ReloadConfig() {
-	err := f.reloadConfig()
-	if err != nil {
-		fmt.Printf("Error reloading configs: %+v\n", err)
-	}
-}
-
-func (f *FileConfig) RegisterReloadCallback(cb func()) {
-	if f.callbacks == nil {
-		f.callbacks = make([]func(), 0, 1)
-	}
-	f.callbacks = append(f.callbacks, cb)
-}
-
-func (f *FileConfig) GetListenAddr() (string, error) {
-	return f.conf.ListenAddr, nil
-}
-
-func (f *FileConfig) GetPeerListenAddr() (string, error) {
-	return f.conf.PeerListenAddr, nil
-}
-
-func (f *FileConfig) GetAPIKeys() ([]string, error) {
-	return f.conf.APIKeys, nil
-}
-
-func (f *FileConfig) GetPeers() ([]string, error) {
-	return f.conf.Peers, nil
-}
-
-func (f *FileConfig) GetHoneycombAPI() (string, error) {
-	return f.conf.HoneycombAPI, nil
-}
-
-func (f *FileConfig) GetLoggingLevel() (string, error) {
-	return f.conf.LoggingLevel, nil
-}
-
-func (f *FileConfig) GetLoggerType() (string, error) {
-	return f.conf.Logger, nil
-}
-
-func (f *FileConfig) GetCollectorType() (string, error) {
-	return f.conf.Collector, nil
-}
-
-func (f *FileConfig) GetDefaultSamplerType() (string, error) {
-	t := samplerConfigType{}
-	err := f.GetOtherConfig("SamplerConfig._default", &t)
-	if err != nil {
-		return "", err
-	}
-	return t.Sampler, nil
-}
-
-func (f *FileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
-	t := samplerConfigType{}
-	err := f.GetOtherConfig("SamplerConfig."+dataset, &t)
-	if err != nil {
-		return "", err
-	}
-	return t.Sampler, nil
-}
-
-func (f *FileConfig) GetMetricsType() (string, error) {
-	return f.conf.Metrics, nil
-}
-
-func (f *FileConfig) GetSendDelay() (int, error) {
-	return f.conf.SendDelay, nil
-}
-
-func (f *FileConfig) GetSpanSeenDelay() (int, error) {
-	return f.conf.SpanSeenDelay, nil
-}
-
-func (f *FileConfig) GetTraceTimeout() (int, error) {
-	return f.conf.TraceTimeout, nil
-}
-
-func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
-	subConf := f.rawConf.Get(name)
-	if subConfTree, ok := subConf.(*toml.Tree); ok {
-		return subConfTree.Unmarshal(iface)
-	}
-	return fmt.Errorf("failed to find config tree for %s", name)
-}
-
-func (f *FileConfig) GetUpstreamBufferSize() int {
-	if f.conf.UpstreamBufferSize == 0 {
-		return libhoney.DefaultPendingWorkCapacity
-	}
-	return f.conf.UpstreamBufferSize
-}
-
-func (f *FileConfig) GetPeerBufferSize() int {
-	if f.conf.PeerBufferSize == 0 {
-		return libhoney.DefaultPendingWorkCapacity
-	}
-	return f.conf.PeerBufferSize
-}
-
-// MockConfig will respond with whatever config it's set to do during
-// initialization
-type MockConfig struct {
-	GetAPIKeysErr        error
-	GetAPIKeysVal        []string
-	GetCollectorTypeErr  error
-	GetCollectorTypeVal  string
-	GetHoneycombAPIErr   error
-	GetHoneycombAPIVal   string
-	GetListenAddrErr     error
-	GetListenAddrVal     string
-	GetPeerListenAddrErr error
-	GetPeerListenAddrVal string
-	GetLoggerTypeErr     error
-	GetLoggerTypeVal     string
-	GetLoggingLevelErr   error
-	GetLoggingLevelVal   string
-	GetOtherConfigErr    error
-	// GetOtherConfigVal must be a JSON representation of the config struct to be populated.
-	GetOtherConfigVal        string
-	GetPeersErr              error
-	GetPeersVal              []string
-	GetDefaultSamplerTypeErr error
-	GetDefaultSamplerTypeVal string
-	GetMetricsTypeErr        error
-	GetMetricsTypeVal        string
-	GetSendDelayErr          error
-	GetSendDelayVal          int
-	GetSpanSeenDelayErr      error
-	GetSpanSeenDelayVal      int
-	GetTraceTimeoutErr       error
-	GetTraceTimeoutVal       int
-	GetUpstreamBufferSizeVal int
-	GetPeerBufferSizeVal     int
-}
-
-func (m *MockConfig) ReloadConfig()                 {}
-func (m *MockConfig) RegisterReloadCallback(func()) {}
-func (m *MockConfig) GetAPIKeys() ([]string, error) { return m.GetAPIKeysVal, m.GetAPIKeysErr }
-func (m *MockConfig) GetCollectorType() (string, error) {
-	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
-}
-func (m *MockConfig) GetHoneycombAPI() (string, error) {
-	return m.GetHoneycombAPIVal, m.GetHoneycombAPIErr
-}
-func (m *MockConfig) GetListenAddr() (string, error) { return m.GetListenAddrVal, m.GetListenAddrErr }
-func (m *MockConfig) GetPeerListenAddr() (string, error) {
-	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
-}
-func (m *MockConfig) GetLoggerType() (string, error) { return m.GetLoggerTypeVal, m.GetLoggerTypeErr }
-func (m *MockConfig) GetLoggingLevel() (string, error) {
-	return m.GetLoggingLevelVal, m.GetLoggingLevelErr
-}
-func (m *MockConfig) GetOtherConfig(name string, iface interface{}) error {
-	err := json.Unmarshal([]byte(m.GetOtherConfigVal), iface)
-	if err != nil {
-		return err
-	}
-	return m.GetOtherConfigErr
-}
-func (m *MockConfig) GetPeers() ([]string, error) { return m.GetPeersVal, m.GetPeersErr }
-func (m *MockConfig) GetDefaultSamplerType() (string, error) {
-	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
-}
-func (m *MockConfig) GetMetricsType() (string, error) { return m.GetMetricsTypeVal, m.GetMetricsTypeErr }
-func (m *MockConfig) GetSendDelay() (int, error)      { return m.GetSendDelayVal, m.GetSendDelayErr }
-func (m *MockConfig) GetSpanSeenDelay() (int, error) {
-	return m.GetSpanSeenDelayVal, m.GetSpanSeenDelayErr
-}
-func (m *MockConfig) GetTraceTimeout() (int, error) { return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr }
-
-// TODO: allow per-dataset mock values
-func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
-	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
-}
-
-func (m *MockConfig) GetUpstreamBufferSize() int {
-	return m.GetUpstreamBufferSizeVal
-}
-func (m *MockConfig) GetPeerBufferSize() int {
-	return m.GetPeerBufferSizeVal
 }

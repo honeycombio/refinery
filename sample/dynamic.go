@@ -79,6 +79,7 @@ func (d *DynamicSampler) Start() error {
 }
 
 func (d *DynamicSampler) reloadConfigs() {
+	d.Logger.Debugf("reloading config for dynamic sampler")
 	// only actually reload the dynsampler if the config changed.
 	var configChanged bool
 

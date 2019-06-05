@@ -1,0 +1,75 @@
+version: 2.1
+
+orbs:
+  buildevents: honeycombio/buildevents@0.0.1
+
+executors:
+  linuxgo:
+    parameters:
+    working_directory: /go/src/github.com/honeycombio/samproxy
+    docker:
+      - image: circleci/golang:1.10
+
+jobs:
+  setup:
+    executor: linuxgo
+    steps:
+      - buildevents/start_trace
+
+  build:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - checkout
+            - buildevents/berun:
+                bename: go_get
+                becommand: go get -v -t -d ./...
+            - buildevents/berun:
+                bename: go_test
+                becommand: go test -v ./...
+            - buildevents/berun:
+                bename: go_build
+                becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:-unset}" ./...
+            - run: |
+                mkdir artifacts
+                cp $GOPATH/bin/samproxy artifacts
+            - persist_to_workspace:
+                root: artifacts
+                paths:
+                  - samproxy
+
+  publish:
+    docker:
+      - image: cibuilds/github:0.12.1
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - attach_workspace:
+                at: artifacts
+            - run:
+                name: "Publish Release on GitHub"
+                command: |
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
+
+workflows:
+  build:
+    jobs:
+      - setup:
+          filters:
+            tags:
+              only: /.*/
+      - build:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/
+      - publish:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+/
+            branches:
+              ignore: /.*/

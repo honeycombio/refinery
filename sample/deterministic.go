@@ -34,6 +34,7 @@ func (d *DeterministicSampler) Start() error {
 
 	// listen for config reloads with an errorless version of the reload
 	d.Config.RegisterReloadCallback(func() {
+		d.Logger.Debugf("reloading deterministic sampler config")
 		if err := d.loadConfigs(); err != nil {
 			d.Logger.WithField("error", err).Errorf("failed to reload deterministic sampler configs")
 		}

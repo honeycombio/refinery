@@ -123,6 +123,7 @@ func (h *HoneycombLogger) readResponses() {
 }
 
 func (h *HoneycombLogger) reloadBuilder() {
+	h.Debugf("reloading config for Honeycomb logger")
 	// preseve log level
 	logLevel := h.loggerConfig.level
 	loggerConfig := HoneycombLoggerConfig{}

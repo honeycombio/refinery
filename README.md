@@ -21,7 +21,11 @@ Samproxy is built by [Travis-CI](https://travis-ci.org/honeycombio/samproxy). Bu
 
 ## Configuration
 
-There are a few vital configuration options:
+Configuration is done in one of two ways - entirely by the config file or a combination of the config file and a Redis backend for managing the list of peers in the cluster. When using Redis, it only manages peers - everything else is managed by the config file.
+
+There are a few vital configuration options; read through this list and make sure all the variables are set.
+
+### File-based Config
 
 - API Keys: Samproxy itself needs to be configured with a list of your API keys. This lets it respond with a 401/Unauthorized if an unexpected api key is used. You can configure Samproxy to accept all API keys by setting it to `*` but then you will lose the authentication feedback to your application. Samproxy will accept all events even if those events will eventually be rejected by the Honeycomb API due to an API key issue.
 
@@ -36,6 +40,22 @@ There are a few vital configuration options:
 There are a few components of Samproxy with multiple implementations; the config file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level config item that lets you choose which implementation to use and then a section further down with additional config options for that choice (for example, the Honeycomb logger requires an API key).
 
 When configuration changes, send Samproxy a USR1 signal and it will re-read the configuration.
+
+### Redis-based Config
+
+In the Redis-based config mode, all config options _except_ peer management are still handled by the config file.  Only coordinating the list of peers in the samproxy cluster is managed with Redis.
+
+Enabling the redis-based config happens in one of two ways:
+* set the `SAMPROXY_REDIS_HOST` environment variable
+* use the flag `-p` or `--peer_type` with the argument `redis`
+
+When launched in redis-config mode, Samproxy needs a redis host to use for managing the list of peers in the samproxy cluster. This hostname and port can be specified in one of two ways:
+* set the `SAMPROXY_REDIS_HOST` environment variable
+* set the `RedisHost` field in the config file
+
+In other words, if you set the `SAMPROXY_REDIS_HOST` environment variable to the location of your redis host, you are done. Otherwise, launching samproxy with `-p redis` and setting the `RedisHost` field in the config file will accomplish the same thing.
+
+The redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host.
 
 ## How sampling decisions are made
 

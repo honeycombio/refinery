@@ -5,13 +5,16 @@
 # ListenAddr is the IP and port on which to listen for incoming events. Incoming
 # traffic is expected to be HTTP, so if using SSL put something like nginx in
 # front to do the decryption.
+# Should be of the form 0.0.0.0:8080
 # Not eligible for live reload.
 ListenAddr = "0.0.0.0:8080"
 
 # PeerListenAddr is the IP and port on which to listen for traffic being
 # rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
-# put something like nginx in front to do the decryption. Not eligible for live
-# reload.
+# put something like nginx in front to do the decryption. Must be different from
+# ListenAddr
+# Should be of the form 0.0.0.0:8081
+# Not eligible for live reload.
 PeerListenAddr = "0.0.0.0:8081"
 
 # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
@@ -32,8 +35,10 @@ APIKeys = [
 # Peers is the list of all servers participating in this proxy cluster. Events
 # will be sharded evenly across all peers based on the Trace ID. Values here
 # should be the base URL used to access the peer, and should include scheme,
-# hostname (or ip address) and port (if it's non-standard). All servers in the
-# cluster should be in this list, including this host.
+# hostname (or ip address) and port. All servers in the cluster should be in
+# this list, including this host.
+# This list is only used when the 'peer_type' command line flag is set to
+# 'file'. It is _not_ used if the 'peer_type' flag is set to 'redis'.
 # Eligible for live reload.
 Peers = [
 	"http://127.0.0.1:8081",
@@ -42,6 +47,13 @@ Peers = [
 	# "http://samproxy-1231:8080",
 	# "http://peer-3.fqdn" // assumes port 80
 ]
+
+# RedisHost is only used when the 'peer_type' command line flag is set to
+# 'redis'. Further, if the environment variable 'SAMPROXY_REDIS_HOST' is set it
+# takes precedence and this value is ignored. This value is used to connect to
+# Redis for peer cluster membership management.
+# Not eligible for live reload.
+RedisHost = "localhost:6379"
 
 # HoneycombAPI is the URL for the upstream Honeycomb API.
 # Eligible for live reload.
