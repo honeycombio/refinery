@@ -28,7 +28,6 @@ jobs:
             - buildevents/berun:
                 bename: go_test
                 becommand: go test -v ./...
-            - run: ls -al *
             - buildevents/berun:
                 bename: go_build
                 becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:-unset}" ./...
