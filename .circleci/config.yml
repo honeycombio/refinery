@@ -36,6 +36,7 @@ jobs:
                     CIRCLE_TAG="unset"
                   fi
                   go build -ldflags "-X main.Version=${CIRCLE_TAG}"
+            - run: ls -al *
             - run: |
                 mkdir artifacts
                 cp cmd/samproxy/samproxy artifacts
