@@ -32,6 +32,15 @@ jobs:
                 bename: go_build
                 becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:-unset}" ./...
             - buildevents/berun:
+                bename: apt_get_update
+                becommand: sudo apt-get -qq update
+            - buildevents/berun:
+                bename: apt_get_install
+                becommand: sudo apt-get install -y build-essential rpm ruby ruby-dev
+            - buildevents/berun:
+                bename: gem_install
+                becommand: sudo gem install fpm
+            - buildevents/berun:
                 bename: build_deb
                 becommand: ./build-pkg.sh -v "${CIRCLE_TAG:-unset}" -t deb
             - buildevents/berun:
