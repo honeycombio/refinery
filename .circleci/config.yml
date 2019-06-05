@@ -69,7 +69,7 @@ jobs:
                 command: |
                   echo "about to publish to tag ${CIRCLE_TAG}"
                   tar -xvf artifacts/samproxies.tar
-                  find . -ls
+                  ls -l *
                   ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
                   ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:-unset}_amd64.deb
                   ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:-unset}-1.x86_64.rpm
