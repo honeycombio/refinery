@@ -69,7 +69,7 @@ jobs:
                 name: "Publish Release on GitHub"
                 command: |
                   echo "about to publish to tag ${CIRCLE_TAG}"
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy*
 
 workflows:
   build:
