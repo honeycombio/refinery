@@ -30,27 +30,47 @@ jobs:
                 becommand: go test -v ./...
             - buildevents/berun:
                 bename: go_build
-                becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:-unset}" ./...
+                becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:1:20}" ./...
+            - buildevents/berun:
+                bename: apt_get_update
+                becommand: sudo apt-get -qq update
+            - buildevents/berun:
+                bename: apt_get_install
+                becommand: sudo apt-get install -y build-essential rpm ruby ruby-dev
+            - buildevents/berun:
+                bename: gem_install
+                becommand: sudo gem install fpm
+            - buildevents/berun:
+                bename: build_deb
+                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t deb
+            - buildevents/berun:
+                bename: build_rpm
+                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t rpm
             - run: |
                 mkdir artifacts
-                cp $GOPATH/bin/samproxy artifacts
+                cp $GOPATH/bin/samproxy* artifacts
+                tar -cvf artifacts/samproxies.tar artifacts/samproxy*
+                find artifacts -ls
             - persist_to_workspace:
                 root: artifacts
                 paths:
-                  - samproxy
+                  - samproxies.tar
 
   publish:
     docker:
       - image: cibuilds/github:0.12.1
     steps:
-      - buildevents/with_job_span:
-          steps:
-            - attach_workspace:
-                at: artifacts
-            - run:
-                name: "Publish Release on GitHub"
-                command: |
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
+      - attach_workspace:
+          at: artifacts
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            echo "about to publish to tag ${CIRCLE_TAG}"
+            tar -xvf artifacts/samproxies.tar
+            ls -l *
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
 
 workflows:
   build:
