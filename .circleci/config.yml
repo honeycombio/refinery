@@ -16,7 +16,7 @@ jobs:
     steps:
       - buildevents/start_trace
 
-  build:
+  test:
     executor: linuxgo
     steps:
       - buildevents/with_job_span:
@@ -28,6 +28,13 @@ jobs:
             - buildevents/berun:
                 bename: go_test
                 becommand: go test -v ./...
+
+  build:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - checkout
             - buildevents/berun:
                 bename: go_build
                 becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:1:20}" ./...
@@ -79,12 +86,20 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - build:
+      - test:
           requires:
             - setup
           filters:
             tags:
               only: /.*/
+      - build:
+          requires:
+            - test
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+/
+            branches:
+              ignore: /.*/
       - publish:
           requires:
             - build
