@@ -60,19 +60,17 @@ jobs:
     docker:
       - image: cibuilds/github:0.12.1
     steps:
-      - buildevents/with_job_span:
-          steps:
-            - attach_workspace:
-                at: artifacts
-            - run:
-                name: "Publish Release on GitHub"
-                command: |
-                  echo "about to publish to tag ${CIRCLE_TAG}"
-                  tar -xvf artifacts/samproxies.tar
-                  ls -l *
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
+      - attach_workspace:
+          at: artifacts
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            echo "about to publish to tag ${CIRCLE_TAG}"
+            tar -xvf artifacts/samproxies.tar
+            ls -l *
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
 
 workflows:
   build:
