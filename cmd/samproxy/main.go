@@ -32,6 +32,7 @@ var version string
 
 type Options struct {
 	ConfiFile string `short:"c" long:"config" description:"Path to config file" default:"/etc/samproxy/samproxy.toml"`
+	PeerType  string `short:"p" long:"peer_type" description:"Peer type - should be redis or file" default:"file"`
 	Version   bool   `short:"v" long:"version" description:"Print version number and exit"`
 }
 
@@ -54,8 +55,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	c := &config.FileConfig{Path: opts.ConfiFile}
-	err := c.Start()
+	var c config.Config
+	var err error
+	// either the flag or the env var will kick us in to redis mode
+	if opts.PeerType == "redis" || os.Getenv(config.RedisHostEnvVarName) != "" {
+		c = &config.RedisPeerFileConfig{}
+		c.(*config.RedisPeerFileConfig).Path = opts.ConfiFile
+		err = c.(*config.RedisPeerFileConfig).Start()
+	} else {
+		c = &config.FileConfig{Path: opts.ConfiFile}
+		err = c.(*config.FileConfig).Start()
+	}
 	if err != nil {
 		fmt.Printf("unable to load config: %+v\n", err)
 		os.Exit(1)
