@@ -83,6 +83,8 @@ type DeterministicSharder struct {
 }
 
 func (d *DeterministicSharder) Start() error {
+	d.Logger.Debugf("Starting DeterministicSharder")
+	defer func() { d.Logger.Debugf("Finished starting DeterministicSharder") }()
 
 	d.Config.RegisterReloadCallback(func() {
 		d.Logger.Debugf("reloading deterministic sharder config")

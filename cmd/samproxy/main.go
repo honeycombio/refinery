@@ -37,6 +37,7 @@ type Options struct {
 }
 
 func main() {
+	fmt.Println("Starting samproxy")
 	var opts Options
 	flagParser := flag.NewParser(&opts, flag.Default)
 	if extraArgs, err := flagParser.Parse(); err != nil || len(extraArgs) != 0 {
@@ -47,7 +48,7 @@ func main() {
 	if BuildID == "" {
 		version = "dev"
 	} else {
-		version = "0." + BuildID
+		version = BuildID
 	}
 
 	if opts.Version {

@@ -37,7 +37,7 @@ jobs:
             - checkout
             - buildevents/berun:
                 bename: go_build
-                becommand: go install -ldflags "-X main.Version=${CIRCLE_TAG:1:20}" ./...
+                becommand: go install -ldflags "-X main.BuildID=${CIRCLE_TAG:1:20}" ./...
             - buildevents/berun:
                 bename: apt_get_update
                 becommand: sudo apt-get -qq update

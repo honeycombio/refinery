@@ -79,10 +79,14 @@ func (rm *RedisMembership) Register(ctx context.Context, memberName string, time
 			WithField("timeoutSec", timeoutSec).
 			WithField("err", err).
 			Error("registration failed")
+		return err
 	}
 	return nil
 }
 
+// GetMembers reaches out to Redis to retrieve a list of all members in the
+// cluster. It does this multiple times (how many is configured on
+// initializition) and takes the union of the results returned.
 func (rm *RedisMembership) GetMembers(ctx context.Context) ([]string, error) {
 	err := rm.validateDefaults()
 	if err != nil {
@@ -131,6 +135,8 @@ func (rm *RedisMembership) getMembersOnce(ctx context.Context) ([]string, error)
 
 // scan returns two channels and handles all the iteration necessary to get all
 // keys from Redis when using the Scan verb by abstracting away the iterator.
+// even though scan won't block the redis host, it can still take a long time
+// when there are many keys in the redis DB.
 func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string) (<-chan string, <-chan error) {
 	keyChan := make(chan string)
 	errChan := make(chan error)

@@ -9,10 +9,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/logger"
 )
 
 type PromMetrics struct {
 	Config config.Config `inject:""`
+	Logger logger.Logger `inject:""`
 	// metrics keeps a record of all the registered metrics so we can increment
 	// them by name
 	metrics map[string]interface{}
@@ -23,6 +25,8 @@ type PromConfig struct {
 }
 
 func (p *PromMetrics) Start() error {
+	p.Logger.Debugf("Starting PromMetrics")
+	defer func() { p.Logger.Debugf("Finished starting PromMetrics") }()
 	pc := PromConfig{}
 	err := p.Config.GetOtherConfig("PrometheusMetrics", &pc)
 	if err != nil {

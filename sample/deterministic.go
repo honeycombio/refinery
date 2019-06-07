@@ -28,6 +28,8 @@ type DetSamplerConfig struct {
 }
 
 func (d *DeterministicSampler) Start() error {
+	d.Logger.Debugf("Starting DeterministicSampler")
+	defer func() { d.Logger.Debugf("Finished starting DeterministicSampler") }()
 	if err := d.loadConfigs(); err != nil {
 		return err
 	}
