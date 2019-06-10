@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
 )
@@ -16,6 +17,7 @@ func TestCacheSetGet(t *testing.T) {
 	c := &DefaultInMemCache{
 		Config:  CacheConfig{10},
 		Metrics: s,
+		Logger:  &logger.NullLogger{},
 	}
 	c.Start()
 
@@ -35,6 +37,7 @@ func TestBufferOverrun(t *testing.T) {
 	c := &DefaultInMemCache{
 		Config:  CacheConfig{2},
 		Metrics: s,
+		Logger:  &logger.NullLogger{},
 	}
 	c.Start()
 
