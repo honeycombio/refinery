@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/garyburd/redigo/redis"
+	"github.com/sirupsen/logrus"
 
 	"github.com/honeycombio/samproxy/config/redimem"
 )
@@ -112,7 +113,11 @@ func (rc *RedisPeerFileConfig) Start() error {
 		rc.publicAddr = publicListenAddr
 
 		// register myself once
-		rc.peerStore.Register(context.TODO(), publicListenAddr, peerEntryTimeout)
+		err = rc.peerStore.Register(context.TODO(), publicListenAddr, peerEntryTimeout)
+		if err != nil {
+			logrus.WithError(err).Errorf("failed to register self with peer store")
+			return
+		}
 
 		// go establish a regular registration heartbeat to ensure I stay alive in redis
 		go rc.registerSelf()

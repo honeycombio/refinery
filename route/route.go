@@ -108,6 +108,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 }
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
+	r.Logger.Debugf("answered /x/alive check")
 	w.Write([]byte(`{"source":"samproxy","alive":true}`))
 }
 

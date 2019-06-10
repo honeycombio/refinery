@@ -26,8 +26,11 @@ type Membership interface {
 }
 
 const (
-	globalPrefix       = "redimem"
+	globalPrefix       = "samproxy"
 	defaultRepeatCount = 2
+
+	// redisScanTimeout indicates how long to attempt to scan for peers.
+	redisScanTimeout = 5 * time.Second
 )
 
 // RedisMembership implements the Membership interface using Redis as the backend
@@ -124,11 +127,17 @@ func (rm *RedisMembership) getMembersOnce(ctx context.Context) ([]string, error)
 		return nil, err
 	}
 	defer conn.Close()
-	keysChan, _ := rm.scan(conn, keyPrefix, "10")
+	keysChan, errChan := rm.scan(conn, keyPrefix, "10", redisScanTimeout)
 	memberList := make([]string, 0)
 	for key := range keysChan {
 		name := strings.Split(key, "•")[2]
 		memberList = append(memberList, name)
+	}
+	for err := range errChan {
+		logrus.WithField("keys_returned", len(memberList)).
+			WithField("timeoutSec", redisScanTimeout).
+			WithField("err", err).
+			Error("redis scan encountered an error")
 	}
 	return memberList, nil
 }
@@ -136,14 +145,28 @@ func (rm *RedisMembership) getMembersOnce(ctx context.Context) ([]string, error)
 // scan returns two channels and handles all the iteration necessary to get all
 // keys from Redis when using the Scan verb by abstracting away the iterator.
 // even though scan won't block the redis host, it can still take a long time
-// when there are many keys in the redis DB.
-func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string) (<-chan string, <-chan error) {
-	keyChan := make(chan string)
-	errChan := make(chan error)
+// when there are many keys in the redis DB. If the timeout duration elapses,
+// scanning will stop and the function will return a timeout value to the error
+// channel. There may have been valid results already returned to the keys
+// channel, and there may or may not be additional keys in the DB.
+func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string, timeout time.Duration) (<-chan string, <-chan error) {
+	// make both channels buffered so they can be read in any order instead of both
+	// at once
+	keyChan := make(chan string, 1)
+	errChan := make(chan error, 1)
+
+	// this stop assumes that any individual redis scan operation is fast. It will
+	// not trigger if an individual scan blocks. The redis connection has timeouts
+	// for other bits, so it should be fine.
+	stopAt := time.Now().Add(timeout)
 
 	go func() {
 		cursor := "0"
 		for {
+			if time.Now().After(stopAt) {
+				errChan <- errors.New("redis scan timeout")
+				break
+			}
 			values, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", pattern, "COUNT", count))
 			if err != nil {
 				errChan <- err
@@ -177,7 +200,6 @@ func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string) (<-chan 
 				break
 			}
 		}
-
 		close(errChan)
 		close(keyChan)
 
