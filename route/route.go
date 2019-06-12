@@ -38,6 +38,9 @@ type Router struct {
 	// type indicates whether this should listen for incoming events or content
 	// redirected from a peer
 	incomingOrPeer string
+
+	// iopLogger is a logger that knows whether it's incoming or peer
+	iopLogger logger.Entry
 }
 
 type BatchResponse struct {
@@ -51,6 +54,7 @@ type BatchResponse struct {
 // prioritized.
 func (r *Router) LnS(incomingOrPeer string) {
 	r.incomingOrPeer = incomingOrPeer
+	r.iopLogger = r.Logger.WithField("router_iop", r.incomingOrPeer)
 
 	r.proxyClient = &http.Client{
 		Timeout:   time.Second * 10,
@@ -89,26 +93,26 @@ func (r *Router) LnS(incomingOrPeer string) {
 	if r.incomingOrPeer == "incoming" {
 		listenAddr, err = r.Config.GetListenAddr()
 		if err != nil {
-			r.Logger.Errorf("failed to get listen addr config: %s", err)
+			r.iopLogger.Errorf("failed to get listen addr config: %s", err)
 			return
 		}
 	} else {
 		listenAddr, err = r.Config.GetPeerListenAddr()
 		if err != nil {
-			r.Logger.Errorf("failed to get peer listen addr config: %s", err)
+			r.iopLogger.Errorf("failed to get peer listen addr config: %s", err)
 			return
 		}
 	}
 
-	r.Logger.Infof("Listening on %s", listenAddr)
+	r.iopLogger.Infof("Listening on %s", listenAddr)
 	err = http.ListenAndServe(listenAddr, muxxer)
 	if err != nil {
-		r.Logger.Errorf("failed to ListenAndServe: %s", err)
+		r.iopLogger.Errorf("failed to ListenAndServe: %s", err)
 	}
 }
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
-	r.Logger.Debugf("answered /x/alive check")
+	r.iopLogger.Debugf("answered /x/alive check")
 	w.Write([]byte(`{"source":"samproxy","alive":true}`))
 }
 
@@ -130,7 +134,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 
 	// get out request ID for logging
 	reqID := req.Context().Value(types.RequestIDContextKey{})
-	logger := r.Logger.WithField("request_id", reqID)
+	logger := r.iopLogger.WithField("request_id", reqID)
 
 	// not part of a trace. send along upstream
 	if trEv.TraceID == "" {
@@ -279,7 +283,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	reqID := req.Context().Value(types.RequestIDContextKey{})
-	logger := r.Logger.WithField("request_id", reqID)
+	logger := r.iopLogger.WithField("request_id", reqID)
 
 	for _, bev := range batchedEvents {
 		// extract trace ID, route to self or peer, pass on to collector
