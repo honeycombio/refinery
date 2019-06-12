@@ -42,6 +42,7 @@ func TestAddRootSpan(t *testing.T) {
 			CacheCapacity: 3,
 		},
 		Metrics: &metrics.NullMetrics{},
+		Logger:  &logger.NullLogger{},
 	}
 	err := c.Start()
 	assert.NoError(t, err, "in-mem cache should start")
@@ -116,6 +117,7 @@ func TestAddSpan(t *testing.T) {
 			CacheCapacity: 3,
 		},
 		Metrics: &metrics.NullMetrics{},
+		Logger:  &logger.NullLogger{},
 	}
 	c.Start()
 	coll.Cache = c

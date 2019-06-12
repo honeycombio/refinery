@@ -80,6 +80,8 @@ type traceSentRecord struct {
 }
 
 func (i *InMemCollector) Start() error {
+	i.Logger.Debugf("Starting InMemCollector")
+	defer func() { i.Logger.Debugf("Finished starting InMemCollector") }()
 	i.defaultSampler = i.SamplerFactory.GetDefaultSamplerImplementation()
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
@@ -95,6 +97,7 @@ func (i *InMemCollector) Start() error {
 			CacheCapacity: capacity,
 		},
 		Metrics: i.Metrics,
+		Logger:  i.Logger,
 	}
 	c.Start()
 	i.Cache = c

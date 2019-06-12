@@ -105,6 +105,8 @@ func (h *HoneycombLogger) Start() error {
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
 
+	fmt.Printf("Starting Honeycomb Logger - see Honeycomb %s dataset for service logs\n", h.loggerConfig.LoggerDataset)
+
 	return nil
 }
 

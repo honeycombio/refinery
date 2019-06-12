@@ -83,6 +83,8 @@ type DeterministicSharder struct {
 }
 
 func (d *DeterministicSharder) Start() error {
+	d.Logger.Debugf("Starting DeterministicSharder")
+	defer func() { d.Logger.Debugf("Finished starting DeterministicSharder") }()
 
 	d.Config.RegisterReloadCallback(func() {
 		d.Logger.Debugf("reloading deterministic sharder config")
@@ -147,8 +149,8 @@ func (d *DeterministicSharder) Start() error {
 		if found {
 			break
 		}
-		d.Logger.Debugf("Failed to find self in peer list; waiting 1sec and trying again")
-		time.Sleep(1 * time.Second)
+		d.Logger.Debugf("Failed to find self in peer list; waiting 5sec and trying again")
+		time.Sleep(5 * time.Second)
 	}
 	if !found {
 		d.Logger.Debugf("list of current peers: %+v", d.peers)

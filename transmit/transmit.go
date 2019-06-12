@@ -40,6 +40,9 @@ type DefaultTransmission struct {
 }
 
 func (d *DefaultTransmission) Start() error {
+	d.Logger.Debugf("Starting DefaultTransmission: %s type", d.Name)
+	defer func() { d.Logger.Debugf("Finished starting DefaultTransmission: %s type", d.Name) }()
+
 	// upstreamAPI doesn't get set when the client is initialized, because
 	// it can be reloaded from the config file while live
 	upstreamAPI, err := d.Config.GetHoneycombAPI()

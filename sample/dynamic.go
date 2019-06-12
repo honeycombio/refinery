@@ -38,6 +38,8 @@ type DynSamplerConfig struct {
 }
 
 func (d *DynamicSampler) Start() error {
+	d.Logger.Debugf("Starting DynamicSampler")
+	defer func() { d.Logger.Debugf("Finished starting DynamicSampler") }()
 	dsConfig := DynSamplerConfig{}
 	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
 	err := d.Config.GetOtherConfig(configKey, &dsConfig)

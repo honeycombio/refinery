@@ -66,6 +66,8 @@ type histogram struct {
 }
 
 func (h *HoneycombMetrics) Start() error {
+	h.Logger.Debugf("Starting HoneycombMetrics")
+	defer func() { h.Logger.Debugf("Finished starting HoneycombMetrics") }()
 	mc := MetricsConfig{}
 	err := h.Config.GetOtherConfig("HoneycombMetrics", &mc)
 	if err != nil {

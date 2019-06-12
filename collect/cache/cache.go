@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
 )
@@ -22,6 +23,7 @@ type Cache interface {
 type DefaultInMemCache struct {
 	Config  CacheConfig
 	Metrics metrics.Metrics
+	Logger  logger.Logger
 
 	cache map[string]*types.Trace
 
@@ -38,6 +40,8 @@ type CacheConfig struct {
 const DefaultInMemCacheCapacity = 10000
 
 func (d *DefaultInMemCache) Start() error {
+	d.Logger.Debugf("Starting DefaultInMemCache")
+	defer func() { d.Logger.Debugf("Finished starting DefaultInMemCache") }()
 	if d.Config.CacheCapacity == 0 {
 		d.Config.CacheCapacity = DefaultInMemCacheCapacity
 	}

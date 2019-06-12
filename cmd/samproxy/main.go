@@ -47,7 +47,7 @@ func main() {
 	if BuildID == "" {
 		version = "dev"
 	} else {
-		version = "0." + BuildID
+		version = BuildID
 	}
 
 	if opts.Version {
