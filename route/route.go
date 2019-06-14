@@ -33,6 +33,10 @@ type Router struct {
 	Collector            collect.Collector     `inject:""`
 	Metrics              metrics.Metrics       `inject:""`
 
+	// version is set on startup so that the router may answer HTTP requests for
+	// the version
+	versionStr string
+
 	proxyClient *http.Client
 
 	// type indicates whether this should listen for incoming events or content
@@ -46,6 +50,10 @@ type Router struct {
 type BatchResponse struct {
 	Status int    `json:"status"`
 	Error  string `json:"error,omitempty"`
+}
+
+func (r *Router) SetVersion(ver string) {
+	r.versionStr = ver
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -76,6 +84,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	// answer a basic health check locally
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
+	muxxer.HandleFunc("/version", r.version).Name("report version info")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -118,6 +127,10 @@ func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
 	panic("panic? never!")
+}
+
+func (r *Router) version(w http.ResponseWriter, req *http.Request) {
+	w.Write([]byte(fmt.Sprintf(`{"source":"samproxy","version":%s}`, r.versionStr)))
 }
 
 // event is handler for /1/event/
