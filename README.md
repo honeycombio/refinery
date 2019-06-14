@@ -3,7 +3,7 @@
 
 ![samproxy](https://user-images.githubusercontent.com/1476820/47527709-0e185f00-d858-11e8-8e66-4fd5294d1918.png)
 
-**Alpha Release** This is the initial draft. Please expect and help find bugs! :)  samproxy [![Build Status](https://travis-ci.org/honeycombio/samproxy.svg?branch=master)](https://travis-ci.org/honeycombio/samproxy)
+**Alpha Release** This is the initial draft. Please expect and help find bugs! :)  samproxy [![Build Status](https://circleci.com/gh/honeycombio/samproxy.svg?style=shield)](https://circleci.com/gh/honeycombio/samproxy)
 
 ## Purpose
 
@@ -17,7 +17,7 @@ Within your application (or other Honeycomb event sources) you would configure t
 
 ### Builds
 
-Samproxy is built by [Travis-CI](https://travis-ci.org/honeycombio/samproxy). Build artifacts are uploaded to S3 and available for download. The download URL is listed at the bottom of the build record.
+Samproxy is built by [CircleCI](https://circleci.com/gh/honeycombio/samproxy). Released versions of samproxy are available via Github under the Releases tab.
 
 ## Configuration
 
@@ -76,8 +76,13 @@ Determining the number of machines necessary in the cluster is not an exact scie
 Samproxy emits a number of metrics to give some indication about the health of the process. These metrics can be exposed to Prometheus or sent up to Honeycomb. The interesting ones to watch are:
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
-- router_*: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
+- [incoming|peer]_router_*: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
 - collect_cache_buffer_overrun: this should remain zero; a positive value indicates the need to grow the size of the collector's circular buffer (via configuration `CacheCapacity`).
+- process_uptime_seconds: records the uptime of each process; look for unexpected restarts as a key towards memory constraints.
+
+## Troubleshooting
+
+The default logging level of `warn` is almost entirely silent. The `debug` level emits too much data to be used in production, but contains excellent information in a pre-production enviromnent. Setting the logging level to `debug` during initial configuration will help understand what's working and what's not, but when traffic volumes increase it should be set to `warn`.
 
 ## Restarts
 
@@ -91,9 +96,9 @@ Within each directory, the interface the dependency exports is in the file with 
 
 `main.go` sets up the app and makes choices about which versions of dependency implementations to use (eg which logger, which sampler, etc.) It starts up everything and then launches `App`
 
-`app/app.go` is the main control point. When its `Start` function ends, the program shuts down. It launches a `Router` which will be the primary listener for incoming events.
+`app/app.go` is the main control point. When its `Start` function ends, the program shuts down. It launches two `Router`s which listen for incoming events.
 
-`route/route.go` listens on the network for incoming traffic. It handles traffic depending on two things: is this incoming request an event (or batch of events), and if so, does it have a trace ID? Everything that is not an event or an event that does not have a trace ID is immediately handed to `transmission` to be forwarded on to Honeycomb. If it is an event, the router extracts the trace ID and then uses the `sharder` to decide which member of the Samproxy cluster should handle this trace. If it's a peer, the event will be forwarded to that peer. If it's us, the event will be transformed in to an internal representation and handed to the `collector` to bundle up spans in to traces.
+`route/route.go` listens on the network for incoming traffic. There are two routers running and they handle different types of incoming traffic: events coming from the outside world (the `incoming` router) and events coming from another member of the samproxy cluster (`peer` traffic). Once it gets an event, it decides where it should go next: is this incoming request an event (or batch of events), and if so, does it have a trace ID? Everything that is not an event or an event that does not have a trace ID is immediately handed to `transmission` to be forwarded on to Honeycomb. If it is an event, the router extracts the trace ID and then uses the `sharder` to decide which member of the Samproxy cluster should handle this trace. If it's a peer, the event will be forwarded to that peer. If it's us, the event will be transformed in to an internal representation and handed to the `collector` to bundle up spans in to traces.
 
 `collect/collect.go` the collector is responsible for bundling spans together in to traces and deciding when to send them to Honeycomb or if they should be dropped. The first time a trace ID is seen, the collector starts a timer. When that timer expires, the trace will be sent, whether or not it is complete. The arrival of the root span (aka a span with a trace ID and no parent ID) indicates the trace is complete. When that happens, the trace is sent and the timer canceled. Just before sending, the collector asks the `sampler` to give it a sample rate and whether to keep the trace. The collector obeys this sampling decision and records it (the record is applied to any spans that may come in as part of the trace after the decision has been made). After making the sampling decision, if the trace is to be kept, it is passed along to the `transmission` for actual sending.
 
@@ -106,7 +111,4 @@ Within each directory, the interface the dependency exports is in the file with 
 `sharder` determines which peer in a clustered Samproxy config is supposed to handle and individual trace.
 
 `types` contains a few type definitions that are used to hand data in between packages.
-
-`process` is not yet used, but is a placeholder for when (or if) Samproxy learns to modify the traces that it handles. Examples of processing that might take place: scrubbing fields, adding fields, moving fields from one span to another, and so on.
-
 
