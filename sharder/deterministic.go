@@ -33,7 +33,7 @@ func (d *DetShard) Equals(other Shard) bool {
 		return false
 	}
 	// only basic types in this struct; we can use == hooray
-	return d == otherDetshard
+	return *d == *otherDetshard
 }
 
 type SortableShardList []*DetShard
