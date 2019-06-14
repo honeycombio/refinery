@@ -71,7 +71,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	a := app.App{}
+	a := app.App{
+		Version: version,
+	}
 
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)

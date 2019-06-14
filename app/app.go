@@ -21,6 +21,10 @@ type App struct {
 	PeerRouter     route.Router      `inject:"inline"`
 	Collector      collect.Collector `inject:""`
 	Metrics        metrics.Metrics   `inject:""`
+
+	// Version is the build ID for samproxy so that the running process may answer
+	// requests for the version
+	Version string
 }
 
 // Start on the App obect should block until the proxy is shutting down. After
@@ -44,6 +48,9 @@ func (a *App) Start() error {
 		a.Logger.WithField("error", err).Errorf("Failed to validate API key")
 		return err
 	}
+
+	a.IncomingRouter.SetVersion(a.Version)
+	a.PeerRouter.SetVersion(a.Version)
 
 	// launch our main routers to listen for incoming event traffic from both peers
 	// and external sources
