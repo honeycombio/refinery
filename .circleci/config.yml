@@ -52,7 +52,7 @@ jobs:
             - persist_to_workspace:
                 root: artifacts
                 paths:
-                  - *
+                  - "*"
             - store_artifacts:
                 path: artifacts/
 
