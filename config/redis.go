@@ -44,7 +44,8 @@ type RedisPeerFileConfig struct {
 }
 
 const (
-	RedisHostEnvVarName = "SAMPROXY_REDIS_HOST"
+	RedisHostEnvVarName           = "SAMPROXY_REDIS_HOST"
+	RedisPeerAdvertisePortVarName = "SAMPROXY_PEER_ADV_PORT"
 
 	// refreshCacheInterval is how frequently this host will re-register itself
 	// with Redis. This should happen about 3x during each timeout phase in order
@@ -107,7 +108,13 @@ func (rc *RedisPeerFileConfig) Start() error {
 
 		// compute the public version of my peer listen address
 		listenAddr, _ := rc.FileConfig.GetPeerListenAddr()
-		port := strings.Split(listenAddr, ":")[1]
+
+		// if present, use the peer advertise port
+		port, _ := rc.GetPeerAdvertisePort()
+		if port == "" {
+			// otherwise use the port defined on the listen address
+			port = strings.Split(listenAddr, ":")[1]
+		}
 		myhostname, _ := os.Hostname()
 		publicListenAddr := fmt.Sprintf("http://%s:%s", myhostname, port)
 		rc.publicAddr = publicListenAddr
@@ -132,6 +139,16 @@ func (rc *RedisPeerFileConfig) Start() error {
 
 	})
 	return err
+}
+
+// GetPeerAdvertisePort returns the port to use when advertising ourselves to
+// peers via redis.
+func (rc *RedisPeerFileConfig) GetPeerAdvertisePort() (string, error) {
+	peerAdvPort := os.Getenv(RedisPeerAdvertisePortVarName)
+	if peerAdvPort != "" {
+		return peerAdvPort, nil
+	}
+	return rc.FileConfig.GetPeerAdvertisePort()
 }
 
 // GetPeers returns the locally cached list of peers that are in redis. It

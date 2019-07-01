@@ -114,6 +114,12 @@ func (d *DeterministicSharder) Start() error {
 		}
 		d.Logger.Debugf("picked up local peer port of %s", localPort)
 
+		overridePeerPort, _ := d.Config.GetPeerAdvertisePort()
+		if overridePeerPort != "" {
+			localPort = overridePeerPort
+			d.Logger.Debugf("found peer advertise port override: will look for peer with port %s to identify as myself", localPort)
+		}
+
 		// get my local interfaces
 		localAddrs, err := net.InterfaceAddrs()
 		if err != nil {

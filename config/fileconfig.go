@@ -17,6 +17,7 @@ type FileConfig struct {
 type confContents struct {
 	ListenAddr           string
 	PeerListenAddr       string
+	PeerAdvertisePort    string
 	APIKeys              []string
 	Peers                []string
 	RedisHost            string
@@ -85,6 +86,10 @@ func (f *FileConfig) GetListenAddr() (string, error) {
 
 func (f *FileConfig) GetPeerListenAddr() (string, error) {
 	return f.conf.PeerListenAddr, nil
+}
+
+func (f *FileConfig) GetPeerAdvertisePort() (string, error) {
+	return f.conf.PeerAdvertisePort, nil
 }
 
 func (f *FileConfig) GetAPIKeys() ([]string, error) {

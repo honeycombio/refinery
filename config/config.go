@@ -29,6 +29,10 @@ type Config interface {
 	// peer traffic
 	GetPeerListenAddr() (string, error)
 
+	// GetPeerAdvertisePort returns the port to use when advertising our address to
+	// peers via redis
+	GetPeerAdvertisePort() (string, error)
+
 	// GetAPIKeys returns a list of Honeycomb API keys
 	GetAPIKeys() ([]string, error)
 

@@ -5,7 +5,7 @@
 # ListenAddr is the IP and port on which to listen for incoming events. Incoming
 # traffic is expected to be HTTP, so if using SSL put something like nginx in
 # front to do the decryption.
-# Should be of the form 0.0.0.0:8080
+# Should be of the form "0.0.0.0:8080"
 # Not eligible for live reload.
 ListenAddr = "0.0.0.0:8080"
 
@@ -13,9 +13,20 @@ ListenAddr = "0.0.0.0:8080"
 # rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
 # put something like nginx in front to do the decryption. Must be different from
 # ListenAddr
-# Should be of the form 0.0.0.0:8081
+# Should be of the form "0.0.0.0:8081"
 # Not eligible for live reload.
 PeerListenAddr = "0.0.0.0:8081"
+
+# PeerAdvertisePort is the port on which to advertise that this server is
+# available for peers. When running in a container with virtualized networking,
+# the port on which samproxy should listen can be different from the port by
+# which other servers can reach this machine. Use this setting to set the
+# advertised port when it is different from the the PeerListenAddr. Only valid
+# when used with Redis as the peer manager. Can be also be set with an
+# environment variable SAMPROXY_PEER_ADV_PORT.
+# Should be of the form "8081"
+# Not eligible for live reload
+PeerAdvertisePort = "8081"
 
 # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
 # only applies to events - other Honeycomb API actions will fall through to the

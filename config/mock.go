@@ -5,21 +5,23 @@ import "encoding/json"
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	GetAPIKeysErr        error
-	GetAPIKeysVal        []string
-	GetCollectorTypeErr  error
-	GetCollectorTypeVal  string
-	GetHoneycombAPIErr   error
-	GetHoneycombAPIVal   string
-	GetListenAddrErr     error
-	GetListenAddrVal     string
-	GetPeerListenAddrErr error
-	GetPeerListenAddrVal string
-	GetLoggerTypeErr     error
-	GetLoggerTypeVal     string
-	GetLoggingLevelErr   error
-	GetLoggingLevelVal   string
-	GetOtherConfigErr    error
+	GetAPIKeysErr           error
+	GetAPIKeysVal           []string
+	GetCollectorTypeErr     error
+	GetCollectorTypeVal     string
+	GetHoneycombAPIErr      error
+	GetHoneycombAPIVal      string
+	GetListenAddrErr        error
+	GetListenAddrVal        string
+	GetPeerListenAddrErr    error
+	GetPeerListenAddrVal    string
+	GetPeerAdvertisePortErr error
+	GetPeerAdvertisePortVal string
+	GetLoggerTypeErr        error
+	GetLoggerTypeVal        string
+	GetLoggingLevelErr      error
+	GetLoggingLevelVal      string
+	GetOtherConfigErr       error
 	// GetOtherConfigVal must be a JSON representation of the config struct to be populated.
 	GetOtherConfigVal        string
 	GetPeersErr              error
@@ -52,6 +54,9 @@ func (m *MockConfig) GetHoneycombAPI() (string, error) {
 func (m *MockConfig) GetListenAddr() (string, error) { return m.GetListenAddrVal, m.GetListenAddrErr }
 func (m *MockConfig) GetPeerListenAddr() (string, error) {
 	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
+}
+func (m *MockConfig) GetPeerAdvertisePort() (string, error) {
+	return m.GetPeerAdvertisePortVal, m.GetPeerAdvertisePortErr
 }
 func (m *MockConfig) GetLoggerType() (string, error) { return m.GetLoggerTypeVal, m.GetLoggerTypeErr }
 func (m *MockConfig) GetLoggingLevel() (string, error) {
