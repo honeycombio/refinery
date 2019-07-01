@@ -68,6 +68,8 @@ jobs:
                 root: artifacts
                 paths:
                   - samproxies.tar
+            - store_artifacts:
+                path: artifacts/
 
   publish:
     docker:
@@ -109,9 +111,7 @@ workflows:
             - test
           filters:
             tags:
-              only: /^v\d+\.\d+\.\d+/
-            branches:
-              ignore: /.*/
+              only: /.*/
       - publish:
           requires:
             - build
