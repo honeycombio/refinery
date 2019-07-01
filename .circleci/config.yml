@@ -16,6 +16,11 @@ jobs:
     steps:
       - buildevents/start_trace
 
+  finish_trace:
+    executor: linuxgo
+    steps:
+      - buildevents/watch_build_and_finish
+
   test:
     executor: linuxgo
     steps:
@@ -79,11 +84,6 @@ jobs:
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
             ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
 
-  finish_trace:
-    executor: linuxgo
-    steps:
-      - buildevents/finish_trace:
-          result: success
 
 workflows:
   build:
@@ -92,15 +92,15 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - test:
+      - finish_trace:
           requires:
             - setup
           filters:
             tags:
               only: /.*/
-      - finish_trace:
+      - test:
           requires:
-            - test
+            - setup
           filters:
             tags:
               only: /.*/
