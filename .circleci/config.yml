@@ -19,7 +19,8 @@ jobs:
   finish_trace:
     executor: linuxgo
     steps:
-      - buildevents/watch_build_and_finish
+      - buildevents/finish_trace:
+          success: true
 
   test:
     executor: linuxgo
