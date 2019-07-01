@@ -16,11 +16,11 @@ jobs:
     steps:
       - buildevents/start_trace
 
-  finish_trace:
-    executor: linuxgo
-    steps:
-      - buildevents/finish_trace:
-          success: true
+  # finish_trace:
+  #   executor: linuxgo
+  #   steps:
+  #     - buildevents/finish_trace:
+  #         success: true
 
   test:
     executor: linuxgo
@@ -92,12 +92,12 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - finish_trace:
-          requires:
-            - setup
-          filters:
-            tags:
-              only: /.*/
+      # - finish_trace:
+      #     requires:
+      #       - setup
+      #     filters:
+      #       tags:
+      #         only: /.*/
       - test:
           requires:
             - setup
