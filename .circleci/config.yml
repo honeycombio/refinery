@@ -44,6 +44,27 @@ jobs:
             - buildevents/berun:
                 bename: go_build
                 becommand: go install -ldflags "-X main.BuildID=${CIRCLE_TAG:1:20}" ./...
+            - run: |
+                mkdir artifacts
+                cp $GOPATH/bin/samproxy* artifacts
+                tar -cvf artifacts/samproxies.tar artifacts/samproxy*
+                find artifacts -ls
+            - persist_to_workspace:
+                root: artifacts
+                paths:
+                  - *
+            - store_artifacts:
+                path: artifacts/
+
+
+  build_packages:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - checkout
+            - attach_workspace:
+                at: artifacts
             - buildevents/berun:
                 bename: apt_get_update
                 becommand: sudo apt-get -qq update
@@ -60,8 +81,6 @@ jobs:
                 bename: build_rpm
                 becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t rpm
             - run: |
-                mkdir artifacts
-                cp $GOPATH/bin/samproxy* artifacts
                 tar -cvf artifacts/samproxies.tar artifacts/samproxy*
                 find artifacts -ls
             - persist_to_workspace:
@@ -112,9 +131,17 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - publish:
+      - build_artifacts:
           requires:
             - build
+          filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+/
+            branches:
+              ignore: /.*/
+      - publish:
+          requires:
+            - build_artifacts
           filters:
             tags:
               only: /^v\d+\.\d+\.\d+/
