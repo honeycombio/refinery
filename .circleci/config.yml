@@ -131,7 +131,7 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - build_artifacts:
+      - build_packages:
           requires:
             - build
           filters:
@@ -141,7 +141,7 @@ workflows:
               ignore: /.*/
       - publish:
           requires:
-            - build_artifacts
+            - build_packages
           filters:
             tags:
               only: /^v\d+\.\d+\.\d+/
