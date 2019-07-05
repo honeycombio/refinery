@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  buildevents: honeycombio/buildevents@0.0.3
+  buildevents: honeycombio/buildevents@0.2.0
 
 executors:
   linuxgo:
@@ -16,11 +16,10 @@ jobs:
     steps:
       - buildevents/start_trace
 
-  # finish_trace:
-  #   executor: linuxgo
-  #   steps:
-  #     - buildevents/finish_trace:
-  #         success: true
+  watch:
+    executor: linuxgo
+    steps:
+      - buildevents/watch_build_and_finish
 
   test:
     executor: linuxgo
@@ -44,6 +43,27 @@ jobs:
             - buildevents/berun:
                 bename: go_build
                 becommand: go install -ldflags "-X main.BuildID=${CIRCLE_TAG:1:20}" ./...
+            - run: |
+                mkdir artifacts
+                cp $GOPATH/bin/samproxy* artifacts
+                tar -cvf artifacts/samproxies.tar artifacts/samproxy*
+                find artifacts -ls
+            - persist_to_workspace:
+                root: artifacts
+                paths:
+                  - "*"
+            - store_artifacts:
+                path: artifacts/
+
+
+  build_packages:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - checkout
+            - attach_workspace:
+                at: artifacts
             - buildevents/berun:
                 bename: apt_get_update
                 becommand: sudo apt-get -qq update
@@ -60,30 +80,32 @@ jobs:
                 bename: build_rpm
                 becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t rpm
             - run: |
-                mkdir artifacts
-                cp $GOPATH/bin/samproxy* artifacts
                 tar -cvf artifacts/samproxies.tar artifacts/samproxy*
                 find artifacts -ls
             - persist_to_workspace:
                 root: artifacts
                 paths:
                   - samproxies.tar
+            - store_artifacts:
+                path: artifacts/
 
   publish:
     docker:
       - image: cibuilds/github:0.12.1
     steps:
-      - attach_workspace:
-          at: artifacts
-      - run:
-          name: "Publish Release on GitHub"
-          command: |
-            echo "about to publish to tag ${CIRCLE_TAG}"
-            tar -xvf artifacts/samproxies.tar
-            ls -l *
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
-            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
+      - buildevents/with_job_span:
+          steps:
+            - attach_workspace:
+                at: artifacts
+            - run:
+                name: "Publish Release on GitHub"
+                command: |
+                  echo "about to publish to tag ${CIRCLE_TAG}"
+                  tar -xvf artifacts/samproxies.tar
+                  ls -l *
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
+                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
 
 workflows:
   build:
@@ -92,12 +114,12 @@ workflows:
           filters:
             tags:
               only: /.*/
-      # - finish_trace:
-      #     requires:
-      #       - setup
-      #     filters:
-      #       tags:
-      #         only: /.*/
+      - watch:
+          requires:
+            - setup
+          filters:
+            tags:
+              only: /.*/
       - test:
           requires:
             - setup
@@ -109,12 +131,18 @@ workflows:
             - test
           filters:
             tags:
+              only: /.*/
+      - build_packages:
+          requires:
+            - build
+          filters:
+            tags:
               only: /^v\d+\.\d+\.\d+/
             branches:
               ignore: /.*/
       - publish:
           requires:
-            - build
+            - build_packages
           filters:
             tags:
               only: /^v\d+\.\d+\.\d+/
