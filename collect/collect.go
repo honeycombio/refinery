@@ -400,6 +400,11 @@ func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
 
 // pauseAndSend will block for pause time and then send the trace.
 func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
 	select {
 	case <-time.After(pause):
 		// TODO fix FinishTime to be the time of the last span + its duration rather
