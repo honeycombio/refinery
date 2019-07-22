@@ -133,6 +133,10 @@ func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) error {
 	if hostname, err := os.Hostname(); err == nil {
 		h.libhClient.AddField("hostname", hostname)
 	}
+	// add environment to every report
+	if environment := os.Getenv("ENVIRONMENT"); environment != "" {
+		h.libhClient.AddField("environment", environment)
+	}
 	h.libhClient.AddDynamicField("num_goroutines",
 		func() interface{} { return runtime.NumGoroutine() })
 	ctx, cancel := context.WithCancel(context.Background())
