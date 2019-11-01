@@ -11,9 +11,15 @@ Samproxy is a trace-aware sampling proxy. It collects spans emitted by your appl
 
 ## Setting up Samproxy
 
-Samproxy is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it. A standard deployment would include 2 or more servers running Samproxy accessible via a load balancer. Each instance of Samproxy must be configured with a list of all other running instances in order to balance the traces evenly across the cluster.
+Samproxy is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it. A standard deployment has a cluster of servers running Samproxy accessible via a load balancer. Samproxy instances must be able to communicate with each other to concentrate traces on single servers.
 
 Within your application (or other Honeycomb event sources) you would configure the `API Host` to be http(s)://load-balancer/. Everything else remains the same (api key, dataset name, etc. - all that lives with the originating client).
+
+### Minimum configuration
+
+The Samproxy cluster should have at least 2 servers with 2GB RAM and access to 2 cores each.
+
+Additional RAM and CPU can be used by increasing configuration values to have a larger `CacheCapacity`. The cluster should be monitored for panics caused by running out of memory and scaled up (with either more servers or more RAM per server) when they occur.
 
 ### Builds
 
@@ -33,7 +39,7 @@ There are a few vital configuration options; read through this list and make sur
 
 - Trace timeout - it should be set higher (maybe double?) the longest expected trace. If all of your traces complete in under 10 seconds, 30 is a good value here.  If you have traces that can last minutes, it should be raised accordingly. Note that the trace doesn't *have* to complete before this timer expires - but the sampling decision will be made at that time. So any spans that contain fields that you want to use to compute the sample rate should arrive before this timer expires. Additional spans that arrive after the timer has expired will be sent or dropped according to the sampling decision made when the timer expired.
 
-- Peer list: this is a list of all the other servers participating in this Samproxy cluster. Traces are evenly distributed across all available servers, and any one trace must be concentrated on one server, regardless of which server handled the incoming spans. The peer list lets the cluster move spans around to the server that is handling the trace.
+- Peer list: this is a list of all the other servers participating in this Samproxy cluster. Traces are evenly distributed across all available servers, and any one trace must be concentrated on one server, regardless of which server handled the incoming spans. The peer list lets the cluster move spans around to the server that is handling the trace. (Not used in the Redis-based config.)
 
 - Buffer size: The `InMemCollector`'s `CacheCapacity` setting determines how many in-flight traces you can have. This should be large enough to avoid overflow. Some multiple (2x, 3x) the total number of in-flight traces you expect is a good place to start. If it's too low you will see the `collect_cache_buffer_overrun` metric increment. If you see that, you should increase the size of the buffer.
 
