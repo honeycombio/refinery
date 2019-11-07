@@ -3,9 +3,12 @@ package transmission
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"time"
+
+	"github.com/vmihailenco/msgpack"
 )
 
 type Event struct {
@@ -49,6 +52,34 @@ func (e *Event) MarshalJSON() ([]byte, error) {
 		SampleRate uint            `json:"samplerate,omitempty"`
 		Timestamp  *time.Time      `json:"time,omitempty"`
 	}{e.Data, sampleRate, tPointer})
+}
+
+func (e *Event) MarshalMsgpack() (byts []byte, err error) {
+	tPointer := &(e.Timestamp)
+	if e.Timestamp.IsZero() {
+		tPointer = nil
+	}
+
+	// don't include sample rate if it's 1; this is the default
+	sampleRate := e.SampleRate
+	if sampleRate == 1 {
+		sampleRate = 0
+	}
+
+	defer func() {
+		if p := recover(); p != nil {
+			byts = nil
+			err = fmt.Errorf("msgpack panic: %v, trying to encode: %#v", p, e)
+		}
+	}()
+
+	var buf bytes.Buffer
+	err = msgpack.NewEncoder(&buf).UseJSONTag(true).Encode(struct {
+		Data       map[string]interface{} `msgpack:"data"`
+		SampleRate uint                   `msgpack:"samplerate,omitempty"`
+		Timestamp  *time.Time             `msgpack:"time,omitempty"`
+	}{e.Data, sampleRate, tPointer})
+	return buf.Bytes(), err
 }
 
 type marshallableMap map[string]interface{}

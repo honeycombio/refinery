@@ -33,7 +33,7 @@ const (
 	defaultSampleRate = 1
 	defaultAPIHost    = "https://api.honeycomb.io/"
 	defaultDataset    = "libhoney-go dataset"
-	version           = "1.9.2"
+	version           = "1.12.2"
 
 	// DefaultMaxBatchSize how many events to collect in a batch
 	DefaultMaxBatchSize = 50
@@ -284,7 +284,7 @@ func VerifyAPIKey(config Config) (team string, err error) {
 	defer func() { dc.logger.Printf("verify write key got back %s with err=%s", team, err) }()
 	if config.APIKey == "" {
 		if config.WriteKey == "" {
-			return team, errors.New("config.APIKey and config.WriteKey are both empty; can't verify empty ke")
+			return team, errors.New("config.APIKey and config.WriteKey are both empty; can't verify empty key")
 		}
 		config.APIKey = config.WriteKey
 	}
@@ -723,6 +723,9 @@ func (e *Event) AddFunc(fn func() (string, interface{}, error)) error {
 // Once you Send an event, any addition calls to add data to that event will
 // return without doing anything. Once the event is sent, it becomes immutable.
 func (e *Event) Send() error {
+	if e.client == nil {
+		e.client = &Client{}
+	}
 	e.client.ensureLogger()
 	if shouldDrop(e.SampleRate) {
 		e.client.logger.Printf("dropping event due to sampling")
@@ -759,27 +762,39 @@ func (e *Event) SendPresampled() (err error) {
 			e.client.logger.Printf("Send enqueued event: %+v", e)
 		}
 	}()
-	e.lock.RLock()
-	defer e.lock.RUnlock()
+
+	// Lock the sent bool before taking the event lock, to match the order in
+	// the Add methods.
+	e.sendLock.Lock()
+	defer e.sendLock.Unlock()
+
+	e.fieldHolder.lock.RLock()
+	defer e.fieldHolder.lock.RUnlock()
 	if len(e.data) == 0 {
 		return errors.New("No metrics added to event. Won't send empty event.")
 	}
-	// Consider making these restrictions optional; for non-Honeycomb based
-	// Sender implementations (eg STDOUT) it's totally possible to send events
-	// without an API key etc.
-	if e.APIHost == "" {
-		return errors.New("No APIHost for Honeycomb. Can't send to the Great Unknown.")
-	}
-	if e.WriteKey == "" {
-		return errors.New("No WriteKey specified. Can't send event.")
+
+	// if client.transmission is transmission.Honeycomb or a pointer to same,
+	// then we should verify that APIHost and WriteKey are set. For
+	// non-Honeycomb based Sender implementations (eg STDOUT) it's totally
+	// possible to send events without an API key etc
+
+	senderType := reflect.TypeOf(e.client.transmission).String()
+	isHoneycombSender := strings.HasSuffix(senderType, "transmission.Honeycomb")
+	isMockSender := strings.HasSuffix(senderType, "transmission.MockSender")
+	if isHoneycombSender || isMockSender {
+		if e.APIHost == "" {
+			return errors.New("No APIHost for Honeycomb. Can't send to the Great Unknown.")
+		}
+		if e.WriteKey == "" {
+			return errors.New("No WriteKey specified. Can't send event.")
+		}
 	}
 	if e.Dataset == "" {
 		return errors.New("No Dataset for Honeycomb. Can't send datasetless.")
 	}
 
-	// lock the sent bool and then mark the event as sent. No more changes!
-	e.sendLock.Lock()
-	defer e.sendLock.Unlock()
+	// Mark the event as sent, no more field changes will be applied.
 	e.sent = true
 
 	e.client.ensureTransmission()
@@ -798,6 +813,10 @@ func (e *Event) SendPresampled() (err error) {
 
 // returns true if the sample should be dropped
 func shouldDrop(rate uint) bool {
+	if rate <= 1 {
+		return false
+	}
+
 	return rand.Intn(int(rate)) != 0
 }
 

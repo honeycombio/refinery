@@ -135,7 +135,8 @@ func (c *Client) ensureBuilder() {
 	c.oneBuilder.Do(func() {
 		if c.builder == nil {
 			c.builder = &Builder{
-				dynFields: make([]dynamicField, 0, 0),
+				SampleRate: 1,
+				dynFields:  make([]dynamicField, 0, 0),
 				fieldHolder: fieldHolder{
 					data: make(map[string]interface{}),
 				},

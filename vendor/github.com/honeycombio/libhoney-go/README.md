@@ -1,4 +1,4 @@
-# libhoney [![Build Status](https://travis-ci.org/honeycombio/libhoney-go.svg?branch=master)](https://travis-ci.org/honeycombio/libhoney-go)
+# libhoney [![CircleCI](https://circleci.com/gh/honeycombio/libhoney-go.svg?style=shield)](https://circleci.com/gh/honeycombio/libhoney-go)
 
 Go library for sending events to [Honeycomb](https://honeycomb.io), a service for debugging your software in production.
 

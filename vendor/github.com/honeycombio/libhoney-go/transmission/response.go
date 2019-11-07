@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/vmihailenco/msgpack"
 )
 
 // Response is a record of an event sent. It includes information about sending
@@ -41,6 +43,32 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 		Status int
 	}{}
 	if err := json.Unmarshal(b, &aux); err != nil {
+		return err
+	}
+	r.StatusCode = aux.Status
+	if aux.Error != "" {
+		r.Err = errors.New(aux.Error)
+	}
+	return nil
+}
+
+func (r *Response) MarshalMsgpack() ([]byte, error) {
+	aux := struct {
+		Error  string `msgpack:"error,omitempty"`
+		Status int    `msgpack:"status,omitempty"`
+	}{Status: r.StatusCode}
+	if r.Err != nil {
+		aux.Error = r.Err.Error()
+	}
+	return msgpack.Marshal(&aux)
+}
+
+func (r *Response) UnmarshalMsgpack(b []byte) error {
+	aux := struct {
+		Error  string `msgpack:"error"`
+		Status int    `msgpack:"status"`
+	}{}
+	if err := msgpack.Unmarshal(b, &aux); err != nil {
 		return err
 	}
 	r.StatusCode = aux.Status
