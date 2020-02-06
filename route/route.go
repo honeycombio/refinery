@@ -136,18 +136,20 @@ func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
+
+	// get out request ID for logging
+	reqID := req.Context().Value(types.RequestIDContextKey{})
+	logger := r.iopLogger.WithField("request_id", reqID)
+
 	reqBod, _ := ioutil.ReadAll(req.Body)
 	var trEv eventWithTraceID
 	// pull out just the trace ID for use in routing
 	err := json.Unmarshal(reqBod, &trEv)
 	if err != nil {
+		logger.WithField("error", err.Error()).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
-
-	// get out request ID for logging
-	reqID := req.Context().Value(types.RequestIDContextKey{})
-	logger := r.iopLogger.WithField("request_id", reqID)
 
 	// not part of a trace. send along upstream
 	if trEv.TraceID == "" {
@@ -275,6 +277,10 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
+
+	reqID := req.Context().Value(types.RequestIDContextKey{})
+	logger := r.iopLogger.WithField("request_id", reqID)
+
 	bodyReader, err := getMaybeGzippedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
@@ -291,12 +297,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	batchedResponses := make([]*BatchResponse, 0)
 	err = json.Unmarshal(reqBod, &batchedEvents)
 	if err != nil {
+		logger.WithField("error", err.Error()).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
-
-	reqID := req.Context().Value(types.RequestIDContextKey{})
-	logger := r.iopLogger.WithField("request_id", reqID)
 
 	for _, bev := range batchedEvents {
 		// extract trace ID, route to self or peer, pass on to collector
