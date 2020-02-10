@@ -29,7 +29,7 @@ fpm -s dir -n samproxy \
     -v $version \
     -t $pkg_type \
     --pre-install=./preinstall \
-    $GOPATH/bin/samproxy=/usr/bin/samproxy \
+    ./artifacts/samproxy=/usr/bin/samproxy \
     ./samproxy.upstart=/etc/init/samproxy.conf \
     ./samproxy.service=/lib/systemd/system/samproxy.service \
     ./config.toml=/etc/samproxy/samproxy.toml
