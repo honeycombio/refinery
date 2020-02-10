@@ -25,7 +25,7 @@ fi
 
 fpm -s dir -n samproxy \
     -m "Honeycomb <support@honeycomb.io>" \
-    -p $GOPATH/bin \
+    -p ./artifacts \
     -v $version \
     -t $pkg_type \
     --pre-install=./preinstall \
