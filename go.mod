@@ -2,6 +2,7 @@ module github.com/honeycombio/samproxy
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
+	github.com/aws/aws-sdk-go v1.28.14 // indirect
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
@@ -20,10 +21,11 @@ require (
 	github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f
 	github.com/honeycombio/libhoney-go v1.12.2
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/klauspost/compress v1.9.1 // indirect
+	github.com/klauspost/compress v1.9.1
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/pelletier/go-toml v1.2.0
+	github.com/pierrec/lz4 v2.4.1+incompatible // indirect
 	github.com/pkg/errors v0.8.0
 	github.com/prometheus/client_golang v0.9.0
 	github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910 // indirect
