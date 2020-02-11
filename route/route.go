@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/klauspost/compress/zstd"
 
 	"github.com/honeycombio/samproxy/collect"
 	"github.com/honeycombio/samproxy/config"
@@ -21,6 +22,13 @@ import (
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
 	"github.com/honeycombio/samproxy/types"
+)
+
+const (
+	// numZstdDecoders is set statically here - we may make it into a config option
+	// A normal practice might be to use some multiple of the CPUs, but that goes south
+	// in kubernetes
+	numZstdDecoders = 4
 )
 
 type Router struct {
@@ -45,6 +53,8 @@ type Router struct {
 
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger logger.Entry
+
+	zstdDecoders chan *zstd.Decoder
 }
 
 type BatchResponse struct {
@@ -67,6 +77,13 @@ func (r *Router) LnS(incomingOrPeer string) {
 	r.proxyClient = &http.Client{
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
+	}
+
+	var err error
+	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
+	if err != nil {
+		r.iopLogger.Errorf("couldn't start zstd decoders: %s", err.Error())
+		return
 	}
 
 	r.Metrics.Register(r.incomingOrPeer+"_router_proxied", "counter")
@@ -98,7 +115,6 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	var listenAddr string
-	var err error
 	if r.incomingOrPeer == "incoming" {
 		listenAddr, err = r.Config.GetListenAddr()
 		if err != nil {
@@ -281,7 +297,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	reqID := req.Context().Value(types.RequestIDContextKey{})
 	logger := r.iopLogger.WithField("request_id", reqID)
 
-	bodyReader, err := getMaybeGzippedBody(req)
+	bodyReader, err := r.getMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
@@ -407,19 +423,38 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	w.Write(response)
 }
 
-func getMaybeGzippedBody(req *http.Request) (io.Reader, error) {
+func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	var reader io.Reader
 	switch req.Header.Get("Content-Encoding") {
 	case "gzip":
-		buf := bytes.Buffer{}
-		if _, err := io.Copy(&buf, req.Body); err != nil {
-			return nil, err
-		}
-		var err error
-		reader, err = gzip.NewReader(&buf)
+		gzipReader, err := gzip.NewReader(req.Body)
 		if err != nil {
 			return nil, err
 		}
+		defer gzipReader.Close()
+
+		buf := &bytes.Buffer{}
+		if _, err := io.Copy(buf, gzipReader); err != nil {
+			return nil, err
+		}
+		reader = buf
+	case "zstd":
+		zReader := <-r.zstdDecoders
+		defer func(zReader *zstd.Decoder) {
+			zReader.Reset(nil)
+			r.zstdDecoders <- zReader
+		}(zReader)
+
+		err := zReader.Reset(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		buf := &bytes.Buffer{}
+		if _, err := io.Copy(buf, zReader); err != nil {
+			return nil, err
+		}
+
+		reader = buf
 	default:
 		reader = req.Body
 	}
@@ -504,4 +539,21 @@ func getEventTime(etHeader string) time.Time {
 		}
 	}
 	return eventTime
+}
+
+func makeDecoders(num int) (chan *zstd.Decoder, error) {
+	zstdDecoders := make(chan *zstd.Decoder, num)
+	for i := 0; i < num; i++ {
+		zReader, err := zstd.NewReader(
+			nil,
+			zstd.WithDecoderConcurrency(1),
+			zstd.WithDecoderLowmem(true),
+			zstd.WithDecoderMaxMemory(8*1024*1024),
+		)
+		if err != nil {
+			return nil, err
+		}
+		zstdDecoders <- zReader
+	}
+	return zstdDecoders, nil
 }
