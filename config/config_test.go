@@ -29,6 +29,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
 		AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
+		ClearFrequencySec = 60
 
 	[SamplerConfig.dataset2]
 
