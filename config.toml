@@ -169,7 +169,7 @@ CacheCapacity = 1000
 		# implementation. This sampler collects the values of a number of fields from a
 		# trace and uses them to form a key. This key is handed to the standard dynamic
 		# sampler algorithm which generates a sample rate based on the frequency with
-		# which that key has appeared in the previous 30 seconds. See
+		# which that key has appeared in the previous ClearFrequencySec seconds. See
 		# https://github.com/honeycombio/dynsampler-go for more detail on the mechanics
 		# of the dynamic sampler.  This sampler uses the AvgSampleRate algorithm from
 		# that package.
@@ -218,6 +218,12 @@ CacheCapacity = 1000
 		# when adding the sample rate key to the trace. This setting is only used when
 		# AddSampleRateKeyToTrace is true.
 		AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
+
+        # ClearFrequencySec is the name of the field the sampler will use to determine
+        # the period over which it will calculate the sample rate. This setting defaults
+        # to 30.
+        # Eligible for live reload.
+		ClearFrequencySec = 60
 
 	[SamplerConfig.dataset2]
 

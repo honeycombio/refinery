@@ -20,6 +20,7 @@ type DynamicSampler struct {
 	Metrics metrics.Metrics
 
 	sampleRate        int64
+	clearFrequencySec int64
 	fieldList         []string
 	useTraceLength    bool
 	addDynsampleKey   bool
@@ -31,6 +32,7 @@ type DynamicSampler struct {
 
 type DynSamplerConfig struct {
 	SampleRate                   int64
+	ClearFrequencySec			 int64
 	FieldList                    []string
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool
@@ -51,6 +53,10 @@ func (d *DynamicSampler) Start() error {
 		dsConfig.SampleRate = 1
 	}
 	d.sampleRate = dsConfig.SampleRate
+	if dsConfig.ClearFrequencySec == 0 {
+		dsConfig.ClearFrequencySec = 30
+	}
+	d.clearFrequencySec = dsConfig.ClearFrequencySec
 
 	// get list of fields to use when constructing the dynsampler key
 	fieldList := dsConfig.FieldList
@@ -67,6 +73,7 @@ func (d *DynamicSampler) Start() error {
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
 		GoalSampleRate: int(d.sampleRate),
+		ClearFrequencySec: int(d.clearFrequencySec),
 	}
 	d.dynsampler.Start()
 
@@ -98,6 +105,13 @@ func (d *DynamicSampler) reloadConfigs() {
 	if d.sampleRate != dsConfig.SampleRate {
 		configChanged = true
 		d.sampleRate = dsConfig.SampleRate
+	}
+	if dsConfig.ClearFrequencySec == 0 {
+		dsConfig.ClearFrequencySec = 30
+	}
+	if d.clearFrequencySec != dsConfig.ClearFrequencySec {
+		configChanged = true
+		d.clearFrequencySec = dsConfig.ClearFrequencySec
 	}
 
 	// get list of fields to use when constructing the dynsampler key
@@ -135,6 +149,7 @@ func (d *DynamicSampler) reloadConfigs() {
 	if configChanged {
 		newSampler := &dynsampler.AvgSampleRate{
 			GoalSampleRate: int(d.sampleRate),
+			ClearFrequencySec: int(d.clearFrequencySec),
 		}
 		newSampler.Start()
 
