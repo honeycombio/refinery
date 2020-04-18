@@ -402,16 +402,18 @@ func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
 func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
 	select {
 	case <-time.After(pause):
-		// TODO fix FinishTime to be the time of the last span + its duration rather
-		// than whenever the timer goes off.
-		trace.FinishTime = time.Now()
-		// close the channel so all other timers expire
-		close(trace.CancelSending)
-		i.Logger.
-			WithField("trace_id", trace.TraceID).
-			WithField("pause_dur", pause).
-			Debugf("pauseAndSend wait finished; sending trace.")
-		i.toSend <- &sendSignal{trace}
+		trace.SendOnce.Do(func() {
+			// TODO fix FinishTime to be the time of the last span + its duration rather
+			// than whenever the timer goes off.
+			trace.FinishTime = time.Now()
+			// close the channel so all other timers expire
+			close(trace.CancelSending)
+			i.Logger.
+				WithField("trace_id", trace.TraceID).
+				WithField("pause_dur", pause).
+				Debugf("pauseAndSend wait finished; sending trace.")
+			i.toSend <- &sendSignal{trace}
+		})
 
 	case <-trace.CancelSending:
 		// CancelSending channel is closed, meaning someone else sent the trace.

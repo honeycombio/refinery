@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -97,6 +98,8 @@ type Trace struct {
 	// waiting a full minute (or whatever the trace timeout is) then doing nothing.
 	// Closing this channel will cause any still-waiting send timers to exit.
 	CancelSending chan struct{}
+
+	SendOnce sync.Once
 
 	// spans is the list of spans in this trace, protected by the list lock
 	spans []*Span
