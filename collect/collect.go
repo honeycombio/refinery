@@ -362,30 +362,6 @@ func (i *InMemCollector) sendAfterTraceTimeout(trace *types.Trace) {
 	go i.pauseAndSend(dur, trace)
 }
 
-// if the configuration says "send the trace when no new spans have come in for
-// X seconds" this function will cancel all outstanding send timers and start a
-// new one. To prevent infinitely postponed traces, there is still the (TODO)
-// total number of spans cap and a (TODO) gloabal time since first seen cap.
-//
-// TODO this is not yet actually implemented, but leaving the function here as a
-// reminder that it'd be an interesting config to add.
-func (i *InMemCollector) sendAfterIdleTimeout(trace *types.Trace) {
-	// cancel all outstanding sending timers
-	close(trace.CancelSending)
-
-	// get the configured delay
-	spanSeenDelay, err := i.Config.GetSpanSeenDelay()
-	if err != nil {
-		i.Logger.Errorf("failed to get send delay. pausing for 2 seconds")
-		spanSeenDelay = 2
-	}
-
-	// make a new cancel sending channel and then wait on it
-	trace.CancelSending = make(chan struct{})
-	dur := time.Duration(spanSeenDelay) * time.Second
-	go i.pauseAndSend(dur, trace)
-}
-
 // sendAfterRootDelay waits the SendDelay timeout then registers the trace to be
 // sent.
 func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
