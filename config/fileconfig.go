@@ -15,23 +15,26 @@ type FileConfig struct {
 }
 
 type confContents struct {
-	ListenAddr           string
-	PeerListenAddr       string
-	APIKeys              []string
-	Peers                []string
-	RedisHost            string
-	HoneycombAPI         string
-	CollectCacheCapacity int
-	Logger               string
-	LoggingLevel         string
-	Collector            string
-	Sampler              string
-	Metrics              string
-	SendDelay            int
-	SpanSeenDelay        int
-	TraceTimeout         int
-	UpstreamBufferSize   int
-	PeerBufferSize       int
+	ListenAddr              string
+	PeerListenAddr          string
+	APIKeys                 []string
+	Peers                   []string
+	RedisHost               string
+	RedisIdentifier         string
+	IdentifierInterfaceName string
+	UseIPV6Identifier       bool
+	HoneycombAPI            string
+	CollectCacheCapacity    int
+	Logger                  string
+	LoggingLevel            string
+	Collector               string
+	Sampler                 string
+	Metrics                 string
+	SendDelay               int
+	SpanSeenDelay           int
+	TraceTimeout            int
+	UpstreamBufferSize      int
+	PeerBufferSize          int
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
@@ -97,6 +100,18 @@ func (f *FileConfig) GetPeers() ([]string, error) {
 
 func (f *FileConfig) GetRedisHost() (string, error) {
 	return f.conf.RedisHost, nil
+}
+
+func (f *FileConfig) GetIdentifierInterfaceName() (string, error) {
+	return f.conf.IdentifierInterfaceName, nil
+}
+
+func (f *FileConfig) GetUseIPV6Identifier() (bool, error) {
+	return f.conf.UseIPV6Identifier, nil
+}
+
+func (f *FileConfig) GetRedisIdentifier() (string, error) {
+	return f.conf.RedisIdentifier, nil
 }
 
 func (f *FileConfig) GetHoneycombAPI() (string, error) {

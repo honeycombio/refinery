@@ -55,6 +55,27 @@ Peers = [
 # Not eligible for live reload.
 RedisHost = "localhost:6379"
 
+# IdentifierInterfaceName is optional. By default, when using RedisHost, samproxy will use
+# the local hostname to identify itself to other peers in Redis. If your environment
+# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# by name), you can specify the network interface that samproxy is listening on here.
+# Samproxy will use the fist unicast address that it finds on the specified network
+# interface as its identifier.
+# Not eligible for live reload.
+# IdentifierInterfaceName = "eth0"
+
+# UseIPV6Identifier is optional. If using IdentifierInterfaceName, samproxy will default to the first
+# IPv4 unicast address it finds for the specified interface. If UseIPV6Identifier is used, will use
+# the first IPV6 unicast address found.
+# UseIPV6Identifier = false
+
+# RedisIdentifier is optional. By default, when using RedisHost, samproxy will use
+# the local hostname to identify itself to other peers in Redis. If your environment
+# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# by name), you can specify the exact identifier (IP address, etc) to use here.
+# Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
+# RedisIdentifier = "192.168.1.1"
+
 # HoneycombAPI is the URL for the upstream Honeycomb API.
 # Eligible for live reload.
 HoneycombAPI = "https://api.honeycomb.io"

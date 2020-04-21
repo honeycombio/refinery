@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"sort"
 	"strings"
@@ -23,6 +24,14 @@ type RedisPeerFileConfig struct {
 	// RedisAddress is the connection string used to get us a valid redis to use to
 	// store and check for peers
 	RedisAddress string
+
+	// If set, register the host in redis using the (first) IP address from the interface
+	// specified here. If not set, registers the host using its hostname.
+	IdentifierInterfaceName string
+
+	UseIPV6Identifier bool
+
+	RedisIdentifier string
 
 	// peers is my local cache of the peer list. It gets updated by a background
 	// ticker
@@ -80,6 +89,9 @@ func (rc *RedisPeerFileConfig) Start() error {
 		}
 
 		rc.RedisAddress, _ = rc.GetRedisHost()
+		rc.IdentifierInterfaceName, _ = rc.GetIdentifierInterfaceName()
+		rc.UseIPV6Identifier, _ = rc.GetUseIPV6Identifier()
+		rc.RedisIdentifier, _ = rc.GetRedisIdentifier()
 
 		if rc.RedisAddress == "" {
 			rc.RedisAddress = "localhost:6379"
@@ -108,8 +120,47 @@ func (rc *RedisPeerFileConfig) Start() error {
 		// compute the public version of my peer listen address
 		listenAddr, _ := rc.FileConfig.GetPeerListenAddr()
 		port := strings.Split(listenAddr, ":")[1]
-		myhostname, _ := os.Hostname()
-		publicListenAddr := fmt.Sprintf("http://%s:%s", myhostname, port)
+
+		myIdentifier, _ := os.Hostname()
+		if rc.IdentifierInterfaceName != "" {
+			ifc, err := net.InterfaceByName(rc.IdentifierInterfaceName)
+			if err != nil {
+				logrus.WithError(err).WithField("interface", rc.IdentifierInterfaceName).
+					Error("IdentifierInterfaceName set but couldn't find interface by that name")
+				return
+			}
+			addrs, err := ifc.Addrs()
+			if err != nil {
+				logrus.WithError(err).WithField("interface", rc.IdentifierInterfaceName).
+					Error("IdentifierInterfaceName set but couldn't list addresses")
+				return
+			}
+			var ipStr string
+			for _, addr := range addrs {
+				// ParseIP doesn't know what to do with the suffix
+				ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
+				if rc.UseIPV6Identifier && ip.To16() != nil {
+					ipStr = fmt.Sprintf("[%s]", ip.String())
+					break
+				}
+				if !rc.UseIPV6Identifier && ip.To4() != nil {
+					ipStr = ip.String()
+					break
+				}
+			}
+			if ipStr == "" {
+				logrus.WithField("interface", ifc.Name).Error("could not find a valid IP to use from interface")
+				return
+			}
+			myIdentifier = ipStr
+			logrus.WithField("identifier", myIdentifier).WithField("interface", ifc.Name).Info("using identifier from interface")
+		}
+		if rc.RedisIdentifier != "" {
+			myIdentifier = rc.RedisIdentifier
+			logrus.WithField("identifier", myIdentifier).Info("using specific identifier from config")
+		}
+
+		publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
 		rc.publicAddr = publicListenAddr
 
 		// register myself once
