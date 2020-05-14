@@ -24,7 +24,7 @@ github.com/gorilla/mux
 # github.com/hashicorp/golang-lru v0.5.0
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
-# github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f
+# github.com/honeycombio/dynsampler-go v0.2.1
 github.com/honeycombio/dynsampler-go
 # github.com/honeycombio/libhoney-go v1.12.2
 github.com/honeycombio/libhoney-go

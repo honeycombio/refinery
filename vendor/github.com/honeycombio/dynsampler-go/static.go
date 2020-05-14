@@ -26,3 +26,13 @@ func (s *Static) GetSampleRate(key string) int {
 	}
 	return s.Default
 }
+
+// SaveState is not implemented
+func (s *Static) SaveState() ([]byte, error) {
+	return nil, nil
+}
+
+// LoadState is not implemented
+func (s *Static) LoadState(state []byte) error {
+	return nil
+}

@@ -65,3 +65,13 @@ func (o *OnlyOnce) GetSampleRate(key string) int {
 	o.seen[key] = true
 	return 1
 }
+
+// SaveState is not implemented
+func (o *OnlyOnce) SaveState() ([]byte, error) {
+	return nil, nil
+}
+
+// LoadState is not implemented
+func (o *OnlyOnce) LoadState(state []byte) error {
+	return nil
+}

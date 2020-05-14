@@ -28,6 +28,12 @@ type TotalThroughput struct {
 	// goal throughput. Actual throughput may exceed goal throughput. default 100
 	GoalThroughputPerSec int
 
+	// MaxKeys, if greater than 0, limits the number of distinct keys used to build
+	// the sample rate map within the interval defined by `ClearFrequencySec`. Once
+	// MaxKeys is reached, new keys will not be included in the sample rate map, but
+	// existing keys will continue to be be counted.
+	MaxKeys int
+
 	savedSampleRates map[string]int
 	currentCounts    map[string]int
 
@@ -96,9 +102,27 @@ func (t *TotalThroughput) updateMaps() {
 func (t *TotalThroughput) GetSampleRate(key string) int {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	t.currentCounts[key]++
+	// Enforce MaxKeys limit on the size of the map
+	if t.MaxKeys > 0 {
+		// If a key already exists, increment it. If not, but we're under the limit, store a new key
+		if _, found := t.currentCounts[key]; found || len(t.currentCounts) < t.MaxKeys {
+			t.currentCounts[key]++
+		}
+	} else {
+		t.currentCounts[key]++
+	}
 	if rate, found := t.savedSampleRates[key]; found {
 		return rate
 	}
 	return 1
+}
+
+// SaveState is not implemented
+func (t *TotalThroughput) SaveState() ([]byte, error) {
+	return nil, nil
+}
+
+// LoadState is not implemented
+func (t *TotalThroughput) LoadState(state []byte) error {
+	return nil
 }
