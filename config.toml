@@ -351,7 +351,8 @@ CacheCapacity = 1000
 		# Eligible for live reload
 		BurstMultiple = 2.0
 
-		# BurstDetectionDelay indicates the number of intervals to run after Start is called before burst detection kicks in.
+		# BurstDetectionDelay indicates the number of intervals to run after Start is called before
+		# burst detection kicks in.
 		# Defaults to 3
 		# Eligible for live reload
 		BurstDetectionDelay = 3
