@@ -334,10 +334,11 @@ CacheCapacity = 1000
 		# Eligible for live reload
 		MaxKeys = 0
 
-		# AgeOutValue indicates the threshold for removing keys from the EMA. The EMA of any key will approach 0
-		# if it is not repeatedly observed, but will never truly reach it, so we have to decide what constitutes "zero".
-		# Keys with averages below this threshold will be removed from the EMA. Default is the same as Weight, as this prevents
-		# a key with the smallest integer value (1) from being aged out immediately. This value should generally be <= Weight,
+		# AgeOutValue indicates the threshold for removing keys from the EMA. The EMA of any key
+		# will approach 0 if it is not repeatedly observed, but will never truly reach it, so we have to
+		# decide what constitutes "zero". Keys with averages below this threshold will be removed
+		# from the EMA. Default is the same as Weight, as this prevents a key with the smallest
+		# integer value (1) from being aged out immediately. This value should generally be <= Weight,
 		# unless you have very specific reasons to set it higher.
 		# Eligible for live reload
 		AgeOutValue = 0.5
