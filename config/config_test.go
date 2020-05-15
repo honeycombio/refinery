@@ -35,6 +35,11 @@ func TestGetSamplerTypes(t *testing.T) {
 
 		Sampler = "DeterministicSampler"
 		SampleRate = 10
+
+	[SamplerConfig.dataset3]
+
+		Sampler = "EMADynamicSampler"
+		GoalSampleRate = 10
 `)
 
 	_, err = f.Write(dummyConfig)
@@ -58,5 +63,9 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, "DeterministicSampler", typ)
 
 	typ, err = c.GetSamplerTypeForDataset("dataset3")
-	assert.Equal(t, "failed to find config tree for SamplerConfig.dataset3", err.Error())
+	assert.Equal(t, nil, err)
+	assert.Equal(t, "EMADynamicSampler", typ)
+
+	typ, err = c.GetSamplerTypeForDataset("dataset4")
+	assert.Equal(t, "failed to find config tree for SamplerConfig.dataset4", err.Error())
 }

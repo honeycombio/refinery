@@ -56,6 +56,10 @@ func (s *SamplerFactory) getSamplerForType(samplerType, configName string) Sampl
 		ds := &DynamicSampler{configName: configName, Config: s.Config, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
+	case "EMADynamicSampler":
+		ds := &EMADynamicSampler{configName: configName, Config: s.Config, Logger: s.Logger, Metrics: s.Metrics}
+		ds.Start()
+		sampler = ds
 	default:
 		s.Logger.Errorf("unknown sampler type %s. Exiting.", samplerType)
 		os.Exit(1)

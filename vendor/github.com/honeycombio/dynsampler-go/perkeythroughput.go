@@ -22,6 +22,12 @@ type PerKeyThroughput struct {
 	// throughput down to match the goal throughput. default 10
 	PerKeyThroughputPerSec int
 
+	// MaxKeys, if greater than 0, limits the number of distinct keys used to build
+	// the sample rate map within the interval defined by `ClearFrequencySec`. Once
+	// MaxKeys is reached, new keys will not be included in the sample rate map, but
+	// existing keys will continue to be be counted.
+	MaxKeys int
+
 	savedSampleRates map[string]int
 	currentCounts    map[string]int
 
@@ -87,9 +93,27 @@ func (p *PerKeyThroughput) updateMaps() {
 func (p *PerKeyThroughput) GetSampleRate(key string) int {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	p.currentCounts[key]++
+	// Enforce MaxKeys limit on the size of the map
+	if p.MaxKeys > 0 {
+		// If a key already exists, increment it. If not, but we're under the limit, store a new key
+		if _, found := p.currentCounts[key]; found || len(p.currentCounts) < p.MaxKeys {
+			p.currentCounts[key]++
+		}
+	} else {
+		p.currentCounts[key]++
+	}
 	if rate, found := p.savedSampleRates[key]; found {
 		return rate
 	}
 	return 1
+}
+
+// SaveState is not implemented
+func (p *PerKeyThroughput) SaveState() ([]byte, error) {
+	return nil, nil
+}
+
+// LoadState is not implemented
+func (p *PerKeyThroughput) LoadState(state []byte) error {
+	return nil
 }

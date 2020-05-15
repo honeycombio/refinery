@@ -21,8 +21,14 @@ The following guidelines can help you choose a sampler. Depending on the shape o
 
 * The best choice for a system with a large key space and a large disparity between the highest volume and lowest volume keys is `AvgSampleRateWithMin` - it will increase the sample rate of higher volume traffic proportionally to the logarithm of the specific key's volume. If total traffic falls below a configured minimum, it stops sampling to avoid any sampling when the traffic is too low to warrant it.
 
+* `EMASampleRate` works like `AvgSampleRate`, but calculates sample rates based on a moving average (Exponential Moving Average) of many measurement intervals rather than a single isolated interval. In addition, it can detect large bursts in traffic and will trigger a recalculation of sample rates before the regular interval.
+
 Each sampler implementation below has additional configuration parameters and a
 detailed description of how it chooses a sample rate.
+
+Some implementations implement `SaveState` and `LoadState` - enabling you to serialize the Sampler's internal state
+and load it back. This is useful, for example, if you want to avoid losing calculated sample rates between process
+restarts.
 
 */
 package dynsampler

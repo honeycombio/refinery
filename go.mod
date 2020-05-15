@@ -18,7 +18,7 @@ require (
 	github.com/gogo/protobuf v0.0.0-20180509162441-30cf7ac33676 // indirect
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
 	github.com/hashicorp/golang-lru v0.5.0
-	github.com/honeycombio/dynsampler-go v0.0.0-20171107180038-7f9929d9ca1f
+	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/libhoney-go v1.12.2
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/klauspost/compress v1.9.1
