@@ -174,6 +174,10 @@ func (d *DeterministicSharder) loadPeerList() error {
 		return errors.Wrap(err, "failed to get peer list config")
 	}
 
+	if len(peerList) == 0 {
+		return errors.New("refusing to load empty peer list")
+	}
+
 	// turn my peer list into a list of shards
 	newPeers := make([]*DetShard, 0, len(peerList))
 	for _, peer := range peerList {
