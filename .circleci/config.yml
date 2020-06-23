@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  buildevents: honeycombio/buildevents@0.2.0
+  buildevents: honeycombio/buildevents@0.2.6
 
 executors:
   linuxgo:
@@ -91,7 +91,7 @@ jobs:
 
   publish:
     docker:
-      - image: cibuilds/github:0.12.1
+      - image: cibuilds/github:0.13.0
     steps:
       - buildevents/with_job_span:
           steps:
