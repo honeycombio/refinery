@@ -31,7 +31,7 @@ commands:
           buildevents cmd $CIRCLE_WORKFLOW_ID $BUILDEVENTS_SPAN_ID go_build -- \
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG}" \
           -o $GOPATH/bin/samproxy-<< parameters.os >>-<< parameters.arch >> \
-          ./...
+          ./cmd/samproxy
 
 jobs:
   setup:
