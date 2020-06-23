@@ -2,13 +2,36 @@ version: 2.1
 
 orbs:
   buildevents: honeycombio/buildevents@0.2.6
+  aws-cli: circleci/aws-cli@0.1.13
 
 executors:
   linuxgo:
     parameters:
     working_directory: /go/src/github.com/honeycombio/samproxy
     docker:
-      - image: circleci/golang:1.10
+      - image: circleci/golang:1.14
+
+commands:
+  go-build:
+    parameters:
+      os:
+        description: Target operating system
+        type: enum
+        enum: ["linux", "darwin"]
+        default: "linux"
+      arch:
+        description: Target architecture
+        type: enum
+        enum: ["amd64", "arm64"]
+        default: "amd64"
+    steps:
+      - run: |
+          GOOS=<< parameters.os >> \
+          GOARCH=<< parameters.arch >> \
+          buildevents cmd $CIRCLE_WORKFLOW_ID $BUILDEVENTS_SPAN_ID go_build -- \
+          go build -ldflags "-X main.BuildID=${CIRCLE_TAG}" \
+          -o $GOPATH/bin/samproxy-<< parameters.os >>-<< parameters.arch >> \
+          .
 
 jobs:
   setup:
@@ -28,11 +51,8 @@ jobs:
           steps:
             - checkout
             - buildevents/berun:
-                bename: go_get
-                becommand: go get -v -t -d ./...
-            - buildevents/berun:
                 bename: go_test
-                becommand: go test -v ./...
+                becommand: go test --timeout 10s -v ./...
 
   build:
     executor: linuxgo
@@ -40,30 +60,15 @@ jobs:
       - buildevents/with_job_span:
           steps:
             - checkout
-            - buildevents/berun:
-                bename: go_build
-                becommand: go install -ldflags "-X main.BuildID=${CIRCLE_TAG:1:20}" ./...
-            - run: |
-                mkdir artifacts
-                cp $GOPATH/bin/samproxy* artifacts
-                tar -cvf artifacts/samproxies.tar artifacts/samproxy*
-                find artifacts -ls
-            - persist_to_workspace:
-                root: artifacts
-                paths:
-                  - "*"
-            - store_artifacts:
-                path: artifacts/
-
-
-  build_packages:
-    executor: linuxgo
-    steps:
-      - buildevents/with_job_span:
-          steps:
-            - checkout
-            - attach_workspace:
-                at: artifacts
+            - go-build:
+                os: linux
+                arch: amd64
+            - go-build:
+                os: linux
+                arch: arm64
+            - go-build:
+                os: darwin
+                arch: amd64
             - buildevents/berun:
                 bename: apt_get_update
                 becommand: sudo apt-get -qq update
@@ -73,40 +78,57 @@ jobs:
             - buildevents/berun:
                 bename: gem_install
                 becommand: sudo gem install fpm
+            - run: mkdir -p ~/artifacts
             - buildevents/berun:
-                bename: build_deb
-                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t deb
+                bename: build_deb_amd64
+                becommand: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG}" -t deb && mv *.deb ~/artifacts
             - buildevents/berun:
-                bename: build_rpm
-                becommand: ./build-pkg.sh -v "${CIRCLE_TAG:1:20}" -t rpm
-            - run: |
-                tar -cvf artifacts/samproxies.tar artifacts/samproxy*
-                find artifacts -ls
+                bename: build_deb_arm64
+                becommand: ./build-pkg.sh -m arm64 -v "${CIRCLE_TAG}" -t deb && mv *.deb ~/artifacts
+            - buildevents/berun:
+                bename: build_rpm_amd64
+                becommand: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG}" -t rpm && mv *.rpm ~/artifacts
+            - buildevents/berun:
+                bename: copy_binaries
+                becommand: cp $GOPATH/bin/samproxy-* ~/artifacts
+            - run: echo "finished builds" && find ~/artifacts -ls
             - persist_to_workspace:
-                root: artifacts
+                root: ~/
                 paths:
-                  - samproxies.tar
+                  - artifacts
             - store_artifacts:
-                path: artifacts/
+                path: ~/artifacts
 
-  publish:
+  publish_github:
     docker:
       - image: cibuilds/github:0.13.0
     steps:
       - buildevents/with_job_span:
           steps:
             - attach_workspace:
-                at: artifacts
+                at: ~/
             - run:
                 name: "Publish Release on GitHub"
                 command: |
                   echo "about to publish to tag ${CIRCLE_TAG}"
-                  tar -xvf artifacts/samproxies.tar
-                  ls -l *
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy_${CIRCLE_TAG:1:20}_amd64.deb
-                  ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ./artifacts/samproxy-${CIRCLE_TAG:1:20}-1.x86_64.rpm
+                  ls -l ~/artifacts/*
+                  ghr -draft -n ${CIRCLE_TAG} -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ~/artifacts
 
+  publish_s3:
+    executor: linuxgo
+    steps:
+      - buildevents/with_job_span:
+          steps:
+            - attach_workspace:
+                at: ~/
+            - aws-cli/install
+            - aws-cli/configure:
+                aws-access-key-id: AWS_ACCESS_KEY_ID
+                aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+                aws-region: AWS_REGION
+            - buildevents/berun:
+                bename: sync_s3_artifacts
+                becommand: aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/samproxy/${CIRCLE_TAG}/
 
 workflows:
   build:
@@ -133,19 +155,21 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - build_packages:
+      - publish_github:
+          context: Honeycomb Secrets
           requires:
             - build
           filters:
             tags:
-              only: /^v\d+\.\d+\.\d+/
+              only: /^v.*/
             branches:
               ignore: /.*/
-      - publish:
+      - publish_s3:
+          context: Honeycomb Secrets
           requires:
-            - build_packages
+            - build
           filters:
             tags:
-              only: /^v\d+\.\d+\.\d+/
+              only: /^v.*/
             branches:
               ignore: /.*/
