@@ -4,11 +4,11 @@
 set -e
 
 function usage() {
-    echo "Usage: build-pkg.sh -v <version> -t <package_type>"
+    echo "Usage: build-pkg.sh -m <arch> -v <version> -t <package_type>"
     exit 2
 }
 
-while getopts "v:t:" opt; do
+while getopts "v:t:m:" opt; do
     case "$opt" in
     v)
         version=$OPTARG
@@ -16,20 +16,27 @@ while getopts "v:t:" opt; do
     t)
         pkg_type=$OPTARG
         ;;
+    m)
+        arch=$OPTARG
+        ;;
     esac
 done
 
-if [ -z "$version" ] || [ -z "$pkg_type" ]; then
+if [ -z "$pkg_type" ] || [ -z "$arch" ]; then
     usage
 fi
 
+if [ -z "$version" ]; then
+    version=v0.0.0-dev
+fi
+
 fpm -s dir -n samproxy \
-    -m "Honeycomb <support@honeycomb.io>" \
-    -p ./artifacts \
-    -v $version \
+    -m "Honeycomb <team@honeycomb.io>" \
+    -v ${version#v} \
     -t $pkg_type \
+    -a $arch \
     --pre-install=./preinstall \
-    ./artifacts/samproxy=/usr/bin/samproxy \
+    $GOPATH/bin/samproxy-linux-${arch}=/usr/bin/samproxy \
     ./samproxy.upstart=/etc/init/samproxy.conf \
     ./samproxy.service=/lib/systemd/system/samproxy.service \
     ./config.toml=/etc/samproxy/samproxy.toml
