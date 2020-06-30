@@ -86,6 +86,9 @@ type Trace struct {
 	// Sent should only be changed if the changer holds the SendSampleLock
 	Sent bool
 
+	// If non-zero, deadline to send this trace by.
+	SendBy time.Time
+
 	// StartTime is the server time when the first span arrived for this trace.
 	// Used to calculate how long traces spend sitting in Samproxy
 	StartTime time.Time
@@ -93,15 +96,9 @@ type Trace struct {
 	// any additional delay imposed by the DelaySend config option.
 	FinishTime time.Time
 
-	// CanceSending is a channel used to abort the trace timeout if we send or
-	// sample this trace so that we're not sitting around with tons of goroutines
-	// waiting a full minute (or whatever the trace timeout is) then doing nothing.
-	// Closing this channel will cause any still-waiting send timers to exit.
-	CancelSending chan struct{}
-
 	SendOnce sync.Once
 
-	// spans is the list of spans in this trace, protected by the list lock
+	// spans is the list of spans in this trace
 	spans []*Span
 }
 
@@ -119,7 +116,13 @@ func (t *Trace) AddSpan(sp *Span) {
 // GetSpans returns the list of spans in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
+}
 
+func (t *Trace) SetDeadline(d time.Duration) {
+	deadline := time.Now().Add(d)
+	if t.SendBy.IsZero() || t.SendBy.After(deadline) {
+		t.SendBy = deadline
+	}
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace

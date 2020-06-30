@@ -53,8 +53,19 @@ func TestAddRootSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.toSend = make(chan *sendSignal, 5)
+
 	go coll.collect()
+
+	var ticker *time.Ticker
+
+	// wait for the ticker to be created in the collect() above
+	for {
+		ticker = coll.sendTicker
+
+		if ticker != nil {
+			break
+		}
+	}
 
 	var traceID1 = "mytrace"
 	var traceID2 = "mytraess"
@@ -71,6 +82,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	assert.Equal(t, traceID1, coll.Cache.Get(traceID1).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	<-ticker.C
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
@@ -86,6 +98,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	assert.Equal(t, traceID2, coll.Cache.Get(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	<-ticker.C
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	coll.Stop()
@@ -127,8 +140,19 @@ func TestAddSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.toSend = make(chan *sendSignal, 5)
+
 	go coll.collect()
+
+	var ticker *time.Ticker
+
+	// wait for the ticker to be created in the collect() above
+	for {
+		ticker = coll.sendTicker
+
+		if ticker != nil {
+			break
+		}
+	}
 
 	var traceID = "mytrace"
 
@@ -156,5 +180,6 @@ func TestAddSpan(t *testing.T) {
 	coll.AddSpan(rootSpan)
 	time.Sleep(10 * time.Millisecond)
 	assert.Equal(t, 2, len(coll.Cache.Get(traceID).GetSpans()), "after adding a leaf and root span, we should have a two spans in the cache")
+	<-ticker.C
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 }

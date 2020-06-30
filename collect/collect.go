@@ -17,6 +17,10 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
+const (
+	sendTickerInterval = 100 * time.Millisecond
+)
+
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged in to a trace.
 	// Once the trace is "complete", it'll be passed off to the sampler then
@@ -56,10 +60,10 @@ type InMemCollector struct {
 
 	sentTraceCache *lru.Cache
 
-	incoming chan *types.Span
-	fromPeer chan *types.Span
-	toSend   chan *sendSignal
-	reload   chan struct{}
+	incoming   chan *types.Span
+	fromPeer   chan *types.Span
+	sendTicker *time.Ticker
+	reload     chan struct{}
 }
 
 // sendSignal is an indicator that it's time to send a trace.
@@ -123,7 +127,6 @@ func (i *InMemCollector) Start() error {
 
 	i.incoming = make(chan *types.Span, capacity*3)
 	i.fromPeer = make(chan *types.Span, capacity*3)
-	i.toSend = make(chan *sendSignal, capacity)
 	i.reload = make(chan struct{}, 1)
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
@@ -196,38 +199,21 @@ func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
 // block is the only place we are allowed to modify any running data
 // structures.
 func (i *InMemCollector) collect() {
-	// make sure we send all pending traces when we finish
-	defer func() {
-		for sig := range i.toSend {
-			i.send(sig.trace)
-		}
-	}()
-
 	peerChanSize := cap(i.fromPeer)
+
+	i.sendTicker = time.NewTicker(sendTickerInterval)
+	defer i.sendTicker.Stop()
 
 	for {
 		// record channel lengths
-		i.Metrics.Histogram("collector_tosend_queue", float64(len(i.toSend)))
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
-
-		// process traces that are ready to send first to make sure we can clear out
-		// any stuck queues that are eligible for clearing
-		select {
-		case sig, ok := <-i.toSend:
-			if ok {
-				i.send(sig.trace)
-			}
-		default:
-		}
 
 		// process peer traffic at 2/1 ratio to incoming traffic. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
 		// deadlocks because peers are waiting to get their events handed off to each
 		// other.
 		select {
-		case sig := <-i.toSend:
-			i.send(sig.trace)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -246,9 +232,9 @@ func (i *InMemCollector) collect() {
 
 		// ok, the peer queue is low enough, let's wait for new events from anywhere
 		select {
-		case sig, ok := <-i.toSend:
-			if ok {
-				i.send(sig.trace)
+		case <-i.sendTicker.C:
+			for _, trace := range i.Cache.GetTracesToSend() {
+				i.send(trace)
 			}
 		case sp, ok := <-i.incoming:
 			if !ok {
@@ -287,14 +273,12 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
 		i.Metrics.IncrementCounter("trace_accepted")
-		cancel := make(chan struct{})
 		trace = &types.Trace{
-			APIHost:       sp.APIHost,
-			APIKey:        sp.APIKey,
-			Dataset:       sp.Dataset,
-			TraceID:       sp.TraceID,
-			StartTime:     time.Now(),
-			CancelSending: cancel,
+			APIHost:   sp.APIHost,
+			APIKey:    sp.APIKey,
+			Dataset:   sp.Dataset,
+			TraceID:   sp.TraceID,
+			StartTime: time.Now(),
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.Cache.Set(trace)
@@ -346,7 +330,7 @@ func isRootSpan(sp *types.Span) bool {
 
 // sendASAP sends a trace as soon as possible, aka no delay.
 func (i *InMemCollector) sendASAP(trace *types.Trace) {
-	go i.pauseAndSend(0, trace)
+	trace.SetDeadline(0)
 }
 
 // sendAfterTraceTimeout will wait for the trace timeout to expire then send (if
@@ -359,7 +343,7 @@ func (i *InMemCollector) sendAfterTraceTimeout(trace *types.Trace) {
 		traceTimeout = 60
 	}
 	dur := time.Duration(traceTimeout) * time.Second
-	go i.pauseAndSend(dur, trace)
+	trace.SetDeadline(dur)
 }
 
 // sendAfterRootDelay waits the SendDelay timeout then registers the trace to be
@@ -371,30 +355,7 @@ func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
 		sendDelay = 2
 	}
 	dur := time.Duration(sendDelay) * time.Second
-	go i.pauseAndSend(dur, trace)
-}
-
-// pauseAndSend will block for pause time and then send the trace.
-func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
-	select {
-	case <-time.After(pause):
-		trace.SendOnce.Do(func() {
-			// TODO fix FinishTime to be the time of the last span + its duration rather
-			// than whenever the timer goes off.
-			trace.FinishTime = time.Now()
-			// close the channel so all other timers expire
-			close(trace.CancelSending)
-			i.Logger.
-				WithField("trace_id", trace.TraceID).
-				WithField("pause_dur", pause).
-				Debugf("pauseAndSend wait finished; sending trace.")
-			i.toSend <- &sendSignal{trace}
-		})
-
-	case <-trace.CancelSending:
-		// CancelSending channel is closed, meaning someone else sent the trace.
-		// Let's stop waiting and bail.
-	}
+	trace.SetDeadline(dur)
 }
 
 func (i *InMemCollector) send(trace *types.Trace) {
