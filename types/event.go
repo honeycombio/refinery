@@ -2,7 +2,6 @@ package types
 
 import (
 	"context"
-	"sync"
 	"time"
 )
 
@@ -95,8 +94,6 @@ type Trace struct {
 	// FinishTime is when a trace is prepared for sending; it does not include
 	// any additional delay imposed by the DelaySend config option.
 	FinishTime time.Time
-
-	SendOnce sync.Once
 
 	// spans is the list of spans in this trace
 	spans []*Span
