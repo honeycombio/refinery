@@ -115,6 +115,9 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
+// SetDeadline sets the deadline that this trace should be sent by
+// When we check for traces to send any trace that has exceeded the
+// deadline will be sent
 func (t *Trace) SetDeadline(d time.Duration) {
 	deadline := time.Now().Add(d)
 	if t.SendBy.IsZero() || t.SendBy.After(deadline) {
