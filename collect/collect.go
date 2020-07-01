@@ -233,7 +233,10 @@ func (i *InMemCollector) collect() {
 		// ok, the peer queue is low enough, let's wait for new events from anywhere
 		select {
 		case <-i.sendTicker.C:
+			now := time.Now()
 			for _, trace := range i.Cache.GetTracesToSend() {
+				// TODO fix FinishTime to be the time of the last span + its duration
+				trace.FinishTime = now
 				i.send(trace)
 			}
 		case sp, ok := <-i.incoming:
