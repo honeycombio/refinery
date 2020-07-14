@@ -5,13 +5,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/samproxy/collect"
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/route"
-	"github.com/pkg/errors"
 )
 
 type App struct {
@@ -42,13 +40,6 @@ func (a *App) Start() error {
 	signal.Notify(sigsToReload, syscall.SIGUSR1)
 	go a.listenForReload(sigsToReload)
 
-	// Validate configuration
-	err := a.validateAPIKeys()
-	if err != nil {
-		a.Logger.WithField("error", err).Errorf("Failed to validate API key")
-		return err
-	}
-
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
 
@@ -75,29 +66,5 @@ func (a *App) listenForReload(sigs chan os.Signal) {
 
 func (a *App) Stop() error {
 	a.Logger.Debugf("Shutting down App...")
-	return nil
-}
-
-func (a *App) validateAPIKeys() error {
-	keys, err := a.Config.GetAPIKeys()
-	if err != nil {
-		return err
-	}
-	// if we have the key '*' anywhere in the list, consider all keys valid
-	for _, key := range keys {
-		if key == "*" {
-			return nil
-		}
-	}
-	apiHost, _ := a.Config.GetHoneycombAPI()
-	// ok, go ahead and actually validate keys
-	for _, key := range keys {
-		libhConfig := libhoney.Config{WriteKey: key, APIHost: apiHost}
-		team, err := libhoney.VerifyWriteKey(libhConfig)
-		if err != nil {
-			return errors.Wrapf(err, "failed to validate API key: %s", key)
-		}
-		a.Logger.WithField("api_key", key).WithField("team", team).Debugf("validated API key")
-	}
 	return nil
 }
