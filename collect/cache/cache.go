@@ -124,7 +124,8 @@ func (d *DefaultInMemCache) GetTracesToSend() []*types.Trace {
 	var traces []*types.Trace
 	for _, tr := range d.insertionOrder {
 		if tr != nil && !tr.SendBy.IsZero() && tr.SendBy.Before(now) {
-			tr.SendBy = time.Time{}
+			// set SendBy to the zero time to skip it next time.
+			tr.SendBy = time.Time{}			
 			traces = append(traces, tr)
 		}
 	}
