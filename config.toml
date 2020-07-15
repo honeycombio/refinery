@@ -20,9 +20,7 @@ PeerListenAddr = "0.0.0.0:8081"
 # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
 # only applies to events - other Honeycomb API actions will fall through to the
 # upstream API directly.
-# Adding keys here causes two things to happen:
-# * on startup, Samproxy will validate the API keys against the Honeycomb API
-# * during operation, events arriving with API keys not in this list will be
+# Adding keys here causes events arriving with API keys not in this list to be
 # rejected with an HTTP 401 error If an API key that is a literal '*' is in the
 # list, all API keys are accepted.
 # Eligible for live reload.
