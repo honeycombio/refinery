@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   buildevents: honeycombio/buildevents@0.2.6
   aws-cli: circleci/aws-cli@0.1.13
+  docker: circleci/docker@1.3.0
 
 executors:
   linuxgo:
@@ -166,6 +167,17 @@ workflows:
               ignore: /.*/
       - publish_s3:
           context: Honeycomb Secrets
+          requires:
+            - build
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - docker/publish:
+          context: Honeycomb Secrets
+          tag: latest,${CIRCLE_TAG:1}
+          image: $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME
           requires:
             - build
           filters:
