@@ -203,13 +203,12 @@ func (i *InMemCollector) collect() {
 		}
 	}()
 
-	peerChanSize := cap(i.fromPeer)
+	incoming := mergeIncomingSpans(i.incoming, i.fromPeer)
 
 	for {
 		// record channel lengths
 		i.Metrics.Histogram("collector_tosend_queue", float64(len(i.toSend)))
-		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
-		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
+		i.Metrics.Histogram("collector_incoming_queue", float64(len(incoming)))
 
 		// process traces that are ready to send first to make sure we can clear out
 		// any stuck queues that are eligible for clearing
@@ -228,19 +227,12 @@ func (i *InMemCollector) collect() {
 		select {
 		case sig := <-i.toSend:
 			i.send(sig.trace)
-		case sp, ok := <-i.fromPeer:
+		case sp, ok := <-incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
 			}
 			i.processSpan(sp)
-			// additionally, if the peer channel is more than 80% full, restart this
-			// loop to make sure it stays empty enough. We _really_ want to avoid
-			// blocking peer traffic.
-			if len(i.fromPeer)*100/peerChanSize > 80 {
-				i.Metrics.IncrementCounter("peer_queue_too_large")
-				continue
-			}
 		default:
 		}
 
@@ -250,14 +242,7 @@ func (i *InMemCollector) collect() {
 			if ok {
 				i.send(sig.trace)
 			}
-		case sp, ok := <-i.incoming:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
-			}
-			i.processSpan(sp)
-			continue
-		case sp, ok := <-i.fromPeer:
+		case sp, ok := <-incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
@@ -267,7 +252,6 @@ func (i *InMemCollector) collect() {
 		case <-i.reload:
 			i.reloadConfigs()
 		}
-
 	}
 }
 
