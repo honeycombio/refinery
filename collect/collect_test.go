@@ -25,6 +25,7 @@ func TestAddRootSpan(t *testing.T) {
 		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       60,
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
+		SendTickerVal:            2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
 		Config:         conf,
@@ -66,7 +67,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpan(span)
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(conf.SendTickerVal * 2)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
@@ -81,7 +82,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(conf.SendTickerVal * 2)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace

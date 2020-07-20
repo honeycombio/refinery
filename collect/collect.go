@@ -123,7 +123,6 @@ func (i *InMemCollector) Start() error {
 
 	i.incoming = make(chan *types.Span, capacity*3)
 	i.fromPeer = make(chan *types.Span, capacity*3)
-	i.toSend = make(chan *sendSignal, capacity)
 	i.reload = make(chan struct{}, 1)
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
@@ -196,12 +195,8 @@ func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
 // block is the only place we are allowed to modify any running data
 // structures.
 func (i *InMemCollector) collect() {
-	// make sure we send all pending traces when we finish
-	defer func() {
-		for sig := range i.toSend {
-			i.send(sig.trace)
-		}
-	}()
+	ticker := time.NewTicker(i.Config.GetSendTickerValue())
+	defer ticker.Stop()
 
 	incoming := mergeIncomingSpans(spanInput{
 		ch:          i.incoming,
@@ -215,26 +210,17 @@ func (i *InMemCollector) collect() {
 
 	for {
 		// record channel lengths
-		i.Metrics.Histogram("collector_tosend_queue", float64(len(i.toSend)))
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(incoming)))
 
-		// process traces that are ready to send first to make sure we can clear out
-		// any stuck queues that are eligible for clearing
 		select {
-		case sig, ok := <-i.toSend:
-			if ok {
-				i.send(sig.trace)
-			}
+		case <-ticker.C:
+			i.sendTracesInCache()
 		default:
 		}
 
-		// process peer traffic at 2/1 ratio to incoming traffic. By processing peer
-		// traffic preferentially we avoid the situation where the cluster essentially
-		// deadlocks because peers are waiting to get their events handed off to each
-		// other.
 		select {
-		case sig := <-i.toSend:
-			i.send(sig.trace)
+		case <-ticker.C:
+			i.sendTracesInCache()
 		case sp, ok := <-incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -246,10 +232,8 @@ func (i *InMemCollector) collect() {
 
 		// ok, the peer queue is low enough, let's wait for new events from anywhere
 		select {
-		case sig, ok := <-i.toSend:
-			if ok {
-				i.send(sig.trace)
-			}
+		case <-ticker.C:
+			i.sendTracesInCache()
 		case sp, ok := <-incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -259,6 +243,19 @@ func (i *InMemCollector) collect() {
 			continue
 		case <-i.reload:
 			i.reloadConfigs()
+		}
+	}
+}
+
+func (i *InMemCollector) sendTracesInCache() {
+	traces := i.Cache.GetAll()
+	now := time.Now()
+
+	for _, t := range traces {
+		if t != nil {
+			if now.After(t.SendBy) {
+				i.send(t)
+			}
 		}
 	}
 }
@@ -279,22 +276,28 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
 		i.Metrics.IncrementCounter("trace_accepted")
-		cancel := make(chan struct{})
+
+		timeout, err := i.Config.GetTraceTimeout()
+
+		if err != nil {
+			// TODO: our implementation of config does not return errors
+			// maybe we should just remove the error from the signature
+			timeout = 60
+		}
+
 		trace = &types.Trace{
-			APIHost:       sp.APIHost,
-			APIKey:        sp.APIKey,
-			Dataset:       sp.Dataset,
-			TraceID:       sp.TraceID,
-			StartTime:     time.Now(),
-			CancelSending: cancel,
+			APIHost:   sp.APIHost,
+			APIKey:    sp.APIKey,
+			Dataset:   sp.Dataset,
+			TraceID:   sp.TraceID,
+			StartTime: time.Now(),
+			SendBy:    time.Now().Add(time.Duration(timeout) * time.Second),
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.Cache.Set(trace)
 		if ejectedTrace != nil {
-			i.sendASAP(ejectedTrace)
+			i.send(ejectedTrace)
 		}
-		// start up the overall trace timeout
-		i.sendAfterTraceTimeout(trace)
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
@@ -307,7 +310,15 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 
 	// if this is a root span, send the trace
 	if isRootSpan(sp) {
-		i.sendAfterRootDelay(trace)
+		timeout, err := i.Config.GetSendDelay()
+
+		if err != nil {
+			// TODO: our implementation of config does not return errors
+			// maybe we should just remove the error from the signature
+			timeout = 2
+		}
+
+		trace.SendBy = time.Now().Add(time.Duration(timeout) * time.Second)
 	}
 }
 
@@ -334,59 +345,6 @@ func isRootSpan(sp *types.Span) bool {
 		}
 	}
 	return false
-}
-
-// sendASAP sends a trace as soon as possible, aka no delay.
-func (i *InMemCollector) sendASAP(trace *types.Trace) {
-	go i.pauseAndSend(0, trace)
-}
-
-// sendAfterTraceTimeout will wait for the trace timeout to expire then send (if
-// it has not already been sent). It should be called in a goroutine, not
-// synchronously.
-func (i *InMemCollector) sendAfterTraceTimeout(trace *types.Trace) {
-	traceTimeout, err := i.Config.GetTraceTimeout()
-	if err != nil {
-		i.Logger.Errorf("failed to get trace timeout. pausing for 60 seconds")
-		traceTimeout = 60
-	}
-	dur := time.Duration(traceTimeout) * time.Second
-	go i.pauseAndSend(dur, trace)
-}
-
-// sendAfterRootDelay waits the SendDelay timeout then registers the trace to be
-// sent.
-func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
-	sendDelay, err := i.Config.GetSendDelay()
-	if err != nil {
-		i.Logger.Errorf("failed to get send delay. pausing for 2 seconds")
-		sendDelay = 2
-	}
-	dur := time.Duration(sendDelay) * time.Second
-	go i.pauseAndSend(dur, trace)
-}
-
-// pauseAndSend will block for pause time and then send the trace.
-func (i *InMemCollector) pauseAndSend(pause time.Duration, trace *types.Trace) {
-	select {
-	case <-time.After(pause):
-		trace.SendOnce.Do(func() {
-			// TODO fix FinishTime to be the time of the last span + its duration rather
-			// than whenever the timer goes off.
-			trace.FinishTime = time.Now()
-			// close the channel so all other timers expire
-			close(trace.CancelSending)
-			i.Logger.
-				WithField("trace_id", trace.TraceID).
-				WithField("pause_dur", pause).
-				Debugf("pauseAndSend wait finished; sending trace.")
-			i.toSend <- &sendSignal{trace}
-		})
-
-	case <-trace.CancelSending:
-		// CancelSending channel is closed, meaning someone else sent the trace.
-		// Let's stop waiting and bail.
-	}
 }
 
 func (i *InMemCollector) send(trace *types.Trace) {
