@@ -101,6 +101,7 @@ func TestAddSpan(t *testing.T) {
 		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       60,
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
+		SendTickerVal:            2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
 		Config:         conf,
@@ -143,7 +144,7 @@ func TestAddSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(conf.SendTickerVal * 2)
 	assert.Equal(t, traceID, coll.Cache.Get(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
@@ -155,7 +156,7 @@ func TestAddSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(conf.SendTickerVal * 2)
 	assert.Equal(t, 2, len(coll.Cache.Get(traceID).GetSpans()), "after adding a leaf and root span, we should have a two spans in the cache")
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 }
