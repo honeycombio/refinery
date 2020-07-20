@@ -12,7 +12,15 @@ func TestMergeIncomingSpans(t *testing.T) {
 	ch1 := make(chan *types.Span)
 	ch2 := make(chan *types.Span)
 
-	out := mergeIncomingSpans(ch1, ch2)
+	out := mergeIncomingSpans(spanInput{
+		ch:          ch1,
+		concurrency: 1,
+		name:        "1",
+	}, spanInput{
+		ch:          ch2,
+		concurrency: 2,
+		name:        "2",
+	})
 
 	var count int
 

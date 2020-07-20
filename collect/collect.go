@@ -203,7 +203,15 @@ func (i *InMemCollector) collect() {
 		}
 	}()
 
-	incoming := mergeIncomingSpans(i.incoming, i.fromPeer)
+	incoming := mergeIncomingSpans(spanInput{
+		ch:          i.incoming,
+		name:        "from_incoming",
+		concurrency: 1,
+	}, spanInput{
+		ch:          i.fromPeer,
+		name:        "from_peer",
+		concurrency: 2,
+	})
 
 	for {
 		// record channel lengths

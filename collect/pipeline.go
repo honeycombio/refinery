@@ -6,21 +6,28 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
-func mergeIncomingSpans(in ...<-chan *types.Span) <-chan *types.Span {
+type spanInput struct {
+	ch          <-chan *types.Span
+	concurrency int
+	name        string
+}
+
+func mergeIncomingSpans(in ...spanInput) <-chan *types.Span {
 	var wg sync.WaitGroup
 	out := make(chan *types.Span)
 
-	output := func(c <-chan *types.Span) {
-		for n := range c {
+	output := func(c spanInput) {
+		for n := range c.ch {
 			out <- n
 		}
 		wg.Done()
 	}
 
-	wg.Add(len(in))
-
 	for _, c := range in {
-		go output(c)
+		for i := 0; i < c.concurrency; i++ {
+			wg.Add(1)
+			go output(c)
+		}
 	}
 
 	go func() {
