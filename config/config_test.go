@@ -24,6 +24,10 @@ func TestReadDefaultFile(t *testing.T) {
 	if d, _ := c.GetTraceTimeout(); d != 60*time.Second {
 		t.Error("received", d, "expected", 60*time.Second)
 	}
+
+	if d := c.GetSendTickerValue(); d != 100*time.Millisecond {
+		t.Error("received", d, "expected", 100*time.Millisecond)
+	}
 }
 
 func TestGetSamplerTypes(t *testing.T) {

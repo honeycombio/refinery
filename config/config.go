@@ -89,4 +89,7 @@ type Config interface {
 	// GetPeerBufferSize returns the size of the libhoney buffer to use for the peer forwarding
 	// libhoney client
 	GetPeerBufferSize() int
+
+	// GetSendTickerValue returns the duration to use to check for traces to send
+	GetSendTickerValue() time.Duration
 }

@@ -33,6 +33,7 @@ type confContents struct {
 	Metrics                 string
 	SendDelay               time.Duration
 	TraceTimeout            time.Duration
+	SendTicker              time.Duration
 	UpstreamBufferSize      int
 	PeerBufferSize          int
 }
@@ -56,7 +57,11 @@ func (f *FileConfig) reloadConfig() error {
 		return err
 	}
 	f.rawConf = config
-	f.conf = confContents{}
+
+	// set the defaults here which are used when the key is not present in the file
+	f.conf = confContents{
+		SendTicker: 100 * time.Millisecond,
+	}
 	err = config.Unmarshal(&f.conf)
 	if err != nil {
 		return err
@@ -180,4 +185,8 @@ func (f *FileConfig) GetPeerBufferSize() int {
 		return libhoney.DefaultPendingWorkCapacity
 	}
 	return f.conf.PeerBufferSize
+}
+
+func (f *FileConfig) GetSendTickerValue() time.Duration {
+	return f.conf.SendTicker
 }

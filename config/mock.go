@@ -39,6 +39,7 @@ type MockConfig struct {
 	GetTraceTimeoutVal       time.Duration
 	GetUpstreamBufferSizeVal int
 	GetPeerBufferSizeVal     int
+	SendTickerVal            time.Duration
 }
 
 func (m *MockConfig) ReloadConfig()                 {}
@@ -90,4 +91,8 @@ func (m *MockConfig) GetUpstreamBufferSize() int {
 }
 func (m *MockConfig) GetPeerBufferSize() int {
 	return m.GetPeerBufferSizeVal
+}
+
+func (m *MockConfig) GetSendTickerValue() time.Duration {
+	return m.SendTickerVal
 }
