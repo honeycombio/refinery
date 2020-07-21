@@ -1,6 +1,9 @@
 package config
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // MockConfig will respond with whatever config it's set to do during
 // initialization
@@ -31,11 +34,9 @@ type MockConfig struct {
 	GetMetricsTypeErr        error
 	GetMetricsTypeVal        string
 	GetSendDelayErr          error
-	GetSendDelayVal          int
-	GetSpanSeenDelayErr      error
-	GetSpanSeenDelayVal      int
+	GetSendDelayVal          time.Duration
 	GetTraceTimeoutErr       error
-	GetTraceTimeoutVal       int
+	GetTraceTimeoutVal       time.Duration
 	GetUpstreamBufferSizeVal int
 	GetPeerBufferSizeVal     int
 }
@@ -69,12 +70,15 @@ func (m *MockConfig) GetRedisHost() (string, error) { return m.GetRedisHostVal, 
 func (m *MockConfig) GetDefaultSamplerType() (string, error) {
 	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
 }
-func (m *MockConfig) GetMetricsType() (string, error) { return m.GetMetricsTypeVal, m.GetMetricsTypeErr }
-func (m *MockConfig) GetSendDelay() (int, error)      { return m.GetSendDelayVal, m.GetSendDelayErr }
-func (m *MockConfig) GetSpanSeenDelay() (int, error) {
-	return m.GetSpanSeenDelayVal, m.GetSpanSeenDelayErr
+func (m *MockConfig) GetMetricsType() (string, error) {
+	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
-func (m *MockConfig) GetTraceTimeout() (int, error) { return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr }
+func (m *MockConfig) GetSendDelay() (time.Duration, error) {
+	return m.GetSendDelayVal, m.GetSendDelayErr
+}
+func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
+	return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr
+}
 
 // TODO: allow per-dataset mock values
 func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {

@@ -4,9 +4,27 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestReadDefaultFile(t *testing.T) {
+	c := FileConfig{Path: "../config.toml"}
+	err := c.Start()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetSendDelay(); d != 2*time.Second {
+		t.Error("received", d, "expected", 2*time.Second)
+	}
+
+	if d, _ := c.GetTraceTimeout(); d != 60*time.Second {
+		t.Error("received", d, "expected", 60*time.Second)
+	}
+}
 
 func TestGetSamplerTypes(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")

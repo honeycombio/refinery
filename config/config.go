@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 // Config defines the interface the rest of the code uses to get items from the
 // config. There are different implementations of the config using different
 // backends to store the config. FileConfig is the default and uses a
@@ -49,18 +51,12 @@ type Config interface {
 
 	// GetSendDelay returns the number of seconds to pause after a trace is
 	// complete before sending it, to allow stragglers to arrive
-	GetSendDelay() (int, error)
+	GetSendDelay() (time.Duration, error)
 
 	// GetTraceTimeout is how long to wait before sending a trace even if it's
 	// not complete. This should be longer than the longest expected trace
 	// duration.
-	GetTraceTimeout() (int, error)
-
-	// GetSpanSeenDelay is a timer that bumps out sending the trace every time a
-	// span is received. This one is used if you have traces of widely variable
-	// duration, but don't want them to get sent until all spans arrive. Use with
-	// care - if a trace continues to accumulate spans it may never get sent.
-	GetSpanSeenDelay() (int, error)
+	GetTraceTimeout() (time.Duration, error)
 
 	// GetOtherConfig attempts to fill the passed in struct with the contents of
 	// a subsection of the config.   This is used by optional configurations to

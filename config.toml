@@ -85,7 +85,7 @@ HoneycombAPI = "https://api.honeycomb.io"
 # trace. This timer is in seconds. Set to 0 for immediate
 # sends.
 # Eligible for live reload.
-SendDelay = 2
+SendDelay = "2s"
 
 # TraceTimeout is a long timer; it represents the outside boundary of how long
 # to wait before sending an incomplete trace. Normally traces are sent when the
@@ -94,7 +94,7 @@ SendDelay = 2
 # root span. If you have particularly long-lived traces you should increase this
 # timer. This timer is in seconds.
 # Eligible for live reload.
-TraceTimeout = 60
+TraceTimeout = "60s"
 
 # LoggingLevel is the level above which we should log. Debug is very verbose,
 # and should only be used in pre-production environments. Info is the
@@ -248,8 +248,8 @@ CacheCapacity = 1000
 
 		# EMADynamicSampler is a section of the config for manipulating the Exponential
 		# Moving Average (EMA) Dynamic Sampler implementation. Like the simple DynamicSampler,
-		# it attempts to average a given sample rate, weighting rare traffic and frequent 
-		# traffic differently so as to end up with the correct average. 
+		# it attempts to average a given sample rate, weighting rare traffic and frequent
+		# traffic differently so as to end up with the correct average.
 		#
 		# EMADynamicSampler is an improvement upon the simple DynamicSampler and is recommended
 		# for most use cases. Based on the DynamicSampler implementation, EMADynamicSampler differs
