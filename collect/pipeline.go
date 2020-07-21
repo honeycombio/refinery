@@ -12,6 +12,11 @@ type spanInput struct {
 	name        string
 }
 
+// mergeIncomingSpans accepts a variable number of spanInputs. Each spanInput says 
+// which span channel to pull from and how many goroutines should be doing the pulling.
+// By adjusting the concurrency field in the spanInput, you can give some channels a 
+// higher throughput than others. The resulting channel merges inputs from all listed 
+// incoming channels.
 func mergeIncomingSpans(in ...spanInput) <-chan *types.Span {
 	var wg sync.WaitGroup
 	out := make(chan *types.Span)
