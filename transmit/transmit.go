@@ -30,6 +30,7 @@ type DefaultTransmission struct {
 	Config     config.Config   `inject:""`
 	Logger     logger.Logger   `inject:""`
 	Metrics    metrics.Metrics `inject:""`
+	Version    string          `inject:"version"`
 	LibhClient *libhoney.Client
 
 	// Type is peer or upstream, and used only for naming metrics
@@ -49,6 +50,7 @@ func (d *DefaultTransmission) Start() error {
 	if err != nil {
 		return err
 	}
+	libhoney.UserAgentAddition = "samproxy/" + d.Version
 	d.builder = d.LibhClient.NewBuilder()
 	d.builder.APIHost = upstreamAPI
 
