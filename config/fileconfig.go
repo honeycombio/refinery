@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
 	toml "github.com/pelletier/go-toml"
@@ -30,9 +31,8 @@ type confContents struct {
 	Collector               string
 	Sampler                 string
 	Metrics                 string
-	SendDelay               int
-	SpanSeenDelay           int
-	TraceTimeout            int
+	SendDelay               time.Duration
+	TraceTimeout            time.Duration
 	UpstreamBufferSize      int
 	PeerBufferSize          int
 }
@@ -152,15 +152,11 @@ func (f *FileConfig) GetMetricsType() (string, error) {
 	return f.conf.Metrics, nil
 }
 
-func (f *FileConfig) GetSendDelay() (int, error) {
+func (f *FileConfig) GetSendDelay() (time.Duration, error) {
 	return f.conf.SendDelay, nil
 }
 
-func (f *FileConfig) GetSpanSeenDelay() (int, error) {
-	return f.conf.SpanSeenDelay, nil
-}
-
-func (f *FileConfig) GetTraceTimeout() (int, error) {
+func (f *FileConfig) GetTraceTimeout() (time.Duration, error) {
 	return f.conf.TraceTimeout, nil
 }
 
