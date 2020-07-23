@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestReadDefaultFile(t *testing.T) {
-	c := FileConfig{ConfigFile: "../config.toml"}
+func TestReadDefaultFiles(t *testing.T) {
+	c := FileConfig{ConfigFile: "../config.toml", RulesFile: "../rules.toml"}
 	err := c.Start()
 
 	if err != nil {
@@ -23,6 +23,14 @@ func TestReadDefaultFile(t *testing.T) {
 
 	if d, _ := c.GetTraceTimeout(); d != 60*time.Second {
 		t.Error("received", d, "expected", 60*time.Second)
+	}
+
+	if d, _ := c.GetDefaultSamplerType(); d != "DeterministicSampler" {
+		t.Error("received", d, "expected", "DeterministicSampler")
+	}
+
+	if d, _ := c.GetSamplerTypeForDataset("dataset1"); d != "DynamicSampler" {
+		t.Error("received", d, "expected", "DynamicSampler")
 	}
 }
 
