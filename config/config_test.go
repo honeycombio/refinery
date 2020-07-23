@@ -10,7 +10,7 @@ import (
 )
 
 func TestReadDefaultFile(t *testing.T) {
-	c := FileConfig{Path: "../config.toml"}
+	c := FileConfig{ConfigFile: "../config.toml"}
 	err := c.Start()
 
 	if err != nil {
@@ -31,11 +31,10 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
 
-	f, err := ioutil.TempFile(tmpDir, "")
+	f, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
 	dummyConfig := []byte(`
-[[SamplerConfig]]
 	[SamplerConfig._default]
 		Sampler = "DeterministicSampler"
 		SampleRate = 2
@@ -65,7 +64,7 @@ func TestGetSamplerTypes(t *testing.T) {
 	f.Close()
 
 	var c Config
-	fc := &FileConfig{Path: f.Name()}
+	fc := &FileConfig{RulesFile: f.Name(), ConfigFile: f.Name()}
 	fc.Start()
 	c = fc
 	typ, err := c.GetDefaultSamplerType()

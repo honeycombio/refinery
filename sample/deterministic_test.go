@@ -35,11 +35,10 @@ func TestInitializationFromConfigFile(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
 
-	f, err := ioutil.TempFile(tmpDir, "")
+	f, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
 	dummyConfig := []byte(`
-	[[SamplerConfig]]
 		[SamplerConfig._default]
 			Sampler = "DeterministicSampler"
 			SampleRate = 2
@@ -63,7 +62,7 @@ func TestInitializationFromConfigFile(t *testing.T) {
 	f.Close()
 
 	var c config.Config
-	fc := &config.FileConfig{Path: f.Name()}
+	fc := &config.FileConfig{RulesFile: f.Name(), ConfigFile: f.Name()}
 	fc.Start()
 	c = fc
 
