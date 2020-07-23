@@ -411,12 +411,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	trace.Sent = true
 
-	// we're sending this trace, bump the counter
-	i.Metrics.IncrementCounter("trace_sent")
-	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
-
 	traceDur := float64(trace.FinishTime.Sub(trace.StartTime) / time.Millisecond)
 	i.Metrics.Histogram("trace_duration_ms", traceDur)
+	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
 
 	var sampler sample.Sampler
 	var found bool
