@@ -31,9 +31,10 @@ var BuildID string
 var version string
 
 type Options struct {
-	ConfiFile string `short:"c" long:"config" description:"Path to config file" default:"/etc/samproxy/samproxy.toml"`
-	PeerType  string `short:"p" long:"peer_type" description:"Peer type - should be redis or file" default:"file"`
-	Version   bool   `short:"v" long:"version" description:"Print version number and exit"`
+	ConfigFile string `short:"c" long:"config" description:"Path to config file" default:"/etc/samproxy/samproxy.toml"`
+	RulesFile  string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/samproxy/rules.toml"`
+	PeerType   string `short:"p" long:"peer_type" description:"Peer type - should be redis or file" default:"file"`
+	Version    bool   `short:"v" long:"version" description:"Print version number and exit"`
 }
 
 func main() {
@@ -60,10 +61,11 @@ func main() {
 	// either the flag or the env var will kick us in to redis mode
 	if opts.PeerType == "redis" || os.Getenv(config.RedisHostEnvVarName) != "" {
 		c = &config.RedisPeerFileConfig{}
-		c.(*config.RedisPeerFileConfig).Path = opts.ConfiFile
+		c.(*config.RedisPeerFileConfig).ConfigFile = opts.ConfigFile
+		c.(*config.RedisPeerFileConfig).ConfigFile = opts.RulesFile
 		err = c.(*config.RedisPeerFileConfig).Start()
 	} else {
-		c = &config.FileConfig{Path: opts.ConfiFile}
+		c = &config.FileConfig{ConfigFile: opts.ConfigFile, RulesFile: opts.RulesFile}
 		err = c.(*config.FileConfig).Start()
 	}
 	if err != nil {

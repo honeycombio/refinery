@@ -5,14 +5,14 @@ import (
 	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
-	toml "github.com/pelletier/go-toml"
+	viper "github.com/spf13/viper"
 )
 
 type FileConfig struct {
-	Path      string
-	conf      confContents
-	rawConf   *toml.Tree
-	callbacks []func()
+	ConfigFile string
+	RulesFile  string
+	conf       confContents
+	callbacks  []func()
 }
 
 type confContents struct {
@@ -48,16 +48,23 @@ func (f *FileConfig) Start() error {
 	return f.reloadConfig()
 }
 
-// reloadConfig re-reads the config file for up-to-date config options. It is
+// reloadConfig re-reads the config files for up-to-date config options. It is
 // called when a USR1 signal hits the process.
 func (f *FileConfig) reloadConfig() error {
-	config, err := toml.LoadFile(f.Path)
+	viper.SetConfigFile(f.ConfigFile)
+	err := viper.ReadInConfig()
 	if err != nil {
 		return err
 	}
-	f.rawConf = config
+
+	viper.SetConfigFile(f.RulesFile)
+	err = viper.MergeInConfig()
+	if err != nil {
+		return err
+	}
+
 	f.conf = confContents{}
-	err = config.Unmarshal(&f.conf)
+	err = viper.Unmarshal(&f.conf)
 	if err != nil {
 		return err
 	}
@@ -161,9 +168,9 @@ func (f *FileConfig) GetTraceTimeout() (time.Duration, error) {
 }
 
 func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
-	subConf := f.rawConf.Get(name)
-	if subConfTree, ok := subConf.(*toml.Tree); ok {
-		return subConfTree.Unmarshal(iface)
+	subConf := viper.Sub(name)
+	if subConf != nil {
+		return subConf.Unmarshal(iface)
 	}
 	return fmt.Errorf("failed to find config tree for %s", name)
 }
