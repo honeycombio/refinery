@@ -105,8 +105,9 @@ func (i *InMemCollector) Start() error {
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
-	i.Metrics.Register("trace_duration", "histogram")
-	i.Metrics.Register("trace_num_spans", "histogram")
+	i.Metrics.Register("trace_duration_ms", "histogram")
+	i.Metrics.Register("trace_span_count", "histogram")
+	i.Metrics.Register("collector_tosend_queue", "histogram")
 	i.Metrics.Register("collector_incoming_queue", "histogram")
 	i.Metrics.Register("collector_peer_queue", "histogram")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
