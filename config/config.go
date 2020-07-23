@@ -99,4 +99,7 @@ type Config interface {
 	GetUseIPV6Identifier() (bool, error)
 
 	GetRedisIdentifier() (string, error)
+
+	// GetSendTickerValue returns the duration to use to check for traces to send
+	GetSendTickerValue() time.Duration
 }

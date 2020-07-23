@@ -25,6 +25,10 @@ func TestReadDefaultFiles(t *testing.T) {
 		t.Error("received", d, "expected", 60*time.Second)
 	}
 
+	if d := c.GetSendTickerValue(); d != 100*time.Millisecond {
+		t.Error("received", d, "expected", 100*time.Millisecond)
+	}
+
 	if d, _ := c.GetDefaultSamplerType(); d != "DeterministicSampler" {
 		t.Error("received", d, "expected", "DeterministicSampler")
 	}
