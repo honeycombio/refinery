@@ -114,16 +114,6 @@ jobs:
 workflows:
   build:
     jobs:
-      - setup:
-          filters:
-            tags:
-              only: /.*/
-      - watch:
-          requires:
-            - setup
-          filters:
-            tags:
-              only: /.*/
       - test:
           requires:
             - setup
