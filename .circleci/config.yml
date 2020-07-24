@@ -115,8 +115,6 @@ workflows:
   build:
     jobs:
       - test:
-          requires:
-            - setup
           filters:
             tags:
               only: /.*/
