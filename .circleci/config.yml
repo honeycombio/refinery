@@ -1,7 +1,6 @@
 version: 2.1
 
 orbs:
-  buildevents: honeycombio/buildevents@0.2.6
   aws-cli: circleci/aws-cli@0.1.13
   docker: circleci/docker@1.3.0
 
@@ -29,124 +28,93 @@ commands:
       - run: |
           GOOS=<< parameters.os >> \
           GOARCH=<< parameters.arch >> \
-          buildevents cmd $CIRCLE_WORKFLOW_ID $BUILDEVENTS_SPAN_ID go_build -- \
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG}" \
           -o $GOPATH/bin/samproxy-<< parameters.os >>-<< parameters.arch >> \
           ./cmd/samproxy
 
 jobs:
-  setup:
-    executor: linuxgo
-    steps:
-      - buildevents/start_trace
-
-  watch:
-    executor: linuxgo
-    steps:
-      - buildevents/watch_build_and_finish
-
   test:
     executor: linuxgo
     steps:
-      - buildevents/with_job_span:
-          steps:
-            - checkout
-            - buildevents/berun:
-                bename: go_test
-                becommand: go test --timeout 10s -v ./...
+      - checkout
+      - run:
+          name: go_test
+          command: go test --timeout 10s -v ./...
 
   build:
     executor: linuxgo
     steps:
-      - buildevents/with_job_span:
-          steps:
-            - checkout
-            - go-build:
-                os: linux
-                arch: amd64
-            - go-build:
-                os: linux
-                arch: arm64
-            - go-build:
-                os: darwin
-                arch: amd64
-            - buildevents/berun:
-                bename: apt_get_update
-                becommand: sudo apt-get -qq update
-            - buildevents/berun:
-                bename: apt_get_install
-                becommand: sudo apt-get install -y build-essential rpm ruby ruby-dev
-            - buildevents/berun:
-                bename: gem_install
-                becommand: sudo gem install fpm
-            - run: mkdir -p ~/artifacts
-            - buildevents/berun:
-                bename: build_deb_amd64
-                becommand: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG}" -t deb && mv *.deb ~/artifacts
-            - buildevents/berun:
-                bename: build_deb_arm64
-                becommand: ./build-pkg.sh -m arm64 -v "${CIRCLE_TAG}" -t deb && mv *.deb ~/artifacts
-            - buildevents/berun:
-                bename: build_rpm_amd64
-                becommand: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG}" -t rpm && mv *.rpm ~/artifacts
-            - buildevents/berun:
-                bename: copy_binaries
-                becommand: cp $GOPATH/bin/samproxy-* ~/artifacts
-            - run: echo "finished builds" && find ~/artifacts -ls
-            - persist_to_workspace:
-                root: ~/
-                paths:
-                  - artifacts
-            - store_artifacts:
-                path: ~/artifacts
+      - checkout
+      - go-build:
+          os: linux
+          arch: amd64
+      - go-build:
+          os: linux
+          arch: arm64
+      - go-build:
+          os: darwin
+          arch: amd64
+      - run:
+          name: apt_get_update
+          command: sudo apt-get -qq update
+      - run:
+          name: apt_get_install
+          command: sudo apt-get install -y build-essential rpm ruby ruby-dev
+      - run:
+          name: gem_install
+          command: sudo gem install fpm
+      - run: mkdir -p ~/artifacts
+      - run:
+          name: build_deb_amd64
+          command: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG}" -t deb && mv *.deb ~/artifacts
+      - run:
+          name: build_deb_arm64
+          command: ./build-pkg.sh -m arm64 -v "${CIRCLE_TAG}" -t deb && mv *.deb ~/artifacts
+      - run:
+          name: build_rpm_amd64
+          command: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG}" -t rpm && mv *.rpm ~/artifacts
+      - run:
+          name: copy_binaries
+          command: cp $GOPATH/bin/samproxy-* ~/artifacts
+      - run: echo "finished builds" && find ~/artifacts -ls
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - artifacts
+      - store_artifacts:
+          path: ~/artifacts
 
   publish_github:
     docker:
       - image: cibuilds/github:0.13.0
     steps:
-      - buildevents/with_job_span:
-          steps:
-            - attach_workspace:
-                at: ~/
-            - run:
-                name: "Publish Release on GitHub"
-                command: |
-                  echo "about to publish to tag ${CIRCLE_TAG}"
-                  ls -l ~/artifacts/*
-                  ghr -draft -n ${CIRCLE_TAG} -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ~/artifacts
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            echo "about to publish to tag ${CIRCLE_TAG}"
+            ls -l ~/artifacts/*
+            ghr -draft -n ${CIRCLE_TAG} -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} ${CIRCLE_TAG} ~/artifacts
 
   publish_s3:
     executor: linuxgo
     steps:
-      - buildevents/with_job_span:
-          steps:
-            - attach_workspace:
-                at: ~/
-            - aws-cli/install
-            - aws-cli/configure:
-                aws-access-key-id: AWS_ACCESS_KEY_ID
-                aws-secret-access-key: AWS_SECRET_ACCESS_KEY
-                aws-region: AWS_REGION
-            - buildevents/berun:
-                bename: sync_s3_artifacts
-                becommand: aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/samproxy/${CIRCLE_TAG}/
+      - attach_workspace:
+          at: ~/
+      - aws-cli/install
+      - aws-cli/configure:
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          aws-region: AWS_REGION
+      - run:
+          name: sync_s3_artifacts
+          command: aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/samproxy/${CIRCLE_TAG}/
 
 workflows:
   build:
     jobs:
-      - setup:
-          filters:
-            tags:
-              only: /.*/
-      - watch:
-          requires:
-            - setup
-          filters:
-            tags:
-              only: /.*/
       - test:
-          requires:
-            - setup
           filters:
             tags:
               only: /.*/
