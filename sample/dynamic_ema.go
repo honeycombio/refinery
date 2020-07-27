@@ -267,14 +267,9 @@ func (d *EMADynamicSampler) buildKey(trace *types.Trace) string {
 		key += strconv.FormatInt(int64(len(spans)), 10)
 	}
 
-	// if we should add the key used by the dynsampler to the root span, let's
-	// do so now.
 	if d.addDynsampleKey {
-		span := findRootSpan(trace)
-		if span != nil {
+		for _, span := range trace.GetSpans() {
 			span.Data[d.addDynsampleField] = key
-		} else {
-			d.Logger.WithField("trace_id", trace.TraceID).Debugf("no root span found; not adding dynsampler key to the trace")
 		}
 	}
 
