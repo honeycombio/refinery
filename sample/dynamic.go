@@ -227,39 +227,11 @@ func (d *DynamicSampler) buildKey(trace *types.Trace) string {
 		key += strconv.FormatInt(int64(len(spans)), 10)
 	}
 
-	// if we should add the key used by the dynsampler to the root span, let's
-	// do so now.
 	if d.addDynsampleKey {
-		span := findRootSpan(trace)
-		if span != nil {
+		for _, span := range trace.GetSpans() {
 			span.Data[d.addDynsampleField] = key
-		} else {
-			d.Logger.WithField("trace_id", trace.TraceID).Debugf("no root span found; not adding dynsampler key to the trace")
 		}
 	}
 
 	return key
-}
-
-// findRootSpan selects the root span from the list of spans in a trace. If it
-// can't find a root span it returns nil.
-func findRootSpan(trace *types.Trace) *types.Span {
-	for _, span := range trace.GetSpans() {
-		if isRootSpan(span) {
-			return span
-		}
-	}
-	return nil
-}
-
-func isRootSpan(sp *types.Span) bool {
-	parentID := sp.Data["trace.parent_id"]
-	if parentID == nil {
-		parentID = sp.Data["parentId"]
-		if parentID == nil {
-			// no parent ID present; it's a root span
-			return true
-		}
-	}
-	return false
 }
