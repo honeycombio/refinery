@@ -13,7 +13,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/sirupsen/logrus"
 
-	"github.com/honeycombio/samproxy/config/redimem"
+	"github.com/honeycombio/samproxy/internal/redimem"
 )
 
 func main() {
