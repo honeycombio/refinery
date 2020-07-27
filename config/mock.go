@@ -39,6 +39,9 @@ type MockConfig struct {
 	GetTraceTimeoutVal       time.Duration
 	GetUpstreamBufferSizeVal int
 	GetPeerBufferSizeVal     int
+	IdentifierInterfaceName  string
+	UseIPV6Identifier        bool
+	RedisIdentifier          string
 }
 
 func (m *MockConfig) ReloadConfig()                 {}
@@ -90,4 +93,16 @@ func (m *MockConfig) GetUpstreamBufferSize() int {
 }
 func (m *MockConfig) GetPeerBufferSize() int {
 	return m.GetPeerBufferSizeVal
+}
+
+func (m *MockConfig) GetIdentifierInterfaceName() (string, error) {
+	return m.IdentifierInterfaceName, nil
+}
+
+func (m *MockConfig) GetUseIPV6Identifier() (bool, error) {
+	return m.UseIPV6Identifier, nil
+}
+
+func (m *MockConfig) GetRedisIdentifier() (string, error) {
+	return m.RedisIdentifier, nil
 }

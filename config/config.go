@@ -89,4 +89,10 @@ type Config interface {
 	// GetPeerBufferSize returns the size of the libhoney buffer to use for the peer forwarding
 	// libhoney client
 	GetPeerBufferSize() int
+
+	GetIdentifierInterfaceName() (string, error)
+
+	GetUseIPV6Identifier() (bool, error)
+
+	GetRedisIdentifier() (string, error)
 }
