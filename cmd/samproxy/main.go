@@ -22,6 +22,7 @@ import (
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/sample"
+	"github.com/honeycombio/samproxy/service/debug"
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
 )
@@ -35,6 +36,7 @@ type Options struct {
 	RulesFile  string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/samproxy/rules.toml"`
 	PeerType   string `short:"p" long:"peer_type" description:"Peer type - should be redis or file" default:"file"`
 	Version    bool   `short:"v" long:"version" description:"Print version number and exit"`
+	Debug      bool   `short:"d" long:"debug" description:"If enabled, runs debug service on port 6060"`
 }
 
 func main() {
@@ -173,6 +175,13 @@ func main() {
 		fmt.Printf("failed to provide injection graph. error: %+v\n", err)
 		os.Exit(1)
 	}
+
+	if opts.Debug {
+		g.Provide(
+			&inject.Object{Value: &debug.DebugService{}},
+		)
+	}
+
 	if err := g.Populate(); err != nil {
 		fmt.Printf("failed to populate injection graph. error: %+v\n", err)
 		os.Exit(1)
