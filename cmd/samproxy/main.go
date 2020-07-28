@@ -62,7 +62,7 @@ func main() {
 	if opts.PeerType == "redis" || os.Getenv(config.RedisHostEnvVarName) != "" {
 		c = &config.RedisPeerFileConfig{}
 		c.(*config.RedisPeerFileConfig).ConfigFile = opts.ConfigFile
-		c.(*config.RedisPeerFileConfig).ConfigFile = opts.RulesFile
+		c.(*config.RedisPeerFileConfig).RulesFile = opts.RulesFile
 		err = c.(*config.RedisPeerFileConfig).Start()
 	} else {
 		c = &config.FileConfig{ConfigFile: opts.ConfigFile, RulesFile: opts.RulesFile}
