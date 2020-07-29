@@ -12,4 +12,6 @@
 *.out
 
 samproxy
+!/cmd/samproxy
 test_redimem
+!/cmd/test_redimem
