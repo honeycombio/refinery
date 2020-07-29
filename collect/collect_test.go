@@ -23,7 +23,7 @@ func TestAddRootSpan(t *testing.T) {
 	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60,
+		GetTraceTimeoutVal:       60 * time.Second,
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
 	}
 	coll := &InMemCollector{
@@ -98,7 +98,7 @@ func TestAddSpan(t *testing.T) {
 	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60,
+		GetTraceTimeoutVal:       60 * time.Second,
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
 	}
 	coll := &InMemCollector{

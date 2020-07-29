@@ -357,10 +357,9 @@ func (i *InMemCollector) sendAfterTraceTimeout(trace *types.Trace) {
 	traceTimeout, err := i.Config.GetTraceTimeout()
 	if err != nil {
 		i.Logger.Errorf("failed to get trace timeout. pausing for 60 seconds")
-		traceTimeout = 60
+		traceTimeout = 60 * time.Second
 	}
-	dur := time.Duration(traceTimeout) * time.Second
-	go i.pauseAndSend(dur, trace)
+	go i.pauseAndSend(traceTimeout, trace)
 }
 
 // sendAfterRootDelay waits the SendDelay timeout then registers the trace to be
@@ -369,10 +368,9 @@ func (i *InMemCollector) sendAfterRootDelay(trace *types.Trace) {
 	sendDelay, err := i.Config.GetSendDelay()
 	if err != nil {
 		i.Logger.Errorf("failed to get send delay. pausing for 2 seconds")
-		sendDelay = 2
+		sendDelay = 2 * time.Second
 	}
-	dur := time.Duration(sendDelay) * time.Second
-	go i.pauseAndSend(dur, trace)
+	go i.pauseAndSend(sendDelay, trace)
 }
 
 // pauseAndSend will block for pause time and then send the trace.
