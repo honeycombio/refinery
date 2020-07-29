@@ -27,10 +27,6 @@ import (
 	"github.com/honeycombio/samproxy/transmit"
 )
 
-const (
-	RedisHostEnvVarName = "SAMPROXY_REDIS_HOST"
-)
-
 // set by travis.
 var BuildID string
 var version string
@@ -70,7 +66,7 @@ func main() {
 
 	var peers peer.Peers
 	// either the flag or the env var will kick us in to redis mode
-	if opts.PeerType == "redis" || os.Getenv(RedisHostEnvVarName) != "" {
+	if opts.PeerType == "redis" || os.Getenv(config.RedisHostEnvVarName) != "" {
 		peers, err = peer.NewRedisPeers(c)
 	} else {
 		peers = peer.NewFilePeers(c)
