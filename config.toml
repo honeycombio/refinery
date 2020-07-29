@@ -37,7 +37,6 @@ APIKeys = [
 # this list, including this host.
 # This list is only used when the 'peer_type' command line flag is set to
 # 'file'. It is _not_ used if the 'peer_type' flag is set to 'redis'.
-# Eligible for live reload.
 Peers = [
 	"http://127.0.0.1:8081",
 	# "http://127.0.0.1:8081",

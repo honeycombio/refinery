@@ -19,11 +19,16 @@ import (
 	"github.com/honeycombio/samproxy/app"
 	"github.com/honeycombio/samproxy/collect"
 	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/internal/peer"
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/sample"
 	"github.com/honeycombio/samproxy/sharder"
 	"github.com/honeycombio/samproxy/transmit"
+)
+
+const (
+	RedisHostEnvVarName = "SAMPROXY_REDIS_HOST"
 )
 
 // set by travis.
@@ -56,21 +61,19 @@ func main() {
 		os.Exit(0)
 	}
 
-	var c config.Config
-	var err error
-	// either the flag or the env var will kick us in to redis mode
-	if opts.PeerType == "redis" || os.Getenv(config.RedisHostEnvVarName) != "" {
-		c = &config.RedisPeerFileConfig{}
-		c.(*config.RedisPeerFileConfig).ConfigFile = opts.ConfigFile
-		c.(*config.RedisPeerFileConfig).RulesFile = opts.RulesFile
-		err = c.(*config.RedisPeerFileConfig).Start()
-	} else {
-		c = &config.FileConfig{ConfigFile: opts.ConfigFile, RulesFile: opts.RulesFile}
-		err = c.(*config.FileConfig).Start()
-	}
+	c := &config.FileConfig{ConfigFile: opts.ConfigFile, RulesFile: opts.RulesFile}
+	err := c.Start()
 	if err != nil {
 		fmt.Printf("unable to load config: %+v\n", err)
 		os.Exit(1)
+	}
+
+	var peers peer.Peers
+	// either the flag or the env var will kick us in to redis mode
+	if opts.PeerType == "redis" || os.Getenv(RedisHostEnvVarName) != "" {
+		peers, err = peer.NewRedisPeers(c)
+	} else {
+		peers = peer.NewFilePeers(c)
 	}
 
 	a := app.App{
@@ -157,6 +160,7 @@ func main() {
 	var g inject.Graph
 	err = g.Provide(
 		&inject.Object{Value: c},
+		&inject.Object{Value: peers},
 		&inject.Object{Value: lgr},
 		&inject.Object{Value: upstreamTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: peerTransport, Name: "peerTransport"},

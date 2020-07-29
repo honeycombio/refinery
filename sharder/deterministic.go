@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/internal/peer"
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/pkg/errors"
 )
@@ -75,6 +76,7 @@ func (d *DetShard) String() string {
 type DeterministicSharder struct {
 	Config config.Config `inject:""`
 	Logger logger.Logger `inject:""`
+	Peers  peer.Peers    `inject:""`
 
 	myShard *DetShard
 	peers   []*DetShard
@@ -86,7 +88,7 @@ func (d *DeterministicSharder) Start() error {
 	d.Logger.Debugf("Starting DeterministicSharder")
 	defer func() { d.Logger.Debugf("Finished starting DeterministicSharder") }()
 
-	d.Config.RegisterReloadCallback(func() {
+	d.Peers.RegisterUpdatedPeersCallback(func() {
 		d.Logger.Debugf("reloading deterministic sharder config")
 		// make an error-less version of the peer reloader
 		if err := d.loadPeerList(); err != nil {
@@ -167,7 +169,7 @@ func (d *DeterministicSharder) Start() error {
 func (d *DeterministicSharder) loadPeerList() error {
 	d.Logger.Debugf("loading peer list")
 	// get my peers
-	peerList, err := d.Config.GetPeers()
+	peerList, err := d.Peers.GetPeers()
 	if err != nil {
 		return errors.Wrap(err, "failed to get peer list config")
 	}
