@@ -1,0 +1,11 @@
+FROM ruby:latest
+
+WORKDIR /app
+
+RUN gem install sinatra zstd-ruby
+
+COPY main.rb .
+
+EXPOSE 4567
+
+CMD ["ruby", "main.rb", "-o", "0.0.0.0", "-p", "4567"]

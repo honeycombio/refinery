@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  haproxy:
+    image: dockercloud/haproxy
+    ports:
+      - 80:80
+    links:
+      - samproxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  api:
+    build:
+      context: ./integration
+      dockerfile: Dockerfile-api
+  redis:
+    image: redis:latest
+  samproxy:
+    depends_on:
+      - redis
+    volumes:
+      - ./integration/config.toml:/app/config.toml:ro
+      - ./integration/rules.toml:/app/rules.toml:ro
+    build:
+      context: .
+      dockerfile: integration/Dockerfile
