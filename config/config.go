@@ -2,6 +2,10 @@ package config
 
 import "time"
 
+const (
+	RedisHostEnvVarName = "SAMPROXY_REDIS_HOST"
+)
+
 // Config defines the interface the rest of the code uses to get items from the
 // config. There are different implementations of the config using different
 // backends to store the config. FileConfig is the default and uses a
@@ -89,4 +93,10 @@ type Config interface {
 	// GetPeerBufferSize returns the size of the libhoney buffer to use for the peer forwarding
 	// libhoney client
 	GetPeerBufferSize() int
+
+	GetIdentifierInterfaceName() (string, error)
+
+	GetUseIPV6Identifier() (bool, error)
+
+	GetRedisIdentifier() (string, error)
 }

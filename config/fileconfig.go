@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -106,6 +107,10 @@ func (f *FileConfig) GetPeers() ([]string, error) {
 }
 
 func (f *FileConfig) GetRedisHost() (string, error) {
+	envRedisHost := os.Getenv(RedisHostEnvVarName)
+	if envRedisHost != "" {
+		return envRedisHost, nil
+	}
 	return f.conf.RedisHost, nil
 }
 
