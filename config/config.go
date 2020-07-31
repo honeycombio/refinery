@@ -14,12 +14,6 @@ const (
 // other config elements.
 
 type Config interface {
-
-	// ReloadConfigs requests the configuration implementation to re-read
-	// configs from whatever backs the source. Triggered by sending a USR1
-	// signal to Samproxy
-	ReloadConfig()
-
 	// RegisterReloadCallback takes a name and a function that will be called
 	// when the configuration is reloaded. This will happen infrequently. If
 	// consumers of configuration set config values on startup, they should

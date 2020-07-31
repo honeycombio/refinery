@@ -14,7 +14,7 @@ require (
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
 	github.com/facebookgo/structtag v0.0.0-20150214074306-217e25fb9691 // indirect
 	github.com/facebookgo/subset v0.0.0-20150612182917-8dac2c3c4870 // indirect
-	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/fsnotify/fsnotify v1.4.9
 	github.com/garyburd/redigo v1.6.0
 	github.com/google/go-cmp v0.5.0 // indirect
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d

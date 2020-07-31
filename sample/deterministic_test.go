@@ -61,10 +61,11 @@ func TestInitializationFromConfigFile(t *testing.T) {
 	assert.Equal(t, nil, err)
 	f.Close()
 
-	var c config.Config
-	fc := &config.FileConfig{RulesFile: f.Name(), ConfigFile: f.Name()}
-	fc.Start()
-	c = fc
+	c, err := config.NewConfig(f.Name(), f.Name())
+
+	if err != nil {
+		t.Error(err)
+	}
 
 	ds := &DeterministicSampler{
 		Config:     c,

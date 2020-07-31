@@ -59,8 +59,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	c := &config.FileConfig{ConfigFile: opts.ConfigFile, RulesFile: opts.RulesFile}
-	err := c.Start()
+	c, err := config.NewConfig(opts.ConfigFile, opts.RulesFile)
 	if err != nil {
 		fmt.Printf("unable to load config: %+v\n", err)
 		os.Exit(1)
