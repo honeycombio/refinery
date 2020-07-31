@@ -3,17 +3,20 @@ package config
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	libhoney "github.com/honeycombio/libhoney-go"
 	viper "github.com/spf13/viper"
 )
 
 type fileConfig struct {
-	ConfigFile string
-	RulesFile  string
-	conf       confContents
-	callbacks  []func()
+	config    *viper.Viper
+	rules     *viper.Viper
+	conf      *confContents
+	callbacks []func()
+	mux       sync.Mutex
 }
 
 type confContents struct {
@@ -47,59 +50,72 @@ type samplerConfigType struct {
 
 // NewConfig creates a new config struct
 func NewConfig(config, rules string) (Config, error) {
-	c := &fileConfig{ConfigFile: config, RulesFile: rules}
-
-	err := c.reloadConfig()
+	c := viper.New()
+	c.SetDefault("sendticker", 100*time.Millisecond)
+	c.SetConfigFile(config)
+	err := c.ReadInConfig()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return c, nil
+	r := viper.New()
+	r.SetConfigFile(rules)
+	err = r.ReadInConfig()
+
+	if err != nil {
+		return nil, err
+	}
+
+	fc := &fileConfig{
+		config:    c,
+		rules:     r,
+		conf:      &confContents{},
+		callbacks: make([]func(), 0),
+	}
+
+	err = fc.unmarshal()
+
+	if err != nil {
+		return nil, err
+	}
+
+	c.WatchConfig()
+	c.OnConfigChange(fc.onChange)
+
+	r.WatchConfig()
+	r.OnConfigChange(fc.onChange)
+
+	return fc, nil
 }
 
-// reloadConfig re-reads the config files for up-to-date config options. It is
-// called when a USR1 signal hits the process.
-func (f *fileConfig) reloadConfig() error {
-	viper.SetConfigFile(f.ConfigFile)
-	err := viper.ReadInConfig()
+func (f *fileConfig) onChange(in fsnotify.Event) {
+	f.unmarshal()
+
+	for _, c := range f.callbacks {
+		c()
+	}
+}
+
+func (f *fileConfig) unmarshal() error {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+	err := f.config.Unmarshal(f.conf)
+
 	if err != nil {
 		return err
 	}
 
-	viper.SetConfigFile(f.RulesFile)
-	err = viper.MergeInConfig()
+	err = f.rules.Unmarshal(f.conf)
+
 	if err != nil {
 		return err
 	}
 
-	// set the defaults here which are used when the key is not present in the file
-	f.conf = confContents{
-		SendTicker: 100 * time.Millisecond,
-	}
-
-	err = viper.Unmarshal(&f.conf)
-	if err != nil {
-		return err
-	}
-	// notify everybody that we've reloaded the config
-	for _, callback := range f.callbacks {
-		go callback()
-	}
 	return nil
 }
 
-func (f *fileConfig) ReloadConfig() {
-	err := f.reloadConfig()
-	if err != nil {
-		fmt.Printf("Error reloading configs: %+v\n", err)
-	}
-}
-
 func (f *fileConfig) RegisterReloadCallback(cb func()) {
-	if f.callbacks == nil {
-		f.callbacks = make([]func(), 0, 1)
-	}
 	f.callbacks = append(f.callbacks, cb)
 }
 
@@ -186,10 +202,14 @@ func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 }
 
 func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
-	subConf := viper.Sub(name)
-	if subConf != nil {
-		return subConf.Unmarshal(iface)
+	if sub := f.config.Sub(name); sub != nil {
+		return sub.Unmarshal(iface)
 	}
+
+	if sub := f.rules.Sub(name); sub != nil {
+		return sub.Unmarshal(iface)
+	}
+
 	return fmt.Errorf("failed to find config tree for %s", name)
 }
 

@@ -3,11 +3,68 @@ package config
 import (
 	"io/ioutil"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestReload(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	f, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	dummy := []byte(`ListenAddr = "0.0.0.0:8080"`)
+
+	_, err = f.Write(dummy)
+	assert.Equal(t, nil, err)
+	f.Close()
+
+	c, err := NewConfig(f.Name(), f.Name())
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+		t.Error("received", d, "expected", "0.0.0.0:8080")
+	}
+
+	wg := &sync.WaitGroup{}
+
+	ch := make(chan interface{}, 1)
+
+	c.RegisterReloadCallback(func() {
+		ch <- 1
+	})
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Error("No callback")
+		}
+	}()
+
+	if file, err := os.OpenFile(f.Name(), os.O_RDWR, 0644); err == nil {
+		file.WriteString(`ListenAddr = "0.0.0.0:9000"`)
+		file.Close()
+	}
+
+	wg.Wait()
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
+		t.Error("received", d, "expected", "0.0.0.0:9000")
+	}
+
+}
 
 func TestReadDefaultFiles(t *testing.T) {
 	c, err := NewConfig("../config.toml", "../rules.toml")
