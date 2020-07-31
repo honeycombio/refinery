@@ -9,7 +9,7 @@ import (
 	viper "github.com/spf13/viper"
 )
 
-type FileConfig struct {
+type fileConfig struct {
 	ConfigFile string
 	RulesFile  string
 	conf       confContents
@@ -47,7 +47,7 @@ type samplerConfigType struct {
 
 // NewConfig creates a new config struct
 func NewConfig(config, rules string) (Config, error) {
-	c := &FileConfig{ConfigFile: config, RulesFile: rules}
+	c := &fileConfig{ConfigFile: config, RulesFile: rules}
 
 	err := c.reloadConfig()
 
@@ -60,7 +60,7 @@ func NewConfig(config, rules string) (Config, error) {
 
 // reloadConfig re-reads the config files for up-to-date config options. It is
 // called when a USR1 signal hits the process.
-func (f *FileConfig) reloadConfig() error {
+func (f *fileConfig) reloadConfig() error {
 	viper.SetConfigFile(f.ConfigFile)
 	err := viper.ReadInConfig()
 	if err != nil {
@@ -89,37 +89,37 @@ func (f *FileConfig) reloadConfig() error {
 	return nil
 }
 
-func (f *FileConfig) ReloadConfig() {
+func (f *fileConfig) ReloadConfig() {
 	err := f.reloadConfig()
 	if err != nil {
 		fmt.Printf("Error reloading configs: %+v\n", err)
 	}
 }
 
-func (f *FileConfig) RegisterReloadCallback(cb func()) {
+func (f *fileConfig) RegisterReloadCallback(cb func()) {
 	if f.callbacks == nil {
 		f.callbacks = make([]func(), 0, 1)
 	}
 	f.callbacks = append(f.callbacks, cb)
 }
 
-func (f *FileConfig) GetListenAddr() (string, error) {
+func (f *fileConfig) GetListenAddr() (string, error) {
 	return f.conf.ListenAddr, nil
 }
 
-func (f *FileConfig) GetPeerListenAddr() (string, error) {
+func (f *fileConfig) GetPeerListenAddr() (string, error) {
 	return f.conf.PeerListenAddr, nil
 }
 
-func (f *FileConfig) GetAPIKeys() ([]string, error) {
+func (f *fileConfig) GetAPIKeys() ([]string, error) {
 	return f.conf.APIKeys, nil
 }
 
-func (f *FileConfig) GetPeers() ([]string, error) {
+func (f *fileConfig) GetPeers() ([]string, error) {
 	return f.conf.Peers, nil
 }
 
-func (f *FileConfig) GetRedisHost() (string, error) {
+func (f *fileConfig) GetRedisHost() (string, error) {
 	envRedisHost := os.Getenv(RedisHostEnvVarName)
 	if envRedisHost != "" {
 		return envRedisHost, nil
@@ -127,35 +127,35 @@ func (f *FileConfig) GetRedisHost() (string, error) {
 	return f.conf.RedisHost, nil
 }
 
-func (f *FileConfig) GetIdentifierInterfaceName() (string, error) {
+func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
 	return f.conf.IdentifierInterfaceName, nil
 }
 
-func (f *FileConfig) GetUseIPV6Identifier() (bool, error) {
+func (f *fileConfig) GetUseIPV6Identifier() (bool, error) {
 	return f.conf.UseIPV6Identifier, nil
 }
 
-func (f *FileConfig) GetRedisIdentifier() (string, error) {
+func (f *fileConfig) GetRedisIdentifier() (string, error) {
 	return f.conf.RedisIdentifier, nil
 }
 
-func (f *FileConfig) GetHoneycombAPI() (string, error) {
+func (f *fileConfig) GetHoneycombAPI() (string, error) {
 	return f.conf.HoneycombAPI, nil
 }
 
-func (f *FileConfig) GetLoggingLevel() (string, error) {
+func (f *fileConfig) GetLoggingLevel() (string, error) {
 	return f.conf.LoggingLevel, nil
 }
 
-func (f *FileConfig) GetLoggerType() (string, error) {
+func (f *fileConfig) GetLoggerType() (string, error) {
 	return f.conf.Logger, nil
 }
 
-func (f *FileConfig) GetCollectorType() (string, error) {
+func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *FileConfig) GetDefaultSamplerType() (string, error) {
+func (f *fileConfig) GetDefaultSamplerType() (string, error) {
 	t := samplerConfigType{}
 	err := f.GetOtherConfig("SamplerConfig._default", &t)
 	if err != nil {
@@ -164,7 +164,7 @@ func (f *FileConfig) GetDefaultSamplerType() (string, error) {
 	return t.Sampler, nil
 }
 
-func (f *FileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
+func (f *fileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
 	t := samplerConfigType{}
 	err := f.GetOtherConfig("SamplerConfig."+dataset, &t)
 	if err != nil {
@@ -173,19 +173,19 @@ func (f *FileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
 	return t.Sampler, nil
 }
 
-func (f *FileConfig) GetMetricsType() (string, error) {
+func (f *fileConfig) GetMetricsType() (string, error) {
 	return f.conf.Metrics, nil
 }
 
-func (f *FileConfig) GetSendDelay() (time.Duration, error) {
+func (f *fileConfig) GetSendDelay() (time.Duration, error) {
 	return f.conf.SendDelay, nil
 }
 
-func (f *FileConfig) GetTraceTimeout() (time.Duration, error) {
+func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 	return f.conf.TraceTimeout, nil
 }
 
-func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
+func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
 	subConf := viper.Sub(name)
 	if subConf != nil {
 		return subConf.Unmarshal(iface)
@@ -193,20 +193,20 @@ func (f *FileConfig) GetOtherConfig(name string, iface interface{}) error {
 	return fmt.Errorf("failed to find config tree for %s", name)
 }
 
-func (f *FileConfig) GetUpstreamBufferSize() int {
+func (f *fileConfig) GetUpstreamBufferSize() int {
 	if f.conf.UpstreamBufferSize == 0 {
 		return libhoney.DefaultPendingWorkCapacity
 	}
 	return f.conf.UpstreamBufferSize
 }
 
-func (f *FileConfig) GetPeerBufferSize() int {
+func (f *fileConfig) GetPeerBufferSize() int {
 	if f.conf.PeerBufferSize == 0 {
 		return libhoney.DefaultPendingWorkCapacity
 	}
 	return f.conf.PeerBufferSize
 }
 
-func (f *FileConfig) GetSendTickerValue() time.Duration {
+func (f *fileConfig) GetSendTickerValue() time.Duration {
 	return f.conf.SendTicker
 }
