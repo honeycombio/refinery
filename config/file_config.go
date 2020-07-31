@@ -45,9 +45,17 @@ type samplerConfigType struct {
 	Sampler string
 }
 
-// Start reads the config initially
-func (f *FileConfig) Start() error {
-	return f.reloadConfig()
+// NewConfig creates a new config struct
+func NewConfig(config, rules string) (Config, error) {
+	c := &FileConfig{ConfigFile: config, RulesFile: rules}
+
+	err := c.reloadConfig()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // reloadConfig re-reads the config files for up-to-date config options. It is

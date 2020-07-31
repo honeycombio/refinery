@@ -10,8 +10,7 @@ import (
 )
 
 func TestReadDefaultFiles(t *testing.T) {
-	c := FileConfig{ConfigFile: "../config.toml", RulesFile: "../rules.toml"}
-	err := c.Start()
+	c, err := NewConfig("../config.toml", "../rules.toml")
 
 	if err != nil {
 		t.Error(err)
@@ -75,10 +74,12 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	f.Close()
 
-	var c Config
-	fc := &FileConfig{RulesFile: f.Name(), ConfigFile: f.Name()}
-	fc.Start()
-	c = fc
+	c, err := NewConfig(f.Name(), f.Name())
+
+	if err != nil {
+		t.Error(err)
+	}
+
 	typ, err := c.GetDefaultSamplerType()
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DeterministicSampler", typ)
