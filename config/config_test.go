@@ -107,7 +107,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		Sampler = "DeterministicSampler"
 		SampleRate = 2
 
-	[SamplerConfig.dataset1]
+	[SamplerConfig.'dataset 1']
 		Sampler = "DynamicSampler"
 		SampleRate = 2
 		FieldList = ["request.method","response.status_code"]
@@ -141,7 +141,7 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DeterministicSampler", typ)
 
-	typ, err = c.GetSamplerTypeForDataset("dataset1")
+	typ, err = c.GetSamplerTypeForDataset("dataset 1")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DynamicSampler", typ)
 
