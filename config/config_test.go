@@ -67,7 +67,7 @@ func TestReload(t *testing.T) {
 }
 
 func TestReadDefaults(t *testing.T) {
-	c, err := NewConfig("../config_quickstart.toml", "../rules.toml")
+	c, err := NewConfig("../config.toml", "../rules.toml")
 
 	if err != nil {
 		t.Error(err)
