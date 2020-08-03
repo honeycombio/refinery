@@ -71,8 +71,10 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	assert.Equal(t, traceID1, coll.Cache.Get(traceID1).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	transmission.Mux.RUnlock()
 
 	span = &types.Span{
 		TraceID: traceID2,
@@ -86,8 +88,10 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	assert.Equal(t, traceID2, coll.Cache.Get(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
+	transmission.Mux.RUnlock()
 	coll.Stop()
 }
 
@@ -156,5 +160,7 @@ func TestAddSpan(t *testing.T) {
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 2)
 	assert.Equal(t, 2, len(coll.Cache.Get(traceID).GetSpans()), "after adding a leaf and root span, we should have a two spans in the cache")
+	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+	transmission.Mux.RUnlock()
 }
