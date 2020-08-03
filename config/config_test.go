@@ -15,6 +15,9 @@ func TestReload(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
 
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
 	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
@@ -24,7 +27,7 @@ func TestReload(t *testing.T) {
 	assert.Equal(t, nil, err)
 	configFile.Close()
 
-	c, err := NewConfig(configFile.Name(), configFile.Name())
+	c, err := NewConfig(rulesFile.Name(), configFile.Name())
 
 	if err != nil {
 		t.Error(err)
@@ -99,6 +102,9 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
 
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
 	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
@@ -131,7 +137,7 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	rulesFile.Close()
 
-	c, err := NewConfig(rulesFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
 
 	if err != nil {
 		t.Error(err)
