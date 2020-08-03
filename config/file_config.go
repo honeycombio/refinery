@@ -51,7 +51,34 @@ type samplerConfigType struct {
 // NewConfig creates a new config struct
 func NewConfig(config, rules string) (Config, error) {
 	c := viper.New()
-	c.SetDefault("sendticker", 100*time.Millisecond)
+
+	var defaultPeers []string
+	defaultPeers = append(defaultPeers, "http://127.0.0.1:8081")
+
+	var defaultAPIKeys []string
+	defaultAPIKeys = append(defaultAPIKeys, "*")
+
+	c.SetDefault("ListenAddr", "0.0.0.0:8080")
+	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
+	c.SetDefault("APIKeys", defaultAPIKeys)
+	c.SetDefault("Peers", defaultPeers)
+	c.SetDefault("RedisHost", "localhost:6379")
+	c.SetDefault("RedisIdentifier", "192.168.1.1")
+	c.SetDefault("IdentifierInterfaceName", "eth0")
+	c.SetDefault("UseIPV6Identifier", false)
+	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
+	c.SetDefault("CollectCacheCapacity", 1000)
+	c.SetDefault("Logger", "logrus")
+	c.SetDefault("LoggingLevel", "debug")
+	c.SetDefault("Collector", "InMemCollector")
+	c.SetDefault("Sampler", "DynamicSampler")
+	c.SetDefault("Metrics", "honeycomb")
+	c.SetDefault("SendDelay", 2*time.Second)
+	c.SetDefault("TraceTimeout", 60*time.Second)
+	c.SetDefault("SendTicker", 100*time.Millisecond)
+	c.SetDefault("UpstreamBufferSize", 10000)
+	c.SetDefault("PeerBufferSize", 10000)
+
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
 

@@ -50,7 +50,7 @@ Peers = [
 # takes precedence and this value is ignored. This value is used to connect to
 # Redis for peer cluster membership management.
 # Not eligible for live reload.
-RedisHost = "localhost:6379"
+# RedisHost = "localhost:6379"
 
 # IdentifierInterfaceName is optional. By default, when using RedisHost, samproxy will use
 # the local hostname to identify itself to other peers in Redis. If your environment
@@ -94,6 +94,9 @@ SendDelay = "2s"
 # timer. This supports duration strings with supplied units.
 # Eligible for live reload.
 TraceTimeout = "60s"
+
+# SendTicker is a short timer; it determines the duration to use to check for traces to send
+SendTicker = "100ms"
 
 # LoggingLevel is the level above which we should log. Debug is very verbose,
 # and should only be used in pre-production environments. Info is the
@@ -177,17 +180,17 @@ CacheCapacity = 1000
 
 # LoggerHoneycombAPI is the URL for the upstream Honeycomb API.
 # Eligible for live reload.
-LoggerHoneycombAPI = "https://api.honeycomb.io"
+# LoggerHoneycombAPI = "https://api.honeycomb.io"
 
 # LoggerAPIKey is the API key to use to send log events to the Honeycomb logging
 # dataset. This is separate from the APIKeys used to authenticate regular
 # traffic.
 # Eligible for live reload.
-LoggerAPIKey = "abcd1234"
+# LoggerAPIKey = "abcd1234"
 
 # LoggerDataset is the name of the dataset to which to send Samproxy logs
 # Eligible for live reload.
-LoggerDataset = "Samproxy Logs"
+# LoggerDataset = "Samproxy Logs"
 
 
 #######################
@@ -231,4 +234,4 @@ MetricsReportingInterval = 3
 # listen for requests for /metrics. Must be different from the main Samproxy
 # listener.
 # Not eligible for live reload.
-MetricsListenAddr = "localhost:2112"
+# MetricsListenAddr = "localhost:2112"
