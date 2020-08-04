@@ -28,6 +28,9 @@ Sampler = "DynamicSampler"
 
 	[SamplerConfig.dataset1]
 
+		# Note: If your dataset name contains a space, you will have to escape the dataset name
+		# using single quotes, such as [SamplerConfig.'dataset 1']
+
 		# DynamicSampler is a section of the config for manipulating the simple Dynamic Sampler
 		# implementation. This sampler collects the values of a number of fields from a
 		# trace and uses them to form a key. This key is handed to the standard dynamic
