@@ -15,16 +15,19 @@ func TestReload(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
 
-	f, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
 	dummy := []byte(`ListenAddr = "0.0.0.0:8080"`)
 
-	_, err = f.Write(dummy)
+	_, err = configFile.Write(dummy)
 	assert.Equal(t, nil, err)
-	f.Close()
+	configFile.Close()
 
-	c, err := NewConfig(f.Name(), f.Name())
+	c, err := NewConfig(rulesFile.Name(), configFile.Name())
 
 	if err != nil {
 		t.Error(err)
@@ -53,7 +56,7 @@ func TestReload(t *testing.T) {
 		}
 	}()
 
-	if file, err := os.OpenFile(f.Name(), os.O_RDWR, 0644); err == nil {
+	if file, err := os.OpenFile(configFile.Name(), os.O_RDWR, 0644); err == nil {
 		file.WriteString(`ListenAddr = "0.0.0.0:9000"`)
 		file.Close()
 	}
@@ -99,7 +102,10 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
 
-	f, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
 	dummyConfig := []byte(`
@@ -107,7 +113,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		Sampler = "DeterministicSampler"
 		SampleRate = 2
 
-	[SamplerConfig.dataset1]
+	[SamplerConfig.'dataset 1']
 		Sampler = "DynamicSampler"
 		SampleRate = 2
 		FieldList = ["request.method","response.status_code"]
@@ -127,11 +133,11 @@ func TestGetSamplerTypes(t *testing.T) {
 		GoalSampleRate = 10
 `)
 
-	_, err = f.Write(dummyConfig)
+	_, err = rulesFile.Write(dummyConfig)
 	assert.Equal(t, nil, err)
-	f.Close()
+	rulesFile.Close()
 
-	c, err := NewConfig(f.Name(), f.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
 
 	if err != nil {
 		t.Error(err)
@@ -141,7 +147,7 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DeterministicSampler", typ)
 
-	typ, err = c.GetSamplerTypeForDataset("dataset1")
+	typ, err = c.GetSamplerTypeForDataset("dataset 1")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DynamicSampler", typ)
 

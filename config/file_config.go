@@ -14,12 +14,12 @@ import (
 type fileConfig struct {
 	config    *viper.Viper
 	rules     *viper.Viper
-	conf      *confContents
+	conf      *configContents
 	callbacks []func()
 	mux       sync.Mutex
 }
 
-type confContents struct {
+type configContents struct {
 	ListenAddr              string
 	PeerListenAddr          string
 	APIKeys                 []string
@@ -88,7 +88,7 @@ func NewConfig(config, rules string) (Config, error) {
 	fc := &fileConfig{
 		config:    c,
 		rules:     r,
-		conf:      &confContents{},
+		conf:      &configContents{},
 		callbacks: make([]func(), 0),
 	}
 
