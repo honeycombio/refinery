@@ -1,4 +1,4 @@
-FROM golang:1.14
+FROM golang:alpine as builder
 
 ARG BUILD_ID=dev
 
@@ -19,4 +19,4 @@ RUN CGO_ENABLED=0 \
 FROM alpine
 
 RUN apk add --update --no-cache ca-certificates
-COPY --from=0 /app/samproxy /usr/bin/samproxy
+COPY --from=builder /app/samproxy /usr/bin/samproxy
