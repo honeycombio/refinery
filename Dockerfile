@@ -1,5 +1,7 @@
 FROM golang:alpine as builder
 
+RUN apk update && apk add --no-cache git ca-certificates && update-ca-certificates
+
 ARG BUILD_ID=dev
 
 WORKDIR /app
@@ -16,7 +18,8 @@ RUN CGO_ENABLED=0 \
     GOARCH=amd64 \
     go build -ldflags "-X main.BuildID=${BUILD_ID}}" ./cmd/samproxy
 
-FROM alpine
+FROM scratch
 
-RUN apk add --update --no-cache ca-certificates
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
 COPY --from=builder /app/samproxy /usr/bin/samproxy
