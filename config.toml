@@ -1,6 +1,21 @@
-#####################
+#######################
 ## Quickstart Config ##
-#####################
+#######################
+
+# InMemCollector brings together all the settings that are relevant to
+# collecting spans together to make traces.
+[InMemCollector]
+
+# The collection cache is used to collect all spans into a trace as well as
+# remember the sampling decision for any spans that might come in after the
+# trace has been marked "complete" (either by timing out or seeing the root
+# span). The number of traces in the cache should be many multiples (100x to
+# 1000x) of the total number of concurrently active traces (trace throughput *
+# trace duration).
+# Eligible for live reload. Growing the cache capacity with a live config reload
+# is fine. Avoid shrinking it with a live reload (you can, but it may cause
+# temporary odd sampling decisions).
+CacheCapacity = 1000
 
 [HoneycombMetrics]
 
