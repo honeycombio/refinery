@@ -7,6 +7,7 @@ WORKDIR /app
 ADD go.mod go.sum ./
 
 RUN go mod download
+RUN go mod verify
 
 ADD . .
 
