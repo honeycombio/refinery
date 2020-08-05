@@ -65,9 +65,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	host, _ := c.GetRedisHost()
+
 	var peers peer.Peers
 	// either the flag or the env var will kick us in to redis mode
-	if opts.PeerType == "redis" || os.Getenv(config.RedisHostEnvVarName) != "" {
+	if opts.PeerType == "redis" || host != "" {
 		peers, err = peer.NewRedisPeers(c)
 	} else {
 		peers = peer.NewFilePeers(c)

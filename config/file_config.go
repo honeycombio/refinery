@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -51,6 +50,7 @@ type samplerConfigType struct {
 func NewConfig(config, rules string) (Config, error) {
 	c := viper.New()
 
+	c.BindEnv("redishost", "SAMPROXY_REDIS_HOST")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("APIKeys", []string{"*"})
@@ -152,10 +152,6 @@ func (f *fileConfig) GetPeers() ([]string, error) {
 }
 
 func (f *fileConfig) GetRedisHost() (string, error) {
-	envRedisHost := os.Getenv(RedisHostEnvVarName)
-	if envRedisHost != "" {
-		return envRedisHost, nil
-	}
 	return f.conf.RedisHost, nil
 }
 
