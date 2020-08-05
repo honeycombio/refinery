@@ -16,7 +16,7 @@ ADD . .
 RUN CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -ldflags "-X main.BuildID=${BUILD_ID}}" ./cmd/samproxy
+    go build -ldflags "-X main.BuildID=${BUILD_ID}" ./cmd/samproxy
 
 FROM scratch
 
