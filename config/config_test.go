@@ -95,6 +95,16 @@ func TestReadDefaults(t *testing.T) {
 	if d, _ := c.GetSamplerTypeForDataset("dataset1"); d != "DynamicSampler" {
 		t.Error("received", d, "expected", "DynamicSampler")
 	}
+
+	type imcConfig struct {
+		CacheCapacity int
+	}
+	collectorConfig := &imcConfig{}
+	err = c.GetOtherConfig("InMemCollector", collectorConfig)
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Equal(t, collectorConfig.CacheCapacity, 1000)
 }
 
 func TestGetSamplerTypes(t *testing.T) {
