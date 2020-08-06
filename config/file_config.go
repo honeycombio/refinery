@@ -29,7 +29,6 @@ type configContents struct {
 	IdentifierInterfaceName string
 	UseIPV6Identifier       bool
 	HoneycombAPI            string
-	CollectCacheCapacity    int
 	Logger                  string
 	LoggingLevel            string
 	Collector               string
@@ -51,7 +50,24 @@ type samplerConfigType struct {
 // NewConfig creates a new config struct
 func NewConfig(config, rules string) (Config, error) {
 	c := viper.New()
-	c.SetDefault("sendticker", 100*time.Millisecond)
+
+	c.SetDefault("ListenAddr", "0.0.0.0:8080")
+	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
+	c.SetDefault("APIKeys", []string{"*"})
+	c.SetDefault("Peers", []string{"http://127.0.0.1:8081"})
+	c.SetDefault("UseIPV6Identifier", false)
+	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
+	c.SetDefault("Logger", "logrus")
+	c.SetDefault("LoggingLevel", "debug")
+	c.SetDefault("Collector", "InMemCollector")
+	c.SetDefault("Sampler", "DynamicSampler")
+	c.SetDefault("Metrics", "honeycomb")
+	c.SetDefault("SendDelay", 2*time.Second)
+	c.SetDefault("TraceTimeout", 60*time.Second)
+	c.SetDefault("SendTicker", 100*time.Millisecond)
+	c.SetDefault("UpstreamBufferSize", 10000)
+	c.SetDefault("PeerBufferSize", 10000)
+
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
 
