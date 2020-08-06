@@ -1,10 +1,25 @@
-FROM golang:alpine
+FROM golang:alpine as builder
 
-RUN apk add --update --no-cache git
-RUN go get github.com/honeycombio/samproxy/cmd/samproxy
+RUN apk update && apk add --no-cache git ca-certificates && update-ca-certificates
 
-FROM alpine
+ARG BUILD_ID=dev
 
-RUN apk add --update --no-cache ca-certificates
-COPY --from=0 /go/bin/samproxy /usr/bin/samproxy
+WORKDIR /app
 
+ADD go.mod go.sum ./
+
+RUN go mod download
+RUN go mod verify
+
+ADD . .
+
+RUN CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    go build -ldflags "-X main.BuildID=${BUILD_ID}" ./cmd/samproxy
+
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+COPY --from=builder /app/samproxy /usr/bin/samproxy
