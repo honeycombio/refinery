@@ -162,7 +162,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	// pull out just the trace ID for use in routing
 	err := json.Unmarshal(reqBod, &trEv)
 	if err != nil {
-		logger.WithField("error", err.Error()).WithField("json_body", string(reqBod)).Debugf("error parsing json")
+		logger.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
@@ -313,7 +313,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	batchedResponses := make([]*BatchResponse, 0)
 	err = json.Unmarshal(reqBod, &batchedEvents)
 	if err != nil {
-		logger.WithField("error", err.Error()).WithField("json_body", string(reqBod)).Debugf("error parsing json")
+		logger.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
