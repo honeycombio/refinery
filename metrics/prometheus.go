@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"net/http"
+	"sync"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
@@ -18,6 +19,7 @@ type PromMetrics struct {
 	// metrics keeps a record of all the registered metrics so we can increment
 	// them by name
 	metrics map[string]interface{}
+	lock    sync.Mutex
 }
 
 type PromConfig struct {
@@ -63,7 +65,10 @@ func (p *PromMetrics) Register(name string, metricType string) {
 			Help: name,
 		})
 	}
+
+	p.lock.Lock()
 	p.metrics[name] = newmet
+	p.lock.Unlock()
 }
 
 func (p *PromMetrics) IncrementCounter(name string) {
