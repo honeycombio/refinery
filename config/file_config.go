@@ -65,8 +65,8 @@ func NewConfig(config, rules string) (Config, error) {
 	c.SetDefault("SendDelay", 2*time.Second)
 	c.SetDefault("TraceTimeout", 60*time.Second)
 	c.SetDefault("SendTicker", 100*time.Millisecond)
-	c.SetDefault("UpstreamBufferSize", 10000)
-	c.SetDefault("PeerBufferSize", 10000)
+	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
+	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -226,16 +226,10 @@ func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
 }
 
 func (f *fileConfig) GetUpstreamBufferSize() int {
-	if f.conf.UpstreamBufferSize == 0 {
-		return libhoney.DefaultPendingWorkCapacity
-	}
 	return f.conf.UpstreamBufferSize
 }
 
 func (f *fileConfig) GetPeerBufferSize() int {
-	if f.conf.PeerBufferSize == 0 {
-		return libhoney.DefaultPendingWorkCapacity
-	}
 	return f.conf.PeerBufferSize
 }
 
