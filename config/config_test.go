@@ -27,7 +27,7 @@ func TestReload(t *testing.T) {
 	assert.Equal(t, nil, err)
 	configFile.Close()
 
-	c, err := NewConfig(rulesFile.Name(), configFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
 
 	if err != nil {
 		t.Error(err)
