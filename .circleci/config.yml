@@ -143,7 +143,6 @@ workflows:
             branches:
               ignore: /.*/
       - docker/publish:
-          context: Honeycomb Secrets
           tag: latest,${CIRCLE_TAG:1}
           extra_build_args: --build-arg BUILD_ID=${CIRCLE_TAG:1}
           image: $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME
