@@ -44,7 +44,7 @@ type redisPeers struct {
 }
 
 // NewRedisPeers returns a peers collection backed by redis
-func NewRedisPeers(c config.Config) (Peers, error) {
+func newRedisPeers(c config.Config) (Peers, error) {
 	redisHost, _ := c.GetRedisHost()
 
 	if redisHost == "" {
@@ -68,6 +68,10 @@ func NewRedisPeers(c config.Config) (Peers, error) {
 
 	// deal with this error
 	address, err := publicAddr(c)
+
+	if err != nil {
+		return nil, err
+	}
 
 	peers := &redisPeers{
 		store: &redimem.RedisMembership{
@@ -166,7 +170,11 @@ func (p *redisPeers) watchPeers() {
 func publicAddr(c config.Config) (string, error) {
 	// compute the public version of my peer listen address
 	listenAddr, _ := c.GetPeerListenAddr()
-	port := strings.Split(listenAddr, ":")[1]
+	_, port, err := net.SplitHostPort(listenAddr)
+
+	if err != nil {
+		return "", err
+	}
 
 	myIdentifier, _ := os.Hostname()
 	identifierInterfaceName, _ := c.GetIdentifierInterfaceName()

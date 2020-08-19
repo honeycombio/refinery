@@ -7,7 +7,7 @@ type filePeers struct {
 }
 
 // NewFilePeers returns a peers collection backed by the config file
-func NewFilePeers(c config.Config) Peers {
+func newFilePeers(c config.Config) Peers {
 	return &filePeers{
 		c: c,
 	}

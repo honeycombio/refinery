@@ -19,25 +19,20 @@ type fileConfig struct {
 }
 
 type configContents struct {
-	ListenAddr              string
-	PeerListenAddr          string
-	APIKeys                 []string
-	Peers                   []string
-	RedisHost               string
-	RedisIdentifier         string
-	IdentifierInterfaceName string
-	UseIPV6Identifier       bool
-	HoneycombAPI            string
-	Logger                  string
-	LoggingLevel            string
-	Collector               string
-	Sampler                 string
-	Metrics                 string
-	SendDelay               time.Duration
-	TraceTimeout            time.Duration
-	SendTicker              time.Duration
-	UpstreamBufferSize      int
-	PeerBufferSize          int
+	ListenAddr         string
+	PeerListenAddr     string
+	APIKeys            []string
+	HoneycombAPI       string
+	Logger             string
+	LoggingLevel       string
+	Collector          string
+	Sampler            string
+	Metrics            string
+	SendDelay          time.Duration
+	TraceTimeout       time.Duration
+	SendTicker         time.Duration
+	UpstreamBufferSize int
+	PeerBufferSize     int
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
@@ -54,8 +49,9 @@ func NewConfig(config, rules string) (Config, error) {
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("APIKeys", []string{"*"})
-	c.SetDefault("Peers", []string{"http://127.0.0.1:8081"})
-	c.SetDefault("UseIPV6Identifier", false)
+	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
+	c.SetDefault("PeerManagement.Type", "file")
+	c.SetDefault("PeerManagement.UseIPV6Identifier", false)
 	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
 	c.SetDefault("Logger", "logrus")
 	c.SetDefault("LoggingLevel", "debug")
@@ -147,24 +143,28 @@ func (f *fileConfig) GetAPIKeys() ([]string, error) {
 	return f.conf.APIKeys, nil
 }
 
+func (f *fileConfig) GetPeerManagementType() (string, error) {
+	return f.config.GetString("PeerManagement.Type"), nil
+}
+
 func (f *fileConfig) GetPeers() ([]string, error) {
-	return f.conf.Peers, nil
+	return f.config.GetStringSlice("PeerManagement.Peers"), nil
 }
 
 func (f *fileConfig) GetRedisHost() (string, error) {
-	return f.conf.RedisHost, nil
+	return f.config.GetString("PeerManagement.RedisHost"), nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
-	return f.conf.IdentifierInterfaceName, nil
+	return f.config.GetString("PeerManagement.IdentifierInterfaceName"), nil
 }
 
 func (f *fileConfig) GetUseIPV6Identifier() (bool, error) {
-	return f.conf.UseIPV6Identifier, nil
+	return f.config.GetBool("PeerManagement.UseIPV6Identifier"), nil
 }
 
 func (f *fileConfig) GetRedisIdentifier() (string, error) {
-	return f.conf.RedisIdentifier, nil
+	return f.config.GetString("PeerManagement.RedisIdentifier"), nil
 }
 
 func (f *fileConfig) GetHoneycombAPI() (string, error) {

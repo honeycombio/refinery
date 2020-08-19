@@ -30,49 +30,6 @@ APIKeys = [
 	"*",                   # wildcard accept all keys
 	]
 
-# Peers is the list of all servers participating in this proxy cluster. Events
-# will be sharded evenly across all peers based on the Trace ID. Values here
-# should be the base URL used to access the peer, and should include scheme,
-# hostname (or ip address) and port. All servers in the cluster should be in
-# this list, including this host.
-# This list is only used when the 'peer_type' command line flag is set to
-# 'file'. It is _not_ used if the 'peer_type' flag is set to 'redis'.
-Peers = [
-	"http://127.0.0.1:8081",
-	# "http://127.0.0.1:8081",
-	# "http://10.1.2.3.4:8080",
-	# "http://samproxy-1231:8080",
-	# "http://peer-3.fqdn" // assumes port 80
-]
-
-# RedisHost is only used when the 'peer_type' command line flag is set to
-# 'redis'. Further, if the environment variable 'SAMPROXY_REDIS_HOST' is set it
-# takes precedence and this value is ignored. This value is used to connect to
-# Redis for peer cluster membership management.
-# Not eligible for live reload.
-# RedisHost = "localhost:6379"
-
-# IdentifierInterfaceName is optional. By default, when using RedisHost, samproxy will use
-# the local hostname to identify itself to other peers in Redis. If your environment
-# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
-# by name), you can specify the network interface that samproxy is listening on here.
-# Samproxy will use the first unicast address that it finds on the specified network
-# interface as its identifier.
-# Not eligible for live reload.
-# IdentifierInterfaceName = "eth0"
-
-# UseIPV6Identifier is optional. If using IdentifierInterfaceName, samproxy will default to the first
-# IPv4 unicast address it finds for the specified interface. If UseIPV6Identifier is used, will use
-# the first IPV6 unicast address found.
-# UseIPV6Identifier = false
-
-# RedisIdentifier is optional. By default, when using RedisHost, samproxy will use
-# the local hostname to identify itself to other peers in Redis. If your environment
-# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
-# by name), you can specify the exact identifier (IP address, etc) to use here.
-# Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
-# RedisIdentifier = "192.168.1.1"
-
 # HoneycombAPI is the URL for the upstream Honeycomb API.
 # Eligible for live reload.
 HoneycombAPI = "https://api.honeycomb.io"
@@ -136,6 +93,57 @@ Logger = "logrus"
 # will reply to a request for /metrics. The honeycomb option will send summary
 # metrics to a Honeycomb dataset.
 Metrics = "honeycomb"
+
+#########################
+## Peer Management     ##
+#########################
+
+# [PeerManagement]
+# Type = "file"
+# Peers is the list of all servers participating in this proxy cluster. Events
+# will be sharded evenly across all peers based on the Trace ID. Values here
+# should be the base URL used to access the peer, and should include scheme,
+# hostname (or ip address) and port. All servers in the cluster should be in
+# this list, including this host.
+# This list is only used when the 'peer_type' command line flag is set to
+# 'file'. It is _not_ used if the 'peer_type' flag is set to 'redis'.
+# Peers = [
+	# "http://127.0.0.1:8081",
+	# "http://127.0.0.1:8081",
+	# "http://10.1.2.3.4:8080",
+	# "http://samproxy-1231:8080",
+	# "http://peer-3.fqdn" // assumes port 80
+# ]
+
+# [PeerManagement]
+# Type = "redis"
+# RedisHost is only used when the 'peer_type' command line flag is set to
+# 'redis'. Further, if the environment variable 'SAMPROXY_REDIS_HOST' is set it
+# takes precedence and this value is ignored. This value is used to connect to
+# Redis for peer cluster membership management.
+# Not eligible for live reload.
+# RedisHost = "localhost:6379"
+
+# IdentifierInterfaceName is optional. By default, when using RedisHost, samproxy will use
+# the local hostname to identify itself to other peers in Redis. If your environment
+# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# by name), you can specify the network interface that samproxy is listening on here.
+# Samproxy will use the first unicast address that it finds on the specified network
+# interface as its identifier.
+# Not eligible for live reload.
+# IdentifierInterfaceName = "eth0"
+
+# UseIPV6Identifier is optional. If using IdentifierInterfaceName, samproxy will default to the first
+# IPv4 unicast address it finds for the specified interface. If UseIPV6Identifier is used, will use
+# the first IPV6 unicast address found.
+# UseIPV6Identifier = false
+
+# RedisIdentifier is optional. By default, when using RedisHost, samproxy will use
+# the local hostname to identify itself to other peers in Redis. If your environment
+# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# by name), you can specify the exact identifier (IP address, etc) to use here.
+# Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
+# RedisIdentifier = "192.168.1.1"
 
 #########################
 ## In-Memory Collector ##

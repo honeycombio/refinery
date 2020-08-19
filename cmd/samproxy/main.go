@@ -35,7 +35,6 @@ var version string
 type Options struct {
 	ConfigFile string `short:"c" long:"config" description:"Path to config file" default:"/etc/samproxy/samproxy.toml"`
 	RulesFile  string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/samproxy/rules.toml"`
-	PeerType   string `short:"p" long:"peer_type" description:"Peer type - should be redis or file" default:"file"`
 	Version    bool   `short:"v" long:"version" description:"Print version number and exit"`
 	Debug      bool   `short:"d" long:"debug" description:"If enabled, runs debug service (default port 6060)"`
 }
@@ -65,14 +64,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	host, _ := c.GetRedisHost()
+	peers, err := peer.NewPeers(c)
 
-	var peers peer.Peers
-	// either the flag or the env var will kick us in to redis mode
-	if opts.PeerType == "redis" || host != "" {
-		peers, err = peer.NewRedisPeers(c)
-	} else {
-		peers = peer.NewFilePeers(c)
+	if err != nil {
+		fmt.Printf("unable to load peers: %+v\n", err)
+		os.Exit(1)
 	}
 
 	a := app.App{

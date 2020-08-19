@@ -31,6 +31,8 @@ type Config interface {
 	// GetPeers returns a list of other servers participating in this proxy cluster
 	GetPeers() ([]string, error)
 
+	GetPeerManagementType() (string, error)
+
 	// GetRedisHost returns the address of a Redis instance to use for peer
 	// management. Only valid when the command line flag 'peer_type' is set to
 	// 'redis'
