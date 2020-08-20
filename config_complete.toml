@@ -105,8 +105,6 @@ Metrics = "honeycomb"
 # should be the base URL used to access the peer, and should include scheme,
 # hostname (or ip address) and port. All servers in the cluster should be in
 # this list, including this host.
-# This list is only used when the 'peer_type' command line flag is set to
-# 'file'. It is _not_ used if the 'peer_type' flag is set to 'redis'.
 # Peers = [
 	# "http://127.0.0.1:8081",
 	# "http://127.0.0.1:8081",
@@ -117,10 +115,9 @@ Metrics = "honeycomb"
 
 # [PeerManagement]
 # Type = "redis"
-# RedisHost is only used when the 'peer_type' command line flag is set to
-# 'redis'. Further, if the environment variable 'SAMPROXY_REDIS_HOST' is set it
-# takes precedence and this value is ignored. This value is used to connect to
-# Redis for peer cluster membership management.
+# RedisHost is is used to connect to redis for peer cluster membership management.
+# Further, if the environment variable 'SAMPROXY_REDIS_HOST' is set it takes
+# precedence and this value is ignored.
 # Not eligible for live reload.
 # RedisHost = "localhost:6379"
 
