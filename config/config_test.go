@@ -96,6 +96,18 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", "DynamicSampler")
 	}
 
+	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
+		t.Error("received", d, "expected", "[http://127.0.0.1:8081]")
+	}
+
+	if d, _ := c.GetPeerManagementType(); d != "file" {
+		t.Error("received", d, "expected", "file")
+	}
+
+	if d, _ := c.GetUseIPV6Identifier(); d != false {
+		t.Error("received", d, "expected", false)
+	}
+
 	type imcConfig struct {
 		CacheCapacity int
 	}
@@ -105,6 +117,29 @@ func TestReadDefaults(t *testing.T) {
 		t.Error(err)
 	}
 	assert.Equal(t, collectorConfig.CacheCapacity, 1000)
+}
+
+func TestPeerManagementType(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	_, err = configFile.Write([]byte(`
+	[PeerManagement]
+	Type = "redis"
+	`))
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+
+	if d, _ := c.GetPeerManagementType(); d != "redis" {
+		t.Error("received", d, "expected", "redis")
+	}
 }
 
 func TestGetSamplerTypes(t *testing.T) {
