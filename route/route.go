@@ -237,24 +237,6 @@ type eventWithTraceID struct {
 	TraceID string
 }
 
-func (ev *eventWithTraceID) UnmarshalJSON(b []byte) error {
-	type bothTraceIDs struct {
-		BeelineTraceID string `json:"trace.trace_id"`
-		ZipkinTraceID  string `json:"traceId"`
-	}
-	var rawEv bothTraceIDs
-	err := json.Unmarshal(b, &rawEv)
-	if err != nil {
-		return err
-	}
-	if rawEv.BeelineTraceID != "" {
-		ev.TraceID = rawEv.BeelineTraceID
-	} else if rawEv.ZipkinTraceID != "" {
-		ev.TraceID = rawEv.ZipkinTraceID
-	}
-	return nil
-}
-
 func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event, error) {
 	// get necessary bits out of the incoming event
 	apiKey := req.Header.Get(types.APIKeyHeader)
