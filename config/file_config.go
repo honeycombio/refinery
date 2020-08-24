@@ -33,6 +33,7 @@ type configContents struct {
 	SendTicker         time.Duration
 	UpstreamBufferSize int
 	PeerBufferSize     int
+	DebugServicePort   string
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
@@ -235,4 +236,8 @@ func (f *fileConfig) GetPeerBufferSize() int {
 
 func (f *fileConfig) GetSendTickerValue() time.Duration {
 	return f.conf.SendTicker
+}
+
+func (f *fileConfig) GetDebugServicePort() string {
+	return f.conf.DebugServicePort
 }

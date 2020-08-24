@@ -67,6 +67,11 @@ LoggingLevel = "debug"
 UpstreamBufferSize = 10000
 PeerBufferSize = 10000
 
+# DebugServicePort sets the port the debug service will run on
+# The debug service will only run if the command line flag -d is specified
+# The debug service runs on the first open port between 6060 and 6069 if no port is specified
+# DebugServicePort = "6060"
+
 ############################
 ## Implementation Choices ##
 ############################

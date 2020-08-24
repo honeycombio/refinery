@@ -142,6 +142,28 @@ func TestPeerManagementType(t *testing.T) {
 	}
 }
 
+func TestDebugServicePort(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	_, err = configFile.Write([]byte(`
+	DebugServicePort = "8085"
+	`))
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+
+	if d := c.GetDebugServicePort(); d != "8085" {
+		t.Error("received", d, "expected", "8085")
+	}
+}
+
 func TestGetSamplerTypes(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Equal(t, nil, err)

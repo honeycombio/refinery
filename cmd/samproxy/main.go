@@ -174,7 +174,7 @@ func main() {
 	}
 
 	if opts.Debug {
-		err = g.Provide(&inject.Object{Value: &debug.DebugService{}})
+		err = g.Provide(&inject.Object{Value: &debug.DebugService{Config: c}})
 		if err != nil {
 			fmt.Printf("failed to provide injection graph. error: %+v\n", err)
 			os.Exit(1)
