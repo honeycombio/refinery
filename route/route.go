@@ -160,7 +160,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	reqBod, _ := ioutil.ReadAll(req.Body)
 	var trEv eventWithTraceID
 	// pull out just the trace ID for use in routing
-	err := unmarshal(reqBod, &trEv)
+	err := unmarshal(req, reqBod, &trEv)
 	if err != nil {
 		logger.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -274,7 +274,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 		return nil, err
 	}
 	data := map[string]interface{}{}
-	err = unmarshal(reqBod, &data)
+	err = unmarshal(req, reqBod, &data)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +311,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	batchedEvents := make([]batchedEvent, 0)
 	batchedResponses := make([]*BatchResponse, 0)
-	err = unmarshal(reqBod, &batchedEvents)
+	err = unmarshal(req, reqBod, &batchedEvents)
 	if err != nil {
 		logger.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -558,6 +558,6 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 	return zstdDecoders, nil
 }
 
-func unmarshal(data []byte, v interface{}) error {
+func unmarshal(r *http.Request, data []byte, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
