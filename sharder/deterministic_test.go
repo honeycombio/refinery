@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/internal/peer"
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/stretchr/testify/assert"
 )
