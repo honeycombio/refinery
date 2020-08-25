@@ -3,12 +3,15 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
+	"github.com/vmihailenco/msgpack/v4"
 )
 
 func TestDecompression(t *testing.T) {
@@ -85,5 +88,92 @@ func TestDecompression(t *testing.T) {
 	}
 	if string(b) != payload {
 		t.Errorf("%s != %s", string(b), payload)
+	}
+}
+
+func unmarshalRequest(w *httptest.ResponseRecorder, content string, body io.Reader) {
+	http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var e eventWithTraceID
+		err := unmarshal(r, r.Body, &e)
+
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.Write([]byte(e.TraceID))
+	}).ServeHTTP(w, &http.Request{
+		Body: ioutil.NopCloser(body),
+		Header: http.Header{
+			"Content-Type": []string{content},
+		},
+	})
+}
+
+func TestUnmarshal(t *testing.T) {
+	var w *httptest.ResponseRecorder
+	var body io.Reader
+
+	w = httptest.NewRecorder()
+	body = bytes.NewBufferString("")
+	unmarshalRequest(w, "nope", body)
+
+	if w.Code != http.StatusBadRequest {
+		t.Error("Expecting BadRequest")
+	}
+
+	w = httptest.NewRecorder()
+	body = bytes.NewBufferString(`{"trace.trace_id": "test"}`)
+	unmarshalRequest(w, "application/json", body)
+
+	if b := w.Body.String(); b != "test" {
+		t.Error("Expecting test")
+	}
+
+	w = httptest.NewRecorder()
+	body = bytes.NewBufferString(`{"traceId": "test"}`)
+	unmarshalRequest(w, "application/json", body)
+
+	if b := w.Body.String(); b != "test" {
+		t.Error("Expecting test")
+	}
+
+	var buf *bytes.Buffer
+	var e *msgpack.Encoder
+	var in map[string]string
+	var err error
+
+	w = httptest.NewRecorder()
+	buf = &bytes.Buffer{}
+	e = msgpack.NewEncoder(buf)
+	in = map[string]string{"trace.trace_id": "test"}
+	err = e.Encode(in)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	body = buf
+	unmarshalRequest(w, "application/msgpack", body)
+
+	if b := w.Body.String(); b != "test" {
+		t.Error("Expecting test")
+	}
+
+	w = httptest.NewRecorder()
+	buf = &bytes.Buffer{}
+	e = msgpack.NewEncoder(buf)
+	in = map[string]string{"traceId": "test"}
+	err = e.Encode(in)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	body = buf
+	unmarshalRequest(w, "application/msgpack", body)
+
+	if b := w.Body.String(); b != "test" {
+		t.Error("Expecting test")
 	}
 }
