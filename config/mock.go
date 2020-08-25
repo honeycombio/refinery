@@ -8,6 +8,7 @@ import (
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
+	Callbacks            []func()
 	GetAPIKeysErr        error
 	GetAPIKeysVal        []string
 	GetCollectorTypeErr  error
@@ -46,8 +47,14 @@ type MockConfig struct {
 	PeerManagementType       string
 }
 
-func (m *MockConfig) ReloadConfig()                 {}
-func (m *MockConfig) RegisterReloadCallback(func()) {}
+func (m *MockConfig) ReloadConfig() {
+	for _, callback := range m.Callbacks {
+		callback()
+	}
+}
+func (m *MockConfig) RegisterReloadCallback(callback func()) {
+	m.Callbacks = append(m.Callbacks, callback)
+}
 func (m *MockConfig) GetAPIKeys() ([]string, error) { return m.GetAPIKeysVal, m.GetAPIKeysErr }
 func (m *MockConfig) GetCollectorType() (string, error) {
 	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
