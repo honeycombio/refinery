@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zstd"
+	"github.com/tinylib/msgp/msgp"
+	"github.com/vmihailenco/msgpack/v4"
 
 	"github.com/honeycombio/samproxy/collect"
 	"github.com/honeycombio/samproxy/config"
@@ -160,7 +163,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	reqBod, _ := ioutil.ReadAll(req.Body)
 	var trEv eventWithTraceID
 	// pull out just the trace ID for use in routing
-	err := json.Unmarshal(reqBod, &trEv)
+	err := unmarshal(req, bytes.NewReader(reqBod), &trEv)
 	if err != nil {
 		logger.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -238,20 +241,28 @@ type eventWithTraceID struct {
 }
 
 func (ev *eventWithTraceID) UnmarshalJSON(b []byte) error {
-	type bothTraceIDs struct {
-		BeelineTraceID string `json:"trace.trace_id"`
-		ZipkinTraceID  string `json:"traceId"`
-	}
-	var rawEv bothTraceIDs
-	err := json.Unmarshal(b, &rawEv)
+	return ev.Unmarshal(b, json.Unmarshal)
+}
+
+func (ev *eventWithTraceID) UnmarshalMsgpack(b []byte) error {
+	return ev.Unmarshal(b, msgpack.Unmarshal)
+}
+
+func (ev *eventWithTraceID) Unmarshal(b []byte, u func(d []byte, v interface{}) error) error {
+	var e map[string]string
+
+	err := u(b, &e)
+
 	if err != nil {
 		return err
 	}
-	if rawEv.BeelineTraceID != "" {
-		ev.TraceID = rawEv.BeelineTraceID
-	} else if rawEv.ZipkinTraceID != "" {
-		ev.TraceID = rawEv.ZipkinTraceID
+
+	if id := e["trace.trace_id"]; id != "" {
+		ev.TraceID = id
+	} else if id := e["traceId"]; id != "" {
+		ev.TraceID = id
 	}
+
 	return nil
 }
 
@@ -274,7 +285,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 		return nil, err
 	}
 	data := map[string]interface{}{}
-	err = json.Unmarshal(reqBod, &data)
+	err = unmarshal(req, bytes.NewReader(reqBod), &data)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +322,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	batchedEvents := make([]batchedEvent, 0)
 	batchedResponses := make([]*BatchResponse, 0)
-	err = json.Unmarshal(reqBod, &batchedEvents)
+	err = unmarshal(req, bytes.NewReader(reqBod), &batchedEvents)
 	if err != nil {
 		logger.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Debugf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -471,7 +482,7 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 	if sampleRate == 0 {
 		sampleRate = 1
 	}
-	eventTime := getEventTime(bev.Timestamp)
+	eventTime := bev.getEventTime()
 	// TODO move the following 3 lines outside of this loop; they could be done
 	// once for the entire batch instead of in every event.
 	vars := mux.Vars(req)
@@ -492,9 +503,18 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 }
 
 type batchedEvent struct {
-	Timestamp  string                 `json:"time"`
-	SampleRate int64                  `json:"samplerate"`
-	Data       map[string]interface{} `json:"data"`
+	Timestamp        string                 `json:"time"`
+	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
+	SampleRate       int64                  `json:"samplerate" msgpack:"samplerate"`
+	Data             map[string]interface{} `json:"data" msgpack:"data"`
+}
+
+func (b *batchedEvent) getEventTime() time.Time {
+	if b.MsgPackTimestamp != nil {
+		return *b.MsgPackTimestamp
+	}
+
+	return getEventTime(b.Timestamp)
 }
 
 // getEventTime tries to guess the time format in our time header!
@@ -556,4 +576,27 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 		zstdDecoders <- zReader
 	}
 	return zstdDecoders, nil
+}
+
+func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
+	switch r.Header.Get("Content-Type") {
+	case "application/x-msgpack", "application/msgpack":
+		// First try to decode with the fast but fussy msgp. If that fails,
+		// defer to the much more friendly msgpack.
+		if decodable, ok := v.(msgp.Decodable); ok {
+			err := msgp.Decode(data, decodable)
+
+			if err == nil {
+				return nil
+			}
+		}
+
+		return msgpack.NewDecoder(data).
+			UseDecodeInterfaceLoose(true).
+			Decode(v)
+	case "application/json":
+		return json.NewDecoder(data).Decode(v)
+	default:
+		return errors.New("Bad Content-Type")
+	}
 }
