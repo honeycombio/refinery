@@ -577,7 +577,7 @@ func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 		if decodable, ok := v.(msgp.Decodable); ok {
 			err := msgp.Decode(data, decodable)
 
-			if err != nil {
+			if err == nil {
 				return nil
 			}
 		}
