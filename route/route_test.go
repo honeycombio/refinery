@@ -119,7 +119,7 @@ func TestUnmarshal(t *testing.T) {
 	unmarshalRequest(w, "nope", body)
 
 	if w.Code != http.StatusBadRequest {
-		t.Error("Expecting BadRequest")
+		t.Error("Expecting", http.StatusBadRequest, "Received", w.Code)
 	}
 
 	w = httptest.NewRecorder()
