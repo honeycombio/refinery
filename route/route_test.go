@@ -162,13 +162,13 @@ func TestUnmarshal(t *testing.T) {
 
 	var buf *bytes.Buffer
 	var e *msgpack.Encoder
-	var in map[string]string
+	var in map[string]interface{}
 	var err error
 
 	w = httptest.NewRecorder()
 	buf = &bytes.Buffer{}
 	e = msgpack.NewEncoder(buf)
-	in = map[string]string{"trace.trace_id": "test"}
+	in = map[string]interface{}{"trace.trace_id": "test"}
 	err = e.Encode(in)
 
 	if err != nil {
@@ -185,7 +185,7 @@ func TestUnmarshal(t *testing.T) {
 	w = httptest.NewRecorder()
 	buf = &bytes.Buffer{}
 	e = msgpack.NewEncoder(buf)
-	in = map[string]string{"traceId": "test"}
+	in = map[string]interface{}{"traceId": "test"}
 	err = e.Encode(in)
 
 	if err != nil {
@@ -203,8 +203,8 @@ func TestUnmarshal(t *testing.T) {
 	w = httptest.NewRecorder()
 	buf = &bytes.Buffer{}
 	e = msgpack.NewEncoder(buf)
-	inz := map[string]interface{}{"time": now}
-	err = e.Encode(inz)
+	in = map[string]interface{}{"time": now}
+	err = e.Encode(in)
 
 	if err != nil {
 		t.Error(err)
