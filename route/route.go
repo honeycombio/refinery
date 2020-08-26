@@ -504,17 +504,17 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 
 type batchedEvent struct {
 	Timestamp        string                 `json:"time"`
-	MsgPackTimestamp time.Time              `msgpack:"time"`
+	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
 	SampleRate       int64                  `json:"samplerate" msgpack:"samplerate"`
 	Data             map[string]interface{} `json:"data" msgpack:"data"`
 }
 
 func (b *batchedEvent) getEventTime() time.Time {
-	if b.MsgPackTimestamp.IsZero() {
-		return getEventTime(b.Timestamp)
+	if b.MsgPackTimestamp != nil {
+		return *b.MsgPackTimestamp
 	}
 
-	return b.MsgPackTimestamp
+	return getEventTime(b.Timestamp)
 }
 
 // getEventTime tries to guess the time format in our time header!
