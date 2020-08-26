@@ -98,6 +98,7 @@ func unmarshalRequest(w *httptest.ResponseRecorder, content string, body io.Read
 
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(err.Error()))
 			return
 		}
 
