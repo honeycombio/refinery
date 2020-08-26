@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
@@ -111,6 +112,26 @@ func unmarshalRequest(w *httptest.ResponseRecorder, content string, body io.Read
 	})
 }
 
+func unmarshalBatchRequest(w *httptest.ResponseRecorder, content string, body io.Reader) {
+	http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var e batchedEvent
+		err := unmarshal(r, r.Body, &e)
+
+		if err != nil {
+			w.Write([]byte(err.Error()))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.Write([]byte(e.getEventTime().Format(time.RFC3339Nano)))
+	}).ServeHTTP(w, &http.Request{
+		Body: ioutil.NopCloser(body),
+		Header: http.Header{
+			"Content-Type": []string{content},
+		},
+	})
+}
+
 func TestUnmarshal(t *testing.T) {
 	var w *httptest.ResponseRecorder
 	var body io.Reader
@@ -176,5 +197,23 @@ func TestUnmarshal(t *testing.T) {
 
 	if b := w.Body.String(); b != "test" {
 		t.Error("Expecting test")
+	}
+
+	now := time.Now()
+	w = httptest.NewRecorder()
+	buf = &bytes.Buffer{}
+	e = msgpack.NewEncoder(buf)
+	inz := map[string]interface{}{"time": now}
+	err = e.Encode(inz)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	body = buf
+	unmarshalBatchRequest(w, "application/msgpack", body)
+
+	if b := w.Body.String(); b != now.Format(time.RFC3339Nano) {
+		t.Error("Expecting", now, "Received", b)
 	}
 }

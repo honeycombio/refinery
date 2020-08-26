@@ -482,7 +482,7 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 	if sampleRate == 0 {
 		sampleRate = 1
 	}
-	eventTime := getEventTime(bev.Timestamp)
+	eventTime := bev.getEventTime()
 	// TODO move the following 3 lines outside of this loop; they could be done
 	// once for the entire batch instead of in every event.
 	vars := mux.Vars(req)
@@ -503,9 +503,18 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 }
 
 type batchedEvent struct {
-	Timestamp  string                 `json:"time"`
-	SampleRate int64                  `json:"samplerate"`
-	Data       map[string]interface{} `json:"data"`
+	Timestamp        string                 `json:"time"`
+	MsgPackTimestamp time.Time              `msgpack:"time"`
+	SampleRate       int64                  `json:"samplerate" msgpack:"samplerate"`
+	Data             map[string]interface{} `json:"data" msgpack:"data"`
+}
+
+func (b *batchedEvent) getEventTime() time.Time {
+	if b.MsgPackTimestamp.IsZero() {
+		return getEventTime(b.Timestamp)
+	}
+
+	return b.MsgPackTimestamp
 }
 
 // getEventTime tries to guess the time format in our time header!
@@ -584,7 +593,6 @@ func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 
 		return msgpack.NewDecoder(data).
 			UseDecodeInterfaceLoose(true).
-			UseJSONTag(true).
 			Decode(v)
 	case "application/json":
 		return json.NewDecoder(data).Decode(v)
