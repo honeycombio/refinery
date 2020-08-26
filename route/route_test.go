@@ -3,6 +3,7 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -135,6 +136,7 @@ func unmarshalBatchRequest(w *httptest.ResponseRecorder, content string, body io
 func TestUnmarshal(t *testing.T) {
 	var w *httptest.ResponseRecorder
 	var body io.Reader
+	now := time.Now()
 
 	w = httptest.NewRecorder()
 	body = bytes.NewBufferString("")
@@ -158,6 +160,14 @@ func TestUnmarshal(t *testing.T) {
 
 	if b := w.Body.String(); b != "test" {
 		t.Error("Expecting test")
+	}
+
+	w = httptest.NewRecorder()
+	body = bytes.NewBufferString(fmt.Sprintf(`{"time": "%s"}`, now.Format(time.RFC3339Nano)))
+	unmarshalBatchRequest(w, "application/json", body)
+
+	if b := w.Body.String(); b != now.Format(time.RFC3339Nano) {
+		t.Error("Expecting", now, "Received", b)
 	}
 
 	var buf *bytes.Buffer
@@ -199,7 +209,6 @@ func TestUnmarshal(t *testing.T) {
 		t.Error("Expecting test")
 	}
 
-	now := time.Now()
 	w = httptest.NewRecorder()
 	buf = &bytes.Buffer{}
 	e = msgpack.NewEncoder(buf)
