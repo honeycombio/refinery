@@ -37,6 +37,7 @@ type Options struct {
 	RulesFile  string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/samproxy/rules.toml"`
 	Version    bool   `short:"v" long:"version" description:"Print version number and exit"`
 	Debug      bool   `short:"d" long:"debug" description:"If enabled, runs debug service (default port 6060)"`
+	DryRun     bool   `long:"dryrun" description:"If enabled, marks traces that would be dropped given current sampling rules, and sends all traces regardless"`
 }
 
 func main() {
@@ -77,7 +78,7 @@ func main() {
 
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
-	collector := collect.GetCollectorImplementation(c)
+	collector := collect.GetCollectorImplementation(c, opts.DryRun)
 	metricsr := metrics.GetMetricsImplementation(c)
 	shrdr := sharder.GetSharderImplementation(c)
 	samplerFactory := &sample.SamplerFactory{}
