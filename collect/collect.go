@@ -423,7 +423,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
 		}
-		sp.Data["samproxy_kept"] = shouldSend
+		if i.DryRun {
+			sp.Data["samproxy_kept"] = shouldSend
+		}
 		// if spans are already sampled, take that in to account when computing
 		// the final rate
 		sp.SampleRate *= trace.SampleRate
