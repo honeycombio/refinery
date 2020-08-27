@@ -154,13 +154,13 @@ func TestDebugServiceAddr(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	_, err = configFile.Write([]byte(`
-	DebugServiceAddr = "0.0.0.0:8085"
+	DebugServiceAddr = "localhost:8085"
 	`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name())
 
-	if d := c.GetDebugServiceAddr(); d != "0.0.0.0:8085" {
-		t.Error("received", d, "expected", "0.0.0.0:8085")
+	if d := c.GetDebugServiceAddr(); d != "localhost:8085" {
+		t.Error("received", d, "expected", "localhost:8085")
 	}
 }
 
