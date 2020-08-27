@@ -44,7 +44,7 @@ type MockConfig struct {
 	UseIPV6Identifier        bool
 	RedisIdentifier          string
 	PeerManagementType       string
-	DebugServicePort         string
+	DebugServiceAddr         string
 }
 
 func (m *MockConfig) ReloadConfig()                 {}
@@ -118,6 +118,6 @@ func (m *MockConfig) GetPeerManagementType() (string, error) {
 	return m.PeerManagementType, nil
 }
 
-func (m *MockConfig) GetDebugServicePort() string {
-	return m.DebugServicePort
+func (m *MockConfig) GetDebugServiceAddr() string {
+	return m.DebugServiceAddr
 }

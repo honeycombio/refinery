@@ -142,7 +142,7 @@ func TestPeerManagementType(t *testing.T) {
 	}
 }
 
-func TestDebugServicePort(t *testing.T) {
+func TestDebugServiceAddr(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Equal(t, nil, err)
 	defer os.RemoveAll(tmpDir)
@@ -154,13 +154,13 @@ func TestDebugServicePort(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	_, err = configFile.Write([]byte(`
-	DebugServicePort = "8085"
+	DebugServiceAddr = "0.0.0.0:8085"
 	`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name())
 
-	if d := c.GetDebugServicePort(); d != "8085" {
-		t.Error("received", d, "expected", "8085")
+	if d := c.GetDebugServiceAddr(); d != "0.0.0.0:8085" {
+		t.Error("received", d, "expected", "0.0.0.0:8085")
 	}
 }
 

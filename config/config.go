@@ -94,7 +94,7 @@ type Config interface {
 	// GetSendTickerValue returns the duration to use to check for traces to send
 	GetSendTickerValue() time.Duration
 
-	// GetDebugServicePort sets the port the debug service will run on (you must provide the
+	// GetDebugServiceAddr sets the IP and port the debug service will run on (you must provide the
 	// command line flag -d to start the debug service)
-	GetDebugServicePort() string
+	GetDebugServiceAddr() string
 }

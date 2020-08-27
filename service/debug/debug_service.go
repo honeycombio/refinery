@@ -50,9 +50,10 @@ func (s *DebugService) Start() error {
 	s.Publish("memstats", Func(memstats))
 
 	go func() {
-		defaultPort := s.Config.GetDebugServicePort()
-		if defaultPort != "" {
-			addr := net.JoinHostPort("localhost", defaultPort)
+		defaultAddr := s.Config.GetDebugServiceAddr()
+		if defaultAddr != "" {
+			host, portStr, _ := net.SplitHostPort(defaultAddr)
+			addr := net.JoinHostPort(host, portStr)
 			logrus.Infof("Debug service listening on %s", addr)
 
 			err := http.ListenAndServe(addr, s.mux)
