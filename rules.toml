@@ -2,6 +2,10 @@
 ## Sampling Rules Config ##
 ############################
 
+# DryRun - If enabled, marks traces that would be dropped given current sampling rules,
+# and sends all traces regardless
+# DryRun = false
+
 # Sampler describes which sampling algorithm to use to sample traces. Valid
 # choices are "DeterministicSampler" and "DynamicSampler". The deterministic
 # sampler is a random sampler - each trace has equal chance of being sampled
