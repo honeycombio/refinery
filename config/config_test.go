@@ -142,6 +142,28 @@ func TestPeerManagementType(t *testing.T) {
 	}
 }
 
+func TestDebugServiceAddr(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	_, err = configFile.Write([]byte(`
+	DebugServiceAddr = "localhost:8085"
+	`))
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+
+	if d := c.GetDebugServiceAddr(); d != "localhost:8085" {
+		t.Error("received", d, "expected", "localhost:8085")
+	}
+}
+
 func TestGetSamplerTypes(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Equal(t, nil, err)
