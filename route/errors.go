@@ -3,6 +3,7 @@ package route
 import (
 	"fmt"
 	"net/http"
+	"runtime/debug"
 )
 
 type handlerError struct {
@@ -43,6 +44,12 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 		"error.err":         he.err.Error(),
 		"error.msg":         he.msg,
 		"error.status_code": he.status,
+	}
+
+	// this is a little jank but should work for now, we might want to rethink
+	// how this section of the code works to make this nicer
+	if he.msg == ErrCaughtPanic.msg {
+		fields["error.stack_trace"] = string(debug.Stack())
 	}
 
 	r.Logger.WithFields(fields).Errorf("handler returning error")
