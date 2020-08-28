@@ -65,7 +65,13 @@ func (r *Router) panicCatcher(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		defer func() {
 			if rcvr := recover(); rcvr != nil {
-				r.handlerReturnWithError(w, ErrCaughtPanic, fmt.Errorf("caught panic: %v", rcvr))
+				err, ok := rcvr.(error)
+
+				if !ok {
+					err = fmt.Errorf("caught panic: %v", rcvr)
+				}
+
+				r.handlerReturnWithError(w, ErrCaughtPanic, err)
 			}
 		}()
 		next.ServeHTTP(w, req)
