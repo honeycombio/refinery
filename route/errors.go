@@ -44,13 +44,18 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 		"error.status_code": he.status,
 	}).Errorf("handler returning error")
 	w.WriteHeader(he.status)
+
 	errmsg := he.msg
+
 	if he.detailed {
 		errmsg = fmt.Sprintf(he.msg + ": " + he.err.Error())
 	}
+
 	if !he.friendly {
 		errmsg = ErrGenericMessage
 	}
+
 	jsonErrMsg := []byte(`{"source":"samproxy","error":"` + errmsg + `"}`)
+
 	w.Write(jsonErrMsg)
 }
