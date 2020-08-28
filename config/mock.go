@@ -45,6 +45,7 @@ type MockConfig struct {
 	UseIPV6Identifier        bool
 	RedisIdentifier          string
 	PeerManagementType       string
+	DebugServiceAddr         string
 }
 
 func (m *MockConfig) ReloadConfig() {
@@ -122,4 +123,8 @@ func (m *MockConfig) GetSendTickerValue() time.Duration {
 
 func (m *MockConfig) GetPeerManagementType() (string, error) {
 	return m.PeerManagementType, nil
+}
+
+func (m *MockConfig) GetDebugServiceAddr() string {
+	return m.DebugServiceAddr
 }

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/honeycombio/samproxy/config"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/rcrowley/go-metrics/exp"
 	"github.com/sirupsen/logrus"
@@ -27,6 +28,7 @@ type DebugService struct {
 	urls    []string
 	expVars map[string]interface{}
 	mutex   sync.RWMutex
+	Config  config.Config
 }
 
 func (s *DebugService) Start() error {
@@ -48,28 +50,38 @@ func (s *DebugService) Start() error {
 	s.Publish("memstats", Func(memstats))
 
 	go func() {
-		// Prefer to listen on addr, but will try to bind to the next 9 ports
-		// in case you have multiple services running on the same host.
-		for i := 0; i < 10; i++ {
-			host, portStr, _ := net.SplitHostPort(addr)
-			port, _ := strconv.Atoi(portStr)
-			port += i
-			addr := net.JoinHostPort(host, fmt.Sprint(port))
-
+		configAddr := s.Config.GetDebugServiceAddr()
+		if configAddr != "" {
+			host, portStr, _ := net.SplitHostPort(configAddr)
+			addr := net.JoinHostPort(host, portStr)
 			logrus.Infof("Debug service listening on %s", addr)
 
 			err := http.ListenAndServe(addr, s.mux)
 			logrus.WithError(err).Warn("debug http server error")
+		} else {
+			// Prefer to listen on addr, but will try to bind to the next 9 ports
+			// in case you have multiple services running on the same host.
+			for i := 0; i < 10; i++ {
+				host, portStr, _ := net.SplitHostPort(addr)
+				port, _ := strconv.Atoi(portStr)
+				port += i
+				addr := net.JoinHostPort(host, fmt.Sprint(port))
 
-			if err, ok := err.(*net.OpError); ok {
-				if err, ok := err.Err.(*os.SyscallError); ok {
-					if err.Err == syscall.EADDRINUSE {
-						// address already in use, try another
-						continue
+				logrus.Infof("Debug service listening on %s", addr)
+
+				err := http.ListenAndServe(addr, s.mux)
+				logrus.WithError(err).Warn("debug http server error")
+
+				if err, ok := err.(*net.OpError); ok {
+					if err, ok := err.Err.(*os.SyscallError); ok {
+						if err.Err == syscall.EADDRINUSE {
+							// address already in use, try another
+							continue
+						}
 					}
 				}
+				break
 			}
-			break
 		}
 	}()
 

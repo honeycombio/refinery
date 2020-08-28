@@ -67,6 +67,11 @@ LoggingLevel = "debug"
 UpstreamBufferSize = 10000
 PeerBufferSize = 10000
 
+# DebugServiceAddr sets the IP and port the debug service will run on
+# The debug service will only run if the command line flag -d is specified
+# The debug service runs on the first open port between localhost:6060 and :6069 by default
+# DebugServiceAddr = "localhost:8085"
+
 ############################
 ## Implementation Choices ##
 ############################
