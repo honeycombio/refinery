@@ -176,6 +176,7 @@ func TestDryRunMode(t *testing.T) {
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
 		SendTickerVal:            2 * time.Millisecond,
 		GetOtherConfigVal:        `{"SampleRate":10}`,
+		DryRun:                   true,
 	}
 	samplerFactory := &sample.SamplerFactory{
 		Config: conf,
@@ -189,7 +190,6 @@ func TestDryRunMode(t *testing.T) {
 		defaultSampler: sampler,
 		Metrics:        &metrics.NullMetrics{},
 		SamplerFactory: samplerFactory,
-		DryRun:         true,
 	}
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{

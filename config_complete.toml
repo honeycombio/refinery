@@ -72,6 +72,10 @@ PeerBufferSize = 10000
 # The debug service runs on the first open port between localhost:6060 and :6069 by default
 # DebugServiceAddr = "localhost:8085"
 
+# DryRun - If enabled, marks traces that would be dropped given current sampling rules,
+# and sends all traces regardless
+# DryRun = false
+
 ############################
 ## Implementation Choices ##
 ############################

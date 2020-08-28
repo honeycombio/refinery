@@ -97,4 +97,6 @@ type Config interface {
 	// GetDebugServiceAddr sets the IP and port the debug service will run on (you must provide the
 	// command line flag -d to start the debug service)
 	GetDebugServiceAddr() string
+
+	GetIsDryRun() bool
 }
