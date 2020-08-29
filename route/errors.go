@@ -3,6 +3,7 @@ package route
 import (
 	"fmt"
 	"net/http"
+	"runtime/debug"
 )
 
 type handlerError struct {
@@ -38,19 +39,34 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	if err != nil {
 		he.err = err
 	}
-	r.Logger.WithFields(map[string]interface{}{
+
+	fields := map[string]interface{}{
 		"error.err":         he.err.Error(),
 		"error.msg":         he.msg,
 		"error.status_code": he.status,
-	}).Errorf("handler returning error")
+	}
+
+	// this is a little jank but should work for now, we might want to rethink
+	// how this section of the code works to make this nicer
+	if he.msg == ErrCaughtPanic.msg {
+		fields["error.stack_trace"] = string(debug.Stack())
+	}
+
+	r.Logger.WithFields(fields).Errorf("handler returning error")
+
 	w.WriteHeader(he.status)
+
 	errmsg := he.msg
+
 	if he.detailed {
 		errmsg = fmt.Sprintf(he.msg + ": " + he.err.Error())
 	}
+
 	if !he.friendly {
 		errmsg = ErrGenericMessage
 	}
+
 	jsonErrMsg := []byte(`{"source":"samproxy","error":"` + errmsg + `"}`)
+
 	w.Write(jsonErrMsg)
 }
