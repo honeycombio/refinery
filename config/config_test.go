@@ -164,6 +164,28 @@ func TestDebugServiceAddr(t *testing.T) {
 	}
 }
 
+func TestDryRun(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	_, err = rulesFile.Write([]byte(`
+	DryRun = true
+	`))
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+
+	if d := c.GetIsDryRun(); d != true {
+		t.Error("received", d, "expected", true)
+	}
+}
+
 func TestGetSamplerTypes(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Equal(t, nil, err)

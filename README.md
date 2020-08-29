@@ -68,6 +68,12 @@ By selecting fields well, you can drop significant amounts of traffic while stil
 
 For more detail on how this algorithm works, please refer to the `dynsampler` package itself.
 
+## Dry Run Mode
+
+When getting started with samproxy or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. By enabling dry run mode, all spans in each trace will be marked with the sampling decision in a field called `samproxy_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. You can then run queries in Honeycomb on this field to check your results and verify that the rules are working as intended. Enable dry run mode by adding `DryRun = true` in your configuration, as noted in `rules.toml`.
+
+When dry run mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain 0, reflecting that we are sending all traces to Honeycomb. 
+
 ## Scaling Up
 
 Samproxy uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have stastics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces.  All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing.  The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (eg traces / second started) and multiply that by the maximum duration of a trace (say, 3 seconds), then multiply that by some large buffer (maybe 10x). This will give you good headroom.
