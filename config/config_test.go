@@ -108,6 +108,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
+	if d := c.GetIsDryRun(); d != false {
+		t.Error("received", d, "expected", false)
+	}
+
 	type imcConfig struct {
 		CacheCapacity int
 	}
