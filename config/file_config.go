@@ -34,6 +34,7 @@ type configContents struct {
 	UpstreamBufferSize int
 	PeerBufferSize     int
 	DebugServiceAddr   string
+	DryRun             bool
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
@@ -64,6 +65,7 @@ func NewConfig(config, rules string) (Config, error) {
 	c.SetDefault("SendTicker", 100*time.Millisecond)
 	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
+	c.SetDefault("DryRun", false)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -240,4 +242,8 @@ func (f *fileConfig) GetSendTickerValue() time.Duration {
 
 func (f *fileConfig) GetDebugServiceAddr() string {
 	return f.conf.DebugServiceAddr
+}
+
+func (f *fileConfig) GetIsDryRun() bool {
+	return f.conf.DryRun
 }

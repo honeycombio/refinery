@@ -328,6 +328,15 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types.Span) {
+	if i.Config.GetIsDryRun() {
+		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
+		sp.Data["samproxy_kept"] = keep
+		if !keep {
+			i.Logger.WithField("trace_id", sp.TraceID).Debugf("Sending span that would have been dropped, but dry run mode is enabled")
+			i.Transmission.EnqueueSpan(sp)
+			return
+		}
+	}
 	if keep {
 		i.Logger.WithField("trace_id", sp.TraceID).Debugf("Sending span because of previous decision to send trace")
 		sp.SampleRate *= sampleRate
@@ -396,8 +405,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
 
-	// if we're supposed to drop this trace, then we're done.
-	if !shouldSend {
+	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
+	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.IncrementCounter("trace_send_dropped")
 		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Dropping trace because of sampling, trace to dataset")
 		return
@@ -405,10 +414,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	i.Metrics.IncrementCounter("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
+	if i.Config.GetIsDryRun() && !shouldSend {
+		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Trace would have been dropped, but dry run mode is enabled")
+	}
 	i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
+		}
+		if i.Config.GetIsDryRun() {
+			sp.Data["samproxy_kept"] = shouldSend
 		}
 		// if spans are already sampled, take that in to account when computing
 		// the final rate

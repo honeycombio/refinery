@@ -46,6 +46,7 @@ type MockConfig struct {
 	RedisIdentifier          string
 	PeerManagementType       string
 	DebugServiceAddr         string
+	DryRun                   bool
 }
 
 func (m *MockConfig) ReloadConfig() {
@@ -127,4 +128,8 @@ func (m *MockConfig) GetPeerManagementType() (string, error) {
 
 func (m *MockConfig) GetDebugServiceAddr() string {
 	return m.DebugServiceAddr
+}
+
+func (m *MockConfig) GetIsDryRun() bool {
+	return m.DryRun
 }

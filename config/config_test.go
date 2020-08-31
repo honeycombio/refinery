@@ -108,6 +108,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
+	if d := c.GetIsDryRun(); d != false {
+		t.Error("received", d, "expected", false)
+	}
+
 	type imcConfig struct {
 		CacheCapacity int
 	}
@@ -161,6 +165,28 @@ func TestDebugServiceAddr(t *testing.T) {
 
 	if d := c.GetDebugServiceAddr(); d != "localhost:8085" {
 		t.Error("received", d, "expected", "localhost:8085")
+	}
+}
+
+func TestDryRun(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	_, err = rulesFile.Write([]byte(`
+	DryRun = true
+	`))
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+
+	if d := c.GetIsDryRun(); d != true {
+		t.Error("received", d, "expected", true)
 	}
 }
 
