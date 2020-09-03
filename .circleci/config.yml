@@ -116,7 +116,10 @@ jobs:
           aws-region: AWS_REGION
       - run:
           name: sync_s3_artifacts
-          command: aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/samproxy/${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}/
+          command: |
+            version=${CIRCLE_TAG:1}
+            if [[ -z "$version" ]] ; then version=${CIRCLE_SHA1:0:7}; fi
+            aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/samproxy/$version/
 
 workflows:
   build:
