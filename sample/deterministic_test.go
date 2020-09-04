@@ -70,7 +70,7 @@ func TestInitializationFromConfigFile(t *testing.T) {
 	ds := &DeterministicSampler{
 		Config:     c,
 		Logger:     &logger.NullLogger{},
-		configName: defaultConfigName,
+		configName: "_default",
 	}
 	ds.Start()
 

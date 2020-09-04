@@ -88,7 +88,7 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", 100*time.Millisecond)
 	}
 
-	if d, _ := c.GetDefaultSamplerType(); d != "DeterministicSampler" {
+	if d, _ := c.GetSamplerTypeForDataset("dataset-doesnt-exist"); d != "DeterministicSampler" {
 		t.Error("received", d, "expected", "DeterministicSampler")
 	}
 
@@ -236,7 +236,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		t.Error(err)
 	}
 
-	typ, err := c.GetDefaultSamplerType()
+	typ, err := c.GetSamplerTypeForDataset("dataset-doesnt-exist")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "DeterministicSampler", typ)
 
@@ -251,7 +251,4 @@ func TestGetSamplerTypes(t *testing.T) {
 	typ, err = c.GetSamplerTypeForDataset("dataset3")
 	assert.Equal(t, nil, err)
 	assert.Equal(t, "EMADynamicSampler", typ)
-
-	typ, err = c.GetSamplerTypeForDataset("dataset4")
-	assert.Equal(t, "failed to find config tree for SamplerConfig.dataset4", err.Error())
 }

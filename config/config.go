@@ -67,10 +67,6 @@ type Config interface {
 	// are in the collect package
 	GetCollectorType() (string, error)
 
-	// GetDefaultSamplerType returns the sampler type to use for all datasets
-	// not explicitly defined
-	GetDefaultSamplerType() (string, error)
-
 	// GetSamplerTypeForDataset returns the sampler type to use for the given dataset
 	GetSamplerTypeForDataset(string) (string, error)
 

@@ -52,7 +52,6 @@ type InMemCollector struct {
 
 	Cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
-	defaultSampler  sample.Sampler
 
 	sentTraceCache *lru.Cache
 
@@ -76,7 +75,6 @@ type traceSentRecord struct {
 func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
-	i.defaultSampler = i.SamplerFactory.GetDefaultSamplerImplementation()
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
 	if err != nil {
@@ -380,11 +378,6 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
-		// no dataset sampler found, use default sampler
-		if sampler == nil {
-			sampler = i.defaultSampler
-		}
-
 		if i.datasetSamplers == nil {
 			i.datasetSamplers = make(map[string]sample.Sampler)
 		}

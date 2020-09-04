@@ -22,22 +22,22 @@ func TestAddRootSpan(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
-		Config:         conf,
-		Logger:         &logger.NullLogger{},
-		Transmission:   transmission,
-		defaultSampler: &sample.DeterministicSampler{},
-		Metrics:        &metrics.NullMetrics{},
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
 		},
 	}
+
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{
 			CacheCapacity: 3,
@@ -47,6 +47,7 @@ func TestAddRootSpan(t *testing.T) {
 	}
 	err := c.Start()
 	assert.NoError(t, err, "in-mem cache should start")
+
 	coll.Cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -101,17 +102,16 @@ func TestAddSpan(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
-		Config:         conf,
-		Logger:         &logger.NullLogger{},
-		Transmission:   transmission,
-		defaultSampler: &sample.DeterministicSampler{},
-		Metrics:        &metrics.NullMetrics{},
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -171,23 +171,22 @@ func TestDryRunMode(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
-		GetOtherConfigVal:        `{"SampleRate":10}`,
-		DryRun:                   true,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
+		GetOtherConfigVal:  `{"SampleRate":10}`,
+		DryRun:             true,
 	}
 	samplerFactory := &sample.SamplerFactory{
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetDefaultSamplerImplementation()
+	sampler := samplerFactory.GetSamplerImplementationForDataset("test")
 	coll := &InMemCollector{
 		Config:         conf,
 		Logger:         &logger.NullLogger{},
 		Transmission:   transmission,
-		defaultSampler: sampler,
 		Metrics:        &metrics.NullMetrics{},
 		SamplerFactory: samplerFactory,
 	}
@@ -213,12 +212,12 @@ func TestDryRunMode(t *testing.T) {
 	var traceID2 = "def456"
 	var traceID3 = "ghi789"
 	// sampling decisions based on trace ID
-	_, keepTraceID1 := coll.defaultSampler.GetSampleRate(&types.Trace{TraceID: traceID1})
+	_, keepTraceID1 := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID1)
-	_, keepTraceID2 := coll.defaultSampler.GetSampleRate(&types.Trace{TraceID: traceID2})
+	_, keepTraceID2 := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
 	assert.True(t, keepTraceID2)
-	_, keepTraceID3 := coll.defaultSampler.GetSampleRate(&types.Trace{TraceID: traceID3})
+	_, keepTraceID3 := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID3)
 

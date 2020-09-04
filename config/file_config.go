@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -186,22 +187,22 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *fileConfig) GetDefaultSamplerType() (string, error) {
-	t := samplerConfigType{}
-	err := f.GetOtherConfig("SamplerConfig._default", &t)
-	if err != nil {
-		return "", err
-	}
-	return t.Sampler, nil
-}
+var (
+	// a list of the fallback keys for sampler type
+	samplerFallbacks = []string{"SamplerConfig._default.Sampler", "Sampler"}
+)
 
 func (f *fileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
-	t := samplerConfigType{}
-	err := f.GetOtherConfig("SamplerConfig."+dataset, &t)
-	if err != nil {
-		return "", err
+	key := fmt.Sprintf("SamplerConfig.%s.Sampler", dataset)
+	keys := append([]string{key}, samplerFallbacks...)
+
+	for _, k := range keys {
+		if ok := f.rules.IsSet(k); ok {
+			return f.rules.GetString(k), nil
+		}
 	}
-	return t.Sampler, nil
+
+	return "", errors.New("No SamplerType found")
 }
 
 func (f *fileConfig) GetMetricsType() (string, error) {
