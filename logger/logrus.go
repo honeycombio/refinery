@@ -12,46 +12,60 @@ type LogrusLogger struct {
 	Config config.Config `inject:""`
 
 	logger *logrus.Logger
-	level  *logrus.Level
+	level  logrus.Level
 }
 
 type LogrusEntry struct {
 	entry *logrus.Entry
+	level logrus.Level
 }
 
 func (l *LogrusLogger) Start() error {
 	l.logger = logrus.New()
-	if l.level != nil {
-		l.logger.SetLevel(*l.level)
-	}
+	l.logger.SetLevel(l.level)
 	return nil
 }
-func (l *LogrusLogger) WithField(key string, value interface{}) Entry {
+
+func (l *LogrusLogger) Debug() Entry {
+	if l.level > logrus.DebugLevel {
+		return nullEntry
+	}
+
 	return &LogrusEntry{
-		entry: l.logger.WithField(key, value),
+		entry: logrus.NewEntry(l.logger),
+		level: logrus.DebugLevel,
 	}
 }
-func (l *LogrusLogger) WithFields(fields map[string]interface{}) Entry {
+
+func (l *LogrusLogger) Info() Entry {
+	if l.level > logrus.InfoLevel {
+		return nullEntry
+	}
+
 	return &LogrusEntry{
-		entry: l.logger.WithFields(fields),
+		entry: logrus.NewEntry(l.logger),
+		level: logrus.InfoLevel,
 	}
 }
-func (l *LogrusLogger) Debugf(f string, args ...interface{}) {
-	l.logger.Debugf(f, args...)
+
+func (l *LogrusLogger) Error() Entry {
+	if l.level > logrus.ErrorLevel {
+		return nullEntry
+	}
+
+	return &LogrusEntry{
+		entry: logrus.NewEntry(l.logger),
+		level: logrus.ErrorLevel,
+	}
 }
-func (l *LogrusLogger) Infof(f string, args ...interface{}) {
-	l.logger.Infof(f, args...)
-}
-func (l *LogrusLogger) Errorf(f string, args ...interface{}) {
-	l.logger.Errorf(f, args...)
-}
+
 func (l *LogrusLogger) SetLevel(level string) error {
 	logrusLevel, err := logrus.ParseLevel(level)
 	if err != nil {
 		return err
 	}
 	// record the choice and set it if we're already initialized
-	l.level = &logrusLevel
+	l.level = logrusLevel
 	if l.logger != nil {
 		l.logger.SetLevel(logrusLevel)
 	}
@@ -63,17 +77,20 @@ func (l *LogrusEntry) WithField(key string, value interface{}) Entry {
 		entry: l.entry.WithField(key, value),
 	}
 }
+
 func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
 	return &LogrusEntry{
 		entry: l.entry.WithFields(fields),
 	}
 }
-func (l *LogrusEntry) Debugf(f string, args ...interface{}) {
-	l.entry.Debugf(f, args...)
-}
-func (l *LogrusEntry) Infof(f string, args ...interface{}) {
-	l.entry.Infof(f, args...)
-}
-func (l *LogrusEntry) Errorf(f string, args ...interface{}) {
-	l.entry.Errorf(f, args...)
+
+func (l *LogrusEntry) Logf(f string, args ...interface{}) {
+	switch l.level {
+	case logrus.DebugLevel:
+		l.entry.Debugf(f, args...)
+	case logrus.InfoLevel:
+		l.entry.Infof(f, args...)
+	default:
+		l.entry.Errorf(f, args...)
+	}
 }
