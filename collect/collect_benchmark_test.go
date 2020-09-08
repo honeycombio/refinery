@@ -3,11 +3,12 @@ package collect
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/honeycombio/samproxy/collect/cache"
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
@@ -15,7 +16,6 @@ import (
 	"github.com/honeycombio/samproxy/sample"
 	"github.com/honeycombio/samproxy/transmit"
 	"github.com/honeycombio/samproxy/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func BenchmarkCollect(b *testing.B) {
@@ -27,23 +27,31 @@ func BenchmarkCollect(b *testing.B) {
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
 		SendTickerVal:            2 * time.Millisecond,
 	}
+
+	log := &logger.LogrusLogger{}
+	log.SetLevel("warn")
+	log.Start()
+
+	metric := &metrics.MockMetrics{}
+	metric.Start()
+
 	coll := &InMemCollector{
 		Config:         conf,
-		Logger:         &logger.NullLogger{},
+		Logger:         log,
 		Transmission:   transmission,
 		defaultSampler: &sample.DeterministicSampler{},
-		Metrics:        &metrics.NullMetrics{},
+		Metrics:        metric,
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
-			Logger: &logger.NullLogger{},
+			Logger: log,
 		},
 	}
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{
 			CacheCapacity: 3,
 		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
+		Metrics: metric,
+		Logger:  log,
 	}
 	err := c.Start()
 	assert.NoError(b, err, "in-mem cache should start")
@@ -74,22 +82,15 @@ func BenchmarkCollect(b *testing.B) {
 		coll.AddSpanFromPeer(span)
 	}
 
-	wg := &sync.WaitGroup{} // wait until we get b.N number of spans out the other side
+	// wait until we get b.N number of spans out the other side
+	for {
+		transmission.Mux.RLock()
+		count := len(transmission.Events)
+		transmission.Mux.RUnlock()
 
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
-		for {
-			// transmission.Mux.RLock()
-			if len(transmission.Events) == (b.N * 2) {
-				// transmission.Mux.RUnlock()
-				return
-			}
-			// transmission.Mux.RUnlock()
+		if count == (b.N * 2) {
+			break
 		}
-	}()
-
-	wg.Wait()
+		time.Sleep(time.Millisecond)
+	}
 }
