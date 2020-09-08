@@ -13,12 +13,12 @@ import (
 // (eg team api key verification, markers, etc.)
 func (r *Router) proxy(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_proxied")
-	r.Logger.Debugf("proxying request for %s", req.URL.Path)
+	r.Logger.Debug().Logf("proxying request for %s", req.URL.Path)
 	upstreamTarget, err := r.Config.GetHoneycombAPI()
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		io.WriteString(w, `{"error":"upstream target unavailable"}`)
-		r.Logger.Errorf("error getting honeycomb API config: %s", err)
+		r.Logger.Error().Logf("error getting honeycomb API config: %s", err)
 		return
 	}
 	forwarded := req.Header.Get("X-Forwarded-For")

@@ -66,8 +66,8 @@ type histogram struct {
 }
 
 func (h *HoneycombMetrics) Start() error {
-	h.Logger.Debugf("Starting HoneycombMetrics")
-	defer func() { h.Logger.Debugf("Finished starting HoneycombMetrics") }()
+	h.Logger.Debug().Logf("Starting HoneycombMetrics")
+	defer func() { h.Logger.Debug().Logf("Finished starting HoneycombMetrics") }()
 	mc := MetricsConfig{}
 	err := h.Config.GetOtherConfig("HoneycombMetrics", &mc)
 	if err != nil {
@@ -93,13 +93,13 @@ func (h *HoneycombMetrics) Start() error {
 }
 
 func (h *HoneycombMetrics) reloadBuilder() {
-	h.Logger.Debugf("reloading config for honeeycomb metrics reporter")
+	h.Logger.Debug().Logf("reloading config for honeeycomb metrics reporter")
 	mc := MetricsConfig{}
 	err := h.Config.GetOtherConfig("HoneycombMetrics", &mc)
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
 		// honeycomb logger
-		h.Logger.Errorf("failed to reload configs for Honeycomb metrics: %+v\n", err)
+		h.Logger.Error().Logf("failed to reload configs for Honeycomb metrics: %+v\n", err)
 		return
 	}
 	h.libhClient.Close()
@@ -173,7 +173,7 @@ func (h *HoneycombMetrics) refreshMemStats(ctx context.Context) {
 			h.latestMemStatsLock.Unlock()
 		case <-ctx.Done():
 			// context canceled? we're being asked to stop this so it can be restarted.
-			h.Logger.Debugf("restarting honeycomb metrics refreshMemStats goroutine")
+			h.Logger.Debug().Logf("restarting honeycomb metrics refreshMemStats goroutine")
 			return
 		}
 	}
@@ -186,23 +186,28 @@ func (h *HoneycombMetrics) readResponses(ctx context.Context) {
 	for {
 		select {
 		case resp := <-resps:
-			log := h.Logger.WithFields(map[string]interface{}{
-				"status_code": resp.StatusCode,
-				"body":        string(resp.Body),
-				"duration":    resp.Duration,
-			})
 			// read response, log if there's an error
+			var msg string
+			var log logger.Entry
 			switch {
 			case resp.Err != nil:
-				log.WithField("error", resp.Err.Error()).Errorf("Metrics reporter got an error back from Honeycomb")
+				msg = "Metrics reporter got an error back from Honeycomb"
+				log = h.Logger.Error().WithField("error", resp.Err.Error())
 			case resp.StatusCode > 202:
-				log.Errorf("Metrics reporter got an unexpected status code back from Honeycomb")
+				msg = "Metrics reporter got an unexpected status code back from Honeycomb"
+				log = h.Logger.Error()
 			}
-
+			if log != nil {
+				log.WithFields(map[string]interface{}{
+					"status_code": resp.StatusCode,
+					"body":        string(resp.Body),
+					"duration":    resp.Duration,
+				}).Logf(msg)
+			}
 		case <-ctx.Done():
 			// bail out; we're refreshing the config and will launch a new
 			// response reader.
-			h.Logger.Debugf("restarting honeycomb metrics read libhoney responses goroutine")
+			h.Logger.Debug().Logf("restarting honeycomb metrics read libhoney responses goroutine")
 			return
 		}
 	}
@@ -317,7 +322,7 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 			h.histograms[name] = newGauge
 		}
 	default:
-		h.Logger.Debugf("unspported metric type %s", metricType)
+		h.Logger.Debug().Logf("unspported metric type %s", metricType)
 	}
 }
 

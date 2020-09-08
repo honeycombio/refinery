@@ -126,7 +126,7 @@ func (h *HoneycombLogger) readResponses() {
 }
 
 func (h *HoneycombLogger) reloadBuilder() {
-	h.Debugf("reloading config for Honeycomb logger")
+	h.Debug().Logf("reloading config for Honeycomb logger")
 	// preseve log level
 	logLevel := h.loggerConfig.level
 	loggerConfig := HoneycombLoggerConfig{}
@@ -135,7 +135,7 @@ func (h *HoneycombLogger) reloadBuilder() {
 		// complain about this both to STDOUT and to the previously configured
 		// honeycomb logger
 		fmt.Printf("failed to reload configs for Honeycomb logger: %+v\n", err)
-		h.Errorf("failed to reload configs for Honeycomb logger: %+v", err)
+		h.Error().Logf("failed to reload configs for Honeycomb logger: %+v", err)
 		return
 	}
 	loggerConfig.level = logLevel
@@ -151,64 +151,46 @@ func (h *HoneycombLogger) Stop() error {
 	return nil
 }
 
-func (h *HoneycombLogger) WithField(key string, value interface{}) Entry {
-	entry := &HoneycombEntry{
-		loggerConfig: h.loggerConfig,
-		builder:      h.builder.Clone(),
-	}
-	entry.builder.AddField(key, value)
-	return entry
-}
-
-func (h *HoneycombLogger) WithFields(fields map[string]interface{}) Entry {
-	entry := &HoneycombEntry{
-		loggerConfig: h.loggerConfig,
-		builder:      h.builder.Clone(),
-	}
-	entry.builder.Add(fields)
-	return entry
-}
-
-func (h *HoneycombLogger) Debugf(f string, args ...interface{}) {
+func (h *HoneycombLogger) Debug() Entry {
 	if h.loggerConfig.level > DebugLevel {
-		return
+		return nullEntry
 	}
-	ev := h.builder.NewEvent()
-	ev.AddField("level", "debug")
-	ev.AddField("msg", fmt.Sprintf(f, args...))
-	ev.Metadata = map[string]string{
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
+
+	ev := &HoneycombEntry{
+		loggerConfig: h.loggerConfig,
+		builder:      h.builder.Clone(),
 	}
-	ev.Send()
+	ev.builder.AddField("level", "debug")
+
+	return ev
 }
 
-func (h *HoneycombLogger) Infof(f string, args ...interface{}) {
+func (h *HoneycombLogger) Info() Entry {
 	if h.loggerConfig.level > InfoLevel {
-		return
+		return nullEntry
 	}
-	ev := h.builder.NewEvent()
-	ev.AddField("level", "info")
-	ev.AddField("msg", fmt.Sprintf(f, args...))
-	ev.Metadata = map[string]string{
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
+
+	ev := &HoneycombEntry{
+		loggerConfig: h.loggerConfig,
+		builder:      h.builder.Clone(),
 	}
-	ev.Send()
+	ev.builder.AddField("level", "info")
+
+	return ev
 }
 
-func (h *HoneycombLogger) Errorf(f string, args ...interface{}) {
+func (h *HoneycombLogger) Error() Entry {
 	if h.loggerConfig.level > ErrorLevel {
-		return
+		return nullEntry
 	}
-	ev := h.builder.NewEvent()
-	ev.AddField("level", "error")
-	ev.AddField("msg", fmt.Sprintf(f, args...))
-	ev.Metadata = map[string]string{
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
+
+	ev := &HoneycombEntry{
+		loggerConfig: h.loggerConfig,
+		builder:      h.builder.Clone(),
 	}
-	ev.Send()
+	ev.builder.AddField("level", "error")
+
+	return ev
 }
 
 func (h *HoneycombLogger) SetLevel(level string) error {
@@ -242,40 +224,8 @@ func (h *HoneycombEntry) WithFields(fields map[string]interface{}) Entry {
 	return h
 }
 
-func (h *HoneycombEntry) Debugf(f string, args ...interface{}) {
-	if h.loggerConfig.level > DebugLevel {
-		return
-	}
+func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
-	ev.AddField("level", "debug")
-	ev.AddField("msg", fmt.Sprintf(f, args...))
-	ev.Metadata = map[string]string{
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
-	}
-	ev.Send()
-}
-
-func (h *HoneycombEntry) Infof(f string, args ...interface{}) {
-	if h.loggerConfig.level > InfoLevel {
-		return
-	}
-	ev := h.builder.NewEvent()
-	ev.AddField("level", "info")
-	ev.AddField("msg", fmt.Sprintf(f, args...))
-	ev.Metadata = map[string]string{
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
-	}
-	ev.Send()
-}
-
-func (h *HoneycombEntry) Errorf(f string, args ...interface{}) {
-	if h.loggerConfig.level > ErrorLevel {
-		return
-	}
-	ev := h.builder.NewEvent()
-	ev.AddField("level", "error")
 	ev.AddField("msg", fmt.Sprintf(f, args...))
 	ev.Metadata = map[string]string{
 		"api_host": ev.APIHost,

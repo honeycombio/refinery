@@ -8,47 +8,32 @@ type MockLogger struct {
 
 type MockLoggerEvent struct {
 	l      *MockLogger
+	level  HoneycombLevel
 	Fields map[string]interface{}
 }
 
-func (l *MockLogger) WithField(key string, value interface{}) Entry {
-	e := &MockLoggerEvent{
+func (l *MockLogger) Debug() Entry {
+	return &MockLoggerEvent{
 		l:      l,
+		level:  DebugLevel,
 		Fields: make(map[string]interface{}),
 	}
-	return e.WithField(key, value)
 }
 
-func (l *MockLogger) WithFields(fields map[string]interface{}) Entry {
-	e := &MockLoggerEvent{
+func (l *MockLogger) Info() Entry {
+	return &MockLoggerEvent{
 		l:      l,
+		level:  InfoLevel,
 		Fields: make(map[string]interface{}),
 	}
-	return e.WithFields(fields)
 }
 
-func (l *MockLogger) Debugf(f string, args ...interface{}) {
-	e := &MockLoggerEvent{
+func (l *MockLogger) Error() Entry {
+	return &MockLoggerEvent{
 		l:      l,
+		level:  ErrorLevel,
 		Fields: make(map[string]interface{}),
 	}
-	e.Debugf(f, args...)
-}
-
-func (l *MockLogger) Infof(f string, args ...interface{}) {
-	e := &MockLoggerEvent{
-		l:      l,
-		Fields: make(map[string]interface{}),
-	}
-	e.Infof(f, args...)
-}
-
-func (l *MockLogger) Errorf(f string, args ...interface{}) {
-	e := &MockLoggerEvent{
-		l:      l,
-		Fields: make(map[string]interface{}),
-	}
-	e.Errorf(f, args...)
 }
 
 func (l *MockLogger) SetLevel(level string) error {
@@ -69,17 +54,17 @@ func (e *MockLoggerEvent) WithFields(fields map[string]interface{}) Entry {
 	return e
 }
 
-func (e *MockLoggerEvent) Debugf(f string, args ...interface{}) {
-	e.WithField("debug", fmt.Sprintf(f, args...))
-	e.l.Events = append(e.l.Events, e)
-}
-
-func (e *MockLoggerEvent) Infof(f string, args ...interface{}) {
-	e.WithField("info", fmt.Sprintf(f, args...))
-	e.l.Events = append(e.l.Events, e)
-}
-
-func (e *MockLoggerEvent) Errorf(f string, args ...interface{}) {
-	e.WithField("error", fmt.Sprintf(f, args...))
+func (e *MockLoggerEvent) Logf(f string, args ...interface{}) {
+	msg := fmt.Sprintf(f, args...)
+	switch e.level {
+	case DebugLevel:
+		e.WithField("debug", msg)
+	case InfoLevel:
+		e.WithField("info", msg)
+	case ErrorLevel:
+		e.WithField("error", msg)
+	default:
+		panic("unexpected log level")
+	}
 	e.l.Events = append(e.l.Events, e)
 }
