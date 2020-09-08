@@ -197,62 +197,43 @@ func (i *InMemCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	peerChanSize := cap(i.fromPeer)
-
 	for {
 		// record channel lengths
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
 
-		select {
-		case <-ticker.C:
-			i.sendTracesInCache(time.Now())
-		default:
-		}
-
-		// process peer traffic at 2/1 ratio to incoming traffic. By processing peer
+		// Always drain peer channel before doing anyhting else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
 		// deadlocks because peers are waiting to get their events handed off to each
 		// other.
 		select {
-		case <-ticker.C:
-			i.sendTracesInCache(time.Now())
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
 			}
 			i.processSpan(sp)
-			// additionally, if the peer channel is more than 80% full, restart this
-			// loop to make sure it stays empty enough. We _really_ want to avoid
-			// blocking peer traffic.
-			if len(i.fromPeer)*100/peerChanSize > 80 {
-				i.Metrics.IncrementCounter("peer_queue_too_large")
-				continue
-			}
 		default:
-		}
-
-		// ok, the peer queue is low enough, let's wait for new events from anywhere
-		select {
-		case <-ticker.C:
-			i.sendTracesInCache(time.Now())
-		case sp, ok := <-i.incoming:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
+			select {
+			case <-ticker.C:
+				i.sendTracesInCache(time.Now())
+			case sp, ok := <-i.incoming:
+				if !ok {
+					// channel's been closed; we should shut down.
+					return
+				}
+				i.processSpan(sp)
+				continue
+			case sp, ok := <-i.fromPeer:
+				if !ok {
+					// channel's been closed; we should shut down.
+					return
+				}
+				i.processSpan(sp)
+				continue
+			case <-i.reload:
+				i.reloadConfigs()
 			}
-			i.processSpan(sp)
-			continue
-		case sp, ok := <-i.fromPeer:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
-			}
-			i.processSpan(sp)
-			continue
-		case <-i.reload:
-			i.reloadConfigs()
 		}
 	}
 }
