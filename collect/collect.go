@@ -117,6 +117,7 @@ func (i *InMemCollector) Start() error {
 	i.incoming = make(chan *types.Span, capacity*3)
 	i.fromPeer = make(chan *types.Span, capacity*3)
 	i.reload = make(chan struct{}, 1)
+	i.datasetSamplers = make(map[string]sample.Sampler)
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
 
@@ -167,6 +168,10 @@ func (i *InMemCollector) reloadConfigs() {
 	} else {
 		i.Logger.Error().WithField("cache", i.Cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
+
+	// clear out any samplers that we have previously created
+	// so that the new configuration will be propagated
+	i.datasetSamplers = make(map[string]sample.Sampler)
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
@@ -378,10 +383,6 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
-		if i.datasetSamplers == nil {
-			i.datasetSamplers = make(map[string]sample.Sampler)
-		}
-
 		// save sampler for later
 		i.datasetSamplers[trace.Dataset] = sampler
 	}

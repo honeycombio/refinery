@@ -55,6 +55,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	var traceID1 = "mytrace"
@@ -132,6 +133,7 @@ func TestAddSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	var traceID = "mytrace"
@@ -206,6 +208,7 @@ func TestDryRunMode(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	var traceID1 = "abc123"
