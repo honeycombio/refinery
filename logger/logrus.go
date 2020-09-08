@@ -27,7 +27,7 @@ func (l *LogrusLogger) Start() error {
 }
 
 func (l *LogrusLogger) Debug() Entry {
-	if l.level > logrus.DebugLevel {
+	if !l.logger.IsLevelEnabled(logrus.DebugLevel) {
 		return nullEntry
 	}
 
@@ -38,7 +38,7 @@ func (l *LogrusLogger) Debug() Entry {
 }
 
 func (l *LogrusLogger) Info() Entry {
-	if l.level > logrus.InfoLevel {
+	if !l.logger.IsLevelEnabled(logrus.InfoLevel) {
 		return nullEntry
 	}
 
@@ -49,7 +49,7 @@ func (l *LogrusLogger) Info() Entry {
 }
 
 func (l *LogrusLogger) Error() Entry {
-	if l.level > logrus.ErrorLevel {
+	if !l.logger.IsLevelEnabled(logrus.ErrorLevel) {
 		return nullEntry
 	}
 
@@ -75,12 +75,14 @@ func (l *LogrusLogger) SetLevel(level string) error {
 func (l *LogrusEntry) WithField(key string, value interface{}) Entry {
 	return &LogrusEntry{
 		entry: l.entry.WithField(key, value),
+		level: l.level,
 	}
 }
 
 func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
 	return &LogrusEntry{
 		entry: l.entry.WithFields(fields),
+		level: l.level,
 	}
 }
 
