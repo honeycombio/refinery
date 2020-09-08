@@ -51,8 +51,8 @@ type EMADynSamplerConfig struct {
 }
 
 func (d *EMADynamicSampler) Start() error {
-	d.Logger.Debugf("Starting EMADynamicSampler")
-	defer func() { d.Logger.Debugf("Finished starting EMADynamicSampler") }()
+	d.Logger.Debug().Logf("Starting EMADynamicSampler")
+	defer func() { d.Logger.Debug().Logf("Finished starting EMADynamicSampler") }()
 	dsConfig := EMADynSamplerConfig{}
 	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
 	err := d.Config.GetOtherConfig(configKey, &dsConfig)
@@ -60,7 +60,7 @@ func (d *EMADynamicSampler) Start() error {
 		return err
 	}
 	if dsConfig.GoalSampleRate < 1 {
-		d.Logger.Debugf("configured sample rate for dynamic sampler was %d; forcing to 1", dsConfig.GoalSampleRate)
+		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", dsConfig.GoalSampleRate)
 		dsConfig.GoalSampleRate = 1
 	}
 	d.goalSampleRate = dsConfig.GoalSampleRate
@@ -106,7 +106,7 @@ func (d *EMADynamicSampler) Start() error {
 }
 
 func (d *EMADynamicSampler) reloadConfigs() {
-	d.Logger.Debugf("reloading config for dynamic sampler")
+	d.Logger.Debug().Logf("reloading config for dynamic sampler")
 	// only actually reload the dynsampler if the config changed.
 	var configChanged bool
 
@@ -114,10 +114,10 @@ func (d *EMADynamicSampler) reloadConfigs() {
 	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
 	err := d.Config.GetOtherConfig(configKey, &dsConfig)
 	if err != nil {
-		d.Logger.Errorf("Failed to get dynsampler settings when reloading configs:", err)
+		d.Logger.Error().Logf("Failed to get dynsampler settings when reloading configs:", err)
 	}
 	if dsConfig.GoalSampleRate < 1 {
-		d.Logger.Debugf("configured sample rate for dynamic sampler was %d; forcing to 1", dsConfig.GoalSampleRate)
+		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", dsConfig.GoalSampleRate)
 		dsConfig.GoalSampleRate = 1
 	}
 	if d.goalSampleRate != dsConfig.GoalSampleRate {
@@ -193,11 +193,11 @@ func (d *EMADynamicSampler) reloadConfigs() {
 		}
 		newSampler.Start()
 
-		d.Logger.Debugf("reloaded dynsampler configs with values %+v", dsConfig)
+		d.Logger.Debug().Logf("reloaded dynsampler configs with values %+v", dsConfig)
 
 		d.dynsampler = newSampler
 	} else {
-		d.Logger.Debugf("skipping dynsampler reload because the config of %+v is unchanged from the previous state", dsConfig)
+		d.Logger.Debug().Logf("skipping dynsampler reload because the config of %+v is unchanged from the previous state", dsConfig)
 	}
 }
 
@@ -208,12 +208,12 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
-	d.Logger.WithFields(map[string]interface{}{
+	d.Logger.Debug().WithFields(map[string]interface{}{
 		"sample_key":  key,
 		"sample_rate": rate,
 		"sample_keep": shouldKeep,
 		"trace_id":    trace.TraceID,
-	}).Debugf("got sample rate and decision")
+	}).Logf("got sample rate and decision")
 	if shouldKeep {
 		d.Metrics.IncrementCounter("dynsampler_num_kept")
 	} else {

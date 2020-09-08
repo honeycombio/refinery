@@ -74,8 +74,8 @@ type traceSentRecord struct {
 }
 
 func (i *InMemCollector) Start() error {
-	i.Logger.Debugf("Starting InMemCollector")
-	defer func() { i.Logger.Debugf("Finished starting InMemCollector") }()
+	i.Logger.Debug().Logf("Starting InMemCollector")
+	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	i.defaultSampler = i.SamplerFactory.GetDefaultSamplerImplementation()
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
@@ -130,24 +130,24 @@ func (i *InMemCollector) sendReloadSignal() {
 	// non-blocking insert of the signal here so we don't leak goroutines
 	select {
 	case i.reload <- struct{}{}:
-		i.Logger.Debugf("sending collect reload signal")
+		i.Logger.Debug().Logf("sending collect reload signal")
 	default:
-		i.Logger.Debugf("collect already waiting to reload; skipping additional signal")
+		i.Logger.Debug().Logf("collect already waiting to reload; skipping additional signal")
 	}
 }
 
 func (i *InMemCollector) reloadConfigs() {
-	i.Logger.Debugf("reloading in-mem collect config")
+	i.Logger.Debug().Logf("reloading in-mem collect config")
 	imcConfig := &imcConfig{}
 	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
 	if err != nil {
-		i.Logger.WithField("error", err).Errorf("Failed to reload InMemCollector section when reloading configs")
+		i.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}
 	capacity := imcConfig.CacheCapacity
 
 	if existingCache, ok := i.Cache.(*cache.DefaultInMemCache); ok {
 		if capacity != existingCache.GetCacheSize() {
-			i.Logger.WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", capacity).Debugf("refreshing the cache because it changed size")
+			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", capacity).Logf("refreshing the cache because it changed size")
 			c := &cache.DefaultInMemCache{
 				Config: cache.CacheConfig{
 					CacheCapacity: capacity,
@@ -164,10 +164,10 @@ func (i *InMemCollector) reloadConfigs() {
 			}
 			i.Cache = c
 		} else {
-			i.Logger.Debugf("skipping reloading the cache on config reload because it hasn't changed capacity")
+			i.Logger.Debug().Logf("skipping reloading the cache on config reload because it hasn't changed capacity")
 		}
 	} else {
-		i.Logger.WithField("cache", i.Cache.(*cache.DefaultInMemCache)).Errorf("skipping reloading the cache on config reload because it's not an in-memory cache")
+		i.Logger.Error().WithField("cache", i.Cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
 	// TODO add resizing the LRU sent trace cache on config reload
 }
@@ -332,18 +332,18 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
 		sp.Data["samproxy_kept"] = keep
 		if !keep {
-			i.Logger.WithField("trace_id", sp.TraceID).Debugf("Sending span that would have been dropped, but dry run mode is enabled")
+			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
 			i.Transmission.EnqueueSpan(sp)
 			return
 		}
 	}
 	if keep {
-		i.Logger.WithField("trace_id", sp.TraceID).Debugf("Sending span because of previous decision to send trace")
+		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		sp.SampleRate *= sampleRate
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
-	i.Logger.WithField("trace_id", sp.TraceID).Debugf("Dropping span because of previous decision to drop trace")
+	i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Dropping span because of previous decision to drop trace")
 }
 
 func isRootSpan(sp *types.Span) bool {
@@ -363,10 +363,10 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		// someone else already sent this so we shouldn't also send it. This happens
 		// when two timers race and two signals for the same trace are sent down the
 		// toSend channel
-		i.Logger.
+		i.Logger.Debug().
 			WithField("trace_id", trace.TraceID).
 			WithField("dataset", trace.Dataset).
-			Debugf("skipping send because someone else already sent trace to dataset")
+			Logf("skipping send because someone else already sent trace to dataset")
 		return
 	}
 	trace.Sent = true
@@ -408,16 +408,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.IncrementCounter("trace_send_dropped")
-		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Dropping trace because of sampling, trace to dataset")
+		i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
 		return
 	}
 	i.Metrics.IncrementCounter("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
-	i.Logger.WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Infof("Sending trace to dataset")
+	i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1

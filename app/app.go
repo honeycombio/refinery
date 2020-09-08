@@ -29,7 +29,7 @@ type App struct {
 // Start exits, Stop will be called on all dependencies then on App then the
 // program will exit.
 func (a *App) Start() error {
-	a.Logger.Debugf("Starting up App...")
+	a.Logger.Debug().Logf("Starting up App...")
 
 	// set up signal channel to exit
 	sigsToExit := make(chan os.Signal, 1)
@@ -45,12 +45,12 @@ func (a *App) Start() error {
 
 	// block on our signal handler to exit
 	sig := <-sigsToExit
-	a.Logger.Errorf("Caught signal \"%s\"", sig)
+	a.Logger.Error().Logf("Caught signal \"%s\"", sig)
 
 	return nil
 }
 
 func (a *App) Stop() error {
-	a.Logger.Debugf("Shutting down App...")
+	a.Logger.Debug().Logf("Shutting down App...")
 	return nil
 }

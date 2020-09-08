@@ -99,7 +99,7 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 		dur := float64(time.Since(arrivalTime)) / float64(time.Millisecond)
 
 		// log that we did so TODO better formatted http log line
-		r.Logger.Debugf("handled %s request %s %s %s %s %f %d", route.GetName(), reqID, remoteIP, method, url, dur, wrapped.status)
+		r.Logger.Debug().Logf("handled %s request %s %s %s %s %f %d", route.GetName(), reqID, remoteIP, method, url, dur, wrapped.status)
 	})
 }
 

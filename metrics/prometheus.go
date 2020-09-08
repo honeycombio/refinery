@@ -27,8 +27,8 @@ type PromConfig struct {
 }
 
 func (p *PromMetrics) Start() error {
-	p.Logger.Debugf("Starting PromMetrics")
-	defer func() { p.Logger.Debugf("Finished starting PromMetrics") }()
+	p.Logger.Debug().Logf("Starting PromMetrics")
+	defer func() { p.Logger.Debug().Logf("Finished starting PromMetrics") }()
 	pc := PromConfig{}
 	err := p.Config.GetOtherConfig("PrometheusMetrics", &pc)
 	if err != nil {

@@ -85,14 +85,14 @@ type DeterministicSharder struct {
 }
 
 func (d *DeterministicSharder) Start() error {
-	d.Logger.Debugf("Starting DeterministicSharder")
-	defer func() { d.Logger.Debugf("Finished starting DeterministicSharder") }()
+	d.Logger.Debug().Logf("Starting DeterministicSharder")
+	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSharder") }()
 
 	d.Peers.RegisterUpdatedPeersCallback(func() {
-		d.Logger.Debugf("reloading deterministic sharder config")
+		d.Logger.Debug().Logf("reloading deterministic sharder config")
 		// make an error-less version of the peer reloader
 		if err := d.loadPeerList(); err != nil {
-			d.Logger.Errorf("failed to reload peer list: %+v", err)
+			d.Logger.Error().Logf("failed to reload peer list: %+v", err)
 		}
 	})
 
@@ -114,7 +114,7 @@ func (d *DeterministicSharder) Start() error {
 		if err != nil {
 			return errors.Wrap(err, "failed to parse listen addr into host:port")
 		}
-		d.Logger.Debugf("picked up local peer port of %s", localPort)
+		d.Logger.Debug().Logf("picked up local peer port of %s", localPort)
 
 		// get my local interfaces
 		localAddrs, err := net.InterfaceAddrs()
@@ -126,7 +126,7 @@ func (d *DeterministicSharder) Start() error {
 		// local interface. Note that this assumes only one instance of samproxy per
 		// host can run.
 		for i, peerShard := range d.peers {
-			d.Logger.WithField("peer", peerShard).WithField("self", localAddrs).Debugf("Considering peer looking for self")
+			d.Logger.Debug().WithField("peer", peerShard).WithField("self", localAddrs).Logf("Considering peer looking for self")
 			peerIPList, err := net.LookupHost(peerShard.ipOrHost)
 			if err != nil {
 				// TODO something better than fail to start if peer is missing
@@ -140,7 +140,7 @@ func (d *DeterministicSharder) Start() error {
 					}
 					if peerIP == ipAddr.String() {
 						if peerShard.port == localPort {
-							d.Logger.WithField("peer", peerShard).Debugf("Found myself in peer list")
+							d.Logger.Debug().WithField("peer", peerShard).Logf("Found myself in peer list")
 							found = true
 							selfIndexIntoPeerList = i
 						}
@@ -151,11 +151,11 @@ func (d *DeterministicSharder) Start() error {
 		if found {
 			break
 		}
-		d.Logger.Debugf("Failed to find self in peer list; waiting 5sec and trying again")
+		d.Logger.Debug().Logf("Failed to find self in peer list; waiting 5sec and trying again")
 		time.Sleep(5 * time.Second)
 	}
 	if !found {
-		d.Logger.Debugf("list of current peers: %+v", d.peers)
+		d.Logger.Debug().Logf("list of current peers: %+v", d.peers)
 		return errors.New("failed to find self in the peer list")
 	}
 	d.myShard = d.peers[selfIndexIntoPeerList]
@@ -167,7 +167,7 @@ func (d *DeterministicSharder) Start() error {
 // of peers changes). Because of this, it only updates the in-memory peer list
 // after verifying that it actually changed.
 func (d *DeterministicSharder) loadPeerList() error {
-	d.Logger.Debugf("loading peer list")
+	d.Logger.Debug().Logf("loading peer list")
 	// get my peers
 	peerList, err := d.Peers.GetPeers()
 	if err != nil {
@@ -200,7 +200,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	// if the peer list changed, load the new list
 	d.peerLock.RLock()
 	if !SortableShardList(d.peers).Equals(newPeers) {
-		d.Logger.Infof("Peer list has changed. New peer list: %+v", newPeers)
+		d.Logger.Info().Logf("Peer list has changed. New peer list: %+v", newPeers)
 		d.peerLock.RUnlock()
 		d.peerLock.Lock()
 		d.peers = newPeers

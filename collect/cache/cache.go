@@ -40,8 +40,8 @@ type CacheConfig struct {
 const DefaultInMemCacheCapacity = 10000
 
 func (d *DefaultInMemCache) Start() error {
-	d.Logger.Debugf("Starting DefaultInMemCache")
-	defer func() { d.Logger.Debugf("Finished starting DefaultInMemCache") }()
+	d.Logger.Debug().Logf("Starting DefaultInMemCache")
+	defer func() { d.Logger.Debug().Logf("Finished starting DefaultInMemCache") }()
 	if d.Config.CacheCapacity == 0 {
 		d.Config.CacheCapacity = DefaultInMemCacheCapacity
 	}
