@@ -27,5 +27,7 @@ func (m *MockTransmission) EnqueueSpan(ev *types.Span) {
 	m.Events = append(m.Events, &ev.Event)
 }
 func (m *MockTransmission) Flush() {
-
+	m.Mux.Lock()
+	defer m.Mux.Unlock()
+	m.Events = m.Events[:0]
 }

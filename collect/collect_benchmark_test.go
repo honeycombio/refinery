@@ -1,8 +1,8 @@
 package collect
 
 import (
-	"fmt"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 
@@ -64,33 +64,46 @@ func BenchmarkCollect(b *testing.B) {
 	coll.fromPeer = make(chan *types.Span, 5)
 	go coll.collect()
 
-	for n := 0; n < b.N; n++ {
-		span := &types.Span{
-			TraceID: fmt.Sprintf("%f", rand.Float64()),
-			Event: types.Event{
-				Dataset: "aoeu",
-			},
-		}
-		coll.AddSpan(span)
+	// wait until we get n number of spans out the other side
+	wait := func(n int) {
+		for {
+			transmission.Mux.RLock()
+			count := len(transmission.Events)
+			transmission.Mux.RUnlock()
 
-		span = &types.Span{
-			TraceID: fmt.Sprintf("%f", rand.Float64()),
-			Event: types.Event{
-				Dataset: "aoeu",
-			},
+			if count >= n {
+				break
+			}
+			time.Sleep(100 * time.Microsecond)
 		}
-		coll.AddSpanFromPeer(span)
 	}
 
-	// wait until we get b.N number of spans out the other side
-	for {
-		transmission.Mux.RLock()
-		count := len(transmission.Events)
-		transmission.Mux.RUnlock()
-
-		if count == (b.N * 2) {
-			break
+	b.Run("AddSpan", func(b *testing.B) {
+		transmission.Flush()
+		for n := 0; n < b.N; n++ {
+			span := &types.Span{
+				TraceID: strconv.Itoa(rand.Int()),
+				Event: types.Event{
+					Dataset: "aoeu",
+				},
+			}
+			coll.AddSpan(span)
 		}
-		time.Sleep(time.Millisecond)
-	}
+		wait(b.N)
+	})
+
+	b.Run("AddSpanFromPeer", func(b *testing.B) {
+		transmission.Flush()
+		for n := 0; n < b.N; n++ {
+			span := &types.Span{
+				TraceID: strconv.Itoa(rand.Int()),
+				Event: types.Event{
+					Dataset: "aoeu",
+				},
+			}
+			coll.AddSpanFromPeer(span)
+		}
+		wait(b.N)
+	})
+
 }
