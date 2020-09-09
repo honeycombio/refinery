@@ -1,10 +1,6 @@
 package app
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
-
 	"github.com/honeycombio/samproxy/collect"
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
@@ -31,10 +27,6 @@ type App struct {
 func (a *App) Start() error {
 	a.Logger.Debug().Logf("Starting up App...")
 
-	// set up signal channel to exit
-	sigsToExit := make(chan os.Signal, 1)
-	signal.Notify(sigsToExit, syscall.SIGINT, syscall.SIGTERM)
-
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
 
@@ -42,10 +34,6 @@ func (a *App) Start() error {
 	// and external sources
 	go a.IncomingRouter.LnS("incoming")
 	go a.PeerRouter.LnS("peer")
-
-	// block on our signal handler to exit
-	sig := <-sigsToExit
-	a.Logger.Error().Logf("Caught signal \"%s\"", sig)
 
 	return nil
 }

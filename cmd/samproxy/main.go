@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -198,4 +200,12 @@ func main() {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
 	}
+
+	// set up signal channel to exit
+	sigsToExit := make(chan os.Signal, 1)
+	signal.Notify(sigsToExit, syscall.SIGINT, syscall.SIGTERM)
+
+	// block on our signal handler to exit
+	sig := <-sigsToExit
+	a.Logger.Error().Logf("Caught signal \"%s\"", sig)
 }
