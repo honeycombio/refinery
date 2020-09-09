@@ -289,3 +289,69 @@ func TestDryRunMode(t *testing.T) {
 	transmission.Mux.RUnlock()
 	coll.Stop()
 }
+
+func TestSampleConfigReload(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+
+	transmission.Start()
+
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Millisecond,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
+		GetOtherConfigVal:  `{"CacheCapacity": 10}`,
+	}
+
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	err := coll.Start()
+
+	assert.NoError(t, err)
+
+	dataset := "aoeu"
+
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: dataset,
+		},
+	}
+
+	coll.AddSpan(span)
+
+	assert.Eventually(t, func() bool {
+		_, ok := coll.datasetSamplers[dataset]
+		return ok
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+
+	conf.ReloadConfig()
+
+	assert.Eventually(t, func() bool {
+		_, ok := coll.datasetSamplers[dataset]
+		return !ok
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+
+	span = &types.Span{
+		TraceID: "2",
+		Event: types.Event{
+			Dataset: dataset,
+		},
+	}
+
+	coll.AddSpan(span)
+
+	assert.Eventually(t, func() bool {
+		_, ok := coll.datasetSamplers[dataset]
+		return ok
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+}
