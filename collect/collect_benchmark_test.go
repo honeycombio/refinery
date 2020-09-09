@@ -22,10 +22,10 @@ func BenchmarkCollect(b *testing.B) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
 	}
 
 	log := &logger.LogrusLogger{}
@@ -36,11 +36,10 @@ func BenchmarkCollect(b *testing.B) {
 	metric.Start()
 
 	coll := &InMemCollector{
-		Config:         conf,
-		Logger:         log,
-		Transmission:   transmission,
-		defaultSampler: &sample.DeterministicSampler{},
-		Metrics:        metric,
+		Config:       conf,
+		Logger:       log,
+		Transmission: transmission,
+		Metrics:      metric,
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: log,
@@ -62,6 +61,7 @@ func BenchmarkCollect(b *testing.B) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	// wait until we get n number of spans out the other side
