@@ -2,6 +2,8 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -187,6 +189,38 @@ func TestAppIntegration(t *testing.T) {
 }
 
 func BenchmarkTraces(b *testing.B) {
+	ctx := context.Background()
+
+	spanFormat := `{"data":{` +
+		`"trace.trace_id":"%d",` +
+		`"trace.span_id":"%d",` +
+		`"trace.parent_id":"0000000000",` +
+		`"key":"value",` +
+		`"field0":0,` +
+		`"field1":1,` +
+		`"field2":2,` +
+		`"field3":3,` +
+		`"field4":4,` +
+		`"field5":5,` +
+		`"field6":6,` +
+		`"field7":7,` +
+		`"field8":8,` +
+		`"field9":9,` +
+		`"field10":10,` +
+		`"long":"this is a test of the emergency broadcast system",` +
+		`"foo":"bar"` +
+		`},"dataset":"dataset"}`
+
+	// Pre-build spans to send, none are root spans
+	var tid int
+	spans := make([][]byte, 100000)
+	for i := range spans {
+		if i%10 == 0 {
+			tid++
+		}
+		spans[i] = []byte(fmt.Sprintf(spanFormat, tid, i))
+	}
+
 	sender := &countingWriterSender{
 		WriterSender: transmission.WriterSender{
 			W: ioutil.Discard,
@@ -217,10 +251,9 @@ func BenchmarkTraces(b *testing.B) {
 
 	b.Run("single", func(b *testing.B) {
 		sender.resetCount()
-		reqBody := strings.NewReader(`[{"data":{"foo":"bar"}}]`)
-		req.Body = ioutil.NopCloser(reqBody)
 		for n := 0; n < b.N; n++ {
-			reqBody.Seek(0, io.SeekStart)
+			blob := `[` + string(spans[n%len(spans)]) + `]`
+			req.Body = ioutil.NopCloser(strings.NewReader(blob))
 			resp, err := client.Do(req)
 			assert.NoError(b, err)
 			if resp != nil {
@@ -234,10 +267,18 @@ func BenchmarkTraces(b *testing.B) {
 
 	b.Run("batch", func(b *testing.B) {
 		sender.resetCount()
-		reqBody := strings.NewReader(`[` + strings.Repeat(`{"data":{"foo":"bar"}},`, 49) + `{"data":{"foo":"bar"}}]`)
-		req.Body = ioutil.NopCloser(reqBody)
+
+		// over-allocate blob for 50 spans
+		blob := make([]byte, 0, len(spanFormat)*100)
 		for n := 0; n < (b.N/50)+1; n++ {
-			reqBody.Seek(0, io.SeekStart)
+			blob = append(blob[:0], '[')
+			for i := 0; i < 50; i++ {
+				blob = append(blob, spans[((n*50)+i)%len(spans)]...)
+				blob = append(blob, ',')
+			}
+			blob[len(blob)-1] = ']'
+			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+
 			resp, err := client.Do(req)
 			assert.NoError(b, err)
 			if resp != nil {
@@ -257,17 +298,17 @@ func BenchmarkTraces(b *testing.B) {
 			go func() {
 				defer wg.Done()
 
-				reqBody := strings.NewReader(`[` + strings.Repeat(`{"data":{"foo":"bar"}},`, 49) + `{"data":{"foo":"bar"}}]`)
-				req, err := http.NewRequest(
-					"POST",
-					"http://localhost:11000/1/batch/dataset",
-					reqBody,
-				)
-				assert.NoError(b, err)
-				req.Header.Set("X-Honeycomb-Team", "KEY")
-				req.Header.Set("Content-Type", "application/json")
+				req := req.Clone(ctx)
+				blob := make([]byte, 0, len(spanFormat)*100)
 				for n := 0; n < (b.N/500)+1; n++ {
-					reqBody.Seek(0, io.SeekStart)
+					blob = append(blob[:0], '[')
+					for i := 0; i < 50; i++ {
+						blob = append(blob, spans[((n*50)+i)%len(spans)]...)
+						blob = append(blob, ',')
+					}
+					blob[len(blob)-1] = ']'
+					req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+
 					resp, err := client.Do(req)
 					assert.NoError(b, err)
 					if resp != nil {
