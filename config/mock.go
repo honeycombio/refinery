@@ -8,45 +8,57 @@ import (
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	Callbacks            []func()
-	GetAPIKeysErr        error
-	GetAPIKeysVal        []string
-	GetCollectorTypeErr  error
-	GetCollectorTypeVal  string
-	GetHoneycombAPIErr   error
-	GetHoneycombAPIVal   string
-	GetListenAddrErr     error
-	GetListenAddrVal     string
-	GetPeerListenAddrErr error
-	GetPeerListenAddrVal string
-	GetLoggerTypeErr     error
-	GetLoggerTypeVal     string
-	GetLoggingLevelErr   error
-	GetLoggingLevelVal   string
-	GetOtherConfigErr    error
+	Callbacks                     []func()
+	GetAPIKeysErr                 error
+	GetAPIKeysVal                 []string
+	GetCollectorTypeErr           error
+	GetCollectorTypeVal           string
+	GetInMemoryCollectorConfigErr error
+	// GetInMemoryCollectorConfigVal must be a JSON representation of the config struct to be populated.
+	GetInMemoryCollectorConfigVal string
+	GetHoneycombAPIErr            error
+	GetHoneycombAPIVal            string
+	GetListenAddrErr              error
+	GetListenAddrVal              string
+	GetPeerListenAddrErr          error
+	GetPeerListenAddrVal          string
+	GetLoggerTypeErr              error
+	GetLoggerTypeVal              string
+	GetHoneycombLoggerConfigErr   error
+	// GetHoneycombLoggerConfigVal must be a JSON representation of the config struct to be populated.
+	GetHoneycombLoggerConfigVal string
+	GetLoggingLevelErr          error
+	GetLoggingLevelVal          string
+	GetOtherConfigErr           error
 	// GetOtherConfigVal must be a JSON representation of the config struct to be populated.
-	GetOtherConfigVal        string
-	GetPeersErr              error
-	GetPeersVal              []string
-	GetRedisHostErr          error
-	GetRedisHostVal          string
-	GetDefaultSamplerTypeErr error
-	GetDefaultSamplerTypeVal string
-	GetMetricsTypeErr        error
-	GetMetricsTypeVal        string
-	GetSendDelayErr          error
-	GetSendDelayVal          time.Duration
-	GetTraceTimeoutErr       error
-	GetTraceTimeoutVal       time.Duration
-	GetUpstreamBufferSizeVal int
-	GetPeerBufferSizeVal     int
-	SendTickerVal            time.Duration
-	IdentifierInterfaceName  string
-	UseIPV6Identifier        bool
-	RedisIdentifier          string
-	PeerManagementType       string
-	DebugServiceAddr         string
-	DryRun                   bool
+	GetOtherConfigVal            string
+	GetPeersErr                  error
+	GetPeersVal                  []string
+	GetRedisHostErr              error
+	GetRedisHostVal              string
+	GetDefaultSamplerTypeErr     error
+	GetDefaultSamplerTypeVal     string
+	GetMetricsTypeErr            error
+	GetMetricsTypeVal            string
+	GetHoneycombMetricsConfigErr error
+	// GetHoneycombMetricsConfigVal must be a JSON representation of the config struct to be populated.
+	GetHoneycombMetricsConfigVal  string
+	GetPrometheusMetricsConfigErr error
+	// GetPrometheusMetricsConfigVal must be a JSON representation of the config struct to be populated.
+	GetPrometheusMetricsConfigVal string
+	GetSendDelayErr               error
+	GetSendDelayVal               time.Duration
+	GetTraceTimeoutErr            error
+	GetTraceTimeoutVal            time.Duration
+	GetUpstreamBufferSizeVal      int
+	GetPeerBufferSizeVal          int
+	SendTickerVal                 time.Duration
+	IdentifierInterfaceName       string
+	UseIPV6Identifier             bool
+	RedisIdentifier               string
+	PeerManagementType            string
+	DebugServiceAddr              string
+	DryRun                        bool
 }
 
 func (m *MockConfig) ReloadConfig() {
@@ -61,6 +73,13 @@ func (m *MockConfig) GetAPIKeys() ([]string, error) { return m.GetAPIKeysVal, m.
 func (m *MockConfig) GetCollectorType() (string, error) {
 	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
 }
+func (m *MockConfig) GetInMemCollectorConfig(imcConfig *InMemoryCollectorConfig) error {
+	err := json.Unmarshal([]byte(m.GetInMemoryCollectorConfigVal), imcConfig)
+	if err != nil {
+		return err
+	}
+	return m.GetInMemoryCollectorConfigErr
+}
 func (m *MockConfig) GetHoneycombAPI() (string, error) {
 	return m.GetHoneycombAPIVal, m.GetHoneycombAPIErr
 }
@@ -69,6 +88,13 @@ func (m *MockConfig) GetPeerListenAddr() (string, error) {
 	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
 }
 func (m *MockConfig) GetLoggerType() (string, error) { return m.GetLoggerTypeVal, m.GetLoggerTypeErr }
+func (m *MockConfig) GetHoneycombLoggerConfig(hlConfig *HoneycombLoggerConfig) error {
+	err := json.Unmarshal([]byte(m.GetHoneycombLoggerConfigVal), hlConfig)
+	if err != nil {
+		return err
+	}
+	return m.GetHoneycombLoggerConfigErr
+}
 func (m *MockConfig) GetLoggingLevel() (string, error) {
 	return m.GetLoggingLevelVal, m.GetLoggingLevelErr
 }
@@ -86,6 +112,20 @@ func (m *MockConfig) GetDefaultSamplerType() (string, error) {
 }
 func (m *MockConfig) GetMetricsType() (string, error) {
 	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
+}
+func (m *MockConfig) GetHoneycombMetricsConfig(hmConfig *HoneycombMetricsConfig) error {
+	err := json.Unmarshal([]byte(m.GetHoneycombMetricsConfigVal), hmConfig)
+	if err != nil {
+		return err
+	}
+	return m.GetHoneycombMetricsConfigErr
+}
+func (m *MockConfig) GetPrometheusMetricsConfig(pmConfig *PrometheusMetricsConfig) error {
+	err := json.Unmarshal([]byte(m.GetPrometheusMetricsConfigVal), pmConfig)
+	if err != nil {
+		return err
+	}
+	return m.GetPrometheusMetricsConfigErr
 }
 func (m *MockConfig) GetSendDelay() (time.Duration, error) {
 	return m.GetSendDelayVal, m.GetSendDelayErr
@@ -126,8 +166,8 @@ func (m *MockConfig) GetPeerManagementType() (string, error) {
 	return m.PeerManagementType, nil
 }
 
-func (m *MockConfig) GetDebugServiceAddr() string {
-	return m.DebugServiceAddr
+func (m *MockConfig) GetDebugServiceAddr() (string, error) {
+	return m.DebugServiceAddr, nil
 }
 
 func (m *MockConfig) GetIsDryRun() bool {

@@ -39,6 +39,15 @@ func TestInitializationFromConfigFile(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	dummyConfig := []byte(`
+		[InMemCollector]
+			CacheCapacity=1000 
+
+		[HoneycombMetrics]
+			MetricsHoneycombAPI="http://honeycomb.io"
+			MetricsAPIKey="1234"
+			MetricsDataset="testDatasetName"
+			MetricsReportingInterval=3
+			
 		[SamplerConfig._default]
 			Sampler = "DeterministicSampler"
 			SampleRate = 2

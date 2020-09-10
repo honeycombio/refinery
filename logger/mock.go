@@ -1,6 +1,10 @@
 package logger
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/honeycombio/samproxy/config"
+)
 
 type MockLogger struct {
 	Events []*MockLoggerEvent
@@ -8,7 +12,7 @@ type MockLogger struct {
 
 type MockLoggerEvent struct {
 	l      *MockLogger
-	level  HoneycombLevel
+	level  config.HoneycombLevel
 	Fields map[string]interface{}
 }
 

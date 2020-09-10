@@ -1,9 +1,7 @@
 package collect
 
 import (
-	"errors"
 	"fmt"
-	"math"
 	"os"
 	"time"
 
@@ -61,10 +59,6 @@ type InMemCollector struct {
 	reload   chan struct{}
 }
 
-type imcConfig struct {
-	CacheCapacity int
-}
-
 // traceSentRecord is the bit we leave behind when sending a trace to remember
 // our decision for the future, so any delinquent spans that show up later can
 // be dropped or passed along.
@@ -77,18 +71,14 @@ func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	i.defaultSampler = i.SamplerFactory.GetDefaultSamplerImplementation()
-	imcConfig := &imcConfig{}
-	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
+	imcConfig := config.InMemoryCollectorConfig{}
+	err := i.Config.GetInMemCollectorConfig(&imcConfig)
 	if err != nil {
 		return err
 	}
-	capacity := imcConfig.CacheCapacity
-	if capacity > math.MaxInt32 {
-		return errors.New(fmt.Sprintf("maximum cache capacity is %d", math.MaxInt32))
-	}
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{
-			CacheCapacity: capacity,
+			CacheCapacity: imcConfig.CacheCapacity,
 		},
 		Metrics: i.Metrics,
 		Logger:  i.Logger,
@@ -110,14 +100,14 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_dropped", "counter")
 	i.Metrics.Register("peer_queue_too_large", "counter")
 
-	stc, err := lru.New(capacity * 5) // keep 5x ring buffer size
+	stc, err := lru.New(imcConfig.CacheCapacity * 5) // keep 5x ring buffer size
 	if err != nil {
 		return err
 	}
 	i.sentTraceCache = stc
 
-	i.incoming = make(chan *types.Span, capacity*3)
-	i.fromPeer = make(chan *types.Span, capacity*3)
+	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
+	i.fromPeer = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.reload = make(chan struct{}, 1)
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
@@ -138,26 +128,25 @@ func (i *InMemCollector) sendReloadSignal() {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig := &imcConfig{}
-	err := i.Config.GetOtherConfig("InMemCollector", imcConfig)
+	imcConfig := config.InMemoryCollectorConfig{}
+	err := i.Config.GetInMemCollectorConfig(&imcConfig)
 	if err != nil {
 		i.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}
-	capacity := imcConfig.CacheCapacity
 
 	if existingCache, ok := i.Cache.(*cache.DefaultInMemCache); ok {
-		if capacity != existingCache.GetCacheSize() {
-			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", capacity).Logf("refreshing the cache because it changed size")
+		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
+			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
 			c := &cache.DefaultInMemCache{
 				Config: cache.CacheConfig{
-					CacheCapacity: capacity,
+					CacheCapacity: imcConfig.CacheCapacity,
 				},
 				Metrics: i.Metrics,
 			}
 			c.Start()
 			// pull the old cache contents into the new cache
 			for i, trace := range existingCache.GetAll() {
-				if i > capacity {
+				if i > imcConfig.CacheCapacity {
 					break
 				}
 				c.Set(trace)

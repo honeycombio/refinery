@@ -1,11 +1,14 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/go-playground/validator"
 	libhoney "github.com/honeycombio/libhoney-go"
 	viper "github.com/spf13/viper"
 )
@@ -19,28 +22,64 @@ type fileConfig struct {
 }
 
 type configContents struct {
-	ListenAddr         string
-	PeerListenAddr     string
-	APIKeys            []string
-	HoneycombAPI       string
-	Logger             string
-	LoggingLevel       string
-	Collector          string
-	Sampler            string
-	Metrics            string
-	SendDelay          time.Duration
-	TraceTimeout       time.Duration
-	SendTicker         time.Duration
-	UpstreamBufferSize int
-	PeerBufferSize     int
+	ListenAddr         string        `validate:"required"`
+	PeerListenAddr     string        `validate:"required"`
+	APIKeys            []string      `validate:"required"`
+	HoneycombAPI       string        `validate:"required,url"`
+	Logger             string        `validate:"required,oneof= logrus honeycomb"`
+	LoggingLevel       string        `validate:"required"`
+	Collector          string        `validate:"required,oneof= InMemCollector"`
+	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler"`
+	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
+	SendDelay          time.Duration `validate:"required"`
+	TraceTimeout       time.Duration `validate:"required"`
+	SendTicker         time.Duration `validate:"required"`
+	UpstreamBufferSize int           `validate:"required"`
+	PeerBufferSize     int           `validate:"required"`
 	DebugServiceAddr   string
 	DryRun             bool
+	PeerManagement     PeerManagementConfig    `validate:"required"`
+	InMemCollector     InMemoryCollectorConfig `validate:"required"`
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
 // other fields are ignored
 type samplerConfigType struct {
 	Sampler string
+}
+
+type InMemoryCollectorConfig struct {
+	// CacheCapacity must be less than math.MaxInt32
+	CacheCapacity int `validate:"required,lt=2147483647"`
+}
+
+type HoneycombLevel int
+
+type HoneycombLoggerConfig struct {
+	LoggerHoneycombAPI string         `validate:"required,url"`
+	LoggerAPIKey       string         `validate:"required"`
+	LoggerDataset      string         `validate:"required"`
+	Level              HoneycombLevel `validate:"required"`
+}
+
+type PrometheusMetricsConfig struct {
+	MetricsListenAddr string `validate:"required"`
+}
+
+type HoneycombMetricsConfig struct {
+	MetricsHoneycombAPI      string `validate:"required,url"`
+	MetricsAPIKey            string `validate:"required"`
+	MetricsDataset           string `validate:"required"`
+	MetricsReportingInterval int64  `validate:"required"`
+}
+
+type PeerManagementConfig struct {
+	Type                    string   `validate:"required,oneof= file redis"`
+	Peers                   []string `validate:"required,dive,url"`
+	RedisHost               string
+	IdentifierInterfaceName string
+	UseIPV6Identifier       bool
+	RedisIdentifier         string
 }
 
 // NewConfig creates a new config struct
@@ -95,6 +134,18 @@ func NewConfig(config, rules string) (Config, error) {
 		return nil, err
 	}
 
+	v := validator.New()
+	err = v.Struct(fc.conf)
+	if err != nil {
+		return nil, err
+	}
+
+	err = fc.validateConditionalConfigs()
+
+	if err != nil {
+		return nil, err
+	}
+
 	c.WatchConfig()
 	c.OnConfigChange(fc.onChange)
 
@@ -130,15 +181,56 @@ func (f *fileConfig) unmarshal() error {
 	return nil
 }
 
+func (f *fileConfig) validateConditionalConfigs() error {
+	// validate logger config
+	loggerType, err := f.GetLoggerType()
+	if err != nil {
+		return err
+	}
+	if loggerType == "honeycomb" {
+		err = f.GetHoneycombLoggerConfig(&HoneycombLoggerConfig{})
+		if err != nil {
+			return err
+		}
+	}
+
+	// validate metrics config
+	metricsType, err := f.GetMetricsType()
+	if err != nil {
+		return err
+	}
+	if metricsType == "honeycomb" {
+		err = f.GetHoneycombMetricsConfig(&HoneycombMetricsConfig{})
+		if err != nil {
+			return err
+		}
+	}
+	if metricsType == "prometheus" {
+		err = f.GetPrometheusMetricsConfig(&PrometheusMetricsConfig{})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (f *fileConfig) RegisterReloadCallback(cb func()) {
 	f.callbacks = append(f.callbacks, cb)
 }
 
 func (f *fileConfig) GetListenAddr() (string, error) {
+	_, _, err := net.SplitHostPort(f.conf.ListenAddr)
+	if err != nil {
+		return "", err
+	}
 	return f.conf.ListenAddr, nil
 }
 
 func (f *fileConfig) GetPeerListenAddr() (string, error) {
+	_, _, err := net.SplitHostPort(f.conf.PeerListenAddr)
+	if err != nil {
+		return "", err
+	}
 	return f.conf.PeerListenAddr, nil
 }
 
@@ -147,11 +239,11 @@ func (f *fileConfig) GetAPIKeys() ([]string, error) {
 }
 
 func (f *fileConfig) GetPeerManagementType() (string, error) {
-	return f.config.GetString("PeerManagement.Type"), nil
+	return f.conf.PeerManagement.Type, nil
 }
 
 func (f *fileConfig) GetPeers() ([]string, error) {
-	return f.config.GetStringSlice("PeerManagement.Peers"), nil
+	return f.conf.PeerManagement.Peers, nil
 }
 
 func (f *fileConfig) GetRedisHost() (string, error) {
@@ -182,8 +274,37 @@ func (f *fileConfig) GetLoggerType() (string, error) {
 	return f.conf.Logger, nil
 }
 
+func (f *fileConfig) GetHoneycombLoggerConfig(hlConfig *HoneycombLoggerConfig) error {
+	if sub := f.config.Sub("HoneycombLogger"); sub != nil {
+		err := sub.UnmarshalExact(hlConfig)
+		if err != nil {
+			return err
+		}
+
+		v := validator.New()
+		err = v.Struct(hlConfig)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+	return errors.New("No config found for HoneycombLogger")
+}
+
 func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
+}
+
+func (f *fileConfig) GetInMemCollectorConfig(imcConfig *InMemoryCollectorConfig) error {
+	if sub := f.config.Sub("InMemCollector"); sub != nil {
+		err := sub.UnmarshalExact(imcConfig)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return errors.New("No config found for inMemCollector")
 }
 
 func (f *fileConfig) GetDefaultSamplerType() (string, error) {
@@ -206,6 +327,42 @@ func (f *fileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
 
 func (f *fileConfig) GetMetricsType() (string, error) {
 	return f.conf.Metrics, nil
+}
+
+func (f *fileConfig) GetHoneycombMetricsConfig(hmConfig *HoneycombMetricsConfig) error {
+	if sub := f.config.Sub("HoneycombMetrics"); sub != nil {
+		err := sub.UnmarshalExact(hmConfig)
+		if err != nil {
+			return err
+		}
+
+		v := validator.New()
+		err = v.Struct(hmConfig)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+	return errors.New("No config found for HoneycombMetrics")
+}
+
+func (f *fileConfig) GetPrometheusMetricsConfig(pcConfig *PrometheusMetricsConfig) error {
+	if sub := f.config.Sub("PrometheusMetrics"); sub != nil {
+		err := sub.UnmarshalExact(pcConfig)
+		if err != nil {
+			return err
+		}
+
+		v := validator.New()
+		err = v.Struct(pcConfig)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+	return errors.New("No config found for PrometheusMetrics")
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {
@@ -240,8 +397,12 @@ func (f *fileConfig) GetSendTickerValue() time.Duration {
 	return f.conf.SendTicker
 }
 
-func (f *fileConfig) GetDebugServiceAddr() string {
-	return f.conf.DebugServiceAddr
+func (f *fileConfig) GetDebugServiceAddr() (string, error) {
+	_, _, err := net.SplitHostPort(f.conf.DebugServiceAddr)
+	if err != nil {
+		return "", err
+	}
+	return f.conf.DebugServiceAddr, nil
 }
 
 func (f *fileConfig) GetIsDryRun() bool {
