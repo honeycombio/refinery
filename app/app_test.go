@@ -3,9 +3,11 @@ package app
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,7 +27,54 @@ import (
 	"github.com/honeycombio/samproxy/transmit"
 )
 
-func newStartedApp(t *testing.T, libhoneyOut io.Writer) (*App, inject.Graph) {
+type countingWriterSender struct {
+	transmission.WriterSender
+
+	count  int
+	target int
+	ch     chan struct{}
+	mutex  sync.Mutex
+}
+
+func (w *countingWriterSender) Add(ev *transmission.Event) {
+	w.WriterSender.Add(ev)
+
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	w.count++
+	if w.ch != nil && w.count >= w.target {
+		close(w.ch)
+		w.ch = nil
+	}
+}
+
+func (w *countingWriterSender) resetCount() {
+	w.mutex.Lock()
+	w.count = 0
+	w.mutex.Unlock()
+}
+
+func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	if w.count >= target {
+		return
+	}
+
+	ch := make(chan struct{})
+	w.ch = ch
+	w.target = target
+
+	select {
+	case <-ch:
+	case <-time.After(time.Minute):
+		t.Errorf("timed out waiting for %d events", target)
+	}
+}
+
+func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Graph) {
 	c := &config.MockConfig{
 		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       60 * time.Second,
@@ -60,9 +109,7 @@ func newStartedApp(t *testing.T, libhoneyOut io.Writer) (*App, inject.Graph) {
 	samplerFactory := &sample.SamplerFactory{}
 
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.WriterSender{
-			W: libhoneyOut,
-		},
+		Transmission: libhoneyT,
 	})
 	assert.NoError(t, err)
 
@@ -101,7 +148,9 @@ func newStartedApp(t *testing.T, libhoneyOut io.Writer) (*App, inject.Graph) {
 
 func TestAppIntegration(t *testing.T) {
 	var out bytes.Buffer
-	_, graph := newStartedApp(t, &out)
+	_, graph := newStartedApp(t, &transmission.WriterSender{
+		W: &out,
+	})
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -134,4 +183,91 @@ func TestAppIntegration(t *testing.T) {
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
+}
+
+func BenchmarkEvents(b *testing.B) {
+	sender := &countingWriterSender{
+		WriterSender: transmission.WriterSender{
+			W: ioutil.Discard,
+		},
+	}
+	_, graph := newStartedApp(b, sender)
+
+	b.Run("single", func(b *testing.B) {
+		sender.resetCount()
+		reqBody := strings.NewReader(`[{"data":{"foo":"bar"}}]`)
+		req := httptest.NewRequest(
+			"POST",
+			"http://localhost:11000/1/batch/dataset",
+			reqBody,
+		)
+		req.Header.Set("X-Honeycomb-Team", "KEY")
+		req.Header.Set("Content-Type", "application/json")
+		for n := 0; n < b.N; n++ {
+			reqBody.Seek(0, io.SeekStart)
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(b, err)
+			if resp != nil {
+				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				resp.Body.Close()
+			}
+		}
+		sender.waitForCount(b, b.N)
+	})
+
+	b.Run("batch", func(b *testing.B) {
+		sender.resetCount()
+		reqBody := strings.NewReader(`[` + strings.Repeat(`{"data":{"foo":"bar"}},`, 49) + `{"data":{"foo":"bar"}}]`)
+		req := httptest.NewRequest(
+			"POST",
+			"http://localhost:11000/1/batch/dataset",
+			reqBody,
+		)
+		req.Header.Set("X-Honeycomb-Team", "KEY")
+		req.Header.Set("Content-Type", "application/json")
+		for n := 0; n < (b.N/50)+1; n++ {
+			reqBody.Seek(0, io.SeekStart)
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(b, err)
+			if resp != nil {
+				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				resp.Body.Close()
+			}
+		}
+		sender.waitForCount(b, b.N)
+	})
+
+	b.Run("multibatch", func(b *testing.B) {
+		sender.resetCount()
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				reqBody := strings.NewReader(`[` + strings.Repeat(`{"data":{"foo":"bar"}},`, 49) + `{"data":{"foo":"bar"}}]`)
+				req := httptest.NewRequest(
+					"POST",
+					"http://localhost:11000/1/batch/dataset",
+					reqBody,
+				)
+				req.Header.Set("X-Honeycomb-Team", "KEY")
+				req.Header.Set("Content-Type", "application/json")
+				for n := 0; n < (b.N/500)+1; n++ {
+					reqBody.Seek(0, io.SeekStart)
+					resp, err := http.DefaultTransport.RoundTrip(req)
+					assert.NoError(b, err)
+					if resp != nil {
+						assert.Equal(b, http.StatusOK, resp.StatusCode)
+						resp.Body.Close()
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		sender.waitForCount(b, b.N)
+	})
+
+	err := startstop.Stop(graph.Objects(), nil)
+	assert.NoError(b, err)
 }
