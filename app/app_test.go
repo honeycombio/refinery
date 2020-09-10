@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -57,15 +58,15 @@ func (w *countingWriterSender) resetCount() {
 
 func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
 	if w.count >= target {
+		w.mutex.Unlock()
 		return
 	}
 
 	ch := make(chan struct{})
 	w.ch = ch
 	w.target = target
+	w.mutex.Unlock()
 
 	select {
 	case <-ch:
@@ -77,7 +78,7 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Graph) {
 	c := &config.MockConfig{
 		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
+		GetTraceTimeoutVal:       10 * time.Millisecond,
 		GetDefaultSamplerTypeVal: "DeterministicSampler",
 		SendTickerVal:            2 * time.Millisecond,
 		PeerManagementType:       "file",
@@ -97,7 +98,7 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 	lgr := &logger.LogrusLogger{
 		Config: c,
 	}
-	lgr.SetLevel("info")
+	lgr.SetLevel("error")
 	lgr.Start()
 
 	// TODO use real metrics
@@ -185,7 +186,7 @@ func TestAppIntegration(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkEvents(b *testing.B) {
+func BenchmarkTraces(b *testing.B) {
 	sender := &countingWriterSender{
 		WriterSender: transmission.WriterSender{
 			W: ioutil.Discard,
@@ -193,22 +194,38 @@ func BenchmarkEvents(b *testing.B) {
 	}
 	_, graph := newStartedApp(b, sender)
 
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:11000/1/batch/dataset",
+		nil,
+	)
+	assert.NoError(b, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   1 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxConnsPerHost:       100,
+		IdleConnTimeout:       90 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}}
+
 	b.Run("single", func(b *testing.B) {
 		sender.resetCount()
 		reqBody := strings.NewReader(`[{"data":{"foo":"bar"}}]`)
-		req := httptest.NewRequest(
-			"POST",
-			"http://localhost:11000/1/batch/dataset",
-			reqBody,
-		)
-		req.Header.Set("X-Honeycomb-Team", "KEY")
-		req.Header.Set("Content-Type", "application/json")
+		req.Body = ioutil.NopCloser(reqBody)
 		for n := 0; n < b.N; n++ {
 			reqBody.Seek(0, io.SeekStart)
-			resp, err := http.DefaultTransport.RoundTrip(req)
+			resp, err := client.Do(req)
 			assert.NoError(b, err)
 			if resp != nil {
 				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				io.Copy(ioutil.Discard, resp.Body)
 				resp.Body.Close()
 			}
 		}
@@ -218,26 +235,21 @@ func BenchmarkEvents(b *testing.B) {
 	b.Run("batch", func(b *testing.B) {
 		sender.resetCount()
 		reqBody := strings.NewReader(`[` + strings.Repeat(`{"data":{"foo":"bar"}},`, 49) + `{"data":{"foo":"bar"}}]`)
-		req := httptest.NewRequest(
-			"POST",
-			"http://localhost:11000/1/batch/dataset",
-			reqBody,
-		)
-		req.Header.Set("X-Honeycomb-Team", "KEY")
-		req.Header.Set("Content-Type", "application/json")
+		req.Body = ioutil.NopCloser(reqBody)
 		for n := 0; n < (b.N/50)+1; n++ {
 			reqBody.Seek(0, io.SeekStart)
-			resp, err := http.DefaultTransport.RoundTrip(req)
+			resp, err := client.Do(req)
 			assert.NoError(b, err)
 			if resp != nil {
 				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				io.Copy(ioutil.Discard, resp.Body)
 				resp.Body.Close()
 			}
 		}
 		sender.waitForCount(b, b.N)
 	})
 
-	b.Run("multibatch", func(b *testing.B) {
+	b.Run("multi", func(b *testing.B) {
 		sender.resetCount()
 		var wg sync.WaitGroup
 		for i := 0; i < 10; i++ {
@@ -246,19 +258,21 @@ func BenchmarkEvents(b *testing.B) {
 				defer wg.Done()
 
 				reqBody := strings.NewReader(`[` + strings.Repeat(`{"data":{"foo":"bar"}},`, 49) + `{"data":{"foo":"bar"}}]`)
-				req := httptest.NewRequest(
+				req, err := http.NewRequest(
 					"POST",
 					"http://localhost:11000/1/batch/dataset",
 					reqBody,
 				)
+				assert.NoError(b, err)
 				req.Header.Set("X-Honeycomb-Team", "KEY")
 				req.Header.Set("Content-Type", "application/json")
 				for n := 0; n < (b.N/500)+1; n++ {
 					reqBody.Seek(0, io.SeekStart)
-					resp, err := http.DefaultTransport.RoundTrip(req)
+					resp, err := client.Do(req)
 					assert.NoError(b, err)
 					if resp != nil {
 						assert.Equal(b, http.StatusOK, resp.StatusCode)
+						io.Copy(ioutil.Discard, resp.Body)
 						resp.Body.Close()
 					}
 				}
@@ -268,6 +282,6 @@ func BenchmarkEvents(b *testing.B) {
 		sender.waitForCount(b, b.N)
 	})
 
-	err := startstop.Stop(graph.Objects(), nil)
+	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(b, err)
 }
