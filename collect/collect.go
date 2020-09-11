@@ -408,9 +408,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithField("trace_id", &trace.TraceID).WithField("dataset", &trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
-	i.Logger.Info().WithField("trace_id", &trace.TraceID).WithField("dataset", &trace.Dataset).Logf("Sending trace to dataset")
+	i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
