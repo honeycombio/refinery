@@ -16,9 +16,12 @@ type Logger interface {
 }
 
 type Entry interface {
-	// Optimization tip: pass scalar values by reference to avoid spurious heap
-	// allocation when converting them to interface{}.
 	WithField(key string, value interface{}) Entry
+
+	// WithString does the same thing as WithField, but is more efficient for
+	// disabled log levels. (Because the value parameter doesn't escape.)
+	WithString(key string, value string) Entry
+
 	WithFields(fields map[string]interface{}) Entry
 	Logf(f string, args ...interface{})
 }

@@ -366,8 +366,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		// when two timers race and two signals for the same trace are sent down the
 		// toSend channel
 		i.Logger.Debug().
-			WithField("trace_id", trace.TraceID).
-			WithField("dataset", trace.Dataset).
+			WithString("trace_id", trace.TraceID).
+			WithString("dataset", trace.Dataset).
 			Logf("skipping send because someone else already sent trace to dataset")
 		return
 	}
@@ -401,16 +401,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.IncrementCounter("trace_send_dropped")
-		i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
+		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
 		return
 	}
 	i.Metrics.IncrementCounter("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithField("trace_id", &trace.TraceID).WithField("dataset", &trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
-	i.Logger.Info().WithField("trace_id", &trace.TraceID).WithField("dataset", &trace.Dataset).Logf("Sending trace to dataset")
+	i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1

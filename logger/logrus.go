@@ -79,6 +79,13 @@ func (l *LogrusEntry) WithField(key string, value interface{}) Entry {
 	}
 }
 
+func (l *LogrusEntry) WithString(key string, value string) Entry {
+	return &LogrusEntry{
+		entry: l.entry.WithField(key, value),
+		level: l.level,
+	}
+}
+
 func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
 	return &LogrusEntry{
 		entry: l.entry.WithFields(fields),
