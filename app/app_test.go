@@ -81,7 +81,7 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 	c := &config.MockConfig{
 		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       10 * time.Millisecond,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
+		GetSamplerTypeVal:        "DeterministicSampler",
 		SendTickerVal:            2 * time.Millisecond,
 		PeerManagementType:       "file",
 		GetOtherConfigVal:        `{"CacheCapacity":10000}`,
