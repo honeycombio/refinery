@@ -296,11 +296,11 @@ func TestSampleConfigReload(t *testing.T) {
 	transmission.Start()
 
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 10 * time.Millisecond,
-		GetSamplerTypeVal:  "DeterministicSampler",
-		SendTickerVal:      2 * time.Millisecond,
-		GetOtherConfigVal:  `{"CacheCapacity": 10}`,
+		GetSendDelayVal:                      0,
+		GetTraceTimeoutVal:                   10 * time.Millisecond,
+		GetSamplerTypeVal:                    "DeterministicSampler",
+		SendTickerVal:                        2 * time.Millisecond,
+		GetInMemoryCollectorCacheCapacityVal: `{"CacheCapacity": 10}`,
 	}
 
 	coll := &InMemCollector{
