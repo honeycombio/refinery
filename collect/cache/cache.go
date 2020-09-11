@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"time"
+
 	"github.com/honeycombio/samproxy/logger"
 	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
@@ -14,6 +16,10 @@ type Cache interface {
 	Get(traceID string) *types.Trace
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
+
+	// Retrieve and remove all traces which are past their SendBy date.
+	// Does not check whether they've been sent.
+	TakeExpiredTraces(now time.Time) []*types.Trace
 }
 
 // DefaultInMemCache keeps a bounded number of entries to avoid growing memory
@@ -113,4 +119,17 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 	tmp := make([]*types.Trace, len(d.insertionOrder))
 	copy(tmp, d.insertionOrder)
 	return tmp
+}
+
+func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+	var res []*types.Trace
+
+	for i, t := range d.insertionOrder {
+		if t != nil && now.After(t.SendBy) {
+			res = append(res, t)
+			d.insertionOrder[i] = nil
+			delete(d.cache, t.TraceID)
+		}
+	}
+	return res
 }

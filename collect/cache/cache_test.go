@@ -2,6 +2,7 @@ package cache
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -52,4 +53,44 @@ func TestBufferOverrun(t *testing.T) {
 	assert.Equal(t, 0, s.CounterIncrements["collect_cache_buffer_overrun"], "buffer should not yet have overrun")
 	c.Set(traces[2])
 	assert.Equal(t, 1, s.CounterIncrements["collect_cache_buffer_overrun"], "buffer should have overrun")
+}
+
+func TestTakeExpiredTraces(t *testing.T) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := &DefaultInMemCache{
+		Config:  CacheConfig{10},
+		Metrics: s,
+		Logger:  &logger.NullLogger{},
+	}
+	c.Start()
+
+	now := time.Now()
+	traces := []*types.Trace{
+		&types.Trace{TraceID: "1", SendBy: now.Add(-time.Minute), Sent: true},
+		&types.Trace{TraceID: "2", SendBy: now.Add(-time.Minute)},
+		&types.Trace{TraceID: "3", SendBy: now.Add(time.Minute)},
+		&types.Trace{TraceID: "4"},
+	}
+	for _, t := range traces {
+		c.Set(t)
+	}
+
+	expired := c.TakeExpiredTraces(now)
+	assert.Equal(t, 3, len(expired))
+	assert.Equal(t, traces[0], expired[0])
+	assert.Equal(t, traces[1], expired[1])
+	assert.Equal(t, traces[3], expired[2])
+
+	assert.Equal(t, 1, len(c.cache))
+
+	all := c.GetAll()
+	assert.Equal(t, 10, len(all))
+	for i := range all {
+		if i == 2 {
+			assert.Equal(t, traces[2], all[i])
+			continue
+		}
+		assert.Nil(t, all[i])
+	}
 }
