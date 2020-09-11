@@ -74,12 +74,12 @@ func (m *MockConfig) GetCollectorType() (string, error) {
 	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
 }
 func (m *MockConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
-	var capacity InMemoryCollectorCacheCapacity
+	capacity := &InMemoryCollectorCacheCapacity{}
 	err := json.Unmarshal([]byte(m.GetInMemoryCollectorCacheCapacityVal), capacity)
 	if err != nil {
-		return capacity, err
+		return *capacity, err
 	}
-	return capacity, m.GetInMemoryCollectorCacheCapacityErr
+	return *capacity, m.GetInMemoryCollectorCacheCapacityErr
 }
 func (m *MockConfig) GetHoneycombAPI() (string, error) {
 	return m.GetHoneycombAPIVal, m.GetHoneycombAPIErr
@@ -90,12 +90,12 @@ func (m *MockConfig) GetPeerListenAddr() (string, error) {
 }
 func (m *MockConfig) GetLoggerType() (string, error) { return m.GetLoggerTypeVal, m.GetLoggerTypeErr }
 func (m *MockConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
-	var hlConfig HoneycombLoggerConfig
+	hlConfig := &HoneycombLoggerConfig{}
 	err := json.Unmarshal([]byte(m.GetHoneycombLoggerConfigVal), hlConfig)
 	if err != nil {
-		return hlConfig, err
+		return *hlConfig, err
 	}
-	return hlConfig, m.GetHoneycombLoggerConfigErr
+	return *hlConfig, m.GetHoneycombLoggerConfigErr
 }
 func (m *MockConfig) GetLoggingLevel() (string, error) {
 	return m.GetLoggingLevelVal, m.GetLoggingLevelErr
@@ -113,20 +113,20 @@ func (m *MockConfig) GetMetricsType() (string, error) {
 	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
 func (m *MockConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
-	var hmConfig HoneycombMetricsConfig
+	hmConfig := &HoneycombMetricsConfig{}
 	err := json.Unmarshal([]byte(m.GetHoneycombMetricsConfigVal), hmConfig)
 	if err != nil {
-		return hmConfig, err
+		return *hmConfig, err
 	}
-	return hmConfig, m.GetHoneycombMetricsConfigErr
+	return *hmConfig, m.GetHoneycombMetricsConfigErr
 }
 func (m *MockConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
-	var pmConfig PrometheusMetricsConfig
+	pmConfig := &PrometheusMetricsConfig{}
 	err := json.Unmarshal([]byte(m.GetPrometheusMetricsConfigVal), pmConfig)
 	if err != nil {
-		return pmConfig, err
+		return *pmConfig, err
 	}
-	return pmConfig, m.GetPrometheusMetricsConfigErr
+	return *pmConfig, m.GetPrometheusMetricsConfigErr
 }
 func (m *MockConfig) GetSendDelay() (time.Duration, error) {
 	return m.GetSendDelayVal, m.GetSendDelayErr

@@ -79,17 +79,17 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 
 func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Graph) {
 	c := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       10 * time.Millisecond,
-		GetSamplerTypeVal:        "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
-		PeerManagementType:       "file",
-		GetOtherConfigVal:        `{"CacheCapacity":10000}`,
-		GetUpstreamBufferSizeVal: 10000,
-		GetPeerBufferSizeVal:     10000,
-		GetListenAddrVal:         "127.0.0.1:11000",
-		GetPeerListenAddrVal:     "127.0.0.1:11001",
-		GetAPIKeysVal:            []string{"KEY"},
+		GetSendDelayVal:                      0,
+		GetTraceTimeoutVal:                   10 * time.Millisecond,
+		GetSamplerTypeVal:                    "DeterministicSampler",
+		SendTickerVal:                        2 * time.Millisecond,
+		PeerManagementType:                   "file",
+		GetUpstreamBufferSizeVal:             10000,
+		GetPeerBufferSizeVal:                 10000,
+		GetListenAddrVal:                     "127.0.0.1:11000",
+		GetPeerListenAddrVal:                 "127.0.0.1:11001",
+		GetAPIKeysVal:                        []string{"KEY"},
+		GetInMemoryCollectorCacheCapacityVal: `{"CacheCapacity":10000}`,
 	}
 
 	peers, err := peer.NewPeers(c)

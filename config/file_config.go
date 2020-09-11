@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-playground/validator"
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -57,10 +56,10 @@ type InMemoryCollectorCacheCapacity struct {
 type HoneycombLevel int
 
 type HoneycombLoggerConfig struct {
-	LoggerHoneycombAPI string         `validate:"required,url"`
-	LoggerAPIKey       string         `validate:"required"`
-	LoggerDataset      string         `validate:"required"`
-	Level              HoneycombLevel `validate:"required"`
+	LoggerHoneycombAPI string `validate:"required,url"`
+	LoggerAPIKey       string `validate:"required"`
+	LoggerDataset      string `validate:"required"`
+	Level              HoneycombLevel
 }
 
 type PrometheusMetricsConfig struct {
@@ -138,13 +137,14 @@ func NewConfig(config, rules string) (Config, error) {
 	v := validator.New()
 	err = v.Struct(fc.conf)
 	if err != nil {
+		fmt.Println("validation err")
 		return nil, err
 	}
 
 	err = fc.validateConditionalConfigs()
 
 	if err != nil {
-		fmt.Println("error validating conditional configs")
+		fmt.Println("conditional err")
 		return nil, err
 	}
 
@@ -277,22 +277,22 @@ func (f *fileConfig) GetLoggerType() (string, error) {
 }
 
 func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
-	var hlConfig HoneycombLoggerConfig
+	hlConfig := &HoneycombLoggerConfig{}
 	if sub := f.config.Sub("HoneycombLogger"); sub != nil {
 		err := sub.UnmarshalExact(hlConfig)
 		if err != nil {
-			return hlConfig, err
+			return *hlConfig, err
 		}
 
 		v := validator.New()
 		err = v.Struct(hlConfig)
 		if err != nil {
-			return hlConfig, err
+			return *hlConfig, err
 		}
 
-		return hlConfig, nil
+		return *hlConfig, nil
 	}
-	return hlConfig, errors.New("No config found for HoneycombLogger")
+	return *hlConfig, errors.New("No config found for HoneycombLogger")
 }
 
 func (f *fileConfig) GetCollectorType() (string, error) {
@@ -300,15 +300,15 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
-	var capacity InMemoryCollectorCacheCapacity
+	capacity := &InMemoryCollectorCacheCapacity{}
 	if sub := f.config.Sub("InMemCollector"); sub != nil {
 		err := sub.UnmarshalExact(capacity)
 		if err != nil {
-			return capacity, err
+			return *capacity, err
 		}
-		return capacity, nil
+		return *capacity, nil
 	}
-	return capacity, errors.New("No config found for inMemCollector")
+	return *capacity, errors.New("No config found for inMemCollector")
 }
 
 var (
@@ -334,42 +334,41 @@ func (f *fileConfig) GetMetricsType() (string, error) {
 }
 
 func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
-	var hmConfig HoneycombMetricsConfig
+	hmConfig := &HoneycombMetricsConfig{}
 	if sub := f.config.Sub("HoneycombMetrics"); sub != nil {
 		err := sub.UnmarshalExact(hmConfig)
 		if err != nil {
-			spew.Dump(err)
-			return hmConfig, err
+			return *hmConfig, err
 		}
 
 		v := validator.New()
 		err = v.Struct(hmConfig)
 		if err != nil {
-			return hmConfig, err
+			return *hmConfig, err
 		}
 
-		return hmConfig, nil
+		return *hmConfig, nil
 	}
-	return hmConfig, errors.New("No config found for HoneycombMetrics")
+	return *hmConfig, errors.New("No config found for HoneycombMetrics")
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
-	var pcConfig PrometheusMetricsConfig
+	pcConfig := &PrometheusMetricsConfig{}
 	if sub := f.config.Sub("PrometheusMetrics"); sub != nil {
 		err := sub.UnmarshalExact(pcConfig)
 		if err != nil {
-			return pcConfig, err
+			return *pcConfig, err
 		}
 
 		v := validator.New()
 		err = v.Struct(pcConfig)
 		if err != nil {
-			return pcConfig, err
+			return *pcConfig, err
 		}
 
-		return pcConfig, nil
+		return *pcConfig, nil
 	}
-	return pcConfig, errors.New("No config found for PrometheusMetrics")
+	return *pcConfig, errors.New("No config found for PrometheusMetrics")
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {

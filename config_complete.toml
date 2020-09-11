@@ -91,7 +91,7 @@ Collector = "InMemCollector"
 # Logger describes which logger to use for Samproxy logs. Valid options are
 # "logrus" and "honeycomb". The logrus option will write logs to STDOUT and the
 # honeycomb option will send them to a Honeycomb dataset.
-Logger = "logrus"
+Logger = "honeycomb"
 
 # Metrics describes which service to use for Samproxy metrics. Valid options are
 # "prometheus" and "honeycomb". The prometheus option starts a listener that
@@ -190,17 +190,17 @@ CacheCapacity = 1000
 
 # LoggerHoneycombAPI is the URL for the upstream Honeycomb API.
 # Eligible for live reload.
-# LoggerHoneycombAPI = "https://api.honeycomb.io"
+ LoggerHoneycombAPI = "https://api.honeycomb.io"
 
 # LoggerAPIKey is the API key to use to send log events to the Honeycomb logging
 # dataset. This is separate from the APIKeys used to authenticate regular
 # traffic.
 # Eligible for live reload.
-# LoggerAPIKey = "abcd1234"
+ LoggerAPIKey = "abcd1234"
 
 # LoggerDataset is the name of the dataset to which to send Samproxy logs
 # Eligible for live reload.
-# LoggerDataset = "Samproxy Logs"
+ LoggerDataset = "Samproxy Logs"
 
 
 #######################
