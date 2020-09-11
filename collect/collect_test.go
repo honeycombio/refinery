@@ -68,11 +68,13 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpan(span)
+
 	time.Sleep(conf.SendTickerVal * 2)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
-	assert.Equal(t, traceID1, coll.Cache.Get(traceID1).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	// * remove the trace from the cache
+	assert.Nil(t, coll.Cache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
@@ -89,7 +91,8 @@ func TestAddRootSpan(t *testing.T) {
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
-	assert.Equal(t, traceID2, coll.Cache.Get(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	// * remove the trace from the cache
+	assert.Nil(t, coll.Cache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
@@ -161,7 +164,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Equal(t, 2, len(coll.Cache.Get(traceID).GetSpans()), "after adding a leaf and root span, we should have a two spans in the cache")
+	assert.Nil(t, coll.Cache.Get(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	transmission.Mux.RUnlock()
@@ -235,7 +238,8 @@ func TestDryRunMode(t *testing.T) {
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
-	assert.Equal(t, traceID1, coll.Cache.Get(traceID1).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	// * remove the trace from the cache
+	assert.Nil(t, coll.Cache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID1, transmission.Events[0].Data["samproxy_kept"], "field should match sampling decision for its trace ID")
@@ -282,7 +286,8 @@ func TestDryRunMode(t *testing.T) {
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
-	assert.Equal(t, traceID3, coll.Cache.Get(traceID3).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	// * remove the trace from the cache
+	assert.Nil(t, coll.Cache.Get(traceID3), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID3, transmission.Events[3].Data["samproxy_kept"], "field should match sampling decision for its trace ID")

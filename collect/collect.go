@@ -258,14 +258,9 @@ func (i *InMemCollector) collect() {
 }
 
 func (i *InMemCollector) sendTracesInCache(now time.Time) {
-	traces := i.Cache.GetAll()
-
+	traces := i.Cache.TakeExpiredTraces(now)
 	for _, t := range traces {
-		if t != nil {
-			if now.After(t.SendBy) {
-				i.send(t)
-			}
-		}
+		i.send(t)
 	}
 }
 
@@ -434,9 +429,7 @@ func (i *InMemCollector) Stop() error {
 		traces := i.Cache.GetAll()
 		for _, trace := range traces {
 			if trace != nil {
-				if !trace.GetSent() {
-					i.send(trace)
-				}
+				i.send(trace)
 			}
 		}
 	}
