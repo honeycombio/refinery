@@ -137,14 +137,12 @@ func NewConfig(config, rules string) (Config, error) {
 	v := validator.New()
 	err = v.Struct(fc.conf)
 	if err != nil {
-		fmt.Println("validation err")
 		return nil, err
 	}
 
 	err = fc.validateConditionalConfigs()
 
 	if err != nil {
-		fmt.Println("conditional err")
 		return nil, err
 	}
 
