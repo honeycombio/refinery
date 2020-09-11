@@ -1,1 +1,328 @@
 package app
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/facebookgo/inject"
+	"github.com/facebookgo/startstop"
+	"github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/honeycombio/samproxy/collect"
+	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/samproxy/internal/peer"
+	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/samproxy/sample"
+	"github.com/honeycombio/samproxy/sharder"
+	"github.com/honeycombio/samproxy/transmit"
+)
+
+type countingWriterSender struct {
+	transmission.WriterSender
+
+	count  int
+	target int
+	ch     chan struct{}
+	mutex  sync.Mutex
+}
+
+func (w *countingWriterSender) Add(ev *transmission.Event) {
+	w.WriterSender.Add(ev)
+
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	w.count++
+	if w.ch != nil && w.count >= w.target {
+		close(w.ch)
+		w.ch = nil
+	}
+}
+
+func (w *countingWriterSender) resetCount() {
+	w.mutex.Lock()
+	w.count = 0
+	w.mutex.Unlock()
+}
+
+func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
+	w.mutex.Lock()
+	if w.count >= target {
+		w.mutex.Unlock()
+		return
+	}
+
+	ch := make(chan struct{})
+	w.ch = ch
+	w.target = target
+	w.mutex.Unlock()
+
+	select {
+	case <-ch:
+	case <-time.After(time.Minute):
+		t.Errorf("timed out waiting for %d events", target)
+	}
+}
+
+func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Graph) {
+	c := &config.MockConfig{
+		GetSendDelayVal:          0,
+		GetTraceTimeoutVal:       10 * time.Millisecond,
+		GetSamplerTypeVal:        "DeterministicSampler",
+		SendTickerVal:            2 * time.Millisecond,
+		PeerManagementType:       "file",
+		GetOtherConfigVal:        `{"CacheCapacity":10000}`,
+		GetUpstreamBufferSizeVal: 10000,
+		GetPeerBufferSizeVal:     10000,
+		GetListenAddrVal:         "127.0.0.1:11000",
+		GetPeerListenAddrVal:     "127.0.0.1:11001",
+		GetAPIKeysVal:            []string{"KEY"},
+	}
+
+	peers, err := peer.NewPeers(c)
+	assert.NoError(t, err)
+
+	a := App{}
+
+	lgr := &logger.LogrusLogger{
+		Config: c,
+	}
+	lgr.SetLevel("error")
+	lgr.Start()
+
+	// TODO use real metrics
+	metricsr := &metrics.MockMetrics{}
+	metricsr.Start()
+
+	collector := &collect.InMemCollector{}
+	shrdr := &sharder.SingleServerSharder{}
+	samplerFactory := &sample.SamplerFactory{}
+
+	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
+		Transmission: libhoneyT,
+	})
+	assert.NoError(t, err)
+
+	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
+		Transmission: &transmission.DiscardSender{},
+	})
+	assert.NoError(t, err)
+
+	var g inject.Graph
+	err = g.Provide(
+		&inject.Object{Value: c},
+		&inject.Object{Value: peers},
+		&inject.Object{Value: lgr},
+		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
+		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: upstreamClient, Name: "upstream_"}, Name: "upstreamTransmission"},
+		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: peerClient, Name: "peer_"}, Name: "peerTransmission"},
+		&inject.Object{Value: shrdr},
+		&inject.Object{Value: collector},
+		&inject.Object{Value: metricsr},
+		&inject.Object{Value: "test", Name: "version"},
+		&inject.Object{Value: samplerFactory},
+		&inject.Object{Value: &a},
+	)
+	assert.NoError(t, err)
+
+	err = g.Populate()
+	assert.NoError(t, err)
+
+	err = startstop.Start(g.Objects(), nil)
+	assert.NoError(t, err)
+
+	// Racy: wait just a moment for ListenAndServe to start up.
+	time.Sleep(10 * time.Millisecond)
+	return &a, g
+}
+
+func TestAppIntegration(t *testing.T) {
+	var out bytes.Buffer
+	_, graph := newStartedApp(t, &transmission.WriterSender{
+		W: &out,
+	})
+
+	// Send a root span, it should be sent in short order.
+	req := httptest.NewRequest(
+		"POST",
+		"http://localhost:11000/1/batch/dataset",
+		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+	)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	// Wait for span to be sent.
+	deadline := time.After(time.Second)
+	for {
+		if out.Len() > 62 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Error("timed out waiting for output")
+			return
+		case <-time.After(time.Millisecond):
+		}
+	}
+	assert.Equal(t, `{"data":{"foo":"bar","trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+}
+
+func BenchmarkTraces(b *testing.B) {
+	ctx := context.Background()
+
+	spanFormat := `{"data":{` +
+		`"trace.trace_id":"%d",` +
+		`"trace.span_id":"%d",` +
+		`"trace.parent_id":"0000000000",` +
+		`"key":"value",` +
+		`"field0":0,` +
+		`"field1":1,` +
+		`"field2":2,` +
+		`"field3":3,` +
+		`"field4":4,` +
+		`"field5":5,` +
+		`"field6":6,` +
+		`"field7":7,` +
+		`"field8":8,` +
+		`"field9":9,` +
+		`"field10":10,` +
+		`"long":"this is a test of the emergency broadcast system",` +
+		`"foo":"bar"` +
+		`},"dataset":"dataset"}`
+
+	// Pre-build spans to send, none are root spans
+	var tid int
+	spans := make([][]byte, 100000)
+	for i := range spans {
+		if i%10 == 0 {
+			tid++
+		}
+		spans[i] = []byte(fmt.Sprintf(spanFormat, tid, i))
+	}
+
+	sender := &countingWriterSender{
+		WriterSender: transmission.WriterSender{
+			W: ioutil.Discard,
+		},
+	}
+	_, graph := newStartedApp(b, sender)
+
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:11000/1/batch/dataset",
+		nil,
+	)
+	assert.NoError(b, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   1 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxConnsPerHost:       100,
+		IdleConnTimeout:       90 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}}
+
+	b.Run("single", func(b *testing.B) {
+		sender.resetCount()
+		for n := 0; n < b.N; n++ {
+			blob := `[` + string(spans[n%len(spans)]) + `]`
+			req.Body = ioutil.NopCloser(strings.NewReader(blob))
+			resp, err := client.Do(req)
+			assert.NoError(b, err)
+			if resp != nil {
+				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				io.Copy(ioutil.Discard, resp.Body)
+				resp.Body.Close()
+			}
+		}
+		sender.waitForCount(b, b.N)
+	})
+
+	b.Run("batch", func(b *testing.B) {
+		sender.resetCount()
+
+		// over-allocate blob for 50 spans
+		blob := make([]byte, 0, len(spanFormat)*100)
+		for n := 0; n < (b.N/50)+1; n++ {
+			blob = append(blob[:0], '[')
+			for i := 0; i < 50; i++ {
+				blob = append(blob, spans[((n*50)+i)%len(spans)]...)
+				blob = append(blob, ',')
+			}
+			blob[len(blob)-1] = ']'
+			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+
+			resp, err := client.Do(req)
+			assert.NoError(b, err)
+			if resp != nil {
+				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				io.Copy(ioutil.Discard, resp.Body)
+				resp.Body.Close()
+			}
+		}
+		sender.waitForCount(b, b.N)
+	})
+
+	b.Run("multi", func(b *testing.B) {
+		sender.resetCount()
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				req := req.Clone(ctx)
+				blob := make([]byte, 0, len(spanFormat)*100)
+				for n := 0; n < (b.N/500)+1; n++ {
+					blob = append(blob[:0], '[')
+					for i := 0; i < 50; i++ {
+						blob = append(blob, spans[((n*50)+i)%len(spans)]...)
+						blob = append(blob, ',')
+					}
+					blob[len(blob)-1] = ']'
+					req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+
+					resp, err := client.Do(req)
+					assert.NoError(b, err)
+					if resp != nil {
+						assert.Equal(b, http.StatusOK, resp.StatusCode)
+						io.Copy(ioutil.Discard, resp.Body)
+						resp.Body.Close()
+					}
+				}
+			}()
+		}
+		wg.Wait()
+		sender.waitForCount(b, b.N)
+	})
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(b, err)
+}

@@ -22,22 +22,22 @@ func TestAddRootSpan(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
-		Config:         conf,
-		Logger:         &logger.NullLogger{},
-		Transmission:   transmission,
-		defaultSampler: &sample.DeterministicSampler{},
-		Metrics:        &metrics.NullMetrics{},
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
 		},
 	}
+
 	c := &cache.DefaultInMemCache{
 		Config: cache.CacheConfig{
 			CacheCapacity: 3,
@@ -47,6 +47,7 @@ func TestAddRootSpan(t *testing.T) {
 	}
 	err := c.Start()
 	assert.NoError(t, err, "in-mem cache should start")
+
 	coll.Cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -54,6 +55,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	var traceID1 = "mytrace"
@@ -101,17 +103,16 @@ func TestAddSpan(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
-		Config:         conf,
-		Logger:         &logger.NullLogger{},
-		Transmission:   transmission,
-		defaultSampler: &sample.DeterministicSampler{},
-		Metrics:        &metrics.NullMetrics{},
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -132,6 +133,7 @@ func TestAddSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	var traceID = "mytrace"
@@ -171,23 +173,22 @@ func TestDryRunMode(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       60 * time.Second,
-		GetDefaultSamplerTypeVal: "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
-		GetOtherConfigVal:        `{"SampleRate":10}`,
-		DryRun:                   true,
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
+		GetOtherConfigVal:  `{"SampleRate":10}`,
+		DryRun:             true,
 	}
 	samplerFactory := &sample.SamplerFactory{
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetDefaultSamplerImplementation()
+	sampler := samplerFactory.GetSamplerImplementationForDataset("test")
 	coll := &InMemCollector{
 		Config:         conf,
 		Logger:         &logger.NullLogger{},
 		Transmission:   transmission,
-		defaultSampler: sampler,
 		Metrics:        &metrics.NullMetrics{},
 		SamplerFactory: samplerFactory,
 	}
@@ -207,18 +208,19 @@ func TestDryRunMode(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	var traceID1 = "abc123"
 	var traceID2 = "def456"
 	var traceID3 = "ghi789"
 	// sampling decisions based on trace ID
-	_, keepTraceID1 := coll.defaultSampler.GetSampleRate(&types.Trace{TraceID: traceID1})
+	_, keepTraceID1 := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID1)
-	_, keepTraceID2 := coll.defaultSampler.GetSampleRate(&types.Trace{TraceID: traceID2})
+	_, keepTraceID2 := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
 	assert.True(t, keepTraceID2)
-	_, keepTraceID3 := coll.defaultSampler.GetSampleRate(&types.Trace{TraceID: traceID3})
+	_, keepTraceID3 := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID3)
 
@@ -286,4 +288,70 @@ func TestDryRunMode(t *testing.T) {
 	assert.Equal(t, keepTraceID3, transmission.Events[3].Data["samproxy_kept"], "field should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
 	coll.Stop()
+}
+
+func TestSampleConfigReload(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+
+	transmission.Start()
+
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Millisecond,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
+		GetOtherConfigVal:  `{"CacheCapacity": 10}`,
+	}
+
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	err := coll.Start()
+
+	assert.NoError(t, err)
+
+	dataset := "aoeu"
+
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: dataset,
+		},
+	}
+
+	coll.AddSpan(span)
+
+	assert.Eventually(t, func() bool {
+		_, ok := coll.datasetSamplers[dataset]
+		return ok
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+
+	conf.ReloadConfig()
+
+	assert.Eventually(t, func() bool {
+		_, ok := coll.datasetSamplers[dataset]
+		return !ok
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+
+	span = &types.Span{
+		TraceID: "2",
+		Event: types.Event{
+			Dataset: dataset,
+		},
+	}
+
+	coll.AddSpan(span)
+
+	assert.Eventually(t, func() bool {
+		_, ok := coll.datasetSamplers[dataset]
+		return ok
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 }

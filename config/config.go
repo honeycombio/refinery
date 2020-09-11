@@ -73,10 +73,6 @@ type Config interface {
 	// GetInMemCollectorConfig returns the config specific to the InMemCollector
 	GetInMemCollectorConfig(*InMemoryCollectorConfig) error
 
-	// GetDefaultSamplerType returns the sampler type to use for all datasets
-	// not explicitly defined
-	GetDefaultSamplerType() (string, error)
-
 	// GetSamplerTypeForDataset returns the sampler type to use for the given dataset
 	GetSamplerTypeForDataset(string) (string, error)
 

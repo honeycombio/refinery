@@ -9,8 +9,6 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
-const defaultConfigName = "_default"
-
 type Sampler interface {
 	GetSampleRate(trace *types.Trace) (rate uint, keep bool)
 }
@@ -20,18 +18,6 @@ type SamplerFactory struct {
 	Config  config.Config   `inject:""`
 	Logger  logger.Logger   `inject:""`
 	Metrics metrics.Metrics `inject:""`
-}
-
-// GetDefaultSamplerImplementation returns the default sampler implementation
-// or exits fatally if not defined
-func (s *SamplerFactory) GetDefaultSamplerImplementation() Sampler {
-	samplerType, err := s.Config.GetDefaultSamplerType()
-	if err != nil {
-		s.Logger.Error().WithField("error", err).Logf("unable to get default sampler type from config")
-		os.Exit(1)
-	}
-	s.Logger.Debug().Logf("creating default sampler implementation")
-	return s.getSamplerForType(samplerType, defaultConfigName)
 }
 
 // GetSamplerImplementationForDataset returns the sampler implementation for the dataset,

@@ -36,8 +36,8 @@ type MockConfig struct {
 	GetPeersVal                  []string
 	GetRedisHostErr              error
 	GetRedisHostVal              string
-	GetDefaultSamplerTypeErr     error
-	GetDefaultSamplerTypeVal     string
+	GetSamplerTypeErr            error
+	GetSamplerTypeVal            string
 	GetMetricsTypeErr            error
 	GetMetricsTypeVal            string
 	GetHoneycombMetricsConfigErr error
@@ -107,9 +107,6 @@ func (m *MockConfig) GetOtherConfig(name string, iface interface{}) error {
 }
 func (m *MockConfig) GetPeers() ([]string, error)   { return m.GetPeersVal, m.GetPeersErr }
 func (m *MockConfig) GetRedisHost() (string, error) { return m.GetRedisHostVal, m.GetRedisHostErr }
-func (m *MockConfig) GetDefaultSamplerType() (string, error) {
-	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
-}
 func (m *MockConfig) GetMetricsType() (string, error) {
 	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
@@ -136,7 +133,7 @@ func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
 
 // TODO: allow per-dataset mock values
 func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
-	return m.GetDefaultSamplerTypeVal, m.GetDefaultSamplerTypeErr
+	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
 }
 
 func (m *MockConfig) GetUpstreamBufferSize() int {
