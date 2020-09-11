@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -15,7 +14,7 @@ import (
 )
 
 type DynamicSampler struct {
-	Config  config.Config
+	Config  *config.DynamicSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
@@ -30,45 +29,30 @@ type DynamicSampler struct {
 	dynsampler dynsampler.Sampler
 }
 
-type DynSamplerConfig struct {
-	SampleRate                   int64
-	ClearFrequencySec            int64
-	FieldList                    []string
-	UseTraceLength               bool
-	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string
-}
-
 func (d *DynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DynamicSampler") }()
-	dsConfig := DynSamplerConfig{}
-	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
-	err := d.Config.GetOtherConfig(configKey, &dsConfig)
-	if err != nil {
-		return err
+	if d.Config.SampleRate < 1 {
+		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", d.Config.SampleRate)
+		d.Config.SampleRate = 1
 	}
-	if dsConfig.SampleRate < 1 {
-		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", dsConfig.SampleRate)
-		dsConfig.SampleRate = 1
+	d.sampleRate = d.Config.SampleRate
+	if d.Config.ClearFrequencySec == 0 {
+		d.Config.ClearFrequencySec = 30
 	}
-	d.sampleRate = dsConfig.SampleRate
-	if dsConfig.ClearFrequencySec == 0 {
-		dsConfig.ClearFrequencySec = 30
-	}
-	d.clearFrequencySec = dsConfig.ClearFrequencySec
+	d.clearFrequencySec = d.Config.ClearFrequencySec
 
 	// get list of fields to use when constructing the dynsampler key
-	fieldList := dsConfig.FieldList
+	fieldList := d.Config.FieldList
 
 	// always put the field list in sorted order for easier comparison
 	sort.Strings(fieldList)
 	d.fieldList = fieldList
 
-	d.useTraceLength = dsConfig.UseTraceLength
+	d.useTraceLength = d.Config.UseTraceLength
 
-	d.addDynsampleKey = dsConfig.AddSampleRateKeyToTrace
-	d.addDynsampleField = dsConfig.AddSampleRateKeyToTraceField
+	d.addDynsampleKey = d.Config.AddSampleRateKeyToTrace
+	d.addDynsampleField = d.Config.AddSampleRateKeyToTraceField
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{

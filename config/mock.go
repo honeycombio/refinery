@@ -35,7 +35,7 @@ type MockConfig struct {
 	GetRedisHostErr               error
 	GetRedisHostVal               string
 	GetSamplerTypeErr             error
-	GetSamplerTypeVal             string
+	GetSamplerTypeVal             interface{}
 	GetMetricsTypeErr             error
 	GetMetricsTypeVal             string
 	GetHoneycombMetricsConfigErr  error
@@ -112,7 +112,7 @@ func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
 }
 
 // TODO: allow per-dataset mock values
-func (m *MockConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
+func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
 	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
 }
 

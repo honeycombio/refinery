@@ -17,15 +17,12 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 	metrics := metrics.MockMetrics{}
 	metrics.Start()
 
-	config := &config.MockConfig{
-		GetOtherConfigVal: `{
-  "FieldList":["http.status_code"],
-  "AddSampleRateKeyToTrace":true,
-  "AddSampleRateKeyToTraceField":"meta.key"
-}`,
-	}
 	sampler := &EMADynamicSampler{
-		Config:  config,
+		Config: &config.EMADynamicSamplerConfig{
+			FieldList:                    []string{"http.status_code"},
+			AddSampleRateKeyToTrace:      true,
+			AddSampleRateKeyToTraceField: "meta.key",
+		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
 	}

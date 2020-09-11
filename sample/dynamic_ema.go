@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -15,7 +14,7 @@ import (
 )
 
 type EMADynamicSampler struct {
-	Config  config.Config
+	Config  *config.EMADynamicSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
@@ -35,53 +34,32 @@ type EMADynamicSampler struct {
 	dynsampler dynsampler.Sampler
 }
 
-type EMADynSamplerConfig struct {
-	GoalSampleRate      int
-	AdjustmentInterval  int
-	Weight              float64
-	AgeOutValue         float64
-	BurstMultiple       float64
-	BurstDetectionDelay uint
-	MaxKeys             int
-
-	FieldList                    []string
-	UseTraceLength               bool
-	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string
-}
-
 func (d *EMADynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMADynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMADynamicSampler") }()
-	dsConfig := EMADynSamplerConfig{}
-	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
-	err := d.Config.GetOtherConfig(configKey, &dsConfig)
-	if err != nil {
-		return err
+	if d.Config.GoalSampleRate < 1 {
+		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", d.Config.GoalSampleRate)
+		d.Config.GoalSampleRate = 1
 	}
-	if dsConfig.GoalSampleRate < 1 {
-		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", dsConfig.GoalSampleRate)
-		dsConfig.GoalSampleRate = 1
-	}
-	d.goalSampleRate = dsConfig.GoalSampleRate
-	d.adjustmentInterval = dsConfig.AdjustmentInterval
-	d.weight = dsConfig.Weight
-	d.ageOutValue = dsConfig.AgeOutValue
-	d.burstMultiple = dsConfig.BurstMultiple
-	d.burstDetectionDelay = dsConfig.BurstDetectionDelay
-	d.maxKeys = dsConfig.MaxKeys
+	d.goalSampleRate = d.Config.GoalSampleRate
+	d.adjustmentInterval = d.Config.AdjustmentInterval
+	d.weight = d.Config.Weight
+	d.ageOutValue = d.Config.AgeOutValue
+	d.burstMultiple = d.Config.BurstMultiple
+	d.burstDetectionDelay = d.Config.BurstDetectionDelay
+	d.maxKeys = d.Config.MaxKeys
 
 	// get list of fields to use when constructing the dynsampler key
-	fieldList := dsConfig.FieldList
+	fieldList := d.Config.FieldList
 
 	// always put the field list in sorted order for easier comparison
 	sort.Strings(fieldList)
 	d.fieldList = fieldList
 
-	d.useTraceLength = dsConfig.UseTraceLength
+	d.useTraceLength = d.Config.UseTraceLength
 
-	d.addDynsampleKey = dsConfig.AddSampleRateKeyToTrace
-	d.addDynsampleField = dsConfig.AddSampleRateKeyToTraceField
+	d.addDynsampleKey = d.Config.AddSampleRateKeyToTrace
+	d.addDynsampleField = d.Config.AddSampleRateKeyToTraceField
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{

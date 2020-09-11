@@ -23,31 +23,29 @@ type SamplerFactory struct {
 // GetSamplerImplementationForDataset returns the sampler implementation for the dataset,
 // or nil if it is not defined
 func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Sampler {
-	samplerType, err := s.Config.GetSamplerTypeForDataset(dataset)
+	c, err := s.Config.GetSamplerConfigForDataset(dataset)
 	if err != nil {
 		return nil
 	}
-	s.Logger.Debug().WithField("dataset", dataset).Logf("creating sampler implementation")
-	return s.getSamplerForType(samplerType, dataset)
-}
 
-func (s *SamplerFactory) getSamplerForType(samplerType, configName string) Sampler {
+	s.Logger.Debug().WithField("dataset", dataset).Logf("creating sampler implementation")
 	var sampler Sampler
-	switch samplerType {
-	case "DeterministicSampler":
-		ds := &DeterministicSampler{configName: configName, Config: s.Config, Logger: s.Logger}
+
+	switch c := c.(type) {
+	case *config.DeterministicSamplerConfig:
+		ds := &DeterministicSampler{Config: c, Logger: s.Logger}
 		ds.Start()
 		sampler = ds
-	case "DynamicSampler":
-		ds := &DynamicSampler{configName: configName, Config: s.Config, Logger: s.Logger, Metrics: s.Metrics}
+	case *config.DynamicSamplerConfig:
+		ds := &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
-	case "EMADynamicSampler":
-		ds := &EMADynamicSampler{configName: configName, Config: s.Config, Logger: s.Logger, Metrics: s.Metrics}
+	case *config.EMADynamicSamplerConfig:
+		ds := &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
 	default:
-		s.Logger.Error().Logf("unknown sampler type %s. Exiting.", samplerType)
+		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)
 	}
 

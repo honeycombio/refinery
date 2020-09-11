@@ -24,7 +24,7 @@ func BenchmarkCollect(b *testing.B) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  "DeterministicSampler",
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
 	}
 

@@ -42,12 +42,6 @@ type configContents struct {
 	InMemCollector     InMemoryCollectorCacheCapacity `validate:"required"`
 }
 
-// Used to marshall in the sampler type in SamplerConfig definitions
-// other fields are ignored
-type samplerConfigType struct {
-	Sampler string
-}
-
 type InMemoryCollectorCacheCapacity struct {
 	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity int `validate:"required,lt=2147483647"`
@@ -297,6 +291,48 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
+func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
+	key := fmt.Sprintf("%s.Sampler", dataset)
+	if ok := f.rules.IsSet(key); ok {
+		t := f.rules.GetString(key)
+		var i interface{}
+
+		switch t {
+		case "DeterministicSampler":
+			i = &DeterministicSamplerConfig{}
+		case "DynamicSampler":
+			i = &DynamicSamplerConfig{}
+		case "EMADynamicSampler":
+			i = &EMADynamicSamplerConfig{}
+		default:
+			return nil, errors.New("No Sampler found")
+		}
+
+		if sub := f.rules.Sub(dataset); sub != nil {
+			return i, sub.Unmarshal(i)
+		}
+
+	} else if ok := f.rules.IsSet("Sampler"); ok {
+		t := f.rules.GetString("Sampler")
+		var i interface{}
+
+		switch t {
+		case "DeterministicSampler":
+			i = &DeterministicSamplerConfig{}
+		case "DynamicSampler":
+			i = &DynamicSamplerConfig{}
+		case "EMADynamicSampler":
+			i = &EMADynamicSamplerConfig{}
+		default:
+			return nil, errors.New("No Sampler found")
+		}
+
+		return i, f.rules.Unmarshal(i)
+	}
+
+	return nil, errors.New("No Sampler found")
+}
+
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
 	capacity := &InMemoryCollectorCacheCapacity{}
 	if sub := f.config.Sub("InMemCollector"); sub != nil {
@@ -307,24 +343,6 @@ func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCap
 		return *capacity, nil
 	}
 	return *capacity, errors.New("No config found for inMemCollector")
-}
-
-var (
-	// a list of the fallback keys for sampler type
-	samplerFallbacks = []string{"SamplerConfig._default.Sampler", "Sampler"}
-)
-
-func (f *fileConfig) GetSamplerTypeForDataset(dataset string) (string, error) {
-	key := fmt.Sprintf("SamplerConfig.%s.Sampler", dataset)
-	keys := append([]string{key}, samplerFallbacks...)
-
-	for _, k := range keys {
-		if ok := f.rules.IsSet(k); ok {
-			return f.rules.GetString(k), nil
-		}
-	}
-
-	return "", errors.New("No SamplerType found")
 }
 
 func (f *fileConfig) GetMetricsType() (string, error) {

@@ -2,7 +2,6 @@ package sample
 
 import (
 	"crypto/sha1"
-	"fmt"
 	"math"
 
 	"github.com/honeycombio/samproxy/config"
@@ -15,38 +14,28 @@ import (
 const shardingSalt = "5VQ8l2jE5aJLPVqk"
 
 type DeterministicSampler struct {
-	Config config.Config
+	Config *config.DeterministicSamplerConfig
 	Logger logger.Logger
 
 	sampleRate int
 	upperBound uint32
-	configName string
-}
-
-type DetSamplerConfig struct {
-	SampleRate int
 }
 
 func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
 
-	dsConfig := DetSamplerConfig{}
-	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
-	err := d.Config.GetOtherConfig(configKey, &dsConfig)
-	if err != nil {
-		return err
+	if d.Config.SampleRate < 1 {
+		d.Logger.Debug().WithField("sample_rate", d.Config.SampleRate).Logf("configured sample rate for deterministic sampler was less than 1; forcing to 1")
+		d.Config.SampleRate = 1
 	}
-	if dsConfig.SampleRate < 1 {
-		d.Logger.Debug().WithField("sample_rate", dsConfig.SampleRate).Logf("configured sample rate for deterministic sampler was less than 1; forcing to 1")
-		dsConfig.SampleRate = 1
-	}
-	d.sampleRate = dsConfig.SampleRate
+	d.sampleRate = d.Config.SampleRate
 
 	// Get the actual upper bound - the largest possible value divided by
 	// the sample rate. In the case where the sample rate is 1, this should
 	// sample every value.
 	d.upperBound = math.MaxUint32 / uint32(d.sampleRate)
+
 	return nil
 }
 
