@@ -95,7 +95,7 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	oldTrace := d.insertionOrder[d.insertPoint]
 	if oldTrace != nil {
 		delete(d.cache, oldTrace.TraceID)
-		if !oldTrace.GetSent() {
+		if !oldTrace.Sent {
 			// if it hasn't already been sent,
 			// record that we're overrunning the buffer
 			d.Metrics.IncrementCounter("collect_cache_buffer_overrun")
@@ -113,11 +113,14 @@ func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
 }
 
 // GetAll is not thread safe and should only be used when that's ok
+// Returns all non-nil trace entries.
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
-	// make a copy so it doesn't get modified for the poor soul trying to use
-	// this list after it's returned
-	tmp := make([]*types.Trace, len(d.insertionOrder))
-	copy(tmp, d.insertionOrder)
+	tmp := make([]*types.Trace, 0, len(d.insertionOrder))
+	for _, t := range d.insertionOrder {
+		if t != nil {
+			tmp = append(tmp, t)
+		}
+	}
 	return tmp
 }
 

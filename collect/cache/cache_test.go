@@ -85,12 +85,8 @@ func TestTakeExpiredTraces(t *testing.T) {
 	assert.Equal(t, 1, len(c.cache))
 
 	all := c.GetAll()
-	assert.Equal(t, 10, len(all))
+	assert.Equal(t, 1, len(all))
 	for i := range all {
-		if i == 2 {
-			assert.Equal(t, traces[2], all[i])
-			continue
-		}
-		assert.Nil(t, all[i])
+		assert.Equal(t, traces[2], all[i])
 	}
 }
