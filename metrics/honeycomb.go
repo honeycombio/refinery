@@ -61,8 +61,7 @@ type histogram struct {
 func (h *HoneycombMetrics) Start() error {
 	h.Logger.Debug().Logf("Starting HoneycombMetrics")
 	defer func() { h.Logger.Debug().Logf("Finished starting HoneycombMetrics") }()
-	mc := config.HoneycombMetricsConfig{}
-	err := h.Config.GetHoneycombMetricsConfig(&mc)
+	mc, err := h.Config.GetHoneycombMetricsConfig()
 	if err != nil {
 		return err
 	}
@@ -87,8 +86,7 @@ func (h *HoneycombMetrics) Start() error {
 
 func (h *HoneycombMetrics) reloadBuilder() {
 	h.Logger.Debug().Logf("reloading config for honeeycomb metrics reporter")
-	mc := config.HoneycombMetricsConfig{}
-	err := h.Config.GetHoneycombMetricsConfig(&mc)
+	mc, err := h.Config.GetHoneycombMetricsConfig()
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
 		// honeycomb logger

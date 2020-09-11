@@ -69,8 +69,7 @@ type traceSentRecord struct {
 func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
-	imcConfig := config.InMemoryCollectorConfig{}
-	err := i.Config.GetInMemCollectorConfig(&imcConfig)
+	imcConfig, err := i.Config.GetInMemCollectorCacheCapacity()
 	if err != nil {
 		return err
 	}
@@ -127,8 +126,7 @@ func (i *InMemCollector) sendReloadSignal() {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig := config.InMemoryCollectorConfig{}
-	err := i.Config.GetInMemCollectorConfig(&imcConfig)
+	imcConfig, err := i.Config.GetInMemCollectorCacheCapacity()
 	if err != nil {
 		i.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}

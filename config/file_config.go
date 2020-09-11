@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-playground/validator"
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -38,8 +39,8 @@ type configContents struct {
 	PeerBufferSize     int           `validate:"required"`
 	DebugServiceAddr   string
 	DryRun             bool
-	PeerManagement     PeerManagementConfig    `validate:"required"`
-	InMemCollector     InMemoryCollectorConfig `validate:"required"`
+	PeerManagement     PeerManagementConfig           `validate:"required"`
+	InMemCollector     InMemoryCollectorCacheCapacity `validate:"required"`
 }
 
 // Used to marshall in the sampler type in SamplerConfig definitions
@@ -48,7 +49,7 @@ type samplerConfigType struct {
 	Sampler string
 }
 
-type InMemoryCollectorConfig struct {
+type InMemoryCollectorCacheCapacity struct {
 	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity int `validate:"required,lt=2147483647"`
 }
@@ -143,6 +144,7 @@ func NewConfig(config, rules string) (Config, error) {
 	err = fc.validateConditionalConfigs()
 
 	if err != nil {
+		fmt.Println("error validating conditional configs")
 		return nil, err
 	}
 
@@ -188,7 +190,7 @@ func (f *fileConfig) validateConditionalConfigs() error {
 		return err
 	}
 	if loggerType == "honeycomb" {
-		err = f.GetHoneycombLoggerConfig(&HoneycombLoggerConfig{})
+		_, err = f.GetHoneycombLoggerConfig()
 		if err != nil {
 			return err
 		}
@@ -200,13 +202,13 @@ func (f *fileConfig) validateConditionalConfigs() error {
 		return err
 	}
 	if metricsType == "honeycomb" {
-		err = f.GetHoneycombMetricsConfig(&HoneycombMetricsConfig{})
+		_, err = f.GetHoneycombMetricsConfig()
 		if err != nil {
 			return err
 		}
 	}
 	if metricsType == "prometheus" {
-		err = f.GetPrometheusMetricsConfig(&PrometheusMetricsConfig{})
+		_, err = f.GetPrometheusMetricsConfig()
 		if err != nil {
 			return err
 		}
@@ -274,37 +276,39 @@ func (f *fileConfig) GetLoggerType() (string, error) {
 	return f.conf.Logger, nil
 }
 
-func (f *fileConfig) GetHoneycombLoggerConfig(hlConfig *HoneycombLoggerConfig) error {
+func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
+	var hlConfig HoneycombLoggerConfig
 	if sub := f.config.Sub("HoneycombLogger"); sub != nil {
 		err := sub.UnmarshalExact(hlConfig)
 		if err != nil {
-			return err
+			return hlConfig, err
 		}
 
 		v := validator.New()
 		err = v.Struct(hlConfig)
 		if err != nil {
-			return err
+			return hlConfig, err
 		}
 
-		return nil
+		return hlConfig, nil
 	}
-	return errors.New("No config found for HoneycombLogger")
+	return hlConfig, errors.New("No config found for HoneycombLogger")
 }
 
 func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *fileConfig) GetInMemCollectorConfig(imcConfig *InMemoryCollectorConfig) error {
+func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
+	var capacity InMemoryCollectorCacheCapacity
 	if sub := f.config.Sub("InMemCollector"); sub != nil {
-		err := sub.UnmarshalExact(imcConfig)
+		err := sub.UnmarshalExact(capacity)
 		if err != nil {
-			return err
+			return capacity, err
 		}
-		return nil
+		return capacity, nil
 	}
-	return errors.New("No config found for inMemCollector")
+	return capacity, errors.New("No config found for inMemCollector")
 }
 
 var (
@@ -329,40 +333,43 @@ func (f *fileConfig) GetMetricsType() (string, error) {
 	return f.conf.Metrics, nil
 }
 
-func (f *fileConfig) GetHoneycombMetricsConfig(hmConfig *HoneycombMetricsConfig) error {
+func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
+	var hmConfig HoneycombMetricsConfig
 	if sub := f.config.Sub("HoneycombMetrics"); sub != nil {
 		err := sub.UnmarshalExact(hmConfig)
 		if err != nil {
-			return err
+			spew.Dump(err)
+			return hmConfig, err
 		}
 
 		v := validator.New()
 		err = v.Struct(hmConfig)
 		if err != nil {
-			return err
+			return hmConfig, err
 		}
 
-		return nil
+		return hmConfig, nil
 	}
-	return errors.New("No config found for HoneycombMetrics")
+	return hmConfig, errors.New("No config found for HoneycombMetrics")
 }
 
-func (f *fileConfig) GetPrometheusMetricsConfig(pcConfig *PrometheusMetricsConfig) error {
+func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
+	var pcConfig PrometheusMetricsConfig
 	if sub := f.config.Sub("PrometheusMetrics"); sub != nil {
 		err := sub.UnmarshalExact(pcConfig)
 		if err != nil {
-			return err
+			return pcConfig, err
 		}
 
 		v := validator.New()
 		err = v.Struct(pcConfig)
 		if err != nil {
-			return err
+			return pcConfig, err
 		}
 
-		return nil
+		return pcConfig, nil
 	}
-	return errors.New("No config found for PrometheusMetrics")
+	return pcConfig, errors.New("No config found for PrometheusMetrics")
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {

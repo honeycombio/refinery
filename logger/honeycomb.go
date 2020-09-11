@@ -46,8 +46,7 @@ func (h *HoneycombLogger) Start() error {
 	// preserve it.
 	// TODO: make LogLevel part of the HoneycombLogger/LogrusLogger sections?
 	logLevel := h.loggerConfig.Level
-	loggerConfig := config.HoneycombLoggerConfig{}
-	err := h.Config.GetHoneycombLoggerConfig(&loggerConfig)
+	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
 	if err != nil {
 		return err
 	}
@@ -119,8 +118,7 @@ func (h *HoneycombLogger) reloadBuilder() {
 	h.Debug().Logf("reloading config for Honeycomb logger")
 	// preseve log level
 	logLevel := h.loggerConfig.Level
-	loggerConfig := config.HoneycombLoggerConfig{}
-	err := h.Config.GetHoneycombLoggerConfig(&loggerConfig)
+	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
 		// honeycomb logger

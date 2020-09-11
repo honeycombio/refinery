@@ -64,14 +64,14 @@ type Config interface {
 	GetLoggerType() (string, error)
 
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
-	GetHoneycombLoggerConfig(*HoneycombLoggerConfig) error
+	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
 
 	// GetCollectorType returns the type of the collector to use. Valid types
 	// are in the collect package
 	GetCollectorType() (string, error)
 
-	// GetInMemCollectorConfig returns the config specific to the InMemCollector
-	GetInMemCollectorConfig(*InMemoryCollectorConfig) error
+	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
+	GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error)
 
 	// GetSamplerTypeForDataset returns the sampler type to use for the given dataset
 	GetSamplerTypeForDataset(string) (string, error)
@@ -81,10 +81,10 @@ type Config interface {
 	GetMetricsType() (string, error)
 
 	// GetHoneycombMetricsConfig returns the config specific to HoneycombMetrics
-	GetHoneycombMetricsConfig(*HoneycombMetricsConfig) error
+	GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error)
 
 	// GetPrometheusMetricsConfig returns the config specific to PrometheusMetrics
-	GetPrometheusMetricsConfig(*PrometheusMetricsConfig) error
+	GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error)
 
 	// GetUpstreamBufferSize returns the size of the libhoney buffer to use for the upstream
 	// libhoney client
