@@ -59,8 +59,8 @@ func BenchmarkCollect(b *testing.B) {
 	assert.NoError(b, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
+	coll.incoming = make(chan *types.Span, 500)
+	coll.fromPeer = make(chan *types.Span, 500)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 

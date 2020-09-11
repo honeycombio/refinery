@@ -287,7 +287,6 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		i.Metrics.IncrementCounter("trace_accepted")
 
 		timeout, err := i.Config.GetTraceTimeout()
-
 		if err != nil {
 			timeout = 60 * time.Second
 		}

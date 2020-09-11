@@ -1,5 +1,7 @@
 package metrics
 
+import "sync"
+
 // MockMetrics collects metrics that were registered and changed to allow tests to
 // verify expected behavior
 type MockMetrics struct {
@@ -7,6 +9,8 @@ type MockMetrics struct {
 	CounterIncrements map[string]int
 	GaugeRecords      map[string]float64
 	Histograms        map[string][]float64
+
+	lock sync.Mutex
 }
 
 // Start initializes all metrics or resets all metrics to zero
@@ -18,15 +22,27 @@ func (m *MockMetrics) Start() {
 }
 
 func (m *MockMetrics) Register(name string, metricType string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	m.Registrations[name] = metricType
 }
 func (m *MockMetrics) IncrementCounter(name string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	m.CounterIncrements[name] += 1
 }
 func (m *MockMetrics) Gauge(name string, val float64) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	m.GaugeRecords[name] = val
 }
 func (m *MockMetrics) Histogram(name string, obs float64) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	_, ok := m.Histograms[name]
 	if !ok {
 		m.Histograms[name] = make([]float64, 0)
