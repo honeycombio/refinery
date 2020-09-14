@@ -3,6 +3,7 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,6 +59,8 @@ type Router struct {
 	iopLogger iopLogger
 
 	zstdDecoders chan *zstd.Decoder
+
+	server *http.Server
 }
 
 type BatchResponse struct {
@@ -153,10 +156,19 @@ func (r *Router) LnS(incomingOrPeer string) {
 	}
 
 	r.iopLogger.Info().Logf("Listening on %s", listenAddr)
-	err = http.ListenAndServe(listenAddr, muxxer)
-	if err != nil {
+	r.server = &http.Server{
+		Addr:    listenAddr,
+		Handler: muxxer,
+	}
+	err = r.server.ListenAndServe()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		r.iopLogger.Error().Logf("failed to ListenAndServe: %s", err)
 	}
+}
+
+func (r *Router) Stop() error {
+	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
+	return r.server.Shutdown(ctx)
 }
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {

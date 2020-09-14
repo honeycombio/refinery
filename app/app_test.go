@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -16,10 +17,11 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/stretchr/testify/assert"
+	"gopkg.in/alexcesaro/statsd.v2"
+
 	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/honeycombio/samproxy/collect"
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/internal/peer"
@@ -77,7 +79,23 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	}
 }
 
-func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Graph) {
+type testPeers struct {
+	peers []string
+}
+
+func (p *testPeers) GetPeers() ([]string, error) {
+	return p.peers, nil
+}
+
+func (p *testPeers) RegisterUpdatedPeersCallback(callback func()) {
+}
+
+func newStartedApp(
+	t testing.TB,
+	libhoneyT transmission.Sender,
+	basePort int,
+	peers peer.Peers,
+) (*App, inject.Graph) {
 	c := &config.MockConfig{
 		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       10 * time.Millisecond,
@@ -87,13 +105,16 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 		GetOtherConfigVal:        `{"CacheCapacity":10000}`,
 		GetUpstreamBufferSizeVal: 10000,
 		GetPeerBufferSizeVal:     10000,
-		GetListenAddrVal:         "127.0.0.1:11000",
-		GetPeerListenAddrVal:     "127.0.0.1:11001",
+		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
+		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetAPIKeysVal:            []string{"KEY"},
 	}
 
-	peers, err := peer.NewPeers(c)
-	assert.NoError(t, err)
+	var err error
+	if peers == nil {
+		peers, err = peer.NewPeers(c)
+		assert.NoError(t, err)
+	}
 
 	a := App{}
 
@@ -108,7 +129,17 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 	metricsr.Start()
 
 	collector := &collect.InMemCollector{}
-	shrdr := &sharder.SingleServerSharder{}
+
+	peerList, err := peers.GetPeers()
+	assert.NoError(t, err)
+
+	var shrdr sharder.Sharder
+	if len(peerList) > 1 {
+		shrdr = &sharder.DeterministicSharder{}
+	} else {
+		shrdr = &sharder.SingleServerSharder{}
+	}
+
 	samplerFactory := &sample.SamplerFactory{}
 
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
@@ -116,8 +147,23 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 	})
 	assert.NoError(t, err)
 
+	sdPeer, _ := statsd.New(statsd.Prefix("samproxy.peer"))
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.DiscardSender{},
+		Transmission: &transmission.Honeycomb{
+			MaxBatchSize:         500,
+			BatchTimeout:         libhoney.DefaultBatchTimeout,
+			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
+			PendingWorkCapacity:  uint(c.GetPeerBufferSize()),
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				Dial: (&net.Dialer{
+					Timeout: 3 * time.Second,
+				}).Dial,
+			},
+			BlockOnSend:            true,
+			DisableGzipCompression: true,
+			Metrics:                sdPeer,
+		},
 	})
 	assert.NoError(t, err)
 
@@ -151,14 +197,12 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 
 func TestAppIntegration(t *testing.T) {
 	var out bytes.Buffer
-	_, graph := newStartedApp(t, &transmission.WriterSender{
-		W: &out,
-	})
+	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
-		"http://localhost:11000/1/batch/dataset",
+		"http://localhost:10000/1/batch/dataset",
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", "KEY")
@@ -188,10 +232,8 @@ func TestAppIntegration(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func BenchmarkTraces(b *testing.B) {
-	ctx := context.Background()
-
-	spanFormat := `{"data":{` +
+var (
+	spanFormat = `{"data":{` +
 		`"trace.trace_id":"%d",` +
 		`"trace.span_id":"%d",` +
 		`"trace.parent_id":"0000000000",` +
@@ -210,34 +252,9 @@ func BenchmarkTraces(b *testing.B) {
 		`"long":"this is a test of the emergency broadcast system",` +
 		`"foo":"bar"` +
 		`},"dataset":"dataset"}`
+	spans [][]byte
 
-	// Pre-build spans to send, none are root spans
-	var tid int
-	spans := make([][]byte, 100000)
-	for i := range spans {
-		if i%10 == 0 {
-			tid++
-		}
-		spans[i] = []byte(fmt.Sprintf(spanFormat, tid, i))
-	}
-
-	sender := &countingWriterSender{
-		WriterSender: transmission.WriterSender{
-			W: ioutil.Discard,
-		},
-	}
-	_, graph := newStartedApp(b, sender)
-
-	req, err := http.NewRequest(
-		"POST",
-		"http://localhost:11000/1/batch/dataset",
-		nil,
-	)
-	assert.NoError(b, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Transport: &http.Transport{
+	httpClient = &http.Client{Transport: &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   1 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -248,13 +265,45 @@ func BenchmarkTraces(b *testing.B) {
 		IdleConnTimeout:       90 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}}
+)
+
+// Pre-build spans to send, none are root spans
+func init() {
+	var tid int
+	spans = make([][]byte, 100000)
+	for i := range spans {
+		if i%10 == 0 {
+			tid++
+		}
+		spans[i] = []byte(fmt.Sprintf(spanFormat, tid, i))
+	}
+}
+
+func BenchmarkTraces(b *testing.B) {
+	ctx := context.Background()
+
+	sender := &countingWriterSender{
+		WriterSender: transmission.WriterSender{
+			W: ioutil.Discard,
+		},
+	}
+	_, graph := newStartedApp(b, sender, 11000, nil)
+
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:11000/1/batch/dataset",
+		nil,
+	)
+	assert.NoError(b, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
 
 	b.Run("single", func(b *testing.B) {
 		sender.resetCount()
 		for n := 0; n < b.N; n++ {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
 			req.Body = ioutil.NopCloser(strings.NewReader(blob))
-			resp, err := client.Do(req)
+			resp, err := httpClient.Do(req)
 			assert.NoError(b, err)
 			if resp != nil {
 				assert.Equal(b, http.StatusOK, resp.StatusCode)
@@ -279,7 +328,7 @@ func BenchmarkTraces(b *testing.B) {
 			blob[len(blob)-1] = ']'
 			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
 
-			resp, err := client.Do(req)
+			resp, err := httpClient.Do(req)
 			assert.NoError(b, err)
 			if resp != nil {
 				assert.Equal(b, http.StatusOK, resp.StatusCode)
@@ -309,7 +358,7 @@ func BenchmarkTraces(b *testing.B) {
 					blob[len(blob)-1] = ']'
 					req.Body = ioutil.NopCloser(bytes.NewReader(blob))
 
-					resp, err := client.Do(req)
+					resp, err := httpClient.Do(req)
 					assert.NoError(b, err)
 					if resp != nil {
 						assert.Equal(b, http.StatusOK, resp.StatusCode)
@@ -325,4 +374,85 @@ func BenchmarkTraces(b *testing.B) {
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(b, err)
+}
+
+func BenchmarkDistributedTraces(b *testing.B) {
+	sender := &countingWriterSender{
+		WriterSender: transmission.WriterSender{
+			W: ioutil.Discard,
+		},
+	}
+
+	peers := &testPeers{
+		peers: []string{
+			"http://localhost:12001",
+			"http://localhost:12003",
+			"http://localhost:12005",
+			"http://localhost:12007",
+			"http://localhost:12009",
+		},
+	}
+
+	var apps [5]*App
+	var addrs [5]string
+	for i := range apps {
+		var graph inject.Graph
+		basePort := 12000 + (i * 2)
+		apps[i], graph = newStartedApp(b, sender, basePort, peers)
+		defer startstop.Stop(graph.Objects(), nil)
+
+		addrs[i] = "localhost:" + strconv.Itoa(basePort)
+	}
+
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:12000/1/batch/dataset",
+		nil,
+	)
+	assert.NoError(b, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	b.Run("single", func(b *testing.B) {
+		sender.resetCount()
+		for n := 0; n < b.N; n++ {
+			blob := `[` + string(spans[n%len(spans)]) + `]`
+			req.Body = ioutil.NopCloser(strings.NewReader(blob))
+			req.URL.Host = addrs[n%len(addrs)]
+			resp, err := httpClient.Do(req)
+			assert.NoError(b, err)
+			if resp != nil {
+				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				io.Copy(ioutil.Discard, resp.Body)
+				resp.Body.Close()
+			}
+		}
+		sender.waitForCount(b, b.N)
+	})
+
+	b.Run("batch", func(b *testing.B) {
+		sender.resetCount()
+
+		// over-allocate blob for 50 spans
+		blob := make([]byte, 0, len(spanFormat)*100)
+		for n := 0; n < (b.N/50)+1; n++ {
+			blob = append(blob[:0], '[')
+			for i := 0; i < 50; i++ {
+				blob = append(blob, spans[((n*50)+i)%len(spans)]...)
+				blob = append(blob, ',')
+			}
+			blob[len(blob)-1] = ']'
+			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+			req.URL.Host = addrs[n%len(addrs)]
+
+			resp, err := httpClient.Do(req)
+			assert.NoError(b, err)
+			if resp != nil {
+				assert.Equal(b, http.StatusOK, resp.StatusCode)
+				io.Copy(ioutil.Discard, resp.Body)
+				resp.Body.Close()
+			}
+		}
+		sender.waitForCount(b, b.N)
+	})
 }
