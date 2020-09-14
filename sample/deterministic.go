@@ -30,22 +30,7 @@ type DetSamplerConfig struct {
 func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
-	if err := d.loadConfigs(); err != nil {
-		return err
-	}
 
-	// listen for config reloads with an errorless version of the reload
-	d.Config.RegisterReloadCallback(func() {
-		d.Logger.Debug().Logf("reloading deterministic sampler config")
-		if err := d.loadConfigs(); err != nil {
-			d.Logger.Error().WithField("error", err).Logf("failed to reload deterministic sampler configs")
-		}
-	})
-
-	return nil
-}
-
-func (d *DeterministicSampler) loadConfigs() error {
 	dsConfig := DetSamplerConfig{}
 	configKey := fmt.Sprintf("SamplerConfig.%s", d.configName)
 	err := d.Config.GetOtherConfig(configKey, &dsConfig)
