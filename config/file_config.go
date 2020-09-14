@@ -40,6 +40,7 @@ type configContents struct {
 	DryRun             bool
 	PeerManagement     PeerManagementConfig           `validate:"required"`
 	InMemCollector     InMemoryCollectorCacheCapacity `validate:"required"`
+	MaxAlloc           uint64
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -99,6 +100,7 @@ func NewConfig(config, rules string) (Config, error) {
 	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("DryRun", false)
+	c.SetDefault("MaxAlloc", uint64(0))
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -429,4 +431,8 @@ func (f *fileConfig) GetDebugServiceAddr() (string, error) {
 
 func (f *fileConfig) GetIsDryRun() bool {
 	return f.conf.DryRun
+}
+
+func (f *fileConfig) GetMaxAlloc() uint64 {
+	return f.conf.MaxAlloc
 }

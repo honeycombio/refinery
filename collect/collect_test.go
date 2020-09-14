@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
@@ -370,4 +371,97 @@ func TestSampleConfigReload(t *testing.T) {
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+}
+
+func TestMaxAlloc(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  "DeterministicSampler",
+		SendTickerVal:      2 * time.Millisecond,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+	c := &cache.DefaultInMemCache{
+		Config: cache.CacheConfig{
+			CacheCapacity: 1000,
+		},
+		Metrics: &metrics.NullMetrics{},
+		Logger:  &logger.NullLogger{},
+	}
+	c.Start()
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 1000)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	for i := 0; i < 500; i++ {
+		span := &types.Span{
+			TraceID: strconv.Itoa(i),
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id": "unused",
+					"id":              i,
+				},
+			},
+		}
+		coll.AddSpan(span)
+	}
+
+	for len(coll.incoming) > 0 {
+		time.Sleep(conf.SendTickerVal)
+	}
+
+	// Now there should be 1000 traces in the cache.
+	// Set MaxAlloc, which should cause cache evictions.
+	coll.mutex.Lock()
+	assert.Equal(t, 500, len(coll.cache.GetAll()))
+	conf.MaxAlloc = 10
+	coll.mutex.Unlock()
+
+	var traces []*types.Trace
+	for {
+		coll.mutex.Lock()
+		traces = coll.cache.GetAll()
+		if len(traces) < 500 {
+			break
+		}
+		coll.mutex.Unlock()
+
+		time.Sleep(conf.SendTickerVal)
+	}
+
+	assert.Equal(t, 450, len(traces), "should have shrunk cache to 90% of previous size")
+	for i, trace := range traces {
+		assert.False(t, trace.Sent)
+		assert.Equal(t, strconv.Itoa(i+50), trace.TraceID)
+	}
+	coll.mutex.Unlock()
+
+	// We discarded the first 50 spans, and sent them.
+	transmission.Mux.Lock()
+	assert.Equal(t, 50, len(transmission.Events), "should have sent 10% of traces")
+	for i, ev := range transmission.Events {
+		assert.Equal(t, i, ev.Data["id"])
+	}
+
+	transmission.Mux.Unlock()
+
 }

@@ -123,6 +123,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
+	if d := c.GetMaxAlloc(); d != uint64(0) {
+		t.Error("received", d, "expected", 0)
+	}
+
 	type imcConfig struct {
 		CacheCapacity int
 	}
@@ -231,6 +235,29 @@ func TestDryRun(t *testing.T) {
 
 	if d := c.GetIsDryRun(); d != true {
 		t.Error("received", d, "expected", true)
+	}
+}
+
+func TestMaxAlloc(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.Equal(t, nil, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.Equal(t, nil, err)
+
+	_, err = rulesFile.Write([]byte(`
+	MaxAlloc = 17179869184
+	`))
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+
+	expected := uint64(16 * 1024 * 1024 * 1024)
+	if d := c.GetMaxAlloc(); d != expected {
+		t.Error("received", d, "expected", expected)
 	}
 }
 
