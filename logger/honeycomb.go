@@ -207,6 +207,10 @@ func (h *HoneycombEntry) WithField(key string, value interface{}) Entry {
 	return h
 }
 
+func (h *HoneycombEntry) WithString(key string, value string) Entry {
+	return h.WithField(key, value)
+}
+
 func (h *HoneycombEntry) WithFields(fields map[string]interface{}) Entry {
 	h.builder.Add(fields)
 	return h

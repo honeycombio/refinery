@@ -50,6 +50,10 @@ func (e *MockLoggerEvent) WithField(key string, value interface{}) Entry {
 	return e
 }
 
+func (e *MockLoggerEvent) WithString(key string, value string) Entry {
+	return e.WithField(key, value)
+}
+
 func (e *MockLoggerEvent) WithFields(fields map[string]interface{}) Entry {
 	for k, v := range fields {
 		e.Fields[k] = v

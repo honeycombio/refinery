@@ -95,12 +95,6 @@ type Trace struct {
 	spans []*Span
 }
 
-// GetSent returns true if this trace has already been sent, false if it has not
-// yet been sent.
-func (t *Trace) GetSent() bool {
-	return t.Sent
-}
-
 // AddSpan adds a span to this trace
 func (t *Trace) AddSpan(sp *Span) {
 	t.spans = append(t.spans, sp)

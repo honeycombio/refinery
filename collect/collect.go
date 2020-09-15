@@ -184,75 +184,51 @@ func (i *InMemCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	peerChanSize := cap(i.fromPeer)
-
 	for {
 		// record channel lengths
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
 
-		select {
-		case <-ticker.C:
-			i.sendTracesInCache(time.Now())
-		default:
-		}
-
-		// process peer traffic at 2/1 ratio to incoming traffic. By processing peer
+		// Always drain peer channel before doing anyhting else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
 		// deadlocks because peers are waiting to get their events handed off to each
 		// other.
 		select {
-		case <-ticker.C:
-			i.sendTracesInCache(time.Now())
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
 			}
 			i.processSpan(sp)
-			// additionally, if the peer channel is more than 80% full, restart this
-			// loop to make sure it stays empty enough. We _really_ want to avoid
-			// blocking peer traffic.
-			if len(i.fromPeer)*100/peerChanSize > 80 {
-				i.Metrics.IncrementCounter("peer_queue_too_large")
-				continue
-			}
 		default:
-		}
-
-		// ok, the peer queue is low enough, let's wait for new events from anywhere
-		select {
-		case <-ticker.C:
-			i.sendTracesInCache(time.Now())
-		case sp, ok := <-i.incoming:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
+			select {
+			case <-ticker.C:
+				i.sendTracesInCache(time.Now())
+			case sp, ok := <-i.incoming:
+				if !ok {
+					// channel's been closed; we should shut down.
+					return
+				}
+				i.processSpan(sp)
+				continue
+			case sp, ok := <-i.fromPeer:
+				if !ok {
+					// channel's been closed; we should shut down.
+					return
+				}
+				i.processSpan(sp)
+				continue
+			case <-i.reload:
+				i.reloadConfigs()
 			}
-			i.processSpan(sp)
-			continue
-		case sp, ok := <-i.fromPeer:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
-			}
-			i.processSpan(sp)
-			continue
-		case <-i.reload:
-			i.reloadConfigs()
 		}
 	}
 }
 
 func (i *InMemCollector) sendTracesInCache(now time.Time) {
-	traces := i.Cache.GetAll()
-
+	traces := i.Cache.TakeExpiredTraces(now)
 	for _, t := range traces {
-		if t != nil {
-			if now.After(t.SendBy) {
-				i.send(t)
-			}
-		}
+		i.send(t)
 	}
 }
 
@@ -353,8 +329,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		// when two timers race and two signals for the same trace are sent down the
 		// toSend channel
 		i.Logger.Debug().
-			WithField("trace_id", trace.TraceID).
-			WithField("dataset", trace.Dataset).
+			WithString("trace_id", trace.TraceID).
+			WithString("dataset", trace.Dataset).
 			Logf("skipping send because someone else already sent trace to dataset")
 		return
 	}
@@ -388,16 +364,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.IncrementCounter("trace_send_dropped")
-		i.Logger.Info().WithField("trace_id", trace.TraceID).WithField("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
+		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
 		return
 	}
 	i.Metrics.IncrementCounter("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithField("trace_id", &trace.TraceID).WithField("dataset", &trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
-	i.Logger.Info().WithField("trace_id", &trace.TraceID).WithField("dataset", &trace.Dataset).Logf("Sending trace to dataset")
+	i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
@@ -420,9 +396,7 @@ func (i *InMemCollector) Stop() error {
 		traces := i.Cache.GetAll()
 		for _, trace := range traces {
 			if trace != nil {
-				if !trace.GetSent() {
-					i.send(trace)
-				}
+				i.send(trace)
 			}
 		}
 	}
