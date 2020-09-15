@@ -97,17 +97,17 @@ func newStartedApp(
 	peers peer.Peers,
 ) (*App, inject.Graph) {
 	c := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       10 * time.Millisecond,
-		GetSamplerTypeVal:        "DeterministicSampler",
-		SendTickerVal:            2 * time.Millisecond,
-		PeerManagementType:       "file",
-		GetUpstreamBufferSizeVal: 10000,
-		GetPeerBufferSizeVal:     10000,
-		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
-		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
-		GetAPIKeysVal:            []string{"KEY"},
-    GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
+		GetSendDelayVal:                      0,
+		GetTraceTimeoutVal:                   10 * time.Millisecond,
+		GetSamplerTypeVal:                    "DeterministicSampler",
+		SendTickerVal:                        2 * time.Millisecond,
+		PeerManagementType:                   "file",
+		GetUpstreamBufferSizeVal:             10000,
+		GetPeerBufferSizeVal:                 10000,
+		GetListenAddrVal:                     "127.0.0.1:" + strconv.Itoa(basePort),
+		GetPeerListenAddrVal:                 "127.0.0.1:" + strconv.Itoa(basePort+1),
+		GetAPIKeysVal:                        []string{"KEY"},
+		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 	}
 
 	var err error
