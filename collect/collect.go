@@ -171,9 +171,9 @@ func (i *InMemCollector) reloadConfigs() {
 }
 
 func (i *InMemCollector) checkAlloc() {
-	maxAlloc := i.Config.GetMaxAlloc()
+	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
 	alloc := getAlloc()
-	if maxAlloc == 0 || alloc < maxAlloc {
+	if err != nil || inMemConfig.MaxAlloc == 0 || alloc < inMemConfig.MaxAlloc {
 		return
 	}
 

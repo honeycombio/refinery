@@ -40,12 +40,12 @@ type configContents struct {
 	DryRun             bool
 	PeerManagement     PeerManagementConfig           `validate:"required"`
 	InMemCollector     InMemoryCollectorCacheCapacity `validate:"required"`
-	MaxAlloc           uint64
 }
 
 type InMemoryCollectorCacheCapacity struct {
 	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity int `validate:"required,lt=2147483647"`
+	MaxAlloc      uint64
 }
 
 type HoneycombLevel int
@@ -431,8 +431,4 @@ func (f *fileConfig) GetDebugServiceAddr() (string, error) {
 
 func (f *fileConfig) GetIsDryRun() bool {
 	return f.conf.DryRun
-}
-
-func (f *fileConfig) GetMaxAlloc() uint64 {
-	return f.conf.MaxAlloc
 }

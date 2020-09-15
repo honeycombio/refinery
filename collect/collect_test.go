@@ -433,7 +433,7 @@ func TestMaxAlloc(t *testing.T) {
 	// Set MaxAlloc, which should cause cache evictions.
 	coll.mutex.Lock()
 	assert.Equal(t, 500, len(coll.cache.GetAll()))
-	conf.MaxAlloc = 10
+	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = 10
 	coll.mutex.Unlock()
 
 	var traces []*types.Trace

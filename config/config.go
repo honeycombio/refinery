@@ -107,6 +107,4 @@ type Config interface {
 	GetDebugServiceAddr() (string, error)
 
 	GetIsDryRun() bool
-
-	GetMaxAlloc() uint64
 }

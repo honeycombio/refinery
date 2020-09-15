@@ -55,7 +55,6 @@ type MockConfig struct {
 	PeerManagementType            string
 	DebugServiceAddr              string
 	DryRun                        bool
-	MaxAlloc                      uint64
 }
 
 func (m *MockConfig) ReloadConfig() {
@@ -150,8 +149,4 @@ func (m *MockConfig) GetDebugServiceAddr() (string, error) {
 
 func (m *MockConfig) GetIsDryRun() bool {
 	return m.DryRun
-}
-
-func (m *MockConfig) GetMaxAlloc() uint64 {
-	return m.MaxAlloc
 }
