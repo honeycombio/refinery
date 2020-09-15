@@ -340,7 +340,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	if trace.Sent == true {
 		// someone else already sent this so we shouldn't also send it. This happens
 		// when two timers race and two signals for the same trace are sent down the
-		// toSend channel
+		// toSend channel or when the ticker traverses an already sent but not yet
+		// expunged trace
 		i.Logger.Debug().
 			WithString("trace_id", trace.TraceID).
 			WithString("dataset", trace.Dataset).
