@@ -300,7 +300,7 @@ func TestSampleConfigReload(t *testing.T) {
 		GetTraceTimeoutVal:                   10 * time.Millisecond,
 		GetSamplerTypeVal:                    "DeterministicSampler",
 		SendTickerVal:                        2 * time.Millisecond,
-		GetInMemoryCollectorCacheCapacityVal: `{"CacheCapacity": 10}`,
+		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
 	}
 
 	coll := &InMemCollector{

@@ -9,7 +9,7 @@ import (
 )
 
 func TestHoneycombLoggerRespectsLogLevelAfterStart(t *testing.T) {
-	cfg := &config.MockConfig{GetHoneycombLoggerConfigVal: `{}`}
+	cfg := &config.MockConfig{GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{}}
 	hcLogger := &HoneycombLogger{
 		Config:       cfg,
 		loggerConfig: config.HoneycombLoggerConfig{Level: WarnLevel},

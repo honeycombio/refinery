@@ -89,7 +89,7 @@ func newStartedApp(t testing.TB, libhoneyT transmission.Sender) (*App, inject.Gr
 		GetListenAddrVal:                     "127.0.0.1:11000",
 		GetPeerListenAddrVal:                 "127.0.0.1:11001",
 		GetAPIKeysVal:                        []string{"KEY"},
-		GetInMemoryCollectorCacheCapacityVal: `{"CacheCapacity":10000}`,
+		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 	}
 
 	peers, err := peer.NewPeers(c)
