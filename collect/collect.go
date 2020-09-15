@@ -3,6 +3,8 @@ package collect
 import (
 	"fmt"
 	"os"
+	"runtime"
+	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -48,6 +50,8 @@ type InMemCollector struct {
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
+	// cacheLock must be held whenever cache is accessed.
+	cacheLock       sync.Mutex
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 
@@ -184,6 +188,11 @@ func (i *InMemCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
+	// cacheLock is normally held by this goroutine at all times.
+	// It is unlocked once per ticker cycle for tests.
+	i.cacheLock.Lock()
+	defer i.cacheLock.Unlock()
+
 	for {
 		// record channel lengths
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
@@ -204,6 +213,11 @@ func (i *InMemCollector) collect() {
 			select {
 			case <-ticker.C:
 				i.sendTracesInCache(time.Now())
+
+				// Briefly unlock the cache, to allow test access.
+				i.cacheLock.Unlock()
+				runtime.Gosched()
+				i.cacheLock.Lock()
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -391,6 +405,10 @@ func (i *InMemCollector) send(trace *types.Trace) {
 func (i *InMemCollector) Stop() error {
 	// close the incoming channel and (TODO) wait for all collectors to finish
 	close(i.incoming)
+
+	i.cacheLock.Lock()
+	defer i.cacheLock.Unlock()
+
 	// purge the collector of any in-flight traces
 	if i.cache != nil {
 		traces := i.cache.GetAll()
@@ -404,4 +422,12 @@ func (i *InMemCollector) Stop() error {
 		i.Transmission.Flush()
 	}
 	return nil
+}
+
+// For tests.
+func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
+	i.cacheLock.Lock()
+	defer i.cacheLock.Unlock()
+
+	return i.cache.Get(traceID)
 }
