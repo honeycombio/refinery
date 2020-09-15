@@ -32,8 +32,8 @@ func (a *App) Start() error {
 
 	// launch our main routers to listen for incoming event traffic from both peers
 	// and external sources
-	go a.IncomingRouter.LnS("incoming")
-	go a.PeerRouter.LnS("peer")
+	a.IncomingRouter.LnS("incoming")
+	a.PeerRouter.LnS("peer")
 
 	return nil
 }

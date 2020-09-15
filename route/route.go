@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -61,6 +62,7 @@ type Router struct {
 	zstdDecoders chan *zstd.Decoder
 
 	server *http.Server
+	doneWG sync.WaitGroup
 }
 
 type BatchResponse struct {
@@ -160,15 +162,26 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Addr:    listenAddr,
 		Handler: muxxer,
 	}
-	err = r.server.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		r.iopLogger.Error().Logf("failed to ListenAndServe: %s", err)
-	}
+
+	r.doneWG.Add(1)
+	go func() {
+		defer r.doneWG.Done()
+
+		err = r.server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			r.iopLogger.Error().Logf("failed to ListenAndServe: %s", err)
+		}
+	}()
 }
 
 func (r *Router) Stop() error {
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
-	return r.server.Shutdown(ctx)
+	err := r.server.Shutdown(ctx)
+	if err != nil {
+		return err
+	}
+	r.doneWG.Wait()
+	return nil
 }
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
