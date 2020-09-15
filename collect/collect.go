@@ -50,8 +50,10 @@ type InMemCollector struct {
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
-	// cacheLock must be held whenever cache is accessed.
-	cacheLock       sync.Mutex
+	// mutex must be held whenever non-channel internal fields are accessed.
+	// This exists to avoid data races in tests and startup/shutdown.
+	mutex sync.Mutex
+
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 
@@ -188,10 +190,10 @@ func (i *InMemCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	// cacheLock is normally held by this goroutine at all times.
+	// mutex is normally held by this goroutine at all times.
 	// It is unlocked once per ticker cycle for tests.
-	i.cacheLock.Lock()
-	defer i.cacheLock.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 
 	for {
 		// record channel lengths
@@ -215,9 +217,9 @@ func (i *InMemCollector) collect() {
 				i.sendTracesInCache(time.Now())
 
 				// Briefly unlock the cache, to allow test access.
-				i.cacheLock.Unlock()
+				i.mutex.Unlock()
 				runtime.Gosched()
-				i.cacheLock.Lock()
+				i.mutex.Lock()
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -406,8 +408,8 @@ func (i *InMemCollector) Stop() error {
 	// close the incoming channel and (TODO) wait for all collectors to finish
 	close(i.incoming)
 
-	i.cacheLock.Lock()
-	defer i.cacheLock.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 
 	// purge the collector of any in-flight traces
 	if i.cache != nil {
@@ -424,10 +426,10 @@ func (i *InMemCollector) Stop() error {
 	return nil
 }
 
-// For tests.
+// Convenience method for tests.
 func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.cacheLock.Lock()
-	defer i.cacheLock.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 
 	return i.cache.Get(traceID)
 }

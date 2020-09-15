@@ -336,6 +336,9 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
+		coll.mutex.Lock()
+		defer coll.mutex.Unlock()
+
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
@@ -343,6 +346,9 @@ func TestSampleConfigReload(t *testing.T) {
 	conf.ReloadConfig()
 
 	assert.Eventually(t, func() bool {
+		coll.mutex.Lock()
+		defer coll.mutex.Unlock()
+
 		_, ok := coll.datasetSamplers[dataset]
 		return !ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
@@ -357,6 +363,9 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
+		coll.mutex.Lock()
+		defer coll.mutex.Unlock()
+
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
