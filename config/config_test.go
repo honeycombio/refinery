@@ -21,7 +21,18 @@ func TestReload(t *testing.T) {
 	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
-	dummy := []byte(`ListenAddr = "0.0.0.0:8080"`)
+	dummy := []byte(`
+	ListenAddr="0.0.0.0:8080"
+
+	[InMemCollector]
+		CacheCapacity=1000 
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`)
 
 	_, err = configFile.Write(dummy)
 	assert.Equal(t, nil, err)
@@ -135,11 +146,22 @@ func TestPeerManagementType(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	_, err = configFile.Write([]byte(`
+	[InMemCollector]
+		CacheCapacity=1000 
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+
 	[PeerManagement]
-	Type = "redis"
+		Type = "redis"
+		Peers = ["http://samproxy-1231:8080"]
 	`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	assert.Equal(t, nil, err)
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
 		t.Error("received", d, "expected", "redis")
@@ -159,11 +181,21 @@ func TestDebugServiceAddr(t *testing.T) {
 
 	_, err = configFile.Write([]byte(`
 	DebugServiceAddr = "localhost:8085"
+
+	[InMemCollector]
+		CacheCapacity=1000 
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
 	`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	assert.Equal(t, nil, err)
 
-	if d := c.GetDebugServiceAddr(); d != "localhost:8085" {
+	if d, _ := c.GetDebugServiceAddr(); d != "localhost:8085" {
 		t.Error("received", d, "expected", "localhost:8085")
 	}
 }
@@ -176,14 +208,26 @@ func TestDryRun(t *testing.T) {
 	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
+	_, err = configFile.Write([]byte(`
+	[InMemCollector]
+		CacheCapacity=1000 
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`))
+
 	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
 
 	_, err = rulesFile.Write([]byte(`
-	DryRun = true
+	DryRun=true
 	`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	assert.Equal(t, nil, err)
 
 	if d := c.GetIsDryRun(); d != true {
 		t.Error("received", d, "expected", true)
@@ -197,6 +241,17 @@ func TestGetSamplerTypes(t *testing.T) {
 
 	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)
+
+	_, err = configFile.Write([]byte(`
+	[InMemCollector]
+		CacheCapacity=1000 
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`))
 
 	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.Equal(t, nil, err)

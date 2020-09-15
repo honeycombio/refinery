@@ -22,15 +22,10 @@ type PromMetrics struct {
 	lock    sync.Mutex
 }
 
-type PromConfig struct {
-	MetricsListenAddr string
-}
-
 func (p *PromMetrics) Start() error {
 	p.Logger.Debug().Logf("Starting PromMetrics")
 	defer func() { p.Logger.Debug().Logf("Finished starting PromMetrics") }()
-	pc := PromConfig{}
-	err := p.Config.GetOtherConfig("PrometheusMetrics", &pc)
+	pc, err := p.Config.GetPrometheusMetricsConfig()
 	if err != nil {
 		return err
 	}

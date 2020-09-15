@@ -10,12 +10,15 @@ require (
 	github.com/facebookgo/structtag v0.0.0-20150214074306-217e25fb9691 // indirect
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/garyburd/redigo v1.6.0
+	github.com/go-playground/universal-translator v0.17.0 // indirect
+	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/libhoney-go v1.12.4
 	github.com/jessevdk/go-flags v1.4.0
 	github.com/klauspost/compress v1.10.3
+	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
 	github.com/pelletier/go-toml v1.8.0 // indirect
 	github.com/philhofer/fwd v1.0.0 // indirect
@@ -34,5 +37,6 @@ require (
 	golang.org/x/sys v0.0.0-20200722175500-76b94024e4b6 // indirect
 	golang.org/x/text v0.3.3 // indirect
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
+	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/ini.v1 v1.57.0 // indirect
 )

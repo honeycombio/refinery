@@ -40,13 +40,6 @@ type HoneycombMetrics struct {
 	reportingCancelFunc func()
 }
 
-type MetricsConfig struct {
-	MetricsHoneycombAPI      string
-	MetricsAPIKey            string
-	MetricsDataset           string
-	MetricsReportingInterval int64
-}
-
 type counter struct {
 	lock sync.Mutex
 	name string
@@ -68,8 +61,7 @@ type histogram struct {
 func (h *HoneycombMetrics) Start() error {
 	h.Logger.Debug().Logf("Starting HoneycombMetrics")
 	defer func() { h.Logger.Debug().Logf("Finished starting HoneycombMetrics") }()
-	mc := MetricsConfig{}
-	err := h.Config.GetOtherConfig("HoneycombMetrics", &mc)
+	mc, err := h.Config.GetHoneycombMetricsConfig()
 	if err != nil {
 		return err
 	}
@@ -94,8 +86,7 @@ func (h *HoneycombMetrics) Start() error {
 
 func (h *HoneycombMetrics) reloadBuilder() {
 	h.Logger.Debug().Logf("reloading config for honeeycomb metrics reporter")
-	mc := MetricsConfig{}
-	err := h.Config.GetOtherConfig("HoneycombMetrics", &mc)
+	mc, err := h.Config.GetHoneycombMetricsConfig()
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
 		// honeycomb logger
@@ -108,7 +99,7 @@ func (h *HoneycombMetrics) reloadBuilder() {
 	h.initLibhoney(mc)
 }
 
-func (h *HoneycombMetrics) initLibhoney(mc MetricsConfig) error {
+func (h *HoneycombMetrics) initLibhoney(mc config.HoneycombMetricsConfig) error {
 	metricsTx := &transmission.Honeycomb{
 		// metrics are always sent as a single event, so don't wait for the timeout
 		MaxBatchSize:      1,
