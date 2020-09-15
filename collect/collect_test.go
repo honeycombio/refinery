@@ -48,7 +48,7 @@ func TestAddRootSpan(t *testing.T) {
 	err := c.Start()
 	assert.NoError(t, err, "in-mem cache should start")
 
-	coll.Cache = c
+	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
@@ -57,6 +57,7 @@ func TestAddRootSpan(t *testing.T) {
 	coll.fromPeer = make(chan *types.Span, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	defer coll.Stop()
 
 	var traceID1 = "mytrace"
 	var traceID2 = "mytraess"
@@ -74,7 +75,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.Cache.Get(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
@@ -92,12 +93,11 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.Cache.Get(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
-	coll.Stop()
 }
 
 // TestAddSpan tests that adding a span winds up with a trace object in the
@@ -129,7 +129,7 @@ func TestAddSpan(t *testing.T) {
 		Logger:  &logger.NullLogger{},
 	}
 	c.Start()
-	coll.Cache = c
+	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
@@ -138,6 +138,7 @@ func TestAddSpan(t *testing.T) {
 	coll.fromPeer = make(chan *types.Span, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	defer coll.Stop()
 
 	var traceID = "mytrace"
 
@@ -152,7 +153,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Equal(t, traceID, coll.Cache.Get(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
@@ -164,7 +165,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Nil(t, coll.Cache.Get(traceID), "after adding a leaf and root span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	transmission.Mux.RUnlock()
@@ -204,7 +205,7 @@ func TestDryRunMode(t *testing.T) {
 	}
 	err := c.Start()
 	assert.NoError(t, err, "in-mem cache should start")
-	coll.Cache = c
+	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
@@ -213,6 +214,7 @@ func TestDryRunMode(t *testing.T) {
 	coll.fromPeer = make(chan *types.Span, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	defer coll.Stop()
 
 	var traceID1 = "abc123"
 	var traceID2 = "def456"
@@ -239,7 +241,7 @@ func TestDryRunMode(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.Cache.Get(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID1, transmission.Events[0].Data["samproxy_kept"], "field should match sampling decision for its trace ID")
@@ -257,7 +259,7 @@ func TestDryRunMode(t *testing.T) {
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Equal(t, traceID2, coll.Cache.Get(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	assert.Equal(t, traceID2, coll.getFromCache(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
 		TraceID: traceID2,
@@ -287,12 +289,11 @@ func TestDryRunMode(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.Cache.Get(traceID3), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID3, transmission.Events[3].Data["samproxy_kept"], "field should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
-	coll.Stop()
 }
 
 func TestSampleConfigReload(t *testing.T) {
@@ -320,8 +321,8 @@ func TestSampleConfigReload(t *testing.T) {
 	}
 
 	err := coll.Start()
-
 	assert.NoError(t, err)
+	defer coll.Stop()
 
 	dataset := "aoeu"
 
@@ -335,6 +336,9 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
+		coll.mutex.Lock()
+		defer coll.mutex.Unlock()
+
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
@@ -342,6 +346,9 @@ func TestSampleConfigReload(t *testing.T) {
 	conf.ReloadConfig()
 
 	assert.Eventually(t, func() bool {
+		coll.mutex.Lock()
+		defer coll.mutex.Unlock()
+
 		_, ok := coll.datasetSamplers[dataset]
 		return !ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
@@ -356,6 +363,9 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
+		coll.mutex.Lock()
+		defer coll.mutex.Unlock()
+
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)

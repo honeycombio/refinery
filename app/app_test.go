@@ -213,6 +213,9 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+
 	// Wait for span to be sent.
 	deadline := time.After(time.Second)
 	for {
@@ -227,9 +230,6 @@ func TestAppIntegration(t *testing.T) {
 		}
 	}
 	assert.Equal(t, `{"data":{"foo":"bar","trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
 }
 
 var (

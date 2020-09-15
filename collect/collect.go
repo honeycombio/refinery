@@ -3,6 +3,8 @@ package collect
 import (
 	"fmt"
 	"os"
+	"runtime"
+	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -48,7 +50,11 @@ type InMemCollector struct {
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
-	Cache           cache.Cache
+	// mutex must be held whenever non-channel internal fields are accessed.
+	// This exists to avoid data races in tests and startup/shutdown.
+	mutex sync.Mutex
+
+	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 
 	sentTraceCache *lru.Cache
@@ -81,7 +87,7 @@ func (i *InMemCollector) Start() error {
 		Logger:  i.Logger,
 	}
 	c.Start()
-	i.Cache = c
+	i.cache = c
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -131,7 +137,7 @@ func (i *InMemCollector) reloadConfigs() {
 		i.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}
 
-	if existingCache, ok := i.Cache.(*cache.DefaultInMemCache); ok {
+	if existingCache, ok := i.cache.(*cache.DefaultInMemCache); ok {
 		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
 			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
 			c := &cache.DefaultInMemCache{
@@ -148,12 +154,12 @@ func (i *InMemCollector) reloadConfigs() {
 				}
 				c.Set(trace)
 			}
-			i.Cache = c
+			i.cache = c
 		} else {
 			i.Logger.Debug().Logf("skipping reloading the cache on config reload because it hasn't changed capacity")
 		}
 	} else {
-		i.Logger.Error().WithField("cache", i.Cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
+		i.Logger.Error().WithField("cache", i.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
 
 	// clear out any samplers that we have previously created
@@ -184,6 +190,11 @@ func (i *InMemCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
+	// mutex is normally held by this goroutine at all times.
+	// It is unlocked once per ticker cycle for tests.
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
 	for {
 		// record channel lengths
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
@@ -204,6 +215,11 @@ func (i *InMemCollector) collect() {
 			select {
 			case <-ticker.C:
 				i.sendTracesInCache(time.Now())
+
+				// Briefly unlock the cache, to allow test access.
+				i.mutex.Unlock()
+				runtime.Gosched()
+				i.mutex.Lock()
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -226,7 +242,7 @@ func (i *InMemCollector) collect() {
 }
 
 func (i *InMemCollector) sendTracesInCache(now time.Time) {
-	traces := i.Cache.TakeExpiredTraces(now)
+	traces := i.cache.TakeExpiredTraces(now)
 	for _, t := range traces {
 		i.send(t)
 	}
@@ -235,7 +251,7 @@ func (i *InMemCollector) sendTracesInCache(now time.Time) {
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
 func (i *InMemCollector) processSpan(sp *types.Span) {
-	trace := i.Cache.Get(sp.TraceID)
+	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
@@ -263,7 +279,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			SendBy:    time.Now().Add(timeout),
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
-		ejectedTrace := i.Cache.Set(trace)
+		ejectedTrace := i.cache.Set(trace)
 		if ejectedTrace != nil {
 			i.send(ejectedTrace)
 		}
@@ -391,9 +407,13 @@ func (i *InMemCollector) send(trace *types.Trace) {
 func (i *InMemCollector) Stop() error {
 	// close the incoming channel and (TODO) wait for all collectors to finish
 	close(i.incoming)
+
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
 	// purge the collector of any in-flight traces
-	if i.Cache != nil {
-		traces := i.Cache.GetAll()
+	if i.cache != nil {
+		traces := i.cache.GetAll()
 		for _, trace := range traces {
 			if trace != nil {
 				i.send(trace)
@@ -404,4 +424,12 @@ func (i *InMemCollector) Stop() error {
 		i.Transmission.Flush()
 	}
 	return nil
+}
+
+// Convenience method for tests.
+func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
+
+	return i.cache.Get(traceID)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
@@ -61,7 +62,7 @@ func (d *DefaultTransmission) Start() error {
 
 	processCtx, canceler := context.WithCancel(context.Background())
 	d.responseCanceler = canceler
-	go d.processResponses(processCtx)
+	go d.processResponses(processCtx, d.LibhClient.TxResponses())
 
 	// listen for config reloads
 	d.Config.RegisterReloadCallback(d.reloadTransmissionBuilder)
@@ -137,9 +138,11 @@ func (d *DefaultTransmission) Stop() error {
 	return nil
 }
 
-func (d *DefaultTransmission) processResponses(ctx context.Context) {
+func (d *DefaultTransmission) processResponses(
+	ctx context.Context,
+	responses chan transmission.Response,
+) {
 	honeycombAPI, _ := d.Config.GetHoneycombAPI()
-	responses := d.LibhClient.TxResponses()
 	for {
 		select {
 		case r := <-responses:

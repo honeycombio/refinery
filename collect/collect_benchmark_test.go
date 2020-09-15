@@ -54,7 +54,7 @@ func BenchmarkCollect(b *testing.B) {
 	}
 	err := c.Start()
 	assert.NoError(b, err, "in-mem cache should start")
-	coll.Cache = c
+	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(b, err, "lru cache should start")
 	coll.sentTraceCache = stc
