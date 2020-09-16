@@ -99,12 +99,12 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", 100*time.Millisecond)
 	}
 
-	if d, _ := c.GetSamplerTypeForDataset("dataset-doesnt-exist"); d != "DeterministicSampler" {
-		t.Error("received", d, "expected", "DeterministicSampler")
+	if d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); err != nil {
+		assert.IsType(t, &DeterministicSamplerConfig{}, d)
 	}
 
-	if d, _ := c.GetSamplerTypeForDataset("dataset1"); d != "DynamicSampler" {
-		t.Error("received", d, "expected", "DynamicSampler")
+	if d, err := c.GetSamplerConfigForDataset("dataset1"); err != nil {
+		assert.IsType(t, &DynamicSamplerConfig{}, d)
 	}
 
 	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
@@ -257,11 +257,10 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.Equal(t, nil, err)
 
 	dummyConfig := []byte(`
-	[SamplerConfig._default]
-		Sampler = "DeterministicSampler"
-		SampleRate = 2
+	Sampler = "DeterministicSampler"
+	SampleRate = 2
 
-	[SamplerConfig.'dataset 1']
+	['dataset 1']
 		Sampler = "DynamicSampler"
 		SampleRate = 2
 		FieldList = ["request.method","response.status_code"]
@@ -270,12 +269,12 @@ func TestGetSamplerTypes(t *testing.T) {
 		AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
 		ClearFrequencySec = 60
 
-	[SamplerConfig.dataset2]
+	[dataset2]
 
 		Sampler = "DeterministicSampler"
 		SampleRate = 10
 
-	[SamplerConfig.dataset3]
+	[dataset3]
 
 		Sampler = "EMADynamicSampler"
 		GoalSampleRate = 10
@@ -291,19 +290,19 @@ func TestGetSamplerTypes(t *testing.T) {
 		t.Error(err)
 	}
 
-	typ, err := c.GetSamplerTypeForDataset("dataset-doesnt-exist")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, "DeterministicSampler", typ)
+	if d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
+		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	}
 
-	typ, err = c.GetSamplerTypeForDataset("dataset 1")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, "DynamicSampler", typ)
+	if d, err := c.GetSamplerConfigForDataset("dataset 1"); assert.Equal(t, nil, err) {
+		assert.IsType(t, &DynamicSamplerConfig{}, d)
+	}
 
-	typ, err = c.GetSamplerTypeForDataset("dataset2")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, "DeterministicSampler", typ)
+	if d, err := c.GetSamplerConfigForDataset("dataset2"); assert.Equal(t, nil, err) {
+		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	}
 
-	typ, err = c.GetSamplerTypeForDataset("dataset3")
-	assert.Equal(t, nil, err)
-	assert.Equal(t, "EMADynamicSampler", typ)
+	if d, err := c.GetSamplerConfigForDataset("dataset3"); assert.Equal(t, nil, err) {
+		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
+	}
 }

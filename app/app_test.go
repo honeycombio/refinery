@@ -99,7 +99,7 @@ func newStartedApp(
 	c := &config.MockConfig{
 		GetSendDelayVal:                      0,
 		GetTraceTimeoutVal:                   10 * time.Millisecond,
-		GetSamplerTypeVal:                    "DeterministicSampler",
+		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{},
 		SendTickerVal:                        2 * time.Millisecond,
 		PeerManagementType:                   "file",
 		GetUpstreamBufferSizeVal:             10000,

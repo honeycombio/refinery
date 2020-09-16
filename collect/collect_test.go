@@ -24,7 +24,7 @@ func TestAddRootSpan(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  "DeterministicSampler",
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
@@ -108,7 +108,7 @@ func TestAddSpan(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  "DeterministicSampler",
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
@@ -179,10 +179,11 @@ func TestDryRunMode(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  "DeterministicSampler",
-		SendTickerVal:      2 * time.Millisecond,
-		GetOtherConfigVal:  `{"SampleRate":10}`,
-		DryRun:             true,
+		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
+			SampleRate: 10,
+		},
+		SendTickerVal: 2 * time.Millisecond,
+		DryRun:        true,
 	}
 	samplerFactory := &sample.SamplerFactory{
 		Config: conf,
@@ -304,7 +305,7 @@ func TestSampleConfigReload(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:                      0,
 		GetTraceTimeoutVal:                   10 * time.Millisecond,
-		GetSamplerTypeVal:                    "DeterministicSampler",
+		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{},
 		SendTickerVal:                        2 * time.Millisecond,
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
 	}

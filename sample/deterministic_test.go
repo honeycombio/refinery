@@ -1,9 +1,7 @@
 package sample
 
 import (
-	"io/ioutil"
 	"math"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,11 +13,10 @@ import (
 
 // TestInitialization tests that sample rates are consistently returned
 func TestInitialization(t *testing.T) {
-	mc := &config.MockConfig{
-		GetOtherConfigVal: `{"SampleRate":10}`,
-	}
 	ds := &DeterministicSampler{
-		Config: mc,
+		Config: &config.DeterministicSamplerConfig{
+			SampleRate: 10,
+		},
 		Logger: &logger.NullLogger{},
 	}
 
@@ -30,79 +27,12 @@ func TestInitialization(t *testing.T) {
 	assert.Equal(t, uint32(math.MaxUint32/10), ds.upperBound, "upper bound should be correctly calculated")
 }
 
-func TestInitializationFromConfigFile(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.Equal(t, nil, err)
-	defer os.RemoveAll(tmpDir)
-
-	f, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.Equal(t, nil, err)
-
-	dummyConfig := []byte(`
-		[InMemCollector]
-			CacheCapacity=1000 
-
-		[HoneycombMetrics]
-			MetricsHoneycombAPI="http://honeycomb.io"
-			MetricsAPIKey="1234"
-			MetricsDataset="testDatasetName"
-			MetricsReportingInterval=3
-			
-		[SamplerConfig._default]
-			Sampler = "DeterministicSampler"
-			SampleRate = 2
-
-		[SamplerConfig.dataset1]
-			Sampler = "DynamicSampler"
-			SampleRate = 2
-			FieldList = ["request.method","response.status_code"]
-			UseTraceLength = true
-			AddSampleRateKeyToTrace = true
-			AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
-
-		[SamplerConfig.dataset2]
-
-			Sampler = "DeterministicSampler"
-			SampleRate = 10
-	`)
-
-	_, err = f.Write(dummyConfig)
-	assert.Equal(t, nil, err)
-	f.Close()
-
-	c, err := config.NewConfig(f.Name(), f.Name())
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	ds := &DeterministicSampler{
-		Config:     c,
-		Logger:     &logger.NullLogger{},
-		configName: "_default",
-	}
-	ds.Start()
-
-	assert.Equal(t, 2, ds.sampleRate)
-
-	ds = &DeterministicSampler{
-		Config:     c,
-		Logger:     &logger.NullLogger{},
-		configName: "dataset2",
-	}
-	ds.Start()
-	// ensure we get the dataset value from "SamplerConfig.dataset2"
-	assert.Equal(t, 10, ds.sampleRate)
-
-}
-
 // TestGetSampleRate verifies the same trace ID gets the same response
 func TestGetSampleRate(t *testing.T) {
-	mc := &config.MockConfig{
-		GetOtherConfigVal: `{"SampleRate":10}`,
-	}
 	ds := &DeterministicSampler{
-		Config: mc,
+		Config: &config.DeterministicSamplerConfig{
+			SampleRate: 10,
+		},
 		Logger: &logger.NullLogger{},
 	}
 

@@ -73,8 +73,8 @@ type Config interface {
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
 	GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error)
 
-	// GetSamplerTypeForDataset returns the sampler type to use for the given dataset
-	GetSamplerTypeForDataset(string) (string, error)
+	// GetSamplerConfigForDataset returns the sampler type to use for the given dataset
+	GetSamplerConfigForDataset(string) (interface{}, error)
 
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
