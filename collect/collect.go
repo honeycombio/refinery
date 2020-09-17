@@ -150,9 +150,10 @@ func (i *InMemCollector) reloadConfigs() {
 			}
 			c.Start()
 			// pull the old cache contents into the new cache
-			for i, trace := range existingCache.GetAll() {
-				if i > imcConfig.CacheCapacity {
-					break
+			for j, trace := range existingCache.GetAll() {
+				if j >= imcConfig.CacheCapacity {
+					i.send(trace)
+					continue
 				}
 				c.Set(trace)
 			}
