@@ -166,13 +166,13 @@ Metrics = "honeycomb"
 # temporary odd sampling decisions).
 CacheCapacity = 1000
 
-// MaxAlloc is optional. If set, it must be an integer >= 0. 64-bit values are
-// supported.
-// If set to a non-zero value, once per tick (see SendTicker) the collector
-// will compare total allocated bytes to this value. If allocation is too
-// high, cache capacity will be reduced and an error will be logged.
-// Useful values for this setting are generally in the range of 75%-90% of
-// available system memory.
+# MaxAlloc is optional. If set, it must be an integer >= 0. 64-bit values are
+# supported.
+# If set to a non-zero value, once per tick (see SendTicker) the collector
+# will compare total allocated bytes to this value. If allocation is too
+# high, cache capacity will be reduced and an error will be logged.
+# Useful values for this setting are generally in the range of 75%-90% of
+# available system memory.
 MaxAlloc = 0
 
 ###################
