@@ -379,7 +379,7 @@ func TestMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 10 * time.Minute,
-		GetSamplerTypeVal:  "DeterministicSampler",
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
 	}
 	coll := &InMemCollector{
