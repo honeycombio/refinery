@@ -119,14 +119,15 @@ func main() {
 	userAgentAddition := "samproxy/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         500,
-			BatchTimeout:         libhoney.DefaultBatchTimeout,
-			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:  uint(c.GetUpstreamBufferSize()),
-			UserAgentAddition:    userAgentAddition,
-			Transport:            upstreamTransport,
-			BlockOnSend:          true,
-			Metrics:              sdUpstream,
+			MaxBatchSize:          500,
+			BatchTimeout:          libhoney.DefaultBatchTimeout,
+			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
+			PendingWorkCapacity:   uint(c.GetUpstreamBufferSize()),
+			UserAgentAddition:     userAgentAddition,
+			Transport:             upstreamTransport,
+			BlockOnSend:           true,
+			EnableMsgpackEncoding: true,
+			Metrics:               sdUpstream,
 		},
 	})
 	if err != nil {
@@ -146,6 +147,7 @@ func main() {
 			// gzip compression is expensive, and peers are most likely close to each other
 			// so we can turn off gzip when forwarding to peers
 			DisableGzipCompression: true,
+			EnableMsgpackEncoding:  true,
 			Metrics:                sdPeer,
 		},
 	})
