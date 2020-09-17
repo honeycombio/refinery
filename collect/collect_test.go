@@ -339,7 +339,7 @@ func TestCacheSizeReload(t *testing.T) {
 	coll.AddSpan(&types.Span{TraceID: "2", Event: event})
 
 	expectedEvents := 1
-	wait := conf.SendTickerVal
+	wait := 2 * time.Millisecond
 	check := func() bool {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
@@ -348,7 +348,9 @@ func TestCacheSizeReload(t *testing.T) {
 	}
 	assert.Eventually(t, check, 10*wait, wait, "expected one trace evicted and sent")
 
+	conf.Mux.Lock()
 	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 2
+	conf.Mux.Unlock()
 	conf.ReloadConfig()
 
 	assert.Eventually(t, func() bool {
@@ -362,7 +364,9 @@ func TestCacheSizeReload(t *testing.T) {
 	time.Sleep(5 * conf.SendTickerVal)
 	assert.True(t, check(), "expected no more traces evicted and sent")
 
+	conf.Mux.Lock()
 	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 1
+	conf.Mux.Unlock()
 	conf.ReloadConfig()
 
 	expectedEvents = 2
