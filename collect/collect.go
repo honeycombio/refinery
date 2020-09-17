@@ -172,14 +172,16 @@ func (i *InMemCollector) reloadConfigs() {
 
 func (i *InMemCollector) checkAlloc() {
 	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
-	alloc := getAlloc()
-	if err != nil || inMemConfig.MaxAlloc == 0 || alloc < inMemConfig.MaxAlloc {
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < inMemConfig.MaxAlloc {
 		return
 	}
 
 	existingCache, ok := i.cache.(*cache.DefaultInMemCache)
 	if !ok || existingCache.GetCacheSize() < 100 {
-		i.Logger.Error().WithField("alloc", alloc).Logf(
+		i.Logger.Error().WithField("alloc", mem.Alloc).Logf(
 			"total allocation exceeds limit, but unable to shrink cache",
 		)
 		return
@@ -197,7 +199,7 @@ func (i *InMemCollector) checkAlloc() {
 	i.Logger.Error().
 		WithField("cache_size.previous", oldCap).
 		WithField("cache_size.new", newCap).
-		WithField("alloc", alloc).
+		WithField("alloc", mem.Alloc).
 		Logf("reducing cache size due to memory overage")
 
 	c := &cache.DefaultInMemCache{
@@ -227,13 +229,6 @@ func (i *InMemCollector) checkAlloc() {
 	// this we can easily end up shrinking more than we need to, since total
 	// alloc won't be updated until after a GC pass.
 	runtime.GC()
-
-	var myStats runtime.MemStats
-	runtime.ReadMemStats(&myStats)
-
-	memStatsMutex.Lock()
-	memStats = myStats
-	memStatsMutex.Unlock()
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
@@ -501,35 +496,4 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 	defer i.mutex.Unlock()
 
 	return i.cache.Get(traceID)
-}
-
-var (
-	memStatsMutex sync.RWMutex
-	memStats      runtime.MemStats
-)
-
-func init() {
-	// Prior to go 1.15, runtime.ReadMemStats() blocks if garbage collection
-	// is in progress. To avoid stalling during our memory check, start a
-	// background goroutine to read this data regularly.
-	go func() {
-		for {
-			var myStats runtime.MemStats
-			runtime.ReadMemStats(&myStats)
-
-			memStatsMutex.Lock()
-			memStats = myStats
-			memStatsMutex.Unlock()
-
-			time.Sleep(10 * time.Millisecond)
-		}
-	}()
-}
-
-func getAlloc() uint64 {
-	memStatsMutex.RLock()
-	alloc := memStats.Alloc
-	memStatsMutex.RUnlock()
-
-	return alloc
 }
