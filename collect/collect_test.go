@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -433,7 +434,14 @@ func TestMaxAlloc(t *testing.T) {
 	// Set MaxAlloc, which should cause cache evictions.
 	coll.mutex.Lock()
 	assert.Equal(t, 500, len(coll.cache.GetAll()))
-	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = 10
+
+	// We only want to induce a single downsize, so set MaxAlloc just below
+	// our current post-GC alloc.
+	runtime.GC()
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = mem.Alloc - 1
+
 	coll.mutex.Unlock()
 
 	var traces []*types.Trace
