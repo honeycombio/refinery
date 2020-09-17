@@ -53,7 +53,7 @@ type InMemCollector struct {
 
 	// mutex must be held whenever non-channel internal fields are accessed.
 	// This exists to avoid data races in tests and startup/shutdown.
-	mutex sync.Mutex
+	mutex sync.RWMutex
 
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
@@ -483,8 +483,8 @@ func (i *InMemCollector) Stop() error {
 
 // Convenience method for tests.
 func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
 }

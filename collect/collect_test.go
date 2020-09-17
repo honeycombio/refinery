@@ -354,8 +354,8 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.ReloadConfig()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
+		coll.mutex.RLock()
+		defer coll.mutex.RUnlock()
 
 		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
 	}, 10*wait, wait, "cache size to change")
