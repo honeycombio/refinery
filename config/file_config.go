@@ -45,6 +45,7 @@ type configContents struct {
 type InMemoryCollectorCacheCapacity struct {
 	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity int `validate:"required,lt=2147483647"`
+	MaxAlloc      uint64
 }
 
 type HoneycombLevel int
@@ -99,6 +100,7 @@ func NewConfig(config, rules string) (Config, error) {
 	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("DryRun", false)
+	c.SetDefault("MaxAlloc", uint64(0))
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()

@@ -8,7 +8,7 @@ executors:
   linuxgo:
     parameters:
     docker:
-      - image: cimg/go:1.14
+      - image: cimg/go:1.15
       - image: redis:6
 
 commands:

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -145,6 +146,7 @@ func (i *InMemCollector) reloadConfigs() {
 					CacheCapacity: imcConfig.CacheCapacity,
 				},
 				Metrics: i.Metrics,
+				Logger:  i.Logger,
 			}
 			c.Start()
 			// pull the old cache contents into the new cache
@@ -166,6 +168,67 @@ func (i *InMemCollector) reloadConfigs() {
 	// so that the new configuration will be propagated
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	// TODO add resizing the LRU sent trace cache on config reload
+}
+
+func (i *InMemCollector) checkAlloc() {
+	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < inMemConfig.MaxAlloc {
+		return
+	}
+
+	existingCache, ok := i.cache.(*cache.DefaultInMemCache)
+	if !ok || existingCache.GetCacheSize() < 100 {
+		i.Logger.Error().WithField("alloc", mem.Alloc).Logf(
+			"total allocation exceeds limit, but unable to shrink cache",
+		)
+		return
+	}
+
+	// Reduce cache size by a fixed 10%, successive overages will continue to shrink.
+	// Base this on the total number of actual traces, which may be fewer than
+	// the cache capacity.
+	oldCap := existingCache.GetCacheSize()
+	oldTraces := existingCache.GetAll()
+	newCap := int(float64(len(oldTraces)) * 0.9)
+
+	// Treat any MaxAlloc overage as an error. The configured cache capacity
+	// should be reduced to avoid this condition.
+	i.Logger.Error().
+		WithField("cache_size.previous", oldCap).
+		WithField("cache_size.new", newCap).
+		WithField("alloc", mem.Alloc).
+		Logf("reducing cache size due to memory overage")
+
+	c := &cache.DefaultInMemCache{
+		Config: cache.CacheConfig{
+			CacheCapacity: newCap,
+		},
+		Metrics: i.Metrics,
+		Logger:  i.Logger,
+	}
+	c.Start()
+
+	// Sort traces by deadline, oldest first.
+	sort.Slice(oldTraces, func(i, j int) bool {
+		return oldTraces[i].SendBy.Before(oldTraces[j].SendBy)
+	})
+
+	// Send the traces we can't keep, put the rest into the new cache.
+	for _, trace := range oldTraces[:len(oldTraces)-newCap] {
+		i.send(trace)
+	}
+	for _, trace := range oldTraces[len(oldTraces)-newCap:] {
+		c.Set(trace)
+	}
+	i.cache = c
+
+	// Manually GC here - it's unfortunate to block this long, but without
+	// this we can easily end up shrinking more than we need to, since total
+	// alloc won't be updated until after a GC pass.
+	runtime.GC()
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
@@ -215,6 +278,7 @@ func (i *InMemCollector) collect() {
 			select {
 			case <-ticker.C:
 				i.sendTracesInCache(time.Now())
+				i.checkAlloc()
 
 				// Briefly unlock the cache, to allow test access.
 				i.mutex.Unlock()
