@@ -18,7 +18,7 @@ type fileConfig struct {
 	rules     *viper.Viper
 	conf      *configContents
 	callbacks []func()
-	mux       sync.Mutex
+	mux       sync.RWMutex
 }
 
 type configContents struct {
@@ -154,6 +154,9 @@ func NewConfig(config, rules string) (Config, error) {
 func (f *fileConfig) onChange(in fsnotify.Event) {
 	f.unmarshal()
 
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	for _, c := range f.callbacks {
 		c()
 	}
@@ -211,10 +214,16 @@ func (f *fileConfig) validateConditionalConfigs() error {
 }
 
 func (f *fileConfig) RegisterReloadCallback(cb func()) {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+
 	f.callbacks = append(f.callbacks, cb)
 }
 
 func (f *fileConfig) GetListenAddr() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	_, _, err := net.SplitHostPort(f.conf.ListenAddr)
 	if err != nil {
 		return "", err
@@ -223,6 +232,9 @@ func (f *fileConfig) GetListenAddr() (string, error) {
 }
 
 func (f *fileConfig) GetPeerListenAddr() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	_, _, err := net.SplitHostPort(f.conf.PeerListenAddr)
 	if err != nil {
 		return "", err
@@ -231,46 +243,79 @@ func (f *fileConfig) GetPeerListenAddr() (string, error) {
 }
 
 func (f *fileConfig) GetAPIKeys() ([]string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.APIKeys, nil
 }
 
 func (f *fileConfig) GetPeerManagementType() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.PeerManagement.Type, nil
 }
 
 func (f *fileConfig) GetPeers() ([]string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.PeerManagement.Peers, nil
 }
 
 func (f *fileConfig) GetRedisHost() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.config.GetString("PeerManagement.RedisHost"), nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.config.GetString("PeerManagement.IdentifierInterfaceName"), nil
 }
 
 func (f *fileConfig) GetUseIPV6Identifier() (bool, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.config.GetBool("PeerManagement.UseIPV6Identifier"), nil
 }
 
 func (f *fileConfig) GetRedisIdentifier() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.config.GetString("PeerManagement.RedisIdentifier"), nil
 }
 
 func (f *fileConfig) GetHoneycombAPI() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.HoneycombAPI, nil
 }
 
 func (f *fileConfig) GetLoggingLevel() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.LoggingLevel, nil
 }
 
 func (f *fileConfig) GetLoggerType() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.Logger, nil
 }
 
 func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	hlConfig := &HoneycombLoggerConfig{}
 	if sub := f.config.Sub("HoneycombLogger"); sub != nil {
 		err := sub.UnmarshalExact(hlConfig)
@@ -290,10 +335,16 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 }
 
 func (f *fileConfig) GetCollectorType() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.Collector, nil
 }
 
 func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+
 	key := fmt.Sprintf("%s.Sampler", dataset)
 	if ok := f.rules.IsSet(key); ok {
 		t := f.rules.GetString(key)
@@ -336,6 +387,9 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	capacity := &InMemoryCollectorCacheCapacity{}
 	if sub := f.config.Sub("InMemCollector"); sub != nil {
 		err := sub.UnmarshalExact(capacity)
@@ -348,10 +402,16 @@ func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCap
 }
 
 func (f *fileConfig) GetMetricsType() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.Metrics, nil
 }
 
 func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	hmConfig := &HoneycombMetricsConfig{}
 	if sub := f.config.Sub("HoneycombMetrics"); sub != nil {
 		err := sub.UnmarshalExact(hmConfig)
@@ -371,6 +431,9 @@ func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error)
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	pcConfig := &PrometheusMetricsConfig{}
 	if sub := f.config.Sub("PrometheusMetrics"); sub != nil {
 		err := sub.UnmarshalExact(pcConfig)
@@ -390,14 +453,23 @@ func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, erro
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.SendDelay, nil
 }
 
 func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.TraceTimeout, nil
 }
 
 func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	if sub := f.config.Sub(name); sub != nil {
 		return sub.Unmarshal(iface)
 	}
@@ -410,18 +482,30 @@ func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
 }
 
 func (f *fileConfig) GetUpstreamBufferSize() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.UpstreamBufferSize
 }
 
 func (f *fileConfig) GetPeerBufferSize() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.PeerBufferSize
 }
 
 func (f *fileConfig) GetSendTickerValue() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.SendTicker
 }
 
 func (f *fileConfig) GetDebugServiceAddr() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	_, _, err := net.SplitHostPort(f.conf.DebugServiceAddr)
 	if err != nil {
 		return "", err
@@ -430,5 +514,8 @@ func (f *fileConfig) GetDebugServiceAddr() (string, error) {
 }
 
 func (f *fileConfig) GetIsDryRun() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	return f.conf.DryRun
 }
