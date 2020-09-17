@@ -430,7 +430,7 @@ func TestMaxAlloc(t *testing.T) {
 		time.Sleep(conf.SendTickerVal)
 	}
 
-	// Now there should be 1000 traces in the cache.
+	// Now there should be 500 traces in the cache.
 	// Set MaxAlloc, which should cause cache evictions.
 	coll.mutex.Lock()
 	assert.Equal(t, 500, len(coll.cache.GetAll()))
