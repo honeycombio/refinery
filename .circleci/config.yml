@@ -47,7 +47,7 @@ jobs:
            command: dockerize -wait tcp://localhost:6379 -timeout 1m
       - run:
           name: go_test
-          command: go test --timeout 10s -v ./...
+          command: go test --race --timeout 60s -v ./...
 
   build:
     executor: linuxgo
