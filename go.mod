@@ -17,6 +17,7 @@ require (
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/libhoney-go v1.12.4
 	github.com/jessevdk/go-flags v1.4.0
+	github.com/json-iterator/go v1.1.6
 	github.com/klauspost/compress v1.10.3
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
