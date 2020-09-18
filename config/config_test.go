@@ -310,6 +310,10 @@ func TestGetSamplerTypes(t *testing.T) {
 
 		Sampler = "EMADynamicSampler"
 		GoalSampleRate = 10
+		UseTraceLength = true
+		AddSampleRateKeyToTrace = true
+		FieldList = "[request.method]"
+		Weight = 0.3
 `)
 
 	_, err = rulesFile.Write(dummyConfig)

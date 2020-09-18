@@ -32,10 +32,6 @@ type DynamicSampler struct {
 func (d *DynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DynamicSampler") }()
-	if d.Config.SampleRate < 1 {
-		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", d.Config.SampleRate)
-		d.Config.SampleRate = 1
-	}
 	d.sampleRate = d.Config.SampleRate
 	if d.Config.ClearFrequencySec == 0 {
 		d.Config.ClearFrequencySec = 30

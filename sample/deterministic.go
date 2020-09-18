@@ -24,11 +24,6 @@ type DeterministicSampler struct {
 func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
-
-	if d.Config.SampleRate < 1 {
-		d.Logger.Debug().WithField("sample_rate", d.Config.SampleRate).Logf("configured sample rate for deterministic sampler was less than 1; forcing to 1")
-		d.Config.SampleRate = 1
-	}
 	d.sampleRate = d.Config.SampleRate
 
 	// Get the actual upper bound - the largest possible value divided by

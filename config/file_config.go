@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,7 +30,7 @@ type configContents struct {
 	Logger             string        `validate:"required,oneof= logrus honeycomb"`
 	LoggingLevel       string        `validate:"required"`
 	Collector          string        `validate:"required,oneof= InMemCollector"`
-	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler"`
+	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler"`
 	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay          time.Duration `validate:"required"`
 	TraceTimeout       time.Duration `validate:"required"`
@@ -137,7 +138,11 @@ func NewConfig(config, rules string) (Config, error) {
 	}
 
 	err = fc.validateConditionalConfigs()
+	if err != nil {
+		return nil, err
+	}
 
+	err = fc.validateSamplerConfigs()
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +210,67 @@ func (f *fileConfig) validateConditionalConfigs() error {
 		_, err = f.GetPrometheusMetricsConfig()
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (f *fileConfig) validateSamplerConfigs() error {
+	keys := f.rules.AllKeys()
+	for _, key := range keys {
+		parts := strings.Split(key, ".")
+
+		// verify default sampler config
+		if parts[0] == "sampler" {
+			t := f.rules.GetString(key)
+			var i interface{}
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			default:
+				return errors.New("Invalid or missing default sampler type")
+			}
+			err := f.rules.Unmarshal(i)
+			if err != nil {
+				return err
+			}
+			v := validator.New()
+			err = v.Struct(i)
+			if err != nil {
+				return err
+			}
+		}
+
+		// verify dataset sampler configs
+		if len(parts) > 1 && parts[1] == "sampler" {
+			t := f.rules.GetString(key)
+			var i interface{}
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			default:
+				return errors.New("Invalid or missing dataset sampler type")
+			}
+			datasetName := parts[0]
+			if sub := f.rules.Sub(datasetName); sub != nil {
+				err := sub.Unmarshal(i)
+				if err != nil {
+					return err
+				}
+				v := validator.New()
+				err = v.Struct(i)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
