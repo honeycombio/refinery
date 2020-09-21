@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -18,12 +19,14 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
+var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
+
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged in to a trace.
 	// Once the trace is "complete", it'll be passed off to the sampler then
 	// scheduled for transmission.
-	AddSpan(*types.Span)
-	AddSpanFromPeer(*types.Span)
+	AddSpan(*types.Span) error
+	AddSpanFromPeer(*types.Span) error
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -50,6 +53,9 @@ type InMemCollector struct {
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
+
+	// For test use only
+	BlockOnAddSpan bool
 
 	// mutex must be held whenever non-channel internal fields are accessed.
 	// This exists to avoid data races in tests and startup/shutdown.
@@ -211,15 +217,27 @@ func (i *InMemCollector) checkAlloc() {
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpan(sp *types.Span) {
-	// TODO protect against sending on a closed channel during shutdown
-	i.incoming <- sp
+func (i *InMemCollector) AddSpan(sp *types.Span) error {
+	return i.add(sp, i.incoming)
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
-	// TODO protect against sending on a closed channel during shutdown
-	i.fromPeer <- sp
+func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
+	return i.add(sp, i.fromPeer)
+}
+
+func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
+	if i.BlockOnAddSpan {
+		ch <- sp
+		return nil
+	}
+
+	select {
+	case ch <- sp:
+		return nil
+	default:
+		return ErrWouldBlock
+	}
 }
 
 // collect handles both accepting spans that have been handed to it and sending

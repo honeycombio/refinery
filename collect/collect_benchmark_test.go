@@ -47,6 +47,7 @@ func BenchmarkCollect(b *testing.B) {
 			Config: conf,
 			Logger: log,
 		},
+		BlockOnAddSpan:  true,
 		cache:           cache.NewInMemCache(3, metric, log),
 		incoming:        make(chan *types.Span, 500),
 		fromPeer:        make(chan *types.Span, 500),

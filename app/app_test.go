@@ -128,7 +128,9 @@ func newStartedApp(
 	metricsr := &metrics.MockMetrics{}
 	metricsr.Start()
 
-	collector := &collect.InMemCollector{}
+	collector := &collect.InMemCollector{
+		BlockOnAddSpan: true,
+	}
 
 	peerList, err := peers.GetPeers()
 	assert.NoError(t, err)
