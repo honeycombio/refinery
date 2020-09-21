@@ -80,7 +80,7 @@ func (i *InMemCollector) Start() error {
 	if err != nil {
 		return err
 	}
-	i.cache = i.createStartedCache(imcConfig.CacheCapacity)
+	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -112,18 +112,6 @@ func (i *InMemCollector) Start() error {
 	return nil
 }
 
-func (i InMemCollector) createStartedCache(capacity int) *cache.DefaultInMemCache {
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: capacity,
-		},
-		Metrics: i.Metrics,
-		Logger:  i.Logger,
-	}
-	c.Start()
-	return c
-}
-
 // sendReloadSignal will trigger the collector reloading its config, eventually.
 func (i *InMemCollector) sendReloadSignal() {
 	// non-blocking insert of the signal here so we don't leak goroutines
@@ -145,7 +133,7 @@ func (i *InMemCollector) reloadConfigs() {
 	if existingCache, ok := i.cache.(*cache.DefaultInMemCache); ok {
 		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
 			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-			c := i.createStartedCache(imcConfig.CacheCapacity)
+			c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 			// pull the old cache contents into the new cache
 			for j, trace := range existingCache.GetAll() {
 				if j >= imcConfig.CacheCapacity {
@@ -200,7 +188,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		Logf("reducing cache size due to memory overage")
 
-	c := i.createStartedCache(newCap)
+	c := cache.NewInMemCache(newCap, i.Metrics, i.Logger)
 
 	// Sort traces by deadline, oldest first.
 	sort.Slice(oldTraces, func(i, j int) bool {

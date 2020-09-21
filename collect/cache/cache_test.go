@@ -15,12 +15,7 @@ import (
 func TestCacheSetGet(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := &DefaultInMemCache{
-		Config:  CacheConfig{10},
-		Metrics: s,
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := NewInMemCache(10, s, &logger.NullLogger{})
 
 	trace := &types.Trace{
 		TraceID: "abc123",
@@ -35,12 +30,7 @@ func TestCacheSetGet(t *testing.T) {
 func TestBufferOverrun(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := &DefaultInMemCache{
-		Config:  CacheConfig{2},
-		Metrics: s,
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := NewInMemCache(2, s, &logger.NullLogger{})
 
 	traces := []*types.Trace{
 		&types.Trace{TraceID: "abc123"},
@@ -58,12 +48,7 @@ func TestBufferOverrun(t *testing.T) {
 func TestTakeExpiredTraces(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := &DefaultInMemCache{
-		Config:  CacheConfig{10},
-		Metrics: s,
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := NewInMemCache(10, s, &logger.NullLogger{})
 
 	now := time.Now()
 	traces := []*types.Trace{

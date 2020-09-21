@@ -40,16 +40,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	err := c.Start()
-	assert.NoError(t, err, "in-mem cache should start")
-
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -123,14 +114,7 @@ func TestAddSpan(t *testing.T) {
 			Logger: &logger.NullLogger{},
 		},
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -199,15 +183,7 @@ func TestDryRunMode(t *testing.T) {
 		Metrics:        &metrics.NullMetrics{},
 		SamplerFactory: samplerFactory,
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	err := c.Start()
-	assert.NoError(t, err, "in-mem cache should start")
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -467,14 +443,7 @@ func TestMaxAlloc(t *testing.T) {
 			Logger: &logger.NullLogger{},
 		},
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 1000,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
