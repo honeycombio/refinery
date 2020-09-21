@@ -54,6 +54,9 @@ type InMemCollector struct {
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
+	// For test use only
+	BlockOnAddSpan bool
+
 	// mutex must be held whenever non-channel internal fields are accessed.
 	// This exists to avoid data races in tests and startup/shutdown.
 	mutex sync.RWMutex
@@ -215,18 +218,22 @@ func (i *InMemCollector) checkAlloc() {
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) error {
-	select {
-	case i.incoming <- sp:
-		return nil
-	default:
-		return ErrWouldBlock
-	}
+	return i.add(sp, i.incoming)
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
+	return i.add(sp, i.fromPeer)
+}
+
+func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
+	if i.BlockOnAddSpan {
+		ch <- sp
+		return nil
+	}
+
 	select {
-	case i.fromPeer <- sp:
+	case ch <- sp:
 		return nil
 	default:
 		return ErrWouldBlock
