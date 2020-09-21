@@ -35,6 +35,9 @@ func BenchmarkCollect(b *testing.B) {
 	metric := &metrics.MockMetrics{}
 	metric.Start()
 
+	stc, err := lru.New(15)
+	assert.NoError(b, err, "lru cache should start")
+
 	coll := &InMemCollector{
 		Config:       conf,
 		Logger:       log,
@@ -44,24 +47,12 @@ func BenchmarkCollect(b *testing.B) {
 			Config: conf,
 			Logger: log,
 		},
+		cache:           cache.NewInMemCache(3, metric, log),
+		incoming:        make(chan *types.Span, 500),
+		fromPeer:        make(chan *types.Span, 500),
+		datasetSamplers: make(map[string]sample.Sampler),
+		sentTraceCache:  stc,
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: metric,
-		Logger:  log,
-	}
-	err := c.Start()
-	assert.NoError(b, err, "in-mem cache should start")
-	coll.cache = c
-	stc, err := lru.New(15)
-	assert.NoError(b, err, "lru cache should start")
-	coll.sentTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 500)
-	coll.fromPeer = make(chan *types.Span, 500)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 
 	// wait until we get n number of spans out the other side

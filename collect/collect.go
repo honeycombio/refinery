@@ -53,7 +53,7 @@ type InMemCollector struct {
 
 	// mutex must be held whenever non-channel internal fields are accessed.
 	// This exists to avoid data races in tests and startup/shutdown.
-	mutex sync.Mutex
+	mutex sync.RWMutex
 
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
@@ -80,15 +80,7 @@ func (i *InMemCollector) Start() error {
 	if err != nil {
 		return err
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: imcConfig.CacheCapacity,
-		},
-		Metrics: i.Metrics,
-		Logger:  i.Logger,
-	}
-	c.Start()
-	i.cache = c
+	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -141,18 +133,12 @@ func (i *InMemCollector) reloadConfigs() {
 	if existingCache, ok := i.cache.(*cache.DefaultInMemCache); ok {
 		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
 			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-			c := &cache.DefaultInMemCache{
-				Config: cache.CacheConfig{
-					CacheCapacity: imcConfig.CacheCapacity,
-				},
-				Metrics: i.Metrics,
-				Logger:  i.Logger,
-			}
-			c.Start()
+			c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 			// pull the old cache contents into the new cache
-			for i, trace := range existingCache.GetAll() {
-				if i > imcConfig.CacheCapacity {
-					break
+			for j, trace := range existingCache.GetAll() {
+				if j >= imcConfig.CacheCapacity {
+					i.send(trace)
+					continue
 				}
 				c.Set(trace)
 			}
@@ -202,14 +188,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		Logf("reducing cache size due to memory overage")
 
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: newCap,
-		},
-		Metrics: i.Metrics,
-		Logger:  i.Logger,
-	}
-	c.Start()
+	c := cache.NewInMemCache(newCap, i.Metrics, i.Logger)
 
 	// Sort traces by deadline, oldest first.
 	sort.Slice(oldTraces, func(i, j int) bool {
@@ -492,8 +471,8 @@ func (i *InMemCollector) Stop() error {
 
 // Convenience method for tests.
 func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
 }
