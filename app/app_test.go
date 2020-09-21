@@ -74,7 +74,7 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 
 	select {
 	case <-ch:
-	case <-time.After(time.Minute):
+	case <-time.After(10 * time.Second):
 		t.Errorf("timed out waiting for %d events", target)
 	}
 }
@@ -231,6 +231,72 @@ func TestAppIntegration(t *testing.T) {
 		}
 	}
 	assert.Equal(t, `{"data":{"foo":"bar","trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+}
+
+func TestPeerRouting(t *testing.T) {
+	peers := &testPeers{
+		peers: []string{
+			"http://localhost:11001",
+			"http://localhost:11003",
+		},
+	}
+
+	var apps [2]*App
+	var addrs [2]string
+	var senders [2]*countingWriterSender
+	for i := range apps {
+		var graph inject.Graph
+		basePort := 11000 + (i * 2)
+		senders[i] = &countingWriterSender{
+			WriterSender: transmission.WriterSender{
+				W: ioutil.Discard,
+			},
+		}
+		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
+		defer startstop.Stop(graph.Objects(), nil)
+
+		addrs[i] = "localhost:" + strconv.Itoa(basePort)
+	}
+
+	// Deliver to host 1, it should be passed to host 0 and emited there.
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:11002/1/batch/dataset",
+		nil,
+	)
+	assert.NoError(t, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	blob := `[` + string(spans[0]) + `]`
+	req.Body = ioutil.NopCloser(strings.NewReader(blob))
+	resp, err := httpClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+
+	senders[0].waitForCount(t, 1)
+
+	// Repeat, but deliver to host 1 on the peer channel, it should not be
+	// passed to host 0.
+	req, err = http.NewRequest(
+		"POST",
+		"http://localhost:11003/1/batch/dataset",
+		nil,
+	)
+	assert.NoError(t, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	req.Body = ioutil.NopCloser(strings.NewReader(blob))
+	resp, err = httpClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+
+	senders[1].waitForCount(t, 1)
 }
 
 var (

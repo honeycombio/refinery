@@ -410,10 +410,12 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			r.UpstreamTransmission.EnqueueEvent(ev)
 			continue
 		}
-		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
+		// ok, we're a span. Figure out if we should handle locally or pass on
+		// to a peer. We won't pass anything that came from a peer; if there's
+		// confusion about who owns what, this avoids loops.
 		targetShard := r.Sharder.WhichShard(traceID)
-		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
+		if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
+			r.Metrics.IncrementCounter("incoming_router_peer")
 			ev, err := r.batchedEventToEvent(req, bev)
 			if err != nil {
 				batchedResponses = append(
