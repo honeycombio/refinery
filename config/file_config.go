@@ -342,8 +342,8 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 }
 
 func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
-	f.mux.Lock()
-	defer f.mux.Unlock()
+	f.mux.RLock()
+	defer f.mux.RUnlock()
 
 	key := fmt.Sprintf("%s.Sampler", dataset)
 	if ok := f.rules.IsSet(key); ok {
