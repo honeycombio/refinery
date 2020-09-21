@@ -53,8 +53,23 @@ func TestReload(t *testing.T) {
 	ch := make(chan interface{}, 1)
 
 	c.RegisterReloadCallback(func() {
-		ch <- 1
+		close(ch)
 	})
+
+	// Hey race detector, we're doing some concurrent config reads.
+	// That's cool, right?
+	go func() {
+		tick := time.NewTicker(time.Millisecond)
+		defer tick.Stop()
+		for {
+			c.GetListenAddr()
+			select {
+			case <-ch:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
 
 	wg.Add(1)
 
