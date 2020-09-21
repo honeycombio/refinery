@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v4"
@@ -640,7 +641,7 @@ func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 			UseDecodeInterfaceLoose(true).
 			Decode(v)
 	case "application/json":
-		return json.NewDecoder(data).Decode(v)
+		return jsoniter.NewDecoder(data).Decode(v)
 	default:
 		return errors.New("Bad Content-Type")
 	}

@@ -162,6 +162,7 @@ func newStartedApp(
 			},
 			BlockOnSend:            true,
 			DisableGzipCompression: true,
+			EnableMsgpackEncoding:  true,
 			Metrics:                sdPeer,
 		},
 	})
