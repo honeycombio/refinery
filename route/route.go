@@ -438,6 +438,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 				&BatchResponse{Status: http.StatusAccepted},
 			)
 			ev.APIHost = targetShard.GetAddress()
+
+			// Unfortunately this doesn't tell us if the event was actually
+			// enqueued; we need to watch the response channel to find out, at
+			// which point it's too late to tell the client.
 			r.PeerTransmission.EnqueueEvent(ev)
 			continue
 		}

@@ -81,13 +81,13 @@ func (d *DefaultTransmission) reloadTransmissionBuilder() {
 }
 
 func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
-	d.Logger.Debug().WithFields(map[string]interface{}{
-		"request_id": ev.Context.Value(types.RequestIDContextKey{}),
-		"api_host":   ev.APIHost,
-		"dataset":    ev.Dataset,
-		"type":       ev.Type,
-		"target":     ev.Target,
-	}).Logf("transmit sending event")
+	d.Logger.Debug().
+		WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
+		WithString("api_host", ev.APIHost).
+		WithString("dataset", ev.Dataset).
+		WithString("type", ev.Type.String()).
+		WithString("target", ev.Target.String()).
+		Logf("transmit sending event")
 	libhEv := d.builder.NewEvent()
 	libhEv.APIHost = ev.APIHost
 	libhEv.WriteKey = ev.APIKey
@@ -108,14 +108,14 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	err := libhEv.SendPresampled()
 	if err != nil {
 		d.Metrics.IncrementCounter(d.Name + counterEnqueueErrors)
-		d.Logger.Error().WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"request_id": ev.Context.Value(types.RequestIDContextKey{}),
-			"dataset":    ev.Dataset,
-			"api_host":   ev.APIHost,
-			"type":       ev.Type.String(),
-			"target":     ev.Target.String(),
-		}).Logf("failed to enqueue event")
+		d.Logger.Error().
+			WithString("error", err.Error()).
+			WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
+			WithString("dataset", ev.Dataset).
+			WithString("api_host", ev.APIHost).
+			WithString("type", ev.Type.String()).
+			WithString("target", ev.Target.String()).
+			Logf("failed to enqueue event")
 	}
 }
 
