@@ -514,5 +514,54 @@ func TestMaxAlloc(t *testing.T) {
 	}
 
 	transmission.Mux.Unlock()
+}
 
+func TestAddSpanNoBlock(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
+		SendTickerVal:      2 * time.Millisecond,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 3)
+	coll.fromPeer = make(chan *types.Span, 3)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+
+	// Don't start collect(), so the queues are never drained
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: "aoeu",
+		},
+	}
+
+	for i := 0; i < 3; i++ {
+		err := coll.AddSpan(span)
+		assert.NoError(t, err)
+		err = coll.AddSpanFromPeer(span)
+		assert.NoError(t, err)
+	}
+
+	err = coll.AddSpan(span)
+	assert.Error(t, err)
+	err = coll.AddSpanFromPeer(span)
+	assert.Error(t, err)
 }

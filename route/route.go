@@ -120,6 +120,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	r.Metrics.Register(r.incomingOrPeer+"_router_batch", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_span", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_peer", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_dropped", "counter")
 
 	muxxer := mux.NewRouter()
 
@@ -410,38 +411,6 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			r.UpstreamTransmission.EnqueueEvent(ev)
 			continue
 		}
-		// ok, we're a span. Figure out if we should handle locally or pass on
-		// to a peer. We won't pass anything that came from a peer; if there's
-		// confusion about who owns what, this avoids loops.
-		targetShard := r.Sharder.WhichShard(traceID)
-		if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.IncrementCounter("incoming_router_peer")
-			ev, err := r.batchedEventToEvent(req, bev)
-			if err != nil {
-				batchedResponses = append(
-					batchedResponses,
-					&BatchResponse{
-						Status: http.StatusBadRequest,
-						Error:  fmt.Sprintf("failed to process event: %s", err.Error()),
-					},
-				)
-				continue
-			}
-			debugLog.WithFields(map[string]interface{}{
-				"api_host": ev.APIHost,
-				"dataset":  ev.Dataset,
-				"trace_id": traceID,
-				"peer":     targetShard.GetAddress(),
-			}).Logf("Sending span from batch to my peer")
-			batchedResponses = append(
-				batchedResponses,
-				&BatchResponse{Status: http.StatusAccepted},
-			)
-			ev.APIHost = targetShard.GetAddress()
-			r.PeerTransmission.EnqueueEvent(ev)
-			continue
-		}
-		// we're supposed to handle it
 		ev, err := r.batchedEventToEvent(req, bev)
 		if err != nil {
 			batchedResponses = append(
@@ -454,25 +423,54 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
+		debugLog := debugLog.WithString("api_host", ev.APIHost).
+			WithString("dataset", ev.Dataset).
+			WithString("trace_id", traceID)
+
+		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
+		targetShard := r.Sharder.WhichShard(traceID)
+		if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
+			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
+			debugLog.WithString("peer", targetShard.GetAddress()).
+				Logf("Sending span from batch to my peer")
+			batchedResponses = append(
+				batchedResponses,
+				&BatchResponse{Status: http.StatusAccepted},
+			)
+			ev.APIHost = targetShard.GetAddress()
+			r.PeerTransmission.EnqueueEvent(ev)
+			continue
+		}
+		// we're supposed to handle it
 		span := &types.Span{
 			Event:   *ev,
 			TraceID: traceID,
 		}
+		if r.incomingOrPeer == "incoming" {
+			err = r.Collector.AddSpan(span)
+		} else {
+			err = r.Collector.AddSpanFromPeer(span)
+		}
+
+		if err != nil {
+			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_dropped")
+			debugLog.Logf("Dropping span from batch, channel full")
+			batchedResponses = append(
+				batchedResponses,
+				&BatchResponse{
+					Error:  err.Error(),
+					Status: http.StatusTooManyRequests,
+				},
+			)
+			continue
+		}
+
 		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
-		debugLog.WithFields(map[string]interface{}{
-			"api_host": ev.APIHost,
-			"dataset":  ev.Dataset,
-			"trace_id": span.TraceID,
-		}).Logf("Accepting span from batch for collection into a trace")
+		debugLog.Logf("Accepting span from batch for collection into a trace")
 		batchedResponses = append(
 			batchedResponses,
 			&BatchResponse{Status: http.StatusAccepted},
 		)
-		if r.incomingOrPeer == "incoming" {
-			r.Collector.AddSpan(span)
-		} else {
-			r.Collector.AddSpanFromPeer(span)
-		}
 	}
 	response, err := json.Marshal(batchedResponses)
 	if err != nil {

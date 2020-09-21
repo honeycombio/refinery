@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -18,12 +19,14 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
+var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
+
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged in to a trace.
 	// Once the trace is "complete", it'll be passed off to the sampler then
 	// scheduled for transmission.
-	AddSpan(*types.Span)
-	AddSpanFromPeer(*types.Span)
+	AddSpan(*types.Span) error
+	AddSpanFromPeer(*types.Span) error
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -211,15 +214,23 @@ func (i *InMemCollector) checkAlloc() {
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpan(sp *types.Span) {
-	// TODO protect against sending on a closed channel during shutdown
-	i.incoming <- sp
+func (i *InMemCollector) AddSpan(sp *types.Span) error {
+	select {
+	case i.incoming <- sp:
+		return nil
+	default:
+		return ErrWouldBlock
+	}
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
-	// TODO protect against sending on a closed channel during shutdown
-	i.fromPeer <- sp
+func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
+	select {
+	case i.fromPeer <- sp:
+		return nil
+	default:
+		return ErrWouldBlock
+	}
 }
 
 // collect handles both accepting spans that have been handed to it and sending
