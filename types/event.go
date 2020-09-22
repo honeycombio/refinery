@@ -91,6 +91,8 @@ type Trace struct {
 	// Used to calculate how long traces spend sitting in Samproxy
 	StartTime time.Time
 
+	HasRootSpan bool
+
 	// spans is the list of spans in this trace
 	spans []*Span
 }

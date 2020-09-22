@@ -100,7 +100,8 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
 	i.Metrics.Register("trace_send_dropped", "counter")
-	i.Metrics.Register("peer_queue_too_large", "counter")
+	i.Metrics.Register("trace_send_has_root", "counter")
+	i.Metrics.Register("trace_send_no_root", "counter")
 
 	stc, err := lru.New(imcConfig.CacheCapacity * 5) // keep 5x ring buffer size
 	if err != nil {
@@ -363,6 +364,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace.SendBy = time.Now().Add(timeout)
+		trace.HasRootSpan = true
 	}
 }
 
@@ -416,6 +418,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	traceDur := time.Now().Sub(trace.StartTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
+	if trace.HasRootSpan {
+		i.Metrics.IncrementCounter("trace_send_has_root")
+	} else {
+		i.Metrics.IncrementCounter("trace_send_no_root")
+	}
 
 	var sampler sample.Sampler
 	var found bool
