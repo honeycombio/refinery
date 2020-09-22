@@ -254,15 +254,11 @@ func TestPeerRouting(t *testing.T) {
 
 	var apps [2]*App
 	var addrs [2]string
-	var senders [2]*countingWriterSender
+	var senders [2]*transmission.MockSender
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
-		senders[i] = &countingWriterSender{
-			WriterSender: transmission.WriterSender{
-				W: ioutil.Discard,
-			},
-		}
+		senders[i] = &transmission.MockSender{}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
 		defer startstop.Stop(graph.Objects(), nil)
 
@@ -282,7 +278,37 @@ func TestPeerRouting(t *testing.T) {
 	blob := `[` + string(spans[0]) + `]`
 	req.Body = ioutil.NopCloser(strings.NewReader(blob))
 	post(t, req)
-	senders[0].waitForCount(t, 1)
+	assert.Eventually(t, func() bool {
+		return len(senders[0].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+
+	expectedEvent := &transmission.Event{
+		APIKey:     "KEY",
+		Dataset:    "dataset",
+		SampleRate: 2,
+		APIHost:    "http://api.honeycomb.io",
+		Timestamp:  now,
+		Data: map[string]interface{}{
+			"trace.trace_id":  "1",
+			"trace.span_id":   "0",
+			"trace.parent_id": "0000000000",
+			"key":             "value",
+			"field0":          float64(0),
+			"field1":          float64(1),
+			"field2":          float64(2),
+			"field3":          float64(3),
+			"field4":          float64(4),
+			"field5":          float64(5),
+			"field6":          float64(6),
+			"field7":          float64(7),
+			"field8":          float64(8),
+			"field9":          float64(9),
+			"field10":         float64(10),
+			"long":            "this is a test of the emergency broadcast system",
+			"foo":             "bar",
+		},
+	}
+	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 
 	// Repeat, but deliver to host 1 on the peer channel, it should not be
 	// passed to host 0.
@@ -297,11 +323,13 @@ func TestPeerRouting(t *testing.T) {
 
 	req.Body = ioutil.NopCloser(strings.NewReader(blob))
 	post(t, req)
-	senders[1].waitForCount(t, 1)
+	assert.Eventually(t, func() bool {
+		return len(senders[1].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 }
 
 func TestEventsEndpoint(t *testing.T) {
-	now := time.Now().UTC()
 	peers := &testPeers{
 		peers: []string{
 			"http://localhost:13001",
@@ -316,7 +344,6 @@ func TestEventsEndpoint(t *testing.T) {
 		var graph inject.Graph
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		senders[i].Start()
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
 		defer startstop.Stop(graph.Objects(), nil)
 
@@ -392,6 +419,8 @@ func TestEventsEndpoint(t *testing.T) {
 }
 
 var (
+	now        = time.Now().UTC()
+	nowString  = now.Format(time.RFC3339Nano)
 	spanFormat = `{"data":{` +
 		`"trace.trace_id":"%d",` +
 		`"trace.span_id":"%d",` +
@@ -410,7 +439,10 @@ var (
 		`"field10":10,` +
 		`"long":"this is a test of the emergency broadcast system",` +
 		`"foo":"bar"` +
-		`},"dataset":"dataset"}`
+		`},"dataset":"dataset",` +
+		`"time":"` + nowString + `",` +
+		`"samplerate":2` +
+		`}`
 	spans [][]byte
 
 	httpClient = &http.Client{Transport: &http.Transport{
