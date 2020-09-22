@@ -18,7 +18,6 @@ import (
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
-	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v4"
 
 	"github.com/honeycombio/samproxy/collect"
@@ -525,16 +524,6 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
-		// First try to decode with the fast but fussy msgp. If that fails,
-		// defer to the much more friendly msgpack.
-		if decodable, ok := v.(msgp.Decodable); ok {
-			err := msgp.Decode(data, decodable)
-
-			if err == nil {
-				return nil
-			}
-		}
-
 		return msgpack.NewDecoder(data).
 			UseDecodeInterfaceLoose(true).
 			Decode(v)
