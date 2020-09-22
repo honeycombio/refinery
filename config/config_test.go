@@ -122,6 +122,10 @@ func TestReadDefaults(t *testing.T) {
 		assert.IsType(t, &DynamicSamplerConfig{}, d)
 	}
 
+	if d, err := c.GetSamplerConfigForDataset("dataset4"); err != nil {
+		assert.IsType(t, &RulesBasedSamplerConfig{}, d)
+	}
+
 	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
 		t.Error("received", d, "expected", "[http://127.0.0.1:8081]")
 	}

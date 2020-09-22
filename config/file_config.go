@@ -21,6 +21,22 @@ type fileConfig struct {
 	mux       sync.RWMutex
 }
 
+type RulesBasedSamplerCondition struct {
+	Field    string
+	Operator string
+	Value    interface{}
+}
+
+type RulesBasedSamplerRule struct {
+	Name       string
+	SampleRate int
+	Condition  []*RulesBasedSamplerCondition
+}
+
+type RulesBasedSamplerConfig struct {
+	Rule []*RulesBasedSamplerRule
+}
+
 type configContents struct {
 	ListenAddr         string        `validate:"required"`
 	PeerListenAddr     string        `validate:"required"`
@@ -357,6 +373,8 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 			i = &DynamicSamplerConfig{}
 		case "EMADynamicSampler":
 			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
 		default:
 			return nil, errors.New("No Sampler found")
 		}
@@ -376,6 +394,8 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 			i = &DynamicSamplerConfig{}
 		case "EMADynamicSampler":
 			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
 		default:
 			return nil, errors.New("No Sampler found")
 		}
