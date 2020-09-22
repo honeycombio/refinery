@@ -204,19 +204,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// get out request ID for logging
-	reqID := req.Context().Value(types.RequestIDContextKey{})
-	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
-
 	reqBod, _ := ioutil.ReadAll(req.Body)
-	var trEv eventWithTraceID
-	// pull out just the trace ID for use in routing
-	err := unmarshal(req, bytes.NewReader(reqBod), &trEv)
-	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
-		r.handlerReturnWithError(w, ErrJSONFailed, err)
-		return
-	}
-
 	ev, err := r.requestToEvent(req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
@@ -228,36 +216,6 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
-}
-
-type eventWithTraceID struct {
-	TraceID string
-}
-
-func (ev *eventWithTraceID) UnmarshalJSON(b []byte) error {
-	return ev.Unmarshal(b, json.Unmarshal)
-}
-
-func (ev *eventWithTraceID) UnmarshalMsgpack(b []byte) error {
-	return ev.Unmarshal(b, msgpack.Unmarshal)
-}
-
-func (ev *eventWithTraceID) Unmarshal(b []byte, u func(d []byte, v interface{}) error) error {
-	var e map[string]string
-
-	err := u(b, &e)
-
-	if err != nil {
-		return err
-	}
-
-	if id := e["trace.trace_id"]; id != "" {
-		ev.TraceID = id
-	} else if id := e["traceId"]; id != "" {
-		ev.TraceID = id
-	}
-
-	return nil
 }
 
 func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event, error) {
