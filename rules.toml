@@ -212,17 +212,17 @@ SampleRate = 1
 		operator = "="
 		value = 500
 		[[dataset4.rule.condition]]
-		field = "durationMs"
+		field = "duration_ms"
 		operator = ">="
 		value = 1000.789
 
 	[[dataset4.rule]]
-		name = "wow"
-		SampleRate = 2
+		name = "drop 200 responses"
+		SampleRate = 0
 		[[dataset4.rule.condition]]
-		field = "wow"
+		field = "status_code"
 		operator = "="
-		value = "wee"
+		value = 200
 
 	[[dataset4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 1
