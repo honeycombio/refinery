@@ -217,66 +217,16 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// not part of a trace. send along upstream
-	if trEv.TraceID == "" {
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
-		ev, err := r.requestToEvent(req, reqBod)
-		if err != nil {
-			r.handlerReturnWithError(w, ErrReqToEvent, err)
-			return
-		}
-		ev.Type = types.EventTypeEvent
-		debugLog.WithFields(map[string]interface{}{
-			"api_host": ev.APIHost,
-			"dataset":  ev.Dataset,
-		}).Logf("sending non-trace event")
-		r.UpstreamTransmission.EnqueueEvent(ev)
-		return
-	}
-
-	// ok, we're a span. Figure out if we should handle locally or pass on to a
-	// peer
-	targetShard := r.Sharder.WhichShard(trEv.TraceID)
-	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
-		// it's not for us; send to the peer
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
-		ev, err := r.requestToEvent(req, reqBod)
-		if err != nil {
-			r.handlerReturnWithError(w, ErrReqToEvent, err)
-			return
-		}
-		ev.Type = types.EventTypeSpan
-		ev.APIHost = targetShard.GetAddress()
-		debugLog.WithFields(map[string]interface{}{
-			"api_host": ev.APIHost,
-			"dataset":  ev.Dataset,
-			"trace_id": trEv.TraceID,
-			"peer":     targetShard.GetAddress(),
-		}).Logf("Sending span to my peer")
-		r.PeerTransmission.EnqueueEvent(ev)
-		return
-	}
-	// we're supposed to handle it
 	ev, err := r.requestToEvent(req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
-	ev.Type = types.EventTypeSpan
-	span := &types.Span{
-		Event:   *ev,
-		TraceID: trEv.TraceID,
-	}
-	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
-	debugLog.WithFields(map[string]interface{}{
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
-		"trace_id": trEv.TraceID,
-	}).Logf("Accepting span for collection into a trace")
-	if r.incomingOrPeer == "incoming" {
-		r.Collector.AddSpan(span)
-	} else {
-		r.Collector.AddSpanFromPeer(span)
+
+	err = r.processEvent(ev)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		return
 	}
 }
 
@@ -365,7 +315,6 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	batchedEvents := make([]batchedEvent, 0)
-	batchedResponses := make([]*BatchResponse, 0)
 	err = unmarshal(req, bytes.NewReader(reqBod), &batchedEvents)
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
@@ -373,105 +322,35 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		// extract trace ID, route to self or peer, pass on to collector
-		// TODO make trace ID field configurable
-		var traceID string
-		if trID, ok := bev.Data["trace.trace_id"]; ok {
-			traceID = trID.(string)
-		} else if trID, ok := bev.Data["traceId"]; ok {
-			traceID = trID.(string)
-		}
-		if traceID == "" {
-			// not part of a trace. send along upstream
-			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
-			ev, err := r.batchedEventToEvent(req, bev)
-			if err != nil {
-				batchedResponses = append(
-					batchedResponses,
-					&BatchResponse{
-						Status: http.StatusBadRequest,
-						Error:  fmt.Sprintf("failed to convert to event: %s", err.Error()),
-					},
-				)
-				debugLog.WithField("error", err).Logf("event from batch failed to process event")
-				continue
-			}
-			batchedResponses = append(
-				batchedResponses,
-				&BatchResponse{Status: http.StatusAccepted},
-			)
-			debugLog.WithFields(map[string]interface{}{
-				"api_host": ev.APIHost,
-				"dataset":  ev.Dataset,
-			}).Logf("sending non-trace event from batch")
-			r.UpstreamTransmission.EnqueueEvent(ev)
-			continue
-		}
 		ev, err := r.batchedEventToEvent(req, bev)
 		if err != nil {
 			batchedResponses = append(
 				batchedResponses,
 				&BatchResponse{
 					Status: http.StatusBadRequest,
-					Error:  fmt.Sprintf("failed to process event: %s", err.Error()),
+					Error:  fmt.Sprintf("failed to convert to event: %s", err.Error()),
 				},
 			)
+			debugLog.WithField("error", err).Logf("event from batch failed to process event")
 			continue
 		}
 
-		debugLog := debugLog.WithString("api_host", ev.APIHost).
-			WithString("dataset", ev.Dataset).
-			WithString("trace_id", traceID)
+		err = r.processEvent(ev)
 
-		// ok, we're a span. Figure out if we should handle locally or pass on to a peer
-		targetShard := r.Sharder.WhichShard(traceID)
-		if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
-			debugLog.WithString("peer", targetShard.GetAddress()).
-				Logf("Sending span from batch to my peer")
-			batchedResponses = append(
-				batchedResponses,
-				&BatchResponse{Status: http.StatusAccepted},
-			)
-			ev.APIHost = targetShard.GetAddress()
-
-			// Unfortunately this doesn't tell us if the event was actually
-			// enqueued; we need to watch the response channel to find out, at
-			// which point it's too late to tell the client.
-			r.PeerTransmission.EnqueueEvent(ev)
-			continue
+		var resp BatchResponse
+		switch {
+		case errors.Is(err, collect.ErrWouldBlock):
+			resp.Status = http.StatusTooManyRequests
+			resp.Error = err.Error()
+		case err != nil:
+			resp.Status = http.StatusBadRequest
+			resp.Error = err.Error()
+		default:
+			resp.Status = http.StatusAccepted
 		}
-		// we're supposed to handle it
-		span := &types.Span{
-			Event:   *ev,
-			TraceID: traceID,
-		}
-		if r.incomingOrPeer == "incoming" {
-			err = r.Collector.AddSpan(span)
-		} else {
-			err = r.Collector.AddSpanFromPeer(span)
-		}
-
-		if err != nil {
-			r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_dropped")
-			debugLog.Logf("Dropping span from batch, channel full")
-			batchedResponses = append(
-				batchedResponses,
-				&BatchResponse{
-					Error:  err.Error(),
-					Status: http.StatusTooManyRequests,
-				},
-			)
-			continue
-		}
-
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
-		debugLog.Logf("Accepting span from batch for collection into a trace")
-		batchedResponses = append(
-			batchedResponses,
-			&BatchResponse{Status: http.StatusAccepted},
-		)
+		batchedResponses = append(batchedResponses, &resp)
 	}
 	response, err := json.Marshal(batchedResponses)
 	if err != nil {
@@ -479,6 +358,66 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.Write(response)
+}
+
+func (r *Router) processEvent(ev *types.Event) error {
+	debugLog := r.iopLogger.Debug().WithString("api_host", ev.APIHost).
+		WithString("dataset", ev.Dataset)
+
+	// extract trace ID, route to self or peer, pass on to collector
+	// TODO make trace ID field configurable
+	var traceID string
+	if trID, ok := ev.Data["trace.trace_id"]; ok {
+		traceID = trID.(string)
+	} else if trID, ok := ev.Data["traceId"]; ok {
+		traceID = trID.(string)
+	}
+	if traceID == "" {
+		// not part of a trace. send along upstream
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
+		debugLog.WithString("api_host", ev.APIHost).
+			WithString("dataset", ev.Dataset).
+			Logf("sending non-trace event from batch")
+		r.UpstreamTransmission.EnqueueEvent(ev)
+		return nil
+	}
+	debugLog = debugLog.WithString("trace_id", traceID)
+
+	// ok, we're a span. Figure out if we should handle locally or pass on to a peer
+	targetShard := r.Sharder.WhichShard(traceID)
+	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
+		debugLog.WithString("peer", targetShard.GetAddress()).
+			Logf("Sending span from batch to my peer")
+		ev.APIHost = targetShard.GetAddress()
+
+		// Unfortunately this doesn't tell us if the event was actually
+		// enqueued; we need to watch the response channel to find out, at
+		// which point it's too late to tell the client.
+		r.PeerTransmission.EnqueueEvent(ev)
+		return nil
+	}
+
+	// we're supposed to handle it
+	var err error
+	span := &types.Span{
+		Event:   *ev,
+		TraceID: traceID,
+	}
+	if r.incomingOrPeer == "incoming" {
+		err = r.Collector.AddSpan(span)
+	} else {
+		err = r.Collector.AddSpanFromPeer(span)
+	}
+	if err != nil {
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_dropped")
+		debugLog.Logf("Dropping span from batch, channel full")
+		return err
+	}
+
+	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
+	debugLog.Logf("Accepting span from batch for collection into a trace")
+	return nil
 }
 
 func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {

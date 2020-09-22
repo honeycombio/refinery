@@ -199,7 +199,7 @@ func newStartedApp(
 	return &a, g
 }
 
-func post(t *testing.T, req *http.Request) {
+func post(t testing.TB, req *http.Request) {
 	resp, err := httpClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -348,11 +348,6 @@ func TestEventsEndpoint(t *testing.T) {
 			SampleRate: 10,
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
-			Metadata: map[string]string{
-				"type":     "unknown",
-				"api_host": "http://api.honeycomb.io",
-				"dataset":  "dataset",
-			},
 			Data: map[string]interface{}{
 				"trace.trace_id": "1",
 				"foo":            "bar",
@@ -387,11 +382,6 @@ func TestEventsEndpoint(t *testing.T) {
 			SampleRate: 10,
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
-			Metadata: map[string]string{
-				"type":     "span",
-				"api_host": "http://api.honeycomb.io",
-				"dataset":  "dataset",
-			},
 			Data: map[string]interface{}{
 				"trace.trace_id": "1",
 				"foo":            "bar",
@@ -472,13 +462,7 @@ func BenchmarkTraces(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
 			req.Body = ioutil.NopCloser(strings.NewReader(blob))
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
@@ -497,13 +481,7 @@ func BenchmarkTraces(b *testing.B) {
 			blob[len(blob)-1] = ']'
 			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
 
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
@@ -588,13 +566,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
 			req.Body = ioutil.NopCloser(strings.NewReader(blob))
 			req.URL.Host = addrs[n%len(addrs)]
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
@@ -614,13 +586,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
 			req.URL.Host = addrs[n%len(addrs)]
 
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
