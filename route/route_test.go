@@ -95,16 +95,22 @@ func TestDecompression(t *testing.T) {
 
 func unmarshalRequest(w *httptest.ResponseRecorder, content string, body io.Reader) {
 	http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var e eventWithTraceID
-		err := unmarshal(r, r.Body, &e)
-
+		var data map[string]interface{}
+		err := unmarshal(r, r.Body, &data)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(err.Error()))
 			return
 		}
 
-		w.Write([]byte(e.TraceID))
+		var traceID string
+		if trID, ok := data["trace.trace_id"]; ok {
+			traceID = trID.(string)
+		} else if trID, ok := data["traceId"]; ok {
+			traceID = trID.(string)
+		}
+
+		w.Write([]byte(traceID))
 	}).ServeHTTP(w, &http.Request{
 		Body: ioutil.NopCloser(body),
 		Header: http.Header{
