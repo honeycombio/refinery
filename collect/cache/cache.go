@@ -51,6 +51,7 @@ func NewInMemCache(
 	// buffer_overrun increments when the trace overwritten in the circular
 	// buffer has not yet been sent
 	metrics.Register("collect_cache_buffer_overrun", "counter")
+	metrics.Register("collect_cache_entries", "histogram")
 
 	if capacity == 0 {
 		capacity = DefaultInMemCacheCapacity
@@ -127,8 +128,9 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 }
 
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
-	var res []*types.Trace
+	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
+	var res []*types.Trace
 	for i, t := range d.insertionOrder {
 		if t != nil && now.After(t.SendBy) {
 			res = append(res, t)
