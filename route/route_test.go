@@ -136,7 +136,7 @@ func unmarshalBatchRequest(w *httptest.ResponseRecorder, content string, body io
 func TestUnmarshal(t *testing.T) {
 	var w *httptest.ResponseRecorder
 	var body io.Reader
-	now := time.Now()
+	now := time.Now().UTC()
 
 	w = httptest.NewRecorder()
 	body = bytes.NewBufferString("")

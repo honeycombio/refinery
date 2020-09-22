@@ -226,7 +226,6 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		ev.Type = types.EventTypeEvent
-		ev.Target = types.TargetUpstream
 		debugLog.WithFields(map[string]interface{}{
 			"api_host": ev.APIHost,
 			"dataset":  ev.Dataset,
@@ -238,7 +237,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	// ok, we're a span. Figure out if we should handle locally or pass on to a
 	// peer
 	targetShard := r.Sharder.WhichShard(trEv.TraceID)
-	if !targetShard.Equals(r.Sharder.MyShard()) {
+	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
 		// it's not for us; send to the peer
 		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
 		ev, err := r.requestToEvent(req, reqBod)
@@ -247,7 +246,6 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		ev.Type = types.EventTypeSpan
-		ev.Target = types.TargetPeer
 		ev.APIHost = targetShard.GetAddress()
 		debugLog.WithFields(map[string]interface{}{
 			"api_host": ev.APIHost,
@@ -265,7 +263,6 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	ev.Type = types.EventTypeSpan
-	ev.Target = types.TargetUpstream
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: trEv.TraceID,
@@ -561,7 +558,7 @@ type batchedEvent struct {
 
 func (b *batchedEvent) getEventTime() time.Time {
 	if b.MsgPackTimestamp != nil {
-		return *b.MsgPackTimestamp
+		return b.MsgPackTimestamp.UTC()
 	}
 
 	return getEventTime(b.Timestamp)
@@ -608,7 +605,7 @@ func getEventTime(etHeader string) time.Time {
 			}
 		}
 	}
-	return eventTime
+	return eventTime.UTC()
 }
 
 func makeDecoders(num int) (chan *zstd.Decoder, error) {

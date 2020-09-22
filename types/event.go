@@ -36,31 +36,10 @@ func (et EventType) String() string {
 	return "unknown_event_type"
 }
 
-type TargetType int
-
-const (
-	TargetUnknown TargetType = iota
-	TargetPeer
-	TargetUpstream
-)
-
-func (tt TargetType) String() string {
-	switch tt {
-	case TargetUnknown:
-		return "unknown"
-	case TargetPeer:
-		return "peer"
-	case TargetUpstream:
-		return "upstream"
-	}
-	return "unknown_target_type"
-}
-
 // event is not part of a trace - it's an event that showed up with no trace ID
 type Event struct {
 	Context    context.Context
 	Type       EventType
-	Target     TargetType
 	APIHost    string
 	APIKey     string
 	Dataset    string
