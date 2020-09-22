@@ -44,6 +44,10 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 		ds := &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
+	case *config.RulesBasedSamplerConfig:
+		ds := &RulesBasedSampler{Config: c, Logger: s.Logger}
+		ds.Start()
+		sampler = ds
 	default:
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)
