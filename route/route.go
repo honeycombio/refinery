@@ -202,8 +202,13 @@ func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
-	// get out request ID for logging
-	reqBod, _ := ioutil.ReadAll(req.Body)
+	bodyReader, err := r.getMaybeCompressedBody(req)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrPostBody, err)
+		return
+	}
+
+	reqBod, _ := ioutil.ReadAll(bodyReader)
 	ev, err := r.requestToEvent(req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/alexcesaro/statsd.v2"
 
@@ -351,14 +353,17 @@ func TestEventsEndpoint(t *testing.T) {
 	}
 
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
+	zEnc, _ := zstd.NewWriter(nil)
+	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
 	req, err := http.NewRequest(
 		"POST",
 		"http://localhost:13002/1/events/dataset",
-		strings.NewReader(`{"foo":"bar","trace.trace_id":"1"}`),
+		bytes.NewReader(blob),
 	)
 	assert.NoError(t, err)
 	req.Header.Set("X-Honeycomb-Team", "KEY")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "zstd")
 	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
@@ -385,14 +390,22 @@ func TestEventsEndpoint(t *testing.T) {
 
 	// Repeat, but deliver to host 1 on the peer channel, it should not be
 	// passed to host 0.
+
+	blob = blob[:0]
+	buf := bytes.NewBuffer(blob)
+	gz := gzip.NewWriter(buf)
+	gz.Write([]byte(`{"foo":"bar","trace.trace_id":"1"}`))
+	gz.Close()
+
 	req, err = http.NewRequest(
 		"POST",
 		"http://localhost:13003/1/events/dataset",
-		strings.NewReader(`{"foo":"bar","trace.trace_id":"1"}`),
+		buf,
 	)
 	assert.NoError(t, err)
 	req.Header.Set("X-Honeycomb-Team", "KEY")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
