@@ -45,7 +45,7 @@ type configContents struct {
 	Logger             string        `validate:"required,oneof= logrus honeycomb"`
 	LoggingLevel       string        `validate:"required"`
 	Collector          string        `validate:"required,oneof= InMemCollector"`
-	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler"`
+	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler RulesBasedSampler"`
 	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay          time.Duration `validate:"required"`
 	TraceTimeout       time.Duration `validate:"required"`
