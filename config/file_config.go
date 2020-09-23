@@ -70,7 +70,7 @@ type HoneycombMetricsConfig struct {
 
 type PeerManagementConfig struct {
 	Type                    string   `validate:"required,oneof= file redis"`
-	Peers                   []string `validate:"required,dive,url"`
+	Peers                   []string `validate:"dive,url"`
 	RedisHost               string
 	IdentifierInterfaceName string
 	UseIPV6Identifier       bool
