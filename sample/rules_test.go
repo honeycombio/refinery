@@ -134,6 +134,17 @@ func TestRules(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rule: []*config.RulesBasedSamplerRule{
 					{
+						Name:       "rule that wont be hit",
+						SampleRate: 0,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: ">",
+								Value:    2.2,
+							},
+						},
+					},
+					{
 						Name:       "fallback",
 						SampleRate: 10,
 					},
@@ -218,6 +229,27 @@ func TestRules(t *testing.T) {
 					Event: types.Event{
 						Data: map[string]interface{}{
 							"test": float64(3),
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+			ExpectedRate: 0,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "drop everything",
+						SampleRate: 0,
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": int64(1),
 						},
 					},
 				},
