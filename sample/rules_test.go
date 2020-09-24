@@ -5,6 +5,7 @@ import (
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -261,8 +262,9 @@ func TestRules(t *testing.T) {
 
 	for _, d := range data {
 		sampler := &RulesBasedSampler{
-			Config: d.Rules,
-			Logger: &logger.NullLogger{},
+			Config:  d.Rules,
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
 		}
 
 		trace := &types.Trace{}
