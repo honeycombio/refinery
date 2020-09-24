@@ -117,6 +117,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	r.Metrics.Register(r.incomingOrPeer+"_router_proxied", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_event", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_batch", "counter")
+	r.Metrics.Register(r.incomingOrPeer+"_router_nonspan", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_span", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_peer", "counter")
 	r.Metrics.Register(r.incomingOrPeer+"_router_dropped", "counter")
@@ -200,6 +201,7 @@ func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
+	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
 	bodyReader, err := r.getMaybeCompressedBody(req)
@@ -208,14 +210,20 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reqBod, _ := ioutil.ReadAll(bodyReader)
+	reqBod, err := ioutil.ReadAll(bodyReader)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrPostBody, err)
+		return
+	}
+
 	ev, err := r.requestToEvent(req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
 
-	err = r.processEvent(ev)
+	reqID := req.Context().Value(types.RequestIDContextKey{})
+	err = r.processEvent(ev, reqID)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
@@ -299,7 +307,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
-		err = r.processEvent(ev)
+		err = r.processEvent(ev, reqID)
 
 		var resp BatchResponse
 		switch {
@@ -322,8 +330,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	w.Write(response)
 }
 
-func (r *Router) processEvent(ev *types.Event) error {
-	debugLog := r.iopLogger.Debug().WithString("api_host", ev.APIHost).
+func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
+	debugLog := r.iopLogger.Debug().
+		WithField("request_id", reqID).
+		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset)
 
 	// extract trace ID, route to self or peer, pass on to collector
@@ -336,7 +346,7 @@ func (r *Router) processEvent(ev *types.Event) error {
 	}
 	if traceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
+		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_nonspan")
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
