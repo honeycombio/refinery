@@ -210,6 +210,8 @@ func post(t testing.TB, req *http.Request) {
 }
 
 func TestAppIntegration(t *testing.T) {
+	t.Parallel()
+
 	var out bytes.Buffer
 	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil)
 
@@ -247,6 +249,8 @@ func TestAppIntegration(t *testing.T) {
 }
 
 func TestPeerRouting(t *testing.T) {
+	t.Parallel()
+
 	peers := &testPeers{
 		peers: []string{
 			"http://localhost:11001",
@@ -332,6 +336,8 @@ func TestPeerRouting(t *testing.T) {
 }
 
 func TestEventsEndpoint(t *testing.T) {
+	t.Parallel()
+
 	peers := &testPeers{
 		peers: []string{
 			"http://localhost:13001",
