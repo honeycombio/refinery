@@ -123,7 +123,17 @@ func TestReadDefaults(t *testing.T) {
 	}
 
 	if d, err := c.GetSamplerConfigForDataset("dataset4"); err != nil {
-		assert.IsType(t, &RulesBasedSamplerConfig{}, d)
+		switch r := d.(type) {
+		case RulesBasedSamplerConfig:
+			assert.Len(t, r.Rule, 3)
+
+			rule := r.Rule[0]
+			assert.Equal(t, 1, rule.SampleRate)
+			assert.Equal(t, "500 errors", rule.Name)
+			assert.Len(t, rule.Condition, 2)
+		default:
+			assert.Fail(t, "dataset4 should have a rules based sampler", d)
+		}
 	}
 
 	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
