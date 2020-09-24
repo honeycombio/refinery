@@ -21,6 +21,23 @@ type fileConfig struct {
 	mux       sync.RWMutex
 }
 
+type RulesBasedSamplerCondition struct {
+	Field    string
+	Operator string
+	Value    interface{}
+}
+
+type RulesBasedSamplerRule struct {
+	Name       string
+	SampleRate int
+	Drop       bool
+	Condition  []*RulesBasedSamplerCondition
+}
+
+type RulesBasedSamplerConfig struct {
+	Rule []*RulesBasedSamplerRule
+}
+
 type configContents struct {
 	ListenAddr         string        `validate:"required"`
 	PeerListenAddr     string        `validate:"required"`
@@ -29,7 +46,7 @@ type configContents struct {
 	Logger             string        `validate:"required,oneof= logrus honeycomb"`
 	LoggingLevel       string        `validate:"required"`
 	Collector          string        `validate:"required,oneof= InMemCollector"`
-	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler"`
+	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler RulesBasedSampler"`
 	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay          time.Duration `validate:"required"`
 	TraceTimeout       time.Duration `validate:"required"`
@@ -357,6 +374,8 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 			i = &DynamicSamplerConfig{}
 		case "EMADynamicSampler":
 			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
 		default:
 			return nil, errors.New("No Sampler found")
 		}
@@ -376,6 +395,8 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 			i = &DynamicSamplerConfig{}
 		case "EMADynamicSampler":
 			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
 		default:
 			return nil, errors.New("No Sampler found")
 		}
