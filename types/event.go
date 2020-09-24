@@ -16,51 +16,9 @@ const (
 // used to put a request ID into the request context for logging
 type RequestIDContextKey struct{}
 
-type EventType int
-
-const (
-	EventTypeUnknown EventType = iota
-	EventTypeSpan
-	EventTypeEvent
-)
-
-func (et EventType) String() string {
-	switch et {
-	case EventTypeUnknown:
-		return "unknown"
-	case EventTypeSpan:
-		return "span"
-	case EventTypeEvent:
-		return "event"
-	}
-	return "unknown_event_type"
-}
-
-type TargetType int
-
-const (
-	TargetUnknown TargetType = iota
-	TargetPeer
-	TargetUpstream
-)
-
-func (tt TargetType) String() string {
-	switch tt {
-	case TargetUnknown:
-		return "unknown"
-	case TargetPeer:
-		return "peer"
-	case TargetUpstream:
-		return "upstream"
-	}
-	return "unknown_target_type"
-}
-
 // event is not part of a trace - it's an event that showed up with no trace ID
 type Event struct {
 	Context    context.Context
-	Type       EventType
-	Target     TargetType
 	APIHost    string
 	APIKey     string
 	Dataset    string

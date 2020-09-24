@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/alexcesaro/statsd.v2"
 
@@ -107,6 +109,7 @@ func newStartedApp(
 		GetListenAddrVal:                     "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:                 "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetAPIKeysVal:                        []string{"KEY"},
+		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 	}
 
@@ -198,6 +201,14 @@ func newStartedApp(
 	return &a, g
 }
 
+func post(t testing.TB, req *http.Request) {
+	resp, err := httpClient.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+}
+
 func TestAppIntegration(t *testing.T) {
 	var out bytes.Buffer
 	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil)
@@ -245,22 +256,18 @@ func TestPeerRouting(t *testing.T) {
 
 	var apps [2]*App
 	var addrs [2]string
-	var senders [2]*countingWriterSender
+	var senders [2]*transmission.MockSender
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
-		senders[i] = &countingWriterSender{
-			WriterSender: transmission.WriterSender{
-				W: ioutil.Discard,
-			},
-		}
+		senders[i] = &transmission.MockSender{}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
 		defer startstop.Stop(graph.Objects(), nil)
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
-	// Deliver to host 1, it should be passed to host 0 and emited there.
+	// Deliver to host 1, it should be passed to host 0 and emitted there.
 	req, err := http.NewRequest(
 		"POST",
 		"http://localhost:11002/1/batch/dataset",
@@ -272,13 +279,38 @@ func TestPeerRouting(t *testing.T) {
 
 	blob := `[` + string(spans[0]) + `]`
 	req.Body = ioutil.NopCloser(strings.NewReader(blob))
-	resp, err := httpClient.Do(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close()
+	post(t, req)
+	assert.Eventually(t, func() bool {
+		return len(senders[0].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
 
-	senders[0].waitForCount(t, 1)
+	expectedEvent := &transmission.Event{
+		APIKey:     "KEY",
+		Dataset:    "dataset",
+		SampleRate: 2,
+		APIHost:    "http://api.honeycomb.io",
+		Timestamp:  now,
+		Data: map[string]interface{}{
+			"trace.trace_id":  "1",
+			"trace.span_id":   "0",
+			"trace.parent_id": "0000000000",
+			"key":             "value",
+			"field0":          float64(0),
+			"field1":          float64(1),
+			"field2":          float64(2),
+			"field3":          float64(3),
+			"field4":          float64(4),
+			"field5":          float64(5),
+			"field6":          float64(6),
+			"field7":          float64(7),
+			"field8":          float64(8),
+			"field9":          float64(9),
+			"field10":         float64(10),
+			"long":            "this is a test of the emergency broadcast system",
+			"foo":             "bar",
+		},
+	}
+	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 
 	// Repeat, but deliver to host 1 on the peer channel, it should not be
 	// passed to host 0.
@@ -292,16 +324,116 @@ func TestPeerRouting(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	req.Body = ioutil.NopCloser(strings.NewReader(blob))
-	resp, err = httpClient.Do(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	io.Copy(ioutil.Discard, resp.Body)
-	resp.Body.Close()
+	post(t, req)
+	assert.Eventually(t, func() bool {
+		return len(senders[1].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+	assert.Equal(t, expectedEvent, senders[0].Events()[0])
+}
 
-	senders[1].waitForCount(t, 1)
+func TestEventsEndpoint(t *testing.T) {
+	peers := &testPeers{
+		peers: []string{
+			"http://localhost:13001",
+			"http://localhost:13003",
+		},
+	}
+
+	var apps [2]*App
+	var addrs [2]string
+	var senders [2]*transmission.MockSender
+	for i := range apps {
+		var graph inject.Graph
+		basePort := 13000 + (i * 2)
+		senders[i] = &transmission.MockSender{}
+		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
+		defer startstop.Stop(graph.Objects(), nil)
+
+		addrs[i] = "localhost:" + strconv.Itoa(basePort)
+	}
+
+	// Deliver to host 1, it should be passed to host 0 and emitted there.
+	zEnc, _ := zstd.NewWriter(nil)
+	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:13002/1/events/dataset",
+		bytes.NewReader(blob),
+	)
+	assert.NoError(t, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "zstd")
+	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
+	req.Header.Set("X-Honeycomb-Samplerate", "10")
+
+	post(t, req)
+	assert.Eventually(t, func() bool {
+		return len(senders[0].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+
+	assert.Equal(
+		t,
+		&transmission.Event{
+			APIKey:     "KEY",
+			Dataset:    "dataset",
+			SampleRate: 10,
+			APIHost:    "http://api.honeycomb.io",
+			Timestamp:  now,
+			Data: map[string]interface{}{
+				"trace.trace_id": "1",
+				"foo":            "bar",
+			},
+		},
+		senders[0].Events()[0],
+	)
+
+	// Repeat, but deliver to host 1 on the peer channel, it should not be
+	// passed to host 0.
+
+	blob = blob[:0]
+	buf := bytes.NewBuffer(blob)
+	gz := gzip.NewWriter(buf)
+	gz.Write([]byte(`{"foo":"bar","trace.trace_id":"1"}`))
+	gz.Close()
+
+	req, err = http.NewRequest(
+		"POST",
+		"http://localhost:13003/1/events/dataset",
+		buf,
+	)
+	assert.NoError(t, err)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
+	req.Header.Set("X-Honeycomb-Samplerate", "10")
+
+	post(t, req)
+	assert.Eventually(t, func() bool {
+		return len(senders[1].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+
+	assert.Equal(
+		t,
+		&transmission.Event{
+			APIKey:     "KEY",
+			Dataset:    "dataset",
+			SampleRate: 10,
+			APIHost:    "http://api.honeycomb.io",
+			Timestamp:  now,
+			Data: map[string]interface{}{
+				"trace.trace_id": "1",
+				"foo":            "bar",
+			},
+		},
+		senders[1].Events()[0],
+	)
 }
 
 var (
+	now        = time.Now().UTC()
+	nowString  = now.Format(time.RFC3339Nano)
 	spanFormat = `{"data":{` +
 		`"trace.trace_id":"%d",` +
 		`"trace.span_id":"%d",` +
@@ -320,7 +452,10 @@ var (
 		`"field10":10,` +
 		`"long":"this is a test of the emergency broadcast system",` +
 		`"foo":"bar"` +
-		`},"dataset":"dataset"}`
+		`},"dataset":"dataset",` +
+		`"time":"` + nowString + `",` +
+		`"samplerate":2` +
+		`}`
 	spans [][]byte
 
 	httpClient = &http.Client{Transport: &http.Transport{
@@ -372,13 +507,7 @@ func BenchmarkTraces(b *testing.B) {
 		for n := 0; n < b.N; n++ {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
 			req.Body = ioutil.NopCloser(strings.NewReader(blob))
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
@@ -397,13 +526,7 @@ func BenchmarkTraces(b *testing.B) {
 			blob[len(blob)-1] = ']'
 			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
 
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
@@ -488,13 +611,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
 			req.Body = ioutil.NopCloser(strings.NewReader(blob))
 			req.URL.Host = addrs[n%len(addrs)]
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})
@@ -514,13 +631,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
 			req.URL.Host = addrs[n%len(addrs)]
 
-			resp, err := httpClient.Do(req)
-			assert.NoError(b, err)
-			if resp != nil {
-				assert.Equal(b, http.StatusOK, resp.StatusCode)
-				io.Copy(ioutil.Discard, resp.Body)
-				resp.Body.Close()
-			}
+			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
 	})

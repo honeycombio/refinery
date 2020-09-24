@@ -85,8 +85,6 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 		WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
 		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset).
-		WithString("type", ev.Type.String()).
-		WithString("target", ev.Target.String()).
 		Logf("transmit sending event")
 	libhEv := d.builder.NewEvent()
 	libhEv.APIHost = ev.APIHost
@@ -94,12 +92,6 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	libhEv.Dataset = ev.Dataset
 	libhEv.SampleRate = ev.SampleRate
 	libhEv.Timestamp = ev.Timestamp
-	libhEv.Metadata = map[string]string{
-		"type":     ev.Type.String(),
-		"target":   ev.Target.String(),
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
-	}
 
 	for k, v := range ev.Data {
 		libhEv.AddField(k, v)
@@ -113,8 +105,6 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 			WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
 			WithString("dataset", ev.Dataset).
 			WithString("api_host", ev.APIHost).
-			WithString("type", ev.Type.String()).
-			WithString("target", ev.Target.String()).
 			Logf("failed to enqueue event")
 	}
 }
