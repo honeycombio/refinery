@@ -212,8 +212,8 @@ func TestRules(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rule: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "drop",
-						SampleRate: 0,
+						Name: "drop",
+						Drop: true,
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
@@ -240,8 +240,8 @@ func TestRules(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rule: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "drop everything",
-						SampleRate: 0,
+						Name: "drop everything",
+						Drop: true,
 					},
 				},
 			},

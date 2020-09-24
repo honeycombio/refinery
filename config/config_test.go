@@ -127,10 +127,18 @@ func TestReadDefaults(t *testing.T) {
 		case RulesBasedSamplerConfig:
 			assert.Len(t, r.Rule, 3)
 
-			rule := r.Rule[0]
+			var rule *RulesBasedSamplerRule
+
+			rule = r.Rule[0]
 			assert.Equal(t, 1, rule.SampleRate)
 			assert.Equal(t, "500 errors", rule.Name)
 			assert.Len(t, rule.Condition, 2)
+
+			rule = r.Rule[1]
+			assert.True(t, rule.Drop)
+			assert.Equal(t, 0, rule.SampleRate)
+			assert.Len(t, rule.Condition, 1)
+
 		default:
 			assert.Fail(t, "dataset4 should have a rules based sampler", d)
 		}

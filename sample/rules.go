@@ -24,7 +24,7 @@ func (s *RulesBasedSampler) Start() error {
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool) {
 	for _, rule := range s.Config.Rule {
 		var matched int
-		keep := rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
+		keep := !rule.Drop || rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 
 		// no condition signifies the default
 		if rule.Condition == nil {

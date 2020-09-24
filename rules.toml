@@ -218,8 +218,7 @@ SampleRate = 1
 
 	[[dataset4.rule]]
 		name = "drop 200 responses"
-		# a sample rate of 0 indicates that we will drop traces matching these conditions
-		SampleRate = 0
+		drop = true
 		[[dataset4.rule.condition]]
 		field = "status_code"
 		operator = "="

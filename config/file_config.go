@@ -30,6 +30,7 @@ type RulesBasedSamplerCondition struct {
 type RulesBasedSamplerRule struct {
 	Name       string
 	SampleRate int
+	Drop       bool
 	Condition  []*RulesBasedSamplerCondition
 }
 
