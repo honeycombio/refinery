@@ -45,7 +45,7 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 		ds.Start()
 		sampler = ds
 	case *config.RulesBasedSamplerConfig:
-		ds := &RulesBasedSampler{Config: c, Logger: s.Logger}
+		ds := &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
 	default:

@@ -6,29 +6,51 @@ import (
 
 	"github.com/honeycombio/samproxy/config"
 	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/samproxy/metrics"
 	"github.com/honeycombio/samproxy/types"
 )
 
 type RulesBasedSampler struct {
-	Logger logger.Logger
-	Config *config.RulesBasedSamplerConfig
+	Config  *config.RulesBasedSamplerConfig
+	Logger  logger.Logger
+	Metrics metrics.Metrics
 }
 
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
 
+	s.Metrics.Register("rulessampler_num_dropped", "counter")
+	s.Metrics.Register("rulessampler_num_kept", "counter")
+	s.Metrics.Register("rulessampler_sample_rate", "histogram")
+
 	return nil
 }
 
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool) {
+	logger := s.Logger.Debug().WithFields(map[string]interface{}{
+		"trace_id": trace.TraceID,
+	})
+
 	for _, rule := range s.Config.Rule {
 		var matched int
 		keep := !rule.Drop || rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
+		rate := uint(rule.SampleRate)
 
 		// no condition signifies the default
 		if rule.Condition == nil {
-			return uint(rule.SampleRate), keep
+			s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
+			if keep {
+				s.Metrics.IncrementCounter("rulessampler_num_kept")
+			} else {
+				s.Metrics.IncrementCounter("dynsampler_num_dropped")
+			}
+			logger.WithFields(map[string]interface{}{
+				"rate":      rate,
+				"keep":      keep,
+				"drop_rule": rule.Drop,
+			}).Logf("got sample rate and decision")
+			return rate, keep
 		}
 
 		for _, condition := range rule.Condition {
@@ -62,8 +84,20 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			}
 
 			if matched == len(rule.Condition) {
+				s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
+				if keep {
+					s.Metrics.IncrementCounter("rulessampler_num_kept")
+				} else {
+					s.Metrics.IncrementCounter("dynsampler_num_dropped")
+				}
+				logger.WithFields(map[string]interface{}{
+					"rate":      rate,
+					"keep":      keep,
+					"drop_rule": rule.Drop,
+					"rule_name": rule.Name,
+				}).Logf("got sample rate and decision")
 				// we have a match
-				return uint(rule.SampleRate), keep
+				return rate, keep
 			}
 		}
 	}
