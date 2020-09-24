@@ -34,8 +34,8 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 
 	for _, rule := range s.Config.Rule {
 		var matched int
-		keep := !rule.Drop || rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 		rate := uint(rule.SampleRate)
+		keep := !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 
 		// no condition signifies the default
 		if rule.Condition == nil {
@@ -96,7 +96,6 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					"drop_rule": rule.Drop,
 					"rule_name": rule.Name,
 				}).Logf("got sample rate and decision")
-				// we have a match
 				return rate, keep
 			}
 		}
