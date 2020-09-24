@@ -2,6 +2,7 @@ package transmit
 
 import (
 	"context"
+	"sync"
 
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
@@ -41,6 +42,8 @@ type DefaultTransmission struct {
 	responseCanceler context.CancelFunc
 }
 
+var once sync.Once
+
 func (d *DefaultTransmission) Start() error {
 	d.Logger.Debug().Logf("Starting DefaultTransmission: %s type", d.Name)
 	defer func() { d.Logger.Debug().Logf("Finished starting DefaultTransmission: %s type", d.Name) }()
@@ -51,9 +54,12 @@ func (d *DefaultTransmission) Start() error {
 	if err != nil {
 		return err
 	}
-	libhoney.UserAgentAddition = "samproxy/" + d.Version
 	d.builder = d.LibhClient.NewBuilder()
 	d.builder.APIHost = upstreamAPI
+
+	once.Do(func() {
+		libhoney.UserAgentAddition = "samproxy/" + d.Version
+	})
 
 	d.Metrics.Register(d.Name+counterEnqueueErrors, "counter")
 	d.Metrics.Register(d.Name+counterResponse20x, "counter")
