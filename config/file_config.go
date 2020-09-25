@@ -15,11 +15,12 @@ import (
 )
 
 type fileConfig struct {
-	config    *viper.Viper
-	rules     *viper.Viper
-	conf      *configContents
-	callbacks []func()
-	mux       sync.RWMutex
+	config        *viper.Viper
+	rules         *viper.Viper
+	conf          *configContents
+	callbacks     []func()
+	errorCallback func(error)
+	mux           sync.RWMutex
 }
 
 type RulesBasedSamplerCondition struct {
@@ -96,7 +97,7 @@ type PeerManagementConfig struct {
 }
 
 // NewConfig creates a new config struct
-func NewConfig(config, rules string) (Config, error) {
+func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
 
 	c.BindEnv("redishost", "SAMPROXY_REDIS_HOST")
@@ -140,6 +141,7 @@ func NewConfig(config, rules string) (Config, error) {
 		rules:     r,
 		conf:      &configContents{},
 		callbacks: make([]func(), 0),
+		errorCallback: errorCallback,
 	}
 
 	err = fc.unmarshal()
@@ -177,19 +179,19 @@ func (f *fileConfig) onChange(in fsnotify.Event) {
 	v := validator.New()
 	err := v.Struct(f.conf)
 	if err != nil {
-		fmt.Printf("error validating config on reload: %+v\n", err)
+		f.errorCallback(err)
 		return
 	}
 
 	err = f.validateConditionalConfigs()
 	if err != nil {
-		fmt.Printf("error validating conditional configs on reload: %+v\n", err)
+		f.errorCallback(err)
 		return
 	}
 
 	err = f.validateSamplerConfigs()
 	if err != nil {
-		fmt.Printf("error validating sampler configs on reload: %+v\n", err)
+		f.errorCallback(err)
 		return
 	}
 

@@ -60,7 +60,11 @@ func main() {
 		os.Exit(0)
 	}
 
-	c, err := config.NewConfig(opts.ConfigFile, opts.RulesFile)
+	a := app.App{
+		Version: version,
+	}
+
+	c, err := config.NewConfig(opts.ConfigFile, opts.RulesFile, func(err error) { a.Logger.Error().WithField("error", err).Logf("error reloading config") })
 	if err != nil {
 		fmt.Printf("unable to load config: %+v\n", err)
 		os.Exit(1)
@@ -71,10 +75,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("unable to load peers: %+v\n", err)
 		os.Exit(1)
-	}
-
-	a := app.App{
-		Version: version,
 	}
 
 	// get desired implementation for each dependency to inject
