@@ -282,7 +282,7 @@ func TestCacheSizeReload(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 10 * time.Minute,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{
 			CacheCapacity: 1,
