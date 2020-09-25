@@ -174,6 +174,25 @@ func NewConfig(config, rules string) (Config, error) {
 }
 
 func (f *fileConfig) onChange(in fsnotify.Event) {
+	v := validator.New()
+	err := v.Struct(f.conf)
+	if err != nil {
+		fmt.Printf("error validating config on reload: %+v\n", err)
+		return
+	}
+
+	err = f.validateConditionalConfigs()
+	if err != nil {
+		fmt.Printf("error validating conditional configs on reload: %+v\n", err)
+		return
+	}
+
+	err = f.validateSamplerConfigs()
+	if err != nil {
+		fmt.Printf("error validating sampler configs on reload: %+v\n", err)
+		return
+	}
+
 	f.unmarshal()
 
 	f.mux.RLock()
@@ -251,6 +270,8 @@ func (f *fileConfig) validateSamplerConfigs() error {
 				i = &DynamicSamplerConfig{}
 			case "EMADynamicSampler":
 				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
 			default:
 				return errors.New("Invalid or missing default sampler type")
 			}
@@ -276,6 +297,8 @@ func (f *fileConfig) validateSamplerConfigs() error {
 				i = &DynamicSamplerConfig{}
 			case "EMADynamicSampler":
 				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
 			default:
 				return errors.New("Invalid or missing dataset sampler type")
 			}
