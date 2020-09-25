@@ -2,6 +2,7 @@ package transmit
 
 import (
 	"context"
+	"sync"
 
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
@@ -41,6 +42,8 @@ type DefaultTransmission struct {
 	responseCanceler context.CancelFunc
 }
 
+var once sync.Once
+
 func (d *DefaultTransmission) Start() error {
 	d.Logger.Debug().Logf("Starting DefaultTransmission: %s type", d.Name)
 	defer func() { d.Logger.Debug().Logf("Finished starting DefaultTransmission: %s type", d.Name) }()
@@ -51,9 +54,12 @@ func (d *DefaultTransmission) Start() error {
 	if err != nil {
 		return err
 	}
-	libhoney.UserAgentAddition = "samproxy/" + d.Version
 	d.builder = d.LibhClient.NewBuilder()
 	d.builder.APIHost = upstreamAPI
+
+	once.Do(func() {
+		libhoney.UserAgentAddition = "samproxy/" + d.Version
+	})
 
 	d.Metrics.Register(d.Name+counterEnqueueErrors, "counter")
 	d.Metrics.Register(d.Name+counterResponse20x, "counter")
@@ -81,25 +87,17 @@ func (d *DefaultTransmission) reloadTransmissionBuilder() {
 }
 
 func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
-	d.Logger.Debug().WithFields(map[string]interface{}{
-		"request_id": ev.Context.Value(types.RequestIDContextKey{}),
-		"api_host":   ev.APIHost,
-		"dataset":    ev.Dataset,
-		"type":       ev.Type,
-		"target":     ev.Target,
-	}).Logf("transmit sending event")
+	d.Logger.Debug().
+		WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
+		WithString("api_host", ev.APIHost).
+		WithString("dataset", ev.Dataset).
+		Logf("transmit sending event")
 	libhEv := d.builder.NewEvent()
 	libhEv.APIHost = ev.APIHost
 	libhEv.WriteKey = ev.APIKey
 	libhEv.Dataset = ev.Dataset
 	libhEv.SampleRate = ev.SampleRate
 	libhEv.Timestamp = ev.Timestamp
-	libhEv.Metadata = map[string]string{
-		"type":     ev.Type.String(),
-		"target":   ev.Target.String(),
-		"api_host": ev.APIHost,
-		"dataset":  ev.Dataset,
-	}
 
 	for k, v := range ev.Data {
 		libhEv.AddField(k, v)
@@ -108,14 +106,12 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	err := libhEv.SendPresampled()
 	if err != nil {
 		d.Metrics.IncrementCounter(d.Name + counterEnqueueErrors)
-		d.Logger.Error().WithFields(map[string]interface{}{
-			"error":      err.Error(),
-			"request_id": ev.Context.Value(types.RequestIDContextKey{}),
-			"dataset":    ev.Dataset,
-			"api_host":   ev.APIHost,
-			"type":       ev.Type.String(),
-			"target":     ev.Target.String(),
-		}).Logf("failed to enqueue event")
+		d.Logger.Error().
+			WithString("error", err.Error()).
+			WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
+			WithString("dataset", ev.Dataset).
+			WithString("api_host", ev.APIHost).
+			Logf("failed to enqueue event")
 	}
 }
 

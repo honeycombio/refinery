@@ -40,16 +40,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	err := c.Start()
-	assert.NoError(t, err, "in-mem cache should start")
-
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -123,14 +114,7 @@ func TestAddSpan(t *testing.T) {
 			Logger: &logger.NullLogger{},
 		},
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -199,15 +183,7 @@ func TestDryRunMode(t *testing.T) {
 		Metrics:        &metrics.NullMetrics{},
 		SamplerFactory: samplerFactory,
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 3,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	err := c.Start()
-	assert.NoError(t, err, "in-mem cache should start")
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -297,6 +273,80 @@ func TestDryRunMode(t *testing.T) {
 	assert.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID3, transmission.Events[3].Data["samproxy_kept"], "field should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
+}
+
+func TestCacheSizeReload(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
+		SendTickerVal:      2 * time.Millisecond,
+		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{
+			CacheCapacity: 1,
+		},
+	}
+
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	err := coll.Start()
+	assert.NoError(t, err)
+	defer coll.Stop()
+
+	event := types.Event{
+		Dataset: "dataset",
+		Data: map[string]interface{}{
+			"trace.parent_id": "1",
+		},
+	}
+
+	coll.AddSpan(&types.Span{TraceID: "1", Event: event})
+	coll.AddSpan(&types.Span{TraceID: "2", Event: event})
+
+	expectedEvents := 1
+	wait := 2 * time.Millisecond
+	check := func() bool {
+		transmission.Mux.RLock()
+		defer transmission.Mux.RUnlock()
+
+		return len(transmission.Events) == expectedEvents
+	}
+	assert.Eventually(t, check, 10*wait, wait, "expected one trace evicted and sent")
+
+	conf.Mux.Lock()
+	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 2
+	conf.Mux.Unlock()
+	conf.ReloadConfig()
+
+	assert.Eventually(t, func() bool {
+		coll.mutex.RLock()
+		defer coll.mutex.RUnlock()
+
+		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
+	}, 10*wait, wait, "cache size to change")
+
+	coll.AddSpan(&types.Span{TraceID: "3", Event: event})
+	time.Sleep(5 * conf.SendTickerVal)
+	assert.True(t, check(), "expected no more traces evicted and sent")
+
+	conf.Mux.Lock()
+	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 1
+	conf.Mux.Unlock()
+	conf.ReloadConfig()
+
+	expectedEvents = 2
+	assert.Eventually(t, check, 10*wait, wait, "expected another trace evicted and sent")
 }
 
 func TestSampleConfigReload(t *testing.T) {
@@ -393,14 +443,7 @@ func TestMaxAlloc(t *testing.T) {
 			Logger: &logger.NullLogger{},
 		},
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: 1000,
-		},
-		Metrics: &metrics.NullMetrics{},
-		Logger:  &logger.NullLogger{},
-	}
-	c.Start()
+	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := lru.New(15)
 	assert.NoError(t, err, "lru cache should start")
@@ -471,5 +514,54 @@ func TestMaxAlloc(t *testing.T) {
 	}
 
 	transmission.Mux.Unlock()
+}
 
+func TestAddSpanNoBlock(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
+		SendTickerVal:      2 * time.Millisecond,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 3)
+	coll.fromPeer = make(chan *types.Span, 3)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+
+	// Don't start collect(), so the queues are never drained
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: "aoeu",
+		},
+	}
+
+	for i := 0; i < 3; i++ {
+		err := coll.AddSpan(span)
+		assert.NoError(t, err)
+		err = coll.AddSpanFromPeer(span)
+		assert.NoError(t, err)
+	}
+
+	err = coll.AddSpan(span)
+	assert.Error(t, err)
+	err = coll.AddSpanFromPeer(span)
+	assert.Error(t, err)
 }

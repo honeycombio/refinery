@@ -53,8 +53,23 @@ func TestReload(t *testing.T) {
 	ch := make(chan interface{}, 1)
 
 	c.RegisterReloadCallback(func() {
-		ch <- 1
+		close(ch)
 	})
+
+	// Hey race detector, we're doing some concurrent config reads.
+	// That's cool, right?
+	go func() {
+		tick := time.NewTicker(time.Millisecond)
+		defer tick.Stop()
+		for {
+			c.GetListenAddr()
+			select {
+			case <-ch:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
 
 	wg.Add(1)
 
@@ -105,6 +120,28 @@ func TestReadDefaults(t *testing.T) {
 
 	if d, err := c.GetSamplerConfigForDataset("dataset1"); err != nil {
 		assert.IsType(t, &DynamicSamplerConfig{}, d)
+	}
+
+	if d, err := c.GetSamplerConfigForDataset("dataset4"); err != nil {
+		switch r := d.(type) {
+		case RulesBasedSamplerConfig:
+			assert.Len(t, r.Rule, 3)
+
+			var rule *RulesBasedSamplerRule
+
+			rule = r.Rule[0]
+			assert.Equal(t, 1, rule.SampleRate)
+			assert.Equal(t, "500 errors", rule.Name)
+			assert.Len(t, rule.Condition, 2)
+
+			rule = r.Rule[1]
+			assert.True(t, rule.Drop)
+			assert.Equal(t, 0, rule.SampleRate)
+			assert.Len(t, rule.Condition, 1)
+
+		default:
+			assert.Fail(t, "dataset4 should have a rules based sampler", d)
+		}
 	}
 
 	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {

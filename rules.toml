@@ -199,3 +199,30 @@ SampleRate = 1
 
 	Sampler = "DeterministicSampler"
 	SampleRate = 10
+
+[dataset4]
+
+	Sampler = "RulesBasedSampler"
+
+	[[dataset4.rule]]
+		name = "500 errors"
+		SampleRate = 1
+		[[dataset4.rule.condition]]
+		field = "status_code"
+		operator = "="
+		value = 500
+		[[dataset4.rule.condition]]
+		field = "duration_ms"
+		operator = ">="
+		value = 1000.789
+
+	[[dataset4.rule]]
+		name = "drop 200 responses"
+		drop = true
+		[[dataset4.rule.condition]]
+		field = "status_code"
+		operator = "="
+		value = 200
+
+	[[dataset4.rule]]
+		SampleRate = 10 # default when no rules match, if missing defaults to 1

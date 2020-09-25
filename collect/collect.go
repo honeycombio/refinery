@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -18,12 +19,14 @@ import (
 	"github.com/honeycombio/samproxy/types"
 )
 
+var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
+
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged in to a trace.
 	// Once the trace is "complete", it'll be passed off to the sampler then
 	// scheduled for transmission.
-	AddSpan(*types.Span)
-	AddSpanFromPeer(*types.Span)
+	AddSpan(*types.Span) error
+	AddSpanFromPeer(*types.Span) error
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -51,9 +54,12 @@ type InMemCollector struct {
 	Metrics        metrics.Metrics        `inject:""`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
+	// For test use only
+	BlockOnAddSpan bool
+
 	// mutex must be held whenever non-channel internal fields are accessed.
 	// This exists to avoid data races in tests and startup/shutdown.
-	mutex sync.Mutex
+	mutex sync.RWMutex
 
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
@@ -80,15 +86,7 @@ func (i *InMemCollector) Start() error {
 	if err != nil {
 		return err
 	}
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: imcConfig.CacheCapacity,
-		},
-		Metrics: i.Metrics,
-		Logger:  i.Logger,
-	}
-	c.Start()
-	i.cache = c
+	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -102,7 +100,8 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
 	i.Metrics.Register("trace_send_dropped", "counter")
-	i.Metrics.Register("peer_queue_too_large", "counter")
+	i.Metrics.Register("trace_send_has_root", "counter")
+	i.Metrics.Register("trace_send_no_root", "counter")
 
 	stc, err := lru.New(imcConfig.CacheCapacity * 5) // keep 5x ring buffer size
 	if err != nil {
@@ -141,18 +140,12 @@ func (i *InMemCollector) reloadConfigs() {
 	if existingCache, ok := i.cache.(*cache.DefaultInMemCache); ok {
 		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
 			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-			c := &cache.DefaultInMemCache{
-				Config: cache.CacheConfig{
-					CacheCapacity: imcConfig.CacheCapacity,
-				},
-				Metrics: i.Metrics,
-				Logger:  i.Logger,
-			}
-			c.Start()
+			c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 			// pull the old cache contents into the new cache
-			for i, trace := range existingCache.GetAll() {
-				if i > imcConfig.CacheCapacity {
-					break
+			for j, trace := range existingCache.GetAll() {
+				if j >= imcConfig.CacheCapacity {
+					i.send(trace)
+					continue
 				}
 				c.Set(trace)
 			}
@@ -202,14 +195,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		Logf("reducing cache size due to memory overage")
 
-	c := &cache.DefaultInMemCache{
-		Config: cache.CacheConfig{
-			CacheCapacity: newCap,
-		},
-		Metrics: i.Metrics,
-		Logger:  i.Logger,
-	}
-	c.Start()
+	c := cache.NewInMemCache(newCap, i.Metrics, i.Logger)
 
 	// Sort traces by deadline, oldest first.
 	sort.Slice(oldTraces, func(i, j int) bool {
@@ -232,15 +218,27 @@ func (i *InMemCollector) checkAlloc() {
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpan(sp *types.Span) {
-	// TODO protect against sending on a closed channel during shutdown
-	i.incoming <- sp
+func (i *InMemCollector) AddSpan(sp *types.Span) error {
+	return i.add(sp, i.incoming)
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) {
-	// TODO protect against sending on a closed channel during shutdown
-	i.fromPeer <- sp
+func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
+	return i.add(sp, i.fromPeer)
+}
+
+func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
+	if i.BlockOnAddSpan {
+		ch <- sp
+		return nil
+	}
+
+	select {
+	case ch <- sp:
+		return nil
+	default:
+		return ErrWouldBlock
+	}
 }
 
 // collect handles both accepting spans that have been handed to it and sending
@@ -366,6 +364,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace.SendBy = time.Now().Add(timeout)
+		trace.HasRootSpan = true
 	}
 }
 
@@ -419,6 +418,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	traceDur := time.Now().Sub(trace.StartTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
+	if trace.HasRootSpan {
+		i.Metrics.IncrementCounter("trace_send_has_root")
+	} else {
+		i.Metrics.IncrementCounter("trace_send_no_root")
+	}
 
 	var sampler sample.Sampler
 	var found bool
@@ -492,8 +496,8 @@ func (i *InMemCollector) Stop() error {
 
 // Convenience method for tests.
 func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
 }

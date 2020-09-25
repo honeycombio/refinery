@@ -27,7 +27,6 @@ type Cache interface {
 // order) so it is important to have a cache larger than trace throughput *
 // longest trace.
 type DefaultInMemCache struct {
-	Config  CacheConfig
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
@@ -39,32 +38,37 @@ type DefaultInMemCache struct {
 	insertPoint int
 }
 
-type CacheConfig struct {
-	CacheCapacity int
-}
-
 const DefaultInMemCacheCapacity = 10000
 
-func (d *DefaultInMemCache) Start() error {
-	d.Logger.Debug().Logf("Starting DefaultInMemCache")
-	defer func() { d.Logger.Debug().Logf("Finished starting DefaultInMemCache") }()
-	if d.Config.CacheCapacity == 0 {
-		d.Config.CacheCapacity = DefaultInMemCacheCapacity
-	}
-	d.cache = make(map[string]*types.Trace, d.Config.CacheCapacity)
-	d.insertionOrder = make([]*types.Trace, d.Config.CacheCapacity)
-
-	// register statistics sent by this module
+func NewInMemCache(
+	capacity int,
+	metrics metrics.Metrics,
+	logger logger.Logger,
+) *DefaultInMemCache {
+	logger.Debug().Logf("Starting DefaultInMemCache")
+	defer func() { logger.Debug().Logf("Finished starting DefaultInMemCache") }()
 
 	// buffer_overrun increments when the trace overwritten in the circular
 	// buffer has not yet been sent
-	d.Metrics.Register("collect_cache_buffer_overrun", "counter")
+	metrics.Register("collect_cache_buffer_overrun", "counter")
+	metrics.Register("collect_cache_capacity", "gauge")
+	metrics.Register("collect_cache_entries", "histogram")
 
-	return nil
+	if capacity == 0 {
+		capacity = DefaultInMemCacheCapacity
+	}
+
+	return &DefaultInMemCache{
+		Metrics:        metrics,
+		Logger:         logger,
+		cache:          make(map[string]*types.Trace, capacity),
+		insertionOrder: make([]*types.Trace, capacity),
+	}
+
 }
 
 func (d *DefaultInMemCache) GetCacheSize() int {
-	return d.Config.CacheCapacity
+	return len(d.insertionOrder)
 }
 
 // Set adds the trace to the ring. If it is kicking out a trace from the ring
@@ -84,7 +88,7 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	defer func() { d.insertPoint++ }()
 
 	// loop insert point when we get to the end of the ring
-	if d.insertPoint >= d.Config.CacheCapacity {
+	if d.insertPoint >= len(d.insertionOrder) {
 		d.insertPoint = 0
 	}
 
@@ -125,8 +129,10 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 }
 
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
-	var res []*types.Trace
+	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.insertionOrder)))
+	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
+	var res []*types.Trace
 	for i, t := range d.insertionOrder {
 		if t != nil && now.After(t.SendBy) {
 			res = append(res, t)
