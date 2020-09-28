@@ -37,10 +37,6 @@ type EMADynamicSampler struct {
 func (d *EMADynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMADynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMADynamicSampler") }()
-	if d.Config.GoalSampleRate < 1 {
-		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 1", d.Config.GoalSampleRate)
-		d.Config.GoalSampleRate = 1
-	}
 	d.goalSampleRate = d.Config.GoalSampleRate
 	d.adjustmentInterval = d.Config.AdjustmentInterval
 	d.weight = d.Config.Weight

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,11 +15,12 @@ import (
 )
 
 type fileConfig struct {
-	config    *viper.Viper
-	rules     *viper.Viper
-	conf      *configContents
-	callbacks []func()
-	mux       sync.RWMutex
+	config        *viper.Viper
+	rules         *viper.Viper
+	conf          *configContents
+	callbacks     []func()
+	errorCallback func(error)
+	mux           sync.RWMutex
 }
 
 type RulesBasedSamplerCondition struct {
@@ -46,7 +48,7 @@ type configContents struct {
 	Logger             string        `validate:"required,oneof= logrus honeycomb"`
 	LoggingLevel       string        `validate:"required"`
 	Collector          string        `validate:"required,oneof= InMemCollector"`
-	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler RulesBasedSampler"`
+	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler"`
 	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay          time.Duration `validate:"required"`
 	TraceTimeout       time.Duration `validate:"required"`
@@ -95,7 +97,7 @@ type PeerManagementConfig struct {
 }
 
 // NewConfig creates a new config struct
-func NewConfig(config, rules string) (Config, error) {
+func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
 
 	c.BindEnv("redishost", "SAMPROXY_REDIS_HOST")
@@ -135,10 +137,11 @@ func NewConfig(config, rules string) (Config, error) {
 	}
 
 	fc := &fileConfig{
-		config:    c,
-		rules:     r,
-		conf:      &configContents{},
-		callbacks: make([]func(), 0),
+		config:        c,
+		rules:         r,
+		conf:          &configContents{},
+		callbacks:     make([]func(), 0),
+		errorCallback: errorCallback,
 	}
 
 	err = fc.unmarshal()
@@ -154,7 +157,11 @@ func NewConfig(config, rules string) (Config, error) {
 	}
 
 	err = fc.validateConditionalConfigs()
+	if err != nil {
+		return nil, err
+	}
 
+	err = fc.validateSamplerConfigs()
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +176,25 @@ func NewConfig(config, rules string) (Config, error) {
 }
 
 func (f *fileConfig) onChange(in fsnotify.Event) {
+	v := validator.New()
+	err := v.Struct(f.conf)
+	if err != nil {
+		f.errorCallback(err)
+		return
+	}
+
+	err = f.validateConditionalConfigs()
+	if err != nil {
+		f.errorCallback(err)
+		return
+	}
+
+	err = f.validateSamplerConfigs()
+	if err != nil {
+		f.errorCallback(err)
+		return
+	}
+
 	f.unmarshal()
 
 	f.mux.RLock()
@@ -225,6 +251,71 @@ func (f *fileConfig) validateConditionalConfigs() error {
 		_, err = f.GetPrometheusMetricsConfig()
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (f *fileConfig) validateSamplerConfigs() error {
+	keys := f.rules.AllKeys()
+	for _, key := range keys {
+		parts := strings.Split(key, ".")
+
+		// verify default sampler config
+		if parts[0] == "sampler" {
+			t := f.rules.GetString(key)
+			var i interface{}
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
+			default:
+				return errors.New("Invalid or missing default sampler type")
+			}
+			err := f.rules.Unmarshal(i)
+			if err != nil {
+				return err
+			}
+			v := validator.New()
+			err = v.Struct(i)
+			if err != nil {
+				return err
+			}
+		}
+
+		// verify dataset sampler configs
+		if len(parts) > 1 && parts[1] == "sampler" {
+			t := f.rules.GetString(key)
+			var i interface{}
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
+			default:
+				return errors.New("Invalid or missing dataset sampler type")
+			}
+			datasetName := parts[0]
+			if sub := f.rules.Sub(datasetName); sub != nil {
+				err := sub.Unmarshal(i)
+				if err != nil {
+					return err
+				}
+				v := validator.New()
+				err = v.Struct(i)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil

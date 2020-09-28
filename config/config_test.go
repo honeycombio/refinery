@@ -38,7 +38,7 @@ func TestReload(t *testing.T) {
 	assert.NoError(t, err)
 	configFile.Close()
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -95,8 +95,84 @@ func TestReload(t *testing.T) {
 
 }
 
+func TestReloadError(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	dummy := []byte(`
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`)
+
+	_, err = configFile.Write(dummy)
+	assert.NoError(t, err)
+	configFile.Close()
+
+	dummy = []byte(`
+	Sampler="DeterministicSampler"
+	SampleRate=1
+	`)
+
+	_, err = rulesFile.Write(dummy)
+	assert.NoError(t, err)
+	rulesFile.Close()
+
+	ch := make(chan interface{}, 1)
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) { close(ch) })
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	d, _ := c.GetSamplerConfigForDataset("dataset5")
+	if _, ok := d.(DeterministicSamplerConfig); ok {
+		t.Error("received", d, "expected", "DeterministicSampler")
+	}
+
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Error("No error callback")
+		}
+	}()
+
+	err = ioutil.WriteFile(rulesFile.Name(), []byte(`Sampler="InvalidSampler"`), 0644)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	wg.Wait()
+
+	// config should error and not update sampler to invalid type
+	d, _ = c.GetSamplerConfigForDataset("dataset5")
+	if _, ok := d.(DeterministicSamplerConfig); ok {
+		t.Error("received", d, "expected", "DeterministicSampler")
+	}
+}
+
 func TestReadDefaults(t *testing.T) {
-	c, err := NewConfig("../config.toml", "../rules.toml")
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -197,7 +273,7 @@ func TestPeerManagementType(t *testing.T) {
 		Peers = ["http://samproxy-1231:8080"]
 	`))
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
@@ -229,7 +305,7 @@ func TestDebugServiceAddr(t *testing.T) {
 		MetricsReportingInterval=3
 	`))
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetDebugServiceAddr(); d != "localhost:8085" {
@@ -263,7 +339,7 @@ func TestDryRun(t *testing.T) {
 	DryRun=true
 	`))
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
 
 	if d := c.GetIsDryRun(); d != true {
@@ -294,7 +370,7 @@ func TestMaxAlloc(t *testing.T) {
 		MetricsReportingInterval=3
 	`))
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
 
 	expected := uint64(16 * 1024 * 1024 * 1024)
@@ -347,13 +423,17 @@ func TestGetSamplerTypes(t *testing.T) {
 
 		Sampler = "EMADynamicSampler"
 		GoalSampleRate = 10
+		UseTraceLength = true
+		AddSampleRateKeyToTrace = true
+		FieldList = "[request.method]"
+		Weight = 0.3
 `)
 
 	_, err = rulesFile.Write(dummyConfig)
 	assert.NoError(t, err)
 	rulesFile.Close()
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 
 	if err != nil {
 		t.Error(err)
