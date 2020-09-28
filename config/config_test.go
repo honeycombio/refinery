@@ -132,7 +132,7 @@ func TestReloadError(t *testing.T) {
 
 	ch := make(chan interface{}, 1)
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) { close(ch) })
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) { ch<-1 })
 
 	if err != nil {
 		t.Error(err)
