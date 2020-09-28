@@ -224,6 +224,8 @@ func (f *fileConfig) unmarshal() error {
 }
 
 func (f *fileConfig) validateConditionalConfigs() error {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
 	// validate logger config
 	loggerType, err := f.GetLoggerType()
 	if err != nil {
@@ -257,6 +259,9 @@ func (f *fileConfig) validateConditionalConfigs() error {
 }
 
 func (f *fileConfig) validateSamplerConfigs() error {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	keys := f.rules.AllKeys()
 	for _, key := range keys {
 		parts := strings.Split(key, ".")
