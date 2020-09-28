@@ -137,10 +137,10 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	}
 
 	fc := &fileConfig{
-		config:    c,
-		rules:     r,
-		conf:      &configContents{},
-		callbacks: make([]func(), 0),
+		config:        c,
+		rules:         r,
+		conf:          &configContents{},
+		callbacks:     make([]func(), 0),
 		errorCallback: errorCallback,
 	}
 

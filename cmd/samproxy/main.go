@@ -64,7 +64,11 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts.ConfigFile, opts.RulesFile, func(err error) { a.Logger.Error().WithField("error", err).Logf("error reloading config") })
+	c, err := config.NewConfig(opts.ConfigFile, opts.RulesFile, func(err error) {
+		if a.Logger != nil {
+			a.Logger.Error().WithField("error", err).Logf("error reloading config")
+		}
+	})
 	if err != nil {
 		fmt.Printf("unable to load config: %+v\n", err)
 		os.Exit(1)
