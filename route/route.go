@@ -188,7 +188,7 @@ func (r *Router) Stop() error {
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /x/alive check")
-	w.Write([]byte(`{"source":"samproxy","alive":true}`))
+	w.Write([]byte(`{"source":"samproxy","alive":"yes"}`))
 }
 
 func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
