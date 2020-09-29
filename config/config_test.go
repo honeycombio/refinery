@@ -95,7 +95,7 @@ func TestReload(t *testing.T) {
 
 }
 
-func TestReloadError(t *testing.T) {
+func TestErrorReloading(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
