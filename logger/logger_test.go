@@ -1,3 +1,5 @@
+// +build all race
+
 package logger
 
 import (
