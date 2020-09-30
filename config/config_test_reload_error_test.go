@@ -1,4 +1,4 @@
-// +build all
+// +build all !race
 
 package config
 
