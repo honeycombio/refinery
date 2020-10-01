@@ -383,6 +383,34 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 4,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "starts with test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "starts-with",
+								Value:    "honey",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": "honeycomb",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 4,
+		},
 	}
 
 	for _, d := range data {

@@ -88,6 +88,14 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 						if comparison, ok := compare(value, condition.Value); ok {
 							match = comparison == less || comparison == equal
 						}
+					case "starts-with":
+						switch a := value.(type) {
+						case string:
+							switch b := condition.Value.(type) {
+							case string:
+								match = strings.HasPrefix(a, b)
+							}
+						}
 					}
 				case false:
 					switch condition.Operator {
