@@ -260,6 +260,46 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: false,
 			ExpectedRate: 0,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "another test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "=",
+								Value:    int64(1),
+							},
+							{
+								Field:    "second",
+								Operator: "=",
+								Value:    int64(2),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": int64(1),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": int64(1),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+		},
 	}
 
 	for _, d := range data {
