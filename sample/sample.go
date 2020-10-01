@@ -28,7 +28,6 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 		return nil
 	}
 
-	s.Logger.Debug().WithField("dataset", dataset).Logf("creating sampler implementation")
 	var sampler Sampler
 
 	switch c := c.(type) {
@@ -52,6 +51,8 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)
 	}
+
+	s.Logger.Debug().WithField("dataset", dataset).Logf("created implementation for sampler type %T", c)
 
 	return sampler
 }
