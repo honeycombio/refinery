@@ -281,7 +281,7 @@ func TestRules(t *testing.T) {
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
-			assert.Equal(t, d.ExpectedKeep, keep)
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 		}
 	}
 }
