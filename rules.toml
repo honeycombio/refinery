@@ -19,7 +19,7 @@ Sampler = "DeterministicSampler"
 # Eligible for live reload.
 SampleRate = 1
 
-[dataset1]
+['API Calls']
 
 	# Note: If your dataset name contains a space, you will have to escape the dataset name
 	# using single quotes, such as ['dataset 1']

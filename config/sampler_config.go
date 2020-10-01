@@ -5,8 +5,8 @@ type DeterministicSamplerConfig struct {
 }
 
 type DynamicSamplerConfig struct {
-	SampleRate                   int64 `validate:"required,gte=1"`
-	ClearFrequencySec            int64
+	SampleRate                   int64    `validate:"required,gte=1"`
+	ClearFrequencySec            int64    `validate:"required,gt=0"`
 	FieldList                    []string `validate:"required"`
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool

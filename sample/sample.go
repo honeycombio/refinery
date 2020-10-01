@@ -32,22 +32,18 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 
 	switch c := c.(type) {
 	case *config.DeterministicSamplerConfig:
-		s.Logger.Debug().WithField("dataset", dataset).Logf("creating deterministic sampler implementation")
 		ds := &DeterministicSampler{Config: c, Logger: s.Logger}
 		ds.Start()
 		sampler = ds
 	case *config.DynamicSamplerConfig:
-		s.Logger.Debug().WithField("dataset", dataset).Logf("creating dynamic sampler implementation")
 		ds := &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
 	case *config.EMADynamicSamplerConfig:
-		s.Logger.Debug().WithField("dataset", dataset).Logf("creating EMA dynamic sampler implementation")
 		ds := &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
 	case *config.RulesBasedSamplerConfig:
-		s.Logger.Debug().WithField("dataset", dataset).Logf("creating rules based sampler implementation")
 		ds := &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 		ds.Start()
 		sampler = ds
@@ -55,6 +51,8 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)
 	}
+
+	s.Logger.Debug().WithField("dataset", dataset).Logf("created implementation for sampler type %T", c)
 
 	return sampler
 }
