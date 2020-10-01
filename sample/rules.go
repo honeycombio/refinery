@@ -57,23 +57,42 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		span:
 			for _, span := range trace.GetSpans() {
 				var match bool
+				value, exists := span.Data[condition.Field]
 
-				if d, ok := span.Data[condition.Field]; ok {
-					if c, ok := compare(d, condition.Value); ok {
-						switch condition.Operator {
-						case "!=":
-							match = c != equal
-						case "=":
-							match = c == equal
-						case ">":
-							match = c == more
-						case ">=":
-							match = c == more || c == equal
-						case "<":
-							match = c == less
-						case "<=":
-							match = c == less || c == equal
+				switch exists {
+				case true:
+					switch condition.Operator {
+					case "exists":
+						match = exists
+					case "!=":
+						if comparison, ok := compare(value, condition.Value); ok {
+							match = comparison != equal
 						}
+					case "=":
+						if comparison, ok := compare(value, condition.Value); ok {
+							match = comparison == equal
+						}
+					case ">":
+						if comparison, ok := compare(value, condition.Value); ok {
+							match = comparison == more
+						}
+					case ">=":
+						if comparison, ok := compare(value, condition.Value); ok {
+							match = comparison == more || comparison == equal
+						}
+					case "<":
+						if comparison, ok := compare(value, condition.Value); ok {
+							match = comparison == less
+						}
+					case "<=":
+						if comparison, ok := compare(value, condition.Value); ok {
+							match = comparison == less || comparison == equal
+						}
+					}
+				case false:
+					switch condition.Operator {
+					case "not-exists":
+						match = !exists
 					}
 				}
 

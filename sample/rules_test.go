@@ -329,6 +329,60 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 4,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "exists test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "exists",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": int64(9),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 4,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "not exists test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "not-exists",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"second": int64(9),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 4,
+		},
 	}
 
 	for _, d := range data {
@@ -346,7 +400,7 @@ func TestRules(t *testing.T) {
 
 		rate, keep := sampler.GetSampleRate(trace)
 
-		assert.Equal(t, d.ExpectedRate, rate)
+		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
