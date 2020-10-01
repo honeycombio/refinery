@@ -54,6 +54,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		}
 
 		for _, condition := range rule.Condition {
+		span:
 			for _, span := range trace.GetSpans() {
 				if d, ok := span.Data[condition.Field]; ok {
 					if c, ok := compare(d, condition.Value); ok {
@@ -61,43 +62,48 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 						case "=":
 							if c == equal {
 								matched++
+								break span
 							}
 						case ">":
 							if c == more {
 								matched++
+								break span
 							}
 						case ">=":
 							if c == more || c == equal {
 								matched++
+								break span
 							}
 						case "<":
 							if c == less {
 								matched++
+								break span
 							}
 						case "<=":
 							if c == less || c == equal {
 								matched++
+								break span
 							}
 						}
 					}
 				}
 			}
+		}
 
-			if matched == len(rule.Condition) {
-				s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
-				if keep {
-					s.Metrics.IncrementCounter("rulessampler_num_kept")
-				} else {
-					s.Metrics.IncrementCounter("dynsampler_num_dropped")
-				}
-				logger.WithFields(map[string]interface{}{
-					"rate":      rate,
-					"keep":      keep,
-					"drop_rule": rule.Drop,
-					"rule_name": rule.Name,
-				}).Logf("got sample rate and decision")
-				return rate, keep
+		if matched == len(rule.Condition) {
+			s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
+			if keep {
+				s.Metrics.IncrementCounter("rulessampler_num_kept")
+			} else {
+				s.Metrics.IncrementCounter("dynsampler_num_dropped")
 			}
+			logger.WithFields(map[string]interface{}{
+				"rate":      rate,
+				"keep":      keep,
+				"drop_rule": rule.Drop,
+				"rule_name": rule.Name,
+			}).Logf("got sample rate and decision")
+			return rate, keep
 		}
 	}
 

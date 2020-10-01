@@ -260,6 +260,47 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: false,
 			ExpectedRate: 0,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "test multiple rules must all be matched",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "=",
+								Value:    int64(1),
+							},
+							{
+								Field:    "second",
+								Operator: "=",
+								Value:    int64(2),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": int64(1),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": int64(1),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			// the trace does not match all the rules so we expect the default sample rate
+			ExpectedRate: 1,
+		},
 	}
 
 	for _, d := range data {
@@ -281,7 +322,7 @@ func TestRules(t *testing.T) {
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
-			assert.Equal(t, d.ExpectedKeep, keep)
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 		}
 	}
 }
