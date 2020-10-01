@@ -91,7 +91,7 @@ Collector = "InMemCollector"
 # Logger describes which logger to use for Samproxy logs. Valid options are
 # "logrus" and "honeycomb". The logrus option will write logs to STDOUT and the
 # honeycomb option will send them to a Honeycomb dataset.
-Logger = "logrus"
+Logger = "honeycomb"
 
 # Metrics describes which service to use for Samproxy metrics. Valid options are
 # "prometheus" and "honeycomb". The prometheus option starts a listener that
