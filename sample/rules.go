@@ -56,41 +56,30 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		for _, condition := range rule.Condition {
 		span:
 			for _, span := range trace.GetSpans() {
+				var match bool
+
 				if d, ok := span.Data[condition.Field]; ok {
 					if c, ok := compare(d, condition.Value); ok {
 						switch condition.Operator {
 						case "!=":
-							if c != equal {
-								matched++
-								break span
-							}
+							match = c != equal
 						case "=":
-							if c == equal {
-								matched++
-								break span
-							}
+							match = c == equal
 						case ">":
-							if c == more {
-								matched++
-								break span
-							}
+							match = c == more
 						case ">=":
-							if c == more || c == equal {
-								matched++
-								break span
-							}
+							match = c == more || c == equal
 						case "<":
-							if c == less {
-								matched++
-								break span
-							}
+							match = c == less
 						case "<=":
-							if c == less || c == equal {
-								matched++
-								break span
-							}
+							match = c == less || c == equal
 						}
 					}
+				}
+
+				if match {
+					matched++
+					break span
 				}
 			}
 		}
