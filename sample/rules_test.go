@@ -301,6 +301,34 @@ func TestRules(t *testing.T) {
 			// the trace does not match all the rules so we expect the default sample rate
 			ExpectedRate: 1,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "not equal test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "!=",
+								Value:    int64(10),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": int64(9),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 4,
+		},
 	}
 
 	for _, d := range data {
