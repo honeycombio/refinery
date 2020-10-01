@@ -59,6 +59,11 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				if d, ok := span.Data[condition.Field]; ok {
 					if c, ok := compare(d, condition.Value); ok {
 						switch condition.Operator {
+						case "!=":
+							if c != equal {
+								matched++
+								break span
+							}
 						case "=":
 							if c == equal {
 								matched++
