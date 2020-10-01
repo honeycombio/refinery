@@ -264,7 +264,7 @@ func TestRules(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rule: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "another test",
+						Name:       "test multiple rules must all be matched",
 						SampleRate: 4,
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
@@ -298,6 +298,7 @@ func TestRules(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			// the trace does not match all the rules so we expect the default sample rate
 			ExpectedRate: 1,
 		},
 	}
