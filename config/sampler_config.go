@@ -5,11 +5,11 @@ type DeterministicSamplerConfig struct {
 }
 
 type DynamicSamplerConfig struct {
-	SampleRate                   int64    `validate:"required,gte=1"`
-	ClearFrequencySec            int64    `validate:"required,gt=0"`
+	SampleRate                   int64 `validate:"required,gte=1"`
+	ClearFrequencySec            int64
 	FieldList                    []string `validate:"required"`
-	UseTraceLength               bool     
-	AddSampleRateKeyToTrace      bool     
+	UseTraceLength               bool
+	AddSampleRateKeyToTrace      bool
 	AddSampleRateKeyToTraceField string
 }
 
@@ -23,7 +23,7 @@ type EMADynamicSamplerConfig struct {
 	MaxKeys             int
 
 	FieldList                    []string `validate:"required"`
-	UseTraceLength               bool     
-	AddSampleRateKeyToTrace      bool     
+	UseTraceLength               bool
+	AddSampleRateKeyToTrace      bool
 	AddSampleRateKeyToTraceField string
 }
