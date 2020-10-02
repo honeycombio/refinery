@@ -154,7 +154,7 @@ func newStartedApp(
 	})
 	assert.NoError(t, err)
 
-	sdPeer, _ := statsd.New(statsd.Prefix("samproxy.peer"))
+	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
 			MaxBatchSize:         500,

@@ -117,8 +117,8 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
-	sdUpstream, _ := statsd.New(statsd.Prefix("samproxy.upstream"))
-	sdPeer, _ := statsd.New(statsd.Prefix("samproxy.peer"))
+	sdUpstream, _ := statsd.New(statsd.Prefix("refinery.upstream"))
+	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
 
 	userAgentAddition := "samproxy/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
