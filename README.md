@@ -1,7 +1,6 @@
-
 # Refinery - the Honeycomb Sampling Proxy
 
-![refinery](https://user-images.githubusercontent.com/1476820/47527709-0e185f00-d858-11e8-8e66-4fd5294d1918.png)
+![refinery](https://user-images.githubusercontent.com/6510988/94976958-8cadba80-04cb-11eb-9883-6e8ea554a081.png)
 
 **Beta Release** This is the initial draft. Please expect and help find bugs! :) Refinery [![Build Status](https://circleci.com/gh/honeycombio/samproxy.svg?style=shield)](https://circleci.com/gh/honeycombio/samproxy)
 
@@ -37,7 +36,7 @@ There are a few vital configuration options; read through this list and make sur
 
 - Goal Sample Rate and the list of fields you'd like to use to generate the keys off which sample rate is chosen. This is where the power of the proxy comes in - being able to dynamically choose sample rates based on the contents of the traces as they go by. There is an overall default and dataset-specific sections for this configuration, so that different datasets can have different sets of fields and goal sample rates.
 
-- Trace timeout - it should be set higher (maybe double?) the longest expected trace. If all of your traces complete in under 10 seconds, 30 is a good value here.  If you have traces that can last minutes, it should be raised accordingly. Note that the trace doesn't *have* to complete before this timer expires - but the sampling decision will be made at that time. So any spans that contain fields that you want to use to compute the sample rate should arrive before this timer expires. Additional spans that arrive after the timer has expired will be sent or dropped according to the sampling decision made when the timer expired.
+- Trace timeout - it should be set higher (maybe double?) the longest expected trace. If all of your traces complete in under 10 seconds, 30 is a good value here. If you have traces that can last minutes, it should be raised accordingly. Note that the trace doesn't _have_ to complete before this timer expires - but the sampling decision will be made at that time. So any spans that contain fields that you want to use to compute the sample rate should arrive before this timer expires. Additional spans that arrive after the timer has expired will be sent or dropped according to the sampling decision made when the timer expired.
 
 - Peer list: this is a list of all the other servers participating in this Refinery cluster. Traces are evenly distributed across all available servers, and any one trace must be concentrated on one server, regardless of which server handled the incoming spans. The peer list lets the cluster move spans around to the server that is handling the trace. (Not used in the Redis-based config.)
 
@@ -49,14 +48,16 @@ When configuration changes, send Refinery a USR1 signal and it will re-read the 
 
 ### Redis-based Config
 
-In the Redis-based config mode, all config options _except_ peer management are still handled by the config file.  Only coordinating the list of peers in the Refinery cluster is managed with Redis.
+In the Redis-based config mode, all config options _except_ peer management are still handled by the config file. Only coordinating the list of peers in the Refinery cluster is managed with Redis.
 
 To enable the redis-based config:
-* set PeerManagement.Type in the config file to "redis"
+
+- set PeerManagement.Type in the config file to "redis"
 
 When launched in redis-config mode, Refinery needs a redis host to use for managing the list of peers in the Refinery cluster. This hostname and port can be specified in one of two ways:
-* set the `REFINERY_REDIS_HOST` environment variable
-* set the `RedisHost` field in the config file
+
+- set the `REFINERY_REDIS_HOST` environment variable
+- set the `RedisHost` field in the config file
 
 The redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host.
 
@@ -76,7 +77,7 @@ When dry run mode is enabled, the metric `trace_send_kept` will increment for ea
 
 ## Scaling Up
 
-Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have stastics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces.  All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing.  The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (eg traces / second started) and multiply that by the maximum duration of a trace (say, 3 seconds), then multiply that by some large buffer (maybe 10x). This will give you good headroom.
+Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have stastics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (eg traces / second started) and multiply that by the maximum duration of a trace (say, 3 seconds), then multiply that by some large buffer (maybe 10x). This will give you good headroom.
 
 Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2G of memory to handle 5000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
 
@@ -85,7 +86,7 @@ Determining the number of machines necessary in the cluster is not an exact scie
 Refinery emits a number of metrics to give some indication about the health of the process. These metrics can be exposed to Prometheus or sent up to Honeycomb. The interesting ones to watch are:
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
-- [incoming|peer]_router_*: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
+- [incoming|peer]_router_\*: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
 - collect_cache_buffer_overrun: this should remain zero; a positive value indicates the need to grow the size of the collector's circular buffer (via configuration `CacheCapacity`).
 - process_uptime_seconds: records the uptime of each process; look for unexpected restarts as a key towards memory constraints.
 
@@ -99,7 +100,7 @@ Refinery does not yet buffer traces or sampling decisions to disk. When you rest
 
 ## Architecture of Refinery itself (for contributors)
 
-Within each directory, the interface the dependency exports is in the file with the same name as the directory and then (for the most part) each of the other files are alternative implementations of that interface.  For example, in `logger`, `/logger/logger.go` contains the interface definition and `logger/honeycomb.go` contains the implementation of the `logger` interface that will send logs to Honeycomb.
+Within each directory, the interface the dependency exports is in the file with the same name as the directory and then (for the most part) each of the other files are alternative implementations of that interface. For example, in `logger`, `/logger/logger.go` contains the interface definition and `logger/honeycomb.go` contains the implementation of the `logger` interface that will send logs to Honeycomb.
 
 `main.go` sets up the app and makes choices about which versions of dependency implementations to use (eg which logger, which sampler, etc.) It starts up everything and then launches `App`
 
