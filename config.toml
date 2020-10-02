@@ -29,9 +29,9 @@ MetricsHoneycombAPI = "https://api.honeycomb.io"
 # Eligible for live reload.
 MetricsAPIKey = "abcd1234"
 
-# MetricsDataset is the name of the dataset to which to send Samproxy metrics
+# MetricsDataset is the name of the dataset to which to send Refinery metrics
 # Eligible for live reload.
-MetricsDataset = "Samproxy Metrics"
+MetricsDataset = "Refinery Metrics"
 
 # MetricsReportingInterval is the frequency (in seconds) to send metric events
 # to Honeycomb. Between 1 and 60 is recommended.
