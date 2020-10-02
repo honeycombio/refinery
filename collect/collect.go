@@ -373,8 +373,9 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types.Span) {
 	if i.Config.GetIsDryRun() {
+		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
-		sp.Data["samproxy_kept"] = keep
+		sp.Data[field] = keep
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
 			i.Transmission.EnqueueSpan(sp)
@@ -463,7 +464,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 			sp.SampleRate = 1
 		}
 		if i.Config.GetIsDryRun() {
-			sp.Data["samproxy_kept"] = shouldSend
+			field := i.Config.GetDryRunFieldName()
+			sp.Data[field] = shouldSend
 		}
 		// if spans are already sampled, take that in to account when computing
 		// the final rate
