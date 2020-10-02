@@ -96,6 +96,14 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 								match = strings.HasPrefix(a, b)
 							}
 						}
+					case "contains":
+						switch a := value.(type) {
+						case string:
+							switch b := condition.Value.(type) {
+							case string:
+								match = strings.Contains(a, b)
+							}
+						}
 					}
 				case false:
 					switch condition.Operator {

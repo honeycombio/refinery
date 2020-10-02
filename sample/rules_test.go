@@ -411,6 +411,34 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 4,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "contains test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "first",
+								Operator: "contains",
+								Value:    "eyco",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"first": "honeycomb",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 4,
+		},
 	}
 
 	for _, d := range data {
