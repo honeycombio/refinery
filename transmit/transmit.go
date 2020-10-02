@@ -58,7 +58,7 @@ func (d *DefaultTransmission) Start() error {
 	d.builder.APIHost = upstreamAPI
 
 	once.Do(func() {
-		libhoney.UserAgentAddition = "samproxy/" + d.Version
+		libhoney.UserAgentAddition = "refinery/" + d.Version
 	})
 
 	d.Metrics.Register(d.Name+counterEnqueueErrors, "counter")
