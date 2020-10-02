@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build deb or rpm packages for samproxy.
+# Build deb or rpm packages for Refinery.
 set -e
 
 function usage() {
@@ -30,13 +30,13 @@ if [ -z "$version" ]; then
     version=v0.0.0-dev
 fi
 
-fpm -s dir -n samproxy \
+fpm -s dir -n refinery \
     -m "Honeycomb <team@honeycomb.io>" \
     -v ${version#v} \
     -t $pkg_type \
     -a $arch \
     --pre-install=./preinstall \
-    $GOPATH/bin/samproxy-linux-${arch}=/usr/bin/samproxy \
-    ./samproxy.upstart=/etc/init/samproxy.conf \
-    ./samproxy.service=/lib/systemd/system/samproxy.service \
-    ./config.toml=/etc/samproxy/samproxy.toml
+    $GOPATH/bin/refinery-linux-${arch}=/usr/bin/refinery \
+    ./refinery.upstart=/etc/init/refinery.conf \
+    ./refinery.service=/lib/systemd/system/refinery.service \
+    ./config.toml=/etc/refinery/refinery.toml
