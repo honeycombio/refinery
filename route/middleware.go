@@ -78,7 +78,7 @@ func (r *Router) panicCatcher(next http.Handler) http.Handler {
 	})
 }
 
-// requestLogger logs one line debug per request that comes through samproxy
+// requestLogger logs one line debug per request that comes through Refinery
 func (r *Router) requestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		arrivalTime := time.Now()

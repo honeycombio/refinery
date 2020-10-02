@@ -7,7 +7,7 @@ import (
 	"github.com/honeycombio/samproxy/config"
 )
 
-// Shard repreesents a single instance of Samproxy.
+// Shard repreesents a single instance of Refinery.
 type Shard interface {
 	Equals(Shard) bool
 	// GetAddress returns a string suitable for use in building a URL, eg

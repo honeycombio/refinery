@@ -16,7 +16,7 @@ type App struct {
 	Collector      collect.Collector `inject:""`
 	Metrics        metrics.Metrics   `inject:""`
 
-	// Version is the build ID for samproxy so that the running process may answer
+	// Version is the build ID for Refinery so that the running process may answer
 	// requests for the version
 	Version string
 }
