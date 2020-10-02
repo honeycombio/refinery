@@ -200,7 +200,7 @@ func TestPeerManagementType(t *testing.T) {
 
 	[PeerManagement]
 		Type = "redis"
-		Peers = ["http://samproxy-1231:8080"]
+		Peers = ["http://refinery-1231:8080"]
 	`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
@@ -341,7 +341,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		FieldList = ["request.method","response.status_code"]
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
-		AddSampleRateKeyToTraceField = "meta.samproxy.dynsampler_key"
+		AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
 		ClearFrequencySec = 60
 
 	[dataset2]

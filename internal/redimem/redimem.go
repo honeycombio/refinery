@@ -26,7 +26,7 @@ type Membership interface {
 }
 
 const (
-	globalPrefix       = "samproxy"
+	globalPrefix       = "refinery"
 	defaultRepeatCount = 2
 
 	// redisScanTimeout indicates how long to attempt to scan for peers.
