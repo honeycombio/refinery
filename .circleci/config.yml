@@ -30,7 +30,7 @@ commands:
           GOARCH=<< parameters.arch >> \
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
           -o $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
-          ./cmd/samproxy
+          ./cmd/refinery
 
 jobs:
   test:
