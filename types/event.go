@@ -28,7 +28,7 @@ type Event struct {
 }
 
 // Trace isn't something that shows up on the wire; it gets created within
-// Samproxy. Traces are not thread-safe; only one goroutine should be working
+// Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
 type Trace struct {
 	APIHost string
@@ -46,7 +46,7 @@ type Trace struct {
 	SendBy time.Time
 
 	// StartTime is the server time when the first span arrived for this trace.
-	// Used to calculate how long traces spend sitting in Samproxy
+	// Used to calculate how long traces spend sitting in Refinery
 	StartTime time.Time
 
 	HasRootSpan bool
