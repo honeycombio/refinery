@@ -2,7 +2,7 @@
 
 ![refinery](https://user-images.githubusercontent.com/6510988/94976958-8cadba80-04cb-11eb-9883-6e8ea554a081.png)
 
-**Beta Release** This is the initial draft. Please expect and help find bugs! :) Refinery [![Build Status](https://circleci.com/gh/honeycombio/samproxy.svg?style=shield)](https://circleci.com/gh/honeycombio/samproxy)
+**Beta Release** This is the initial draft. Please expect and help find bugs! :) Refinery [![Build Status](https://circleci.com/gh/honeycombio/refinery.svg?style=shield)](https://circleci.com/gh/honeycombio/refinery)
 
 ## Purpose
 
@@ -22,7 +22,7 @@ Additional RAM and CPU can be used by increasing configuration values to have a 
 
 ### Builds
 
-Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/samproxy). Released versions of Refinery are available via Github under the Releases tab.
+Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/refinery). Released versions of Refinery are available via Github under the Releases tab.
 
 ## Configuration
 
