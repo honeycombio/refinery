@@ -55,7 +55,7 @@ To enable the redis-based config:
 * set PeerManagement.Type in the config file to "redis"
 
 When launched in redis-config mode, Samproxy needs a redis host to use for managing the list of peers in the samproxy cluster. This hostname and port can be specified in one of two ways:
-* set the `SAMPROXY_REDIS_HOST` environment variable
+* set the `REFINERY_REDIS_HOST` environment variable
 * set the `RedisHost` field in the config file
 
 The redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host.
@@ -72,7 +72,7 @@ For more detail on how this algorithm works, please refer to the `dynsampler` pa
 
 When getting started with samproxy or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. By enabling dry run mode, all spans in each trace will be marked with the sampling decision in a field called `samproxy_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. You can then run queries in Honeycomb on this field to check your results and verify that the rules are working as intended. Enable dry run mode by adding `DryRun = true` in your configuration, as noted in `rules.toml`.
 
-When dry run mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain 0, reflecting that we are sending all traces to Honeycomb. 
+When dry run mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain 0, reflecting that we are sending all traces to Honeycomb.
 
 ## Scaling Up
 
@@ -118,4 +118,3 @@ Within each directory, the interface the dependency exports is in the file with 
 `sharder` determines which peer in a clustered Samproxy config is supposed to handle and individual trace.
 
 `types` contains a few type definitions that are used to hand data in between packages.
-

@@ -121,7 +121,7 @@ Metrics = "honeycomb"
 # [PeerManagement]
 # Type = "redis"
 # RedisHost is is used to connect to redis for peer cluster membership management.
-# Further, if the environment variable 'SAMPROXY_REDIS_HOST' is set it takes
+# Further, if the environment variable 'REFINERY_REDIS_HOST' is set it takes
 # precedence and this value is ignored.
 # Not eligible for live reload.
 # RedisHost = "localhost:6379"
