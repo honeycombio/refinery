@@ -6,7 +6,7 @@
 # and sends all traces regardless
 # DryRun = false
 
-# DryRunFieldName - the key to add to use to add to event data when using DryRun mode above
+# DryRunFieldName - the key to add to use to add to event data when using DryRun mode above, defaults to refinery_kept
 # DryRunFieldName = refinery_kept
 
 # DeterministicSampler is a section of the config for manipulating the
