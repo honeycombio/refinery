@@ -1,0 +1,12 @@
+# Upstart job for Refinery, the Honeycomb Trace-Aware Sampling Proxy
+# https://honeycomb.io/
+
+description     "Refinery Daemon"
+author          "Ben Hartshorne <ben@honeycomb.io>"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+
+exec su -s /bin/sh -c 'exec "$0" "$@"' honeycomb -- /usr/bin/refinery -c /etc/refinery/refinery.toml -r /etc/refinery/rules.toml
