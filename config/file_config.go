@@ -113,7 +113,7 @@ type PeerManagementConfig struct {
 func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
 
-	c.BindEnv("redishost", "SAMPROXY_REDIS_HOST")
+	c.BindEnv("redishost", "REFINERY_REDIS_HOST")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("APIKeys", []string{"*"})
