@@ -66,7 +66,7 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 		errmsg = ErrGenericMessage
 	}
 
-	jsonErrMsg := []byte(`{"source":"samproxy","error":"` + errmsg + `"}`)
+	jsonErrMsg := []byte(`{"source":"refinery","error":"` + errmsg + `"}`)
 
 	w.Write(jsonErrMsg)
 }
