@@ -162,6 +162,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
+	if d := c.GetDryRunFieldName(); d != "refinery_kept" {
+		t.Error("received", d, "expected", "refinery_kept")
+	}
+
 	type imcConfig struct {
 		CacheCapacity int
 	}

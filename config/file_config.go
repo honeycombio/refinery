@@ -69,6 +69,7 @@ type configContents struct {
 	PeerBufferSize     int           `validate:"required"`
 	DebugServiceAddr   string
 	DryRun             bool
+	DryRunFieldName    string
 	PeerManagement     PeerManagementConfig           `validate:"required"`
 	InMemCollector     InMemoryCollectorCacheCapacity `validate:"required"`
 }
@@ -131,6 +132,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("DryRun", false)
+	c.SetDefault("DryRunFieldName", "refinery_kept")
 	c.SetDefault("MaxAlloc", uint64(0))
 
 	c.SetConfigFile(config)
@@ -642,4 +644,11 @@ func (f *fileConfig) GetIsDryRun() bool {
 	defer f.mux.RUnlock()
 
 	return f.conf.DryRun
+}
+
+func (f *fileConfig) GetDryRunFieldName() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.DryRunFieldName
 }

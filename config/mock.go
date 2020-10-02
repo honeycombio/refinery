@@ -56,6 +56,7 @@ type MockConfig struct {
 	PeerManagementType            string
 	DebugServiceAddr              string
 	DryRun                        bool
+	DryRunFieldName               string
 
 	Mux sync.RWMutex
 }
@@ -248,4 +249,11 @@ func (m *MockConfig) GetIsDryRun() bool {
 	defer m.Mux.RUnlock()
 
 	return m.DryRun
+}
+
+func (m *MockConfig) GetDryRunFieldName() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.DryRunFieldName
 }

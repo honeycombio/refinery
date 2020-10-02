@@ -107,4 +107,6 @@ type Config interface {
 	GetDebugServiceAddr() (string, error)
 
 	GetIsDryRun() bool
+
+	GetDryRunFieldName() string
 }
