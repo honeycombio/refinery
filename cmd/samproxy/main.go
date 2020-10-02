@@ -120,7 +120,7 @@ func main() {
 	sdUpstream, _ := statsd.New(statsd.Prefix("samproxy.upstream"))
 	sdPeer, _ := statsd.New(statsd.Prefix("samproxy.peer"))
 
-	userAgentAddition := "samproxy/" + version
+	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
 			MaxBatchSize:          500,

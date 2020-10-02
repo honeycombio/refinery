@@ -25,5 +25,5 @@ func TestDefaultTransmissionUpdatesUserAgentAdditionAfterStart(t *testing.T) {
 	assert.Equal(t, libhoney.UserAgentAddition, "")
 	err := transmission.Start()
 	assert.Nil(t, err)
-	assert.Equal(t, libhoney.UserAgentAddition, "samproxy/test")
+	assert.Equal(t, libhoney.UserAgentAddition, "refinery/test")
 }

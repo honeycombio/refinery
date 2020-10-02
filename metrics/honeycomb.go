@@ -104,7 +104,7 @@ func (h *HoneycombMetrics) initLibhoney(mc config.HoneycombMetricsConfig) error 
 		// metrics are always sent as a single event, so don't wait for the timeout
 		MaxBatchSize:      1,
 		BlockOnSend:       true,
-		UserAgentAddition: "samproxy/" + h.Version + " (metrics)",
+		UserAgentAddition: "refinery/" + h.Version + " (metrics)",
 		Transport:         h.UpstreamTransport,
 	}
 	libhClientConfig := libhoney.ClientConfig{
