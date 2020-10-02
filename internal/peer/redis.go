@@ -75,7 +75,7 @@ func newRedisPeers(c config.Config) (Peers, error) {
 
 	peers := &redisPeers{
 		store: &redimem.RedisMembership{
-			Prefix: "samproxy",
+			Prefix: "refinery",
 			Pool:   pool,
 		},
 		peers:      make([]string, 1),
