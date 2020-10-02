@@ -7,11 +7,11 @@
 
 ## Purpose
 
-Samproxy is a trace-aware sampling proxy. It collects spans emitted by your application, gathers them into traces, and examines them as a whole. This enables Refinery to make an intelligent sampling decision (whether to keep or discard) based on the entire trace. Buffering the spans allows you to use fields that might be present in different spans within the trace to influence the sampling decision. For example, the root span might have HTTP status code, whereas another span might have information on whether the request was served from a cache. Using Refinery, you can choose to keep only traces that had a 500 status code and were also served from a cache.
+Refinery is a trace-aware sampling proxy. It collects spans emitted by your application, gathers them into traces, and examines them as a whole. This enables Refinery to make an intelligent sampling decision (whether to keep or discard) based on the entire trace. Buffering the spans allows you to use fields that might be present in different spans within the trace to influence the sampling decision. For example, the root span might have HTTP status code, whereas another span might have information on whether the request was served from a cache. Using Refinery, you can choose to keep only traces that had a 500 status code and were also served from a cache.
 
 ## Setting up Refinery
 
-Samproxy is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it. A standard deployment will have a cluster of servers running Refinery accessible via a load balancer. Refinery instances must be able to communicate with each other to concentrate traces on single servers.
+Refinery is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it. A standard deployment will have a cluster of servers running Refinery accessible via a load balancer. Refinery instances must be able to communicate with each other to concentrate traces on single servers.
 
 Within your application (or other Honeycomb event sources) you would configure the `API Host` to be http(s)://load-balancer/. Everything else remains the same (api key, dataset name, etc. - all that lives with the originating client).
 
@@ -76,13 +76,13 @@ When dry run mode is enabled, the metric `trace_send_kept` will increment for ea
 
 ## Scaling Up
 
-Samproxy uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have stastics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces.  All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing.  The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (eg traces / second started) and multiply that by the maximum duration of a trace (say, 3 seconds), then multiply that by some large buffer (maybe 10x). This will give you good headroom.
+Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have stastics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces.  All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing.  The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (eg traces / second started) and multiply that by the maximum duration of a trace (say, 3 seconds), then multiply that by some large buffer (maybe 10x). This will give you good headroom.
 
 Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2G of memory to handle 5000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
 
 ## Understanding Regular Operation
 
-Samproxy emits a number of metrics to give some indication about the health of the process. These metrics can be exposed to Prometheus or sent up to Honeycomb. The interesting ones to watch are:
+Refinery emits a number of metrics to give some indication about the health of the process. These metrics can be exposed to Prometheus or sent up to Honeycomb. The interesting ones to watch are:
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
 - [incoming|peer]_router_*: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
@@ -95,7 +95,7 @@ The default logging level of `warn` is almost entirely silent. The `debug` level
 
 ## Restarts
 
-Samproxy does not yet buffer traces or sampling decisions to disk. When you restart the process all in-flight traces will be flushed (sent upstream to Honeycomb), but you will lose the record of past trace decisions. When started back up, it will start with a clean slate.
+Refinery does not yet buffer traces or sampling decisions to disk. When you restart the process all in-flight traces will be flushed (sent upstream to Honeycomb), but you will lose the record of past trace decisions. When started back up, it will start with a clean slate.
 
 ## Architecture of Refinery itself (for contributors)
 
