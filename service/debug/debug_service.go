@@ -14,7 +14,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/refinery/config"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/rcrowley/go-metrics/exp"
 	"github.com/sirupsen/logrus"

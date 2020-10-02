@@ -1,6 +1,6 @@
 package peer
 
-import "github.com/honeycombio/samproxy/config"
+import "github.com/honeycombio/refinery/config"
 
 type filePeers struct {
 	c config.Config

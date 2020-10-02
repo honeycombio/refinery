@@ -13,8 +13,8 @@ import (
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 )
 
 type HoneycombMetrics struct {

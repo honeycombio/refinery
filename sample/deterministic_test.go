@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/types"
 )
 
 // TestInitialization tests that sample rates are consistently returned

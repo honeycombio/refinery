@@ -3,9 +3,9 @@ package cache
 import (
 	"time"
 
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/types"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.

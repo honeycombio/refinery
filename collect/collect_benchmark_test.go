@@ -11,13 +11,13 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/honeycombio/samproxy/collect/cache"
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/sample"
-	"github.com/honeycombio/samproxy/transmit"
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 )
 
 func BenchmarkCollect(b *testing.B) {

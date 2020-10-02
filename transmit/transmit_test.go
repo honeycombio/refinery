@@ -5,9 +5,9 @@ package transmit
 import (
 	"testing"
 
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/stretchr/testify/assert"

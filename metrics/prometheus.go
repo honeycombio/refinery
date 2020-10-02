@@ -9,8 +9,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 )
 
 type PromMetrics struct {
