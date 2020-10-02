@@ -16,10 +16,12 @@ ADD . .
 RUN CGO_ENABLED=0 \
     GOOS=linux \
     GOARCH=amd64 \
-    go build -ldflags "-X main.BuildID=${BUILD_ID}" ./cmd/samproxy
+    go build -ldflags "-X main.BuildID=${BUILD_ID}" \
+    -o refinery \
+    ./cmd/samproxy
 
 FROM scratch
 
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=builder /app/samproxy /usr/bin/samproxy
+COPY --from=builder /app/refinery /usr/bin/refinery
