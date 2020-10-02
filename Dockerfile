@@ -18,7 +18,7 @@ RUN CGO_ENABLED=0 \
     GOARCH=amd64 \
     go build -ldflags "-X main.BuildID=${BUILD_ID}" \
     -o refinery \
-    ./cmd/samproxy
+    ./cmd/refinery
 
 FROM scratch
 
