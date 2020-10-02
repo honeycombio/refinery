@@ -188,7 +188,7 @@ func (r *Router) Stop() error {
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /x/alive check")
-	w.Write([]byte(`{"source":"samproxy","alive":"yes"}`))
+	w.Write([]byte(`{"source":"refinery","alive":"yes"}`))
 }
 
 func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
@@ -196,7 +196,7 @@ func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) version(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte(fmt.Sprintf(`{"source":"samproxy","version":"%s"}`, r.versionStr)))
+	w.Write([]byte(fmt.Sprintf(`{"source":"refinery","version":"%s"}`, r.versionStr)))
 }
 
 // event is handler for /1/event/
