@@ -1,4 +1,4 @@
-module github.com/honeycombio/samproxy
+module github.com/honeycombio/refinery
 
 go 1.14
 

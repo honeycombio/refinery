@@ -20,13 +20,13 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
 
-	"github.com/honeycombio/samproxy/collect"
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/sharder"
-	"github.com/honeycombio/samproxy/transmit"
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sharder"
+	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 )
 
 const (

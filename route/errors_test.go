@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/refinery/logger"
 )
 
 func TestHandlerReturnWithError(t *testing.T) {

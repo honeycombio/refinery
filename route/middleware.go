@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/types"
 )
 
 // for generating request IDs

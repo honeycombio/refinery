@@ -11,7 +11,7 @@ import (
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 
-	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/refinery/config"
 )
 
 // HoneycombLogger is a Logger implementation that sends all logs to a Honeycomb

@@ -1,7 +1,7 @@
 package sharder
 
 import (
-	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/refinery/logger"
 )
 
 // SingleShard implements the Shard interface

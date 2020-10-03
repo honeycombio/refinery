@@ -3,7 +3,7 @@ package logger
 import (
 	"fmt"
 
-	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/refinery/config"
 )
 
 type MockLogger struct {

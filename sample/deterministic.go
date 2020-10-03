@@ -4,9 +4,9 @@ import (
 	"crypto/sha1"
 	"math"
 
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/types"
 )
 
 // shardingSalt is a random bit to make sure we don't shard the same as any

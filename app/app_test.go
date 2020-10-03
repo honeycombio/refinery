@@ -26,14 +26,14 @@ import (
 
 	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-	"github.com/honeycombio/samproxy/collect"
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/internal/peer"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/sample"
-	"github.com/honeycombio/samproxy/sharder"
-	"github.com/honeycombio/samproxy/transmit"
+	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/sharder"
+	"github.com/honeycombio/refinery/transmit"
 )
 
 type countingWriterSender struct {

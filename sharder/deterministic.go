@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/internal/peer"
-	"github.com/honeycombio/samproxy/logger"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/pkg/errors"
 )
 

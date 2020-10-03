@@ -1,11 +1,11 @@
 package app
 
 import (
-	"github.com/honeycombio/samproxy/collect"
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/route"
+	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/route"
 )
 
 type App struct {

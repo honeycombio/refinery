@@ -3,7 +3,7 @@ package peer
 import (
 	"errors"
 
-	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/refinery/config"
 )
 
 // Peers holds the collection of peers for the cluster

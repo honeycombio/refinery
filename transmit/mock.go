@@ -3,7 +3,7 @@ package transmit
 import (
 	"sync"
 
-	"github.com/honeycombio/samproxy/types"
+	"github.com/honeycombio/refinery/types"
 )
 
 type MockTransmission struct {

@@ -18,16 +18,16 @@ import (
 	flag "github.com/jessevdk/go-flags"
 	"github.com/sirupsen/logrus"
 
-	"github.com/honeycombio/samproxy/app"
-	"github.com/honeycombio/samproxy/collect"
-	"github.com/honeycombio/samproxy/config"
-	"github.com/honeycombio/samproxy/internal/peer"
-	"github.com/honeycombio/samproxy/logger"
-	"github.com/honeycombio/samproxy/metrics"
-	"github.com/honeycombio/samproxy/sample"
-	"github.com/honeycombio/samproxy/service/debug"
-	"github.com/honeycombio/samproxy/sharder"
-	"github.com/honeycombio/samproxy/transmit"
+	"github.com/honeycombio/refinery/app"
+	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/service/debug"
+	"github.com/honeycombio/refinery/sharder"
+	"github.com/honeycombio/refinery/transmit"
 )
 
 // set by travis.

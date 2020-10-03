@@ -5,7 +5,7 @@ package peer
 import (
 	"testing"
 
-	"github.com/honeycombio/samproxy/config"
+	"github.com/honeycombio/refinery/config"
 )
 
 func TestFilePeers(t *testing.T) {
