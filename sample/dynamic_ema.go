@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -110,16 +111,7 @@ func (d *EMADynamicSampler) buildKey(trace *types.Trace) string {
 	for _, field := range d.fieldList {
 		for _, span := range spans {
 			if val, ok := span.Data[field]; ok {
-				switch val := val.(type) {
-				case string:
-					fieldCollector[field] = append(fieldCollector[field], val)
-				case float64:
-					valStr := strconv.FormatFloat(val, 'f', -1, 64)
-					fieldCollector[field] = append(fieldCollector[field], valStr)
-				case bool:
-					valStr := strconv.FormatBool(val)
-					fieldCollector[field] = append(fieldCollector[field], valStr)
-				}
+				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
 			}
 		}
 	}
