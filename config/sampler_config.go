@@ -27,3 +27,12 @@ type EMADynamicSamplerConfig struct {
 	AddSampleRateKeyToTrace      bool
 	AddSampleRateKeyToTraceField string
 }
+
+type TotalThroughputSamplerConfig struct {
+	GoalThroughputPerSec         int64
+	ClearFrequencySec            int64
+	FieldList                    []string
+	UseTraceLength               bool
+	AddSampleRateKeyToTrace      bool
+	AddSampleRateKeyToTraceField string
+}
