@@ -153,6 +153,9 @@ workflows:
           filters:
             tags:
               only: /.*/
+            branches:
+              # Forked pull requests have CIRCLE_BRANCH set to pull/XXX
+              ignore: /pull\/[0-9]+/
       - docker/publish:
           tag: latest
           extra_build_args: --build-arg BUILD_ID=${CIRCLE_SHA1:0:7}
