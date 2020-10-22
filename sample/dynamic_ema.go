@@ -1,10 +1,7 @@
 package sample
 
 import (
-	"fmt"
 	"math/rand"
-	"sort"
-	"strconv"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
@@ -26,11 +23,9 @@ type EMADynamicSampler struct {
 	burstMultiple       float64
 	burstDetectionDelay uint
 	maxKeys             int
-	fieldList           []string
-	useTraceLength      bool
-	addDynsampleKey     bool
-	addDynsampleField   string
 	configName          string
+
+	key *traceKey
 
 	dynsampler dynsampler.Sampler
 }
@@ -45,18 +40,7 @@ func (d *EMADynamicSampler) Start() error {
 	d.burstMultiple = d.Config.BurstMultiple
 	d.burstDetectionDelay = d.Config.BurstDetectionDelay
 	d.maxKeys = d.Config.MaxKeys
-
-	// get list of fields to use when constructing the dynsampler key
-	fieldList := d.Config.FieldList
-
-	// always put the field list in sorted order for easier comparison
-	sort.Strings(fieldList)
-	d.fieldList = fieldList
-
-	d.useTraceLength = d.Config.UseTraceLength
-
-	d.addDynsampleKey = d.Config.AddSampleRateKeyToTrace
-	d.addDynsampleField = d.Config.AddSampleRateKeyToTraceField
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength, d.Config.AddSampleRateKeyToTrace, d.Config.AddSampleRateKeyToTraceField)
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{
@@ -79,7 +63,7 @@ func (d *EMADynamicSampler) Start() error {
 }
 
 func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
-	key := d.buildKey(trace)
+	key := d.key.buildAndAdd(trace)
 	rate := d.dynsampler.GetSampleRate(key)
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
@@ -98,48 +82,4 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
 	return uint(rate), shouldKeep
-}
-
-// buildKey takes a trace and returns the key to use for the dynsampler.
-func (d *EMADynamicSampler) buildKey(trace *types.Trace) string {
-	// fieldCollector gets all values from the fields listed in the config, even
-	// if they happen multiple times.
-	fieldCollector := map[string][]string{}
-
-	// for each field, for each span, get the value of that field
-	spans := trace.GetSpans()
-	for _, field := range d.fieldList {
-		for _, span := range spans {
-			if val, ok := span.Data[field]; ok {
-				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
-			}
-		}
-	}
-	// ok, now we have a map of fields to a list of all values for that field.
-
-	var key string
-	for _, field := range d.fieldList {
-		// sort and collapse list
-		sort.Strings(fieldCollector[field])
-		var prevStr string
-		for _, str := range fieldCollector[field] {
-			if str != prevStr {
-				key += str + "•"
-			}
-			prevStr = str
-		}
-		// get ready for the next element
-		key += ","
-	}
-	if d.useTraceLength {
-		key += strconv.FormatInt(int64(len(spans)), 10)
-	}
-
-	if d.addDynsampleKey {
-		for _, span := range trace.GetSpans() {
-			span.Data[d.addDynsampleField] = key
-		}
-	}
-
-	return key
 }
