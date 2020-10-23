@@ -29,9 +29,9 @@ type EMADynamicSamplerConfig struct {
 }
 
 type TotalThroughputSamplerConfig struct {
-	GoalThroughputPerSec         int64
+	GoalThroughputPerSec         int64 `validate:"gte=1"`
 	ClearFrequencySec            int64
-	FieldList                    []string
+	FieldList                    []string `validate:"required"`
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool
 	AddSampleRateKeyToTraceField string
