@@ -12,6 +12,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestRedisEnvVar(t *testing.T) {
+	host := "redis.magic:1337"
+	os.Setenv("REFINERY_REDIS_HOST", host)
+	defer os.Unsetenv("REFINERY_REDIS_HOST")
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetRedisHost(); d != host {
+		t.Error("received", d, "expected", host)
+	}
+}
+
 func TestReload(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
