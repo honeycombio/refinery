@@ -60,7 +60,7 @@ type configContents struct {
 	Logger             string        `validate:"required,oneof= logrus honeycomb"`
 	LoggingLevel       string        `validate:"required"`
 	Collector          string        `validate:"required,oneof= InMemCollector"`
-	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler"`
+	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler TotalThroughputSampler"`
 	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay          time.Duration `validate:"required"`
 	TraceTimeout       time.Duration `validate:"required"`
@@ -481,6 +481,8 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 			i = &EMADynamicSamplerConfig{}
 		case "RulesBasedSampler":
 			i = &RulesBasedSamplerConfig{}
+		case "TotalThroughputSampler":
+			i = &TotalThroughputSamplerConfig{}
 		default:
 			return nil, errors.New("No Sampler found")
 		}
@@ -502,6 +504,8 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 			i = &EMADynamicSamplerConfig{}
 		case "RulesBasedSampler":
 			i = &RulesBasedSamplerConfig{}
+		case "TotalThroughputSampler":
+			i = &TotalThroughputSamplerConfig{}
 		default:
 			return nil, errors.New("No Sampler found")
 		}
