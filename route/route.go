@@ -542,9 +542,7 @@ func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 		return msgpack.NewDecoder(data).
 			UseDecodeInterfaceLoose(true).
 			Decode(v)
-	case "application/json":
-		return jsoniter.NewDecoder(data).Decode(v)
 	default:
-		return errors.New("Bad Content-Type")
+		return jsoniter.NewDecoder(data).Decode(v)
 	}
 }
