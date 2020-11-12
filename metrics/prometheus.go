@@ -42,28 +42,38 @@ func (p *PromMetrics) Start() error {
 // Register takes a name and a metric type. The type should be one of "counter",
 // "gauge", or "histogram"
 func (p *PromMetrics) Register(name string, metricType string) {
-	var newmet interface{}
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	newmet, ok := p.metrics[name]
+
 	switch metricType {
 	case "counter":
-		newmet = promauto.NewCounter(prometheus.CounterOpts{
-			Name: name,
-			Help: name,
-		})
+		if !ok {
+			newmet = promauto.NewCounter(prometheus.CounterOpts{
+				Name: name,
+				Help: name,
+			})
+		}
 	case "gauge":
-		newmet = promauto.NewGauge(prometheus.GaugeOpts{
-			Name: name,
-			Help: name,
-		})
+		if !ok {
+			newmet = promauto.NewGauge(prometheus.GaugeOpts{
+				Name: name,
+				Help: name,
+			})
+		}
 	case "histogram":
-		newmet = promauto.NewHistogram(prometheus.HistogramOpts{
-			Name: name,
-			Help: name,
-		})
+		if !ok {
+			newmet = promauto.NewHistogram(prometheus.HistogramOpts{
+				Name: name,
+				Help: name,
+			})
+		}
 	}
 
-	p.lock.Lock()
-	p.metrics[name] = newmet
-	p.lock.Unlock()
+	if newmet != nil {
+		p.metrics[name] = newmet
+	}
 }
 
 func (p *PromMetrics) IncrementCounter(name string) {
