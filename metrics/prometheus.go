@@ -47,33 +47,30 @@ func (p *PromMetrics) Register(name string, metricType string) {
 
 	newmet, ok := p.metrics[name]
 
-	switch metricType {
-	case "counter":
-		if !ok {
-			newmet = promauto.NewCounter(prometheus.CounterOpts{
-				Name: name,
-				Help: name,
-			})
-		}
-	case "gauge":
-		if !ok {
-			newmet = promauto.NewGauge(prometheus.GaugeOpts{
-				Name: name,
-				Help: name,
-			})
-		}
-	case "histogram":
-		if !ok {
-			newmet = promauto.NewHistogram(prometheus.HistogramOpts{
-				Name: name,
-				Help: name,
-			})
-		}
+	// don't attempt to add the metric again as this will cause a panic
+	if !ok {
+		return
 	}
 
-	if newmet != nil {
-		p.metrics[name] = newmet
+	switch metricType {
+	case "counter":
+		newmet = promauto.NewCounter(prometheus.CounterOpts{
+			Name: name,
+			Help: name,
+		})
+	case "gauge":
+		newmet = promauto.NewGauge(prometheus.GaugeOpts{
+			Name: name,
+			Help: name,
+		})
+	case "histogram":
+		newmet = promauto.NewHistogram(prometheus.HistogramOpts{
+			Name: name,
+			Help: name,
+		})
 	}
+
+	p.metrics[name] = newmet
 }
 
 func (p *PromMetrics) IncrementCounter(name string) {
