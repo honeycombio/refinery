@@ -45,10 +45,10 @@ func (p *PromMetrics) Register(name string, metricType string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	newmet, ok := p.metrics[name]
+	newmet, exists := p.metrics[name]
 
 	// don't attempt to add the metric again as this will cause a panic
-	if !ok {
+	if exists {
 		return
 	}
 
