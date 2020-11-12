@@ -143,6 +143,10 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	}
 
 	r := viper.New()
+
+	r.SetDefault("Sampler", "DeterministicSampler")
+	r.SetDefault("SampleRate", 1)
+
 	r.SetConfigFile(rules)
 	err = r.ReadInConfig()
 

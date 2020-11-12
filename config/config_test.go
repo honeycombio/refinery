@@ -401,3 +401,40 @@ func TestGetSamplerTypes(t *testing.T) {
 		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
 	}
 }
+
+func TestDefaultSampler(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	dummy := []byte(`
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`)
+
+	_, err = configFile.Write(dummy)
+	assert.NoError(t, err)
+	configFile.Close()
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+
+	assert.NoError(t, err)
+
+	s, err := c.GetSamplerConfigForDataset("nonexistent")
+
+	assert.NoError(t, err)
+
+	assert.IsType(t, &DeterministicSamplerConfig{}, s)
+}
