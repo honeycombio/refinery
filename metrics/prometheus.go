@@ -42,7 +42,16 @@ func (p *PromMetrics) Start() error {
 // Register takes a name and a metric type. The type should be one of "counter",
 // "gauge", or "histogram"
 func (p *PromMetrics) Register(name string, metricType string) {
-	var newmet interface{}
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	newmet, exists := p.metrics[name]
+
+	// don't attempt to add the metric again as this will cause a panic
+	if exists {
+		return
+	}
+
 	switch metricType {
 	case "counter":
 		newmet = promauto.NewCounter(prometheus.CounterOpts{
@@ -61,9 +70,7 @@ func (p *PromMetrics) Register(name string, metricType string) {
 		})
 	}
 
-	p.lock.Lock()
 	p.metrics[name] = newmet
-	p.lock.Unlock()
 }
 
 func (p *PromMetrics) IncrementCounter(name string) {
