@@ -164,7 +164,7 @@ func TestUnmarshal(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	body = bytes.NewBufferString(`{"traceId": "test"}`)
-	unmarshalRequest(w, "application/json", body)
+	unmarshalRequest(w, "application/json; charset=utf-8", body)
 
 	if b := w.Body.String(); b != "test" {
 		t.Error("Expecting test")
