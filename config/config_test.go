@@ -132,34 +132,34 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", 100*time.Millisecond)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); err != nil {
-		assert.IsType(t, &DeterministicSamplerConfig{}, d)
-	}
+	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
+	assert.NoError(t, err)
+	assert.IsType(t, &DeterministicSamplerConfig{}, d)
 
-	if d, err := c.GetSamplerConfigForDataset("dataset1"); err != nil {
-		assert.IsType(t, &DynamicSamplerConfig{}, d)
-	}
+	d, err = c.GetSamplerConfigForDataset("dataset1")
+	assert.NoError(t, err)
+	assert.IsType(t, &DynamicSamplerConfig{}, d)
 
-	if d, err := c.GetSamplerConfigForDataset("dataset4"); err != nil {
-		switch r := d.(type) {
-		case RulesBasedSamplerConfig:
-			assert.Len(t, r.Rule, 3)
+	d, err = c.GetSamplerConfigForDataset("dataset4")
+	assert.NoError(t, err)
+	switch r := d.(type) {
+	case *RulesBasedSamplerConfig:
+		assert.Len(t, r.Rule, 3)
 
-			var rule *RulesBasedSamplerRule
+		var rule *RulesBasedSamplerRule
 
-			rule = r.Rule[0]
-			assert.Equal(t, 1, rule.SampleRate)
-			assert.Equal(t, "500 errors", rule.Name)
-			assert.Len(t, rule.Condition, 2)
+		rule = r.Rule[0]
+		assert.Equal(t, 1, rule.SampleRate)
+		assert.Equal(t, "500 errors", rule.Name)
+		assert.Len(t, rule.Condition, 2)
 
-			rule = r.Rule[1]
-			assert.True(t, rule.Drop)
-			assert.Equal(t, 0, rule.SampleRate)
-			assert.Len(t, rule.Condition, 1)
+		rule = r.Rule[1]
+		assert.True(t, rule.Drop)
+		assert.Equal(t, 0, rule.SampleRate)
+		assert.Len(t, rule.Condition, 1)
 
-		default:
-			assert.Fail(t, "dataset4 should have a rules based sampler", d)
-		}
+	default:
+		assert.Fail(t, "dataset4 should have a rules based sampler", d)
 	}
 
 	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
