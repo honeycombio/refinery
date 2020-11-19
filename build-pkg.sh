@@ -39,4 +39,5 @@ fpm -s dir -n refinery \
     $GOPATH/bin/refinery-linux-${arch}=/usr/bin/refinery \
     ./refinery.upstart=/etc/init/refinery.conf \
     ./refinery.service=/lib/systemd/system/refinery.service \
-    ./config.toml=/etc/refinery/refinery.toml
+    ./config.toml=/etc/refinery/refinery.toml \
+    ./rules.toml=/etc/refinery/rules.toml
