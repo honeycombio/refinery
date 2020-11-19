@@ -114,7 +114,7 @@ func TestReload(t *testing.T) {
 }
 
 func TestReadDefaults(t *testing.T) {
-	c, err := NewConfig("../config.toml", "../rules_complete.toml", func(err error) {})
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -130,6 +130,48 @@ func TestReadDefaults(t *testing.T) {
 
 	if d := c.GetSendTickerValue(); d != 100*time.Millisecond {
 		t.Error("received", d, "expected", 100*time.Millisecond)
+	}
+
+	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
+		t.Error("received", d, "expected", "[http://127.0.0.1:8081]")
+	}
+
+	if d, _ := c.GetPeerManagementType(); d != "file" {
+		t.Error("received", d, "expected", "file")
+	}
+
+	if d, _ := c.GetUseIPV6Identifier(); d != false {
+		t.Error("received", d, "expected", false)
+	}
+
+	if d := c.GetIsDryRun(); d != false {
+		t.Error("received", d, "expected", false)
+	}
+
+	if d := c.GetDryRunFieldName(); d != "refinery_kept" {
+		t.Error("received", d, "expected", "refinery_kept")
+	}
+
+	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
+	assert.NoError(t, err)
+	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+
+	type imcConfig struct {
+		CacheCapacity int
+	}
+	collectorConfig := &imcConfig{}
+	err = c.GetOtherConfig("InMemCollector", collectorConfig)
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Equal(t, collectorConfig.CacheCapacity, 1000)
+}
+
+func TestReadRulesConfig(t *testing.T) {
+	c, err := NewConfig("../config.toml", "../rules_complete.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
 	}
 
 	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
@@ -161,36 +203,6 @@ func TestReadDefaults(t *testing.T) {
 	default:
 		assert.Fail(t, "dataset4 should have a rules based sampler", d)
 	}
-
-	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
-		t.Error("received", d, "expected", "[http://127.0.0.1:8081]")
-	}
-
-	if d, _ := c.GetPeerManagementType(); d != "file" {
-		t.Error("received", d, "expected", "file")
-	}
-
-	if d, _ := c.GetUseIPV6Identifier(); d != false {
-		t.Error("received", d, "expected", false)
-	}
-
-	if d := c.GetIsDryRun(); d != false {
-		t.Error("received", d, "expected", false)
-	}
-
-	if d := c.GetDryRunFieldName(); d != "refinery_kept" {
-		t.Error("received", d, "expected", "refinery_kept")
-	}
-
-	type imcConfig struct {
-		CacheCapacity int
-	}
-	collectorConfig := &imcConfig{}
-	err = c.GetOtherConfig("InMemCollector", collectorConfig)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Equal(t, collectorConfig.CacheCapacity, 1000)
 }
 
 func TestPeerManagementType(t *testing.T) {
