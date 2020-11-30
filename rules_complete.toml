@@ -229,3 +229,9 @@ SampleRate = 1
 
 	[[dataset4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 1
+
+[dataset5]
+
+    Sampler = "TotalThroughputSampler"
+    GoalThroughputPerSec = 100
+    FieldList = "[request.method]"

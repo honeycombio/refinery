@@ -385,6 +385,12 @@ func TestGetSamplerTypes(t *testing.T) {
 		AddSampleRateKeyToTrace = true
 		FieldList = "[request.method]"
 		Weight = 0.3
+
+	[dataset4]
+
+		Sampler = "TotalThroughputSampler"
+		GoalThroughputPerSec = 100
+		FieldList = "[request.method]"
 `)
 
 	_, err = rulesFile.Write(dummyConfig)
@@ -411,6 +417,10 @@ func TestGetSamplerTypes(t *testing.T) {
 
 	if d, err := c.GetSamplerConfigForDataset("dataset3"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
+	}
+
+	if d, err := c.GetSamplerConfigForDataset("dataset4"); assert.Equal(t, nil, err) {
+		assert.IsType(t, &TotalThroughputSamplerConfig{}, d)
 	}
 }
 
