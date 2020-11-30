@@ -291,6 +291,8 @@ func (f *fileConfig) validateSamplerConfigs() error {
 				i = &EMADynamicSamplerConfig{}
 			case "RulesBasedSampler":
 				i = &RulesBasedSamplerConfig{}
+			case "TotalThroughputSampler":
+				i = &TotalThroughputSamplerConfig{}
 			default:
 				return errors.New("Invalid or missing default sampler type")
 			}
@@ -318,6 +320,8 @@ func (f *fileConfig) validateSamplerConfigs() error {
 				i = &EMADynamicSamplerConfig{}
 			case "RulesBasedSampler":
 				i = &RulesBasedSamplerConfig{}
+			case "TotalThroughputSampler":
+				i = &TotalThroughputSamplerConfig{}
 			default:
 				return errors.New("Invalid or missing dataset sampler type")
 			}
