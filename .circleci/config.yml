@@ -138,7 +138,7 @@ workflows:
             tags:
               only: /.*/
       - publish_github:
-          context: Honeycomb Secrets
+          context: Honeycomb Secrets for Public Repos
           requires:
             - build
           filters:
@@ -147,7 +147,7 @@ workflows:
             branches:
               ignore: /.*/
       - publish_s3:
-          context: Honeycomb Secrets
+          context: Honeycomb Secrets for Public Repos
           requires:
             - build
           filters:
