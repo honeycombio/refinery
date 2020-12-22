@@ -456,6 +456,10 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 			return *hlConfig, err
 		}
 
+		// https://github.com/spf13/viper/issues/747
+		hlConfig.LoggerSamplerEnabled = f.config.GetBool("HoneycombLogger.LoggerSamplerEnabled")
+		hlConfig.LoggerSamplerThroughput = f.config.GetInt("HoneycombLogger.LoggerSamplerThroughput")
+
 		v := validator.New()
 		err = v.Struct(hlConfig)
 		if err != nil {
