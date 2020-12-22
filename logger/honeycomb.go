@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/honeycombio/dynsampler-go"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 
@@ -24,11 +25,13 @@ type HoneycombLogger struct {
 	loggerConfig      config.HoneycombLoggerConfig
 	libhClient        *libhoney.Client
 	builder           *libhoney.Builder
+	sampler           dynsampler.Sampler
 }
 
 type HoneycombEntry struct {
 	loggerConfig config.HoneycombLoggerConfig
 	builder      *libhoney.Builder
+	sampler      dynsampler.Sampler
 }
 
 const (
@@ -64,6 +67,16 @@ func (h *HoneycombLogger) Start() error {
 			Transport:           h.UpstreamTransport,
 			PendingWorkCapacity: libhoney.DefaultPendingWorkCapacity,
 		}
+	}
+
+	h.sampler = &dynsampler.PerKeyThroughput{
+		ClearFrequencySec:      10,
+		PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
+		MaxKeys:                1000,
+	}
+	err = h.sampler.Start()
+	if err != nil {
+		return err
 	}
 
 	libhClientConfig := libhoney.ClientConfig{
@@ -106,6 +119,8 @@ func (h *HoneycombLogger) readResponses() {
 		respString := fmt.Sprintf("Response: status: %d, duration: %dms", resp.StatusCode, resp.Duration)
 		// read response, log if there's an error
 		switch {
+		case resp.StatusCode == 0: // log message dropped due to sampling
+			continue
 		case resp.Err != nil:
 			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an error back from Honeycomb while trying to send a log line: %s, error: %s, body: %s\n", respString, resp.Err.Error(), string(resp.Body))
 		case resp.StatusCode > 202:
@@ -147,6 +162,7 @@ func (h *HoneycombLogger) Debug() Entry {
 	ev := &HoneycombEntry{
 		loggerConfig: h.loggerConfig,
 		builder:      h.builder.Clone(),
+		sampler:      h.sampler,
 	}
 	ev.builder.AddField("level", "debug")
 
@@ -161,6 +177,7 @@ func (h *HoneycombLogger) Info() Entry {
 	ev := &HoneycombEntry{
 		loggerConfig: h.loggerConfig,
 		builder:      h.builder.Clone(),
+		sampler:      h.sampler,
 	}
 	ev.builder.AddField("level", "info")
 
@@ -175,6 +192,7 @@ func (h *HoneycombLogger) Error() Entry {
 	ev := &HoneycombEntry{
 		loggerConfig: h.loggerConfig,
 		builder:      h.builder.Clone(),
+		sampler:      h.sampler,
 	}
 	ev.builder.AddField("level", "error")
 
@@ -218,10 +236,17 @@ func (h *HoneycombEntry) WithFields(fields map[string]interface{}) Entry {
 
 func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
-	ev.AddField("msg", fmt.Sprintf(f, args...))
+	msg := fmt.Sprintf(f, args...)
+	ev.AddField("msg", msg)
 	ev.Metadata = map[string]string{
 		"api_host": ev.APIHost,
 		"dataset":  ev.Dataset,
 	}
+	level, ok := ev.Fields()["level"].(string)
+	if !ok {
+		level = "unknown"
+	}
+	rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, msg))
+	ev.SampleRate = uint(rate)
 	ev.Send()
 }
