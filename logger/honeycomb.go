@@ -69,14 +69,16 @@ func (h *HoneycombLogger) Start() error {
 		}
 	}
 
-	h.sampler = &dynsampler.PerKeyThroughput{
-		ClearFrequencySec:      10,
-		PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
-		MaxKeys:                1000,
-	}
-	err = h.sampler.Start()
-	if err != nil {
-		return err
+	if loggerConfig.LoggerSamplerEnabled {
+		h.sampler = &dynsampler.PerKeyThroughput{
+			ClearFrequencySec:      10,
+			PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
+			MaxKeys:                1000,
+		}
+		err = h.sampler.Start()
+		if err != nil {
+			return err
+		}
 	}
 
 	libhClientConfig := libhoney.ClientConfig{
@@ -246,7 +248,9 @@ func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 	if !ok {
 		level = "unknown"
 	}
-	rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, msg))
-	ev.SampleRate = uint(rate)
+	if h.sampler != nil {
+		rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, msg))
+		ev.SampleRate = uint(rate)
+	}
 	ev.Send()
 }
