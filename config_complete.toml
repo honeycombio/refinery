@@ -199,18 +199,26 @@ MaxAlloc = 0
 
 # LoggerHoneycombAPI is the URL for the upstream Honeycomb API.
 # Eligible for live reload.
- LoggerHoneycombAPI = "https://api.honeycomb.io"
+LoggerHoneycombAPI = "https://api.honeycomb.io"
 
 # LoggerAPIKey is the API key to use to send log events to the Honeycomb logging
 # dataset. This is separate from the APIKeys used to authenticate regular
 # traffic.
 # Eligible for live reload.
- LoggerAPIKey = "abcd1234"
+LoggerAPIKey = "abcd1234"
 
 # LoggerDataset is the name of the dataset to which to send Refinery logs
 # Eligible for live reload.
- LoggerDataset = "Refinery Logs"
+LoggerDataset = "Refinery Logs"
 
+# LoggerSamplerEnabled enables a PerKeyThroughput dynamic sampler for log messages.
+# This will sample log messages based on [log level:message] key on a per second throughput basis.
+# Eligible for live reload.
+LoggerSamplerEnabled = true
+
+# LoggerSamplerThroughput is the per key per second throughput for the log message dynamic sampler.
+# Eligible for live reload.
+LoggerSamplerThroughput = 10
 
 #######################
 ## Honeycomb Metrics ##
