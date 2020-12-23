@@ -69,9 +69,16 @@ func (h *HoneycombLogger) Start() error {
 		}
 	}
 
-	err = h.maybeStartSampler(loggerConfig)
-	if err != nil {
-		return err
+	if loggerConfig.LoggerSamplerEnabled {
+		h.sampler = &dynsampler.PerKeyThroughput{
+			ClearFrequencySec:      10,
+			PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
+			MaxKeys:                1000,
+		}
+		err := h.sampler.Start()
+		if err != nil {
+			return err
+		}
 	}
 
 	libhClientConfig := libhoney.ClientConfig{
@@ -141,25 +148,6 @@ func (h *HoneycombLogger) reloadBuilder() {
 	h.builder.APIHost = h.loggerConfig.LoggerHoneycombAPI
 	h.builder.WriteKey = h.loggerConfig.LoggerAPIKey
 	h.builder.Dataset = h.loggerConfig.LoggerDataset
-
-	err = h.maybeStartSampler(loggerConfig)
-	if err != nil {
-		fmt.Printf("failed to reload sampler for Honeycomb logger: %+v\n", err)
-	}
-}
-
-func (h *HoneycombLogger) maybeStartSampler(loggerConfig config.HoneycombLoggerConfig) error {
-	if loggerConfig.LoggerSamplerEnabled {
-		h.sampler = &dynsampler.PerKeyThroughput{
-			ClearFrequencySec:      10,
-			PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
-			MaxKeys:                1000,
-		}
-		return h.sampler.Start()
-	} else {
-		h.sampler = nil
-		return nil
-	}
 }
 
 func (h *HoneycombLogger) Stop() error {

@@ -213,11 +213,11 @@ LoggerDataset = "Refinery Logs"
 
 # LoggerSamplerEnabled enables a PerKeyThroughput dynamic sampler for log messages.
 # This will sample log messages based on [log level:message] key on a per second throughput basis.
-# Eligible for live reload.
+# Not eligible for live reload.
 LoggerSamplerEnabled = true
 
 # LoggerSamplerThroughput is the per key per second throughput for the log message dynamic sampler.
-# Eligible for live reload.
+# Not eligible for live reload.
 LoggerSamplerThroughput = 10
 
 #######################
