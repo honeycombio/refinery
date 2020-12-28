@@ -2,6 +2,7 @@ package peer
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -51,18 +52,14 @@ func newRedisPeers(c config.Config) (Peers, error) {
 		redisHost = "localhost:6379"
 	}
 
+	options := buildOptions(c)
 	pool := &redis.Pool{
 		MaxIdle:     3,
 		MaxActive:   30,
 		IdleTimeout: 5 * time.Minute,
 		Wait:        true,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial(
-				"tcp", redisHost,
-				redis.DialReadTimeout(1*time.Second),
-				redis.DialConnectTimeout(1*time.Second),
-				redis.DialDatabase(0), // TODO enable multiple databases for multiple samproxies
-			)
+			return redis.Dial("tcp", redisHost, options...)
 		},
 	}
 
@@ -165,6 +162,32 @@ func (p *redisPeers) watchPeers() {
 			}
 		}
 	}
+}
+
+func buildOptions(c config.Config) []redis.DialOption {
+	options := []redis.DialOption{
+		redis.DialReadTimeout(1 * time.Second),
+		redis.DialConnectTimeout(1 * time.Second),
+		redis.DialDatabase(0), // TODO enable multiple databases for multiple samproxies
+	}
+
+	password, _ := c.GetRedisPassword()
+	if password != "" {
+		options = append(options, redis.DialPassword(password))
+	}
+
+	useTLS, _ := c.GetUseTLS()
+	if useTLS {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+		options = append(options,
+			redis.DialTLSConfig(tlsConfig),
+			redis.DialTLSSkipVerify(true),
+			redis.DialUseTLS(true))
+	}
+
+	return options
 }
 
 func publicAddr(c config.Config) (string, error) {

@@ -35,6 +35,10 @@ type MockConfig struct {
 	GetPeersVal                   []string
 	GetRedisHostErr               error
 	GetRedisHostVal               string
+	GetRedisPasswordErr           error
+	GetRedisPasswordVal           string
+	GetUseTLSErr                  error
+	GetUseTLSVal                  bool
 	GetSamplerTypeErr             error
 	GetSamplerTypeVal             interface{}
 	GetMetricsTypeErr             error
@@ -149,6 +153,18 @@ func (m *MockConfig) GetRedisHost() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetRedisHostVal, m.GetRedisHostErr
+}
+func (m *MockConfig) GetRedisPassword() (string, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisPasswordVal, m.GetRedisPasswordErr
+}
+func (m *MockConfig) GetUseTLS() (bool, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetUseTLSVal, m.GetUseTLSErr
 }
 func (m *MockConfig) GetMetricsType() (string, error) {
 	m.Mux.RLock()

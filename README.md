@@ -56,10 +56,10 @@ To enable the redis-based config:
 
 When launched in redis-config mode, Refinery needs a redis host to use for managing the list of peers in the Refinery cluster. This hostname and port can be specified in one of two ways:
 
-- set the `REFINERY_REDIS_HOST` environment variable
-- set the `RedisHost` field in the config file
+- set the `REFINERY_REDIS_HOST` environment variable (and optionally the `REFINERY_REDIS_PASSWORD` environment variable)
+- set the `RedisHost` field in the config file (and optionally the `RedisPassword` field in the config file)
 
-The redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host.
+The redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host. When TLS is required to connect to the redis instance set the `UseTLS` config to `true`.
 
 ## How sampling decisions are made
 

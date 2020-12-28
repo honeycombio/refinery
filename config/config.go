@@ -37,6 +37,14 @@ type Config interface {
 	// management.
 	GetRedisHost() (string, error)
 
+	// GetRedisPassword returns the password of a Redis instance to use for peer
+	// management.
+	GetRedisPassword() (string, error)
+
+	// GetUseTLS returns true when TLS must be enabled to dial the Redis instance to
+	// use for peer management.
+	GetUseTLS() (bool, error)
+
 	// GetHoneycombAPI returns the base URL (protocol, hostname, and port) of
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() (string, error)
