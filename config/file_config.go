@@ -104,6 +104,8 @@ type PeerManagementConfig struct {
 	Type                    string   `validate:"required,oneof= file redis"`
 	Peers                   []string `validate:"dive,url"`
 	RedisHost               string
+	RedisPassword           string
+	UseTLS                  bool
 	IdentifierInterfaceName string
 	UseIPV6Identifier       bool
 	RedisIdentifier         string
@@ -114,11 +116,13 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c := viper.New()
 
 	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
+	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("APIKeys", []string{"*"})
 	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
 	c.SetDefault("PeerManagement.Type", "file")
+	c.SetDefault("PeerManagement.UseTLS", false)
 	c.SetDefault("PeerManagement.UseIPV6Identifier", false)
 	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
 	c.SetDefault("Logger", "logrus")
@@ -397,6 +401,20 @@ func (f *fileConfig) GetRedisHost() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.config.GetString("PeerManagement.RedisHost"), nil
+}
+
+func (f *fileConfig) GetRedisPassword() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetString("PeerManagement.RedisPassword"), nil
+}
+
+func (f *fileConfig) GetUseTLS() (bool, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetBool("PeerManagement.UseTLS"), nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {

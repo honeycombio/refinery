@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRedisEnvVar(t *testing.T) {
+func TestRedisHostEnvVar(t *testing.T) {
 	host := "redis.magic:1337"
 	os.Setenv("REFINERY_REDIS_HOST", host)
 	defer os.Unsetenv("REFINERY_REDIS_HOST")
@@ -25,6 +25,22 @@ func TestRedisEnvVar(t *testing.T) {
 
 	if d, _ := c.GetRedisHost(); d != host {
 		t.Error("received", d, "expected", host)
+	}
+}
+
+func TestRedisPasswordEnvVar(t *testing.T) {
+	password := "admin1234"
+	os.Setenv("REFINERY_REDIS_PASSWORD", password)
+	defer os.Unsetenv("REFINERY_REDIS_PASSWORD")
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetRedisPassword(); d != password {
+		t.Error("received", d, "expected", password)
 	}
 }
 
