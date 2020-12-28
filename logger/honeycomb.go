@@ -118,7 +118,7 @@ func (h *HoneycombLogger) Start() error {
 func (h *HoneycombLogger) readResponses() {
 	resps := h.libhClient.TxResponses()
 	for resp := range resps {
-		respString := fmt.Sprintf("Response: status: %d, duration: %dms", resp.StatusCode, resp.Duration)
+		respString := fmt.Sprintf("Response: status: %d, duration: %s", resp.StatusCode, resp.Duration)
 		// read response, log if there's an error
 		switch {
 		case resp.StatusCode == 0: // log message dropped due to sampling
