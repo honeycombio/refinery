@@ -83,10 +83,12 @@ type InMemoryCollectorCacheCapacity struct {
 type HoneycombLevel int
 
 type HoneycombLoggerConfig struct {
-	LoggerHoneycombAPI string `validate:"required,url"`
-	LoggerAPIKey       string `validate:"required"`
-	LoggerDataset      string `validate:"required"`
-	Level              HoneycombLevel
+	LoggerHoneycombAPI      string `validate:"required,url"`
+	LoggerAPIKey            string `validate:"required"`
+	LoggerDataset           string `validate:"required"`
+	LoggerSamplerEnabled    bool
+	LoggerSamplerThroughput int
+	Level                   HoneycombLevel
 }
 
 type PrometheusMetricsConfig struct {
@@ -131,6 +133,8 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("MaxAlloc", uint64(0))
+	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
+	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -451,6 +455,10 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 		if err != nil {
 			return *hlConfig, err
 		}
+
+		// https://github.com/spf13/viper/issues/747
+		hlConfig.LoggerSamplerEnabled = f.config.GetBool("HoneycombLogger.LoggerSamplerEnabled")
+		hlConfig.LoggerSamplerThroughput = f.config.GetInt("HoneycombLogger.LoggerSamplerThroughput")
 
 		v := validator.New()
 		err = v.Struct(hlConfig)
