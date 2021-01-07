@@ -53,8 +53,9 @@ func (r *RulesBasedSamplerConfig) String() string {
 }
 
 type configContents struct {
-	ListenAddr         string        `validate:"required"`
-	PeerListenAddr     string        `validate:"required"`
+	ListenAddr         string `validate:"required"`
+	PeerListenAddr     string `validate:"required"`
+	GRPCListenAddr     string
 	APIKeys            []string      `validate:"required"`
 	HoneycombAPI       string        `validate:"required,url"`
 	Logger             string        `validate:"required,oneof= logrus honeycomb"`
@@ -377,6 +378,13 @@ func (f *fileConfig) GetPeerListenAddr() (string, error) {
 		return "", err
 	}
 	return f.conf.PeerListenAddr, nil
+}
+
+func (f *fileConfig) GetGRPCListenAddr() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCListenAddr, nil
 }
 
 func (f *fileConfig) GetAPIKeys() ([]string, error) {
