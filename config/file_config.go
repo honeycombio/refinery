@@ -384,6 +384,13 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
+	// GRPC listen addr is optional, only check value is valid if not empty
+	if f.conf.GRPCListenAddr != "" {
+		_, _, err := net.SplitHostPort(f.conf.GRPCListenAddr)
+		if err != nil {
+			return "", err
+		}
+	}
 	return f.conf.GRPCListenAddr, nil
 }
 
