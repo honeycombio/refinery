@@ -212,7 +212,9 @@ func (r *Router) Stop() error {
 	if err != nil {
 		return err
 	}
-	r.grpcServer.GracefulStop()
+	if r.grpcServer != nil {
+		r.grpcServer.GracefulStop()
+	}
 	r.doneWG.Wait()
 	return nil
 }

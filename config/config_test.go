@@ -101,7 +101,6 @@ func TestReload(t *testing.T) {
 		defer tick.Stop()
 		for {
 			c.GetListenAddr()
-			c.GRPCGetListenAddr()
 			select {
 			case <-ch:
 				return
@@ -123,8 +122,8 @@ func TestReload(t *testing.T) {
 
 	if file, err := os.OpenFile(configFile.Name(), os.O_RDWR, 0644); err == nil {
 		file.WriteString(`ListenAddr = "0.0.0.0:9000"`)
-		file.WriteString(`\n`)
-		file.WriteString(`GRPCListenAddr = "0.0.0.0:10000"`)
+		file.WriteString("\n")
+		file.WriteString(`GRPCListenAddr = "0.0.0.0:1010"`)
 		file.Close()
 	}
 
@@ -133,8 +132,8 @@ func TestReload(t *testing.T) {
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
 		t.Error("received", d, "expected", "0.0.0.0:9000")
 	}
-	if d, _ := c.GRPCGetListenAddr(); d != "0.0.0.0:10000" {
-		t.Error("received", d, "expected", "0.0.0.0:10000")
+	if d, _ := c.GetGRPCListenAddr(); d != "0.0.0.0:1010" {
+		t.Error("received", d, "expected", "0.0.0.0:1010")
 	}
 }
 
