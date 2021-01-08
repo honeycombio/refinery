@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"net"
 	"net/http"
 	"strconv"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
+	"google.golang.org/grpc"
 
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
@@ -61,8 +63,9 @@ type Router struct {
 
 	zstdDecoders chan *zstd.Decoder
 
-	server *http.Server
-	doneWG sync.WaitGroup
+	server     *http.Server
+	grpcServer *grpc.Server
+	doneWG     sync.WaitGroup
 }
 
 type BatchResponse struct {
@@ -165,6 +168,24 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Handler: muxxer,
 	}
 
+	// GRPC listen addr is optional, err means addr was not empty and invalid
+	grpcAddr, err := r.Config.GetGRPCListenAddr()
+	if err != nil {
+		r.iopLogger.Error().Logf("failed to get grpc listen addr config: %s", err)
+		return
+	} else if grpcAddr != "" {
+		l, err := net.Listen("tcp", grpcAddr)
+		if err != nil {
+			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
+		}
+
+		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
+		serverOpts := []grpc.ServerOption{}
+		r.grpcServer = grpc.NewServer(serverOpts...)
+		// register handlers here
+		go r.grpcServer.Serve(l)
+	}
+
 	r.doneWG.Add(1)
 	go func() {
 		defer r.doneWG.Done()
@@ -172,6 +193,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 		err = r.server.ListenAndServe()
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			r.iopLogger.Error().Logf("failed to ListenAndServe: %s", err)
+		}
+		if err != nil {
+			r.iopLogger.Error().Logf("failed to serve gRPC: %s", err)
 		}
 	}()
 }
@@ -182,6 +206,7 @@ func (r *Router) Stop() error {
 	if err != nil {
 		return err
 	}
+	r.grpcServer.GracefulStop()
 	r.doneWG.Wait()
 	return nil
 }
