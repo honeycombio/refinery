@@ -191,7 +191,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
 		serverOpts := []grpc.ServerOption{}
 		r.grpcServer = grpc.NewServer(serverOpts...)
-		// register handlers here
+		collectortrace.RegisterTraceServiceServer(r.grpcServer, r)
 		go r.grpcServer.Serve(l)
 	}
 
