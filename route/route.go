@@ -203,9 +203,6 @@ func (r *Router) LnS(incomingOrPeer string) {
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			r.iopLogger.Error().Logf("failed to ListenAndServe: %s", err)
 		}
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to serve gRPC: %s", err)
-		}
 	}()
 }
 
