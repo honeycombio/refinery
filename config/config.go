@@ -25,7 +25,7 @@ type Config interface {
 	// peer traffic
 	GetPeerListenAddr() (string, error)
 
-	// GetGRPCListenAddr returns the address and port on witch to listen for
+	// GetGRPCListenAddr returns the address and port on which to listen for
 	// incoming events over gRPC
 	GetGRPCListenAddr() (string, error)
 
