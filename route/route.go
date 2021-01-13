@@ -132,7 +132,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
-	muxxer.HandleFunc("/getNode/{traceID}", r.getNode).Name("return host given trace ID")
+	muxxer.HandleFunc("/getNode/{traceID}", r.getNode).Name("get node address for given trace ID")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
