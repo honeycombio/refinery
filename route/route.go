@@ -482,7 +482,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 
 				err := r.processEvent(event, requestId)
 				if err != nil {
-					// log failure? We don't send per-event responses back to sender for OTLP
+					r.Logger.Error().Logf("Error processing event: " + err.Error())
 				}
 			}
 		}
