@@ -23,6 +23,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/honeycombio/refinery/collect"
@@ -42,9 +43,10 @@ const (
 	// numZstdDecoders is set statically here - we may make it into a config option
 	// A normal practice might be to use some multiple of the CPUs, but that goes south
 	// in kubernetes
-	numZstdDecoders    = 4
-	traceIDShortLength = 8
-	traceIDLongLength  = 16
+	numZstdDecoders        = 4
+	traceIDShortLength     = 8
+	traceIDLongLength      = 16
+	GRPCMessageSizeMax int = 5000000 // 5MB
 )
 
 type Router struct {
@@ -189,7 +191,15 @@ func (r *Router) LnS(incomingOrPeer string) {
 		}
 
 		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
-		serverOpts := []grpc.ServerOption{}
+		serverOpts := []grpc.ServerOption{
+			grpc.MaxSendMsgSize(GRPCMessageSizeMax), // default is math.MaxInt32
+			grpc.MaxRecvMsgSize(GRPCMessageSizeMax), // default is 4MB
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				Time:              10 * time.Second,
+				Timeout:           2 * time.Second,
+				MaxConnectionIdle: time.Minute,
+			}),
+		}
 		r.grpcServer = grpc.NewServer(serverOpts...)
 		collectortrace.RegisterTraceServiceServer(r.grpcServer, r)
 		go r.grpcServer.Serve(l)
