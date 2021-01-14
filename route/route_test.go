@@ -238,7 +238,7 @@ func TestUnmarshal(t *testing.T) {
 }
 
 func TestGetNode(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/getNode/123abcdef", nil)
+	req, _ := http.NewRequest("GET", "/debug/trace/123abcdef", nil)
 	req = mux.SetURLVars(req, map[string]string{"traceID": "123abcdef"})
 
 	rr := httptest.NewRecorder()
@@ -246,7 +246,7 @@ func TestGetNode(t *testing.T) {
 		Sharder: &TestSharder{},
 	}
 
-	router.getNode(rr, req)
+	router.debugTrace(rr, req)
 	if body := rr.Body.String(); body != `{"traceID":"123abcdef","node":"http://localhost:12345"}` {
 		t.Error(body)
 	}
