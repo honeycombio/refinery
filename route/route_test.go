@@ -237,7 +237,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
-func TestGetNode(t *testing.T) {
+func TestDebugTrace(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/debug/trace/123abcdef", nil)
 	req = mux.SetURLVars(req, map[string]string{"traceID": "123abcdef"})
 
