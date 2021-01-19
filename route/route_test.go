@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
+	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
 )
@@ -234,3 +236,35 @@ func TestUnmarshal(t *testing.T) {
 		t.Error("Expecting", now, "Received", b)
 	}
 }
+
+func TestDebugTrace(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/debug/trace/123abcdef", nil)
+	req = mux.SetURLVars(req, map[string]string{"traceID": "123abcdef"})
+
+	rr := httptest.NewRecorder()
+	router := &Router{
+		Sharder: &TestSharder{},
+	}
+
+	router.debugTrace(rr, req)
+	if body := rr.Body.String(); body != `{"traceID":"123abcdef","node":"http://localhost:12345"}` {
+		t.Error(body)
+	}
+}
+
+type TestSharder struct{}
+
+func (s *TestSharder) MyShard() sharder.Shard { return nil }
+
+func (s *TestSharder) WhichShard(string) sharder.Shard {
+	return &TestShard{
+		addr: "http://localhost:12345",
+	}
+}
+
+type TestShard struct {
+	addr string
+}
+
+func (s *TestShard) Equals(other sharder.Shard) bool { return true }
+func (s *TestShard) GetAddress() string              { return s.addr }
