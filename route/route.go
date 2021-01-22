@@ -383,18 +383,9 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 		return &collectortrace.ExportTraceServiceResponse{}, nil
 	}
 
-	var (
-		apiKey    string
-		dataset   string
-		requestId types.RequestIDContextKey
-	)
+	var requestId types.RequestIDContextKey
 
-	apiKey = getFirstValueFromMetadata(types.APIKeyHeader, md)
-	if apiKey == "" {
-		apiKey = getFirstValueFromMetadata(types.APIKeyHeaderShort, md)
-	}
-	dataset = getFirstValueFromMetadata(types.DatasetHeader, md)
-
+	apiKey, dataset := getAPIKeyAndDatasetFromMetadata(md)
 	if apiKey == "" {
 		r.Logger.Error().Logf("Received OTLP request without Honeycomb APIKey header")
 		return &collectortrace.ExportTraceServiceResponse{}, nil
@@ -799,4 +790,14 @@ func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode
 		return trace.Status_STATUS_CODE_ERROR
 	}
 	return status.Code
+}
+
+func getAPIKeyAndDatasetFromMetadata(md metadata.MD) (apiKey string, dataset string) {
+	apiKey = getFirstValueFromMetadata(types.APIKeyHeader, md)
+	if apiKey == "" {
+		apiKey = getFirstValueFromMetadata(types.APIKeyHeaderShort, md)
+	}
+	dataset = getFirstValueFromMetadata(types.DatasetHeader, md)
+
+	return apiKey, dataset
 }

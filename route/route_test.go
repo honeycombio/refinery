@@ -16,6 +16,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestDecompression(t *testing.T) {
@@ -232,5 +233,66 @@ func TestUnmarshal(t *testing.T) {
 
 	if b := w.Body.String(); b != now.Format(time.RFC3339Nano) {
 		t.Error("Expecting", now, "Received", b)
+	}
+}
+
+func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
+	const (
+		apiKeyValue  = "test-apikey"
+		datasetValue = "test-dataset"
+	)
+
+	tests := []struct {
+		name          string
+		apikeyHeader  string
+		datasetHeader string
+	}{
+		{
+			name:          "lowercase",
+			apikeyHeader:  "x-honeycomb-team",
+			datasetHeader: "x-honeycomb-dataset",
+		},
+		{
+			name:          "uppercase",
+			apikeyHeader:  "X-HONEYCOMB-TEAM",
+			datasetHeader: "X-HONEYCOMB-DATASET",
+		},
+		{
+			name:          "mixed-case",
+			apikeyHeader:  "x-HoNeYcOmB-tEaM",
+			datasetHeader: "X-hOnEyCoMb-DaTaSeT",
+		},
+		{
+			name:          "lowercase-short",
+			apikeyHeader:  "x-hny-team",
+			datasetHeader: "x-honeycomb-dataset",
+		},
+		{
+			name:          "uppercase-short",
+			apikeyHeader:  "X-HNY-TEAM",
+			datasetHeader: "X-HONEYCOMB-DATASET",
+		},
+		{
+			name:          "mixed-case-short",
+			apikeyHeader:  "X-hNy-TeAmd",
+			datasetHeader: "X-hOnEyCoMb-DaTaSeT",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := metadata.MD{
+				tt.apikeyHeader:  []string{apiKeyValue},
+				tt.datasetHeader: []string{datasetValue},
+			}
+
+			apikey, dataset := getAPIKeyAndDatasetFromMetadata(md)
+			if apikey != apiKeyValue {
+				t.Errorf("got: %s\n\twant: %v", apikey, apiKeyValue)
+			}
+			if dataset != datasetValue {
+				t.Errorf("got: %s\n\twant: %v", dataset, datasetValue)
+			}
+		})
 	}
 }
