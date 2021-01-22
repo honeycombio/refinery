@@ -9,6 +9,13 @@
 # Not eligible for live reload.
 ListenAddr = "0.0.0.0:8080"
 
+# GRPCListenAddr is the IP and port on which to listen for incoming events over
+# gRPC. Incoming traffic is expected to be unencrypted, so if using SSL put
+# something like nginx in front to do the decryption.
+# Should be of the form 0.0.0.0:9090
+# Not eligible for live reload.
+GRPCListenAddr = "0.0.0.0:9090"
+
 # PeerListenAddr is the IP and port on which to listen for traffic being
 # rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
 # put something like nginx in front to do the decryption. Must be different from
