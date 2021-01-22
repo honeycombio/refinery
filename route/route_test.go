@@ -274,7 +274,7 @@ func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
 		},
 		{
 			name:          "mixed-case-short",
-			apikeyHeader:  "X-hNy-TeAmd",
+			apikeyHeader:  "X-hNy-TeAm",
 			datasetHeader: "X-hOnEyCoMb-DaTaSeT",
 		},
 	}

@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -704,6 +703,16 @@ func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 	}
 }
 
+func getAPIKeyAndDatasetFromMetadata(md metadata.MD) (apiKey string, dataset string) {
+	apiKey = getFirstValueFromMetadata(types.APIKeyHeader, md)
+	if apiKey == "" {
+		apiKey = getFirstValueFromMetadata(types.APIKeyHeaderShort, md)
+	}
+	dataset = getFirstValueFromMetadata(types.DatasetHeader, md)
+
+	return apiKey, dataset
+}
+
 // safeGetValueFromMeta returns the first value of a metadata entry using a
 // case-insensitive key
 func getFirstValueFromMetadata(key string, md metadata.MD) string {
@@ -793,18 +802,4 @@ func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode
 		return trace.Status_STATUS_CODE_ERROR
 	}
 	return status.Code
-}
-
-func getAPIKeyAndDatasetFromMetadata(md metadata.MD) (apiKey string, dataset string) {
-	for key, value := range md {
-		if strings.EqualFold(key, types.APIKeyHeader) {
-			apiKey = value[0]
-		} else if strings.EqualFold(key, types.APIKeyHeaderShort) {
-			apiKey = value[0]
-		} else if strings.EqualFold(key, types.DatasetHeader) {
-			dataset = value[0]
-		}
-	}
-
-	return apiKey, dataset
 }
