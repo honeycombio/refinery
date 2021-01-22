@@ -126,6 +126,7 @@ func TestReload(t *testing.T) {
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
 		t.Error("received", d, "expected", "0.0.0.0:9000")
 	}
+
 }
 
 func TestReadDefaults(t *testing.T) {

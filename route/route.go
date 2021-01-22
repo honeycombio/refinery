@@ -160,8 +160,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	// pass everything else through unmolested
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
-	var listenAddr string
-	grpcAddr := ""
+	var listenAddr, grpcAddr string
 	if r.incomingOrPeer == "incoming" {
 		listenAddr, err = r.Config.GetListenAddr()
 		if err != nil {
