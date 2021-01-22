@@ -57,7 +57,6 @@ func TestReload(t *testing.T) {
 
 	dummy := []byte(`
 	ListenAddr="0.0.0.0:8080"
-	GRPCListenAddr="0.0.0.0:9090"
 
 	[InMemCollector]
 		CacheCapacity=1000
@@ -81,9 +80,6 @@ func TestReload(t *testing.T) {
 
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
 		t.Error("received", d, "expected", "0.0.0.0:8080")
-	}
-	if d, _ := c.GetGRPCListenAddr(); d != "0.0.0.0:9090" {
-		t.Error("received", d, "expected", "0.0.0.0:9090")
 	}
 
 	wg := &sync.WaitGroup{}
@@ -122,8 +118,6 @@ func TestReload(t *testing.T) {
 
 	if file, err := os.OpenFile(configFile.Name(), os.O_RDWR, 0644); err == nil {
 		file.WriteString(`ListenAddr = "0.0.0.0:9000"`)
-		file.WriteString("\n")
-		file.WriteString(`GRPCListenAddr = "0.0.0.0:1010"`)
 		file.Close()
 	}
 
@@ -131,9 +125,6 @@ func TestReload(t *testing.T) {
 
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
 		t.Error("received", d, "expected", "0.0.0.0:9000")
-	}
-	if d, _ := c.GetGRPCListenAddr(); d != "0.0.0.0:1010" {
-		t.Error("received", d, "expected", "0.0.0.0:1010")
 	}
 }
 
