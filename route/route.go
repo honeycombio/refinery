@@ -410,11 +410,13 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 
 		for _, librarySpan := range resourceSpan.InstrumentationLibrarySpans {
 			library := librarySpan.InstrumentationLibrary
-			if library.Name != "" {
-				resourceAttrs["library.name"] = library.Name
-			}
-			if library.Version != "" {
-				resourceAttrs["library.version"] = library.Version
+			if library != nil {
+				if library.Name != "" {
+					resourceAttrs["library.name"] = library.Name
+				}
+				if library.Version != "" {
+					resourceAttrs["library.version"] = library.Version
+				}
 			}
 
 			for _, span := range librarySpan.GetSpans() {
