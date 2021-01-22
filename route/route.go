@@ -159,10 +159,17 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	var listenAddr string
+	grpcAddr := ""
 	if r.incomingOrPeer == "incoming" {
 		listenAddr, err = r.Config.GetListenAddr()
 		if err != nil {
 			r.iopLogger.Error().Logf("failed to get listen addr config: %s", err)
+			return
+		}
+		// GRPC listen addr is optional, err means addr was not empty and invalid
+		grpcAddr, err = r.Config.GetGRPCListenAddr()
+		if err != nil {
+			r.iopLogger.Error().Logf("failed to get grpc listen addr config: %s", err)
 			return
 		}
 	} else {
@@ -179,12 +186,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Handler: muxxer,
 	}
 
-	// GRPC listen addr is optional, err means addr was not empty and invalid
-	grpcAddr, err := r.Config.GetGRPCListenAddr()
-	if err != nil {
-		r.iopLogger.Error().Logf("failed to get grpc listen addr config: %s", err)
-		return
-	} else if grpcAddr != "" {
+	if grpcAddr != "" {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
 			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
