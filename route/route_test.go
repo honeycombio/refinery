@@ -304,7 +304,7 @@ func TestGetSampleRateFromAttributes(t *testing.T) {
 		name          string
 		attrKey       string
 		attrValue     interface{}
-		expectedValue interface{}
+		expectedValue int
 	}{
 		{
 			name:          "missing attr gets default value",
