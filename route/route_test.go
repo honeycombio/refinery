@@ -352,7 +352,7 @@ func TestGetSampleRateFromAttributes(t *testing.T) {
 
 			sampleRate, _ := getSampleRateFromAttributes(attrs)
 			if sampleRate != tt.expectedValue {
-				t.Errorf("got: %s\n\twant: %v", sampleRate, tt.expectedValue)
+				t.Errorf("got: %d\n\twant: %d", sampleRate, tt.expectedValue)
 			}
 		})
 	}
