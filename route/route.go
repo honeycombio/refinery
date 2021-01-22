@@ -47,6 +47,7 @@ const (
 	traceIDShortLength     = 8
 	traceIDLongLength      = 16
 	GRPCMessageSizeMax int = 5000000 // 5MB
+	defaultSampleRate      = 1
 )
 
 type Router struct {
@@ -384,6 +385,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 	}
 
 	var requestID types.RequestIDContextKey
+	debugLog := r.iopLogger.Debug().WithField("request_id", requestID)
 
 	apiKey, dataset := getAPIKeyAndDatasetFromMetadata(md)
 	if apiKey == "" {
@@ -445,19 +447,9 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					addAttributesToMap(eventAttrs, span.Attributes)
 				}
 
-				sampleRate := 1
-				if eventAttrs["sampleRate"] != nil {
-					switch eventAttrs["sampleRate"].(type) {
-					case string:
-						sampleRate, err = strconv.Atoi(eventAttrs["sampleRate"].(string))
-						if err != nil {
-							r.Logger.Info().WithField("Unable to parse sampleRate in OTLP span attribute", eventAttrs["sampleRate"])
-						}
-					case int:
-						sampleRate = eventAttrs["sampleRate"].(int)
-					}
-					// remove sampleRate from event fields
-					delete(eventAttrs, "sampleRate")
+				sampleRate, err := getSampleRateFromAttributes(eventAttrs)
+				if err != nil {
+					debugLog.WithField("error", err.Error()).WithField("sampleRate", eventAttrs["sampleRate"]).Logf("error parsing sampleRate")
 				}
 
 				// copy resource attributes to event attributes
@@ -475,7 +467,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					Data:       eventAttrs,
 				}
 
-				err := r.processEvent(event, requestID)
+				err = r.processEvent(event, requestID)
 				if err != nil {
 					r.Logger.Error().Logf("Error processing event: " + err.Error())
 				}
@@ -802,4 +794,23 @@ func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode
 		return trace.Status_STATUS_CODE_ERROR
 	}
 	return status.Code
+}
+
+func getSampleRateFromAttributes(attributes map[string]interface{}) (int, error) {
+	var err error
+	sampleRate := defaultSampleRate
+	if attributes["sampleRate"] != nil {
+		switch attributes["sampleRate"].(type) {
+		case string:
+			sampleRate, err = strconv.Atoi(attributes["sampleRate"].(string))
+		case int:
+			sampleRate = attributes["sampleRate"].(int)
+		default:
+			err = fmt.Errorf("Unrecognised sampleRate datatype - %T", attributes["sampleRate"])
+		}
+		// remove sampleRate from event fields
+		delete(attributes, "sampleRate")
+	}
+
+	return sampleRate, err
 }
