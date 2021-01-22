@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -795,11 +796,15 @@ func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode
 }
 
 func getAPIKeyAndDatasetFromMetadata(md metadata.MD) (apiKey string, dataset string) {
-	apiKey = getFirstValueFromMetadata(types.APIKeyHeader, md)
-	if apiKey == "" {
-		apiKey = getFirstValueFromMetadata(types.APIKeyHeaderShort, md)
+	for key, value := range md {
+		if strings.EqualFold(key, types.APIKeyHeader) {
+			apiKey = value[0]
+		} else if strings.EqualFold(key, types.APIKeyHeaderShort) {
+			apiKey = value[0]
+		} else if strings.EqualFold(key, types.DatasetHeader) {
+			dataset = value[0]
+		}
 	}
-	dataset = getFirstValueFromMetadata(types.DatasetHeader, md)
 
 	return apiKey, dataset
 }
