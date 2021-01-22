@@ -383,7 +383,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 		return &collectortrace.ExportTraceServiceResponse{}, nil
 	}
 
-	var requestId types.RequestIDContextKey
+	var requestID types.RequestIDContextKey
 
 	apiKey, dataset := getAPIKeyAndDatasetFromMetadata(md)
 	if apiKey == "" {
@@ -473,7 +473,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					Data:       eventAttrs,
 				}
 
-				err := r.processEvent(event, requestId)
+				err := r.processEvent(event, requestID)
 				if err != nil {
 					r.Logger.Error().Logf("Error processing event: " + err.Error())
 				}
