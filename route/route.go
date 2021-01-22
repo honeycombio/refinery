@@ -147,6 +147,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
+	muxxer.HandleFunc("/debug/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -243,6 +244,12 @@ func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"source":"refinery","version":"%s"}`, r.versionStr)))
+}
+
+func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
+	traceID := mux.Vars(req)["traceID"]
+	shard := r.Sharder.WhichShard(traceID)
+	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
 }
 
 // event is handler for /1/event/
