@@ -713,7 +713,7 @@ func getAPIKeyAndDatasetFromMetadata(md metadata.MD) (apiKey string, dataset str
 	return apiKey, dataset
 }
 
-// safeGetValueFromMeta returns the first value of a metadata entry using a
+// getFirstValueFromMetadata returns the first value of a metadata entry using a
 // case-insensitive key
 func getFirstValueFromMetadata(key string, md metadata.MD) string {
 	if values := md.Get(key); len(values) > 0 {
