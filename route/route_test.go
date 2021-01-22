@@ -238,7 +238,6 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
 func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
 	const (
 		apiKeyValue  = "test-apikey"
