@@ -281,10 +281,9 @@ func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			md := metadata.MD{
-				tt.apikeyHeader:  []string{apiKeyValue},
-				tt.datasetHeader: []string{datasetValue},
-			}
+			md := metadata.MD{}
+			md.Set(tt.apikeyHeader, apiKeyValue)
+			md.Set(tt.datasetHeader, datasetValue)
 
 			apikey, dataset := getAPIKeyAndDatasetFromMetadata(md)
 			if apikey != apiKeyValue {
