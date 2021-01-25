@@ -390,6 +390,8 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 		return &collectortrace.ExportTraceServiceResponse{}, nil
 	}
 
+	// requestID is used to track a requst as it moves between refinery nodes (peers)
+	// the OTLP handler only receives incoming (not peer) requests for now so will be empty here
 	var requestID types.RequestIDContextKey
 	debugLog := r.iopLogger.Debug().WithField("request_id", requestID)
 
