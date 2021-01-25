@@ -18,6 +18,7 @@ import (
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
+	"google.golang.org/grpc/metadata"
 )
 
 func TestDecompression(t *testing.T) {
@@ -234,6 +235,128 @@ func TestUnmarshal(t *testing.T) {
 
 	if b := w.Body.String(); b != now.Format(time.RFC3339Nano) {
 		t.Error("Expecting", now, "Received", b)
+	}
+}
+
+func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
+	const (
+		apiKeyValue  = "test-apikey"
+		datasetValue = "test-dataset"
+	)
+
+	tests := []struct {
+		name          string
+		apikeyHeader  string
+		datasetHeader string
+	}{
+		{
+			name:          "lowercase",
+			apikeyHeader:  "x-honeycomb-team",
+			datasetHeader: "x-honeycomb-dataset",
+		},
+		{
+			name:          "uppercase",
+			apikeyHeader:  "X-HONEYCOMB-TEAM",
+			datasetHeader: "X-HONEYCOMB-DATASET",
+		},
+		{
+			name:          "mixed-case",
+			apikeyHeader:  "x-HoNeYcOmB-tEaM",
+			datasetHeader: "X-hOnEyCoMb-DaTaSeT",
+		},
+		{
+			name:          "lowercase-short",
+			apikeyHeader:  "x-hny-team",
+			datasetHeader: "x-honeycomb-dataset",
+		},
+		{
+			name:          "uppercase-short",
+			apikeyHeader:  "X-HNY-TEAM",
+			datasetHeader: "X-HONEYCOMB-DATASET",
+		},
+		{
+			name:          "mixed-case-short",
+			apikeyHeader:  "X-hNy-TeAm",
+			datasetHeader: "X-hOnEyCoMb-DaTaSeT",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			md := metadata.MD{}
+			md.Set(tt.apikeyHeader, apiKeyValue)
+			md.Set(tt.datasetHeader, datasetValue)
+
+			apikey, dataset := getAPIKeyAndDatasetFromMetadata(md)
+			if apikey != apiKeyValue {
+				t.Errorf("got: %s\n\twant: %v", apikey, apiKeyValue)
+			}
+			if dataset != datasetValue {
+				t.Errorf("got: %s\n\twant: %v", dataset, datasetValue)
+			}
+		})
+	}
+}
+
+func TestGetSampleRateFromAttributes(t *testing.T) {
+	const (
+		defaultSampleRate = 1
+	)
+	tests := []struct {
+		name          string
+		attrKey       string
+		attrValue     interface{}
+		expectedValue int
+	}{
+		{
+			name:          "missing attr gets default value",
+			attrKey:       "",
+			attrValue:     nil,
+			expectedValue: defaultSampleRate,
+		},
+		{
+			name:          "can parse integer value",
+			attrKey:       "sampleRate",
+			attrValue:     5,
+			expectedValue: 5,
+		},
+		{
+			name:          "can parse string value",
+			attrKey:       "sampleRate",
+			attrValue:     "5",
+			expectedValue: 5,
+		},
+		{
+			name:          "does not parse float, gets default value",
+			attrKey:       "sampleRate",
+			attrValue:     0.25,
+			expectedValue: defaultSampleRate,
+		},
+		{
+			name:          "does not parse bool, gets default value",
+			attrKey:       "sampleRate",
+			attrValue:     true,
+			expectedValue: defaultSampleRate,
+		},
+		{
+			name:          "does not parse struct, gets default value",
+			attrKey:       "sampleRate",
+			attrValue:     struct{}{},
+			expectedValue: defaultSampleRate,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			attrs := map[string]interface{}{
+				tt.attrKey: tt.attrValue,
+			}
+
+			sampleRate, _ := getSampleRateFromAttributes(attrs)
+			if sampleRate != tt.expectedValue {
+				t.Errorf("got: %d\n\twant: %d", sampleRate, tt.expectedValue)
+			}
+		})
 	}
 }
 

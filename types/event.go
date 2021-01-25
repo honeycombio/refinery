@@ -9,6 +9,7 @@ const (
 	APIKeyHeader = "X-Honeycomb-Team"
 	// libhoney-js uses this
 	APIKeyHeaderShort = "X-Hny-Team"
+	DatasetHeader     = "X-Honeycomb-Dataset"
 	SampleRateHeader  = "X-Honeycomb-Samplerate"
 	TimestampHeader   = "X-Honeycomb-Event-Time"
 )
