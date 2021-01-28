@@ -53,26 +53,27 @@ func (r *RulesBasedSamplerConfig) String() string {
 }
 
 type configContents struct {
-	ListenAddr         string `validate:"required"`
-	PeerListenAddr     string `validate:"required"`
-	GRPCListenAddr     string
-	APIKeys            []string      `validate:"required"`
-	HoneycombAPI       string        `validate:"required,url"`
-	Logger             string        `validate:"required,oneof= logrus honeycomb"`
-	LoggingLevel       string        `validate:"required"`
-	Collector          string        `validate:"required,oneof= InMemCollector"`
-	Sampler            string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler TotalThroughputSampler"`
-	Metrics            string        `validate:"required,oneof= prometheus honeycomb"`
-	SendDelay          time.Duration `validate:"required"`
-	TraceTimeout       time.Duration `validate:"required"`
-	SendTicker         time.Duration `validate:"required"`
-	UpstreamBufferSize int           `validate:"required"`
-	PeerBufferSize     int           `validate:"required"`
-	DebugServiceAddr   string
-	DryRun             bool
-	DryRunFieldName    string
-	PeerManagement     PeerManagementConfig           `validate:"required"`
-	InMemCollector     InMemoryCollectorCacheCapacity `validate:"required"`
+	ListenAddr                string `validate:"required"`
+	PeerListenAddr            string `validate:"required"`
+	CompressPeerCommunication bool
+	GRPCListenAddr            string
+	APIKeys                   []string      `validate:"required"`
+	HoneycombAPI              string        `validate:"required,url"`
+	Logger                    string        `validate:"required,oneof= logrus honeycomb"`
+	LoggingLevel              string        `validate:"required"`
+	Collector                 string        `validate:"required,oneof= InMemCollector"`
+	Sampler                   string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler TotalThroughputSampler"`
+	Metrics                   string        `validate:"required,oneof= prometheus honeycomb"`
+	SendDelay                 time.Duration `validate:"required"`
+	TraceTimeout              time.Duration `validate:"required"`
+	SendTicker                time.Duration `validate:"required"`
+	UpstreamBufferSize        int           `validate:"required"`
+	PeerBufferSize            int           `validate:"required"`
+	DebugServiceAddr          string
+	DryRun                    bool
+	DryRunFieldName           string
+	PeerManagement            PeerManagementConfig           `validate:"required"`
+	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -122,6 +123,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
+	c.SetDefault("CompressPeerCommunication", true)
 	c.SetDefault("APIKeys", []string{"*"})
 	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
 	c.SetDefault("PeerManagement.Type", "file")
@@ -378,6 +380,13 @@ func (f *fileConfig) GetPeerListenAddr() (string, error) {
 		return "", err
 	}
 	return f.conf.PeerListenAddr, nil
+}
+
+func (f *fileConfig) GetCompressPeerCommunication() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.CompressPeerCommunication
 }
 
 func (f *fileConfig) GetGRPCListenAddr() (string, error) {

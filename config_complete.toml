@@ -24,6 +24,14 @@ GRPCListenAddr = "0.0.0.0:9090"
 # Not eligible for live reload.
 PeerListenAddr = "0.0.0.0:8081"
 
+# CompressPeerCommunication determines whether refinery will compress span data
+# it forwards to peers. If it costs money to transmit data between refinery
+# instances (e.g. they're spread across AWS availability zones), then you
+# almost certainly want compression enabled to reduce your bill. The option to
+# disable it is provided as an escape hatch for deployments that value lower CPU
+# utilization over data transfer costs.
+CompressPeerCommunication = true
+
 # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
 # only applies to events - other Honeycomb API actions will fall through to the
 # upstream API directly.

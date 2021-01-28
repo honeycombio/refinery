@@ -25,6 +25,10 @@ type Config interface {
 	// peer traffic
 	GetPeerListenAddr() (string, error)
 
+	// GetCompressPeerCommunication will be true if refinery should compress
+	// data before forwarding it to a peer.
+	GetCompressPeerCommunication() bool
+
 	// GetGRPCListenAddr returns the address and port on which to listen for
 	// incoming events over gRPC
 	GetGRPCListenAddr() (string, error)
