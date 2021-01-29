@@ -22,6 +22,7 @@ type MockConfig struct {
 	GetListenAddrVal                     string
 	GetPeerListenAddrErr                 error
 	GetPeerListenAddrVal                 string
+	GetCompressPeerCommunicationsVal     bool
 	GetGRPCListenAddrErr                 error
 	GetGRPCListenAddrVal                 string
 	GetLoggerTypeErr                     error
@@ -115,6 +116,12 @@ func (m *MockConfig) GetPeerListenAddr() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
+}
+func (m *MockConfig) GetCompressPeerCommunication() bool {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetCompressPeerCommunicationsVal
 }
 func (m *MockConfig) GetGRPCListenAddr() (string, error) {
 	m.Mux.RLock()

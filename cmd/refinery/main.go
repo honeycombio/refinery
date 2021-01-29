@@ -141,17 +141,15 @@ func main() {
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         500,
-			BatchTimeout:         libhoney.DefaultBatchTimeout,
-			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:  uint(c.GetPeerBufferSize()),
-			UserAgentAddition:    userAgentAddition,
-			Transport:            peerTransport,
-			// gzip compression is expensive, and peers are most likely close to each other
-			// so we can turn off gzip when forwarding to peers
-			DisableGzipCompression: true,
-			EnableMsgpackEncoding:  true,
-			Metrics:                sdPeer,
+			MaxBatchSize:          500,
+			BatchTimeout:          libhoney.DefaultBatchTimeout,
+			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
+			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
+			UserAgentAddition:     userAgentAddition,
+			Transport:             peerTransport,
+			DisableCompression:    !c.GetCompressPeerCommunication(),
+			EnableMsgpackEncoding: true,
+			Metrics:               sdPeer,
 		},
 	})
 	if err != nil {
