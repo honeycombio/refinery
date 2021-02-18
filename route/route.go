@@ -819,7 +819,9 @@ func getSampleRateFromAttributes(attrs map[string]interface{}) (int, error) {
 	var err error
 	switch v := attrs[sampleRateKey].(type) {
 	case string:
-		sampleRate, err = strconv.Atoi(v)
+		var i int64
+		i, err = strconv.ParseInt(v, 10, 32)
+		sampleRate = int(i)
 	case int:
 		if v > int32MaxValue {
 			sampleRate = int32MaxValue
