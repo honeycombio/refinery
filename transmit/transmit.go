@@ -160,7 +160,7 @@ func (d *DefaultTransmission) processResponses(
 				if r.Err != nil {
 					log = log.WithField("error", r.Err.Error())
 				}
-				log.Logf("non-20x response when sending event")
+				log.Logf("error when sending event")
 				if honeycombAPI == apiHost {
 					// if the API host matches the configured honeycomb API,
 					// count it as an API error
