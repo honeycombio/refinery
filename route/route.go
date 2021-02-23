@@ -48,6 +48,7 @@ const (
 	traceIDLongLength      = 16
 	GRPCMessageSizeMax int = 5000000 // 5MB
 	defaultSampleRate      = 1
+	int32MaxValue          = 2147483647 // (2**31)-1
 )
 
 type Router struct {
@@ -804,21 +805,42 @@ func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode
 	return status.Code
 }
 
-func getSampleRateFromAttributes(attributes map[string]interface{}) (int, error) {
-	var err error
-	sampleRate := defaultSampleRate
-	if attributes["sampleRate"] != nil {
-		switch attributes["sampleRate"].(type) {
-		case string:
-			sampleRate, err = strconv.Atoi(attributes["sampleRate"].(string))
-		case int:
-			sampleRate = attributes["sampleRate"].(int)
-		default:
-			err = fmt.Errorf("Unrecognised sampleRate datatype - %T", attributes["sampleRate"])
-		}
-		// remove sampleRate from event fields
-		delete(attributes, "sampleRate")
+func getSampleRateFromAttributes(attrs map[string]interface{}) (int, error) {
+	var sampleRateKey string
+	if attrs["sampleRate"] != nil {
+		sampleRateKey = "sampleRate"
+	} else if attrs["SampleRate"] != nil {
+		sampleRateKey = "SampleRate"
 	}
-
+	if len(sampleRateKey) == 0 || attrs[sampleRateKey] == nil {
+		return defaultSampleRate, nil
+	}
+	var sampleRate int
+	var err error
+	switch v := attrs[sampleRateKey].(type) {
+	case string:
+		var i int64
+		i, err = strconv.ParseInt(v, 10, 32)
+		sampleRate = int(i)
+	case int:
+		if v > int32MaxValue {
+			sampleRate = int32MaxValue
+		} else {
+			sampleRate = v
+		}
+	case int32:
+		sampleRate = int(v)
+	case int64:
+		if v > int32MaxValue {
+			sampleRate = int32MaxValue
+		} else {
+			sampleRate = int(v)
+		}
+	default:
+		err = fmt.Errorf("Unrecognised sampleRate datatype - %T", sampleRate)
+		sampleRate = defaultSampleRate
+	}
+	// remove sampleRate from event fields
+	delete(attrs, sampleRateKey)
 	return sampleRate, err
 }
