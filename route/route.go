@@ -26,6 +26,9 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
+	// grpc/gzip compressor, auto registers on import
+	_ "google.golang.org/grpc/encoding/gzip"
+
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
