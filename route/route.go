@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+
+	// grpc/gzip compressor, auto registers on import
+	_ "google.golang.org/grpc/encoding/gzip"
 
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
@@ -411,6 +415,11 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 		return &collectortrace.ExportTraceServiceResponse{}, nil
 	}
 
+	var grpcRequestEncoding string
+	if val := md.Get("grpc-accept-encoding"); val != nil {
+		grpcRequestEncoding = strings.Join(val, ",")
+	}
+
 	for _, resourceSpan := range req.ResourceSpans {
 		resourceAttrs := make(map[string]interface{})
 
@@ -453,6 +462,9 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 				}
 				if span.Attributes != nil {
 					addAttributesToMap(eventAttrs, span.Attributes)
+				}
+				if grpcRequestEncoding != "" {
+					eventAttrs["grpc_request_encoding"] = grpcRequestEncoding
 				}
 
 				sampleRate, err := getSampleRateFromAttributes(eventAttrs)
