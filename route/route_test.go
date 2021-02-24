@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -325,6 +326,18 @@ func TestGetSampleRateFromAttributes(t *testing.T) {
 			attrKey:       "sampleRate",
 			attrValue:     "5",
 			expectedValue: 5,
+		},
+		{
+			name:          "can parse int64 value (less than int32 max)",
+			attrKey:       "sampleRate",
+			attrValue:     int64(100),
+			expectedValue: 100,
+		},
+		{
+			name:          "can parse int64 value (greater than int32 max)",
+			attrKey:       "sampleRate",
+			attrValue:     int64(math.MaxInt32 + 100),
+			expectedValue: math.MaxInt32,
 		},
 		{
 			name:          "does not parse float, gets default value",

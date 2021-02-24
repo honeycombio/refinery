@@ -48,7 +48,6 @@ const (
 	traceIDLongLength      = 16
 	GRPCMessageSizeMax int = 5000000 // 5MB
 	defaultSampleRate      = 1
-	int32MaxValue          = 2147483647 // (2**31)-1
 )
 
 type Router struct {
@@ -823,16 +822,16 @@ func getSampleRateFromAttributes(attrs map[string]interface{}) (int, error) {
 		i, err = strconv.ParseInt(v, 10, 32)
 		sampleRate = int(i)
 	case int:
-		if v > int32MaxValue {
-			sampleRate = int32MaxValue
+		if v > math.MaxInt32 {
+			sampleRate = math.MaxInt32
 		} else {
 			sampleRate = v
 		}
 	case int32:
 		sampleRate = int(v)
 	case int64:
-		if v > int32MaxValue {
-			sampleRate = int32MaxValue
+		if v > math.MaxInt32 {
+			sampleRate = math.MaxInt32
 		} else {
 			sampleRate = int(v)
 		}
