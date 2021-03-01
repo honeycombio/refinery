@@ -10,7 +10,9 @@ Refinery is a trace-aware sampling proxy. It collects spans emitted by your appl
 
 ## Setting up Refinery
 
-Refinery is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it. A standard deployment will have a cluster of servers running Refinery accessible via a load balancer. Refinery instances must be able to communicate with each other to concentrate traces on single servers.
+Refinery is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it.
+A standard deployment will have a cluster of two or more Refinery processes accessible via a separate load balancer.
+Refinery processes must be able to communicate with each other to concentrate traces on single servers.
 
 Within your application (or other Honeycomb event sources) you would configure the `API Host` to be http(s)://load-balancer/. Everything else remains the same (api key, dataset name, etc. - all that lives with the originating client).
 
@@ -26,7 +28,8 @@ Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/refinery). R
 
 ## Configuration
 
-Configuration is done in one of two ways, either entirely by the config file or a combination of the config file and a Redis backend for managing the list of peers in the cluster. When using Redis, it only manages peers - everything else is managed by the config file.
+Configuration is done in one of two ways, either entirely by the config file or a combination of the config file and a Redis service for managing the list of peers in the cluster.
+When using Redis, it only manages peers; all other configuration remains managed by the config file.
 
 There are a few vital configuration options; read through this list and make sure all the variables are set.
 
@@ -46,9 +49,10 @@ There are a few components of Refinery with multiple implementations; the config
 
 When configuration changes, send Refinery a USR1 signal and it will re-read the configuration.
 
-### Redis-based Config
+### Redis-based Peer Management
 
-In the Redis-based config mode, all config options _except_ peer management are still handled by the config file. Only coordinating the list of peers in the Refinery cluster is managed with Redis.
+With peer management in Redis, all config options _except_ peer management are still handled by the config file.
+Only coordinating the list of peers in the Refinery cluster is managed with Redis.
 
 To enable the redis-based config:
 
@@ -60,6 +64,10 @@ When launched in redis-config mode, Refinery needs a redis host to use for manag
 - set the `RedisHost` field in the config file (and optionally the `RedisPassword` field in the config file)
 
 The redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host. When TLS is required to connect to the redis instance set the `UseTLS` config to `true`.
+
+By default, a Refinery process will register itself in Redis using its local hostname as its identifier for peer communications.
+In environments where domain name resolution is slow or unreliable, override the reliance on name lookups by specifying the name of the peering network interface with the `IdentifierInterfaceName` configuration option.
+See the [Refinery documentation](https://docs.honeycomb.io/manage-data-volume/refinery/) for more details on tuning a cluster.
 
 ## How sampling decisions are made
 
