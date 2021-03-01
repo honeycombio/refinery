@@ -208,8 +208,9 @@ SampleRate = 1
 	Sampler = "RulesBasedSampler"
 
 	[[dataset4.rule]]
-		name = "500 errors"
+		name = "slow 500 errors"
 		SampleRate = 1
+		# all conditions must be met for this rule to trigger
 		[[dataset4.rule.condition]]
 		field = "status_code"
 		operator = "="
@@ -220,8 +221,8 @@ SampleRate = 1
 		value = 1000.789
 
 	[[dataset4.rule]]
-		name = "drop 200 responses"
-		drop = true
+		name = "downsample 200 responses"
+		SampleRate = 1000
 		[[dataset4.rule.condition]]
 		field = "status_code"
 		operator = "="
