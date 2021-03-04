@@ -2,7 +2,7 @@
 
 ![refinery](https://user-images.githubusercontent.com/6510988/94976958-8cadba80-04cb-11eb-9883-6e8ea554a081.png)
 
-**Beta Release** This is the initial draft. Please expect and help find bugs! :) Refinery [![Build Status](https://circleci.com/gh/honeycombio/refinery.svg?style=shield)](https://circleci.com/gh/honeycombio/refinery)
+[![Build Status](https://circleci.com/gh/honeycombio/refinery.svg?style=shield)](https://circleci.com/gh/honeycombio/refinery)
 
 ## Purpose
 
