@@ -146,6 +146,11 @@ const (
 )
 
 func compare(a, b interface{}) (int, bool) {
+	// a is the tracing data field value. This can be: float64, int64, bool, or string
+	// b is the Rule condition value. This can be: float64, int64, int, bool, or string
+	// Note: in YAML config parsing, the Value may be returned as int
+	// When comparing numeric values, we need to check across the 3 types: float64, int64, and int
+
 	if a == nil {
 		if b == nil {
 			return equal, true
@@ -161,6 +166,16 @@ func compare(a, b interface{}) (int, bool) {
 	switch at := a.(type) {
 	case int64:
 		switch bt := b.(type) {
+		case int:
+			i := int(at)
+			switch {
+			case i < bt:
+				return less, true
+			case i > bt:
+				return more, true
+			default:
+				return equal, true
+			}
 		case int64:
 			switch {
 			case at < bt:
@@ -183,6 +198,16 @@ func compare(a, b interface{}) (int, bool) {
 		}
 	case float64:
 		switch bt := b.(type) {
+		case int:
+			f := float64(bt)
+			switch {
+			case at < f:
+				return less, true
+			case at > f:
+				return more, true
+			default:
+				return equal, true
+			}
 		case int64:
 			f := float64(bt)
 			switch {
