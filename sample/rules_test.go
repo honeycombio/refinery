@@ -439,6 +439,34 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 4,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "YAMLintgeaterthan",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: ">",
+								Value:    int(1),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": int64(2),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
 	}
 
 	for _, d := range data {
