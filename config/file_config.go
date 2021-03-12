@@ -121,6 +121,8 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 
 	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
+	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
+	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("CompressPeerCommunication", true)
@@ -498,6 +500,8 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 			return *hlConfig, err
 		}
 
+		hlConfig.LoggerAPIKey = f.config.GetString("HoneycombLogger.LoggerAPIKey")
+
 		// https://github.com/spf13/viper/issues/747
 		hlConfig.LoggerSamplerEnabled = f.config.GetBool("HoneycombLogger.LoggerSamplerEnabled")
 		hlConfig.LoggerSamplerThroughput = f.config.GetInt("HoneycombLogger.LoggerSamplerThroughput")
@@ -605,6 +609,8 @@ func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error)
 		if err != nil {
 			return *hmConfig, err
 		}
+
+		hmConfig.MetricsAPIKey = f.config.GetString("HoneycombMetrics.MetricsAPIKey")
 
 		v := validator.New()
 		err = v.Struct(hmConfig)
