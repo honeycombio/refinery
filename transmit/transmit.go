@@ -105,7 +105,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 
 	err := libhEv.SendPresampled()
 	if err != nil {
-		d.Metrics.IncrementCounter(d.Name + counterEnqueueErrors)
+		d.Metrics.Increment(d.Name + counterEnqueueErrors)
 		d.Logger.Error().
 			WithString("error", err.Error()).
 			WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
@@ -164,13 +164,13 @@ func (d *DefaultTransmission) processResponses(
 				if honeycombAPI == apiHost {
 					// if the API host matches the configured honeycomb API,
 					// count it as an API error
-					d.Metrics.IncrementCounter(d.Name + counterResponseErrorsAPI)
+					d.Metrics.Increment(d.Name + counterResponseErrorsAPI)
 				} else {
 					// otherwise, it's probably a peer error
-					d.Metrics.IncrementCounter(d.Name + counterResponseErrorsPeer)
+					d.Metrics.Increment(d.Name + counterResponseErrorsPeer)
 				}
 			} else {
-				d.Metrics.IncrementCounter(d.Name + counterResponse20x)
+				d.Metrics.Increment(d.Name + counterResponse20x)
 			}
 		case <-ctx.Done():
 			return

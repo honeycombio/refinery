@@ -27,7 +27,7 @@ func (m *MockMetrics) Register(name string, metricType string) {
 
 	m.Registrations[name] = metricType
 }
-func (m *MockMetrics) IncrementCounter(name string) {
+func (m *MockMetrics) Increment(name string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 

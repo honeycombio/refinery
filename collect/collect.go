@@ -318,14 +318,14 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// if the trace has already been sent, just pass along the span
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
-				i.Metrics.IncrementCounter("trace_sent_cache_hit")
+				i.Metrics.Increment("trace_sent_cache_hit")
 				i.dealWithSentTrace(sr.keep, sr.rate, sp)
 				return
 			}
 		}
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
-		i.Metrics.IncrementCounter("trace_accepted")
+		i.Metrics.Increment("trace_accepted")
 
 		timeout, err := i.Config.GetTraceTimeout()
 		if err != nil {
@@ -420,9 +420,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
 	if trace.HasRootSpan {
-		i.Metrics.IncrementCounter("trace_send_has_root")
+		i.Metrics.Increment("trace_send_has_root")
 	} else {
-		i.Metrics.IncrementCounter("trace_send_no_root")
+		i.Metrics.Increment("trace_send_no_root")
 	}
 
 	var sampler sample.Sampler
@@ -448,11 +448,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
-		i.Metrics.IncrementCounter("trace_send_dropped")
+		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
 		return
 	}
-	i.Metrics.IncrementCounter("trace_send_kept")
+	i.Metrics.Increment("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {

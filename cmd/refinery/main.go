@@ -9,12 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
-	statsd "gopkg.in/alexcesaro/statsd.v2"
-
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
 	flag "github.com/jessevdk/go-flags"
 	"github.com/sirupsen/logrus"
 
@@ -84,7 +82,7 @@ func main() {
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
-	metricsr := metrics.GetMetricsImplementation(c)
+	metricsr := metrics.GetMetricsImplementation(c, "")
 	shrdr := sharder.GetSharderImplementation(c)
 	samplerFactory := &sample.SamplerFactory{}
 
@@ -117,8 +115,10 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
-	sdUpstream, _ := statsd.New(statsd.Prefix("refinery.upstream"))
-	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
+	metricsLibUpstream := metrics.GetMetricsImplementation(c, "libhoney_upstream")
+	metricsLibPeer := metrics.GetMetricsImplementation(c, "libhoney_peer")
+	//sdUpstream, _ := statsd.New(statsd.Prefix("refinery.upstream"))
+	//sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
 
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
@@ -131,7 +131,7 @@ func main() {
 			Transport:             upstreamTransport,
 			BlockOnSend:           true,
 			EnableMsgpackEncoding: true,
-			Metrics:               sdUpstream,
+			Metrics:               metricsLibUpstream,
 		},
 	})
 	if err != nil {
@@ -149,7 +149,7 @@ func main() {
 			Transport:             peerTransport,
 			DisableCompression:    !c.GetCompressPeerCommunication(),
 			EnableMsgpackEncoding: true,
-			Metrics:               sdPeer,
+			Metrics:               metricsLibPeer,
 		},
 	})
 	if err != nil {

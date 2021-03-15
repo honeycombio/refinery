@@ -20,6 +20,8 @@ type PromMetrics struct {
 	// them by name
 	metrics map[string]interface{}
 	lock    sync.Mutex
+
+	prefix string
 }
 
 func (p *PromMetrics) Start() error {
@@ -56,16 +58,19 @@ func (p *PromMetrics) Register(name string, metricType string) {
 	case "counter":
 		newmet = promauto.NewCounter(prometheus.CounterOpts{
 			Name: name,
+			Namespace: p.prefix,
 			Help: name,
 		})
 	case "gauge":
 		newmet = promauto.NewGauge(prometheus.GaugeOpts{
 			Name: name,
+			Namespace: p.prefix,
 			Help: name,
 		})
 	case "histogram":
 		newmet = promauto.NewHistogram(prometheus.HistogramOpts{
 			Name: name,
+			Namespace: p.prefix,
 			Help: name,
 		})
 	}
@@ -73,24 +78,31 @@ func (p *PromMetrics) Register(name string, metricType string) {
 	p.metrics[name] = newmet
 }
 
-func (p *PromMetrics) IncrementCounter(name string) {
+func (p *PromMetrics) Increment(name string) {
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
 			counter.Inc()
 		}
 	}
 }
-func (p *PromMetrics) Gauge(name string, val float64) {
-	if gaugeIface, ok := p.metrics[name]; ok {
-		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
-			gauge.Set(val)
+func (p *PromMetrics) Count(name string, n interface{}) {
+	if counterIface, ok := p.metrics[name]; ok {
+		if counter, ok := counterIface.(prometheus.Counter); ok {
+			counter.Add(ConvertNumeric(n))
 		}
 	}
 }
-func (p *PromMetrics) Histogram(name string, obs float64) {
+func (p *PromMetrics) Gauge(name string, val interface{}) {
+	if gaugeIface, ok := p.metrics[name]; ok {
+		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
+			gauge.Set(ConvertNumeric(val))
+		}
+	}
+}
+func (p *PromMetrics) Histogram(name string, obs interface{}) {
 	if histIface, ok := p.metrics[name]; ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
-			hist.Observe(obs)
+			hist.Observe(ConvertNumeric(obs))
 		}
 	}
 }

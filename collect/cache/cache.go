@@ -102,7 +102,7 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 		if !oldTrace.Sent {
 			// if it hasn't already been sent,
 			// record that we're overrunning the buffer
-			d.Metrics.IncrementCounter("collect_cache_buffer_overrun")
+			d.Metrics.Increment("collect_cache_buffer_overrun")
 			// and return the trace so it can be sent.
 			retTrace = oldTrace
 		}

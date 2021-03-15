@@ -76,9 +76,9 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
 		"trace_id":    trace.TraceID,
 	}).Logf("got sample rate and decision")
 	if shouldKeep {
-		d.Metrics.IncrementCounter("dynsampler_num_kept")
+		d.Metrics.Increment("dynsampler_num_kept")
 	} else {
-		d.Metrics.IncrementCounter("dynsampler_num_dropped")
+		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
 	return uint(rate), shouldKeep
