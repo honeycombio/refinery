@@ -40,7 +40,7 @@ func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 				return
 			}
 			if apiKey == key {
-				// we're in the whitelist, it's all good
+				// we're in the allowlist, it's all good
 				next.ServeHTTP(w, req)
 				return
 			}
