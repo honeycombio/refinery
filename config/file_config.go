@@ -12,6 +12,7 @@ import (
 	"github.com/go-playground/validator"
 	libhoney "github.com/honeycombio/libhoney-go"
 	viper "github.com/spf13/viper"
+	"github.com/sirupsen/logrus"
 )
 
 type fileConfig struct {
@@ -287,6 +288,8 @@ func (f *fileConfig) validateConditionalConfigs() error {
 }
 
 func (f *fileConfig) validateSamplerConfigs() error {
+	logrus.Debugf("Sampler rules config - %v+", f.rules)
+
 	keys := f.rules.AllKeys()
 	for _, key := range keys {
 		parts := strings.Split(key, ".")
@@ -311,11 +314,13 @@ func (f *fileConfig) validateSamplerConfigs() error {
 			}
 			err := f.rules.Unmarshal(i)
 			if err != nil {
+				logrus.WithError(err).Warn("Failed to unmarshal sampler rule")
 				return err
 			}
 			v := validator.New()
 			err = v.Struct(i)
 			if err != nil {
+				logrus.WithError(err).Warn("Failed to validate sampler rule")
 				return err
 			}
 		}
@@ -342,11 +347,13 @@ func (f *fileConfig) validateSamplerConfigs() error {
 			if sub := f.rules.Sub(datasetName); sub != nil {
 				err := sub.Unmarshal(i)
 				if err != nil {
+					logrus.WithError(err).Warn("Failed to unmarshal dataset sampler rule")
 					return err
 				}
 				v := validator.New()
 				err = v.Struct(i)
 				if err != nil {
+					logrus.WithError(err).Warn("Failed to validate dataset sampler rule")
 					return err
 				}
 			}
