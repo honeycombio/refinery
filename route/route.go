@@ -449,7 +449,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					"type":           getSpanKind(span.Kind),
 					"name":           span.Name,
 					"duration_ms":    float64(span.EndTimeUnixNano-span.StartTimeUnixNano) / float64(time.Millisecond),
-					"status_code":    int32(span.Status.Code),
+					"status_code":    int32(r.getSpanStatusCode(span.Status)),
 				}
 				if span.ParentSpanId != nil {
 					eventAttrs["trace.parent_id"] = hex.EncodeToString(span.ParentSpanId)
@@ -457,7 +457,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 				if r.getSpanStatusCode(span.Status) == trace.Status_STATUS_CODE_ERROR {
 					eventAttrs["error"] = true
 				}
-				if len(span.Status.Message) > 0 {
+				if span.Status != nil && len(span.Status.Message) > 0 {
 					eventAttrs["status_message"] = span.Status.Message
 				}
 				if span.Attributes != nil {
@@ -807,6 +807,9 @@ func bytesToTraceID(traceID []byte) string {
 //
 // https://github.com/open-telemetry/opentelemetry-proto/blob/59c488bfb8fb6d0458ad6425758b70259ff4a2bd/opentelemetry/proto/trace/v1/trace.proto#L230
 func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode {
+	if status == nil {
+		return trace.Status_STATUS_CODE_UNSET
+	}
 	if status.Code == trace.Status_STATUS_CODE_UNSET {
 		if status.DeprecatedCode == trace.Status_DEPRECATED_STATUS_CODE_OK {
 			return trace.Status_STATUS_CODE_UNSET
