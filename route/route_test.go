@@ -5,7 +5,15 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
+	"github.com/honeycombio/refinery/config"
+	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
+	common "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/common/v1"
+	trace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/trace/v1"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/transmit"
 	"io"
 	"io/ioutil"
 	"math"
@@ -385,6 +393,96 @@ func TestDebugTrace(t *testing.T) {
 	router.debugTrace(rr, req)
 	if body := rr.Body.String(); body != `{"traceID":"123abcdef","node":"http://localhost:12345"}` {
 		t.Error(body)
+	}
+}
+
+func TestOTLPHandler(t *testing.T) {
+	md := metadata.New(map[string]string{"x-honeycomb-team": "meow", "x-honeycomb-dataset": "ds"})
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+
+	mockMetrics := metrics.MockMetrics{}
+	mockMetrics.Start()
+	router := &Router{
+		Config:               &config.MockConfig{},
+		Metrics:              &mockMetrics,
+		UpstreamTransmission: &transmit.MockTransmission{},
+		iopLogger: iopLogger{
+			Logger:         &logger.MockLogger{},
+			incomingOrPeer: "incoming",
+		},
+	}
+
+	t.Run("span with status", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		_, err := router.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+	})
+
+	t.Run("span without status", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: helperOTLPRequestSpansWithoutStatus(),
+				}},
+			}},
+		}
+		_, err := router.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+	})
+}
+
+func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
+	now := time.Now()
+	return []*trace.Span{
+		{
+			StartTimeUnixNano: uint64(now.UnixNano()),
+			Events: []*trace.Span_Event{
+				{
+					TimeUnixNano: uint64(now.UnixNano()),
+					Attributes: []*common.KeyValue{
+						{
+							Key: "attribute_key",
+							Value: &common.AnyValue{
+								Value: &common.AnyValue_StringValue{StringValue: "attribute_value"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func helperOTLPRequestSpansWithStatus() []*trace.Span {
+	now := time.Now()
+	return []*trace.Span{
+		{
+			StartTimeUnixNano: uint64(now.UnixNano()),
+			Events: []*trace.Span_Event{
+				{
+					TimeUnixNano: uint64(now.UnixNano()),
+					Attributes: []*common.KeyValue{
+						{
+							Key: "attribute_key",
+							Value: &common.AnyValue{
+								Value: &common.AnyValue_StringValue{StringValue: "attribute_value"},
+							},
+						},
+					},
+				},
+			},
+			Status: &trace.Status{Code: trace.Status_STATUS_CODE_OK},
+		},
 	}
 }
 
