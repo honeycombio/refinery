@@ -39,6 +39,12 @@ func (m *MockMetrics) Gauge(name string, val float64) {
 
 	m.GaugeRecords[name] = val
 }
+func (m *MockMetrics) Count(name string, n interface{}) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.CounterIncrements[name] += int(ConvertNumeric(n))
+}
 func (m *MockMetrics) Histogram(name string, obs float64) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
