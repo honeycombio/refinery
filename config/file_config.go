@@ -11,6 +11,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-playground/validator"
 	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/sirupsen/logrus"
 	viper "github.com/spf13/viper"
 )
 
@@ -287,6 +288,8 @@ func (f *fileConfig) validateConditionalConfigs() error {
 }
 
 func (f *fileConfig) validateSamplerConfigs() error {
+	logrus.Debugf("Sampler rules config: %+v", f.rules)
+
 	keys := f.rules.AllKeys()
 	for _, key := range keys {
 		parts := strings.Split(key, ".")
@@ -307,16 +310,16 @@ func (f *fileConfig) validateSamplerConfigs() error {
 			case "TotalThroughputSampler":
 				i = &TotalThroughputSamplerConfig{}
 			default:
-				return errors.New("Invalid or missing default sampler type")
+				return fmt.Errorf("Invalid or missing default sampler type: %s", t)
 			}
 			err := f.rules.Unmarshal(i)
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to unmarshal sampler rule: %w", err)
 			}
 			v := validator.New()
 			err = v.Struct(i)
 			if err != nil {
-				return err
+				return fmt.Errorf("Failed to validate sampler rule: %w", err)
 			}
 		}
 
@@ -336,18 +339,18 @@ func (f *fileConfig) validateSamplerConfigs() error {
 			case "TotalThroughputSampler":
 				i = &TotalThroughputSamplerConfig{}
 			default:
-				return errors.New("Invalid or missing dataset sampler type")
+				return fmt.Errorf("Invalid or missing dataset sampler type: %s", t)
 			}
 			datasetName := parts[0]
 			if sub := f.rules.Sub(datasetName); sub != nil {
 				err := sub.Unmarshal(i)
 				if err != nil {
-					return err
+					return fmt.Errorf("Failed to unmarshal dataset sampler rule: %w", err)
 				}
 				v := validator.New()
 				err = v.Struct(i)
 				if err != nil {
-					return err
+					return fmt.Errorf("Failed to validate dataset sampler rule: %w", err)
 				}
 			}
 		}
