@@ -38,6 +38,8 @@ type HoneycombMetrics struct {
 	//reportingFreq is the interval with which to report statistics
 	reportingFreq       int64
 	reportingCancelFunc func()
+
+	prefix string
 }
 
 type counter struct {
@@ -229,7 +231,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			h.countersLock.Lock()
 			for _, count := range h.counters {
 				count.lock.Lock()
-				ev.AddField(count.name, count.val)
+				ev.AddField(PrefixMetricName(h.prefix, count.name), count.val)
 				count.val = 0
 				count.lock.Unlock()
 			}
@@ -238,7 +240,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			h.gaugesLock.Lock()
 			for _, gauge := range h.gauges {
 				gauge.lock.Lock()
-				ev.AddField(gauge.name, gauge.val)
+				ev.AddField(PrefixMetricName(h.prefix, gauge.name), gauge.val)
 				// gauges should remain where they are until changed
 				// gauge.val = 0
 				gauge.lock.Unlock()
@@ -253,12 +255,12 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 					p50Index := int(math.Floor(float64(len(histogram.vals)) * 0.5))
 					p95Index := int(math.Floor(float64(len(histogram.vals)) * 0.95))
 					p99Index := int(math.Floor(float64(len(histogram.vals)) * 0.99))
-					ev.AddField(histogram.name+"_p50", histogram.vals[p50Index])
-					ev.AddField(histogram.name+"_p95", histogram.vals[p95Index])
-					ev.AddField(histogram.name+"_p99", histogram.vals[p99Index])
-					ev.AddField(histogram.name+"_min", histogram.vals[0])
-					ev.AddField(histogram.name+"_max", histogram.vals[len(histogram.vals)-1])
-					ev.AddField(histogram.name+"_avg", average(histogram.vals))
+					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p50", histogram.vals[p50Index])
+					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p95", histogram.vals[p95Index])
+					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p99", histogram.vals[p99Index])
+					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_min", histogram.vals[0])
+					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_max", histogram.vals[len(histogram.vals)-1])
+					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_avg", average(histogram.vals))
 					histogram.vals = histogram.vals[:0]
 				}
 				histogram.lock.Unlock()
@@ -317,7 +319,7 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 	}
 }
 
-func (h *HoneycombMetrics) IncrementCounter(name string) {
+func (h *HoneycombMetrics) Count(name string, n interface{}) {
 	count, ok := h.counters[name]
 	if !ok {
 		h.Register(name, "counter")
@@ -325,10 +327,14 @@ func (h *HoneycombMetrics) IncrementCounter(name string) {
 	}
 	count.lock.Lock()
 	defer count.lock.Unlock()
-	count.val++
+	count.val = count.val + int(ConvertNumeric(n))
 }
 
-func (h *HoneycombMetrics) Gauge(name string, val float64) {
+func (h *HoneycombMetrics) Increment(name string) {
+	h.Count(name, 1)
+}
+
+func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
 	gauge, ok := h.gauges[name]
 	if !ok {
 		h.Register(name, "gauge")
@@ -336,10 +342,10 @@ func (h *HoneycombMetrics) Gauge(name string, val float64) {
 	}
 	gauge.lock.Lock()
 	defer gauge.lock.Unlock()
-	gauge.val = val
+	gauge.val = ConvertNumeric(val)
 }
 
-func (h *HoneycombMetrics) Histogram(name string, obs float64) {
+func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
 	histogram, ok := h.histograms[name]
 	if !ok {
 		h.Register(name, "histogram")
@@ -347,5 +353,5 @@ func (h *HoneycombMetrics) Histogram(name string, obs float64) {
 	}
 	histogram.lock.Lock()
 	defer histogram.lock.Unlock()
-	histogram.vals = append(histogram.vals, obs)
+	histogram.vals = append(histogram.vals, ConvertNumeric(obs))
 }

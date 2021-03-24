@@ -27,19 +27,25 @@ func (m *MockMetrics) Register(name string, metricType string) {
 
 	m.Registrations[name] = metricType
 }
-func (m *MockMetrics) IncrementCounter(name string) {
+func (m *MockMetrics) Increment(name string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	m.CounterIncrements[name] += 1
 }
-func (m *MockMetrics) Gauge(name string, val float64) {
+func (m *MockMetrics) Gauge(name string, val interface{}) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	m.GaugeRecords[name] = val
+	m.GaugeRecords[name] = ConvertNumeric(val)
 }
-func (m *MockMetrics) Histogram(name string, obs float64) {
+func (m *MockMetrics) Count(name string, val interface{}) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.CounterIncrements[name] += int(ConvertNumeric(val))
+}
+func (m *MockMetrics) Histogram(name string, val interface{}) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -47,5 +53,5 @@ func (m *MockMetrics) Histogram(name string, obs float64) {
 	if !ok {
 		m.Histograms[name] = make([]float64, 0)
 	}
-	m.Histograms[name] = append(m.Histograms[name], obs)
+	m.Histograms[name] = append(m.Histograms[name], ConvertNumeric(val))
 }

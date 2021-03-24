@@ -257,7 +257,7 @@ func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_event")
+	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
 	bodyReader, err := r.getMaybeCompressedBody(req)
@@ -322,7 +322,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_batch")
+	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
 
 	reqID := req.Context().Value(types.RequestIDContextKey{})
@@ -514,7 +514,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 	if traceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_nonspan")
+		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
@@ -526,7 +526,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// ok, we're a span. Figure out if we should handle locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
 	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_peer")
+		r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
 		debugLog.WithString("peer", targetShard.GetAddress()).
 			Logf("Sending span from batch to my peer")
 		ev.APIHost = targetShard.GetAddress()
@@ -550,12 +550,12 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_dropped")
+		r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
 
-	r.Metrics.IncrementCounter(r.incomingOrPeer + "_router_span")
+	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
 	debugLog.Logf("Accepting span from batch for collection into a trace")
 	return nil
 }

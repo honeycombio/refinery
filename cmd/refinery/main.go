@@ -9,12 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
-	statsd "gopkg.in/alexcesaro/statsd.v2"
-
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
 	flag "github.com/jessevdk/go-flags"
 	"github.com/sirupsen/logrus"
 
@@ -84,7 +82,7 @@ func main() {
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
-	metricsr := metrics.GetMetricsImplementation(c)
+	metricsConfig := metrics.GetMetricsImplementation(c, "")
 	shrdr := sharder.GetSharderImplementation(c)
 	samplerFactory := &sample.SamplerFactory{}
 
@@ -117,8 +115,8 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
-	sdUpstream, _ := statsd.New(statsd.Prefix("refinery.upstream"))
-	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
+	upstreamMetricsConfig := metrics.GetMetricsImplementation(c, "libhoney_upstream")
+	peerMetricsConfig := metrics.GetMetricsImplementation(c, "libhoney_peer")
 
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
@@ -131,7 +129,7 @@ func main() {
 			Transport:             upstreamTransport,
 			BlockOnSend:           true,
 			EnableMsgpackEncoding: true,
-			Metrics:               sdUpstream,
+			Metrics:               upstreamMetricsConfig,
 		},
 	})
 	if err != nil {
@@ -149,7 +147,7 @@ func main() {
 			Transport:             peerTransport,
 			DisableCompression:    !c.GetCompressPeerCommunication(),
 			EnableMsgpackEncoding: true,
-			Metrics:               sdPeer,
+			Metrics:               peerMetricsConfig,
 		},
 	})
 	if err != nil {
@@ -168,7 +166,9 @@ func main() {
 		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: peerClient, Name: "peer_"}, Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
-		&inject.Object{Value: metricsr},
+		&inject.Object{Value: metricsConfig, Name: "metrics"},
+		&inject.Object{Value: upstreamMetricsConfig, Name: "upstreamMetrics"},
+		&inject.Object{Value: peerMetricsConfig, Name: "peerMetrics"},
 		&inject.Object{Value: version, Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &a},
