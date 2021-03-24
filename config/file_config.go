@@ -288,7 +288,7 @@ func (f *fileConfig) validateConditionalConfigs() error {
 }
 
 func (f *fileConfig) validateSamplerConfigs() error {
-	logrus.Debugf("Sampler rules config - %v+", f.rules)
+	logrus.Debugf("Sampler rules config: %+v", f.rules)
 
 	keys := f.rules.AllKeys()
 	for _, key := range keys {
