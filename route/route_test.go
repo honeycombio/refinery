@@ -7,13 +7,6 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
-	"github.com/honeycombio/refinery/config"
-	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
-	common "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/common/v1"
-	trace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/trace/v1"
-	"github.com/honeycombio/refinery/logger"
-	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/transmit"
 	"io"
 	"io/ioutil"
 	"math"
@@ -22,6 +15,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/facebookgo/inject"
+	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/config"
+	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
+	common "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/common/v1"
+	trace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/trace/v1"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/transmit"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/sharder"
@@ -439,6 +442,28 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 	})
+}
+
+func TestDependencyInjection(t *testing.T) {
+	var g inject.Graph
+	err := g.Provide(
+		&inject.Object{Value: &Router{}},
+
+		&inject.Object{Value: &config.MockConfig{}},
+		&inject.Object{Value: &logger.NullLogger{}},
+		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
+		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
+		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
+		&inject.Object{Value: &TestSharder{}},
+		&inject.Object{Value: &collect.InMemCollector{}},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	if err := g.Populate(); err != nil {
+		t.Error(err)
+	}
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {

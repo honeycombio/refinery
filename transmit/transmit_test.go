@@ -5,6 +5,7 @@ package transmit
 import (
 	"testing"
 
+	"github.com/facebookgo/inject"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -26,4 +27,22 @@ func TestDefaultTransmissionUpdatesUserAgentAdditionAfterStart(t *testing.T) {
 	err := transmission.Start()
 	assert.Nil(t, err)
 	assert.Equal(t, libhoney.UserAgentAddition, "refinery/test")
+}
+
+func TestDependencyInjection(t *testing.T) {
+	var g inject.Graph
+	err := g.Provide(
+		&inject.Object{Value: &DefaultTransmission{}},
+
+		&inject.Object{Value: &config.MockConfig{}},
+		&inject.Object{Value: &logger.NullLogger{}},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
+		&inject.Object{Value: "test", Name: "version"},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	if err := g.Populate(); err != nil {
+		t.Error(err)
+	}
 }
