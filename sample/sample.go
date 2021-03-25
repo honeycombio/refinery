@@ -17,7 +17,7 @@ type Sampler interface {
 type SamplerFactory struct {
 	Config  config.Config   `inject:""`
 	Logger  logger.Logger   `inject:""`
-	Metrics metrics.Metrics `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
 }
 
 // GetSamplerImplementationForDataset returns the sampler implementation for the dataset,

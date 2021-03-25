@@ -185,7 +185,7 @@ func newStartedApp(
 		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: peerClient, Name: "peer_"}, Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
-		&inject.Object{Value: metricsr},
+		&inject.Object{Value: metricsr, Name: "metrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &a},

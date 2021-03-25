@@ -31,7 +31,7 @@ const (
 type DefaultTransmission struct {
 	Config     config.Config   `inject:""`
 	Logger     logger.Logger   `inject:""`
-	Metrics    metrics.Metrics `inject:""`
+	Metrics    metrics.Metrics `inject:"metrics"`
 	Version    string          `inject:"version"`
 	LibhClient *libhoney.Client
 
