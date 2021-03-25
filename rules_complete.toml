@@ -220,12 +220,38 @@ SampleRate = 1
 		value = 1000.789
 
 	[[dataset4.rule]]
+		name = "retain traces with an exception, regardless of status code"
+		SampleRate = 1
+		[[dataset4.rule.condition]]
+		field = "exception"
+		operator = "exists"
+
+	[[dataset4.rule]]
 		name = "drop 200 responses"
 		drop = true
 		[[dataset4.rule.condition]]
 		field = "status_code"
 		operator = "="
 		value = 200
+
+	[[dataset4.rule]]
+		name = "keep more requests from address endpoints"
+		SampleRate = 10
+		[[dataset4.rule.condition]]
+		field = "request.path"
+		operator = "starts-with"
+		value = "/api/v1/address"
+
+	[[dataset4.rule]]
+		name = "retain mailer jobs more frequently"
+		SamplerRate = 5
+		[[dataset4.rule.condition]]
+		field = "job_name"
+		operator = "contains"
+		value = "MailerTask"
+		[[dataset4.rule.condition]]
+		field = "request.path"
+		operator = "not-exists"
 
 	[[dataset4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 1
