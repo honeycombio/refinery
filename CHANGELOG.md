@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## 1.1.1
+
+### Fixes
+
+- Refinery startup issues in v1.1.0
+
 ## 1.1.0
 
 ### Improvements
