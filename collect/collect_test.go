@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebookgo/inject"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
@@ -568,4 +569,22 @@ func TestAddSpanNoBlock(t *testing.T) {
 	assert.Error(t, err)
 	err = coll.AddSpanFromPeer(span)
 	assert.Error(t, err)
+}
+
+func TestDependencyInjection(t *testing.T) {
+	var g inject.Graph
+	err := g.Provide(
+		&inject.Object{Value: &InMemCollector{}},
+		&inject.Object{Value: &config.MockConfig{}},
+		&inject.Object{Value: &logger.NullLogger{}},
+		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
+		&inject.Object{Value: &sample.SamplerFactory{}},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	if err := g.Populate(); err != nil {
+		t.Error(err)
+	}
 }
