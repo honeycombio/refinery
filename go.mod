@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/libhoney-go v1.12.4
-	github.com/jessevdk/go-flags v1.4.0
+	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.6
 	github.com/klauspost/compress v1.10.3
 	github.com/leodido/go-urn v1.2.0 // indirect
@@ -36,7 +36,6 @@ require (
 	github.com/spf13/viper v1.7.0
 	github.com/stretchr/testify v1.5.1
 	github.com/vmihailenco/msgpack/v4 v4.3.11
-	golang.org/x/sys v0.0.0-20200722175500-76b94024e4b6 // indirect
 	golang.org/x/text v0.3.3 // indirect
 	google.golang.org/grpc v1.32.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
