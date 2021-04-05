@@ -16,7 +16,7 @@ require (
 	github.com/golang/protobuf v1.4.3
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
 	github.com/grpc-ecosystem/grpc-gateway v1.12.1
-	github.com/hashicorp/golang-lru v0.5.1
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/libhoney-go v1.12.4
 	github.com/jessevdk/go-flags v1.4.0
