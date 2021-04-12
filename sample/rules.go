@@ -43,7 +43,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			if keep {
 				s.Metrics.Increment("rulessampler_num_kept")
 			} else {
-				s.Metrics.Increment("dynsampler_num_dropped")
+				s.Metrics.Increment("rulessampler_num_dropped")
 			}
 			logger.WithFields(map[string]interface{}{
 				"rate":      rate,
@@ -124,7 +124,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			if keep {
 				s.Metrics.Increment("rulessampler_num_kept")
 			} else {
-				s.Metrics.Increment("dynsampler_num_dropped")
+				s.Metrics.Increment("rulessampler_num_dropped")
 			}
 			logger.WithFields(map[string]interface{}{
 				"rate":      rate,
