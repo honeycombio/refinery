@@ -380,7 +380,10 @@ func (f *fileConfig) validateSampleKeyConfigs() error {
 			}
 		}
 		if len(parts) > 1 && parts[1] == "addsampleratekeytotracefield" {
-			sampleRateFieldProvided = true
+			val := f.rules.Get(key)
+			if len(val.(string)) > 0 {
+				sampleRateFieldProvided = true
+			}
 		}
 	}
 
