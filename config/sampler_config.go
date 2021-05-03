@@ -10,7 +10,7 @@ type DynamicSamplerConfig struct {
 	FieldList                    []string `validate:"required"`
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string
+	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type EMADynamicSamplerConfig struct {
@@ -25,7 +25,7 @@ type EMADynamicSamplerConfig struct {
 	FieldList                    []string `validate:"required"`
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string
+	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type TotalThroughputSamplerConfig struct {
@@ -34,5 +34,5 @@ type TotalThroughputSamplerConfig struct {
 	FieldList                    []string `validate:"required"`
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string
+	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
 }

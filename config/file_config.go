@@ -197,11 +197,6 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 		return nil, err
 	}
 
-	err = fc.validateSampleKeyConfigs()
-	if err != nil {
-		return nil, err
-	}
-
 	c.WatchConfig()
 	c.OnConfigChange(fc.onChange)
 
@@ -360,37 +355,6 @@ func (f *fileConfig) validateSamplerConfigs() error {
 			}
 		}
 	}
-	return nil
-}
-
-// verify that, if AddSampleRateKeyToTrace is set to true, AddSampleRateKeyToTraceField must be specified.
-func (f *fileConfig) validateSampleKeyConfigs() error {
-	sampleRateFieldRequired := false
-	sampleRateFieldProvided := false
-
-	keys := f.rules.AllKeys()
-
-	for _, key := range keys {
-		parts := strings.Split(key, ".")
-
-		if len(parts) > 1 && parts[1] == "addsampleratekeytotrace" {
-			val := f.rules.Get(key)
-			if val.(bool) {
-				sampleRateFieldRequired = true
-			}
-		}
-		if len(parts) > 1 && parts[1] == "addsampleratekeytotracefield" {
-			val := f.rules.Get(key)
-			if len(val.(string)) > 0 {
-				sampleRateFieldProvided = true
-			}
-		}
-	}
-
-	if sampleRateFieldRequired && !sampleRateFieldProvided {
-		return fmt.Errorf("AddSampleRateKeyToTrace is true, but no AddSampleRateKeyToTraceField is specified")
-	}
-
 	return nil
 }
 
