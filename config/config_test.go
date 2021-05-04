@@ -399,6 +399,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		GoalSampleRate = 10
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
+		AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
 		FieldList = "[request.method]"
 		Weight = 0.3
 
