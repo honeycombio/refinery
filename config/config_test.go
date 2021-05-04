@@ -255,6 +255,46 @@ func TestPeerManagementType(t *testing.T) {
 	}
 }
 
+func TestAbsentTraceKeyField(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	_, err = configFile.Write([]byte(`
+		[InMemCollector]
+			CacheCapacity=1000
+
+		[HoneycombMetrics]
+			MetricsHoneycombAPI="http://honeycomb.io"
+			MetricsAPIKey="1234"
+			MetricsDataset="testDatasetName"
+			MetricsReportingInterval=3
+	`))
+	assert.NoError(t, err)
+
+	_, err = rulesFile.Write([]byte(`
+		[dataset1]
+			Sampler = "EMADynamicSampler"
+			GoalSampleRate = 10
+			UseTraceLength = true
+			AddSampleRateKeyToTrace = true
+			FieldList = "[request.method]"
+			Weight = 0.4
+	`))
+
+	rulesFile.Close()
+
+	_, err = NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Error:Field validation for 'AddSampleRateKeyToTraceField'")
+}
+
 func TestDebugServiceAddr(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.NoError(t, err)
