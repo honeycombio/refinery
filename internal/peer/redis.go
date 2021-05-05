@@ -179,11 +179,11 @@ func buildOptions(c config.Config) []redis.DialOption {
 	useTLS, _ := c.GetUseTLS()
 	if useTLS {
 		tlsConfig := &tls.Config{
-			MinVersion: tls.VersionTLS12,
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true,
 		}
 		options = append(options,
 			redis.DialTLSConfig(tlsConfig),
-			redis.DialTLSSkipVerify(true),
 			redis.DialUseTLS(true))
 	}
 
