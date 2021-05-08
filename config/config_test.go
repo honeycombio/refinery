@@ -168,6 +168,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", "refinery_kept")
 	}
 
+	if d := c.GetAddHostMetadataToTrace(); d != true {
+		t.Error("received", d, "expected", true)
+	}
+
 	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)

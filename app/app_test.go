@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -99,6 +100,7 @@ func newStartedApp(
 	libhoneyT transmission.Sender,
 	basePort int,
 	peers peer.Peers,
+	enableHostMetadata bool,
 ) (*App, inject.Graph) {
 	c := &config.MockConfig{
 		GetSendDelayVal:                      0,
@@ -113,6 +115,7 @@ func newStartedApp(
 		GetAPIKeysVal:                        []string{"KEY"},
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
+		AddHostMetadataToTrace:               enableHostMetadata,
 	}
 
 	var err error
@@ -215,7 +218,7 @@ func TestAppIntegration(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil)
+	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil, false)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -267,7 +270,7 @@ func TestPeerRouting(t *testing.T) {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
+		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
@@ -337,6 +340,48 @@ func TestPeerRouting(t *testing.T) {
 	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 }
 
+func TestHostMetadataSpanAdditions(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 14000, nil, true)
+	hostname, _ := os.Hostname()
+
+	// Send a root span, it should be sent in short order.
+	req := httptest.NewRequest(
+		"POST",
+		"http://localhost:14000/1/batch/dataset",
+		strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"1"}}]`),
+	)
+	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+
+	// Wait for span to be sent.
+	deadline := time.After(time.Second)
+	for {
+		if out.Len() > 62 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Error("timed out waiting for output")
+			return
+		case <-time.After(time.Millisecond):
+		}
+	}
+
+	expectedSpan := `{"data":{"foo":"bar","meta.refinery.local_hostname":"%s","trace.trace_id":"1"},"dataset":"dataset"}` + "\n"
+	assert.Equal(t, fmt.Sprintf(expectedSpan, hostname), out.String())
+}
+
 func TestEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
@@ -354,7 +399,7 @@ func TestEventsEndpoint(t *testing.T) {
 		var graph inject.Graph
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		apps[i], graph = newStartedApp(t, senders[i], basePort, peers)
+		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
@@ -499,7 +544,7 @@ func BenchmarkTraces(b *testing.B) {
 			W: ioutil.Discard,
 		},
 	}
-	_, graph := newStartedApp(b, sender, 11000, nil)
+	_, graph := newStartedApp(b, sender, 11000, nil, false)
 
 	req, err := http.NewRequest(
 		"POST",
@@ -598,7 +643,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 12000 + (i * 2)
-		apps[i], graph = newStartedApp(b, sender, basePort, peers)
+		apps[i], graph = newStartedApp(b, sender, basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)

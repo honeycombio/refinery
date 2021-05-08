@@ -75,6 +75,7 @@ type configContents struct {
 	DryRunFieldName           string
 	PeerManagement            PeerManagementConfig           `validate:"required"`
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
+	AddHostMetadataToTrace    bool
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -145,6 +146,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("MaxAlloc", uint64(0))
 	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
+	c.SetDefault("AddHostMetadataToTrace", true)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -721,4 +723,11 @@ func (f *fileConfig) GetDryRunFieldName() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.DryRunFieldName
+}
+
+func (f *fileConfig) GetAddHostMetadataToTrace() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.AddHostMetadataToTrace
 }

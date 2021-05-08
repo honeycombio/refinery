@@ -64,6 +64,7 @@ type MockConfig struct {
 	DebugServiceAddr              string
 	DryRun                        bool
 	DryRunFieldName               string
+	AddHostMetadataToTrace        bool
 
 	Mux sync.RWMutex
 }
@@ -287,4 +288,11 @@ func (m *MockConfig) GetDryRunFieldName() string {
 	defer m.Mux.RUnlock()
 
 	return m.DryRunFieldName
+}
+
+func (m *MockConfig) GetAddHostMetadataToTrace() bool {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.AddHostMetadataToTrace
 }

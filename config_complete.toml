@@ -87,6 +87,14 @@ PeerBufferSize = 10000
 # The debug service runs on the first open port between localhost:6060 and :6069 by default
 # DebugServiceAddr = "localhost:8085"
 
+# AddHostMetadataToTrace determines whether or not to add information about
+# the host that Refinery is running on to the spans that it processes.
+# If enabled, information about the host will be added to each span with the
+# prefix `meta.refinery.`.
+# Currently the only value added is 'meta.refinery.local_hostname'.
+# Eligible for live reload
+AddHostMetadataToTrace = true
+
 ############################
 ## Implementation Choices ##
 ############################
