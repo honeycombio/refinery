@@ -2,6 +2,7 @@ package transmit
 
 import (
 	"context"
+	"os"
 	"sync"
 
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -54,6 +55,14 @@ func (d *DefaultTransmission) Start() error {
 	if err != nil {
 		return err
 	}
+
+	if d.Config.GetAddHostMetadataToTrace() {
+		if hostname, err := os.Hostname(); err == nil && hostname != "" {
+			// add hostname to spans
+			d.LibhClient.AddField("meta.refinery.local_hostname", hostname)
+		}
+	}
+
 	d.builder = d.LibhClient.NewBuilder()
 	d.builder.APIHost = upstreamAPI
 
