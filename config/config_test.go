@@ -168,8 +168,8 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", "refinery_kept")
 	}
 
-	if d := c.GetAddHostMetadataToTrace(); d != true {
-		t.Error("received", d, "expected", true)
+	if d := c.GetAddHostMetadataToTrace(); d != false {
+		t.Error("received", d, "expected", false)
 	}
 
 	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")

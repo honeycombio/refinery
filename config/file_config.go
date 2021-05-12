@@ -146,7 +146,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("MaxAlloc", uint64(0))
 	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
-	c.SetDefault("AddHostMetadataToTrace", true)
+	c.SetDefault("AddHostMetadataToTrace", false)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()

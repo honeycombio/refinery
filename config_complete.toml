@@ -92,8 +92,8 @@ PeerBufferSize = 10000
 # If enabled, information about the host will be added to each span with the
 # prefix `meta.refinery.`.
 # Currently the only value added is 'meta.refinery.local_hostname'.
-# Eligible for live reload
-AddHostMetadataToTrace = true
+# Not eligible for live reload
+AddHostMetadataToTrace = false
 
 ############################
 ## Implementation Choices ##
