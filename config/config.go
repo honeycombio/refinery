@@ -53,6 +53,9 @@ type Config interface {
 	// use for peer management.
 	GetUseTLS() (bool, error)
 
+	// UseTLSInsecure returns true when certificate checks are disabled
+	GetUseTLSInsecure() (bool, error)
+
 	// GetHoneycombAPI returns the base URL (protocol, hostname, and port) of
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() (string, error)

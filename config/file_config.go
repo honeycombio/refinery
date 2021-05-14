@@ -112,6 +112,7 @@ type PeerManagementConfig struct {
 	RedisHost               string
 	RedisPassword           string
 	UseTLS                  bool
+	UseTLSInsecure          bool
 	IdentifierInterfaceName string
 	UseIPV6Identifier       bool
 	RedisIdentifier         string
@@ -132,6 +133,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
 	c.SetDefault("PeerManagement.Type", "file")
 	c.SetDefault("PeerManagement.UseTLS", false)
+	c.SetDefault("PeerManagement.UseTLSInsecure", false)
 	c.SetDefault("PeerManagement.UseIPV6Identifier", false)
 	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
 	c.SetDefault("Logger", "logrus")
@@ -450,6 +452,13 @@ func (f *fileConfig) GetUseTLS() (bool, error) {
 	defer f.mux.RUnlock()
 
 	return f.config.GetBool("PeerManagement.UseTLS"), nil
+}
+
+func (f *fileConfig) GetUseTLSInsecure() (bool, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetBool("PeerManagement.UseTLSInsecure"), nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
