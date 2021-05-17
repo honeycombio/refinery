@@ -159,6 +159,10 @@ Metrics = "honeycomb"
 # Not eligible for live reload.
 # UseTLS = false
 
+# UseTLSInsecure disables certificate checks
+# Not eligible for live reload.
+# UseTLSInsecure = false
+
 # IdentifierInterfaceName is optional. By default, when using RedisHost, Refinery will use
 # the local hostname to identify itself to other peers in Redis. If your environment
 # requires that you use IPs as identifiers (for example, if peers can't resolve eachother
