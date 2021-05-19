@@ -23,10 +23,9 @@ type Transmission interface {
 }
 
 const (
-	counterEnqueueErrors      = "enqueue_errors"
-	counterResponse20x        = "response_20x"
-	counterResponseErrorsAPI  = "response_errors_api"
-	counterResponseErrorsPeer = "response_errors_peer"
+	counterEnqueueErrors  = "enqueue_errors"
+	counterResponse20x    = "response_20x"
+	counterResponseErrors = "response_errors"
 )
 
 type DefaultTransmission struct {
@@ -72,8 +71,7 @@ func (d *DefaultTransmission) Start() error {
 
 	d.Metrics.Register(d.Name+counterEnqueueErrors, "counter")
 	d.Metrics.Register(d.Name+counterResponse20x, "counter")
-	d.Metrics.Register(d.Name+counterResponseErrorsAPI, "counter")
-	d.Metrics.Register(d.Name+counterResponseErrorsPeer, "counter")
+	d.Metrics.Register(d.Name+counterResponseErrors, "counter")
 
 	processCtx, canceler := context.WithCancel(context.Background())
 	d.responseCanceler = canceler
@@ -147,7 +145,6 @@ func (d *DefaultTransmission) processResponses(
 	ctx context.Context,
 	responses chan transmission.Response,
 ) {
-	honeycombAPI, _ := d.Config.GetHoneycombAPI()
 	for {
 		select {
 		case r := <-responses:
@@ -170,14 +167,7 @@ func (d *DefaultTransmission) processResponses(
 					log = log.WithField("error", r.Err.Error())
 				}
 				log.Logf("error when sending event")
-				if honeycombAPI == apiHost {
-					// if the API host matches the configured honeycomb API,
-					// count it as an API error
-					d.Metrics.Increment(d.Name + counterResponseErrorsAPI)
-				} else {
-					// otherwise, it's probably a peer error
-					d.Metrics.Increment(d.Name + counterResponseErrorsPeer)
-				}
+				d.Metrics.Increment(d.Name + counterResponseErrors)
 			} else {
 				d.Metrics.Increment(d.Name + counterResponse20x)
 			}
