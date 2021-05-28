@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## 1.2.1
+
+### Fixes
+
+- OTLP span events are now supported, they were being dropped on the floor previously (#261) | [@dstrelau](https://github.com/dstrelau)
+
 ## 1.2.0
 
 ### Added
