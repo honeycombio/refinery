@@ -477,7 +477,8 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					eventAttrs[k] = v
 				}
 
-				event := &types.Event{
+				events := make([]*types.Event, len(span.Events)+1)
+				events[0] = &types.Event{
 					Context:    ctx,
 					APIHost:    apiHost,
 					APIKey:     apiKey,
@@ -487,10 +488,44 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					Data:       eventAttrs,
 				}
 
-				err = r.processEvent(event, requestID)
-				if err != nil {
-					r.Logger.Error().Logf("Error processing event: " + err.Error())
+				for i, sevent := range span.Events {
+					timestamp := time.Unix(0, int64(sevent.TimeUnixNano)).UTC()
+					attrs := map[string]interface{}{
+						"trace.trace_id":       traceID,
+						"trace.parent_id":      spanID,
+						"name":                 sevent.Name,
+						"parent_name":          span.Name,
+						"meta.annotation_type": "span_event",
+					}
+
+					if sevent.Attributes != nil {
+						addAttributesToMap(attrs, sevent.Attributes)
+					}
+					sampleRate, err := getSampleRateFromAttributes(attrs)
+					if err != nil {
+						debugLog.
+							WithField("error", err.Error()).
+							WithField("sampleRate", attrs["sampleRate"]).
+							Logf("error parsing sampleRate")
+					}
+					events[i+1] = &types.Event{
+						Context:    ctx,
+						APIHost:    apiHost,
+						APIKey:     apiKey,
+						Dataset:    dataset,
+						SampleRate: uint(sampleRate),
+						Timestamp:  timestamp,
+						Data:       attrs,
+					}
 				}
+
+				for _, evt := range events {
+					err = r.processEvent(evt, requestID)
+					if err != nil {
+						r.Logger.Error().Logf("Error processing event: " + err.Error())
+					}
+				}
+
 			}
 		}
 	}
