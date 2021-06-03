@@ -523,7 +523,6 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 				}
 
 				for _, slink := range span.Links {
-					var timestamp time.Time
 					attrs := map[string]interface{}{
 						"trace.trace_id":       traceID,
 						"trace.parent_id":      spanID,
@@ -552,7 +551,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 						APIKey:     apiKey,
 						Dataset:    dataset,
 						SampleRate: uint(sampleRate),
-						Timestamp:  timestamp,
+						Timestamp:  time.Time{}, //links don't have timestamps, so use empty time
 						Data:       attrs,
 					})
 				}
