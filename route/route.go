@@ -478,7 +478,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 				}
 
 				events := make([]*types.Event, 0, 1+len(span.Events)+len(span.Links))
-				events[0] = &types.Event{
+				events = append(events, &types.Event{
 					Context:    ctx,
 					APIHost:    apiHost,
 					APIKey:     apiKey,
@@ -486,7 +486,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					SampleRate: uint(sampleRate),
 					Timestamp:  timestamp,
 					Data:       eventAttrs,
-				}
+				})
 
 				for _, sevent := range span.Events {
 					timestamp := time.Unix(0, int64(sevent.TimeUnixNano)).UTC()
