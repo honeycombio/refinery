@@ -405,10 +405,12 @@ func TestOTLPHandler(t *testing.T) {
 
 	mockMetrics := metrics.MockMetrics{}
 	mockMetrics.Start()
+	mockTransmission := &transmit.MockTransmission{}
+	mockTransmission.Start()
 	router := &Router{
 		Config:               &config.MockConfig{},
 		Metrics:              &mockMetrics,
-		UpstreamTransmission: &transmit.MockTransmission{},
+		UpstreamTransmission: mockTransmission,
 		iopLogger: iopLogger{
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
@@ -441,6 +443,35 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
+	})
+
+	t.Run("creates events for span links", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.Span{{
+				Name:              "my-span",
+				StartTimeUnixNano: uint64(now.UnixNano()),
+				Events: []*trace.Span_Event{{
+					TimeUnixNano: uint64(now.UnixNano()),
+					Attributes: []*common.KeyValue{{
+						Key: "attribute_key",
+						Value: &common.AnyValue{
+							Value: &common.AnyValue_StringValue{StringValue: "attribute_value"},
+						},
+					}},
+				}},
+			}},
+		}
+		_, err := router.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+
+		time.Sleep(conf.SendTickerVal * 2)
+
+		transmission.Mux.RLock()
+		assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
+		assert.Equal(t, transmission.Events[0].Data["span.name"], "my-span")
+		transmission.Mux.RUnlock()
 	})
 }
 
