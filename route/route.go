@@ -477,7 +477,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					eventAttrs[k] = v
 				}
 
-				events := make([]*types.Event, len(span.Events)+1)
+				events := make([]*types.Event, 0, 1+len(span.Events)+len(span.Links))
 				events[0] = &types.Event{
 					Context:    ctx,
 					APIHost:    apiHost,
@@ -488,7 +488,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					Data:       eventAttrs,
 				}
 
-				for i, sevent := range span.Events {
+				for _, sevent := range span.Events {
 					timestamp := time.Unix(0, int64(sevent.TimeUnixNano)).UTC()
 					attrs := map[string]interface{}{
 						"trace.trace_id":       traceID,
@@ -501,6 +501,9 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					if sevent.Attributes != nil {
 						addAttributesToMap(attrs, sevent.Attributes)
 					}
+					for k, v := range resourceAttrs {
+						attrs[k] = v
+					}
 					sampleRate, err := getSampleRateFromAttributes(attrs)
 					if err != nil {
 						debugLog.
@@ -508,7 +511,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 							WithField("sampleRate", attrs["sampleRate"]).
 							Logf("error parsing sampleRate")
 					}
-					events[i+1] = &types.Event{
+					events = append(events, &types.Event{
 						Context:    ctx,
 						APIHost:    apiHost,
 						APIKey:     apiKey,
@@ -516,7 +519,42 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 						SampleRate: uint(sampleRate),
 						Timestamp:  timestamp,
 						Data:       attrs,
+					})
+				}
+
+				for _, slink := range span.Links {
+					var timestamp time.Time
+					attrs := map[string]interface{}{
+						"trace.trace_id":       traceID,
+						"trace.parent_id":      spanID,
+						"trace.link.trace_id":  bytesToTraceID(slink.TraceId),
+						"trace.link.span_id":   hex.EncodeToString(slink.SpanId),
+						"parent_name":          span.Name,
+						"meta.annotation_type": "link",
 					}
+
+					if slink.Attributes != nil {
+						addAttributesToMap(attrs, slink.Attributes)
+					}
+					for k, v := range resourceAttrs {
+						attrs[k] = v
+					}
+					sampleRate, err := getSampleRateFromAttributes(attrs)
+					if err != nil {
+						debugLog.
+							WithField("error", err.Error()).
+							WithField("sampleRate", attrs["sampleRate"]).
+							Logf("error parsing sampleRate")
+					}
+					events = append(events, &types.Event{
+						Context:    ctx,
+						APIHost:    apiHost,
+						APIKey:     apiKey,
+						Dataset:    dataset,
+						SampleRate: uint(sampleRate),
+						Timestamp:  timestamp,
+						Data:       attrs,
+					})
 				}
 
 				for _, evt := range events {
