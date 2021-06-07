@@ -25,6 +25,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/sharder"
@@ -412,7 +413,7 @@ func TestOTLPHandler(t *testing.T) {
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
 		iopLogger: iopLogger{
-			Logger:         &logger.MockLogger{},
+			Logger:         &logger.NullLogger{},
 			incomingOrPeer: "incoming",
 		},
 	}
@@ -429,6 +430,8 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		mockTransmission.Flush()
 	})
 
 	t.Run("span without status", func(t *testing.T) {
@@ -443,36 +446,97 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		mockTransmission.Flush()
 	})
 
-	t.Run("creates events for span links", func(t *testing.T) {
-		req := &collectortrace.ExportTraceServiceRequest{
-			ResourceSpans: []*trace.Span{{
-				Name:              "my-span",
-				StartTimeUnixNano: uint64(now.UnixNano()),
-				Events: []*trace.Span_Event{{
-					TimeUnixNano: uint64(now.UnixNano()),
-					Attributes: []*common.KeyValue{{
-						Key: "attribute_key",
-						Value: &common.AnyValue{
-							Value: &common.AnyValue_StringValue{StringValue: "attribute_value"},
-						},
-					}},
-				}},
-			}},
-		}
-		_, err := router.Export(ctx, req)
-		if err != nil {
-			t.Errorf(`Unexpected error: %s`, err)
-		}
+	// TODO: (MG) figuure out how we can test JSON created from OTLP requests
+	// Below is example, but requires significant usage of collector, sampler, conf, etc
+	// t.Run("creates events for span events", func(t *testing.T) {
+	// 	traceID := []byte{0, 0, 0, 0, 1}
+	// 	spanID := []byte{1, 0, 0, 0, 0}
+	// 	req := &collectortrace.ExportTraceServiceRequest{
+	// 		ResourceSpans: []*trace.ResourceSpans{{
+	// 			InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+	// 				Spans: []*trace.Span{{
+	// 					TraceId: traceID,
+	// 					SpanId:  spanID,
+	// 					Name:    "span_with_event",
+	// 					Events: []*trace.Span_Event{{
+	// 						TimeUnixNano: 12345,
+	// 						Name:         "span_link",
+	// 						Attributes: []*common.KeyValue{{
+	// 							Key: "event_attr_key", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "event_attr_val"}},
+	// 						}},
+	// 					}},
+	// 				}},
+	// 			}},
+	// 		}},
+	// 	}
+	// 	_, err := router.Export(ctx, req)
+	// 	if err != nil {
+	// 		t.Errorf(`Unexpected error: %s`, err)
+	// 	}
 
-		time.Sleep(conf.SendTickerVal * 2)
+	// 	time.Sleep(conf.SendTickerVal * 2)
 
-		transmission.Mux.RLock()
-		assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
-		assert.Equal(t, transmission.Events[0].Data["span.name"], "my-span")
-		transmission.Mux.RUnlock()
-	})
+	// 	mockTransmission.Mux.Lock()
+	// 	assert.Equal(t, 2, len(mockTransmission.Events))
+
+	// 	spanEvent := mockTransmission.Events[0]
+	// 	// assert.Equal(t, time.Unix(0, int64(12345)).UTC(), spanEvent.Timestamp)
+	// 	assert.Equal(t, bytesToTraceID(traceID), spanEvent.Data["trace.trace_id"])
+	// 	assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data["trace.span_id"])
+	// 	assert.Equal(t, "span_link", spanEvent.Data["span.name"])
+	// 	assert.Equal(t, "span_with_event", spanEvent.Data["parent.name"])
+	// 	assert.Equal(t, "span_event", spanEvent.Data["meta.annotation_type"])
+	// 	assert.Equal(t, "event_attr_key", spanEvent.Data["event_attr_val"])
+	// 	mockTransmission.Mux.Unlock()
+	// 	mockTransmission.Flush()
+	// })
+
+	// t.Run("creates events for span links", func(t *testing.T) {
+	// 	traceID := []byte{0, 0, 0, 0, 1}
+	// 	spanID := []byte{1, 0, 0, 0, 0}
+	// 	linkTraceID := []byte{0, 0, 0, 0, 2}
+	// 	linkSpanID := []byte{2, 0, 0, 0, 0}
+
+	// 	req := &collectortrace.ExportTraceServiceRequest{
+	// 		ResourceSpans: []*trace.ResourceSpans{{
+	// 			InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+	// 				Spans: []*trace.Span{{
+	// 					Name:    "span_with_link",
+	// 					TraceId: traceID,
+	// 					SpanId:  spanID,
+	// 					Links: []*trace.Span_Link{{
+	// 						TraceId:    traceID,
+	// 						SpanId:     spanID,
+	// 						TraceState: "link_trace_state",
+	// 						Attributes: []*common.KeyValue{{
+	// 							Key: "link_attr_key", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "link_attr_val"}},
+	// 						}},
+	// 					}},
+	// 				}},
+	// 			}},
+	// 		}},
+	// 	}
+	// 	_, err := router.Export(ctx, req)
+	// 	if err != nil {
+	// 		t.Errorf(`Unexpected error: %s`, err)
+	// 	}
+
+	// 	time.Sleep(conf.SendTickerVal * 2)
+	// 	assert.Equal(t, 2, len(mockTransmission.Events))
+
+	// 	spanLink := mockTransmission.Events[1]
+	// 	assert.Equal(t, bytesToTraceID(traceID), spanLink.Data["trace.trace_id"])
+	// 	assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data["trace.span_id"])
+	// 	assert.Equal(t, bytesToTraceID(linkTraceID), spanLink.Data["trace.link.trace_id"])
+	// 	assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data["trace.link.span_id"])
+	// 	assert.Equal(t, "link", spanLink.Data["meta.annotation_type"])
+	// 	assert.Equal(t, "link_attr_val", spanLink.Data["link_attr_key"])
+	// 	mockTransmission.Flush()
+	// })
 }
 
 func TestDependencyInjection(t *testing.T) {
