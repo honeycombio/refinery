@@ -923,7 +923,7 @@ func getSampleRateFromAttributes(attrs map[string]interface{}) (int, error) {
 			sampleRate = int(v)
 		}
 	default:
-		err = fmt.Errorf("Unrecognised sampleRate datatype - %T", sampleRate)
+		err = fmt.Errorf("unrecognised sampleRate datatype - %T", sampleRate)
 		sampleRate = defaultSampleRate
 	}
 	// remove sampleRate from event fields

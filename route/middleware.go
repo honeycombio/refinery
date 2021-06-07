@@ -45,7 +45,7 @@ func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 				return
 			}
 		}
-		err = errors.New(fmt.Sprintf("api key %s not found in list of authed keys", apiKey))
+		err = fmt.Errorf("api key %s not found in list of authed keys", apiKey)
 		r.handlerReturnWithError(w, ErrAuthNeeded, err)
 	})
 }
