@@ -21,9 +21,10 @@ func TestCacheSetGet(t *testing.T) {
 
 	trace := &types.Trace{
 		TraceID: "abc123",
+		Dataset: "test-dataset",
 	}
 	c.Set(trace)
-	tr := c.Get(trace.TraceID)
+	tr := c.Get(trace.Dataset, trace.TraceID)
 	assert.Equal(t, trace, tr, "fetched trace should equal what we put in")
 }
 
@@ -35,9 +36,9 @@ func TestBufferOverrun(t *testing.T) {
 	c := NewInMemCache(2, s, &logger.NullLogger{})
 
 	traces := []*types.Trace{
-		&types.Trace{TraceID: "abc123"},
-		&types.Trace{TraceID: "def456"},
-		&types.Trace{TraceID: "ghi789"},
+		{TraceID: "abc123", Dataset: "test-dataset"},
+		{TraceID: "def456", Dataset: "test-dataset"},
+		{TraceID: "ghi789", Dataset: "test-dataset"},
 	}
 
 	c.Set(traces[0])
@@ -54,10 +55,10 @@ func TestTakeExpiredTraces(t *testing.T) {
 
 	now := time.Now()
 	traces := []*types.Trace{
-		&types.Trace{TraceID: "1", SendBy: now.Add(-time.Minute), Sent: true},
-		&types.Trace{TraceID: "2", SendBy: now.Add(-time.Minute)},
-		&types.Trace{TraceID: "3", SendBy: now.Add(time.Minute)},
-		&types.Trace{TraceID: "4"},
+		{TraceID: "1", Dataset: "test-dataset", SendBy: now.Add(-time.Minute), Sent: true},
+		{TraceID: "2", Dataset: "test-dataset", SendBy: now.Add(-time.Minute)},
+		{TraceID: "3", Dataset: "test-dataset", SendBy: now.Add(time.Minute)},
+		{TraceID: "4", Dataset: "test-dataset"},
 	}
 	for _, t := range traces {
 		c.Set(t)

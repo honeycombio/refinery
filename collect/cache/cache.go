@@ -13,7 +13,7 @@ type Cache interface {
 	// Set adds the trace to the cache. If it is kicking out a trace from the cache
 	// that has not yet been sent, it will return that trace. Otherwise returns nil.
 	Set(trace *types.Trace) *types.Trace
-	Get(traceID string) *types.Trace
+	Get(Dataset string, traceID string) *types.Trace
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
 
@@ -93,12 +93,12 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	}
 
 	// store the trace
-	d.cache[trace.TraceID] = trace
+	d.cache[trace.Dataset+"::"+trace.TraceID] = trace
 
 	// expunge the trace in the current spot in the insertion ring
 	oldTrace := d.insertionOrder[d.insertPoint]
 	if oldTrace != nil {
-		delete(d.cache, oldTrace.TraceID)
+		delete(d.cache, oldTrace.Dataset+"::"+oldTrace.TraceID)
 		if !oldTrace.Sent {
 			// if it hasn't already been sent,
 			// record that we're overrunning the buffer
@@ -112,8 +112,8 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	return retTrace
 }
 
-func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
-	return d.cache[traceID]
+func (d *DefaultInMemCache) Get(Dataset string, traceID string) *types.Trace {
+	return d.cache[Dataset+"::"+traceID]
 }
 
 // GetAll is not thread safe and should only be used when that's ok
@@ -137,7 +137,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 		if t != nil && now.After(t.SendBy) {
 			res = append(res, t)
 			d.insertionOrder[i] = nil
-			delete(d.cache, t.TraceID)
+			delete(d.cache, t.Dataset+"::"+t.TraceID)
 		}
 	}
 	return res
