@@ -57,11 +57,12 @@ func TestAddRootSpan(t *testing.T) {
 
 	var traceID1 = "mytrace"
 	var traceID2 = "mytraess"
+	var Dataset1 = "aoeu"
 
 	span := &types.Span{
 		TraceID: traceID1,
 		Event: types.Event{
-			Dataset: "aoeu",
+			Dataset: Dataset1,
 		},
 	}
 	coll.AddSpan(span)
@@ -71,16 +72,16 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(Dataset1, traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
-	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	assert.Equal(t, Dataset1, transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
 
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Dataset: "aoeu",
+			Dataset: Dataset1,
 		},
 	}
 	coll.AddSpanFromPeer(span)
@@ -89,10 +90,10 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(Dataset1, traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
-	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
+	assert.Equal(t, Dataset1, transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
 }
 
@@ -130,11 +131,12 @@ func TestAddSpan(t *testing.T) {
 	defer coll.Stop()
 
 	var traceID = "mytrace"
+	var Dataset1 = "aoeu"
 
 	span := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
-			Dataset: "aoeu",
+			Dataset: Dataset1,
 			Data: map[string]interface{}{
 				"trace.parent_id": "unused",
 			},
@@ -142,19 +144,19 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	assert.Equal(t, traceID, coll.getFromCache(Dataset1, traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
-			Dataset: "aoeu",
+		Event: types.Event{``
+			Dataset: Dataset1,
 			Data:    map[string]interface{}{},
 		},
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(Dataset1, traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	transmission.Mux.RUnlock()
@@ -203,20 +205,25 @@ func TestDryRunMode(t *testing.T) {
 	var traceID1 = "abc123"
 	var traceID2 = "def456"
 	var traceID3 = "ghi789"
+	var Dataset1 = "aeou"
+	var Dataset2 = "msasi"
+	var Dataset3 = "other"
+
 	// sampling decisions based on trace ID
-	_, keepTraceID1 := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
+	_, keepTraceID1 := sampler.GetSampleRate(&types.Trace{TraceID: traceID1, Dataset: Dataset1})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID1)
-	_, keepTraceID2 := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
+	_, keepTraceID2 := sampler.GetSampleRate(&types.Trace{TraceID: traceID2, Dataset: Dataset2})
 	assert.True(t, keepTraceID2)
-	_, keepTraceID3 := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
+	_, keepTraceID3 := sampler.GetSampleRate(&types.Trace{TraceID: traceID3, Dataset: Dataset3})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID3)
 
 	span := &types.Span{
 		TraceID: traceID1,
 		Event: types.Event{
-			Data: map[string]interface{}{},
+			Data:    map[string]interface{}{},
+			Dataset: Dataset1,
 		},
 	}
 	coll.AddSpan(span)
@@ -225,7 +232,7 @@ func TestDryRunMode(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(Dataset1, traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID1, transmission.Events[0].Data[field], "field should match sampling decision for its trace ID")
@@ -235,7 +242,7 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Dataset: "aoeu",
+			Dataset: Dataset2,
 			Data: map[string]interface{}{
 				"trace.parent_id": "unused",
 			},
@@ -243,12 +250,13 @@ func TestDryRunMode(t *testing.T) {
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Equal(t, traceID2, coll.getFromCache(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	assert.Equal(t, traceID2, coll.getFromCache(Dataset2, traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Data: map[string]interface{}{},
+			Dataset: Dataset2,
+			Data:    map[string]interface{}{},
 		},
 	}
 	coll.AddSpanFromPeer(span)
@@ -264,7 +272,8 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID3,
 		Event: types.Event{
-			Data: map[string]interface{}{},
+			Dataset: Dataset3,
+			Data:    map[string]interface{}{},
 		},
 	}
 	coll.AddSpan(span)
@@ -273,7 +282,7 @@ func TestDryRunMode(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(Dataset3, traceID3), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, keepTraceID3, transmission.Events[3].Data[field], "field should match sampling decision for its trace ID")
