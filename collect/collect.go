@@ -313,10 +313,10 @@ func (i *InMemCollector) sendTracesInCache(now time.Time) {
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
 func (i *InMemCollector) processSpan(sp *types.Span) {
-	trace := i.cache.Get(sp.TraceID)
+	trace := i.cache.Get(sp.Dataset, sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
+		if sentRecord, found := i.sentTraceCache.Get(sp.Dataset + "::" + sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
 				i.Metrics.Increment("trace_sent_cache_hit")
 				i.dealWithSentTrace(sr.keep, sr.rate, sp)
@@ -444,7 +444,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		keep: shouldSend,
 		rate: rate,
 	}
-	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
+	i.sentTraceCache.Add(trace.Dataset+"::"+trace.TraceID, &sentRecord)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
@@ -497,9 +497,9 @@ func (i *InMemCollector) Stop() error {
 }
 
 // Convenience method for tests.
-func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
+func (i *InMemCollector) getFromCache(Dataset string, traceID string) *types.Trace {
 	i.mutex.RLock()
 	defer i.mutex.RUnlock()
 
-	return i.cache.Get(traceID)
+	return i.cache.Get(Dataset, traceID)
 }
