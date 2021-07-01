@@ -156,6 +156,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 	authedMuxxer.HandleFunc("/events/{datasetName}", r.event).Name("event")
 	authedMuxxer.HandleFunc("/batch/{datasetName}", r.batch).Name("batch")
 
+	// OTLP trace
+	authedMuxxer.HandleFunc("/v1/traces", r.postOTLP).Name("otlp")
+
 	// pass everything else through unmolested
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 

@@ -4,53 +4,84 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"strings"
+	"io/ioutil"
+	"net/http"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/honeycombio/refinery/types"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
 	common "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/common/v1"
 	trace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/trace/v1"
 )
 
-func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		r.Logger.Error().Logf("Unable to retreive metadata from OTLP request.")
-		return &collectortrace.ExportTraceServiceResponse{}, nil
+func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+	contentType := req.Header.Get("content-type")
+	if contentType != "application/protobuf" && contentType != "application/x-protobuf" {
+		router.handlerReturnWithError(w, ErrInvalidContentType, errors.New("invalid content-type"))
+		return
 	}
 
-	// requestID is used to track a requst as it moves between refinery nodes (peers)
-	// the OTLP handler only receives incoming (not peer) requests for now so will be empty here
-	var requestID types.RequestIDContextKey
-	debugLog := r.iopLogger.Debug().WithField("request_id", requestID)
-
-	apiKey, dataset := getAPIKeyAndDatasetFromMetadata(md)
-	if apiKey == "" {
-		r.Logger.Error().Logf("Received OTLP request without Honeycomb APIKey header")
-		return &collectortrace.ExportTraceServiceResponse{}, nil
-	}
-	if dataset == "" {
-		r.Logger.Error().Logf("Received OTLP request without Honeycomb dataset header")
-		return &collectortrace.ExportTraceServiceResponse{}, nil
-	}
-
-	apiHost, err := r.Config.GetHoneycombAPI()
+	apiKey, datasetName, err := getAPIKeyDatasetAndTokenFromHttpHeaders(req)
 	if err != nil {
-		r.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
-		return &collectortrace.ExportTraceServiceResponse{}, nil
+		router.handlerReturnWithError(w, ErrAuthNeeded, err)
+		return
 	}
 
-	var grpcRequestEncoding string
-	if val := md.Get("grpc-accept-encoding"); val != nil {
-		grpcRequestEncoding = strings.Join(val, ",")
+	bodyBytes, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		router.handlerReturnWithError(w, ErrPostBody, err)
+		return
 	}
 
-	for _, resourceSpan := range req.ResourceSpans {
+	request := &collectortrace.ExportTraceServiceRequest{}
+	err = proto.Unmarshal(bodyBytes, request)
+	if err != nil {
+		router.handlerReturnWithError(w, ErrPostBody, err)
+	}
+
+	if err := processTraceRequest(req.Context(), router, request, apiKey, datasetName); err != nil {
+		router.handlerReturnWithError(w, ErrUpstreamFailed, err)
+	}
+}
+
+func (router *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
+	apiKey, datasetName, err := getAPIKeyDatasetAndTokenFromMetadata(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+
+	if err := processTraceRequest(ctx, router, req, apiKey, datasetName); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &collectortrace.ExportTraceServiceResponse{}, nil
+}
+
+func processTraceRequest(
+	ctx context.Context,
+	router *Router,
+	request *collectortrace.ExportTraceServiceRequest,
+	apiKey string,
+	datasetName string) error {
+
+	var requestID types.RequestIDContextKey
+	debugLog := router.iopLogger.Debug().WithField("request_id", requestID)
+
+	apiHost, err := router.Config.GetHoneycombAPI()
+	if err != nil {
+		router.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
+		return err
+	}
+
+	for _, resourceSpan := range request.ResourceSpans {
 		resourceAttrs := make(map[string]interface{})
 
 		if resourceSpan.Resource != nil {
@@ -79,12 +110,12 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					"type":           getSpanKind(span.Kind),
 					"name":           span.Name,
 					"duration_ms":    float64(span.EndTimeUnixNano-span.StartTimeUnixNano) / float64(time.Millisecond),
-					"status_code":    int32(r.getSpanStatusCode(span.Status)),
+					"status_code":    int32(getSpanStatusCode(span.Status)),
 				}
 				if span.ParentSpanId != nil {
 					eventAttrs["trace.parent_id"] = hex.EncodeToString(span.ParentSpanId)
 				}
-				if r.getSpanStatusCode(span.Status) == trace.Status_STATUS_CODE_ERROR {
+				if getSpanStatusCode(span.Status) == trace.Status_STATUS_CODE_ERROR {
 					eventAttrs["error"] = true
 				}
 				if span.Status != nil && len(span.Status.Message) > 0 {
@@ -92,9 +123,6 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 				}
 				if span.Attributes != nil {
 					addAttributesToMap(eventAttrs, span.Attributes)
-				}
-				if grpcRequestEncoding != "" {
-					eventAttrs["grpc_request_encoding"] = grpcRequestEncoding
 				}
 
 				sampleRate, err := getSampleRateFromAttributes(eventAttrs)
@@ -112,7 +140,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 					Context:    ctx,
 					APIHost:    apiHost,
 					APIKey:     apiKey,
-					Dataset:    dataset,
+					Dataset:    datasetName,
 					SampleRate: uint(sampleRate),
 					Timestamp:  timestamp,
 					Data:       eventAttrs,
@@ -145,7 +173,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 						Context:    ctx,
 						APIHost:    apiHost,
 						APIKey:     apiKey,
-						Dataset:    dataset,
+						Dataset:    datasetName,
 						SampleRate: uint(sampleRate),
 						Timestamp:  timestamp,
 						Data:       attrs,
@@ -179,7 +207,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 						Context:    ctx,
 						APIHost:    apiHost,
 						APIKey:     apiKey,
-						Dataset:    dataset,
+						Dataset:    datasetName,
 						SampleRate: uint(sampleRate),
 						Timestamp:  time.Time{}, //links don't have timestamps, so use empty time
 						Data:       attrs,
@@ -187,9 +215,9 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 				}
 
 				for _, evt := range events {
-					err = r.processEvent(evt, requestID)
+					err = router.processEvent(evt, requestID)
 					if err != nil {
-						r.Logger.Error().Logf("Error processing event: " + err.Error())
+						router.Logger.Error().Logf("Error processing event: " + err.Error())
 					}
 				}
 
@@ -197,7 +225,7 @@ func (r *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServ
 		}
 	}
 
-	return &collectortrace.ExportTraceServiceResponse{}, nil
+	return nil
 }
 
 func addAttributesToMap(attrs map[string]interface{}, attributes []*common.KeyValue) {
@@ -272,7 +300,7 @@ func bytesToTraceID(traceID []byte) string {
 // notes in the protobuf definitions. See:
 //
 // https://github.com/open-telemetry/opentelemetry-proto/blob/59c488bfb8fb6d0458ad6425758b70259ff4a2bd/opentelemetry/proto/trace/v1/trace.proto#L230
-func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode {
+func getSpanStatusCode(status *trace.Status) trace.Status_StatusCode {
 	if status == nil {
 		return trace.Status_STATUS_CODE_UNSET
 	}
@@ -283,4 +311,49 @@ func (r *Router) getSpanStatusCode(status *trace.Status) trace.Status_StatusCode
 		return trace.Status_STATUS_CODE_ERROR
 	}
 	return status.Code
+}
+
+func getAPIKeyDatasetAndTokenFromMetadata(ctx context.Context) (
+	apiKey string,
+	datasetName string,
+	err error) {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		apiKey = getValueFromMetadata(md, "x-honeycomb-team")
+		datasetName = getValueFromMetadata(md, "x-honeycomb-dataset")
+	}
+
+	if err := validateHeaders(apiKey, datasetName); err != nil {
+		return "", "", err
+	}
+	return apiKey, datasetName, nil
+}
+
+func getValueFromMetadata(md metadata.MD, key string) string {
+	if vals := md.Get(key); len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
+}
+
+func getAPIKeyDatasetAndTokenFromHttpHeaders(r *http.Request) (
+	apiKey string,
+	datasetName string,
+	err error) {
+	apiKey = r.Header.Get("x-honeycomb-team")
+	datasetName = r.Header.Get("x-honeycomb-dataset")
+
+	if err := validateHeaders(apiKey, datasetName); err != nil {
+		return "", "", err
+	}
+	return apiKey, datasetName, nil
+}
+
+func validateHeaders(apiKey string, datasetName string) error {
+	if apiKey == "" {
+		return errors.New("missing x-honeycomb-team header")
+	}
+	if datasetName == "" {
+		return errors.New("missing x-honeycomb-team header")
+	}
+	return nil
 }
