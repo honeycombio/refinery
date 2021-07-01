@@ -10,6 +10,6 @@ updates:
     schedule:
       interval: "weekly"
     labels:
-      - "type: maintenance"
+      - "type: dependencies"
     reviewers:
-      - "honeycombio/integrations-team"
+      - "honeycombio/telemetry-team"
