@@ -1,6 +1,8 @@
 package route
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/hex"
 	"net/http"
@@ -191,6 +193,42 @@ func TestOTLPHandler(t *testing.T) {
 		request, _ := http.NewRequest("POST", "/v1/traces", strings.NewReader(string(body)))
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/protobuf")
+		request.Header.Set("x-honeycomb-team", "apikey")
+		request.Header.Set("x-honeycomb-dataset", "dataset")
+
+		w := httptest.NewRecorder()
+		router.postOTLP(w, request)
+		assert.Equal(t, w.Code, http.StatusOK)
+
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
+
+	t.Run("can receive OTLP over HTTP/protobuf with gzip encoding", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := proto.Marshal(req)
+		if err != nil {
+			t.Error(err)
+		}
+
+		buf := new(bytes.Buffer)
+		writer := gzip.NewWriter(buf)
+		writer.Write(body)
+		writer.Close()
+		if err != nil {
+			t.Error(err)
+		}
+
+		request, _ := http.NewRequest("POST", "/v1/traces", strings.NewReader(buf.String()))
+		request.Header = http.Header{}
+		request.Header.Set("content-type", "application/protobuf")
+		request.Header.Set("content-encoding", "gzip")
 		request.Header.Set("x-honeycomb-team", "apikey")
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 

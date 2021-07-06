@@ -1,17 +1,21 @@
 package route
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/honeycombio/refinery/types"
+	"github.com/klauspost/compress/zstd"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -35,14 +39,7 @@ func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	bodyBytes, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		router.handlerReturnWithError(w, ErrPostBody, err)
-		return
-	}
-
-	request := &collectortrace.ExportTraceServiceRequest{}
-	err = proto.Unmarshal(bodyBytes, request)
+	request, err := parseOTLPBody(req, router.zstdDecoders)
 	if err != nil {
 		router.handlerReturnWithError(w, ErrPostBody, err)
 	}
@@ -356,4 +353,50 @@ func validateHeaders(apiKey string, datasetName string) error {
 		return errors.New("missing x-honeycomb-team header")
 	}
 	return nil
+}
+
+func parseOTLPBody(r *http.Request, zstdDecoders chan *zstd.Decoder) (request *collectortrace.ExportTraceServiceRequest, err error) {
+	bodyBytes, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader := bytes.NewReader(bodyBytes)
+
+	var reader io.Reader
+	switch r.Header.Get("Content-Encoding") {
+	case "gzip":
+		var err error
+		reader, err = gzip.NewReader(bodyReader)
+		if err != nil {
+			return nil, err
+		}
+	case "zstd":
+		zReader := <-zstdDecoders
+		defer func(zReader *zstd.Decoder) {
+			zReader.Reset(nil)
+			zstdDecoders <- zReader
+		}(zReader)
+
+		err = zReader.Reset(bodyReader)
+		if err != nil {
+			return nil, err
+		}
+
+		reader = zReader
+	default:
+		reader = bodyReader
+	}
+
+	bytes, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	otlpRequet := &collectortrace.ExportTraceServiceRequest{}
+	err = proto.Unmarshal(bytes, otlpRequet)
+	if err != nil {
+		return nil, err
+	}
+
+	return otlpRequet, nil
 }
