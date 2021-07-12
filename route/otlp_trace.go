@@ -39,7 +39,8 @@ func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	request, err := parseOTLPBody(req, router.zstdDecoders)
+	request, cleanup, err := parseOTLPBody(req, router.zstdDecoders)
+	defer cleanup()
 	if err != nil {
 		router.handlerReturnWithError(w, ErrPostBody, err)
 	}
@@ -355,10 +356,11 @@ func validateHeaders(apiKey string, datasetName string) error {
 	return nil
 }
 
-func parseOTLPBody(r *http.Request, zstdDecoders chan *zstd.Decoder) (request *collectortrace.ExportTraceServiceRequest, err error) {
+func parseOTLPBody(r *http.Request, zstdDecoders chan *zstd.Decoder) (request *collectortrace.ExportTraceServiceRequest, cleanup func(), err error) {
+	cleanup = func() { /* empty cleanup */ }
 	bodyBytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 	bodyReader := bytes.NewReader(bodyBytes)
 
@@ -368,18 +370,18 @@ func parseOTLPBody(r *http.Request, zstdDecoders chan *zstd.Decoder) (request *c
 		var err error
 		reader, err = gzip.NewReader(bodyReader)
 		if err != nil {
-			return nil, err
+			return nil, cleanup, err
 		}
 	case "zstd":
 		zReader := <-zstdDecoders
-		defer func(zReader *zstd.Decoder) {
+		cleanup = func() {
 			zReader.Reset(nil)
 			zstdDecoders <- zReader
-		}(zReader)
+		}
 
 		err = zReader.Reset(bodyReader)
 		if err != nil {
-			return nil, err
+			return nil, cleanup, err
 		}
 
 		reader = zReader
@@ -389,14 +391,14 @@ func parseOTLPBody(r *http.Request, zstdDecoders chan *zstd.Decoder) (request *c
 
 	bytes, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	otlpRequet := &collectortrace.ExportTraceServiceRequest{}
 	err = proto.Unmarshal(bytes, otlpRequet)
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
-	return otlpRequet, nil
+	return otlpRequet, cleanup, nil
 }

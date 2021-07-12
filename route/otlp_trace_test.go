@@ -19,6 +19,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/metadata"
 )
@@ -31,6 +32,10 @@ func TestOTLPHandler(t *testing.T) {
 	mockMetrics.Start()
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
+	decoders, err := makeDecoders(1)
+	if err != nil {
+		t.Error(err)
+	}
 	router := &Router{
 		Config:               &config.MockConfig{},
 		Metrics:              &mockMetrics,
@@ -39,7 +44,8 @@ func TestOTLPHandler(t *testing.T) {
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
 		},
-		Logger: &logger.MockLogger{},
+		Logger:       &logger.MockLogger{},
+		zstdDecoders: decoders,
 	}
 
 	conf := &config.MockConfig{
@@ -229,6 +235,45 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/protobuf")
 		request.Header.Set("content-encoding", "gzip")
+		request.Header.Set("x-honeycomb-team", "apikey")
+		request.Header.Set("x-honeycomb-dataset", "dataset")
+
+		w := httptest.NewRecorder()
+		router.postOTLP(w, request)
+		assert.Equal(t, w.Code, http.StatusOK)
+
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
+
+	t.Run("can receive OTLP over HTTP/protobuf with zstd encoding", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := proto.Marshal(req)
+		if err != nil {
+			t.Error(err)
+		}
+
+		buf := new(bytes.Buffer)
+		writer, err := zstd.NewWriter(buf)
+		if err != nil {
+			t.Error(err)
+		}
+		writer.Write(body)
+		writer.Close()
+		if err != nil {
+			t.Error(err)
+		}
+
+		request, _ := http.NewRequest("POST", "/v1/traces", strings.NewReader(buf.String()))
+		request.Header = http.Header{}
+		request.Header.Set("content-type", "application/protobuf")
+		request.Header.Set("content-encoding", "zstd")
 		request.Header.Set("x-honeycomb-team", "apikey")
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
