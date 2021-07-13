@@ -13,7 +13,7 @@ type Cache interface {
 	// Set adds the trace to the cache. If it is kicking out a trace from the cache
 	// that has not yet been sent, it will return that trace. Otherwise returns nil.
 	Set(trace *types.Trace) *types.Trace
-	Get(Dataset string, traceID string) *types.Trace
+	Get(dataset string, traceID string) *types.Trace
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
 
