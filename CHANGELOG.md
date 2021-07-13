@@ -1,5 +1,15 @@
 # Refinery Changelog
 
+## 1.3.0
+
+### Added
+
+- Add support to "does-not-contain" operator on RulesBasedSampler [#267](https://github.com/honeycombio/refinery/pull/267) | [@tr-fteixeira](https://github.com/tr-fteixeira)
+
+### Fixes
+
+- Ensure span links and events generate events and get resource attrs [#264](https://github.com/honeycombio/refinery/pull/264) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.2.1
 
 ### Fixes
@@ -17,7 +27,7 @@
 ### Changed
 
 - Remove redundant peer/api suffix from response error metrics (#247) | [@vreynolds](https://github.com/vreynolds)
-    - `api_response_errors_api`, `api_response_errors_peer`, `peer_response_errors_api`, `peer_response_errors_peer` 
+    - `api_response_errors_api`, `api_response_errors_peer`, `peer_response_errors_api`, `peer_response_errors_peer`
     - replaced by `api_response_errors`, `peer_response_errors`
 - Fix rules sampler to emit correct metric (#236) | [@isnotajoke](https://github.com/isnotajoke)
     - Previously `dynsampler_num_dropped` was emitted, now `rulessampler_num_dropped` will be emitted
