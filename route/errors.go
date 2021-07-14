@@ -33,6 +33,7 @@ var (
 	ErrUpstreamUnavailable = handlerError{nil, "upstream target unavailable", http.StatusServiceUnavailable, true, true}
 	ErrReqToEvent          = handlerError{nil, "failed to parse event", http.StatusBadRequest, false, true}
 	ErrBatchToEvent        = handlerError{nil, "failed to parse event within batch", http.StatusBadRequest, false, true}
+	ErrInvalidContentType  = handlerError{nil, "invalid content-type - only 'application/protobuf' is supported", http.StatusNotImplemented, false, true}
 )
 
 func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, err error) {
