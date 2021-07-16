@@ -3,7 +3,6 @@ module github.com/honeycombio/refinery
 go 1.14
 
 require (
-	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/facebookgo/inject v0.0.0-20180706035515-f23751cae28b
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
@@ -18,10 +17,10 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
-	github.com/honeycombio/libhoney-go v1.12.4
+	github.com/honeycombio/libhoney-go v1.15.3
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.11
-	github.com/klauspost/compress v1.10.3
+	github.com/klauspost/compress v1.12.2
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v0.9.4
@@ -29,7 +28,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.8.1
 	github.com/stretchr/testify v1.7.0
-	github.com/vmihailenco/msgpack/v4 v4.3.11
+	github.com/vmihailenco/msgpack/v4 v4.3.12
 	google.golang.org/grpc v1.39.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
