@@ -13,7 +13,7 @@ require (
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
-	github.com/gomodule/redigo v1.8.4
+	github.com/gomodule/redigo v1.8.5
 	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/golang-lru v0.5.4
