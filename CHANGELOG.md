@@ -6,6 +6,16 @@
 
 - Add support for OTLP over HTTP/protobuf [#279](https://github.com/honeycombio/refinery/pull/279) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
 
+### Maintenance
+
+- Bump github.com/sirupsen/logrus from 1.2.0 to 1.8.1 (#290)
+- Bump google.golang.org/grpc from 1.37.1 to 1.39.0 (#288)
+- Bump github.com/gomodule/redigo from 1.8.4 to 1.8.5 (#287)
+- Bump github.com/spf13/viper from 1.7.0 to 1.8.1 (#274)
+- Bump github.com/gogo/protobuf from 1.3.1 to 1.3.2 (#242)
+- Bump github.com/golang/protobuf from 1.4.3 to 1.5.2 (#252)
+- Bump github.com/grpc-ecosystem/grpc-gateway from 1.12.1 to 1.16.0 (#233)
+
 ## 1.3.0
 
 ### Added
