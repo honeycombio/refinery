@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## 1.4.0
+
+### Added
+
+- Add support for OTLP over HTTP/protobuf [#279](https://github.com/honeycombio/refinery/pull/279) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.3.0
 
 ### Added
