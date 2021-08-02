@@ -21,7 +21,7 @@ require (
 	github.com/honeycombio/libhoney-go v1.12.4
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.11
-	github.com/klauspost/compress v1.10.3
+	github.com/klauspost/compress v1.13.2
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v0.9.4
