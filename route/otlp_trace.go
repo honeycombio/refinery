@@ -102,10 +102,12 @@ func processTraceRequest(
 				spanID := hex.EncodeToString(span.SpanId)
 				timestamp := time.Unix(0, int64(span.StartTimeUnixNano)).UTC()
 
+				spanKind := getSpanKind(span.Kind)
 				eventAttrs := map[string]interface{}{
 					"trace.trace_id": traceID,
 					"trace.span_id":  spanID,
-					"type":           getSpanKind(span.Kind),
+					"type":           spanKind,
+					"span.kind":      spanKind,
 					"name":           span.Name,
 					"duration_ms":    float64(span.EndTimeUnixNano-span.StartTimeUnixNano) / float64(time.Millisecond),
 					"status_code":    int32(getSpanStatusCode(span.Status)),
