@@ -1,5 +1,18 @@
 # Refinery Changelog
 
+## 1.4.1
+
+### Fixes
+
+- Add span.kind when ingesting OTLP (#299)
+
+### Maintenance
+
+- Bump google.golang.org/grpc from 1.39.0 to 1.39.1 (#300)
+- Bump github.com/klauspost/compress from 1.13.2 to 1.13.3 (#301)
+- Bump github.com/honeycombio/libhoney-go from 1.12.4 to 1.15.4 (#295)
+- Bump github.com/klauspost/compress from 1.10.3 to 1.13.2 (#297)
+
 ## 1.4.0
 
 ### Added
