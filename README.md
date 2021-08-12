@@ -2,6 +2,7 @@
 
 ![refinery](https://user-images.githubusercontent.com/6510988/94976958-8cadba80-04cb-11eb-9883-6e8ea554a081.png)
 
+[![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/refinery)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
 [![Build Status](https://circleci.com/gh/honeycombio/refinery.svg?style=shield)](https://circleci.com/gh/honeycombio/refinery)
 
 ## Purpose
