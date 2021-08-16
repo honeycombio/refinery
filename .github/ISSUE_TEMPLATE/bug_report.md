@@ -17,8 +17,8 @@ Please see our [OSS process document](https://github.com/honeycombio/home/blob/m
 
 **Versions**
 
-Go:
-Refinery:
+- Go:
+- Refinery:
 
 
 **Steps to reproduce**
