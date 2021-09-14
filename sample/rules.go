@@ -13,10 +13,11 @@ import (
 )
 
 type RulesBasedSampler struct {
-	Config  *config.RulesBasedSamplerConfig
-	Logger  logger.Logger
-	Metrics metrics.Metrics
-	mux     sync.Mutex
+	Config   *config.RulesBasedSamplerConfig
+	Logger   logger.Logger
+	Metrics  metrics.Metrics
+	samplers map[string]Sampler
+	mux      sync.Mutex
 }
 
 func (s *RulesBasedSampler) Start() error {
@@ -26,6 +27,8 @@ func (s *RulesBasedSampler) Start() error {
 	s.Metrics.Register("rulessampler_num_dropped", "counter")
 	s.Metrics.Register("rulessampler_num_kept", "counter")
 	s.Metrics.Register("rulessampler_sample_rate", "histogram")
+
+	s.samplers = make(map[string]Sampler)
 
 	return nil
 }
@@ -117,16 +120,21 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			var keep bool
 
 			if rule.Downstream != nil {
-				if rule.DownstreamSampler == nil {
-					downstreamSampler, err := s.createDownstreamSampler(rule)
-					if err == nil {
+
+				var sampler Sampler
+				var found bool
+				if sampler, found = s.samplers[rule.String()]; !found {
+					var err error
+					sampler, err = s.createDownstreamSampler(rule)
+					if err != nil {
 						// TODO: Log we got an error before returning: 1, keep
 						return 1, true
 					}
-					rule.DownstreamSampler = downstreamSampler
+					// save sampler for later
+					s.samplers[rule.String()] = sampler
 				}
 
-				rate, keep = rule.DownstreamSampler.GetSampleRate(trace)
+				rate, keep = sampler.GetSampleRate(trace)
 
 			} else {
 				rate = uint(rule.SampleRate)

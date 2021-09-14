@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"github.com/honeycombio/refinery/sample"
 )
 
 type DeterministicSamplerConfig struct {
@@ -58,12 +57,11 @@ type RulesBasedDownstreamSampler struct {
 }
 
 type RulesBasedSamplerRule struct {
-	Name              string
-	SampleRate        int
-	Downstream        *RulesBasedDownstreamSampler
-	DownstreamSampler sample.Sampler
-	Drop              bool
-	Condition         []*RulesBasedSamplerCondition
+	Name       string
+	SampleRate int
+	Downstream *RulesBasedDownstreamSampler
+	Drop       bool
+	Condition  []*RulesBasedSamplerCondition
 }
 
 func (r *RulesBasedSamplerRule) String() string {
