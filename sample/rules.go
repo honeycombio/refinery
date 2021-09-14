@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -15,6 +16,7 @@ type RulesBasedSampler struct {
 	Config  *config.RulesBasedSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
+	mux     sync.Mutex
 }
 
 func (s *RulesBasedSampler) Start() error {
@@ -151,6 +153,9 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 }
 
 func (s *RulesBasedSampler) createDownstreamSampler(rule *config.RulesBasedSamplerRule) (Sampler, error) {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
 	if rule.Downstream.DynamicSampler != nil {
 		ds := &DynamicSampler{Config: rule.Downstream.DynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
 		err := ds.Start()
