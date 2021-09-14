@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -34,24 +35,6 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 
 	for _, rule := range s.Config.Rule {
 		var matched int
-		rate := uint(rule.SampleRate)
-		keep := !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
-
-		// no condition signifies the default
-		if rule.Condition == nil {
-			s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
-			if keep {
-				s.Metrics.Increment("rulessampler_num_kept")
-			} else {
-				s.Metrics.Increment("rulessampler_num_dropped")
-			}
-			logger.WithFields(map[string]interface{}{
-				"rate":      rate,
-				"keep":      keep,
-				"drop_rule": rule.Drop,
-			}).Logf("got sample rate and decision")
-			return rate, keep
-		}
 
 		for _, condition := range rule.Condition {
 		span:
@@ -127,7 +110,27 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			}
 		}
 
-		if matched == len(rule.Condition) {
+		if rule.Condition == nil || matched == len(rule.Condition) {
+			var rate uint
+			var keep bool
+
+			if rule.Downstream != nil {
+				if rule.DownstreamSampler == nil {
+					downstreamSampler, err := s.createDownstreamSampler(rule)
+					if err == nil {
+						// TODO: Log we got an error before returning: 1, keep
+						return 1, true
+					}
+					rule.DownstreamSampler = downstreamSampler
+				}
+
+				rate, keep = rule.DownstreamSampler.GetSampleRate(trace)
+
+			} else {
+				rate = uint(rule.SampleRate)
+				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
+			}
+
 			s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
 			if keep {
 				s.Metrics.Increment("rulessampler_num_kept")
@@ -138,13 +141,34 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				"rate":      rate,
 				"keep":      keep,
 				"drop_rule": rule.Drop,
-				"rule_name": rule.Name,
 			}).Logf("got sample rate and decision")
+
 			return rate, keep
 		}
 	}
 
 	return 1, true
+}
+
+func (s *RulesBasedSampler) createDownstreamSampler(rule *config.RulesBasedSamplerRule) (Sampler, error) {
+	if rule.Downstream.DynamicSampler != nil {
+		ds := &DynamicSampler{Config: rule.Downstream.DynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
+		err := ds.Start()
+		if err != nil {
+			return nil, fmt.Errorf("error creating downstream DynamicSampler for rule: %s", rule.Name)
+		}
+		return ds, nil
+
+	} else if rule.Downstream.EMADynamicSampler != nil {
+		ds := &EMADynamicSampler{Config: rule.Downstream.EMADynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
+		err := ds.Start()
+		if err != nil {
+			return nil, fmt.Errorf("error creating downstream EMADynamicSampler for rule: %s", rule.Name)
+		}
+		return ds, nil
+	}
+
+	return nil, fmt.Errorf("invalid or missing downstream sampler for rule: %s", rule.Name)
 }
 
 const (
