@@ -235,7 +235,7 @@ SampleRate = 1
 			value = 200
 		# define Dynamic Sampler used to determine sample rate
 		# Can be DyanmicSampler or EMADynamicSampler
-		[dataset4.downstream.DynamicSampler]
+		[dataset4.rule.downstream.DynamicSampler]
 			SampleRate = 5
 			FieldList = ["http.route", "http.method"]
 			AddSampleRateKeyToTrace = true
