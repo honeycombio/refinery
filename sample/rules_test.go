@@ -520,3 +520,169 @@ func TestRules(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesWithDynamicSampler(t *testing.T) {
+	data := []TestRulesData{
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name: "downstream-dynamic",
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "rule_test",
+								Operator: "=",
+								Value:    int64(1),
+							},
+						},
+						Downstream: &config.RulesBasedDownstreamSampler{
+							DynamicSampler: &config.DynamicSamplerConfig{
+								SampleRate:                   10,
+								FieldList:                    []string{"http.status_code"},
+								AddSampleRateKeyToTrace:      true,
+								AddSampleRateKeyToTraceField: "meta.key",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+	}
+
+	for _, d := range data {
+		sampler := &RulesBasedSampler{
+			Config:  d.Rules,
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+
+		trace := &types.Trace{}
+
+		for _, span := range d.Spans {
+			trace.AddSpan(span)
+		}
+
+		sampler.Start()
+		rate, keep := sampler.GetSampleRate(trace)
+
+		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+
+		// we can only test when we don't expect to keep the trace
+		if !d.ExpectedKeep {
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+		}
+
+		spans := trace.GetSpans()
+		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
+		for _, span := range spans {
+			assert.Equal(t, span.Event.Data, map[string]interface{}{
+				"rule_test":        int64(1),
+				"http.status_code": "200",
+				"meta.key":         "200•,",
+			}, "should add the sampling key to all spans in the trace")
+		}
+	}
+}
+
+func TestRulesWithEMADynamicSampler(t *testing.T) {
+	data := []TestRulesData{
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name: "downstream-dynamic",
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "rule_test",
+								Operator: "=",
+								Value:    int64(1),
+							},
+						},
+						Downstream: &config.RulesBasedDownstreamSampler{
+							EMADynamicSampler: &config.EMADynamicSamplerConfig{
+								GoalSampleRate:               10,
+								FieldList:                    []string{"http.status_code"},
+								AddSampleRateKeyToTrace:      true,
+								AddSampleRateKeyToTraceField: "meta.key",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+	}
+
+	for _, d := range data {
+		sampler := &RulesBasedSampler{
+			Config:  d.Rules,
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+
+		trace := &types.Trace{}
+
+		for _, span := range d.Spans {
+			trace.AddSpan(span)
+		}
+
+		sampler.Start()
+		rate, keep := sampler.GetSampleRate(trace)
+
+		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+
+		// we can only test when we don't expect to keep the trace
+		if !d.ExpectedKeep {
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+		}
+
+		spans := trace.GetSpans()
+		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
+		for _, span := range spans {
+			assert.Equal(t, span.Event.Data, map[string]interface{}{
+				"rule_test":        int64(1),
+				"http.status_code": "200",
+				"meta.key":         "200•,",
+			}, "should add the sampling key to all spans in the trace")
+		}
+	}
+}
