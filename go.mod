@@ -26,7 +26,7 @@ require (
 	github.com/prometheus/client_golang v0.9.4
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/viper v1.8.1
+	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
 	github.com/vmihailenco/msgpack/v4 v4.3.11
 	google.golang.org/grpc v1.40.0
