@@ -124,6 +124,17 @@ jobs:
             if [[ -z "$version" ]] ; then version=${CIRCLE_SHA1:0:7}; fi
             aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/refinery/$version/
 
+  publish_docker:
+    executor: cimg/go:1.16
+    steps:
+      - checkout
+      - run: go install github.com/google/ko@latest
+      - run:
+          name: "Publish multi-arch docker image"
+          command: |
+            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+            VERSION=${CIRCLE_TAG} KO_DOCKER_REPO=honeycombio build/build_docker.sh
+
 workflows:
   build:
     jobs:
@@ -155,19 +166,8 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - docker/publish:
-          tag: latest
-          extra_build_args: --build-arg BUILD_ID=${CIRCLE_SHA1:0:7}
-          image: $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME
-          requires:
-            - build
-          filters:
-            branches:
-              only: main
-      - docker/publish:
-          tag: latest,${CIRCLE_TAG:1}
-          extra_build_args: --build-arg BUILD_ID=${CIRCLE_TAG:1}
-          image: $CIRCLE_PROJECT_USERNAME/$CIRCLE_PROJECT_REPONAME
+      - publish_docker:
+          context: Honeycomb Secrets for Public Repos
           requires:
             - build
           filters:
