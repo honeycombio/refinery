@@ -2,7 +2,6 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@1.3.0
-  docker: circleci/docker@1.3.0
 
 executors:
   linuxgo:
@@ -125,7 +124,7 @@ jobs:
             aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/refinery/$version/
 
   publish_docker:
-    executor: cimg/go:1.16
+    executor: linuxgo
     steps:
       - checkout
       - run: go install github.com/google/ko@latest
