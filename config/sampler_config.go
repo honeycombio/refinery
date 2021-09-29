@@ -1,5 +1,9 @@
 package config
 
+import (
+	"fmt"
+)
+
 type DeterministicSamplerConfig struct {
 	SampleRate int `validate:"required,gte=1"`
 }
@@ -35,4 +39,40 @@ type TotalThroughputSamplerConfig struct {
 	UseTraceLength               bool
 	AddSampleRateKeyToTrace      bool
 	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
+}
+
+type RulesBasedSamplerCondition struct {
+	Field    string
+	Operator string
+	Value    interface{}
+}
+
+func (r *RulesBasedSamplerCondition) String() string {
+	return fmt.Sprintf("%+v", *r)
+}
+
+type RulesBasedDownstreamSampler struct {
+	DynamicSampler         *DynamicSamplerConfig
+	EMADynamicSampler      *EMADynamicSamplerConfig
+	TotalThroughputSampler *TotalThroughputSamplerConfig
+}
+
+type RulesBasedSamplerRule struct {
+	Name       string
+	SampleRate int
+	Sampler    *RulesBasedDownstreamSampler
+	Drop       bool
+	Condition  []*RulesBasedSamplerCondition
+}
+
+func (r *RulesBasedSamplerRule) String() string {
+	return fmt.Sprintf("%+v", *r)
+}
+
+type RulesBasedSamplerConfig struct {
+	Rule []*RulesBasedSamplerRule
+}
+
+func (r *RulesBasedSamplerConfig) String() string {
+	return fmt.Sprintf("%+v", *r)
 }
