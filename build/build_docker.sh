@@ -16,5 +16,5 @@ export SOURCE_DATE_EPOCH=$(date +%s)
 ko publish \
   --tags "${TAGS}" \
   --base-import-paths \
-  --platform "linux/amd64,linux/arm64,darwin/amd64" \
+  --platform "linux/amd64,linux/arm64" \
   ./cmd/refinery

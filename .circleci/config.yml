@@ -127,6 +127,7 @@ jobs:
     executor: linuxgo
     steps:
       - checkout
+      - setup_remote_docker
       - run: go install github.com/google/ko@latest
       - run:
           name: "Publish multi-arch docker image"
