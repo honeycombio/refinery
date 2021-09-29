@@ -535,7 +535,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 								Value:    int64(1),
 							},
 						},
-						Downstream: &config.RulesBasedDownstreamSampler{
+						Sampler: &config.RulesBasedDownstreamSampler{
 							DynamicSampler: &config.DynamicSamplerConfig{
 								SampleRate:                   10,
 								FieldList:                    []string{"http.status_code"},
@@ -618,7 +618,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 								Value:    int64(1),
 							},
 						},
-						Downstream: &config.RulesBasedDownstreamSampler{
+						Sampler: &config.RulesBasedDownstreamSampler{
 							EMADynamicSampler: &config.EMADynamicSamplerConfig{
 								GoalSampleRate:               10,
 								FieldList:                    []string{"http.status_code"},

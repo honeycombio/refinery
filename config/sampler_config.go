@@ -52,14 +52,15 @@ func (r *RulesBasedSamplerCondition) String() string {
 }
 
 type RulesBasedDownstreamSampler struct {
-	DynamicSampler    *DynamicSamplerConfig
-	EMADynamicSampler *EMADynamicSamplerConfig
+	DynamicSampler         *DynamicSamplerConfig
+	EMADynamicSampler      *EMADynamicSamplerConfig
+	TotalThroughputSampler *TotalThroughputSamplerConfig
 }
 
 type RulesBasedSamplerRule struct {
 	Name       string
 	SampleRate int
-	Downstream *RulesBasedDownstreamSampler
+	Sampler    *RulesBasedDownstreamSampler
 	Drop       bool
 	Condition  []*RulesBasedSamplerCondition
 }

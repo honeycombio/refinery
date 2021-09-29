@@ -1,15 +1,12 @@
 package sample
 
 import (
-	"fmt"
-	"math/rand"
-	"strings"
-	"sync"
-
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
+	"math/rand"
+	"strings"
 )
 
 type RulesBasedSampler struct {
@@ -17,7 +14,6 @@ type RulesBasedSampler struct {
 	Logger   logger.Logger
 	Metrics  metrics.Metrics
 	samplers map[string]Sampler
-	mux      sync.Mutex
 }
 
 func (s *RulesBasedSampler) Start() error {
@@ -29,6 +25,36 @@ func (s *RulesBasedSampler) Start() error {
 	s.Metrics.Register("rulessampler_sample_rate", "histogram")
 
 	s.samplers = make(map[string]Sampler)
+
+	// Check if any rule has a downstream sampler and create it
+	for _, rule := range s.Config.Rule {
+		if rule.Sampler != nil {
+			var sampler Sampler
+			if rule.Sampler.DynamicSampler != nil {
+				sampler = &DynamicSampler{Config: rule.Sampler.DynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
+			} else if rule.Sampler.EMADynamicSampler != nil {
+				sampler = &EMADynamicSampler{Config: rule.Sampler.EMADynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
+			} else if rule.Sampler.TotalThroughputSampler != nil {
+				sampler = &TotalThroughputSampler{Config: rule.Sampler.TotalThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
+
+			} else {
+				s.Logger.Debug().WithFields(map[string]interface{}{
+					"rule_name": rule.Name,
+				}).Logf("invalid or missing downstream sampler")
+				continue
+			}
+
+			err := sampler.Start()
+			if err != nil {
+				s.Logger.Debug().WithFields(map[string]interface{}{
+					"rule_name": rule.Name,
+				}).Logf("error creating downstream sampler: %s", err)
+				continue
+			}
+			s.samplers[rule.String()] = sampler
+
+		}
+	}
 
 	return nil
 }
@@ -119,19 +145,15 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			var rate uint
 			var keep bool
 
-			if rule.Downstream != nil {
+			if rule.Sampler != nil {
 
 				var sampler Sampler
 				var found bool
 				if sampler, found = s.samplers[rule.String()]; !found {
-					var err error
-					sampler, err = s.createDownstreamSampler(rule)
-					if err != nil {
-						// TODO: Log we got an error before returning: 1, keep
-						return 1, true
-					}
-					// save sampler for later
-					s.samplers[rule.String()] = sampler
+					logger.WithFields(map[string]interface{}{
+						"rule_name": rule.Name,
+					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
+					return 1, true
 				}
 
 				rate, keep = sampler.GetSampleRate(trace)
@@ -152,36 +174,11 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				"keep":      keep,
 				"drop_rule": rule.Drop,
 			}).Logf("got sample rate and decision")
-
 			return rate, keep
 		}
 	}
 
 	return 1, true
-}
-
-func (s *RulesBasedSampler) createDownstreamSampler(rule *config.RulesBasedSamplerRule) (Sampler, error) {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	if rule.Downstream.DynamicSampler != nil {
-		ds := &DynamicSampler{Config: rule.Downstream.DynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
-		err := ds.Start()
-		if err != nil {
-			return nil, fmt.Errorf("error creating downstream DynamicSampler for rule: %s", rule.Name)
-		}
-		return ds, nil
-
-	} else if rule.Downstream.EMADynamicSampler != nil {
-		ds := &EMADynamicSampler{Config: rule.Downstream.EMADynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
-		err := ds.Start()
-		if err != nil {
-			return nil, fmt.Errorf("error creating downstream EMADynamicSampler for rule: %s", rule.Name)
-		}
-		return ds, nil
-	}
-
-	return nil, fmt.Errorf("invalid or missing downstream sampler for rule: %s", rule.Name)
 }
 
 const (
