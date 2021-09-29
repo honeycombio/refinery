@@ -203,11 +203,6 @@ SampleRate = 1
 	Sampler = "DeterministicSampler"
 	SampleRate = 10
 
-
-
-
-
-
 [dataset4]
 
 	Sampler = "RulesBasedSampler"
@@ -247,11 +242,6 @@ SampleRate = 1
 
 	[[dataset4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 10
-
-
-
-
-
 
 [dataset5]
 

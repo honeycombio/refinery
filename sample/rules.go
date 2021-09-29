@@ -1,12 +1,13 @@
 package sample
 
 import (
+	"math/rand"
+	"strings"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
-	"math/rand"
-	"strings"
 )
 
 type RulesBasedSampler struct {
@@ -36,7 +37,6 @@ func (s *RulesBasedSampler) Start() error {
 				sampler = &EMADynamicSampler{Config: rule.Sampler.EMADynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else if rule.Sampler.TotalThroughputSampler != nil {
 				sampler = &TotalThroughputSampler{Config: rule.Sampler.TotalThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
-
 			} else {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
@@ -52,10 +52,8 @@ func (s *RulesBasedSampler) Start() error {
 				continue
 			}
 			s.samplers[rule.String()] = sampler
-
 		}
 	}
-
 	return nil
 }
 
@@ -146,7 +144,6 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			var keep bool
 
 			if rule.Sampler != nil {
-
 				var sampler Sampler
 				var found bool
 				if sampler, found = s.samplers[rule.String()]; !found {
@@ -155,9 +152,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
 					return 1, true
 				}
-
 				rate, keep = sampler.GetSampleRate(trace)
-
 			} else {
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
