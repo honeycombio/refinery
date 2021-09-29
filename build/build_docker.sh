@@ -10,7 +10,7 @@ fi
 unset GOOS
 unset GOARCH
 export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
-export GOFLAGS="-ldflags=-X=main.version=$VERSION"
+export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=$(date +%s)
 # shellcheck disable=SC2086
 ko publish \
