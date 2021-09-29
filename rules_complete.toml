@@ -203,6 +203,11 @@ SampleRate = 1
 	Sampler = "DeterministicSampler"
 	SampleRate = 10
 
+
+
+
+
+
 [dataset4]
 
 	Sampler = "RulesBasedSampler"
@@ -216,7 +221,7 @@ SampleRate = 1
 			value = "/health-check"
 
 	[[dataset4.rule]]
-		name = "500 errors"
+		name = "500 errors or slow"
 		SampleRate = 1
 		[[dataset4.rule.condition]]
 			field = "status_code"
@@ -233,16 +238,20 @@ SampleRate = 1
 			field = "status_code"
 			operator = "="
 			value = 200
-		# define Dynamic Sampler used to determine sample rate
-		# Can be DyanmicSampler or EMADynamicSampler
-		[dataset4.rule.downstream.DynamicSampler]
-			SampleRate = 5
-			FieldList = ["http.route", "http.method"]
+		[dataset4.rule.sampler.EMADynamicSampler]
+			Sampler = "EMADynamicSampler"
+			GoalSampleRate = 15
+			FieldList = ["request.method", "request.route"]
 			AddSampleRateKeyToTrace = true
 			AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
 
 	[[dataset4.rule]]
-		SampleRate = 10 # default when no rules match, if missing defaults to 1
+		SampleRate = 10 # default when no rules match, if missing defaults to 10
+
+
+
+
+
 
 [dataset5]
 
