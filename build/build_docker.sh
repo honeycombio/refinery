@@ -1,5 +1,6 @@
 set -o nounset
 set -o pipefail
+set -o xtrace
 
 VERSION="${VERSION:-dev}"
 TAGS="latest"
