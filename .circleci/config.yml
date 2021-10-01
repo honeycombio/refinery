@@ -140,7 +140,7 @@ jobs:
           name: "Publish multi-arch docker image"
           command: |
             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
-            VERSION=${CIRCLE_TAG} KO_DOCKER_REPO=honeycombio build/build_docker.sh
+            build/build_docker.sh
 
 workflows:
   build:
@@ -179,6 +179,5 @@ workflows:
             - build
           filters:
             tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
+              only: /.*/
+
