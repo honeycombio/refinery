@@ -128,10 +128,10 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            googkleko
+            googleko
       - run: go install github.com/google/ko@latest
       - save_cache:
-          key: googkleko
+          key: googleko
           paths:
             - $GOPATH/bin/ko
       - checkout
