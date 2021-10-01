@@ -11,6 +11,7 @@ import (
 
 type Sampler interface {
 	GetSampleRate(trace *types.Trace) (rate uint, keep bool)
+	Start() error
 }
 
 // SamplerFactory is used to create new samplers with common (injected) resources
@@ -32,28 +33,24 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 
 	switch c := c.(type) {
 	case *config.DeterministicSamplerConfig:
-		ds := &DeterministicSampler{Config: c, Logger: s.Logger}
-		ds.Start()
-		sampler = ds
+		sampler = &DeterministicSampler{Config: c, Logger: s.Logger}
 	case *config.DynamicSamplerConfig:
-		ds := &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
-		ds.Start()
-		sampler = ds
+		sampler = &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.EMADynamicSamplerConfig:
-		ds := &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
-		ds.Start()
-		sampler = ds
+		sampler = &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.RulesBasedSamplerConfig:
-		ds := &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
-		ds.Start()
-		sampler = ds
+		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.TotalThroughputSamplerConfig:
-		ds := &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
-		ds.Start()
-		sampler = ds
+		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	default:
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)
+	}
+
+	err = sampler.Start()
+	if err != nil {
+		s.Logger.Debug().WithField("dataset", dataset).Logf("failed to start sampler")
+		return nil
 	}
 
 	s.Logger.Debug().WithField("dataset", dataset).Logf("created implementation for sampler type %T", c)

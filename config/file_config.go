@@ -24,35 +24,6 @@ type fileConfig struct {
 	mux           sync.RWMutex
 }
 
-type RulesBasedSamplerCondition struct {
-	Field    string
-	Operator string
-	Value    interface{}
-}
-
-func (r *RulesBasedSamplerCondition) String() string {
-	return fmt.Sprintf("%+v", *r)
-}
-
-type RulesBasedSamplerRule struct {
-	Name       string
-	SampleRate int
-	Drop       bool
-	Condition  []*RulesBasedSamplerCondition
-}
-
-func (r *RulesBasedSamplerRule) String() string {
-	return fmt.Sprintf("%+v", *r)
-}
-
-type RulesBasedSamplerConfig struct {
-	Rule []*RulesBasedSamplerRule
-}
-
-func (r *RulesBasedSamplerConfig) String() string {
-	return fmt.Sprintf("%+v", *r)
-}
-
 type configContents struct {
 	ListenAddr                string `validate:"required"`
 	PeerListenAddr            string `validate:"required"`
