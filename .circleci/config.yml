@@ -126,9 +126,16 @@ jobs:
   publish_docker:
     executor: linuxgo
     steps:
+      - restore_cache:
+          keys:
+            googkleko
+      - run: go install github.com/google/ko@latest
+      - save_cache:
+          key: googkleko
+          paths:
+            - $GOPATH/bin/ko
       - checkout
       - setup_remote_docker
-      - run: go install github.com/google/ko@latest
       - run:
           name: "Publish multi-arch docker image"
           command: |
