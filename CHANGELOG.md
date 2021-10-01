@@ -1,5 +1,28 @@
 # Refinery Changelog
 
+## 1.5.0
+
+### Enhancements
+
+- Add dynamic sampler support to rules based samplers (#317) [@puckpuck](https://github.com/puckpuck)
+- Publish arm64 Docker images (#323) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+### Maintenance
+
+- Adds Stalebot (#321) [@JamieDanielson](https://github.com/JamieDanielson)
+- Switch licecycle terminology to maintained (#315) [cartermp](https://github.com/cartermp)
+- Add NOTICE (#314) [cartermp](https://github.com/cartermp)
+- Add issue and PR templates (#307) [@vreynolds](https://github.com/vreynolds)
+- Add OSS lifecycle badge (#304) [@vreynolds](https://github.com/vreynolds)
+- Add community health files (#303) [@vreynolds](https://github.com/vreynolds)
+- Bump github.com/spf13/viper from 1.8.1 to 1.9.0 (#320) [dependabot[bot]]
+- Bump github.com/json-iterator/go from 1.1.11 to 1.1.12 (#316) [dependabot[bot]]
+- Bump github.com/klauspost/compress from 1.13.4 to 1.13.6 (#319) [dependabot[bot]]
+- Bump github.com/fsnotify/fsnotify from 1.5.0 to 1.5.1 (#311) [dependabot[bot]]
+- Bump google.golang.org/grpc from 1.39.1 to 1.40.0 (#305) [dependabot[bot]]
+- Bump github.com/fsnotify/fsnotify from 1.4.9 to 1.5.0 (#308) [dependabot[bot]]
+- Bump github.com/klauspost/compress from 1.13.3 to 1.13.4 (#306) [dependabot[bot]]
+
 ## 1.4.1
 
 ### Fixes
