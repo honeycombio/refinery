@@ -79,6 +79,9 @@ func (p *PromMetrics) Register(name string, metricType string) {
 }
 
 func (p *PromMetrics) Increment(name string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
 			counter.Inc()
@@ -86,6 +89,9 @@ func (p *PromMetrics) Increment(name string) {
 	}
 }
 func (p *PromMetrics) Count(name string, n interface{}) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
 			counter.Add(ConvertNumeric(n))
@@ -93,6 +99,9 @@ func (p *PromMetrics) Count(name string, n interface{}) {
 	}
 }
 func (p *PromMetrics) Gauge(name string, val interface{}) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
 			gauge.Set(ConvertNumeric(val))
@@ -100,6 +109,9 @@ func (p *PromMetrics) Gauge(name string, val interface{}) {
 	}
 }
 func (p *PromMetrics) Histogram(name string, obs interface{}) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if histIface, ok := p.metrics[name]; ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
 			hist.Observe(ConvertNumeric(obs))
