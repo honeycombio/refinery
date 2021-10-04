@@ -286,7 +286,7 @@ func TestCacheSizeReload(t *testing.T) {
 
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 10 * time.Minute,
+		GetTraceTimeoutVal: 10 * time.Millisecond,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{
@@ -320,14 +320,13 @@ func TestCacheSizeReload(t *testing.T) {
 	coll.AddSpan(&types.Span{TraceID: "2", Event: event})
 
 	expectedEvents := 1
-	wait := 2 * time.Millisecond
 	check := func() bool {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 
 		return len(transmission.Events) == expectedEvents
 	}
-	assert.Eventually(t, check, 10*wait, wait, "expected one trace evicted and sent")
+	assert.Eventually(t, check, conf.GetTraceTimeoutVal*2, conf.SendTickerVal, "expected one trace evicted and sent")
 
 	conf.Mux.Lock()
 	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 2
@@ -339,7 +338,7 @@ func TestCacheSizeReload(t *testing.T) {
 		defer coll.mutex.RUnlock()
 
 		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
-	}, 10*wait, wait, "cache size to change")
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal, "cache size to change")
 
 	coll.AddSpan(&types.Span{TraceID: "3", Event: event})
 	time.Sleep(5 * conf.SendTickerVal)
@@ -351,7 +350,7 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.ReloadConfig()
 
 	expectedEvents = 2
-	assert.Eventually(t, check, 10*wait, wait, "expected another trace evicted and sent")
+	assert.Eventually(t, check, conf.GetTraceTimeoutVal*2, conf.SendTickerVal, "expected another trace evicted and sent")
 }
 
 func TestSampleConfigReload(t *testing.T) {
