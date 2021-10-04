@@ -19,7 +19,7 @@ type PromMetrics struct {
 	// metrics keeps a record of all the registered metrics so we can increment
 	// them by name
 	metrics map[string]interface{}
-	lock    sync.Mutex
+	lock    sync.RWMutex
 
 	prefix string
 }
@@ -57,21 +57,21 @@ func (p *PromMetrics) Register(name string, metricType string) {
 	switch metricType {
 	case "counter":
 		newmet = promauto.NewCounter(prometheus.CounterOpts{
-			Name: name,
+			Name:      name,
 			Namespace: p.prefix,
-			Help: name,
+			Help:      name,
 		})
 	case "gauge":
 		newmet = promauto.NewGauge(prometheus.GaugeOpts{
-			Name: name,
+			Name:      name,
 			Namespace: p.prefix,
-			Help: name,
+			Help:      name,
 		})
 	case "histogram":
 		newmet = promauto.NewHistogram(prometheus.HistogramOpts{
-			Name: name,
+			Name:      name,
 			Namespace: p.prefix,
-			Help: name,
+			Help:      name,
 		})
 	}
 
@@ -79,8 +79,8 @@ func (p *PromMetrics) Register(name string, metricType string) {
 }
 
 func (p *PromMetrics) Increment(name string) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
@@ -89,8 +89,8 @@ func (p *PromMetrics) Increment(name string) {
 	}
 }
 func (p *PromMetrics) Count(name string, n interface{}) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
@@ -99,8 +99,8 @@ func (p *PromMetrics) Count(name string, n interface{}) {
 	}
 }
 func (p *PromMetrics) Gauge(name string, val interface{}) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
@@ -109,8 +109,8 @@ func (p *PromMetrics) Gauge(name string, val interface{}) {
 	}
 }
 func (p *PromMetrics) Histogram(name string, obs interface{}) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 
 	if histIface, ok := p.metrics[name]; ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
