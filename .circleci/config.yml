@@ -139,7 +139,9 @@ jobs:
       - run:
           name: "Publish multi-arch docker image"
           command: |
-            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+            if [[ -n "${CIRCLE_TAG}" ]]; then
+              echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+            fi
             build/build_docker.sh
 
 workflows:
