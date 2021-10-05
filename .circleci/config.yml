@@ -51,7 +51,7 @@ jobs:
           name: go_test
           command: go test -tags all --timeout 60s -v ./...
 
-  build:
+  build_binaries:
     executor: linuxgo
     steps:
       - checkout
@@ -164,7 +164,7 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - build:
+      - build_binaries:
           requires:
             - test
           filters:
@@ -173,7 +173,7 @@ workflows:
       - publish_github:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build
+            - build_binaries
           filters:
             tags:
               only: /^v.*/
@@ -182,7 +182,7 @@ workflows:
       - publish_s3:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build
+            - build_binaries
           filters:
             tags:
               only: /^v.*/
