@@ -136,7 +136,7 @@ jobs:
             - $GOPATH/bin/ko
       - checkout
       - setup_remote_docker
-      - run: build-docker.sh
+      - run: ./build-docker.sh
       - run: mkdir -p ~/images
       - run: docker save honeycombio/refinery | gzip > ~/images/refinery.tar.gz
       - persist_to_workspace:
