@@ -3,18 +3,20 @@ set -o pipefail
 set -o xtrace
 
 TAGS="latest"
-VERSION=${CIRCLE_TAG:-dev}
-REPO=${KO_DOCKER_REPO:-ko.local}
-if [[ $VERSION != "dev" ]]; then
-    # set docker username and add version tag, trimming 'v' prefix if present
-    VERSION=${VERSION#"v"}
-    REPO="honeycombio"
+VERSION="dev"
+if [[ -n ${CIRCLE_TAG:-} ]]; then
+    # trim 'v' prefix if present
+    VERSION=${CIRCLE_TAG#"v"}
+    # append version to image tags
     TAGS+=",$VERSION"
+    # set ko target repo as docker org name so it creates image named '{org}}/{project}'
+    # and will attempt to publish to docker hub
+    export KO_DOCKER_REPO="honeycombio"
 fi
 
 unset GOOS
 unset GOARCH
-export KO_DOCKER_REPO=$REPO
+export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=$(date +%s)
 # shellcheck disable=SC2086
