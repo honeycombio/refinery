@@ -123,8 +123,13 @@ jobs:
             if [[ -z "$version" ]] ; then version=${CIRCLE_SHA1:0:7}; fi
             aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/refinery/$version/
 
-  publish_docker:
+  build_docker:
     executor: linuxgo
+    parameters:
+      publish:
+        description: publish to Docker Hub
+        type: boolean
+        default: false
     steps:
       - restore_cache:
           keys:
@@ -135,14 +140,14 @@ jobs:
           paths:
             - $GOPATH/bin/ko
       - checkout
+      - when:
+          condition: << parameters.publish >>
+          steps:
+            run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
       - setup_remote_docker
       - run:
-          name: "Publish multi-arch docker image"
-          command: |
-            if [[ -n "${CIRCLE_TAG}" ]]; then
-              echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
-            fi
-            build/build_docker.sh
+          name: "Build multi-arch docker image"
+          command: build/build_docker.sh
 
 workflows:
   build:
@@ -175,11 +180,21 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - publish_docker:
-          context: Honeycomb Secrets for Public Repos
+      - build_docker:
           requires:
             - build
+          publish: false
           filters:
             tags:
               only: /.*/
+      - build_docker:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build
+          publish: true
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
 
