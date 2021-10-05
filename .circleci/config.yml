@@ -124,7 +124,8 @@ jobs:
             aws s3 sync ~/artifacts s3://honeycomb-builds/honeycombio/refinery/$version/
 
   build_docker:
-    executor: cimg/go:1.16
+    docker:
+      - image: cimg/go:1.16
     steps:
       - restore_cache:
           keys:
@@ -147,7 +148,8 @@ jobs:
           path: ~/images
 
   publish_docker:
-    executor: cimg/base
+    docker:
+      - image: cimg/base:stable
     steps:
       - attach_workspace:
           at: ~/
