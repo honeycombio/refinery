@@ -137,23 +137,24 @@ jobs:
       - checkout
       - setup_remote_docker
       - run: build/build_docker.sh
-      - run: mkdir -p /tmp/workspace
+      - run: mkdir -p ~/images
       - run: docker image ls
-      - run: docker buildx build --platform linux/amd64,linux/arm64 --tag honeycombio/refinery:latest ./cmd/refinery
-      - run: docker save honeycombio/refinery | gzip > refinery.tar.gz
+      - run: docker save honeycombio/refinery | gzip > ~/images/refinery.tar.gz
       - persist_to_workspace:
-          root: /tmp/workspace
+          root: ~/
           paths:
-            - refinery.tar.gz
+            - images
+      - store_artifacts:
+          path: ~/images
 
   publish_docker:
     executor: linuxgo
     steps:
       - attach_workspace:
-          at: /tmp/workspace
+          at: ~/
       - setup_remote_docker
       - run:
-          command: docker load -i /tmp/workspace/refinery.tar.gz
+          command: docker load -i ~/images/refinery.tar.gz
       - run:
           command: docker image ls
       # - run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
