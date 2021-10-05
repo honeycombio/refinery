@@ -2,7 +2,7 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-TAGS="latest"
+TAGS="latest,test"
 VERSION="dev"
 if [[ -n ${CIRCLE_TAG:-} ]]; then
     # trim 'v' prefix if present
