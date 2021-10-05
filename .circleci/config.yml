@@ -152,11 +152,10 @@ jobs:
       - attach_workspace:
           at: ~/
       - setup_remote_docker
-      - run: docker image ls
       - run: docker load -i ~/images/refinery.tar.gz
       - run: docker image ls
       # - run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
-
+      # - run: docker push -a honeycombio/refinery
 
 workflows:
   build:
