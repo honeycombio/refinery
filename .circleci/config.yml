@@ -139,6 +139,7 @@ jobs:
       - run: build/build_docker.sh
       - run: mkdir -p /tmp/workspace
       - run: docker image ls
+      - run: docker buildx build --platform linux/amd64,linux/arm64 --tag honeycombio/refinery:latest ./cmd/refinery
       - run: docker save honeycombio/refinery | gzip > refinery.tar.gz
       - persist_to_workspace:
           root: /tmp/workspace
