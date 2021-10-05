@@ -125,11 +125,6 @@ jobs:
 
   build_docker:
     executor: linuxgo
-    parameters:
-      publish:
-        description: publish to Docker Hub
-        type: boolean
-        default: false
     steps:
       - restore_cache:
           keys:
@@ -140,14 +135,27 @@ jobs:
           paths:
             - $GOPATH/bin/ko
       - checkout
-      - when:
-          condition: << parameters.publish >>
-          steps:
-            run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+      - setup_remote_docker
+      - run: build/build_docker.sh
+      - run: mkdir -p /tmp/workspace
+      - run: docker save /tmp/workspace/refinery-image honeycombio/refinery
+      - persist_to_workspace:
+          root: /tmp/workspace
+          paths:
+            - refinery-image
+
+  publish_docker:
+    executor: linuxgo
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
       - setup_remote_docker
       - run:
-          name: "Build multi-arch docker image"
-          command: build/build_docker.sh
+          command: docker load -i ./refinery-image
+      - run:
+          command: docker image ls
+      # - run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+
 
 workflows:
   build:
@@ -182,19 +190,22 @@ workflows:
               ignore: /.*/
       - build_docker:
           requires:
-            - build
-          publish: false
+            - test
+          # publish: false
           filters:
             tags:
               only: /.*/
-      - build_docker:
+      - publish_docker:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - build
-          publish: true
+            - build_docker
+          # publish: true
+          # filters:
+          #   tags:
+          #     only: /^v.*/
+          #   branches:
+          #     ignore: /.*/
           filters:
             tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
+              only: /.*/
 
