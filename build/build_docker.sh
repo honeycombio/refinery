@@ -25,3 +25,6 @@ ko publish \
   --base-import-paths \
   --platform "linux/amd64,linux/arm64" \
   ./cmd/refinery
+
+# retag to correct org/repo
+docker image tag ko.local/refinery honeycombio/refinery:latest
