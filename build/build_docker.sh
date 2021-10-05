@@ -6,7 +6,8 @@ TAGS="latest"
 VERSION=${CIRCLE_TAG:-dev}
 REPO=${KO_DOCKER_REPO:-ko.local}
 if [[ $VERSION != "dev" ]]; then
-    # set docker username and add version tag
+    # set docker username and add version tag, trimming 'v' prefix if present
+    VERSION=${VERSION#"v"}
     REPO="honeycombio"
     TAGS+=",$VERSION"
 fi
