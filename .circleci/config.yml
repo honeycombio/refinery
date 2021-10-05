@@ -136,9 +136,8 @@ jobs:
             - $GOPATH/bin/ko
       - checkout
       - setup_remote_docker
-      - run: build/build_docker.sh
+      - run: build-docker.sh
       - run: mkdir -p ~/images
-      - run: docker image ls
       - run: docker save honeycombio/refinery | gzip > ~/images/refinery.tar.gz
       - persist_to_workspace:
           root: ~/
@@ -153,10 +152,9 @@ jobs:
       - attach_workspace:
           at: ~/
       - setup_remote_docker
-      - run:
-          command: docker load -i ~/images/refinery.tar.gz
-      - run:
-          command: docker image ls
+      - run: docker image ls
+      - run: docker load -i ~/images/refinery.tar.gz
+      - run: docker image ls
       # - run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
 
 
