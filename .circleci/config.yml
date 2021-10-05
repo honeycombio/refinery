@@ -138,6 +138,7 @@ jobs:
       - setup_remote_docker
       - run: build/build_docker.sh
       - run: mkdir -p /tmp/workspace
+      - run: docker image ls
       - run: docker save honeycombio/refinery | gzip > refinery.tar.gz
       - persist_to_workspace:
           root: /tmp/workspace
