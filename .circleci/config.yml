@@ -123,14 +123,7 @@ jobs:
     docker:
       - image: cimg/go:1.16
     steps:
-      - restore_cache:
-          keys:
-            googleko
       - run: go install github.com/google/ko@latest
-      - save_cache:
-          key: googleko
-          paths:
-            - $GOPATH/bin/ko
       - checkout
       - setup_remote_docker
       - run: ./build-docker.sh
