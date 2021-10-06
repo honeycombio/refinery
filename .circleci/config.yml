@@ -40,7 +40,14 @@ jobs:
           key: v1-dockerize-{{ checksum "Makefile" }}
           paths:
             - dockerize.tar.gz
+      - restore_cache:
+          keys:
+            - v3-go-mod-{{ checksum "go.sum" }}
       - run: make test
+      - save_cache:
+          key: v3-go-mod-{{ checksum "go.sum" }}
+          paths:
+            - /home/circleci/go/pkg/mod
 
   build_binaries:
     docker:
