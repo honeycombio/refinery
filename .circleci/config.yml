@@ -31,6 +31,15 @@ jobs:
       - image: redis:6
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - v1-dockerize-{{ checksum "Makefile" }}
+            - v1-dockerize-
+      - run: make dockerize
+      - save_cache:
+          key: v1-dockerize-{{ checksum "Makefile" }}
+          paths:
+            - dockerize.tar.gz
       - run: make test
 
   build_binaries:
