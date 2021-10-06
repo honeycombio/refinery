@@ -3,17 +3,17 @@ set -o pipefail
 set -o xtrace
 
 TAGS="latest"
-VERSION=${CIRCLE_TAG:-dev}
-REPO=${KO_DOCKER_REPO:-ko.local}
-if [[ $VERSION != "dev" ]]; then
-    # set docker username and add version tag
-    REPO="honeycombio"
+VERSION="dev"
+if [[ -n ${CIRCLE_TAG:-} ]]; then
+    # trim 'v' prefix if present
+    VERSION=${CIRCLE_TAG#"v"}
+    # append version to image tags
     TAGS+=",$VERSION"
 fi
 
 unset GOOS
 unset GOARCH
-export KO_DOCKER_REPO=$REPO
+export KO_DOCKER_REPO="ko.local"
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=$(date +%s)
 # shellcheck disable=SC2086
@@ -22,3 +22,9 @@ ko publish \
   --base-import-paths \
   --platform "linux/amd64,linux/arm64" \
   ./cmd/refinery
+
+# update tags to use correct org name
+for TAG in ${TAGS//,/ }
+do
+    docker image tag ko.local/refinery honeycombio/refinery:$TAG
+done
