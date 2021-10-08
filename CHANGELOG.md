@@ -4,12 +4,12 @@
 
 ### Fixes
 
-- Use RWLock in prometheus metrics (#331) [@estheruary](https://githun.com/estheruary)
-- Patch for race condition on map access (#324) [@robbkidd](https://githun.com/robbkidd)
+- Fix for race condition in prometheus metrics (#324) [@estheruary](https://github.com/estheruary)
+- Update race condition fix to use RWLock instead of Lock (#331) [@MikeGoldsmith](https://github.com/MikeGoldsmith) & [@robbkidd](https://github.com/robbkidd)
 
 ### Maintenance
 
-- Build docker images on all builds and publish on tag (#328) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Build docker images on all builds and publish only on tag (#328) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
 
 ## 1.5.0
 
