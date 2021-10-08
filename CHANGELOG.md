@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 1.5.1
+
+### Fixes
+
+- Fix for race condition in prometheus metrics (#324) [@estheruary](https://github.com/estheruary)
+- Update race condition fix to use RWLock instead of Lock (#331) [@MikeGoldsmith](https://github.com/MikeGoldsmith) & [@robbkidd](https://github.com/robbkidd)
+
+### Maintenance
+
+- Build docker images on all builds and publish only on tag (#328) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.5.0
 
 ### Enhancements
