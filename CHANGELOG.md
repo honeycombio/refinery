@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 1.5.1
+
+### Fixes
+
+- Use RWLock in prometheus metrics (#331) [@estheruary](https://githun.com/estheruary)
+- Patch for race condition on map access (#324) [@robbkidd](https://githun.com/robbkidd)
+
+### Maintenance
+
+- Build docker images on all builds and publish on tag (#328) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.5.0
 
 ### Enhancements
