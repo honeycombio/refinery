@@ -192,8 +192,7 @@ workflows:
             - build_docker
           filters:
             tags:
-              only: dev
+              only: /^v.*/
             branches:
               ignore: /.*/
-              
 
