@@ -129,26 +129,22 @@ jobs:
       - run: go install github.com/google/ko@latest
       - checkout
       - setup_remote_docker
-      - run: ./build-docker.sh
-      - run: mkdir -p ~/images
-      - run: docker save honeycombio/refinery | gzip > ~/images/refinery.tar.gz
-      - persist_to_workspace:
-          root: ~/
-          paths:
-            - images
-      - store_artifacts:
-          path: ~/images
+      - run:
+          name: build docker images and publish locally
+          command: ./build-docker.sh
 
   publish_docker:
     docker:
-      - image: cimg/base:stable
+      - image: cimg/go:1.16
     steps:
-      - attach_workspace:
-          at: ~/
+      - run: go install github.com/google/ko@latest
+      - checkout
       - setup_remote_docker
-      - run: docker load -i ~/images/refinery.tar.gz
-      - run: echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
-      - run: docker image push -a honeycombio/refinery
+      - run:
+          name: build docker images and publish to Docker Hub
+          environment:
+            KO_DOCKER_REPO: honeycombio
+          command: ./build-docker.sh
 
 workflows:
   build:
