@@ -169,6 +169,7 @@ workflows:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
+            - build_docker
           filters:
             tags:
               only: /^v.*/
@@ -178,6 +179,7 @@ workflows:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
+            - build_docker
           filters:
             tags:
               only: /^v.*/
@@ -186,6 +188,7 @@ workflows:
       - publish_docker:
           context: Honeycomb Secrets for Public Repos
           requires:
+            - build_binaries
             - build_docker
           filters:
             tags:
