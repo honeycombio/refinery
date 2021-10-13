@@ -145,7 +145,7 @@ jobs:
           environment:
             KO_DOCKER_REPO: honeycombio
           command: |
-            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
             ./build-docker.sh
 
 workflows:
