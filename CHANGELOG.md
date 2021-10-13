@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## 1.5.2
+
+### Fixes
+
+- Build multi-arch docker images during publish CI step (#336) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.5.1
 
 ### Fixes
