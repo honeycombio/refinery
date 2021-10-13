@@ -144,7 +144,9 @@ jobs:
           name: build docker images and publish to Docker Hub
           environment:
             KO_DOCKER_REPO: honeycombio
-          command: ./build-docker.sh
+          command: |
+            echo "$DOCKERHUB_PASS" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            ./build-docker.sh
 
 workflows:
   build:
