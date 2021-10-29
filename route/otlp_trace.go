@@ -20,9 +20,9 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
-	common "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/common/v1"
-	trace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/trace/v1"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	common "go.opentelemetry.io/proto/otlp/common/v1"
+	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 )
 
 func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {

@@ -13,14 +13,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/honeycombio/refinery/config"
-	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
-	common "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/common/v1"
-	trace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/trace/v1"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	common "go.opentelemetry.io/proto/otlp/common/v1"
+	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/grpc/metadata"
 )
 
