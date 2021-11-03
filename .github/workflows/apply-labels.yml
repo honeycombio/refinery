@@ -1,5 +1,5 @@
 name: Apply project labels
-on: [issues, pull_request, label]
+on: [issues, pull_request_target, label]
 jobs:
   apply-labels:
     runs-on: ubuntu-latest
