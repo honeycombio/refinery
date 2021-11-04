@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 1.6.0 2021-11-04
+
+- Add an --interface-names flag (#342) | [@ismith](https://github.com/ismith)
+
+### Fixes
+
+- bump libhoney-go to v1.15.6
+- empower apply-labels action to apply labels (#344)
+- Bump github.com/honeycombio/libhoney-go from 1.15.4 to 1.15.5 (#327)
+- Re-add missing docker login when publishing (#338)
+
 ## 1.5.2 2021-10-13
 
 ### Fixes
