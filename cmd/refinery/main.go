@@ -33,10 +33,11 @@ var BuildID string
 var version string
 
 type Options struct {
-	ConfigFile string `short:"c" long:"config" description:"Path to config file" default:"/etc/refinery/refinery.toml"`
-	RulesFile  string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/refinery/rules.toml"`
-	Version    bool   `short:"v" long:"version" description:"Print version number and exit"`
-	Debug      bool   `short:"d" long:"debug" description:"If enabled, runs debug service (runs on the first open port between localhost:6060 and :6069 by default)"`
+	ConfigFile     string `short:"c" long:"config" description:"Path to config file" default:"/etc/refinery/refinery.toml"`
+	RulesFile      string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/refinery/rules.toml"`
+	Version        bool   `short:"v" long:"version" description:"Print version number and exit"`
+	Debug          bool   `short:"d" long:"debug" description:"If enabled, runs debug service (runs on the first open port between localhost:6060 and :6069 by default)"`
+	InterfaceNames bool   `long:"interface-names" description:"If set, print system's network interface names and exit."`
 }
 
 func main() {
@@ -55,6 +56,18 @@ func main() {
 
 	if opts.Version {
 		fmt.Println("Version: " + version)
+		os.Exit(0)
+	}
+
+	if opts.InterfaceNames {
+		ifaces, err := net.Interfaces()
+		if err != nil {
+			fmt.Printf("Error: %s\n", err)
+			os.Exit(1)
+		}
+		for _, i := range ifaces {
+			fmt.Println(i.Name)
+		}
 		os.Exit(0)
 	}
 

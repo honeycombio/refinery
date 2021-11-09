@@ -16,7 +16,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/husky v0.1.0
-	github.com/honeycombio/libhoney-go v1.15.5
+	github.com/honeycombio/libhoney-go v1.15.6
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.13.6
