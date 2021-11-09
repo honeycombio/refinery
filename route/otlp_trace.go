@@ -2,16 +2,11 @@ package route
 
 import (
 	"context"
-	"encoding/binary"
-	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/types"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
@@ -19,10 +14,11 @@ import (
 func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req)
 	if !ri.HasValidContentType() {
-		router.handlerReturnWithError(w, ErrInvalidContentType, errors.New("invalid content-type"))
+		router.handlerReturnWithError(w, ErrInvalidContentType, huskyotlp.ErrInvalidContentType)
 		return
 	}
-	if err := validateHeaders(ri); err != nil {
+
+	if err := ri.ValidateHeaders(); err != nil {
 		router.handlerReturnWithError(w, ErrAuthNeeded, err)
 		return
 	}
@@ -40,17 +36,17 @@ func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 
 func (router *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
-	if err := validateHeaders(ri); err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+	if err := ri.ValidateHeaders(); err != nil {
+		return nil, huskyotlp.AsGRPCError(err)
 	}
 
 	batch, err := huskyotlp.TranslateGrpcTraceRequest(req)
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+		return nil, huskyotlp.AsGRPCError(err)
 	}
 
 	if err := processTraceRequest(ctx, router, batch, ri.ApiKey, ri.Dataset); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, huskyotlp.AsGRPCError(err)
 	}
 
 	return &collectortrace.ExportTraceServiceResponse{}, nil
@@ -95,44 +91,4 @@ func processTraceRequest(
 	}
 
 	return nil
-}
-
-func validateHeaders(ri huskyotlp.RequestInfo) error {
-	if ri.ApiKey == "" {
-		return errors.New("missing x-honeycomb-team header")
-	}
-	if ri.Dataset == "" {
-		return errors.New("missing x-honeycomb-team header")
-	}
-	return nil
-}
-
-// bytesToTraceID returns an ID suitable for use for spans and traces. Before
-// encoding the bytes as a hex string, we want to handle cases where we are
-// given 128-bit IDs with zero padding, e.g. 0000000000000000f798a1e7f33c8af6.
-// To do this, we borrow a strategy from Jaeger [1] wherein we split the byte
-// sequence into two parts. The leftmost part could contain all zeros. We use
-// that to determine whether to return a 64-bit hex encoded string or a 128-bit
-// one.
-//
-// [1]: https://github.com/jaegertracing/jaeger/blob/cd19b64413eca0f06b61d92fe29bebce1321d0b0/model/ids.go#L81
-func bytesToTraceID(traceID []byte) string {
-	// binary.BigEndian.Uint64() does a bounds check on traceID which will
-	// cause a panic if traceID is fewer than 8 bytes. In this case, we don't
-	// need to check for zero padding on the high part anyway, so just return a
-	// hex string.
-	if len(traceID) < traceIDShortLength {
-		return fmt.Sprintf("%x", traceID)
-	}
-	var low uint64
-	if len(traceID) == traceIDLongLength {
-		low = binary.BigEndian.Uint64(traceID[traceIDShortLength:])
-		if high := binary.BigEndian.Uint64(traceID[:traceIDShortLength]); high != 0 {
-			return fmt.Sprintf("%016x%016x", high, low)
-		}
-	} else {
-		low = binary.BigEndian.Uint64(traceID)
-	}
-
-	return fmt.Sprintf("%016x", low)
 }

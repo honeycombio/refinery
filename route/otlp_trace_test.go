@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -128,7 +129,7 @@ func TestOTLPHandler(t *testing.T) {
 
 		spanEvent := mockTransmission.Events[0]
 		// assert.Equal(t, time.Unix(0, int64(12345)).UTC(), spanEvent.Timestamp)
-		assert.Equal(t, bytesToTraceID(traceID), spanEvent.Data["trace.trace_id"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanEvent.Data["trace.trace_id"])
 		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data["trace.span_id"])
 		assert.Equal(t, "span_link", spanEvent.Data["span.name"])
 		assert.Equal(t, "span_with_event", spanEvent.Data["parent.name"])
@@ -174,9 +175,9 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(mockTransmission.Events))
 
 		spanLink := mockTransmission.Events[1]
-		assert.Equal(t, bytesToTraceID(traceID), spanLink.Data["trace.trace_id"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanLink.Data["trace.trace_id"])
 		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data["trace.span_id"])
-		assert.Equal(t, bytesToTraceID(linkTraceID), spanLink.Data["trace.link.trace_id"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data["trace.link.trace_id"])
 		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data["trace.link.span_id"])
 		assert.Equal(t, "link", spanLink.Data["meta.annotation_type"])
 		assert.Equal(t, "link_attr_val", spanLink.Data["link_attr_key"])
