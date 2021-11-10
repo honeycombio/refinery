@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -12,14 +13,13 @@ import (
 )
 
 func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
-	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req)
-	if !ri.HasValidContentType() {
-		router.handlerReturnWithError(w, ErrInvalidContentType, huskyotlp.ErrInvalidContentType)
-		return
-	}
-
+	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	if err := ri.ValidateHeaders(); err != nil {
-		router.handlerReturnWithError(w, ErrAuthNeeded, err)
+		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
+			router.handlerReturnWithError(w, ErrInvalidContentType, err)
+		} else {
+			router.handlerReturnWithError(w, ErrAuthNeeded, err)
+		}
 		return
 	}
 
