@@ -1,5 +1,9 @@
 # Refinery Changelog
 
+## 1.6.1 2021-11-10
+
+- Revert "Use alpine as base image (#343)" (#352)
+
 ## 1.6.0 2021-11-04
 
 - Add an --interface-names flag (#342) | [@ismith](https://github.com/ismith)
