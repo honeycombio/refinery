@@ -23,7 +23,7 @@ func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	batch, err := huskyotlp.TranslateHttpTraceRequest(req)
+	batch, err := huskyotlp.TranslateHttpTraceRequest(req.Body, ri)
 	if err != nil {
 		router.handlerReturnWithError(w, ErrUpstreamFailed, err)
 		return
