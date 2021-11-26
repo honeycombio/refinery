@@ -103,7 +103,7 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		assert.Equal(t, 2, len(mockTransmission.Events))
+		assert.Equal(t, 4, len(mockTransmission.Events))
 		mockTransmission.Flush()
 	})
 
