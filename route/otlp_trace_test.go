@@ -91,6 +91,22 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
+	t.Run("spans with invalid attributes", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: helperOTLPRequestSpansWithInvalidAttributes(),
+				}},
+			}},
+		}
+		_, err := router.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
+
 	// TODO: (MG) figuure out how we can test JSON created from OTLP requests
 	// Below is example, but requires significant usage of collector, sampler, conf, etc
 	t.Run("creates events for span events", func(t *testing.T) {
@@ -316,6 +332,42 @@ func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
 							Value: &common.AnyValue{
 								Value: &common.AnyValue_StringValue{StringValue: "attribute_value"},
 							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func helperOTLPRequestSpansWithInvalidAttributes() []*trace.Span {
+	now := time.Now()
+	return []*trace.Span{
+		{
+			StartTimeUnixNano: uint64(now.UnixNano()),
+			Events: []*trace.Span_Event{
+				{
+					TimeUnixNano: uint64(now.UnixNano()),
+					Attributes: []*common.KeyValue{
+						{
+							Key: "",
+							Value: &common.AnyValue{
+								Value: &common.AnyValue_StringValue{StringValue: "attribute_value"},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			StartTimeUnixNano: uint64(now.UnixNano()),
+			Events: []*trace.Span_Event{
+				{
+					TimeUnixNano: uint64(now.UnixNano()),
+					Attributes: []*common.KeyValue{
+						{
+							Key: "attribute_key",
+							Value: nil,
 						},
 					},
 				},
