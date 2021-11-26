@@ -230,7 +230,7 @@ func processTraceRequest(
 
 func addAttributesToMap(attrs map[string]interface{}, attributes []*common.KeyValue) {
 	for _, attr := range attributes {
-		if attr.Key == "" {
+		if attr.Key == "" || attr.Value == nil {
 			continue
 		}
 		switch attr.Value.Value.(type) {
