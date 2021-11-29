@@ -35,7 +35,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
-	collectortrace "github.com/honeycombio/refinery/internal/opentelemetry-proto-gen/collector/trace/v1"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
 const (
@@ -77,6 +77,9 @@ type Router struct {
 	server     *http.Server
 	grpcServer *grpc.Server
 	doneWG     sync.WaitGroup
+
+	// used to identify Router as a OTLP TraceServer
+	collectortrace.UnimplementedTraceServiceServer
 }
 
 type BatchResponse struct {
