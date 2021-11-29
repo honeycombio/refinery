@@ -72,6 +72,9 @@ func (p *PromMetrics) Register(name string, metricType string) {
 			Name:      name,
 			Namespace: p.prefix,
 			Help:      name,
+			// This is an attempt at a usable set of buckets for a wide range of metrics
+			// 16 buckets, first upper bound of 1, each following upper bound is 4x the previous
+			Buckets: prometheus.ExponentialBuckets(1, 4, 16),
 		})
 	}
 
