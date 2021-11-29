@@ -1,5 +1,17 @@
 # Refinery Changelog
 
+## 1.7.0 2021-11-29
+
+### Enhancements
+
+- Replace internal duplicated code with Husky (#341) [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+  - Also fixes segfaults caused by nil appearing in OTLP data as described in (#358)
+- Improves histogram buckets over the default set (#355) [@bdarfler](https://github.com/bdarfler)
+
+### Maintenance
+
+- Update dependabot to monthly (#356) [@vreynolds](https://github.com/vreynolds)
+
 ## 1.6.1 2021-11-10
 
 - Revert "Use alpine as base image (#343)" (#352)
