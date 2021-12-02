@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -299,80 +298,6 @@ func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
 			}
 			if dataset != datasetValue {
 				t.Errorf("got: %s\n\twant: %v", dataset, datasetValue)
-			}
-		})
-	}
-}
-
-func TestGetSampleRateFromAttributes(t *testing.T) {
-	const (
-		defaultSampleRate = 1
-	)
-	tests := []struct {
-		name          string
-		attrKey       string
-		attrValue     interface{}
-		expectedValue int
-	}{
-		{
-			name:          "missing attr gets default value",
-			attrKey:       "",
-			attrValue:     nil,
-			expectedValue: defaultSampleRate,
-		},
-		{
-			name:          "can parse integer value",
-			attrKey:       "sampleRate",
-			attrValue:     5,
-			expectedValue: 5,
-		},
-		{
-			name:          "can parse string value",
-			attrKey:       "sampleRate",
-			attrValue:     "5",
-			expectedValue: 5,
-		},
-		{
-			name:          "can parse int64 value (less than int32 max)",
-			attrKey:       "sampleRate",
-			attrValue:     int64(100),
-			expectedValue: 100,
-		},
-		{
-			name:          "can parse int64 value (greater than int32 max)",
-			attrKey:       "sampleRate",
-			attrValue:     int64(math.MaxInt32 + 100),
-			expectedValue: math.MaxInt32,
-		},
-		{
-			name:          "does not parse float, gets default value",
-			attrKey:       "sampleRate",
-			attrValue:     0.25,
-			expectedValue: defaultSampleRate,
-		},
-		{
-			name:          "does not parse bool, gets default value",
-			attrKey:       "sampleRate",
-			attrValue:     true,
-			expectedValue: defaultSampleRate,
-		},
-		{
-			name:          "does not parse struct, gets default value",
-			attrKey:       "sampleRate",
-			attrValue:     struct{}{},
-			expectedValue: defaultSampleRate,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			attrs := map[string]interface{}{
-				tt.attrKey: tt.attrValue,
-			}
-
-			sampleRate, _ := getSampleRateFromAttributes(attrs)
-			if sampleRate != tt.expectedValue {
-				t.Errorf("got: %d\n\twant: %d", sampleRate, tt.expectedValue)
 			}
 		})
 	}
