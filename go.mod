@@ -27,7 +27,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
-	github.com/vmihailenco/msgpack/v4 v4.3.11
+	github.com/vmihailenco/msgpack/v5 v5.3.4
 	go.opentelemetry.io/proto/otlp v0.11.0
 	google.golang.org/grpc v1.42.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
