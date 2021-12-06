@@ -56,7 +56,7 @@ type MockConfig struct {
 	GetSendDelayVal               time.Duration
 	GetTraceTimeoutErr            error
 	GetTraceTimeoutVal            time.Duration
-	GetMaxBatchSize			          int
+	GetMaxBatchSizeVal	          int
 	GetUpstreamBufferSizeVal      int
 	GetPeerBufferSizeVal          int
 	SendTickerVal                 time.Duration
