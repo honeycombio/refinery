@@ -56,6 +56,7 @@ type MockConfig struct {
 	GetSendDelayVal               time.Duration
 	GetTraceTimeoutErr            error
 	GetTraceTimeoutVal            time.Duration
+	GetMaxBatchSize			          int
 	GetUpstreamBufferSizeVal      int
 	GetPeerBufferSizeVal          int
 	SendTickerVal                 time.Duration
@@ -219,6 +220,13 @@ func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr
+}
+
+func (m *MockConfig) GetMaxBatchSize() int {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetMaxBatchSizeVal
 }
 
 // TODO: allow per-dataset mock values

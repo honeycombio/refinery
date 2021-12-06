@@ -38,6 +38,7 @@ type configContents struct {
 	Metrics                   string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay                 time.Duration `validate:"required"`
 	TraceTimeout              time.Duration `validate:"required"`
+	MaxBatchSize							int						`validate:"required"`
 	SendTicker                time.Duration `validate:"required"`
 	UpstreamBufferSize        int           `validate:"required"`
 	PeerBufferSize            int           `validate:"required"`
@@ -113,6 +114,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("Metrics", "honeycomb")
 	c.SetDefault("SendDelay", 2*time.Second)
 	c.SetDefault("TraceTimeout", 60*time.Second)
+	c.SetDefault("MaxBatchSize", 500)
 	c.SetDefault("SendTicker", 100*time.Millisecond)
 	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
 	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
@@ -642,6 +644,13 @@ func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 	defer f.mux.RUnlock()
 
 	return f.conf.TraceTimeout, nil
+}
+
+func (f *fileConfig) GetMaxBatchSize() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.MaxBatchSize
 }
 
 func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
