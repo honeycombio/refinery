@@ -73,7 +73,7 @@ type Config interface {
 	GetTraceTimeout() (time.Duration, error)
 
 	// GetMaxBatchSize is the number of events to be included in the batch for sending
-	GetMaxBatchSize() int
+	GetMaxBatchSize() uint
 
 	// GetOtherConfig attempts to fill the passed in struct with the contents of
 	// a subsection of the config.   This is used by optional configurations to

@@ -161,7 +161,7 @@ func newStartedApp(
 	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         uint(c.GetMaxBatchSize()),
+			MaxBatchSize:         c.GetMaxBatchSize(),
 			BatchTimeout:         libhoney.DefaultBatchTimeout,
 			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:  uint(c.GetPeerBufferSize()),
