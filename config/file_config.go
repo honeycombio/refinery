@@ -646,7 +646,7 @@ func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 	return f.conf.TraceTimeout, nil
 }
 
-func (f *fileConfig) GetMaxBatchSize() int {
+func (f *fileConfig) GetMaxBatchSize() uint {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 

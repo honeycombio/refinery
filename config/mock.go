@@ -56,7 +56,7 @@ type MockConfig struct {
 	GetSendDelayVal               time.Duration
 	GetTraceTimeoutErr            error
 	GetTraceTimeoutVal            time.Duration
-	GetMaxBatchSizeVal            int
+	GetMaxBatchSizeVal            uint
 	GetUpstreamBufferSizeVal      int
 	GetPeerBufferSizeVal          int
 	SendTickerVal                 time.Duration
@@ -222,7 +222,7 @@ func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
 	return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr
 }
 
-func (m *MockConfig) GetMaxBatchSize() int {
+func (m *MockConfig) GetMaxBatchSize() uint {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
