@@ -38,7 +38,7 @@ type configContents struct {
 	Metrics                   string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay                 time.Duration `validate:"required"`
 	TraceTimeout              time.Duration `validate:"required"`
-	MaxBatchSize              int           `validate:"required"`
+	MaxBatchSize              uint           `validate:"required"`
 	SendTicker                time.Duration `validate:"required"`
 	UpstreamBufferSize        int           `validate:"required"`
 	PeerBufferSize            int           `validate:"required"`
