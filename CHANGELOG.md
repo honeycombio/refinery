@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 1.8.0 2021-12-08
+
+### Enhancements
+
+- Make MaxBatchSize configurable (#365) | [@JamieDanielson](https://github.com/JamieDanielson)
+
+### Maintenance
+
+- Bump husky to v0.5.0 (#366) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Bump husky to v0.4.0 (#361) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.7.0 2021-11-29
 
 ### Enhancements
