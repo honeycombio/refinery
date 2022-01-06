@@ -12,11 +12,11 @@ require (
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/golang/protobuf v1.5.2
 	github.com/gomodule/redigo v1.8.5
-	github.com/gorilla/mux v1.6.3-0.20190108142930-08e7f807d38d
+	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/husky v0.5.0
-	github.com/honeycombio/libhoney-go v1.15.6
+	github.com/honeycombio/libhoney-go v1.15.8
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.13.6
@@ -29,6 +29,9 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/vmihailenco/msgpack/v4 v4.3.11
 	go.opentelemetry.io/proto/otlp v0.9.0
+	golang.org/x/net v0.0.0-20210913180222-943fd674d43e // indirect
+	golang.org/x/sys v0.0.0-20210910150752-751e447fb3d0 // indirect
+	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/grpc v1.42.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
