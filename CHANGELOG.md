@@ -5,7 +5,7 @@
 ### Maintenance
 
 - Add re-triage workflow (#368) | [@vreynolds](https://github.com/vreynolds)
-- Bump libhoney & golang (#373) | [lizthegrey](https://github.com/lizthegrey)
+- Bump libhoney & golang (#373) | [@lizthegrey](https://github.com/lizthegrey)
 - Bump github.com/honeycombio/husky from 0.5.0 to 0.6.0 (#370)
 - Bump github.com/prometheus/client_golang from 0.9.4 to 1.11.0 (#357)
 
