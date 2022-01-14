@@ -216,7 +216,7 @@ SampleRate = 1
 			value = "/health-check"
 
 	[[dataset4.rule]]
-		name = "500 errors or slow"
+		name = "keep slow 500 errors"
 		SampleRate = 1
 		[[dataset4.rule.condition]]
 			field = "status_code"
@@ -228,7 +228,7 @@ SampleRate = 1
 			value = 1000.789
 
 	[[dataset4.rule]]
-		name = "dynamic sample 200 responses"
+		name = "dynamically sample 200 responses"
 		[[dataset4.rule.condition]]
 			field = "status_code"
 			operator = "="
