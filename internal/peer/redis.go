@@ -59,7 +59,20 @@ func newRedisPeers(c config.Config) (Peers, error) {
 		IdleTimeout: 5 * time.Minute,
 		Wait:        true,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", redisHost, options...)
+			// keep trying to connect to redis
+			for timeout := time.After(10 * time.Second); ; {
+				select {
+				case <-timeout:
+					return nil, fmt.Errorf("failed to connect to redis at [%s]", redisHost)
+				default:
+					conn, err := redis.Dial("tcp", redisHost, options...)
+					if err == nil {
+						return conn, nil
+					}
+					// delay before trying again
+					time.Sleep(time.Second)
+				}
+			}
 		},
 	}
 
