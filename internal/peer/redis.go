@@ -59,7 +59,26 @@ func newRedisPeers(c config.Config) (Peers, error) {
 		IdleTimeout: 5 * time.Minute,
 		Wait:        true,
 		Dial: func() (redis.Conn, error) {
-			return redis.Dial("tcp", redisHost, options...)
+			// if redis is started at the same time as refinery, connecting to redis can
+			// fail and cause refinery to error out.
+			// Instead, we will try to connect to redis for up to 10 seconds with
+			// a 1 second delay between attempts to allow the redis process to init
+			var (
+				conn redis.Conn
+				err error
+			)
+			for timeout := time.After(10 * time.Second); ; {
+				select {
+				case <-timeout:
+					return nil, err
+				default:
+					conn, err = redis.Dial("tcp", redisHost, options...)
+					if err == nil {
+						return conn, nil
+					}
+					time.Sleep(time.Second)
+				}
+			}
 		},
 	}
 
