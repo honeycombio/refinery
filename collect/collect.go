@@ -467,6 +467,12 @@ func (i *InMemCollector) send(trace *types.Trace) {
 			field := i.Config.GetDryRunFieldName()
 			sp.Data[field] = shouldSend
 		}
+		if i.Config.GetAddHostMetadataToTrace() {
+			if hostname, err := os.Hostname(); err == nil && hostname != "" {
+				// add hostname to span
+				sp.Data["meta.refinery.local_hostname"] = hostname
+			}
+		}
 		// if spans are already sampled, take that in to account when computing
 		// the final rate
 		sp.SampleRate *= trace.SampleRate
