@@ -15,3 +15,5 @@ refinery
 !/cmd/refinery
 test_redimem
 !/cmd/test_redimem
+
+dockerize*
