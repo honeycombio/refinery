@@ -69,6 +69,8 @@ type InMemCollector struct {
 	incoming chan *types.Span
 	fromPeer chan *types.Span
 	reload   chan struct{}
+
+	hostname string
 }
 
 // traceSentRecord is the bit we leave behind when sending a trace to remember
@@ -113,6 +115,13 @@ func (i *InMemCollector) Start() error {
 	i.fromPeer = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
+
+	if i.Config.GetAddHostMetadataToTrace() {
+		if hostname, err := os.Hostname(); err == nil && hostname != "" {
+			i.hostname = hostname
+		}
+	}
+
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
 
@@ -467,11 +476,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 			field := i.Config.GetDryRunFieldName()
 			sp.Data[field] = shouldSend
 		}
-		if i.Config.GetAddHostMetadataToTrace() {
-			if hostname, err := os.Hostname(); err == nil && hostname != "" {
-				// add hostname to span
-				sp.Data["meta.refinery.local_hostname"] = hostname
-			}
+		if i.hostname != "" {
+			sp.Data["meta.refinery.local_hostname"] = i.hostname
 		}
 		// if spans are already sampled, take that in to account when computing
 		// the final rate
