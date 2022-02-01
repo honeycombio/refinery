@@ -94,6 +94,7 @@ type PeerManagementConfig struct {
 func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
 
+	c.BindEnv("GRPCListenAddr", "REFINERY_GRPC_LISTEN_ADDRESS")
 	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
 	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")

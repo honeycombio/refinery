@@ -12,10 +12,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestGRPCListenAddrEnvVar(t *testing.T) {
+	const address = "127.0.0.1:4317"
+	const envVarName = "REFINERY_GRPC_LISTEN_ADDRESS"
+	os.Setenv(envVarName, address)
+	defer os.Unsetenv(envVarName)
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if a, _ := c.GetGRPCListenAddr(); a != address {
+		t.Error("received", a, "expected", address)
+	}
+}
+
 func TestRedisHostEnvVar(t *testing.T) {
-	host := "redis.magic:1337"
-	os.Setenv("REFINERY_REDIS_HOST", host)
-	defer os.Unsetenv("REFINERY_REDIS_HOST")
+	const host = "redis.magic:1337"
+	const envVarName = "REFINERY_REDIS_HOST"
+	os.Setenv(envVarName, host)
+	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
 
@@ -29,9 +47,10 @@ func TestRedisHostEnvVar(t *testing.T) {
 }
 
 func TestRedisPasswordEnvVar(t *testing.T) {
-	password := "admin1234"
-	os.Setenv("REFINERY_REDIS_PASSWORD", password)
-	defer os.Unsetenv("REFINERY_REDIS_PASSWORD")
+	const password = "admin1234"
+	const envVarName = "REFINERY_REDIS_PASSWORD"
+	os.Setenv(envVarName, password)
+	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
 
