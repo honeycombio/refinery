@@ -1,5 +1,23 @@
 # Refinery Changelog
 
+## 1.9.0 2022-02-01
+
+### Enhancements
+
+- Honor env. variable to set gRPC listener address (#386) | [@seh](https://github.com/seh)
+- Add retries when connecting to redis during init (#382) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+### Fixes
+
+- Properly set meta.refinery.local_hostname field (#387) | [@jharley](https://github.com/jharley)
+
+### Maintenance
+
+- docs: update rules example (#378) | [@vreynolds](https://github.com/vreynolds)
+- Bump github.com/gomodule/redigo from 1.8.5 to 1.8.8 (#374)
+- Bump github.com/spf13/viper from 1.9.0 to 1.10.1 (#375)
+- Bump google.golang.org/grpc from 1.42.0 to 1.43.0 (#372)
+
 ## 1.8.1 2022-01-06
 
 ### Maintenance
