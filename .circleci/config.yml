@@ -83,6 +83,9 @@ jobs:
           name: build_rpm_amd64
           command: ./build-pkg.sh -m amd64 -v "${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" -t rpm && mv *.rpm ~/artifacts
       - run:
+          name: build_rpm_arm64
+          command: ./build-pkg.sh -m arm64 -v "${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" -t rpm && mv *.rpm ~/artifacts
+      - run:
           name: copy_binaries
           command: cp $GOPATH/bin/refinery-* ~/artifacts
       - run: echo "finished builds" && find ~/artifacts -ls
@@ -197,4 +200,3 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-
