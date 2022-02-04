@@ -87,7 +87,7 @@ func (h *HoneycombMetrics) Start() error {
 }
 
 func (h *HoneycombMetrics) reloadBuilder() {
-	h.Logger.Debug().Logf("reloading config for honeeycomb metrics reporter")
+	h.Logger.Debug().Logf("reloading config for honeycomb metrics reporter")
 	mc, err := h.Config.GetHoneycombMetricsConfig()
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
