@@ -45,6 +45,10 @@ type Config interface {
 	// management.
 	GetRedisHost() (string, error)
 
+	// GetRedisUsername returns the username of a Redis instance to use for peer
+	// management.
+	GetRedisUsername() (string, error)
+
 	// GetRedisPassword returns the password of a Redis instance to use for peer
 	// management.
 	GetRedisPassword() (string, error)

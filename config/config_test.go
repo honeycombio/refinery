@@ -46,6 +46,23 @@ func TestRedisHostEnvVar(t *testing.T) {
 	}
 }
 
+func TestRedisUsernameEnvVar(t *testing.T) {
+	const username = "admin"
+	const envVarName = "REFINERY_REDIS_USERNAME"
+	os.Setenv(envVarName, username)
+	defer os.Unsetenv(envVarName)
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetRedisUsername(); d != username {
+		t.Error("received", d, "expected", username)
+	}
+}
+
 func TestRedisPasswordEnvVar(t *testing.T) {
 	const password = "admin1234"
 	const envVarName = "REFINERY_REDIS_PASSWORD"
