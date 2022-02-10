@@ -206,9 +206,6 @@ func (f *fileConfig) onChange(in fsnotify.Event) {
 
 	f.unmarshal()
 
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
 	for _, c := range f.callbacks {
 		c()
 	}
