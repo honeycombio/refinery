@@ -82,6 +82,7 @@ type PeerManagementConfig struct {
 	Type                    string   `validate:"required,oneof= file redis"`
 	Peers                   []string `validate:"dive,url"`
 	RedisHost               string
+	RedisUsername           string
 	RedisPassword           string
 	UseTLS                  bool
 	UseTLSInsecure          bool
@@ -96,6 +97,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 
 	c.BindEnv("GRPCListenAddr", "REFINERY_GRPC_LISTEN_ADDRESS")
 	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
+	c.BindEnv("PeerManagement.RedisUsername", "REFINERY_REDIS_USERNAME")
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
 	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_API_KEY")
@@ -409,6 +411,13 @@ func (f *fileConfig) GetRedisHost() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.config.GetString("PeerManagement.RedisHost"), nil
+}
+
+func (f *fileConfig) GetRedisUsername() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetString("PeerManagement.RedisUsername"), nil
 }
 
 func (f *fileConfig) GetRedisPassword() (string, error) {

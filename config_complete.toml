@@ -152,6 +152,12 @@ Metrics = "honeycomb"
 # Not eligible for live reload.
 # RedisHost = "localhost:6379"
 
+# RedisUsername is the username used to connect to redis for peer cluster membership management.
+# If the environment variable 'REFINERY_REDIS_USERNAME' is set it takes
+# precedence and this value is ignored.
+# Not eligible for live reload.
+# RedisUsername = ""
+
 # RedisPassword is the password used to connect to redis for peer cluster membership management.
 # If the environment variable 'REFINERY_REDIS_PASSWORD' is set it takes
 # precedence and this value is ignored.

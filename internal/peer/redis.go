@@ -65,7 +65,7 @@ func newRedisPeers(c config.Config) (Peers, error) {
 			// a 1 second delay between attempts to allow the redis process to init
 			var (
 				conn redis.Conn
-				err error
+				err  error
 			)
 			for timeout := time.After(10 * time.Second); ; {
 				select {
@@ -188,6 +188,11 @@ func buildOptions(c config.Config) []redis.DialOption {
 		redis.DialReadTimeout(1 * time.Second),
 		redis.DialConnectTimeout(1 * time.Second),
 		redis.DialDatabase(0), // TODO enable multiple databases for multiple samproxies
+	}
+
+	username, _ := c.GetRedisUsername()
+	if username != "" {
+		options = append(options, redis.DialUsername(username))
 	}
 
 	password, _ := c.GetRedisPassword()
