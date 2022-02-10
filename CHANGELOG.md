@@ -1,5 +1,17 @@
 # Refinery Changelog
 
+## 1.10.0 2022-02-10
+
+### Enhancements
+
+- added username in config for redis auth (#397) | [@ecobrien29](https://github.com/ecobrien29)
+- build: add ARM64 (aarch64) RPM artifact (#395) | [@jharley](https://github.com/jharley)
+
+### Fixes
+
+- fix: deadlock when reloading configs (#398) | [@vreynolds](https://github.com/vreynolds)
+- Fixed "honeeycomb" typo in log output when reloading config (#394) | [@looneym](https://github.com/looneym)
+
 ## 1.9.0 2022-02-01
 
 ### Enhancements
