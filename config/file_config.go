@@ -301,6 +301,7 @@ func (f *fileConfig) validateSamplerConfigs() error {
 			}
 		}
 
+		// TODO: these can be dataset (legacy) or environment (new)
 		// verify dataset sampler configs
 		if len(parts) > 1 && parts[1] == "sampler" {
 			t := f.rules.GetString(key)
@@ -332,6 +333,8 @@ func (f *fileConfig) validateSamplerConfigs() error {
 				}
 			}
 		}
+
+		// TODO: verify environment.service configs
 	}
 	return nil
 }
@@ -541,6 +544,89 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 		}
 
 	} else if ok := f.rules.IsSet("Sampler"); ok {
+		t := f.rules.GetString("Sampler")
+		var i interface{}
+
+		switch t {
+		case "DeterministicSampler":
+			i = &DeterministicSamplerConfig{}
+		case "DynamicSampler":
+			i = &DynamicSamplerConfig{}
+		case "EMADynamicSampler":
+			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
+		case "TotalThroughputSampler":
+			i = &TotalThroughputSamplerConfig{}
+		default:
+			return nil, errors.New("No Sampler found")
+		}
+
+		return i, f.rules.Unmarshal(i)
+	}
+
+	return nil, errors.New("No Sampler found")
+}
+
+func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string, service string) (interface{}, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	// {environment}.{dataset}.Sampler
+	key := fmt.Sprintf("%s.%s.Sampler", environment, service)
+	if ok := f.rules.IsSet(key); ok {
+		t := f.rules.GetString(key)
+		var i interface{}
+
+		switch t {
+		case "DeterministicSampler":
+			i = &DeterministicSamplerConfig{}
+		case "DynamicSampler":
+			i = &DynamicSamplerConfig{}
+		case "EMADynamicSampler":
+			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
+		case "TotalThroughputSampler":
+			i = &TotalThroughputSamplerConfig{}
+		default:
+			return nil, errors.New("No Sampler found")
+		}
+
+		if sub := f.rules.Sub(fmt.Sprintf("%s.%s", environment, service)); sub != nil {
+			return i, sub.Unmarshal(i)
+		}
+	}
+
+	// {environment}.Sampler
+	key = fmt.Sprintf("%s.Sampler", environment)
+	if ok := f.rules.IsSet(key); ok {
+		t := f.rules.GetString(key)
+		var i interface{}
+
+		switch t {
+		case "DeterministicSampler":
+			i = &DeterministicSamplerConfig{}
+		case "DynamicSampler":
+			i = &DynamicSamplerConfig{}
+		case "EMADynamicSampler":
+			i = &EMADynamicSamplerConfig{}
+		case "RulesBasedSampler":
+			i = &RulesBasedSamplerConfig{}
+		case "TotalThroughputSampler":
+			i = &TotalThroughputSamplerConfig{}
+		default:
+			return nil, errors.New("No Sampler found")
+		}
+
+		if sub := f.rules.Sub(environment); sub != nil {
+			return i, sub.Unmarshal(i)
+		}
+
+	}
+
+	// Sampler
+	if ok := f.rules.IsSet("Sampler"); ok {
 		t := f.rules.GetString("Sampler")
 		var i interface{}
 

@@ -63,6 +63,7 @@ type InMemCollector struct {
 
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
+	ServiceSamplers map[string]map[string]sample.Sampler
 
 	sentTraceCache *lru.Cache
 
@@ -77,8 +78,8 @@ type InMemCollector struct {
 // our decision for the future, so any delinquent spans that show up later can
 // be dropped or passed along.
 type traceSentRecord struct {
-	keep bool // true if the trace was kept, false if it was dropped
-	rate uint // sample rate used when sending the trace
+	datasetDecision  types.SampleDecision            // per-trace / dataset sampling decision
+	serviceDecisions map[string]types.SampleDecision // per-service sampling decisions
 }
 
 func (i *InMemCollector) Start() error {
@@ -115,6 +116,7 @@ func (i *InMemCollector) Start() error {
 	i.fromPeer = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.ServiceSamplers = make(map[string]map[string]sample.Sampler)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -169,6 +171,7 @@ func (i *InMemCollector) reloadConfigs() {
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.ServiceSamplers = make(map[string]map[string]sample.Sampler)
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
@@ -327,9 +330,20 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// if the trace has already been sent, just pass along the span
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
-				i.Metrics.Increment("trace_sent_cache_hit")
-				i.dealWithSentTrace(sr.keep, sr.rate, sp)
-				return
+				if isLegacy(sp.APIKey) {
+					// use dataset sampling decision
+					i.Metrics.Increment("trace_sent_cache_hit")
+					i.dealWithSentTrace(sr.datasetDecision.KeepSample, sr.datasetDecision.SampleRate, sp)
+					return
+				} else {
+					// use dataset sampling decision
+					if decision, ok := sr.serviceDecisions[sp.Dataset]; ok {
+						i.Metrics.Increment("trace_sent_cache_hit")
+						i.dealWithSentTrace(decision.KeepSample, decision.SampleRate, sp)
+						return
+					}
+					// TODO: what if this decision doesn't have a service sampling decision?
+				}
 			}
 		}
 		// trace hasn't already been sent (or this span is really old); let's
@@ -357,8 +371,17 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
-	if trace.Sent == true {
-		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
+	if trace.Sent {
+		if isLegacy(trace.APIHost) {
+			// use dataset sampling decision
+			i.dealWithSentTrace(trace.DatasetSamplingDecision.KeepSample, trace.DatasetSamplingDecision.SampleRate, sp)
+		} else {
+			// use dataset sampling decision
+			if decision, ok := trace.ServiceSamplingDecisions[sp.Dataset]; ok {
+				i.dealWithSentTrace(decision.KeepSample, decision.SampleRate, sp)
+			}
+			// TODO: what if this decision doesn't have a service sampling decision?
+		}
 	}
 
 	// great! trace is live. add the span.
@@ -437,52 +460,123 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	var sampler sample.Sampler
 	var found bool
 
-	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
-		// save sampler for later
-		i.datasetSamplers[trace.Dataset] = sampler
-	}
-
-	// make sampling decision and update the trace
-	rate, shouldSend := sampler.GetSampleRate(trace)
-	trace.SampleRate = rate
-	trace.KeepSample = shouldSend
-
-	// record this decision in the sent record LRU for future spans
-	sentRecord := traceSentRecord{
-		keep: shouldSend,
-		rate: rate,
-	}
-	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
-
-	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
-	if !shouldSend && !i.Config.GetIsDryRun() {
-		i.Metrics.Increment("trace_send_dropped")
-		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
-		return
-	}
-	i.Metrics.Increment("trace_send_kept")
-
-	// ok, we're not dropping this trace; send all the spans
-	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
-	}
-	i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Sending trace to dataset")
-	for _, sp := range trace.GetSpans() {
-		if sp.SampleRate < 1 {
-			sp.SampleRate = 1
+	if isLegacy(trace.APIKey) {
+		if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
+			sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
+			// save sampler for later
+			i.datasetSamplers[trace.Dataset] = sampler
 		}
-		if i.Config.GetIsDryRun() {
-			field := i.Config.GetDryRunFieldName()
-			sp.Data[field] = shouldSend
+
+		// make sampling decision and update the trace and sent record
+		rate, keep := sampler.GetSampleRate(trace)
+		trace.DatasetSamplingDecision = types.SampleDecision{
+			KeepSample: keep,
+			SampleRate: rate,
 		}
-		if i.hostname != "" {
-			sp.Data["meta.refinery.local_hostname"] = i.hostname
+		sentRecord := traceSentRecord{
+			datasetDecision: trace.DatasetSamplingDecision,
 		}
-		// if spans are already sampled, take that in to account when computing
-		// the final rate
-		sp.SampleRate *= trace.SampleRate
-		i.Transmission.EnqueueSpan(sp)
+		i.sentTraceCache.Add(trace.TraceID, &sentRecord)
+
+		// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
+		if !keep && !i.Config.GetIsDryRun() {
+			i.Metrics.Increment("trace_send_dropped")
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
+			return
+		}
+		i.Metrics.Increment("trace_send_kept")
+
+		// ok, we're not dropping this trace; send all the spans
+		if i.Config.GetIsDryRun() && !keep {
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
+		} else {
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Sending trace to dataset")
+		}
+		for _, sp := range trace.GetSpans() {
+			if sp.SampleRate < 1 {
+				sp.SampleRate = 1
+			}
+			if i.Config.GetIsDryRun() {
+				field := i.Config.GetDryRunFieldName()
+				sp.Data[field] = keep
+			}
+			if i.hostname != "" {
+				sp.Data["meta.refinery.local_hostname"] = i.hostname
+			}
+			// if spans are already sampled, take that in to account when computing
+			// the final rate
+			sp.SampleRate *= rate
+			i.Transmission.EnqueueSpan(sp)
+		}
+	} else {
+		environment := getEnvironmentName(trace.APIKey)
+
+		// separate events by service name (dataset)
+		serviceSpans := make(map[string][]*types.Span)
+		for _, span := range trace.GetSpans() {
+			serviceSpans[span.Dataset] = append(serviceSpans[span.Dataset], span)
+		}
+
+		// create trace per-service sampling decision map
+		trace.ServiceSamplingDecisions = make(map[string]types.SampleDecision, len(serviceSpans))
+
+		for serviceName, spans := range serviceSpans {
+			// get sampler for environment & service
+			if sampler, found = i.ServiceSamplers[environment][serviceName]; !found {
+				sampler = i.SamplerFactory.GetSamplerImplementationForEnvironmentAndService(environment, serviceName)
+				// save sampler for later
+				if i.ServiceSamplers[environment] == nil {
+					i.ServiceSamplers[environment] = make(map[string]sample.Sampler)
+				}
+				i.ServiceSamplers[environment][trace.Dataset] = sampler
+			}
+
+			// make sampling decision and update trace and sent record
+			rate, keep := sampler.GetSampleRate(trace)
+			trace.ServiceSamplingDecisions[serviceName] = types.SampleDecision{
+				SampleRate: rate,
+				KeepSample: keep,
+			}
+
+			// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
+			if !keep && !i.Config.GetIsDryRun() {
+				i.Metrics.Increment("trace_send_dropped")
+				i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service_name", serviceName).Logf("Dropping trace because of sampling, trace to dataset")
+				return
+			}
+			i.Metrics.Increment("trace_send_kept")
+
+			// ok, we're not dropping this trace; send all the spans
+			if i.Config.GetIsDryRun() && !keep {
+				i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service_name", serviceName).Logf("Trace would have been dropped, but dry run mode is enabled")
+			} else {
+				i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service_name", serviceName).Logf("Sending trace")
+			}
+
+			for _, sp := range spans {
+				if sp.SampleRate < 1 {
+					sp.SampleRate = 1
+				}
+				if i.Config.GetIsDryRun() {
+					field := i.Config.GetDryRunFieldName()
+					sp.Data[field] = keep
+				}
+				if i.hostname != "" {
+					sp.Data["meta.refinery.local_hostname"] = i.hostname
+				}
+				// if spans are already sampled, take that in to account when computing
+				// the final rate
+				sp.SampleRate *= rate
+				i.Transmission.EnqueueSpan(sp)
+			}
+		}
+
+		// create sent record nmarker to record sampling decisions in the sent record LRU for future spans
+		sentRecord := traceSentRecord{
+			serviceDecisions: trace.ServiceSamplingDecisions,
+		}
+		// add sent record to cache
+		i.sentTraceCache.Add(trace.TraceID, &sentRecord)
 	}
 }
 
@@ -514,4 +608,13 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
+}
+
+func isLegacy(apiKey string) bool {
+	return len(apiKey) == 32
+}
+
+func getEnvironmentName(apikey string) string {
+	// TODO: retrieve from cache or query auth endpoint
+	return "local"
 }

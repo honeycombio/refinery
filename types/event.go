@@ -28,6 +28,11 @@ type Event struct {
 	Data       map[string]interface{}
 }
 
+type SampleDecision struct {
+	SampleRate uint
+	KeepSample bool
+}
+
 // Trace isn't something that shows up on the wire; it gets created within
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
@@ -37,10 +42,10 @@ type Trace struct {
 	Dataset string
 	TraceID string
 
-	// SampleRate should only be changed if the changer holds the SendSampleLock
-	SampleRate uint
-	// KeepSample should only be changed if the changer holds the SendSampleLock
-	KeepSample bool
+	// trace sampling decision
+	DatasetSamplingDecision SampleDecision
+	// services contains sampling decisions per service once sent
+	ServiceSamplingDecisions map[string]SampleDecision
 	// Sent should only be changed if the changer holds the SendSampleLock
 	Sent bool
 
