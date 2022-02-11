@@ -136,4 +136,6 @@ type Config interface {
 	GetDryRunFieldName() string
 
 	GetAddHostMetadataToTrace() bool
+
+	GetDefaultEnvironment() string
 }

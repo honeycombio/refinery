@@ -48,6 +48,7 @@ type configContents struct {
 	PeerManagement            PeerManagementConfig           `validate:"required"`
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 	AddHostMetadataToTrace    bool
+	DefaultEnvironment        string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -572,60 +573,51 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	// {environment}.{dataset}.Sampler
-	key := fmt.Sprintf("%s.%s.Sampler", environment, service)
-	if ok := f.rules.IsSet(key); ok {
-		t := f.rules.GetString(key)
-		var i interface{}
-
-		switch t {
-		case "DeterministicSampler":
-			i = &DeterministicSamplerConfig{}
-		case "DynamicSampler":
-			i = &DynamicSamplerConfig{}
-		case "EMADynamicSampler":
-			i = &EMADynamicSamplerConfig{}
-		case "RulesBasedSampler":
-			i = &RulesBasedSamplerConfig{}
-		case "TotalThroughputSampler":
-			i = &TotalThroughputSamplerConfig{}
-		default:
-			return nil, errors.New("No Sampler found")
+	if environment != "" {
+		// {environment}.{service}.Sampler
+		key := fmt.Sprintf("%s.%s.Sampler", environment, service)
+		sampler, err := f.GetSampler(key)
+		if err != nil {
+			return nil, err
+		}
+		if sampler != nil {
+			return sampler, nil
 		}
 
-		if sub := f.rules.Sub(fmt.Sprintf("%s.%s", environment, service)); sub != nil {
-			return i, sub.Unmarshal(i)
+		// {environment}.Sampler
+		key = fmt.Sprintf("%s.Sampler", environment)
+		sampler, err = f.GetSampler(key)
+		if err != nil {
+			return nil, err
 		}
-	}
-
-	// {environment}.Sampler
-	key = fmt.Sprintf("%s.Sampler", environment)
-	if ok := f.rules.IsSet(key); ok {
-		t := f.rules.GetString(key)
-		var i interface{}
-
-		switch t {
-		case "DeterministicSampler":
-			i = &DeterministicSamplerConfig{}
-		case "DynamicSampler":
-			i = &DynamicSamplerConfig{}
-		case "EMADynamicSampler":
-			i = &EMADynamicSamplerConfig{}
-		case "RulesBasedSampler":
-			i = &RulesBasedSamplerConfig{}
-		case "TotalThroughputSampler":
-			i = &TotalThroughputSamplerConfig{}
-		default:
-			return nil, errors.New("No Sampler found")
+		if sampler != nil {
+			return sampler, nil
 		}
-
-		if sub := f.rules.Sub(environment); sub != nil {
-			return i, sub.Unmarshal(i)
+	} else {
+		// {dataset}.Sampler
+		key := fmt.Sprintf("%s.Sampler", service)
+		sampler, err := f.GetSampler(key)
+		if err != nil {
+			return nil, err
 		}
-
+		if sampler != nil {
+			return sampler, nil
+		}
 	}
 
 	// Sampler
+	sampler, err := f.GetSampler("Sampler")
+	if err != nil {
+		return nil, err
+	}
+	if sampler != nil {
+		return sampler, nil
+	}
+
+	return nil, errors.New("No Sampler found")
+}
+
+func (f *fileConfig) GetSampler(key string) (interface{}, error) {
 	if ok := f.rules.IsSet("Sampler"); ok {
 		t := f.rules.GetString("Sampler")
 		var i interface{}
@@ -648,7 +640,7 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 		return i, f.rules.Unmarshal(i)
 	}
 
-	return nil, errors.New("No Sampler found")
+	return nil, nil
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
@@ -806,4 +798,11 @@ func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	defer f.mux.RUnlock()
 
 	return f.conf.AddHostMetadataToTrace
+}
+
+func (f *fileConfig) GetDefaultEnvironment() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.DefaultEnvironment
 }
