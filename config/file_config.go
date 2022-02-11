@@ -573,53 +573,90 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
+	// TODO: clean-up to make reuseable :|
 	if environment != "" {
-		// {environment}.{service}.Sampler
+		// {environment}.{dataset}.Sampler
 		key := fmt.Sprintf("%s.%s.Sampler", environment, service)
-		sampler, err := f.getSampler(key)
-		if err != nil {
-			return nil, err
-		}
-		if sampler != nil {
-			return sampler, nil
+		if ok := f.rules.IsSet(key); ok {
+			t := f.rules.GetString(key)
+			var i interface{}
+
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
+			case "TotalThroughputSampler":
+				i = &TotalThroughputSamplerConfig{}
+			default:
+				return nil, errors.New("no Sampler found")
+			}
+
+			if sub := f.rules.Sub(fmt.Sprintf("%s.%s", environment, service)); sub != nil {
+				return i, sub.Unmarshal(i)
+			}
 		}
 
 		// {environment}.Sampler
 		key = fmt.Sprintf("%s.Sampler", environment)
-		sampler, err = f.getSampler(key)
-		if err != nil {
-			return nil, err
-		}
-		if sampler != nil {
-			return sampler, nil
+		if ok := f.rules.IsSet(key); ok {
+			t := f.rules.GetString(key)
+			var i interface{}
+
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
+			case "TotalThroughputSampler":
+				i = &TotalThroughputSamplerConfig{}
+			default:
+				return nil, errors.New("no Sampler found")
+			}
+
+			if sub := f.rules.Sub(environment); sub != nil {
+				return i, sub.Unmarshal(i)
+			}
 		}
 	} else {
 		// {dataset}.Sampler
 		key := fmt.Sprintf("%s.Sampler", service)
-		sampler, err := f.getSampler(key)
-		if err != nil {
-			return nil, err
-		}
-		if sampler != nil {
-			return sampler, nil
+		if ok := f.rules.IsSet(key); ok {
+			t := f.rules.GetString(key)
+			var i interface{}
+
+			switch t {
+			case "DeterministicSampler":
+				i = &DeterministicSamplerConfig{}
+			case "DynamicSampler":
+				i = &DynamicSamplerConfig{}
+			case "EMADynamicSampler":
+				i = &EMADynamicSamplerConfig{}
+			case "RulesBasedSampler":
+				i = &RulesBasedSamplerConfig{}
+			case "TotalThroughputSampler":
+				i = &TotalThroughputSamplerConfig{}
+			default:
+				return nil, errors.New("no Sampler found")
+			}
+
+			if sub := f.rules.Sub(service); sub != nil {
+				return i, sub.Unmarshal(i)
+			}
 		}
 	}
 
 	// Sampler
-	sampler, err := f.getSampler("Sampler")
-	if err != nil {
-		return nil, err
-	}
-	if sampler != nil {
-		return sampler, nil
-	}
-
-	return nil, errors.New("no Sampler found")
-}
-
-func (f *fileConfig) getSampler(key string) (interface{}, error) {
-	if ok := f.rules.IsSet(key); ok {
-		t := f.rules.GetString(key)
+	if ok := f.rules.IsSet("Sampler"); ok {
+		t := f.rules.GetString("Sampler")
 		var i interface{}
 
 		switch t {
@@ -634,13 +671,13 @@ func (f *fileConfig) getSampler(key string) (interface{}, error) {
 		case "TotalThroughputSampler":
 			i = &TotalThroughputSamplerConfig{}
 		default:
-			return nil, fmt.Errorf("unknown sampler type: %s", t)
+			return nil, errors.New("no Sampler found")
 		}
 
 		return i, f.rules.Unmarshal(i)
 	}
 
-	return nil, nil
+	return nil, errors.New("no Sampler found")
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
