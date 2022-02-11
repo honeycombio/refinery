@@ -472,7 +472,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 			if i.samplers[environment] == nil {
 				i.samplers[environment] = make(map[string]sample.Sampler)
 			}
-			i.samplers[environment][trace.Dataset] = sampler
+			i.samplers[environment][service] = sampler
 		}
 
 		// make sampling decision and add to trace
