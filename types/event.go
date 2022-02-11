@@ -28,7 +28,7 @@ type Event struct {
 	Data       map[string]interface{}
 }
 
-type SampleResult struct {
+type SamplingDecision struct {
 	SampleRate uint
 	KeepSample bool
 }
@@ -42,8 +42,8 @@ type Trace struct {
 	Dataset string
 	TraceID string
 
-	// services contains sampling decisions per service once sent
-	ServiceSamplingDecisions map[string]SampleResult
+	// per-service sampling decision - populated once sent
+	SampleDecisions map[string]SamplingDecision
 	// Sent should only be changed if the changer holds the SendSampleLock
 	Sent bool
 

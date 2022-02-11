@@ -74,10 +74,11 @@ type InMemCollector struct {
 }
 
 // traceSentRecord is the bit we leave behind when sending a trace to remember
-// our decision for the future, so any delinquent spans that show up later can
+// our decisions for the future, so any delinquent spans that show up later can
 // be dropped or passed along.
 type traceSentRecord struct {
-	serviceResults map[string]types.SampleResult // per-service sampling decisions
+	// per-service sampling decision
+	sampleDecisions map[string]types.SamplingDecision
 }
 
 func (i *InMemCollector) Start() error {
@@ -326,8 +327,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// if the trace has already been sent, just pass along the span
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
-				// use dataset sampling decision
-				if decision, ok := sr.serviceResults[sp.Dataset]; ok {
+				// use service (dataset) sampling decision
+				if decision, ok := sr.sampleDecisions[sp.Dataset]; ok {
 					i.Metrics.Increment("trace_sent_cache_hit")
 					i.dealWithSentTrace(decision.KeepSample, decision.SampleRate, sp)
 					return
@@ -361,8 +362,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		// use dataset sampling decision
-		if decision, ok := trace.ServiceSamplingDecisions[sp.Dataset]; ok {
+		// use service (dataset) sampling decision
+		if decision, ok := trace.SampleDecisions[sp.Dataset]; ok {
 			i.dealWithSentTrace(decision.KeepSample, decision.SampleRate, sp)
 		}
 		// TODO: what if the trace doesn't find a sampling decision?
@@ -459,7 +460,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 
 	// create per-service sampling decision map
-	trace.ServiceSamplingDecisions = make(map[string]types.SampleResult, len(serviceSpans))
+	trace.SampleDecisions = make(map[string]types.SamplingDecision, len(serviceSpans))
 
 	for service, spans := range serviceSpans {
 		var sampler sample.Sampler
@@ -474,9 +475,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 			i.samplers[environment][trace.Dataset] = sampler
 		}
 
-		// make sampling decision and update trace decision for service
+		// make sampling decision and add to trace
 		rate, keep := sampler.GetSampleRate(trace)
-		trace.ServiceSamplingDecisions[service] = types.SampleResult{
+		trace.SampleDecisions[service] = types.SamplingDecision{
 			SampleRate: rate,
 			KeepSample: keep,
 		}
@@ -516,7 +517,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// create sent record marker to record sampling decisions
 	i.sentTraceCache.Add(trace.TraceID, &traceSentRecord{
-		serviceResults: trace.ServiceSamplingDecisions,
+		sampleDecisions: trace.SampleDecisions,
 	})
 }
 
