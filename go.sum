@@ -261,6 +261,8 @@ github.com/honeycombio/dynsampler-go v0.2.1 h1:IbhjbdB0IbLSZn7xVYuk6jjk/ZDk/EO+D
 github.com/honeycombio/dynsampler-go v0.2.1/go.mod h1:BOeTUPT6fCRH5X/+QqF6Kza3IyLp9uSq/rWgEtI4aZI=
 github.com/honeycombio/husky v0.6.0 h1:VufNrLZoVMqDZrj8hHIF6izh/6LbpYfPPaKeGttXMII=
 github.com/honeycombio/husky v0.6.0/go.mod h1:KltmTfiasGGV0L3Hv6KEzm9YSvv3vRTz/JRSq1K+d78=
+github.com/honeycombio/husky v0.8.0 h1:LmvwmX/WAib/hPGPzMuiQGIIWCWY0xPuXHWxKbEOg5U=
+github.com/honeycombio/husky v0.8.0/go.mod h1:KltmTfiasGGV0L3Hv6KEzm9YSvv3vRTz/JRSq1K+d78=
 github.com/honeycombio/libhoney-go v1.15.8 h1:TECEltZ48K6J4NG1JVYqmi0vCJNnHYooFor83fgKesA=
 github.com/honeycombio/libhoney-go v1.15.8/go.mod h1:+tnL2etFnJmVx30yqmoUkVyQjp7uRJw0a2QGu48lSyY=
 github.com/iancoleman/strcase v0.2.0/go.mod h1:iwCmte+B7n89clKwxIoIXy/HfoL7AsD47ZCWhYzw7ho=
