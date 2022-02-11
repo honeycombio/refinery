@@ -61,8 +61,8 @@ type InMemCollector struct {
 	// This exists to avoid data races in tests and startup/shutdown.
 	mutex sync.RWMutex
 
-	cache           cache.Cache
-	ServiceSamplers map[string]map[string]sample.Sampler
+	cache    cache.Cache
+	samplers map[string]map[string]sample.Sampler
 
 	sentTraceCache *lru.Cache
 
@@ -77,7 +77,7 @@ type InMemCollector struct {
 // our decision for the future, so any delinquent spans that show up later can
 // be dropped or passed along.
 type traceSentRecord struct {
-	serviceDecisions map[string]types.SampleDecision // per-service sampling decisions
+	serviceResults map[string]types.SampleResult // per-service sampling decisions
 }
 
 func (i *InMemCollector) Start() error {
@@ -113,7 +113,7 @@ func (i *InMemCollector) Start() error {
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.fromPeer = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.reload = make(chan struct{}, 1)
-	i.ServiceSamplers = make(map[string]map[string]sample.Sampler)
+	i.samplers = make(map[string]map[string]sample.Sampler)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -167,7 +167,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
-	i.ServiceSamplers = make(map[string]map[string]sample.Sampler)
+	i.samplers = make(map[string]map[string]sample.Sampler)
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
@@ -327,7 +327,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
 				// use dataset sampling decision
-				if decision, ok := sr.serviceDecisions[sp.Dataset]; ok {
+				if decision, ok := sr.serviceResults[sp.Dataset]; ok {
 					i.Metrics.Increment("trace_sent_cache_hit")
 					i.dealWithSentTrace(decision.KeepSample, decision.SampleRate, sp)
 					return
@@ -459,24 +459,24 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 
 	// create per-service sampling decision map
-	trace.ServiceSamplingDecisions = make(map[string]types.SampleDecision, len(serviceSpans))
+	trace.ServiceSamplingDecisions = make(map[string]types.SampleResult, len(serviceSpans))
 
-	for serviceName, spans := range serviceSpans {
+	for service, spans := range serviceSpans {
 		var sampler sample.Sampler
 		var found bool
 
 		// get sampler, if not found create and cache
-		if sampler, found = i.ServiceSamplers[environment][serviceName]; !found {
-			sampler = i.SamplerFactory.GetSamplerImplementationForEnvironmentAndService(environment, serviceName)
-			if i.ServiceSamplers[environment] == nil {
-				i.ServiceSamplers[environment] = make(map[string]sample.Sampler)
+		if sampler, found = i.samplers[environment][service]; !found {
+			sampler = i.SamplerFactory.GetSamplerImplementationForEnvironmentAndService(environment, service)
+			if i.samplers[environment] == nil {
+				i.samplers[environment] = make(map[string]sample.Sampler)
 			}
-			i.ServiceSamplers[environment][trace.Dataset] = sampler
+			i.samplers[environment][trace.Dataset] = sampler
 		}
 
 		// make sampling decision and update trace decision for service
 		rate, keep := sampler.GetSampleRate(trace)
-		trace.ServiceSamplingDecisions[serviceName] = types.SampleDecision{
+		trace.ServiceSamplingDecisions[service] = types.SampleResult{
 			SampleRate: rate,
 			KeepSample: keep,
 		}
@@ -484,16 +484,16 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 		if !keep && !i.Config.GetIsDryRun() {
 			i.Metrics.Increment("trace_send_dropped")
-			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service_name", serviceName).Logf("Dropping trace because of sampling, trace to dataset")
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service", service).Logf("Dropping trace because of sampling, trace to dataset")
 			return
 		}
 		i.Metrics.Increment("trace_send_kept")
 
 		// ok, we're not dropping this trace; send all the spans
 		if i.Config.GetIsDryRun() && !keep {
-			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service_name", serviceName).Logf("Trace would have been dropped, but dry run mode is enabled")
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service", service).Logf("Trace would have been dropped, but dry run mode is enabled")
 		} else {
-			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service_name", serviceName).Logf("Sending trace")
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("environment", environment).WithString("service", service).Logf("Sending trace")
 		}
 
 		for _, sp := range spans {
@@ -516,7 +516,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// create sent record marker to record sampling decisions
 	i.sentTraceCache.Add(trace.TraceID, &traceSentRecord{
-		serviceDecisions: trace.ServiceSamplingDecisions,
+		serviceResults: trace.ServiceSamplingDecisions,
 	})
 }
 

@@ -576,7 +576,7 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 	if environment != "" {
 		// {environment}.{service}.Sampler
 		key := fmt.Sprintf("%s.%s.Sampler", environment, service)
-		sampler, err := f.GetSampler(key)
+		sampler, err := f.getSampler(key)
 		if err != nil {
 			return nil, err
 		}
@@ -586,7 +586,7 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 
 		// {environment}.Sampler
 		key = fmt.Sprintf("%s.Sampler", environment)
-		sampler, err = f.GetSampler(key)
+		sampler, err = f.getSampler(key)
 		if err != nil {
 			return nil, err
 		}
@@ -596,7 +596,7 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 	} else {
 		// {dataset}.Sampler
 		key := fmt.Sprintf("%s.Sampler", service)
-		sampler, err := f.GetSampler(key)
+		sampler, err := f.getSampler(key)
 		if err != nil {
 			return nil, err
 		}
@@ -606,7 +606,7 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 	}
 
 	// Sampler
-	sampler, err := f.GetSampler("Sampler")
+	sampler, err := f.getSampler("Sampler")
 	if err != nil {
 		return nil, err
 	}
@@ -617,9 +617,9 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 	return nil, errors.New("no Sampler found")
 }
 
-func (f *fileConfig) GetSampler(key string) (interface{}, error) {
-	if ok := f.rules.IsSet("Sampler"); ok {
-		t := f.rules.GetString("Sampler")
+func (f *fileConfig) getSampler(key string) (interface{}, error) {
+	if ok := f.rules.IsSet(key); ok {
+		t := f.rules.GetString(key)
 		var i interface{}
 
 		switch t {
@@ -634,7 +634,7 @@ func (f *fileConfig) GetSampler(key string) (interface{}, error) {
 		case "TotalThroughputSampler":
 			i = &TotalThroughputSamplerConfig{}
 		default:
-			return nil, errors.New("No Sampler found")
+			return nil, fmt.Errorf("unknown sampler type: %s", t)
 		}
 
 		return i, f.rules.Unmarshal(i)
