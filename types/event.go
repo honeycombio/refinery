@@ -42,8 +42,6 @@ type Trace struct {
 	Dataset string
 	TraceID string
 
-	// trace sampling decision
-	DatasetSamplingDecision SampleDecision
 	// services contains sampling decisions per service once sent
 	ServiceSamplingDecisions map[string]SampleDecision
 	// Sent should only be changed if the changer holds the SendSampleLock

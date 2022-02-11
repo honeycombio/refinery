@@ -614,7 +614,7 @@ func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string
 		return sampler, nil
 	}
 
-	return nil, errors.New("No Sampler found")
+	return nil, errors.New("no Sampler found")
 }
 
 func (f *fileConfig) GetSampler(key string) (interface{}, error) {
