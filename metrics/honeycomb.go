@@ -30,7 +30,8 @@ type HoneycombMetrics struct {
 	histogramsLock sync.Mutex
 	histograms     map[string]*histogram
 
-	libhClient *libhoney.Client
+	libhClient         *libhoney.Client
+	libhoneyClientLock sync.RWMutex
 
 	latestMemStatsLock sync.RWMutex
 	latestMemStats     runtime.MemStats
@@ -72,6 +73,8 @@ func (h *HoneycombMetrics) Start() error {
 	}
 	h.reportingFreq = mc.MetricsReportingInterval
 
+	h.libhoneyClientLock.Lock()
+	defer h.libhoneyClientLock.Unlock()
 	if err = h.initLibhoney(mc); err != nil {
 		return err
 	}
@@ -87,6 +90,9 @@ func (h *HoneycombMetrics) Start() error {
 }
 
 func (h *HoneycombMetrics) reloadBuilder() {
+	h.libhoneyClientLock.Lock()
+	defer h.libhoneyClientLock.Unlock()
+
 	h.Logger.Debug().Logf("reloading config for honeycomb metrics reporter")
 	mc, err := h.Config.GetHoneycombMetricsConfig()
 	if err != nil {
@@ -142,7 +148,7 @@ func (h *HoneycombMetrics) initLibhoney(mc config.HoneycombMetricsConfig) error 
 	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
 		return time.Now().Sub(startTime) / time.Second
 	})
-	go h.reportToHoneycommb(ctx)
+	go h.reportToHoneycomb(ctx)
 	return nil
 }
 
@@ -175,7 +181,9 @@ func (h *HoneycombMetrics) refreshMemStats(ctx context.Context) {
 // readResponses reads the responses from the libhoney responses queue and logs
 // any errors that come down it
 func (h *HoneycombMetrics) readResponses(ctx context.Context) {
+	h.libhoneyClientLock.RLock()
 	resps := h.libhClient.TxResponses()
+	h.libhoneyClientLock.RUnlock()
 	for {
 		select {
 		case resp := <-resps:
@@ -215,7 +223,7 @@ func (h *HoneycombMetrics) readMemStats(mem *runtime.MemStats) {
 	*mem = h.latestMemStats
 }
 
-func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
+func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 	tick := time.NewTicker(time.Duration(h.reportingFreq) * time.Second)
 	for {
 		select {
@@ -223,6 +231,8 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			// context canceled? we're being asked to stop this so it can be restarted.
 			return
 		case <-tick.C:
+			h.libhoneyClientLock.RLock()
+
 			ev := h.libhClient.NewEvent()
 			ev.Metadata = map[string]string{
 				"api_host": ev.APIHost,
@@ -268,6 +278,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			h.histogramsLock.Unlock()
 
 			ev.Send()
+			h.libhoneyClientLock.RUnlock()
 		}
 	}
 }
