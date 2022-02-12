@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package collect
@@ -427,6 +428,49 @@ func TestSampleConfigReload(t *testing.T) {
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+}
+
+func TestConfigReloadRaciness(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+
+	err := transmission.Start()
+	assert.NoError(t, err)
+
+	conf := &config.MockConfig{
+		GetSendDelayVal:                      0,
+		GetTraceTimeoutVal:                   60 * time.Second,
+		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:                        2 * time.Millisecond,
+		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
+	}
+
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	err = coll.Start()
+	assert.NoError(t, err)
+	defer coll.Stop()
+
+	assert.Equal(t, 1, len(conf.Callbacks))
+
+	// imitate concurrent config reload
+	for i := 0; i < 10; i++ {
+		go func(j int) {
+			conf.Callbacks[0]()
+		}(i)
+
+		go func(j int) {
+			conf.Callbacks[0]()
+		}(i)
+	}
 }
 
 func TestMaxAlloc(t *testing.T) {
