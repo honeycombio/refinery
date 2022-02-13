@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/honeycombio/dynsampler-go"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-
 	"github.com/honeycombio/refinery/config"
 )
 
@@ -26,6 +26,7 @@ type HoneycombLogger struct {
 	libhClient        *libhoney.Client
 	builder           *libhoney.Builder
 	sampler           dynsampler.Sampler
+	mux               sync.RWMutex
 }
 
 type HoneycombEntry struct {
@@ -48,6 +49,8 @@ func (h *HoneycombLogger) Start() error {
 	// and is set independently, before Start() is called, so we need to
 	// preserve it.
 	// TODO: make LogLevel part of the HoneycombLogger/LogrusLogger sections?
+	h.mux.Lock()
+	defer h.mux.Unlock()
 	logLevel := h.loggerConfig.Level
 	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
 	if err != nil {
@@ -134,7 +137,9 @@ func (h *HoneycombLogger) readResponses() {
 func (h *HoneycombLogger) reloadBuilder() {
 	h.Debug().Logf("reloading config for Honeycomb logger")
 	// preseve log level
+	h.mux.RLock()
 	logLevel := h.loggerConfig.Level
+	h.mux.RUnlock()
 	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
@@ -144,6 +149,8 @@ func (h *HoneycombLogger) reloadBuilder() {
 		return
 	}
 	loggerConfig.Level = logLevel
+	h.mux.Lock()
+	defer h.mux.Unlock()
 	h.loggerConfig = loggerConfig
 	h.builder.APIHost = h.loggerConfig.LoggerHoneycombAPI
 	h.builder.WriteKey = h.loggerConfig.LoggerAPIKey
@@ -157,6 +164,8 @@ func (h *HoneycombLogger) Stop() error {
 }
 
 func (h *HoneycombLogger) Debug() Entry {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 	if h.loggerConfig.Level > DebugLevel {
 		return nullEntry
 	}
@@ -172,6 +181,8 @@ func (h *HoneycombLogger) Debug() Entry {
 }
 
 func (h *HoneycombLogger) Info() Entry {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 	if h.loggerConfig.Level > InfoLevel {
 		return nullEntry
 	}
@@ -187,6 +198,8 @@ func (h *HoneycombLogger) Info() Entry {
 }
 
 func (h *HoneycombLogger) Error() Entry {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 	if h.loggerConfig.Level > ErrorLevel {
 		return nullEntry
 	}
@@ -218,6 +231,8 @@ func (h *HoneycombLogger) SetLevel(level string) error {
 	default:
 		return errors.New(fmt.Sprintf("unrecognized logging level: %s", level))
 	}
+	h.mux.Lock()
+	defer h.mux.Unlock()
 	h.loggerConfig.Level = lvl
 	return nil
 }
