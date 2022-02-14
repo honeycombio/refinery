@@ -360,6 +360,7 @@ func TestSampleConfigReload(t *testing.T) {
 
 	transmission.Start()
 
+	apiKey := "b9945edf5d245834089a1bd6cc9ad01e" // legacy key (ie 32 chars long)
 	conf := &config.MockConfig{
 		GetSendDelayVal:                      0,
 		GetTraceTimeoutVal:                   60 * time.Second,
@@ -389,6 +390,7 @@ func TestSampleConfigReload(t *testing.T) {
 		TraceID: "1",
 		Event: types.Event{
 			Dataset: dataset,
+			APIKey:  apiKey,
 		},
 	}
 
@@ -416,6 +418,7 @@ func TestSampleConfigReload(t *testing.T) {
 		TraceID: "2",
 		Event: types.Event{
 			Dataset: dataset,
+			APIKey:  apiKey,
 		},
 	}
 
