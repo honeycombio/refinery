@@ -68,6 +68,7 @@ type MockConfig struct {
 	DryRun                        bool
 	DryRunFieldName               string
 	AddHostMetadataToTrace        bool
+	DefaultEnvironment            string
 
 	Mux sync.RWMutex
 }
@@ -237,6 +238,13 @@ func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
 }
 
+func (m *MockConfig) GetSamplerConfigForEnvironmentAndService(environment string, service string) (interface{}, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
+}
+
 func (m *MockConfig) GetUpstreamBufferSize() int {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
@@ -311,4 +319,11 @@ func (m *MockConfig) GetAddHostMetadataToTrace() bool {
 	defer m.Mux.RUnlock()
 
 	return m.AddHostMetadataToTrace
+}
+
+func (m *MockConfig) GetDefaultEnvironment() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.DefaultEnvironment
 }
