@@ -1,3 +1,4 @@
+//go:build all || !race
 // +build all !race
 
 package config
@@ -55,7 +56,7 @@ func TestErrorReloading(t *testing.T) {
 		t.Error(err)
 	}
 
-	d, _ := c.GetSamplerConfigForDataset("dataset5")
+	d, _ := c.GetSamplerConfigForEnvironmentAndService("", "dataset5")
 	if _, ok := d.(DeterministicSamplerConfig); ok {
 		t.Error("received", d, "expected", "DeterministicSampler")
 	}
@@ -82,7 +83,7 @@ func TestErrorReloading(t *testing.T) {
 	wg.Wait()
 
 	// config should error and not update sampler to invalid type
-	d, _ = c.GetSamplerConfigForDataset("dataset5")
+	d, _ = c.GetSamplerConfigForEnvironmentAndService("", "dataset5")
 	if _, ok := d.(DeterministicSamplerConfig); ok {
 		t.Error("received", d, "expected", "DeterministicSampler")
 	}
