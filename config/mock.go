@@ -230,14 +230,6 @@ func (m *MockConfig) GetMaxBatchSize() uint {
 	return m.GetMaxBatchSizeVal
 }
 
-// TODO: allow per-dataset mock values
-func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
-}
-
 func (m *MockConfig) GetSamplerConfigForEnvironmentAndService(environment string, service string) (interface{}, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()

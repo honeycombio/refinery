@@ -516,59 +516,6 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	key := fmt.Sprintf("%s.Sampler", dataset)
-	if ok := f.rules.IsSet(key); ok {
-		t := f.rules.GetString(key)
-		var i interface{}
-
-		switch t {
-		case "DeterministicSampler":
-			i = &DeterministicSamplerConfig{}
-		case "DynamicSampler":
-			i = &DynamicSamplerConfig{}
-		case "EMADynamicSampler":
-			i = &EMADynamicSamplerConfig{}
-		case "RulesBasedSampler":
-			i = &RulesBasedSamplerConfig{}
-		case "TotalThroughputSampler":
-			i = &TotalThroughputSamplerConfig{}
-		default:
-			return nil, errors.New("No Sampler found")
-		}
-
-		if sub := f.rules.Sub(dataset); sub != nil {
-			return i, sub.Unmarshal(i)
-		}
-
-	} else if ok := f.rules.IsSet("Sampler"); ok {
-		t := f.rules.GetString("Sampler")
-		var i interface{}
-
-		switch t {
-		case "DeterministicSampler":
-			i = &DeterministicSamplerConfig{}
-		case "DynamicSampler":
-			i = &DynamicSamplerConfig{}
-		case "EMADynamicSampler":
-			i = &EMADynamicSamplerConfig{}
-		case "RulesBasedSampler":
-			i = &RulesBasedSamplerConfig{}
-		case "TotalThroughputSampler":
-			i = &TotalThroughputSamplerConfig{}
-		default:
-			return nil, errors.New("No Sampler found")
-		}
-
-		return i, f.rules.Unmarshal(i)
-	}
-
-	return nil, errors.New("No Sampler found")
-}
-
 func (f *fileConfig) GetSamplerConfigForEnvironmentAndService(environment string, service string) (interface{}, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
