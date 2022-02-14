@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package collect
@@ -51,7 +52,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.samplers = make(map[string]map[string]sample.Sampler)
 	go coll.collect()
 	defer coll.Stop()
 
@@ -125,7 +126,7 @@ func TestAddSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.samplers = make(map[string]map[string]sample.Sampler)
 	go coll.collect()
 	defer coll.Stop()
 
@@ -180,7 +181,7 @@ func TestDryRunMode(t *testing.T) {
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetSamplerImplementationForDataset("test")
+	sampler := samplerFactory.GetSamplerImplementationForEnvironmentAndService("", "test")
 	coll := &InMemCollector{
 		Config:         conf,
 		Logger:         &logger.NullLogger{},
@@ -196,7 +197,7 @@ func TestDryRunMode(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.samplers = make(map[string]map[string]sample.Sampler)
 	go coll.collect()
 	defer coll.Stop()
 
@@ -397,7 +398,7 @@ func TestSampleConfigReload(t *testing.T) {
 		coll.mutex.Lock()
 		defer coll.mutex.Unlock()
 
-		_, ok := coll.datasetSamplers[dataset]
+		_, ok := coll.samplers[""][dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
@@ -407,7 +408,7 @@ func TestSampleConfigReload(t *testing.T) {
 		coll.mutex.Lock()
 		defer coll.mutex.Unlock()
 
-		_, ok := coll.datasetSamplers[dataset]
+		_, ok := coll.samplers[""][dataset]
 		return !ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
@@ -424,7 +425,7 @@ func TestSampleConfigReload(t *testing.T) {
 		coll.mutex.Lock()
 		defer coll.mutex.Unlock()
 
-		_, ok := coll.datasetSamplers[dataset]
+		_, ok := coll.samplers[""][dataset]
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 }
@@ -456,7 +457,7 @@ func TestMaxAlloc(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.samplers = make(map[string]map[string]sample.Sampler)
 	go coll.collect()
 	defer coll.Stop()
 
@@ -548,7 +549,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 3)
 	coll.fromPeer = make(chan *types.Span, 3)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.samplers = make(map[string]map[string]sample.Sampler)
 
 	// Don't start collect(), so the queues are never drained
 	span := &types.Span{

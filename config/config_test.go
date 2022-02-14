@@ -214,15 +214,15 @@ func TestReadRulesConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	d, err := c.GetSamplerConfigForDataset("", "dataset-doesnt-exist")
+	d, err := c.GetSamplerConfigForEnvironmentAndService("", "dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
 
-	d, err = c.GetSamplerConfigForDataset("", "dataset1")
+	d, err = c.GetSamplerConfigForEnvironmentAndService("", "dataset1")
 	assert.NoError(t, err)
 	assert.IsType(t, &DynamicSamplerConfig{}, d)
 
-	d, err = c.GetSamplerConfigForDataset("", "dataset4")
+	d, err = c.GetSamplerConfigForEnvironmentAndService("", "dataset4")
 	assert.NoError(t, err)
 	switch r := d.(type) {
 	case *RulesBasedSamplerConfig:
@@ -484,23 +484,23 @@ func TestGetSamplerTypes(t *testing.T) {
 		t.Error(err)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("", "dataset-doesnt-exist"); assert.Equal(t, nil, err) {
+	if d, err := c.GetSamplerConfigForEnvironmentAndService("", "dataset-doesnt-exist"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DeterministicSamplerConfig{}, d)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("", "dataset 1"); assert.Equal(t, nil, err) {
+	if d, err := c.GetSamplerConfigForEnvironmentAndService("", "dataset 1"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DynamicSamplerConfig{}, d)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("", "dataset2"); assert.Equal(t, nil, err) {
+	if d, err := c.GetSamplerConfigForEnvironmentAndService("", "dataset2"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DeterministicSamplerConfig{}, d)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("", "dataset3"); assert.Equal(t, nil, err) {
+	if d, err := c.GetSamplerConfigForEnvironmentAndService("", "dataset3"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("", "dataset4"); assert.Equal(t, nil, err) {
+	if d, err := c.GetSamplerConfigForEnvironmentAndService("", "dataset4"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &TotalThroughputSamplerConfig{}, d)
 	}
 }
@@ -535,7 +535,7 @@ func TestDefaultSampler(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	s, err := c.GetSamplerConfigForDataset("", "nonexistent")
+	s, err := c.GetSamplerConfigForEnvironmentAndService("", "nonexistent")
 
 	assert.NoError(t, err)
 

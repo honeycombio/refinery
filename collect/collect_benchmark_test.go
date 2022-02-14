@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package collect
@@ -49,12 +50,13 @@ func BenchmarkCollect(b *testing.B) {
 			Config: conf,
 			Logger: log,
 		},
-		BlockOnAddSpan:  true,
-		cache:           cache.NewInMemCache(3, metric, log),
-		incoming:        make(chan *types.Span, 500),
-		fromPeer:        make(chan *types.Span, 500),
-		datasetSamplers: make(map[string]sample.Sampler),
-		sentTraceCache:  stc,
+		BlockOnAddSpan: true,
+		cache:          cache.NewInMemCache(3, metric, log),
+		incoming:       make(chan *types.Span, 500),
+		fromPeer:       make(chan *types.Span, 500),
+		samplers:       make(map[string]map[string]sample.Sampler),
+
+		sentTraceCache: stc,
 	}
 	go coll.collect()
 
