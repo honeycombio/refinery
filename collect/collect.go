@@ -437,7 +437,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	var sampler sample.Sampler
 	var found bool
 
-	samplerKey := i.getSamplerKey(trace)
+	samplerKey := trace.GetSamplerKey()
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(samplerKey)
 		i.datasetSamplers[samplerKey] = sampler
@@ -517,17 +517,4 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
-}
-
-func (i *InMemCollector) getSamplerKey(trace *types.Trace) string {
-	if isLegacy(trace.APIKey) {
-		return trace.Dataset
-	}
-
-	// TODO: get env from /1/auth endpoint
-	return "local"
-}
-
-func isLegacy(apiKey string) bool {
-	return len(apiKey) == 32
 }

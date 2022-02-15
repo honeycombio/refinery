@@ -37,6 +37,8 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 )
 
+const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+
 type countingWriterSender struct {
 	transmission.WriterSender
 
@@ -113,7 +115,7 @@ func newStartedApp(
 		GetPeerBufferSizeVal:                 10000,
 		GetListenAddrVal:                     "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:                 "127.0.0.1:" + strconv.Itoa(basePort+1),
-		GetAPIKeysVal:                        []string{"KEY"},
+		GetAPIKeysVal:                        []string{legacyAPIKey},
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 		AddHostMetadataToTrace:               enableHostMetadata,
@@ -227,7 +229,7 @@ func TestAppIntegration(t *testing.T) {
 		"http://localhost:10000/1/batch/dataset",
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultTransport.RoundTrip(req)
@@ -284,7 +286,7 @@ func TestPeerRouting(t *testing.T) {
 		nil,
 	)
 	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	blob := `[` + string(spans[0]) + `]`
@@ -295,7 +297,7 @@ func TestPeerRouting(t *testing.T) {
 	}, 2*time.Second, 2*time.Millisecond)
 
 	expectedEvent := &transmission.Event{
-		APIKey:     "KEY",
+		APIKey:     legacyAPIKey,
 		Dataset:    "dataset",
 		SampleRate: 2,
 		APIHost:    "http://api.honeycomb.io",
@@ -330,7 +332,7 @@ func TestPeerRouting(t *testing.T) {
 		nil,
 	)
 	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	req.Body = ioutil.NopCloser(strings.NewReader(blob))
@@ -354,7 +356,7 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 		"http://localhost:14000/1/batch/dataset",
 		strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"1"}}]`),
 	)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultTransport.RoundTrip(req)
@@ -415,7 +417,7 @@ func TestEventsEndpoint(t *testing.T) {
 		bytes.NewReader(blob),
 	)
 	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "zstd")
 	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
@@ -429,7 +431,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(
 		t,
 		&transmission.Event{
-			APIKey:     "KEY",
+			APIKey:     legacyAPIKey,
 			Dataset:    "dataset",
 			SampleRate: 10,
 			APIHost:    "http://api.honeycomb.io",
@@ -457,7 +459,7 @@ func TestEventsEndpoint(t *testing.T) {
 		buf,
 	)
 	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
@@ -471,7 +473,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(
 		t,
 		&transmission.Event{
-			APIKey:     "KEY",
+			APIKey:     legacyAPIKey,
 			Dataset:    "dataset",
 			SampleRate: 10,
 			APIHost:    "http://api.honeycomb.io",
@@ -553,7 +555,7 @@ func BenchmarkTraces(b *testing.B) {
 		nil,
 	)
 	assert.NoError(b, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	b.Run("single", func(b *testing.B) {
@@ -656,7 +658,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		nil,
 	)
 	assert.NoError(b, err)
-	req.Header.Set("X-Honeycomb-Team", "KEY")
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	b.Run("single", func(b *testing.B) {

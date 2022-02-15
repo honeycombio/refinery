@@ -12,6 +12,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -80,6 +81,8 @@ type Router struct {
 
 	// used to identify Router as a OTLP TraceServer
 	collectortrace.UnimplementedTraceServiceServer
+
+	environmentCache *environmentCache
 }
 
 type BatchResponse struct {
@@ -122,6 +125,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 	r.proxyClient = &http.Client{
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
+	}
+	r.environmentCache = &environmentCache{
+		items: make(map[string]*cacheItem),
 	}
 
 	var err error
@@ -416,6 +422,15 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 	debugLog = debugLog.WithString("trace_id", traceID)
 
+	// if not legacy key and environment not set, try to get it
+	if !ev.HasLegacyAPIKey() && ev.Environment == "" {
+		env, err := r.environmentCache.GetOrSet(ev.APIKey, time.Second, r.GetEnvironmentInfoFromKey)
+		if err != nil {
+			return err
+		}
+		ev.Environment = env
+	}
+
 	// ok, we're a span. Figure out if we should handle locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
 	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
@@ -625,4 +640,97 @@ func getFirstValueFromMetadata(key string, md metadata.MD) string {
 		return values[0]
 	}
 	return ""
+}
+
+type environmentCache struct {
+	mutex sync.RWMutex
+	items map[string]*cacheItem
+}
+
+type cacheItem struct {
+	expiresAt time.Time
+	value     string
+}
+
+func (c *environmentCache) GetOrSet(key string, ttl time.Duration, getFn func(string) (string, error)) (string, error) {
+	var item *cacheItem
+	var ok bool
+
+	c.mutex.RLock()
+	if item, ok = c.items[key]; ok {
+		if time.Now().After(item.expiresAt) {
+			// expired so ignore
+			item = nil
+		}
+	}
+	c.mutex.RUnlock()
+
+	if item != nil {
+		return item.value, nil
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	val, err := getFn(key)
+	if err != nil {
+		return "", nil
+	}
+
+	c.items[key] = &cacheItem{
+		expiresAt: time.Now().Add(ttl),
+		value:     val,
+	}
+	return val, nil
+}
+
+type SlugInfo struct {
+	Slug string `json:"slug"`
+}
+
+// AuthInfo is the information returned from /1/auth
+type AuthInfo struct {
+	APIKeyAccess map[string]bool `json:"api_key_access"`
+	Team         SlugInfo        `json:"team"`
+	Environment  SlugInfo        `json:"environment"`
+}
+
+func (r *Router) GetEnvironmentInfoFromKey(apiKey string) (string, error) {
+	apiEndpoint, err := r.Config.GetHoneycombAPI()
+	if err != nil {
+		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
+	}
+	authURL, err := url.Parse(apiEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
+	}
+
+	authURL.Path = "/1/auth"
+	req, err := http.NewRequest("GET", authURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create AuthInfo request. %w", err)
+	}
+
+	req.Header.Set("x-Honeycomb-team", apiKey)
+
+	r.Logger.Debug().WithString("api_key", apiKey).WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
+	resp, err := r.proxyClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("faield sending AuthInfo request to Honeycomb API. %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return "", fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+	case resp.StatusCode > 299:
+		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
+	}
+
+	authinfo := AuthInfo{}
+	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
+		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
+	}
+	r.Logger.Debug().WithString("environment", authinfo.Environment.Slug).Logf("Got environment")
+	return authinfo.Environment.Slug, nil
 }
