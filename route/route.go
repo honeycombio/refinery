@@ -700,7 +700,7 @@ type AuthInfo struct {
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
-	if types.IsLegacyAPIKey(apiKey) || apiKey == "" {
+	if apiKey == "" || types.IsLegacyAPIKey(apiKey) {
 		return "", nil
 	}
 
