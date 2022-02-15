@@ -437,10 +437,10 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	var sampler sample.Sampler
 	var found bool
 
-	if sampler, found = i.datasetSamplers[trace.Dataset]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(trace.Dataset)
-		// save sampler for later
-		i.datasetSamplers[trace.Dataset] = sampler
+	samplerKey := i.getSamplerKey(trace)
+	if sampler, found = i.datasetSamplers[samplerKey]; !found {
+		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(samplerKey)
+		i.datasetSamplers[samplerKey] = sampler
 	}
 
 	// make sampling decision and update the trace
@@ -456,18 +456,21 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
-	if !shouldSend && !i.Config.GetIsDryRun() {
-		i.Metrics.Increment("trace_send_dropped")
-		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Dropping trace because of sampling, trace to dataset")
-		return
+	if !shouldSend {
+		if i.Config.GetIsDryRun() {
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Trace would have been dropped, but dry run mode is enabled")
+		} else {
+			i.Metrics.Increment("trace_send_dropped")
+			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Dropping trace because of sampling, trace to dataset")
+		}
 	}
 	i.Metrics.Increment("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
-	i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("dataset", trace.Dataset).Logf("Sending trace to dataset")
+	i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Sending trace to dataset")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
@@ -514,4 +517,17 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
+}
+
+func (i *InMemCollector) getSamplerKey(trace *types.Trace) string {
+	if trace.APIKey == "" || isLegacy(trace.APIKey) {
+		return trace.Dataset
+	}
+
+	// TODO: get env from /1/auth endpoint
+	return "local"
+}
+
+func isLegacy(apiKey string) bool {
+	return len(apiKey) == 32
 }
