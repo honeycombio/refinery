@@ -520,7 +520,7 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 }
 
 func (i *InMemCollector) getSamplerKey(trace *types.Trace) string {
-	if trace.APIKey == "" || isLegacy(trace.APIKey) {
+	if isLegacy(trace.APIKey) {
 		return trace.Dataset
 	}
 
