@@ -53,7 +53,7 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 		return nil
 	}
 
-	s.Logger.Debug().WithField("dataset", dataset).Logf("created implementation for sampler type %+v", c)
+	s.Logger.Debug().WithField("dataset", dataset).Logf("created implementation for sampler type %T", c)
 
 	return sampler
 }
