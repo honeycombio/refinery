@@ -462,6 +462,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		} else {
 			i.Metrics.Increment("trace_send_dropped")
 			i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Dropping trace because of sampling, trace to dataset")
+			return
 		}
 	}
 	i.Metrics.Increment("trace_send_kept")
