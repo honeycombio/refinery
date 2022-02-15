@@ -25,8 +25,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+
 func TestOTLPHandler(t *testing.T) {
-	md := metadata.New(map[string]string{"x-honeycomb-team": "meow", "x-honeycomb-dataset": "ds"})
+	md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "ds"})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
 	mockMetrics := metrics.MockMetrics{}
@@ -200,7 +202,7 @@ func TestOTLPHandler(t *testing.T) {
 		request, _ := http.NewRequest("POST", "/v1/traces", strings.NewReader(string(body)))
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/protobuf")
-		request.Header.Set("x-honeycomb-team", "apikey")
+		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
@@ -236,7 +238,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/protobuf")
 		request.Header.Set("content-encoding", "gzip")
-		request.Header.Set("x-honeycomb-team", "apikey")
+		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
@@ -275,7 +277,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/protobuf")
 		request.Header.Set("content-encoding", "zstd")
-		request.Header.Set("x-honeycomb-team", "apikey")
+		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
@@ -290,7 +292,7 @@ func TestOTLPHandler(t *testing.T) {
 		request, _ := http.NewRequest("POST", "/v1/traces", strings.NewReader("{}"))
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/json")
-		request.Header.Set("x-honeycomb-team", "apikey")
+		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()

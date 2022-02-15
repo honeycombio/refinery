@@ -29,10 +29,6 @@ type Event struct {
 	Data        map[string]interface{}
 }
 
-func (e *Event) HasLegacyAPIKey() bool {
-	return isLegacyAPIKey(e.APIKey)
-}
-
 func (e *Event) GetSamplerKey() string {
 	if len(e.APIKey) == 32 {
 		return e.Dataset
@@ -80,7 +76,7 @@ func (t *Trace) GetSpans() []*Span {
 }
 
 func (t *Trace) GetSamplerKey() string {
-	if t.HasLegacyAPIKey() {
+	if IsLegacyAPIKey(t.APIKey) {
 		return t.Dataset
 	}
 
@@ -93,16 +89,12 @@ func (t *Trace) GetSamplerKey() string {
 	return ""
 }
 
-func (t *Trace) HasLegacyAPIKey() bool {
-	return isLegacyAPIKey(t.APIKey)
-}
-
 // Span is an event that shows up with a trace ID, so will be part of a Trace
 type Span struct {
 	Event
 	TraceID string
 }
 
-func isLegacyAPIKey(apiKey string) bool {
+func IsLegacyAPIKey(apiKey string) bool {
 	return len(apiKey) == 32
 }

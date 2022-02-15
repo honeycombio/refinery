@@ -315,6 +315,12 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 	if err != nil {
 		return nil, err
 	}
+
+	environment, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		return nil, err
+	}
+
 	data := map[string]interface{}{}
 	err = unmarshal(req, bytes.NewReader(reqBod), &data)
 	if err != nil {
@@ -322,13 +328,14 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 	}
 
 	return &types.Event{
-		Context:    req.Context(),
-		APIHost:    apiHost,
-		APIKey:     apiKey,
-		Dataset:    dataset,
-		SampleRate: uint(sampleRate),
-		Timestamp:  eventTime,
-		Data:       data,
+		Context:     req.Context(),
+		APIHost:     apiHost,
+		APIKey:      apiKey,
+		Dataset:     dataset,
+		Environment: environment,
+		SampleRate:  uint(sampleRate),
+		Timestamp:   eventTime,
+		Data:        data,
 	}, nil
 }
 
@@ -359,9 +366,19 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	apiKey := req.Header.Get(types.APIKeyHeader)
+	if apiKey == "" {
+		apiKey = req.Header.Get(types.APIKeyHeaderShort)
+	}
+
+	environment, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+	}
+
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev, err := r.batchedEventToEvent(req, bev)
+		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment)
 		if err != nil {
 			batchedResponses = append(
 				batchedResponses,
@@ -421,15 +438,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		return nil
 	}
 	debugLog = debugLog.WithString("trace_id", traceID)
-
-	// if not legacy key and environment not set, try to get it
-	if !ev.HasLegacyAPIKey() && ev.Environment == "" {
-		env, err := r.environmentCache.GetOrSet(ev.APIKey, time.Hour, r.GetEnvironmentInfoFromKey)
-		if err != nil {
-			return err
-		}
-		ev.Environment = env
-	}
 
 	// ok, we're a span. Figure out if we should handle locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
@@ -506,12 +514,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	return reader, nil
 }
 
-func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*types.Event, error) {
-	apiKey := req.Header.Get(types.APIKeyHeader)
-	if apiKey == "" {
-		apiKey = req.Header.Get(types.APIKeyHeaderShort)
-	}
-
+func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey string, environment string) (*types.Event, error) {
 	sampleRate := bev.SampleRate
 	if sampleRate == 0 {
 		sampleRate = 1
@@ -526,13 +529,14 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 		return nil, err
 	}
 	return &types.Event{
-		Context:    req.Context(),
-		APIHost:    apiHost,
-		APIKey:     apiKey,
-		Dataset:    dataset,
-		SampleRate: uint(sampleRate),
-		Timestamp:  eventTime,
-		Data:       bev.Data,
+		Context:     req.Context(),
+		APIHost:     apiHost,
+		APIKey:      apiKey,
+		Dataset:     dataset,
+		Environment: environment,
+		SampleRate:  uint(sampleRate),
+		Timestamp:   eventTime,
+		Data:        bev.Data,
 	}, nil
 }
 
@@ -695,7 +699,19 @@ type AuthInfo struct {
 	Environment  SlugInfo        `json:"environment"`
 }
 
-func (r *Router) GetEnvironmentInfoFromKey(apiKey string) (string, error) {
+func (r *Router) getEnvironmentName(apiKey string) (string, error) {
+	if types.IsLegacyAPIKey(apiKey) {
+		return "", nil
+	}
+
+	env, err := r.environmentCache.GetOrSet(apiKey, time.Hour, r.lookupEnvironment)
+	if err != nil {
+		return "", err
+	}
+	return env, nil
+}
+
+func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	apiEndpoint, err := r.Config.GetHoneycombAPI()
 	if err != nil {
 		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
@@ -716,7 +732,7 @@ func (r *Router) GetEnvironmentInfoFromKey(apiKey string) (string, error) {
 	r.Logger.Debug().WithString("api_key", apiKey).WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
 	resp, err := r.proxyClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("faield sending AuthInfo request to Honeycomb API. %w", err)
+		return "", fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
 	}
 	defer resp.Body.Close()
 
