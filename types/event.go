@@ -75,18 +75,19 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
-func (t *Trace) GetSamplerKey() string {
+func (t *Trace) GetSamplerKey() (string, bool) {
 	if IsLegacyAPIKey(t.APIKey) {
-		return t.Dataset
+		return t.Dataset, true
 	}
 
+	env := ""
 	for _, sp := range t.GetSpans() {
 		if sp.Event.Environment != "" {
-			return sp.Event.Environment
+			env = sp.Event.Environment
 		}
 	}
 
-	return ""
+	return env, false
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace

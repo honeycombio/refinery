@@ -438,7 +438,17 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	var sampler sample.Sampler
 	var found bool
 
-	samplerKey := trace.GetSamplerKey()
+	// get sampler key (dataset for legacy keys, environment for new keys)
+	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	logFields := logrus.Fields{
+		"trace_id": trace.TraceID,
+	}
+	if isLegacyKey {
+		logFields["dataset"] = samplerKey
+	} else {
+		logFields["environment"] = samplerKey
+	}
+
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(samplerKey)
 		i.datasetSamplers[samplerKey] = sampler
@@ -455,15 +465,6 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		rate: rate,
 	}
 	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
-
-	logFields := logrus.Fields{
-		"trace_id": trace.TraceID,
-	}
-	if types.IsLegacyAPIKey(trace.APIKey) {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
