@@ -1,4 +1,4 @@
-// +build all race
+//go:build all || race
 
 package app
 

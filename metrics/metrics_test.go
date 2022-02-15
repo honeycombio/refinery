@@ -1,3 +1,3 @@
-// +build all race
+//go:build all || race
 
 package metrics
