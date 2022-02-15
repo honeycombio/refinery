@@ -64,6 +64,7 @@ func processTraceRequest(
 		return err
 	}
 
+	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
 		return nil

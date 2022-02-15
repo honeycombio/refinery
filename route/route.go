@@ -316,6 +316,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 		return nil, err
 	}
 
+	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
 	if err != nil {
 		return nil, err
@@ -371,6 +372,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		apiKey = req.Header.Get(types.APIKeyHeaderShort)
 	}
 
+	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
@@ -692,7 +694,6 @@ type SlugInfo struct {
 	Slug string `json:"slug"`
 }
 
-// AuthInfo is the information returned from /1/auth
 type AuthInfo struct {
 	APIKeyAccess map[string]bool `json:"api_key_access"`
 	Team         SlugInfo        `json:"team"`
