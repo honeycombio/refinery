@@ -17,6 +17,7 @@ import (
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
+	"github.com/sirupsen/logrus"
 )
 
 var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
@@ -455,19 +456,28 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
 
+	logFields := logrus.Fields{
+		"trace_id": trace.TraceID,
+	}
+	if types.IsLegacyAPIKey(trace.APIKey) {
+		logFields["dataset"] = samplerKey
+	} else {
+		logFields["environment"] = samplerKey
+	}
+
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
-		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Dropping trace because of sampling")
+		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 		return
 	}
 	i.Metrics.Increment("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
-	i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Sending trace using sampler")
+	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
