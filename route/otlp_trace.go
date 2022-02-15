@@ -13,7 +13,7 @@ import (
 
 func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
-	if err := ri.ValidateHeaders(); err != nil {
+	if err := ri.ValidateTracesHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
 			router.handlerReturnWithError(w, ErrInvalidContentType, err)
 		} else {
@@ -28,23 +28,23 @@ func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := processTraceRequest(req.Context(), router, result.Events, ri.ApiKey, ri.Dataset); err != nil {
+	if err := processTraceRequest(req.Context(), router, result.Batches, ri.ApiKey); err != nil {
 		router.handlerReturnWithError(w, ErrUpstreamFailed, err)
 	}
 }
 
 func (router *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
-	if err := ri.ValidateHeaders(); err != nil {
+	if err := ri.ValidateTracesHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	result, err := huskyotlp.TranslateTraceRequest(req)
+	result, err := huskyotlp.TranslateTraceRequest(req, ri)
 	if err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := processTraceRequest(ctx, router, result.Events, ri.ApiKey, ri.Dataset); err != nil {
+	if err := processTraceRequest(ctx, router, result.Batches, ri.ApiKey); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
@@ -54,9 +54,8 @@ func (router *Router) Export(ctx context.Context, req *collectortrace.ExportTrac
 func processTraceRequest(
 	ctx context.Context,
 	router *Router,
-	batch []huskyotlp.Event,
-	apiKey string,
-	datasetName string) error {
+	batches []huskyotlp.Batch,
+	apiKey string) error {
 
 	var requestID types.RequestIDContextKey
 	apiHost, err := router.Config.GetHoneycombAPI()
@@ -65,18 +64,20 @@ func processTraceRequest(
 		return err
 	}
 
-	for _, ev := range batch {
-		event := &types.Event{
-			Context:    ctx,
-			APIHost:    apiHost,
-			APIKey:     apiKey,
-			Dataset:    datasetName,
-			SampleRate: uint(ev.SampleRate),
-			Timestamp:  ev.Timestamp,
-			Data:       ev.Attributes,
-		}
-		if err = router.processEvent(event, requestID); err != nil {
-			router.Logger.Error().Logf("Error processing event: " + err.Error())
+	for _, batch := range batches {
+		for _, ev := range batch.Events {
+			event := &types.Event{
+				Context:    ctx,
+				APIHost:    apiHost,
+				APIKey:     apiKey,
+				Dataset:    batch.Dataset,
+				SampleRate: uint(ev.SampleRate),
+				Timestamp:  ev.Timestamp,
+				Data:       ev.Attributes,
+			}
+			if err = router.processEvent(event, requestID); err != nil {
+				router.Logger.Error().Logf("Error processing event: " + err.Error())
+			}
 		}
 	}
 
