@@ -424,7 +424,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// if not legacy key and environment not set, try to get it
 	if !ev.HasLegacyAPIKey() && ev.Environment == "" {
-		env, err := r.environmentCache.GetOrSet(ev.APIKey, time.Second, r.GetEnvironmentInfoFromKey)
+		env, err := r.environmentCache.GetOrSet(ev.APIKey, time.Hour, r.GetEnvironmentInfoFromKey)
 		if err != nil {
 			return err
 		}
