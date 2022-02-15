@@ -460,6 +460,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithString("trace_id", trace.TraceID).WithString("sampler_key", samplerKey).Logf("Dropping trace because of sampling")
 		return
+	}
 	i.Metrics.Increment("trace_send_kept")
 
 	// ok, we're not dropping this trace; send all the spans
