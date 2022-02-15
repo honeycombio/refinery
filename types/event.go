@@ -29,14 +29,6 @@ type Event struct {
 	Data        map[string]interface{}
 }
 
-func (e *Event) GetSamplerKey() string {
-	if len(e.APIKey) == 32 {
-		return e.Dataset
-	} else {
-		return e.Environment
-	}
-}
-
 // Trace isn't something that shows up on the wire; it gets created within
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
