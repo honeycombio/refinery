@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	common "go.opentelemetry.io/proto/otlp/common/v1"
+	resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/grpc/metadata"
 )
@@ -49,6 +50,9 @@ func TestOTLPHandler(t *testing.T) {
 		},
 		Logger:       &logger.MockLogger{},
 		zstdDecoders: decoders,
+		environmentCache: &environmentCache{
+			items: make(map[string]*cacheItem),
+		},
 	}
 
 	conf := &config.MockConfig{
@@ -301,6 +305,68 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, `{"source":"refinery","error":"invalid content-type - only 'application/protobuf' is supported"}`, string(w.Body.String()))
 
 		assert.Equal(t, 0, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
+
+	t.Run("events created with legacy keys use dataset header", func(t *testing.T) {
+		md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "my-dataset"})
+		ctx := metadata.NewIncomingContext(context.Background(), md)
+
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				Resource: &resource.Resource{
+					Attributes: []*common.KeyValue{
+						{Key: "service.name", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "my-service"}}},
+					},
+				},
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: []*trace.Span{{
+						Name: "my-span",
+					}},
+				}},
+			}},
+		}
+		_, err := router.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		assert.Equal(t, 1, len(mockTransmission.Events))
+		event := mockTransmission.Events[0]
+		assert.Equal(t, "my-dataset", event.Dataset)
+		assert.Equal(t, "", event.Environment)
+		mockTransmission.Flush()
+	})
+
+	t.Run("events created with non-legacy keys lookup and use envionment name", func(t *testing.T) {
+		apiKey := "my-api-key"
+		md := metadata.New(map[string]string{"x-honeycomb-team": apiKey})
+		ctx := metadata.NewIncomingContext(context.Background(), md)
+
+		// add cached environment lookup
+		router.environmentCache.addItem(apiKey, "local", time.Minute)
+
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				Resource: &resource.Resource{
+					Attributes: []*common.KeyValue{
+						{Key: "service.name", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "my-service"}}},
+					},
+				},
+				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+					Spans: []*trace.Span{{
+						Name: "my-span",
+					}},
+				}},
+			}},
+		}
+		_, err := router.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		assert.Equal(t, 1, len(mockTransmission.Events))
+		event := mockTransmission.Events[0]
+		assert.Equal(t, "my-service", event.Dataset)
+		assert.Equal(t, "local", event.Environment)
 		mockTransmission.Flush()
 	})
 }
