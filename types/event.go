@@ -76,6 +76,7 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 	for _, sp := range t.GetSpans() {
 		if sp.Event.Environment != "" {
 			env = sp.Event.Environment
+			break
 		}
 	}
 
