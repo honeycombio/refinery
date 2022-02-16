@@ -30,6 +30,8 @@ if [ -z "$version" ]; then
     version=v0.0.0-dev
 fi
 
+version="v1.11.0-dev"
+
 fpm -s dir -n refinery \
     -m "Honeycomb <team@honeycomb.io>" \
     -v ${version#v} \
