@@ -682,7 +682,7 @@ func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(st
 		return val, nil
 	}
 
-	// get write lock here so we don't make consecutive calls to the getFn
+	// get write lock early so we don't execute getFn in parallel
 	// the result will be cached before the next lock is aquired
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -702,8 +702,8 @@ func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(st
 	return val, nil
 }
 
-// addItem create a new cache entry in the environment cache
-// this is not thread-safe, and should not be used outside of getOrSet (above) or tests
+// addItem create a new cache entry in the environment cache.
+// This is not thread-safe, and should not be used outside of getOrSet (above) or tests
 func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
 	c.items[key] = &cacheItem{
 		expiresAt: time.Now().Add(ttl),
