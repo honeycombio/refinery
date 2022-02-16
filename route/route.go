@@ -683,10 +683,7 @@ func (c *environmentCache) GetOrSet(key string, ttl time.Duration, getFn func(st
 		return "", nil
 	}
 
-	c.items[key] = &cacheItem{
-		expiresAt: time.Now().Add(ttl),
-		value:     val,
-	}
+	c.addItem(key, val, ttl)
 	return val, nil
 }
 
@@ -750,4 +747,11 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Slug).Logf("Got environment")
 	return authinfo.Environment.Slug, nil
+}
+
+func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
+	c.items[key] = &cacheItem{
+		expiresAt: time.Now().Add(ttl),
+		value:     value,
+	}
 }
