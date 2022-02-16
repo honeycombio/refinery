@@ -420,7 +420,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	debugLog := r.iopLogger.Debug().
 		WithField("request_id", reqID).
 		WithString("api_host", ev.APIHost).
-		WithString("dataset", ev.Dataset)
+		WithString("dataset", ev.Dataset).
+		WithString("environment", ev.Environment)
 
 	// extract trace ID, route to self or peer, pass on to collector
 	// TODO make trace ID field configurable
