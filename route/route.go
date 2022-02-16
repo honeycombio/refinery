@@ -663,23 +663,11 @@ type cacheItem struct {
 	value     string
 }
 
-func (c *environmentCache) get(key string) string {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
+func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(string) (string, error)) (string, error) {
 	if item, ok := c.items[key]; ok {
 		if time.Now().Before(item.expiresAt) {
-			return item.value
+			return item.value, nil
 		}
-	}
-
-	return ""
-}
-
-func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(string) (string, error)) (string, error) {
-	val := c.get(key)
-	if val != "" {
-		return val, nil
 	}
 
 	// get write lock early so we don't execute getFn in parallel
@@ -687,10 +675,12 @@ func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(st
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// check if the cache has been populated while waiting for a write lock
-	val = c.get(key)
-	if val != "" {
-		return val, nil
+	// manually check if the cache has been populated while waiting for a write lock
+	// don't use get or we'll end up in a dead-lock as it needs read lock
+	if item, ok := c.items[key]; ok {
+		if time.Now().Before(item.expiresAt) {
+			return item.value, nil
+		}
 	}
 
 	val, err := getFn(key)

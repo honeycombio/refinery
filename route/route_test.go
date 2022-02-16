@@ -396,14 +396,26 @@ func TestEnvironmentCache(t *testing.T) {
 		}
 	})
 
-	t.Run("does not return items if expired", func(t *testing.T) {
+	t.Run("ignores expired items", func(t *testing.T) {
 		cache := newEnvironmentCache()
 		cache.addItem("key", "value", time.Millisecond)
 		time.Sleep(time.Millisecond * 5)
 
-		val := cache.get("key")
-		if val != "" {
+		called := false
+		getFn := func(key string) (string, error) {
+			called = true
+			return "value", nil
+		}
+
+		val, err := cache.getOrSet("key", time.Second, getFn)
+		if err != nil {
+			t.Errorf("got error calling getOrSet - %e", err)
+		}
+		if val != "value" {
 			t.Errorf("expected %s - got %s", "", val)
+		}
+		if !called {
+			t.Errorf("expected to call getFn")
 		}
 	})
 
