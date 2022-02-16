@@ -126,9 +126,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
 	}
-	r.environmentCache = &environmentCache{
-		items: make(map[string]*cacheItem),
-	}
+	r.environmentCache = newEnvironmentCache()
 
 	var err error
 	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
@@ -654,26 +652,34 @@ type environmentCache struct {
 	items map[string]*cacheItem
 }
 
+func newEnvironmentCache() *environmentCache {
+	return &environmentCache{
+		items: make(map[string]*cacheItem),
+	}
+}
+
 type cacheItem struct {
 	expiresAt time.Time
 	value     string
 }
 
-func (c *environmentCache) GetOrSet(key string, ttl time.Duration, getFn func(string) (string, error)) (string, error) {
-	var item *cacheItem
-	var ok bool
-
+func (c *environmentCache) get(key string) string {
 	c.mutex.RLock()
-	if item, ok = c.items[key]; ok {
-		if time.Now().After(item.expiresAt) {
-			// expired so ignore
-			item = nil
+	defer c.mutex.RUnlock()
+
+	if item, ok := c.items[key]; ok {
+		if time.Now().Before(item.expiresAt) {
+			return item.value
 		}
 	}
-	c.mutex.RUnlock()
 
-	if item != nil {
-		return item.value, nil
+	return ""
+}
+
+func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(string) (string, error)) (string, error) {
+	val := c.get(key)
+	if val != "" {
+		return val, nil
 	}
 
 	c.mutex.Lock()
@@ -681,11 +687,18 @@ func (c *environmentCache) GetOrSet(key string, ttl time.Duration, getFn func(st
 
 	val, err := getFn(key)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	c.addItem(key, val, ttl)
 	return val, nil
+}
+
+func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
+	c.items[key] = &cacheItem{
+		expiresAt: time.Now().Add(ttl),
+		value:     value,
+	}
 }
 
 type SlugInfo struct {
@@ -703,7 +716,7 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 		return "", nil
 	}
 
-	env, err := r.environmentCache.GetOrSet(apiKey, time.Hour, r.lookupEnvironment)
+	env, err := r.environmentCache.getOrSet(apiKey, time.Hour, r.lookupEnvironment)
 	if err != nil {
 		return "", err
 	}
@@ -748,11 +761,4 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Slug).Logf("Got environment")
 	return authinfo.Environment.Slug, nil
-}
-
-func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
-	c.items[key] = &cacheItem{
-		expiresAt: time.Now().Add(ttl),
-		value:     value,
-	}
 }

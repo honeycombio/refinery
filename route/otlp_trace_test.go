@@ -48,11 +48,9 @@ func TestOTLPHandler(t *testing.T) {
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
 		},
-		Logger:       &logger.MockLogger{},
-		zstdDecoders: decoders,
-		environmentCache: &environmentCache{
-			items: make(map[string]*cacheItem),
-		},
+		Logger:           &logger.MockLogger{},
+		zstdDecoders:     decoders,
+		environmentCache: newEnvironmentCache(),
 	}
 
 	conf := &config.MockConfig{
