@@ -126,7 +126,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
 	}
-	r.environmentCache = newEnvironmentCache(time.Hour, r.lookupEnvironment)
+	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironment)
 
 	var err error
 	r.zstdDecoders, err = makeDecoders(numZstdDecoders)

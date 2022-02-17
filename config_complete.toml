@@ -98,6 +98,13 @@ PeerBufferSize = 10000
 # Not eligible for live reload
 AddHostMetadataToTrace = false
 
+# EnvironmentCacheTTL is the amount of time a cache entry will to associate an API key
+# with an environment name is valid. Cache misses call the Honeycomb API to validate
+# and get the environment name to add to the cache.
+# Default is 1 hour ("1h").
+# Not eligible for live reload.
+EnvironmentCacheTTL = "1h"
+
 ############################
 ## Implementation Choices ##
 ############################

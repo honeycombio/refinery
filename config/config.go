@@ -137,4 +137,6 @@ type Config interface {
 	GetDryRunFieldName() string
 
 	GetAddHostMetadataToTrace() bool
+
+	GetEnvironmentCacheTTL() time.Duration
 }

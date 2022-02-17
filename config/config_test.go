@@ -208,6 +208,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
+	if d := c.GetEnvironmentCacheTTL(); d != time.Hour {
+		t.Error("received", d, "expected", time.Hour)
+	}
+
 	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
