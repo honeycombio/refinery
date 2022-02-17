@@ -259,14 +259,14 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil, false)
+	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {return "test", nil})
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {return "test", nil})
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
-		"http://localhost:10000/1/batch/dataset",
+		"http://localhost:10500/1/batch/dataset",
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
@@ -532,8 +532,8 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 
 	peers := &testPeers{
 		peers: []string{
-			"http://localhost:13001",
-			"http://localhost:13003",
+			"http://localhost:15001",
+			"http://localhost:15003",
 		},
 	}
 
@@ -541,7 +541,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
-		basePort := 13000 + (i * 2)
+		basePort := 15000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
 		app, graph := newStartedApp(t, senders[i], basePort, peers, false)
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil})
@@ -557,7 +557,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
 	req, err := http.NewRequest(
 		"POST",
-		"http://localhost:13002/1/events/dataset",
+		"http://localhost:15002/1/events/dataset",
 		bytes.NewReader(blob),
 	)
 	assert.NoError(t, err)
@@ -599,7 +599,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 
 	req, err = http.NewRequest(
 		"POST",
-		"http://localhost:13003/1/events/dataset",
+		"http://localhost:15003/1/events/dataset",
 		buf,
 	)
 	assert.NoError(t, err)
