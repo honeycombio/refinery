@@ -1,5 +1,15 @@
 # Refinery Changelog
 
+## 1.11.0 2022-02-17
+
+### Enhancements
+
+- Add Environment & Services support (#403) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+### Maintenance
+
+- docs: add helm charts step to releasing (#400) | [@vreynolds](https://github.com/vreynolds)
+
 ## 1.10.0 2022-02-10
 
 ### Enhancements
