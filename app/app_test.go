@@ -1,5 +1,3 @@
-// +build all race
-
 package app
 
 import (
@@ -38,6 +36,7 @@ import (
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+const nonLegacyAPIKey = "d245834089a1bd6cc9ad01e"
 
 type countingWriterSender struct {
 	transmission.WriterSender
@@ -115,7 +114,7 @@ func newStartedApp(
 		GetPeerBufferSizeVal:                 10000,
 		GetListenAddrVal:                     "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:                 "127.0.0.1:" + strconv.Itoa(basePort+1),
-		GetAPIKeysVal:                        []string{legacyAPIKey},
+		GetAPIKeysVal:                        []string{legacyAPIKey, nonLegacyAPIKey},
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 		AddHostMetadataToTrace:               enableHostMetadata,
@@ -230,6 +229,47 @@ func TestAppIntegration(t *testing.T) {
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+
+	// Wait for span to be sent.
+	deadline := time.After(time.Second)
+	for {
+		if out.Len() > 62 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Error("timed out waiting for output")
+			return
+		case <-time.After(time.Millisecond):
+		}
+	}
+	assert.Equal(t, `{"data":{"foo":"bar","trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+}
+
+func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil, false)
+	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {return "test", nil})
+	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {return "test", nil})
+
+	// Send a root span, it should be sent in short order.
+	req := httptest.NewRequest(
+		"POST",
+		"http://localhost:10000/1/batch/dataset",
+		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+	)
+	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultTransport.RoundTrip(req)
@@ -474,6 +514,110 @@ func TestEventsEndpoint(t *testing.T) {
 		t,
 		&transmission.Event{
 			APIKey:     legacyAPIKey,
+			Dataset:    "dataset",
+			SampleRate: 10,
+			APIHost:    "http://api.honeycomb.io",
+			Timestamp:  now,
+			Data: map[string]interface{}{
+				"trace.trace_id": "1",
+				"foo":            "bar",
+			},
+		},
+		senders[1].Events()[0],
+	)
+}
+
+func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
+	t.Parallel()
+
+	peers := &testPeers{
+		peers: []string{
+			"http://localhost:13001",
+			"http://localhost:13003",
+		},
+	}
+
+	var apps [2]*App
+	var addrs [2]string
+	var senders [2]*transmission.MockSender
+	for i := range apps {
+		basePort := 13000 + (i * 2)
+		senders[i] = &transmission.MockSender{}
+		app, graph := newStartedApp(t, senders[i], basePort, peers, false)
+		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil})
+		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil})
+		apps[i] = app
+		defer startstop.Stop(graph.Objects(), nil)
+
+		addrs[i] = "localhost:" + strconv.Itoa(basePort)
+	}
+
+	// Deliver to host 1, it should be passed to host 0 and emitted there.
+	zEnc, _ := zstd.NewWriter(nil)
+	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
+	req, err := http.NewRequest(
+		"POST",
+		"http://localhost:13002/1/events/dataset",
+		bytes.NewReader(blob),
+	)
+	assert.NoError(t, err)
+	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "zstd")
+	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
+	req.Header.Set("X-Honeycomb-Samplerate", "10")
+
+	post(t, req)
+	assert.Eventually(t, func() bool {
+		return len(senders[0].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+
+	assert.Equal(
+		t,
+		&transmission.Event{
+			APIKey:     nonLegacyAPIKey,
+			Dataset:    "dataset",
+			SampleRate: 10,
+			APIHost:    "http://api.honeycomb.io",
+			Timestamp:  now,
+			Data: map[string]interface{}{
+				"trace.trace_id": "1",
+				"foo":            "bar",
+			},
+		},
+		senders[0].Events()[0],
+	)
+
+	// Repeat, but deliver to host 1 on the peer channel, it should not be
+	// passed to host 0.
+
+	blob = blob[:0]
+	buf := bytes.NewBuffer(blob)
+	gz := gzip.NewWriter(buf)
+	gz.Write([]byte(`{"foo":"bar","trace.trace_id":"1"}`))
+	gz.Close()
+
+	req, err = http.NewRequest(
+		"POST",
+		"http://localhost:13003/1/events/dataset",
+		buf,
+	)
+	assert.NoError(t, err)
+	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
+	req.Header.Set("X-Honeycomb-Samplerate", "10")
+
+	post(t, req)
+	assert.Eventually(t, func() bool {
+		return len(senders[1].Events()) == 1
+	}, 2*time.Second, 2*time.Millisecond)
+
+	assert.Equal(
+		t,
+		&transmission.Event{
+			APIKey:     nonLegacyAPIKey,
 			Dataset:    "dataset",
 			SampleRate: 10,
 			APIHost:    "http://api.honeycomb.io",

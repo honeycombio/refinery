@@ -654,6 +654,10 @@ type environmentCache struct {
 	getFn func(string) (string, error)
 }
 
+func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) {
+	r.environmentCache = newEnvironmentCache(ttl, getFn)
+}
+
 func newEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) *environmentCache {
 	return &environmentCache{
 		items: make(map[string]*cacheItem),
