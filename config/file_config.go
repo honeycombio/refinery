@@ -126,7 +126,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 	c.SetDefault("AddHostMetadataToTrace", false)
-	c.SetDefault("GetEnvironmentCacheTTL", time.Hour)
+	c.SetDefault("EnvironmentCacheTTL", time.Hour)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
