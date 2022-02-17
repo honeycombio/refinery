@@ -360,16 +360,14 @@ func (s *TestShard) GetAddress() string              { return s.addr }
 
 func TestEnvironmentCache(t *testing.T) {
 	t.Run("calls getFn on cache miss", func(t *testing.T) {
-		cache := newEnvironmentCache()
-
-		getFn := func(key string) (string, error) {
+		cache := newEnvironmentCache(time.Second, func(key string) (string, error) {
 			if key != "key" {
 				t.Errorf("expected %s - got %s", "key", key)
 			}
 			return "test", nil
-		}
+		})
 
-		val, err := cache.getOrSet("key", time.Second, getFn)
+		val, err := cache.get("key")
 		if err != nil {
 			t.Errorf("got error calling getOrSet - %e", err)
 		}
@@ -379,15 +377,13 @@ func TestEnvironmentCache(t *testing.T) {
 	})
 
 	t.Run("does not call getFn on cache hit", func(t *testing.T) {
-		cache := newEnvironmentCache()
-		cache.addItem("key", "value", time.Second)
-
-		getFn := func(key string) (string, error) {
+		cache := newEnvironmentCache(time.Second, func(key string) (string, error) {
 			t.Errorf("should not have called getFn")
 			return "", nil
-		}
+		})
+		cache.addItem("key", "value", time.Second)
 
-		val, err := cache.getOrSet("key", time.Second, getFn)
+		val, err := cache.get("key")
 		if err != nil {
 			t.Errorf("got error calling getOrSet - %e", err)
 		}
@@ -397,22 +393,20 @@ func TestEnvironmentCache(t *testing.T) {
 	})
 
 	t.Run("ignores expired items", func(t *testing.T) {
-		cache := newEnvironmentCache()
+		called := false
+		cache := newEnvironmentCache(time.Millisecond, func(key string) (string, error) {
+			called = true
+			return "value", nil
+		})
 		cache.addItem("key", "value", time.Millisecond)
 		time.Sleep(time.Millisecond * 5)
 
-		called := false
-		getFn := func(key string) (string, error) {
-			called = true
-			return "value", nil
-		}
-
-		val, err := cache.getOrSet("key", time.Second, getFn)
+		val, err := cache.get("key")
 		if err != nil {
 			t.Errorf("got error calling getOrSet - %e", err)
 		}
 		if val != "value" {
-			t.Errorf("expected %s - got %s", "", val)
+			t.Errorf("expected %s - got %s", "value", val)
 		}
 		if !called {
 			t.Errorf("expected to call getFn")
@@ -420,14 +414,12 @@ func TestEnvironmentCache(t *testing.T) {
 	})
 
 	t.Run("errors returned from getFn are propagated", func(t *testing.T) {
-		cache := newEnvironmentCache()
-
 		expectedErr := errors.New("error")
-		getFn := func(key string) (string, error) {
+		cache := newEnvironmentCache(time.Second, func(key string) (string, error) {
 			return "", expectedErr
-		}
+		})
 
-		_, err := cache.getOrSet("key", time.Second, getFn)
+		_, err := cache.get("key")
 		if err != expectedErr {
 			t.Errorf("expected %e - got %e", expectedErr, err)
 		}

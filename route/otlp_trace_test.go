@@ -50,7 +50,7 @@ func TestOTLPHandler(t *testing.T) {
 		},
 		Logger:           &logger.MockLogger{},
 		zstdDecoders:     decoders,
-		environmentCache: newEnvironmentCache(),
+		environmentCache: newEnvironmentCache(time.Second, nil),
 	}
 
 	conf := &config.MockConfig{

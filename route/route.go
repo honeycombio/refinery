@@ -126,7 +126,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
 	}
-	r.environmentCache = newEnvironmentCache()
+	r.environmentCache = newEnvironmentCache(time.Hour, r.lookupEnvironment)
 
 	var err error
 	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
@@ -650,11 +650,15 @@ func getFirstValueFromMetadata(key string, md metadata.MD) string {
 type environmentCache struct {
 	mutex sync.RWMutex
 	items map[string]*cacheItem
+	ttl time.Duration
+	getFn func(string) (string, error)
 }
 
-func newEnvironmentCache() *environmentCache {
+func newEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) *environmentCache {
 	return &environmentCache{
 		items: make(map[string]*cacheItem),
+		ttl: ttl,
+		getFn: getFn,
 	}
 }
 
@@ -663,37 +667,39 @@ type cacheItem struct {
 	value     string
 }
 
-func (c *environmentCache) getOrSet(key string, ttl time.Duration, getFn func(string) (string, error)) (string, error) {
+// get queries the cached items, returning cache hits that have not expired.
+// Cache missed use the configured getFn to populate the cache.
+func (c *environmentCache) get(key string) (string, error) {
 	if item, ok := c.items[key]; ok {
 		if time.Now().Before(item.expiresAt) {
 			return item.value, nil
 		}
 	}
 
-	// get write lock early so we don't execute getFn in parallel
-	// the result will be cached before the next lock is aquired
+	// get write lock early so we don't execute getFn in parallel so the
+	// the result will be cached before the next lock is aquired to prevent 
+	// subsequent calls to getFn for the same key
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// manually check if the cache has been populated while waiting for a write lock
-	// don't use get or we'll end up in a dead-lock as it needs read lock
+	// check if the cache has been populated while waiting for a write lock
 	if item, ok := c.items[key]; ok {
 		if time.Now().Before(item.expiresAt) {
 			return item.value, nil
 		}
 	}
 
-	val, err := getFn(key)
+	val, err := c.getFn(key)
 	if err != nil {
 		return "", err
 	}
 
-	c.addItem(key, val, ttl)
+	c.addItem(key, val, c.ttl)
 	return val, nil
 }
 
 // addItem create a new cache entry in the environment cache.
-// This is not thread-safe, and should not be used outside of getOrSet (above) or tests
+// This is not thread-safe, and should only be used in tests
 func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
 	c.items[key] = &cacheItem{
 		expiresAt: time.Now().Add(ttl),
@@ -716,7 +722,7 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 		return "", nil
 	}
 
-	env, err := r.environmentCache.getOrSet(apiKey, time.Hour, r.lookupEnvironment)
+	env, err := r.environmentCache.get(apiKey)
 	if err != nil {
 		return "", err
 	}
