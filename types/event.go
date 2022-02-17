@@ -19,13 +19,14 @@ type RequestIDContextKey struct{}
 
 // event is not part of a trace - it's an event that showed up with no trace ID
 type Event struct {
-	Context    context.Context
-	APIHost    string
-	APIKey     string
-	Dataset    string
-	SampleRate uint
-	Timestamp  time.Time
-	Data       map[string]interface{}
+	Context     context.Context
+	APIHost     string
+	APIKey      string
+	Dataset     string
+	Environment string
+	SampleRate  uint
+	Timestamp   time.Time
+	Data        map[string]interface{}
 }
 
 // Trace isn't something that shows up on the wire; it gets created within
@@ -64,11 +65,30 @@ func (t *Trace) AddSpan(sp *Span) {
 // GetSpans returns the list of spans in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
+}
 
+func (t *Trace) GetSamplerKey() (string, bool) {
+	if IsLegacyAPIKey(t.APIKey) {
+		return t.Dataset, true
+	}
+
+	env := ""
+	for _, sp := range t.GetSpans() {
+		if sp.Event.Environment != "" {
+			env = sp.Event.Environment
+			break
+		}
+	}
+
+	return env, false
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace
 type Span struct {
 	Event
 	TraceID string
+}
+
+func IsLegacyAPIKey(apiKey string) bool {
+	return len(apiKey) == 32
 }

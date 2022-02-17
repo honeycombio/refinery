@@ -21,6 +21,8 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+
 // TestAddRootSpan tests that adding a root span winds up with a trace object in
 // the cache and that that trace gets sent
 func TestAddRootSpan(t *testing.T) {
@@ -62,6 +64,7 @@ func TestAddRootSpan(t *testing.T) {
 		TraceID: traceID1,
 		Event: types.Event{
 			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
 		},
 	}
 	coll.AddSpan(span)
@@ -81,6 +84,7 @@ func TestAddRootSpan(t *testing.T) {
 		TraceID: traceID2,
 		Event: types.Event{
 			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
 		},
 	}
 	coll.AddSpanFromPeer(span)
@@ -138,6 +142,7 @@ func TestAddSpan(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.parent_id": "unused",
 			},
+			APIKey: legacyAPIKey,
 		},
 	}
 	coll.AddSpanFromPeer(span)
@@ -150,6 +155,7 @@ func TestAddSpan(t *testing.T) {
 		Event: types.Event{
 			Dataset: "aoeu",
 			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
 		},
 	}
 	coll.AddSpan(rootSpan)
@@ -216,7 +222,8 @@ func TestDryRunMode(t *testing.T) {
 	span := &types.Span{
 		TraceID: traceID1,
 		Event: types.Event{
-			Data: map[string]interface{}{},
+			Data:   map[string]interface{}{},
+			APIKey: legacyAPIKey,
 		},
 	}
 	coll.AddSpan(span)
@@ -239,6 +246,7 @@ func TestDryRunMode(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.parent_id": "unused",
 			},
+			APIKey: legacyAPIKey,
 		},
 	}
 	coll.AddSpanFromPeer(span)
@@ -248,7 +256,8 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Data: map[string]interface{}{},
+			Data:   map[string]interface{}{},
+			APIKey: legacyAPIKey,
 		},
 	}
 	coll.AddSpanFromPeer(span)
@@ -264,7 +273,8 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID3,
 		Event: types.Event{
-			Data: map[string]interface{}{},
+			Data:   map[string]interface{}{},
+			APIKey: legacyAPIKey,
 		},
 	}
 	coll.AddSpan(span)
@@ -314,6 +324,7 @@ func TestCacheSizeReload(t *testing.T) {
 		Data: map[string]interface{}{
 			"trace.parent_id": "1",
 		},
+		APIKey: legacyAPIKey,
 	}
 
 	coll.AddSpan(&types.Span{TraceID: "1", Event: event})
@@ -388,6 +399,7 @@ func TestSampleConfigReload(t *testing.T) {
 		TraceID: "1",
 		Event: types.Event{
 			Dataset: dataset,
+			APIKey:  legacyAPIKey,
 		},
 	}
 
@@ -415,6 +427,7 @@ func TestSampleConfigReload(t *testing.T) {
 		TraceID: "2",
 		Event: types.Event{
 			Dataset: dataset,
+			APIKey:  legacyAPIKey,
 		},
 	}
 
@@ -469,6 +482,7 @@ func TestMaxAlloc(t *testing.T) {
 					"trace.parent_id": "unused",
 					"id":              i,
 				},
+				APIKey: legacyAPIKey,
 			},
 		}
 		coll.AddSpan(span)
@@ -555,6 +569,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 		TraceID: "1",
 		Event: types.Event{
 			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
 		},
 	}
 
