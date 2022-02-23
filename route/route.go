@@ -126,7 +126,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
 	}
-	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironment)
+	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironmentSlug)
 
 	var err error
 	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
@@ -650,18 +650,18 @@ func getFirstValueFromMetadata(key string, md metadata.MD) string {
 type environmentCache struct {
 	mutex sync.RWMutex
 	items map[string]*cacheItem
-	ttl time.Duration
+	ttl   time.Duration
 	getFn func(string) (string, error)
 }
 
-func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) {
+func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) {
 	r.environmentCache = newEnvironmentCache(ttl, getFn)
 }
 
-func newEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) *environmentCache {
+func newEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) *environmentCache {
 	return &environmentCache{
 		items: make(map[string]*cacheItem),
-		ttl: ttl,
+		ttl:   ttl,
 		getFn: getFn,
 	}
 }
@@ -681,7 +681,7 @@ func (c *environmentCache) get(key string) (string, error) {
 	}
 
 	// get write lock early so we don't execute getFn in parallel so the
-	// the result will be cached before the next lock is aquired to prevent 
+	// the result will be cached before the next lock is aquired to prevent
 	// subsequent calls to getFn for the same key
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -715,10 +715,20 @@ type SlugInfo struct {
 	Slug string `json:"slug"`
 }
 
-type AuthInfo struct {
+type NameInfo struct {
+	Name string `json:"name"`
+}
+
+type AuthInfoSlug struct {
 	APIKeyAccess map[string]bool `json:"api_key_access"`
 	Team         SlugInfo        `json:"team"`
 	Environment  SlugInfo        `json:"environment"`
+}
+
+type AuthInfoName struct {
+	APIKeyAccess map[string]bool `json:"api_key_access"`
+	Team         SlugInfo        `json:"team"`
+	Environment  NameInfo        `json:"environment"`
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
@@ -733,7 +743,7 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 	return env, nil
 }
 
-func (r *Router) lookupEnvironment(apiKey string) (string, error) {
+func (r *Router) lookupEnvironmentSlug(apiKey string) (string, error) {
 	apiEndpoint, err := r.Config.GetHoneycombAPI()
 	if err != nil {
 		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
@@ -765,10 +775,50 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
 	}
 
-	authinfo := AuthInfo{}
+	authinfo := AuthInfoSlug{}
 	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
 		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Slug).Logf("Got environment")
 	return authinfo.Environment.Slug, nil
+}
+
+func (r *Router) lookupEnvironmentName(apiKey string) (string, error) {
+	apiEndpoint, err := r.Config.GetHoneycombAPI()
+	if err != nil {
+		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
+	}
+	authURL, err := url.Parse(apiEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
+	}
+
+	authURL.Path = "/1/auth"
+	req, err := http.NewRequest("GET", authURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create AuthInfo request. %w", err)
+	}
+
+	req.Header.Set("x-Honeycomb-team", apiKey)
+
+	r.Logger.Debug().WithString("api_key", apiKey).WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
+	resp, err := r.proxyClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return "", fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+	case resp.StatusCode > 299:
+		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
+	}
+
+	authinfo := AuthInfoName{}
+	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
+		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
+	}
+	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
+	return authinfo.Environment.Name, nil
 }
