@@ -126,7 +126,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
 	}
-	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironmentSlug)
+	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironment)
 
 	var err error
 	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
@@ -711,24 +711,19 @@ func (c *environmentCache) addItem(key string, value string, ttl time.Duration) 
 	}
 }
 
-type SlugInfo struct {
+type TeamInfo struct {
 	Slug string `json:"slug"`
 }
 
-type NameInfo struct {
+type EnvironmentInfo struct {
+	Slug string `json:"slug"`
 	Name string `json:"name"`
 }
 
-type AuthInfoSlug struct {
+type AuthInfo struct {
 	APIKeyAccess map[string]bool `json:"api_key_access"`
-	Team         SlugInfo        `json:"team"`
-	Environment  SlugInfo        `json:"environment"`
-}
-
-type AuthInfoName struct {
-	APIKeyAccess map[string]bool `json:"api_key_access"`
-	Team         SlugInfo        `json:"team"`
-	Environment  NameInfo        `json:"environment"`
+	Team         TeamInfo        `json:"team"`
+	Environment  EnvironmentInfo `json:"environment"`
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
@@ -743,7 +738,7 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 	return env, nil
 }
 
-func (r *Router) lookupEnvironmentSlug(apiKey string) (string, error) {
+func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	apiEndpoint, err := r.Config.GetHoneycombAPI()
 	if err != nil {
 		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
@@ -775,47 +770,7 @@ func (r *Router) lookupEnvironmentSlug(apiKey string) (string, error) {
 		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
 	}
 
-	authinfo := AuthInfoSlug{}
-	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
-		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
-	}
-	r.Logger.Debug().WithString("environment", authinfo.Environment.Slug).Logf("Got environment")
-	return authinfo.Environment.Slug, nil
-}
-
-func (r *Router) lookupEnvironmentName(apiKey string) (string, error) {
-	apiEndpoint, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
-	}
-	authURL, err := url.Parse(apiEndpoint)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
-	}
-
-	authURL.Path = "/1/auth"
-	req, err := http.NewRequest("GET", authURL.String(), nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create AuthInfo request. %w", err)
-	}
-
-	req.Header.Set("x-Honeycomb-team", apiKey)
-
-	r.Logger.Debug().WithString("api_key", apiKey).WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
-	resp, err := r.proxyClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
-	}
-	defer resp.Body.Close()
-
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized:
-		return "", fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
-	case resp.StatusCode > 299:
-		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
-	}
-
-	authinfo := AuthInfoName{}
+	authinfo := AuthInfo{}
 	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
 		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
 	}
