@@ -650,18 +650,18 @@ func getFirstValueFromMetadata(key string, md metadata.MD) string {
 type environmentCache struct {
 	mutex sync.RWMutex
 	items map[string]*cacheItem
-	ttl time.Duration
+	ttl   time.Duration
 	getFn func(string) (string, error)
 }
 
-func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) {
+func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) {
 	r.environmentCache = newEnvironmentCache(ttl, getFn)
 }
 
-func newEnvironmentCache(ttl time.Duration, getFn func(string)(string, error)) *environmentCache {
+func newEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) *environmentCache {
 	return &environmentCache{
 		items: make(map[string]*cacheItem),
-		ttl: ttl,
+		ttl:   ttl,
 		getFn: getFn,
 	}
 }
@@ -681,7 +681,7 @@ func (c *environmentCache) get(key string) (string, error) {
 	}
 
 	// get write lock early so we don't execute getFn in parallel so the
-	// the result will be cached before the next lock is aquired to prevent 
+	// the result will be cached before the next lock is aquired to prevent
 	// subsequent calls to getFn for the same key
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -711,14 +711,19 @@ func (c *environmentCache) addItem(key string, value string, ttl time.Duration) 
 	}
 }
 
-type SlugInfo struct {
+type TeamInfo struct {
 	Slug string `json:"slug"`
+}
+
+type EnvironmentInfo struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
 }
 
 type AuthInfo struct {
 	APIKeyAccess map[string]bool `json:"api_key_access"`
-	Team         SlugInfo        `json:"team"`
-	Environment  SlugInfo        `json:"environment"`
+	Team         TeamInfo        `json:"team"`
+	Environment  EnvironmentInfo `json:"environment"`
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
@@ -769,6 +774,6 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
 		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
 	}
-	r.Logger.Debug().WithString("environment", authinfo.Environment.Slug).Logf("Got environment")
-	return authinfo.Environment.Slug, nil
+	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
+	return authinfo.Environment.Name, nil
 }
