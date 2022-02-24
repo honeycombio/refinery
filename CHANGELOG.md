@@ -1,8 +1,22 @@
 # Refinery Changelog
 
+## 1.12.0 2022-02-24
+
+### Enhancements
+
+- feat: add support for env name from auth (#410) | [@JamieDanielson](https://github.com/JamieDanielson)
+
+### Maintenance
+
+- update aws-client orb to latest (#409) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.11.0 2022-02-17
 
-### Enhancements
+### Enhancements
+
+**Note: Environment & Services Support requires v1.12.0 and higher**
+
+Do **not** use this version with Environment & Services.
 
 - Add Environment & Services support (#403) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
 
