@@ -156,7 +156,7 @@ func (d *DefaultTransmission) processResponses(
 					"target":      target,
 				})
 				if r.Err != nil {
-					log = log.WithField("error", r.Err.Error())
+					log.WithField("error", r.Err.Error())
 				}
 				log.Logf("error when sending event")
 				d.Metrics.Increment(d.Name + counterResponseErrors)
