@@ -48,6 +48,7 @@ type configContents struct {
 	PeerManagement            PeerManagementConfig           `validate:"required"`
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 	AddHostMetadataToTrace    bool
+	EnvironmentCacheTTL       time.Duration
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -125,6 +126,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 	c.SetDefault("AddHostMetadataToTrace", false)
+	c.SetDefault("EnvironmentCacheTTL", time.Hour)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -207,9 +209,6 @@ func (f *fileConfig) onChange(in fsnotify.Event) {
 	}
 
 	f.unmarshal()
-
-	f.mux.RLock()
-	defer f.mux.RUnlock()
 
 	for _, c := range f.callbacks {
 		c()
@@ -729,4 +728,11 @@ func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	defer f.mux.RUnlock()
 
 	return f.conf.AddHostMetadataToTrace
+}
+
+func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.EnvironmentCacheTTL
 }

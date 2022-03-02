@@ -3,6 +3,7 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -356,3 +357,71 @@ type TestShard struct {
 
 func (s *TestShard) Equals(other sharder.Shard) bool { return true }
 func (s *TestShard) GetAddress() string              { return s.addr }
+
+func TestEnvironmentCache(t *testing.T) {
+	t.Run("calls getFn on cache miss", func(t *testing.T) {
+		cache := newEnvironmentCache(time.Second, func(key string) (string, error) {
+			if key != "key" {
+				t.Errorf("expected %s - got %s", "key", key)
+			}
+			return "test", nil
+		})
+
+		val, err := cache.get("key")
+		if err != nil {
+			t.Errorf("got error calling getOrSet - %e", err)
+		}
+		if val != "test" {
+			t.Errorf("expected %s - got %s", "test", val)
+		}
+	})
+
+	t.Run("does not call getFn on cache hit", func(t *testing.T) {
+		cache := newEnvironmentCache(time.Second, func(key string) (string, error) {
+			t.Errorf("should not have called getFn")
+			return "", nil
+		})
+		cache.addItem("key", "value", time.Second)
+
+		val, err := cache.get("key")
+		if err != nil {
+			t.Errorf("got error calling getOrSet - %e", err)
+		}
+		if val != "value" {
+			t.Errorf("expected %s - got %s", "value", val)
+		}
+	})
+
+	t.Run("ignores expired items", func(t *testing.T) {
+		called := false
+		cache := newEnvironmentCache(time.Millisecond, func(key string) (string, error) {
+			called = true
+			return "value", nil
+		})
+		cache.addItem("key", "value", time.Millisecond)
+		time.Sleep(time.Millisecond * 5)
+
+		val, err := cache.get("key")
+		if err != nil {
+			t.Errorf("got error calling getOrSet - %e", err)
+		}
+		if val != "value" {
+			t.Errorf("expected %s - got %s", "value", val)
+		}
+		if !called {
+			t.Errorf("expected to call getFn")
+		}
+	})
+
+	t.Run("errors returned from getFn are propagated", func(t *testing.T) {
+		expectedErr := errors.New("error")
+		cache := newEnvironmentCache(time.Second, func(key string) (string, error) {
+			return "", expectedErr
+		})
+
+		_, err := cache.get("key")
+		if err != expectedErr {
+			t.Errorf("expected %e - got %e", expectedErr, err)
+		}
+	})
+}

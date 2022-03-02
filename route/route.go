@@ -12,6 +12,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -80,6 +81,8 @@ type Router struct {
 
 	// used to identify Router as a OTLP TraceServer
 	collectortrace.UnimplementedTraceServiceServer
+
+	environmentCache *environmentCache
 }
 
 type BatchResponse struct {
@@ -123,6 +126,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Timeout:   time.Second * 10,
 		Transport: r.HTTPTransport,
 	}
+	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironment)
 
 	var err error
 	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
@@ -309,6 +313,13 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 	if err != nil {
 		return nil, err
 	}
+
+	// get environment name - will be empty for legacy keys
+	environment, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		return nil, err
+	}
+
 	data := map[string]interface{}{}
 	err = unmarshal(req, bytes.NewReader(reqBod), &data)
 	if err != nil {
@@ -316,13 +327,14 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 	}
 
 	return &types.Event{
-		Context:    req.Context(),
-		APIHost:    apiHost,
-		APIKey:     apiKey,
-		Dataset:    dataset,
-		SampleRate: uint(sampleRate),
-		Timestamp:  eventTime,
-		Data:       data,
+		Context:     req.Context(),
+		APIHost:     apiHost,
+		APIKey:      apiKey,
+		Dataset:     dataset,
+		Environment: environment,
+		SampleRate:  uint(sampleRate),
+		Timestamp:   eventTime,
+		Data:        data,
 	}, nil
 }
 
@@ -353,9 +365,20 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	apiKey := req.Header.Get(types.APIKeyHeader)
+	if apiKey == "" {
+		apiKey = req.Header.Get(types.APIKeyHeaderShort)
+	}
+
+	// get environment name - will be empty for legacy keys
+	environment, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+	}
+
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev, err := r.batchedEventToEvent(req, bev)
+		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment)
 		if err != nil {
 			batchedResponses = append(
 				batchedResponses,
@@ -395,7 +418,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	debugLog := r.iopLogger.Debug().
 		WithField("request_id", reqID).
 		WithString("api_host", ev.APIHost).
-		WithString("dataset", ev.Dataset)
+		WithString("dataset", ev.Dataset).
+		WithString("environment", ev.Environment)
 
 	// extract trace ID, route to self or peer, pass on to collector
 	// TODO make trace ID field configurable
@@ -491,12 +515,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	return reader, nil
 }
 
-func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*types.Event, error) {
-	apiKey := req.Header.Get(types.APIKeyHeader)
-	if apiKey == "" {
-		apiKey = req.Header.Get(types.APIKeyHeaderShort)
-	}
-
+func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey string, environment string) (*types.Event, error) {
 	sampleRate := bev.SampleRate
 	if sampleRate == 0 {
 		sampleRate = 1
@@ -511,13 +530,14 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent) (*type
 		return nil, err
 	}
 	return &types.Event{
-		Context:    req.Context(),
-		APIHost:    apiHost,
-		APIKey:     apiKey,
-		Dataset:    dataset,
-		SampleRate: uint(sampleRate),
-		Timestamp:  eventTime,
-		Data:       bev.Data,
+		Context:     req.Context(),
+		APIHost:     apiHost,
+		APIKey:      apiKey,
+		Dataset:     dataset,
+		Environment: environment,
+		SampleRate:  uint(sampleRate),
+		Timestamp:   eventTime,
+		Data:        bev.Data,
 	}, nil
 }
 
@@ -625,4 +645,135 @@ func getFirstValueFromMetadata(key string, md metadata.MD) string {
 		return values[0]
 	}
 	return ""
+}
+
+type environmentCache struct {
+	mutex sync.RWMutex
+	items map[string]*cacheItem
+	ttl   time.Duration
+	getFn func(string) (string, error)
+}
+
+func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) {
+	r.environmentCache = newEnvironmentCache(ttl, getFn)
+}
+
+func newEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) *environmentCache {
+	return &environmentCache{
+		items: make(map[string]*cacheItem),
+		ttl:   ttl,
+		getFn: getFn,
+	}
+}
+
+type cacheItem struct {
+	expiresAt time.Time
+	value     string
+}
+
+// get queries the cached items, returning cache hits that have not expired.
+// Cache missed use the configured getFn to populate the cache.
+func (c *environmentCache) get(key string) (string, error) {
+	if item, ok := c.items[key]; ok {
+		if time.Now().Before(item.expiresAt) {
+			return item.value, nil
+		}
+	}
+
+	// get write lock early so we don't execute getFn in parallel so the
+	// the result will be cached before the next lock is aquired to prevent
+	// subsequent calls to getFn for the same key
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	// check if the cache has been populated while waiting for a write lock
+	if item, ok := c.items[key]; ok {
+		if time.Now().Before(item.expiresAt) {
+			return item.value, nil
+		}
+	}
+
+	val, err := c.getFn(key)
+	if err != nil {
+		return "", err
+	}
+
+	c.addItem(key, val, c.ttl)
+	return val, nil
+}
+
+// addItem create a new cache entry in the environment cache.
+// This is not thread-safe, and should only be used in tests
+func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
+	c.items[key] = &cacheItem{
+		expiresAt: time.Now().Add(ttl),
+		value:     value,
+	}
+}
+
+type TeamInfo struct {
+	Slug string `json:"slug"`
+}
+
+type EnvironmentInfo struct {
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
+type AuthInfo struct {
+	APIKeyAccess map[string]bool `json:"api_key_access"`
+	Team         TeamInfo        `json:"team"`
+	Environment  EnvironmentInfo `json:"environment"`
+}
+
+func (r *Router) getEnvironmentName(apiKey string) (string, error) {
+	if apiKey == "" || types.IsLegacyAPIKey(apiKey) {
+		return "", nil
+	}
+
+	env, err := r.environmentCache.get(apiKey)
+	if err != nil {
+		return "", err
+	}
+	return env, nil
+}
+
+func (r *Router) lookupEnvironment(apiKey string) (string, error) {
+	apiEndpoint, err := r.Config.GetHoneycombAPI()
+	if err != nil {
+		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
+	}
+	authURL, err := url.Parse(apiEndpoint)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
+	}
+
+	authURL.Path = "/1/auth"
+	req, err := http.NewRequest("GET", authURL.String(), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create AuthInfo request. %w", err)
+	}
+
+	req.Header.Set("x-Honeycomb-team", apiKey)
+
+	r.Logger.Debug().WithString("api_key", apiKey).WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
+	resp, err := r.proxyClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized:
+		return "", fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+	case resp.StatusCode > 299:
+		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
+	}
+
+	authinfo := AuthInfo{}
+	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
+		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
+	}
+	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
+	return authinfo.Environment.Name, nil
 }
