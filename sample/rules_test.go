@@ -521,6 +521,121 @@ func TestRules(t *testing.T) {
 	}
 }
 
+func TestRulesWithNestedFields(t *testing.T) {
+	data := []TestRulesData{
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "nested field",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test.test1",
+								Operator: "=",
+								Value:    int64(1),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": map[string]interface{}{
+								"test1": int64(1),
+							},
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "field not nested",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test.test1",
+								Operator: "=",
+								Value:    int64(1),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test.test1": int64(1),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "not exists test",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test.test1",
+								Operator: "not-exists",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": map[string]interface{}{
+								"test2": int64(9),
+							},
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 4,
+		},
+	}
+
+	for _, d := range data {
+		sampler := &RulesBasedSampler{
+			Config:  d.Rules,
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+
+		trace := &types.Trace{}
+
+		for _, span := range d.Spans {
+			trace.AddSpan(span)
+		}
+
+		rate, keep := sampler.GetSampleRate(trace)
+
+		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+
+		// we can only test when we don't expect to keep the trace
+		if !d.ExpectedKeep {
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+		}
+	}
+}
+
 func TestRulesWithDynamicSampler(t *testing.T) {
 	data := []TestRulesData{
 		{
