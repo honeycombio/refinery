@@ -74,7 +74,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				value, exists := span.Data[condition.Field]
 				if !exists {
 					jsonStr, err := json.Marshal(span.Data)
-					if err != nil {
+					if err == nil {
 						result := gjson.Get(string(jsonStr), condition.Field)
 						if result.Exists() {
 							value = result.String()
