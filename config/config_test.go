@@ -93,17 +93,17 @@ func TestReload(t *testing.T) {
 	assert.NoError(t, err)
 
 	dummy := []byte(`
-	ListenAddr="0.0.0.0:8080"
+ListenAddr: 0.0.0.0:8080
 
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`)
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`)
 
 	_, err = configFile.Write(dummy)
 	assert.NoError(t, err)
@@ -154,7 +154,7 @@ func TestReload(t *testing.T) {
 	}()
 
 	if file, err := os.OpenFile(configFile.Name(), os.O_RDWR, 0644); err == nil {
-		file.WriteString(`ListenAddr = "0.0.0.0:9000"`)
+		file.WriteString(`ListenAddr: 0.0.0.0:9000 `)
 		file.Close()
 	}
 
@@ -278,19 +278,20 @@ func TestPeerManagementType(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
 
-	[PeerManagement]
-		Type = "redis"
-		Peers = ["http://refinery-1231:8080"]
-	`))
+PeerManagement:
+  Type: redis
+  Peers:
+    - "http://refinery-1231:8080"
+`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
@@ -312,26 +313,27 @@ func TestAbsentTraceKeyField(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
-		[InMemCollector]
-			CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-		[HoneycombMetrics]
-			MetricsHoneycombAPI="http://honeycomb.io"
-			MetricsAPIKey="1234"
-			MetricsDataset="testDatasetName"
-			MetricsReportingInterval=3
-	`))
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`))
 	assert.NoError(t, err)
 
 	_, err = rulesFile.Write([]byte(`
-		[dataset1]
-			Sampler = "EMADynamicSampler"
-			GoalSampleRate = 10
-			UseTraceLength = true
-			AddSampleRateKeyToTrace = true
-			FieldList = "[request.method]"
-			Weight = 0.4
-	`))
+dataset1:
+  Sampler: EMADynamicSampler
+  GoalSampleRate: 10
+  UseTraceLength: true
+  AddSampleRateKeyToTrace: true
+  FieldList:
+    - request.method
+  Weight: 0.4
+`))
 
 	rulesFile.Close()
 
@@ -352,17 +354,17 @@ func TestDebugServiceAddr(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
-	DebugServiceAddr = "localhost:8085"
+DebugServiceAddr: localhost:8085
 
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`))
+HoneycombMetrics: 
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
@@ -381,22 +383,22 @@ func TestDryRun(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`))
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`))
 
 	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = rulesFile.Write([]byte(`
-	DryRun=true
-	`))
+DryRun: true
+`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
@@ -418,16 +420,16 @@ func TestMaxAlloc(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
-	[InMemCollector]
-		CacheCapacity=1000
-		MaxAlloc=17179869184
+InMemCollector:
+  CacheCapacity: 1000
+  MaxAlloc: 17179869184
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`))
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`))
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	assert.NoError(t, err)
@@ -447,52 +449,51 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`))
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`))
 
 	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummyConfig := []byte(`
-	Sampler = "DeterministicSampler"
-	SampleRate = 2
+Sampler: DeterministicSampler
+SampleRate: 2
 
-	['dataset 1']
-		Sampler = "DynamicSampler"
-		SampleRate = 2
-		FieldList = ["request.method","response.status_code"]
-		UseTraceLength = true
-		AddSampleRateKeyToTrace = true
-		AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
-		ClearFrequencySec = 60
+"dataset 1":
+  Sampler: DynamicSampler
+  SampleRate: 2
+  FieldList: [request.method,response.status_code]
+  UseTraceLength: true
+  AddSampleRateKeyToTrace: true
+  AddSampleRateKeyToTraceField: meta.refinery.dynsampler_key
+  ClearFrequencySec: 60
 
-	[dataset2]
+dataset2:
+  Sampler: DeterministicSampler
+  SampleRate: 10
 
-		Sampler = "DeterministicSampler"
-		SampleRate = 10
+dataset3:
+  Sampler: EMADynamicSampler
+  GoalSampleRate: 10
+  UseTraceLength: true
+  AddSampleRateKeyToTrace: true
+  AddSampleRateKeyToTraceField: meta.refinery.dynsampler_key
+  FieldList: 
+    - request.method
+  Weight: 0.3
 
-	[dataset3]
-
-		Sampler = "EMADynamicSampler"
-		GoalSampleRate = 10
-		UseTraceLength = true
-		AddSampleRateKeyToTrace = true
-		AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
-		FieldList = "[request.method]"
-		Weight = 0.3
-
-	[dataset4]
-
-		Sampler = "TotalThroughputSampler"
-		GoalThroughputPerSec = 100
-		FieldList = "[request.method]"
+dataset4:
+  Sampler: TotalThroughputSampler
+  GoalThroughputPerSec: 100
+  FieldList:
+    - request.method
 `)
 
 	_, err = rulesFile.Write(dummyConfig)
@@ -538,15 +539,15 @@ func TestDefaultSampler(t *testing.T) {
 	assert.NoError(t, err)
 
 	dummy := []byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`)
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`)
 
 	_, err = configFile.Write(dummy)
 	assert.NoError(t, err)
@@ -575,22 +576,22 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	dummy := []byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
 
-	[HoneycombLogger]
-		LoggerHoneycombAPI="http://honeycomb.io"
-		LoggerAPIKey="1234"
-		LoggerDataset="loggerDataset"
-		LoggerSamplerEnabled=true
-		LoggerSamplerThroughput=10
-	`)
+HoneycombLogger:
+  LoggerHoneycombAPI: http://honeycomb.io
+  LoggerAPIKey: 1234
+  LoggerDataset: loggerDataset
+  LoggerSamplerEnabled: true
+  LoggerSamplerThroughput: 10
+`)
 
 	_, err = configFile.Write(dummy)
 	assert.NoError(t, err)
@@ -623,20 +624,20 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	assert.NoError(t, err)
 
 	dummy := []byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
 
-	[HoneycombLogger]
-		LoggerHoneycombAPI="http://honeycomb.io"
-		LoggerAPIKey="1234"
-		LoggerDataset="loggerDataset"
-	`)
+HoneycombLogger: 
+  LoggerHoneycombAPI: http://honeycomb.io
+  LoggerAPIKey: 1234
+  LoggerDataset: loggerDataset
+`)
 
 	_, err = configFile.Write(dummy)
 	assert.NoError(t, err)
