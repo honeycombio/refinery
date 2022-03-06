@@ -51,7 +51,10 @@ func (d *traceKey) build(trace *types.Trace) string {
 	for _, field := range d.fields {
 		for _, span := range spans {
 			if val, ok := span.Data[field]; ok {
-				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
+				sval := fmt.Sprintf("%v", val)
+				if len(sval) > 0 {
+					fieldCollector[field] = append(fieldCollector[field], sval)
+				}
 			}
 		}
 	}

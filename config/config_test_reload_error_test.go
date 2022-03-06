@@ -1,3 +1,4 @@
+//go:build all || !race
 // +build all !race
 
 package config
@@ -17,31 +18,31 @@ func TestErrorReloading(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummy := []byte(`
-	[InMemCollector]
-		CacheCapacity=1000
+InMemCollector:
+  CacheCapacity: 1000
 
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`)
+HoneycombMetrics:
+  MetricsHoneycombAPI: http://honeycomb.io
+  MetricsAPIKey: 1234
+  MetricsDataset: testDatasetName
+  MetricsReportingInterval: 3
+`)
 
 	_, err = configFile.Write(dummy)
 	assert.NoError(t, err)
 	configFile.Close()
 
 	dummy = []byte(`
-	Sampler="DeterministicSampler"
-	SampleRate=1
-	`)
+Sampler: DeterministicSampler
+SampleRate: 1
+`)
 
 	_, err = rulesFile.Write(dummy)
 	assert.NoError(t, err)
@@ -73,7 +74,7 @@ func TestErrorReloading(t *testing.T) {
 		}
 	}()
 
-	err = ioutil.WriteFile(rulesFile.Name(), []byte(`Sampler="InvalidSampler"`), 0644)
+	err = ioutil.WriteFile(rulesFile.Name(), []byte(`Sampler: InvalidSampler`), 0644)
 
 	if err != nil {
 		t.Error(err)

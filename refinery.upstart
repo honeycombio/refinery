@@ -9,4 +9,4 @@ stop on runlevel [!2345]
 
 respawn
 
-exec su -s /bin/sh -c 'exec "$0" "$@"' honeycomb -- /usr/bin/refinery -c /etc/refinery/refinery.toml -r /etc/refinery/rules.toml
+exec su -s /bin/sh -c 'exec "$0" "$@"' honeycomb -- /usr/bin/refinery -c /etc/refinery/refinery.yaml -r /etc/refinery/rules.yaml

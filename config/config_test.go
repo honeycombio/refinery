@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package config
@@ -18,7 +19,7 @@ func TestGRPCListenAddrEnvVar(t *testing.T) {
 	os.Setenv(envVarName, address)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+	c, err := NewConfig("../config.yaml", "../rules.yaml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -35,7 +36,7 @@ func TestRedisHostEnvVar(t *testing.T) {
 	os.Setenv(envVarName, host)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+	c, err := NewConfig("../config.yaml", "../rules.yaml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -52,7 +53,7 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	os.Setenv(envVarName, username)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+	c, err := NewConfig("../config.yaml", "../rules.yaml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -69,7 +70,7 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	os.Setenv(envVarName, password)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+	c, err := NewConfig("../config.yaml", "../rules.yaml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -85,10 +86,10 @@ func TestReload(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummy := []byte(`
@@ -166,7 +167,7 @@ func TestReload(t *testing.T) {
 }
 
 func TestReadDefaults(t *testing.T) {
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+	c, err := NewConfig("../config.yaml", "../rules.yaml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -228,7 +229,7 @@ func TestReadDefaults(t *testing.T) {
 }
 
 func TestReadRulesConfig(t *testing.T) {
-	c, err := NewConfig("../config.toml", "../rules_complete.toml", func(err error) {})
+	c, err := NewConfig("../config.yaml", "../rules_complete.yaml", func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -270,10 +271,10 @@ func TestPeerManagementType(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -304,10 +305,10 @@ func TestAbsentTraceKeyField(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -344,10 +345,10 @@ func TestDebugServiceAddr(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -376,7 +377,7 @@ func TestDryRun(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -390,7 +391,7 @@ func TestDryRun(t *testing.T) {
 		MetricsReportingInterval=3
 	`))
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = rulesFile.Write([]byte(`
@@ -410,10 +411,10 @@ func TestMaxAlloc(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -442,7 +443,7 @@ func TestGetSamplerTypes(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -456,7 +457,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		MetricsReportingInterval=3
 	`))
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummyConfig := []byte(`
@@ -530,10 +531,10 @@ func TestDefaultSampler(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummy := []byte(`
@@ -567,10 +568,10 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummy := []byte(`
@@ -615,10 +616,10 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := ioutil.TempFile(tmpDir, "*.yaml")
 	assert.NoError(t, err)
 
 	dummy := []byte(`
