@@ -533,7 +533,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 							{
 								Field:    "test.test1",
 								Operator: "=",
-								Value:    int64(1),
+								Value:    "a",
 							},
 						},
 					},
@@ -544,7 +544,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 					Event: types.Event{
 						Data: map[string]interface{}{
 							"test": map[string]interface{}{
-								"test1": int64(1),
+								"test1": "a",
 							},
 						},
 					},
@@ -563,7 +563,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 							{
 								Field:    "test.test1",
 								Operator: "=",
-								Value:    int64(1),
+								Value:    "a",
 							},
 						},
 					},
@@ -573,7 +573,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"test.test1": int64(1),
+							"test.test1": "a",
 						},
 					},
 				},
@@ -601,7 +601,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 					Event: types.Event{
 						Data: map[string]interface{}{
 							"test": map[string]interface{}{
-								"test2": int64(9),
+								"test2": "b",
 							},
 						},
 					},
