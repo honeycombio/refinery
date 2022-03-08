@@ -27,6 +27,11 @@ Additional RAM and CPU can be used by increasing configuration values to have a 
 
 Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/refinery). Released versions of Refinery are available via Github under the Releases tab.
 
+### Upgrading from v1.12.0
+The default setup for the refinery service will attempt to load configuration files in YAML format. 
+The prior TOML format configuration files can still be used, but will require a change to the service setup in `refinery.service` or `refinery.upstart`.
+The configuration properties between YAML and TOML formats are equivalent.
+
 ## Configuration
 
 Configuration is done in one of two ways, either entirely by the config file or a combination of the config file and a Redis service for managing the list of peers in the cluster.
