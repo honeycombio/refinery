@@ -72,7 +72,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			for _, span := range trace.GetSpans() {
 				var match bool
 				value, exists := span.Data[condition.Field]
-				if !exists {
+				if !exists && s.Config.CheckNestedFields {
 					jsonStr, err := json.Marshal(span.Data)
 					if err == nil {
 						result := gjson.Get(string(jsonStr), condition.Field)

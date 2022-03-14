@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package sample
@@ -538,6 +539,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 						},
 					},
 				},
+				CheckNestedFields: true,
 			},
 			Spans: []*types.Span{
 				{
@@ -568,6 +570,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 						},
 					},
 				},
+				CheckNestedFields: true,
 			},
 			Spans: []*types.Span{
 				{
@@ -595,6 +598,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 						},
 					},
 				},
+				CheckNestedFields: true,
 			},
 			Spans: []*types.Span{
 				{
@@ -609,6 +613,36 @@ func TestRulesWithNestedFields(t *testing.T) {
 			},
 			ExpectedKeep: true,
 			ExpectedRate: 4,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "do not check nested",
+						SampleRate: 4,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test.test1",
+								Operator: "exists",
+							},
+						},
+					},
+				},
+				CheckNestedFields: false,
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": map[string]interface{}{
+								"test1": "a",
+							},
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
 		},
 	}
 

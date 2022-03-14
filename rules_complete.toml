@@ -206,6 +206,8 @@ SampleRate = 1
 [dataset4]
 
 	Sampler = "RulesBasedSampler"
+	# Optional, if set to true then the rules will also check nested json fields, in the format of parent.child
+	CheckNestedFields = false
 
 	[[dataset4.rule]]
 		name = "drop healtchecks"
