@@ -363,6 +363,11 @@ func TestPeerRouting(t *testing.T) {
 			"long":            "this is a test of the emergency broadcast system",
 			"foo":             "bar",
 		},
+		Metadata: map[string]string{
+			"api_host":    "http://api.honeycomb.io",
+			"dataset":     "dataset",
+			"environment": "",
+		},
 	}
 	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 
@@ -482,6 +487,11 @@ func TestEventsEndpoint(t *testing.T) {
 				"trace.trace_id": "1",
 				"foo":            "bar",
 			},
+			Metadata: map[string]string{
+				"api_host":    "http://api.honeycomb.io",
+				"dataset":     "dataset",
+				"environment": "",
+			},
 		},
 		senders[0].Events()[0],
 	)
@@ -523,6 +533,11 @@ func TestEventsEndpoint(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.trace_id": "1",
 				"foo":            "bar",
+			},
+			Metadata: map[string]string{
+				"api_host":    "http://api.honeycomb.io",
+				"dataset":     "dataset",
+				"environment": "",
 			},
 		},
 		senders[1].Events()[0],
@@ -586,6 +601,11 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 				"trace.trace_id": "1",
 				"foo":            "bar",
 			},
+			Metadata: map[string]string{
+				"api_host":    "http://api.honeycomb.io",
+				"dataset":     "dataset",
+				"environment": "test",
+			},
 		},
 		senders[0].Events()[0],
 	)
@@ -627,6 +647,11 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.trace_id": "1",
 				"foo":            "bar",
+			},
+			Metadata: map[string]string{
+				"api_host":    "http://api.honeycomb.io",
+				"dataset":     "dataset",
+				"environment": "test",
 			},
 		},
 		senders[1].Events()[0],
