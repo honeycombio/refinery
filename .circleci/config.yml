@@ -2,7 +2,6 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@2.1.0
-  go: circleci/go@1.7.1
 
 commands:
   go-build:
@@ -24,6 +23,16 @@ commands:
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
           -o $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
           ./cmd/refinery
+  setup_googleko:
+    steps:
+      - restore_cache:
+          keys:
+            - v1-googleko
+      - run: go install github.com/google/ko@latest
+      - save_cache:
+          key: v1-googleko
+          paths:
+            - /home/circleci/go/pkg/mod/
 
 jobs:
   test:
@@ -130,9 +139,7 @@ jobs:
     docker:
       - image: cimg/go:1.17
     steps:
-      - go/load-cache
-      - run: go install github.com/google/ko@latest
-      - go/save-cache
+      - setup_googleko
       - checkout
       - setup_remote_docker
       - run:
@@ -143,9 +150,7 @@ jobs:
     docker:
       - image: cimg/go:1.17
     steps:
-      - go/load-cache
-      - run: go install github.com/google/ko@latest
-      - go/save-cache
+      - setup_googleko
       - checkout
       - setup_remote_docker
       - run:
