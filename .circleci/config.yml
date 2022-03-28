@@ -23,6 +23,9 @@ commands:
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
           -o $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
           ./cmd/refinery
+      - run: |
+          sha256sum $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
+          > $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >>.checksum
   setup_googleko:
     steps:
       - restore_cache:
