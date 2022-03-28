@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@2.1.0
+  go: circleci/go@1.7.1
 
 commands:
   go-build:
@@ -129,7 +130,9 @@ jobs:
     docker:
       - image: cimg/go:1.17
     steps:
+      - go/load-cache
       - run: go install github.com/google/ko@latest
+      - go/save-cache
       - checkout
       - setup_remote_docker
       - run:
@@ -140,7 +143,9 @@ jobs:
     docker:
       - image: cimg/go:1.17
     steps:
+      - go/load-cache
       - run: go install github.com/google/ko@latest
+      - go/save-cache
       - checkout
       - setup_remote_docker
       - run:
