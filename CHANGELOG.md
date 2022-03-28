@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 1.12.1 2022-03-28
+
+### Fixes
+
+- fix: error log event metadata (#422) | [@vreynolds](https://github.com/vreynolds)
+
+### Maintenance
+
+- Create checksums when building binaries (#423) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Cache google ko deps between workflows (#424) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.12.0 2022-02-24
 
 ### Enhancements
