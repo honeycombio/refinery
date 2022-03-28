@@ -25,7 +25,7 @@ commands:
           ./cmd/refinery
       - run: |
           sha256sum $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
-          > $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >>-checksum
+          > $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >>.checksum
   setup_googleko:
     steps:
       - restore_cache:
