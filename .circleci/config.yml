@@ -40,7 +40,7 @@ commands:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.17
+      - image: cimg/go:1.18
       - image: redis:6
     steps:
       - checkout
@@ -64,7 +64,7 @@ jobs:
 
   build_binaries:
     docker:
-      - image: cimg/go:1.17
+      - image: cimg/go:1.18
     steps:
       - checkout
       - go-build:
@@ -140,7 +140,7 @@ jobs:
 
   build_docker:
     docker:
-      - image: cimg/go:1.17
+      - image: cimg/go:1.18
     steps:
       - setup_googleko
       - checkout
@@ -151,7 +151,7 @@ jobs:
 
   publish_docker:
     docker:
-      - image: cimg/go:1.17
+      - image: cimg/go:1.18
     steps:
       - setup_googleko
       - checkout
