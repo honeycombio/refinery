@@ -259,12 +259,10 @@ github.com/hashicorp/memberlist v0.3.0/go.mod h1:MS2lj3INKhZjWNqd3N0m3J+Jxf3DAOn
 github.com/hashicorp/serf v0.9.6/go.mod h1:TXZNMjZQijwlDvp+r0b63xZ45H7JmCmgg4gpTwn9UV4=
 github.com/honeycombio/dynsampler-go v0.2.1 h1:IbhjbdB0IbLSZn7xVYuk6jjk/ZDk/EO+DJ5OXFZliv8=
 github.com/honeycombio/dynsampler-go v0.2.1/go.mod h1:BOeTUPT6fCRH5X/+QqF6Kza3IyLp9uSq/rWgEtI4aZI=
-github.com/honeycombio/husky v0.9.0 h1:TppxWwGCZb54qwHuPRAkxhht4b3btFcM2OvV1/Zs3/s=
-github.com/honeycombio/husky v0.9.0/go.mod h1:KltmTfiasGGV0L3Hv6KEzm9YSvv3vRTz/JRSq1K+d78=
+github.com/honeycombio/husky v0.10.3 h1:407j6dXPG2ClzBGwIm/pgD+1N56jGamb3SZESttcuPg=
+github.com/honeycombio/husky v0.10.3/go.mod h1:KltmTfiasGGV0L3Hv6KEzm9YSvv3vRTz/JRSq1K+d78=
 github.com/honeycombio/libhoney-go v1.15.8 h1:TECEltZ48K6J4NG1JVYqmi0vCJNnHYooFor83fgKesA=
 github.com/honeycombio/libhoney-go v1.15.8/go.mod h1:+tnL2etFnJmVx30yqmoUkVyQjp7uRJw0a2QGu48lSyY=
-github.com/honeycombio/refinery v1.12.0 h1:o1392RE741TZp8+JMsj1sSpmHOs9+hVunPuozn4JPRY=
-github.com/honeycombio/refinery v1.12.0/go.mod h1:ct0vuSsQrUiZZo7sMIQ2grCfeO985A0dwADjUuG81qE=
 github.com/iancoleman/strcase v0.2.0/go.mod h1:iwCmte+B7n89clKwxIoIXy/HfoL7AsD47ZCWhYzw7ho=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
