@@ -15,7 +15,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
-	github.com/honeycombio/husky v0.9.0
+	github.com/honeycombio/husky v0.9.0 // indirect
 	github.com/honeycombio/libhoney-go v1.15.8
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
@@ -27,6 +27,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.0
+	github.com/tidwall/gjson v1.14.0
 	github.com/vmihailenco/msgpack/v4 v4.3.11
 	go.opentelemetry.io/proto/otlp v0.9.0
 	golang.org/x/net v0.0.0-20210913180222-943fd674d43e // indirect

@@ -70,7 +70,8 @@ func (r *RulesBasedSamplerRule) String() string {
 }
 
 type RulesBasedSamplerConfig struct {
-	Rule []*RulesBasedSamplerRule
+	Rule              []*RulesBasedSamplerRule
+	CheckNestedFields bool
 }
 
 func (r *RulesBasedSamplerConfig) String() string {

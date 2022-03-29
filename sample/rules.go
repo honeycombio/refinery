@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"encoding/json"
 	"math/rand"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
+	"github.com/tidwall/gjson"
 )
 
 type RulesBasedSampler struct {
@@ -70,6 +72,16 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			for _, span := range trace.GetSpans() {
 				var match bool
 				value, exists := span.Data[condition.Field]
+				if !exists && s.Config.CheckNestedFields {
+					jsonStr, err := json.Marshal(span.Data)
+					if err == nil {
+						result := gjson.Get(string(jsonStr), condition.Field)
+						if result.Exists() {
+							value = result.String()
+							exists = true
+						}
+					}
+				}
 
 				switch exists {
 				case true:
