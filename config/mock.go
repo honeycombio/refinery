@@ -71,6 +71,7 @@ type MockConfig struct {
 	DryRunFieldName               string
 	AddHostMetadataToTrace        bool
 	EnvironmentCacheTTL           time.Duration
+	DebugFieldsToLog              []string
 
 	Mux sync.RWMutex
 }
@@ -327,4 +328,11 @@ func (f *MockConfig) GetEnvironmentCacheTTL() time.Duration {
 	defer f.Mux.RUnlock()
 
 	return f.EnvironmentCacheTTL
+}
+
+func (f *MockConfig) GetDebugFieldsToLog() []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.DebugFieldsToLog
 }

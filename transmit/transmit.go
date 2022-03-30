@@ -98,7 +98,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	libhEv.SampleRate = ev.SampleRate
 	libhEv.Timestamp = ev.Timestamp
 	// metadata is used to make error logs more helpful when processing libhoney responses
-	libhEv.Metadata = map[string]string{
+	metadata := map[string]string{
 		"api_host":    ev.APIHost,
 		"dataset":     ev.Dataset,
 		"environment": ev.Environment,
@@ -106,8 +106,16 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 
 	for k, v := range ev.Data {
 		libhEv.AddField(k, v)
+
+		// if configured, add additional event fields to debug metadata
+		if d.Config.GetDebugFieldsToLog() != nil {
+			for _, k := range d.Config.GetDebugFieldsToLog() {
+				metadata[k] = v.(string)
+			}
+		}
 	}
 
+	libhEv.Metadata = metadata
 	err := libhEv.SendPresampled()
 	if err != nil {
 		d.Metrics.Increment(d.Name + counterEnqueueErrors)
@@ -148,18 +156,12 @@ func (d *DefaultTransmission) processResponses(
 		select {
 		case r := <-responses:
 			if r.Err != nil || r.StatusCode > 202 {
-				var apiHost, dataset, environment string
+				log := d.Logger.Error().WithField("status_code", r.StatusCode)
 				if metadata, ok := r.Metadata.(map[string]string); ok {
-					apiHost = metadata["api_host"]
-					dataset = metadata["dataset"]
-					environment = metadata["environment"]
+					for k, v := range metadata {
+						log = log.WithField(k, v)
+					}
 				}
-				log := d.Logger.Error().WithFields(map[string]interface{}{
-					"status_code": r.StatusCode,
-					"api_host":    apiHost,
-					"dataset":     dataset,
-					"environment": environment,
-				})
 				if r.Err != nil {
 					log = log.WithField("error", r.Err.Error())
 				}
