@@ -108,7 +108,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 		libhEv.AddField(k, v)
 
 		// if configured, add additional event fields to debug metadata
-		if d.Config.GetDebugFieldsToLog() != nil {
+		if len(d.Config.GetDebugFieldsToLog()) > 0 {
 			for _, k := range d.Config.GetDebugFieldsToLog() {
 				metadata[k] = v.(string)
 			}
