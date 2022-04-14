@@ -1,5 +1,19 @@
 # Refinery Changelog
 
+## 1.13.0 2022-04-08
+
+### Enhancements
+
+- Add parsing for nested json fields in the rules sampler (#418) | [@ecobrien29](https://github.com/ecobrien29)
+
+### Maintenance
+
+- Update husky to v0.10.3 (#431) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Bump google.golang.org/grpc from 1.43.0 to 1.45.0 (#428)
+- Bump github.com/klauspost/compress from 1.13.6 to 1.15.1 (#427)
+- Bump github.com/stretchr/testify from 1.7.0 to 1.7.1 (#426)
+- Bump github.com/prometheus/client_golang from 1.11.0 to 1.12.1 (#390)
+
 ## 1.12.1 2022-03-28
 
 ### Fixes
