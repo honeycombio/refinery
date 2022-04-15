@@ -65,7 +65,13 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	})
 
 	for _, rule := range s.Config.Rule {
-		matched := ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
+		var matched bool
+
+		if rule.MatchSpan {
+			matched = ruleMatchesSpanInTrace(trace, rule, s.Config.CheckNestedFields)
+		} else {
+			matched = ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
+		}
 
 		if matched {
 			var rate uint
@@ -125,6 +131,36 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 	}
 
 	return matched == len(rule.Condition)
+}
+
+func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
+	// We treat a rule with no conditions as a match.
+	if rule.Condition == nil {
+		return true
+	}
+
+	for _, span := range trace.GetSpans() {
+		// the number of conditions that match this span.
+		// incremented later on after we match a condition
+		// since we need to match *all* conditions on a single span, we reset in each iteration of the loop.
+		matchCount := 0
+		for _, condition := range rule.Condition {
+			// whether this condition is matched by this span.
+			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+
+			if conditionMatchesValue(condition, value, exists) {
+				matchCount++
+			}
+		}
+		// If this span was matched by every condition, then the rule as a whole
+		// matches (and we can return)
+		if matchCount == len(rule.Condition) {
+			return true
+		}
+	}
+
+	// if the rule didn't match above, then it doesn't match the trace.
+	return false
 }
 
 func extractValueFromSpan(span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
