@@ -65,93 +65,9 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	})
 
 	for _, rule := range s.Config.Rule {
-		var matched int
+		matched := ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
 
-		for _, condition := range rule.Condition {
-		span:
-			for _, span := range trace.GetSpans() {
-				var match bool
-				value, exists := span.Data[condition.Field]
-				if !exists && s.Config.CheckNestedFields {
-					jsonStr, err := json.Marshal(span.Data)
-					if err == nil {
-						result := gjson.Get(string(jsonStr), condition.Field)
-						if result.Exists() {
-							value = result.String()
-							exists = true
-						}
-					}
-				}
-
-				switch exists {
-				case true:
-					switch condition.Operator {
-					case "exists":
-						match = exists
-					case "!=":
-						if comparison, ok := compare(value, condition.Value); ok {
-							match = comparison != equal
-						}
-					case "=":
-						if comparison, ok := compare(value, condition.Value); ok {
-							match = comparison == equal
-						}
-					case ">":
-						if comparison, ok := compare(value, condition.Value); ok {
-							match = comparison == more
-						}
-					case ">=":
-						if comparison, ok := compare(value, condition.Value); ok {
-							match = comparison == more || comparison == equal
-						}
-					case "<":
-						if comparison, ok := compare(value, condition.Value); ok {
-							match = comparison == less
-						}
-					case "<=":
-						if comparison, ok := compare(value, condition.Value); ok {
-							match = comparison == less || comparison == equal
-						}
-					case "starts-with":
-						switch a := value.(type) {
-						case string:
-							switch b := condition.Value.(type) {
-							case string:
-								match = strings.HasPrefix(a, b)
-							}
-						}
-					case "contains":
-						switch a := value.(type) {
-						case string:
-							switch b := condition.Value.(type) {
-							case string:
-								match = strings.Contains(a, b)
-							}
-						}
-					case "does-not-contain":
-						switch a := value.(type) {
-						case string:
-							switch b := condition.Value.(type) {
-							case string:
-								match = !strings.Contains(a, b)
-							}
-						}
-					}
-				case false:
-					switch condition.Operator {
-					case "not-exists":
-						match = !exists
-					}
-				}
-
-				if match {
-					matched++
-					break span
-				}
-			}
-		}
-
-		if rule.Condition == nil || matched == len(rule.Condition) {
+		if matched {
 			var rate uint
 			var keep bool
 
@@ -186,6 +102,111 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	}
 
 	return 1, true
+}
+
+func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
+	// We treat a rule with no conditions as a match.
+	if rule.Condition == nil {
+		return true
+	}
+
+	var matched int
+
+	for _, condition := range rule.Condition {
+	span:
+		for _, span := range t.GetSpans() {
+			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+
+			if conditionMatchesValue(condition, value, exists) {
+				matched++
+				break span
+			}
+		}
+	}
+
+	return matched == len(rule.Condition)
+}
+
+func extractValueFromSpan(span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+	// whether this condition is matched by this span.
+	value, exists := span.Data[condition.Field]
+	if !exists && checkNestedFields {
+		jsonStr, err := json.Marshal(span.Data)
+		if err == nil {
+			result := gjson.Get(string(jsonStr), condition.Field)
+			if result.Exists() {
+				value = result.String()
+				exists = true
+			}
+		}
+	}
+
+	return value, exists
+}
+
+func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value interface{}, exists bool) bool {
+	var match bool
+	switch exists {
+	case true:
+		switch condition.Operator {
+		case "exists":
+			match = exists
+		case "!=":
+			if comparison, ok := compare(value, condition.Value); ok {
+				match = comparison != equal
+			}
+		case "=":
+			if comparison, ok := compare(value, condition.Value); ok {
+				match = comparison == equal
+			}
+		case ">":
+			if comparison, ok := compare(value, condition.Value); ok {
+				match = comparison == more
+			}
+		case ">=":
+			if comparison, ok := compare(value, condition.Value); ok {
+				match = comparison == more || comparison == equal
+			}
+		case "<":
+			if comparison, ok := compare(value, condition.Value); ok {
+				match = comparison == less
+			}
+		case "<=":
+			if comparison, ok := compare(value, condition.Value); ok {
+				match = comparison == less || comparison == equal
+			}
+		case "starts-with":
+			switch a := value.(type) {
+			case string:
+				switch b := condition.Value.(type) {
+				case string:
+					match = strings.HasPrefix(a, b)
+				}
+			}
+		case "contains":
+			switch a := value.(type) {
+			case string:
+				switch b := condition.Value.(type) {
+				case string:
+					match = strings.Contains(a, b)
+				}
+			}
+		case "does-not-contain":
+			switch a := value.(type) {
+			case string:
+				switch b := condition.Value.(type) {
+				case string:
+					match = !strings.Contains(a, b)
+				}
+			}
+		}
+	case false:
+		switch condition.Operator {
+		case "not-exists":
+			match = !exists
+		}
+	}
+	return match
 }
 
 const (
