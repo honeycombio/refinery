@@ -62,6 +62,7 @@ type RulesBasedSamplerRule struct {
 	SampleRate int
 	Sampler    *RulesBasedDownstreamSampler
 	Drop       bool
+	MatchSpan  bool
 	Condition  []*RulesBasedSamplerCondition
 }
 
