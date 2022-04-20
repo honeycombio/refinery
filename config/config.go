@@ -139,4 +139,6 @@ type Config interface {
 	GetAddHostMetadataToTrace() bool
 
 	GetEnvironmentCacheTTL() time.Duration
+
+	GetDatasetPrefix() string
 }

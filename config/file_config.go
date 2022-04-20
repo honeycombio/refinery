@@ -49,6 +49,7 @@ type configContents struct {
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 	AddHostMetadataToTrace    bool
 	EnvironmentCacheTTL       time.Duration
+	DatasetPrefix             string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -127,6 +128,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 	c.SetDefault("AddHostMetadataToTrace", false)
 	c.SetDefault("EnvironmentCacheTTL", time.Hour)
+	c.SetDefault("DatasetPrefix", "")
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -735,4 +737,11 @@ func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	defer f.mux.RUnlock()
 
 	return f.conf.EnvironmentCacheTTL
+}
+
+func (f *fileConfig) GetDatasetPrefix() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.DatasetPrefix
 }

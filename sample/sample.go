@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/honeycombio/refinery/config"
@@ -21,10 +22,16 @@ type SamplerFactory struct {
 	Metrics metrics.Metrics `inject:"metrics"`
 }
 
-// GetSamplerImplementationForDataset returns the sampler implementation for the dataset,
-// or nil if it is not defined
-func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Sampler {
-	c, err := s.Config.GetSamplerConfigForDataset(dataset)
+// GetSamplerImplementationForKey returns the sampler implementation for the given
+// samplerKey (dataset or environment), or nil if it is not defined
+func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLegacyKey bool) Sampler {
+	if isLegacyKey {
+		if prefix := s.Config.GetDatasetPrefix(); prefix != "" {
+			samplerKey = fmt.Sprintf("%s.%s", prefix, samplerKey)
+		}
+	}
+
+	c, err := s.Config.GetSamplerConfigForDataset(samplerKey)
 	if err != nil {
 		return nil
 	}
@@ -49,11 +56,11 @@ func (s *SamplerFactory) GetSamplerImplementationForDataset(dataset string) Samp
 
 	err = sampler.Start()
 	if err != nil {
-		s.Logger.Debug().WithField("dataset", dataset).Logf("failed to start sampler")
+		s.Logger.Debug().WithField("dataset", samplerKey).Logf("failed to start sampler")
 		return nil
 	}
 
-	s.Logger.Debug().WithField("dataset", dataset).Logf("created implementation for sampler type %T", c)
+	s.Logger.Debug().WithField("dataset", samplerKey).Logf("created implementation for sampler type %T", c)
 
 	return sampler
 }
