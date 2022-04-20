@@ -26,7 +26,7 @@ require (
 	github.com/stretchr/testify v1.7.1
 	github.com/tidwall/gjson v1.14.0
 	github.com/vmihailenco/msgpack/v4 v4.3.11
-	go.opentelemetry.io/proto/otlp v0.9.0
+	go.opentelemetry.io/proto/otlp v0.11.0
 	golang.org/x/net v0.0.0-20210913180222-943fd674d43e // indirect
 	google.golang.org/grpc v1.45.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
