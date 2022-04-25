@@ -23,7 +23,7 @@ type SamplerFactory struct {
 }
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
-// samplerKey (dataset or environment), or nil if it is not defined
+// samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
 func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLegacyKey bool) Sampler {
 	if isLegacyKey {
 		if prefix := s.Config.GetDatasetPrefix(); prefix != "" {
