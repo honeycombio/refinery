@@ -70,6 +70,36 @@ By default, a Refinery process will register itself in Redis using its local hos
 In environments where domain name resolution is slow or unreliable, override the reliance on name lookups by specifying the name of the peering network interface with the `IdentifierInterfaceName` configuration option.
 See the [Refinery documentation](https://docs.honeycomb.io/manage-data-volume/refinery/) for more details on tuning a cluster.
 
+
+### Mixing Legacy and Environment & Services Rule Definitions
+
+With the change to support environemt and services in Honeycomb, some users will want to support both sending telemetry to a legacy dataset and a new environment called the same thing (eg `production`).
+
+This can be achomplihsed by leveraging the new `DataserPrefix` configuration property and then using that prefix in the rules definitions for the legacy datasets.
+
+When Refinery receives telemetry using an API key associated to a legacy dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition.
+
+For example
+config.toml
+```toml
+DatasetPrefix = "legacy"
+```
+
+rules.toml
+```toml
+# default rules
+Sampler = "DeterministicSampler"
+SampleRate = 1
+
+    [production] # environment called "production"
+    Sampler = "DeterministicSampler"
+    SampleRate = 5
+
+    [legacy.production] # dataset called "prodiction"
+    Sampler = "DeterministicSampler"
+    SampleRate = 10
+```
+
 ## How sampling decisions are made
 
 In the configuration file, you can choose from a few sampling methods and specify options for each. The `DynamicSampler` is the most interesting and most commonly used. It uses the `AvgSampleRate` algorithm from the [`dynsampler-go`](https://github.com/honeycombio/dynsampler-go) package. Briefly described, you configure Refinery to examine the trace for a set of fields (for example, `request.status_code` and `request.method`). It collects all the values found in those fields anywhere in the trace (eg "200" and "GET") together into a key it hands to the dynsampler. The dynsampler code will look at the frequency that key appears during the previous 30 seconds (or other value set by the `ClearFrequencySec` setting) and use that to hand back a desired sample rate. More frequent keys are sampled more heavily, so that an even distribution of traffic across the keyspace is represented in Honeycomb.
