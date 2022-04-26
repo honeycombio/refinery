@@ -449,9 +449,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		logFields["environment"] = samplerKey
 	}
 
-	// use sampler key to find sampler, crete and cache if not found
+	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForDataset(samplerKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
 		i.datasetSamplers[samplerKey] = sampler
 	}
 

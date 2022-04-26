@@ -652,3 +652,40 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	assert.Equal(t, false, loggerConfig.LoggerSamplerEnabled)
 	assert.Equal(t, 5, loggerConfig.LoggerSamplerThroughput)
 }
+
+func TestDatasetPrefix(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	_, err = configFile.Write([]byte(`
+	DatasetPrefix = "dataset"
+
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+
+	[HoneycombLogger]
+		LoggerHoneycombAPI="http://honeycomb.io"
+		LoggerAPIKey="1234"
+		LoggerDataset="loggerDataset"
+	`))
+	assert.NoError(t, err)
+	configFile.Close()
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, "dataset", c.GetDatasetPrefix())
+}
