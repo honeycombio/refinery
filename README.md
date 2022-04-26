@@ -75,7 +75,7 @@ See the [Refinery documentation](https://docs.honeycomb.io/manage-data-volume/re
 
 With the change to support environemt and services in Honeycomb, some users will want to support both sending telemetry to a legacy dataset and a new environment called the same thing (eg `production`).
 
-This can be achomplihsed by leveraging the new `DataserPrefix` configuration property and then using that prefix in the rules definitions for the legacy datasets.
+This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for the legacy datasets.
 
 When Refinery receives telemetry using an API key associated to a legacy dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition.
 
@@ -95,7 +95,7 @@ SampleRate = 1
     Sampler = "DeterministicSampler"
     SampleRate = 5
 
-    [legacy.production] # dataset called "prodiction"
+    [legacy.production] # dataset called "production"
     Sampler = "DeterministicSampler"
     SampleRate = 10
 ```
