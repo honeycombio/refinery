@@ -835,3 +835,123 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		}
 	}
 }
+
+func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
+	data := []TestRulesData{
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Rule to match span",
+						MatchSpan:  true,
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "rule_test",
+								Operator: "=",
+								Value:    int64(1),
+							},
+							{
+								Field:    "rule_test_2",
+								Operator: "=",
+								Value:    int64(2),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+							"rule_test_2":      int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:      "Rule to match span",
+						MatchSpan: true,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "rule_test",
+								Operator: "=",
+								Value:    int64(1),
+							},
+							{
+								Field:    "rule_test_2",
+								Operator: "=",
+								Value:    int64(2),
+							},
+						},
+					},
+					{
+						Name:       "Default rule",
+						Drop:       true,
+						SampleRate: 1,
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test":        int64(1),
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"rule_test_2":      int64(2),
+							"http.status_code": "200",
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+			ExpectedRate: 1,
+		},
+	}
+
+	for _, d := range data {
+		sampler := &RulesBasedSampler{
+			Config:  d.Rules,
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+
+		trace := &types.Trace{}
+
+		for _, span := range d.Spans {
+			trace.AddSpan(span)
+		}
+
+		sampler.Start()
+		rate, keep := sampler.GetSampleRate(trace)
+
+		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+
+		// we can only test when we don't expect to keep the trace
+		if !d.ExpectedKeep {
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+		}
+	}
+}
