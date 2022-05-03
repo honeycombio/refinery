@@ -1,5 +1,18 @@
 # Refinery Changelog
 
+## 1.14.0 2022-05-03
+
+### Enhancements
+
+- Add support for environment and dataset rules with same names (#438) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+### Maintenance
+
+- Update otlp to v0.11.0 (#437) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Update go to 1.18 (#430) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+**Note**: The docker image used to create the binaries has been updated to a version that does not suffer a [OpenSSL CVE](https://mta.openssl.org/pipermail/openssl-announce/2022-March/000219.html).
+
 ## 1.13.0 2022-04-08
 
 ### Enhancements
