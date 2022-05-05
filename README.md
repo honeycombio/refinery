@@ -48,7 +48,7 @@ There are a few vital configuration options; read through this list and make sur
 
 There are a few components of Refinery with multiple implementations; the config file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level config item that lets you choose which implementation to use and then a section further down with additional config options for that choice (for example, the Honeycomb logger requires an API key).
 
-When configuration changes, send Refinery a USR1 signal and it will re-read the configuration.
+When configuration changes, Refinery will automatically reload the configuration.
 
 ### Redis-based Peer Management
 
