@@ -50,7 +50,7 @@ There are a few components of Refinery with multiple implementations; the config
 
 When configuration changes, Refinery will automatically reload the configuration[^1].
 
-[^1]: When running within docker, be sure to mount the directory of the configuration rather than the file itself so the [reloading will work](https://github.com/spf13/viper/issues/920)
+[^1]: When running Refinery within docker, be sure to mount the directory containing configuration & rules files so that [reloading will work](https://github.com/spf13/viper/issues/920) as expected.
 
 ### Redis-based Peer Management
 
