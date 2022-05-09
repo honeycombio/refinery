@@ -210,7 +210,7 @@ SampleRate = 1
 	CheckNestedFields = false
 
 	[[dataset4.rule]]
-		name = "drop healtchecks"
+		name = "drop healthchecks"
 		drop = true
 		[[dataset4.rule.condition]]
 			field = "http.route"
