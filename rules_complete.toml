@@ -243,6 +243,25 @@ SampleRate = 1
 			AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
 
 	[[dataset4.rule]]
+		name = "sample traces originating from a service"
+		# if true, a single span must match all of the conditions in this
+		# rule in order for the rule to match the trace.
+		#
+		# this is especially helpful when sampling a dataset written to
+		# by multiple services that call one another in normal operation –
+		# you can set MatchSpan to true to attribute traces to an origin
+		# service in a way that would be difficult without it.
+		MatchSpan = true
+		[[dataset4.rule.condition]]
+			field = "service name"
+			operator = "="
+			value = "users"
+		[[dataset4.rule.condition]]
+			field = "meta.span_type"
+			operator = "="
+			value = "root"
+
+	[[dataset4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 10
 
 [dataset5]
