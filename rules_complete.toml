@@ -244,14 +244,15 @@ SampleRate = 1
 
 	[[dataset4.rule]]
 		name = "sample traces originating from a service"
-		# if true, a single span must match all of the conditions in this
-		# rule in order for the rule to match the trace.
+		# if scope is set to "span", a single span in the trace must match
+		# *all* of the conditions associated with this rule for the rule to
+		# apply to the trace.
 		#
 		# this is especially helpful when sampling a dataset written to
 		# by multiple services that call one another in normal operation –
 		# you can set MatchSpan to true to attribute traces to an origin
 		# service in a way that would be difficult without it.
-		MatchSpan = true
+		Scope = "span"
 		[[dataset4.rule.condition]]
 			field = "service name"
 			operator = "="

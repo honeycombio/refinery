@@ -67,10 +67,17 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	for _, rule := range s.Config.Rule {
 		var matched bool
 
-		if rule.MatchSpan {
+		switch rule.Scope {
+		case "span":
 			matched = ruleMatchesSpanInTrace(trace, rule, s.Config.CheckNestedFields)
-		} else {
+		case "trace", "":
 			matched = ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
+		default:
+			logger.WithFields(map[string]interface{}{
+				"rule_name": rule.Name,
+				"scope":     rule.Scope,
+			}).Logf("invalid scope %s given for rule: %s", rule.Scope, rule.Name)
+			matched = false
 		}
 
 		if matched {

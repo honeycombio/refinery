@@ -843,7 +843,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 				Rule: []*config.RulesBasedSamplerRule{
 					{
 						Name:       "Rule to match span",
-						MatchSpan:  true,
+						Scope:      "span",
 						SampleRate: 10,
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
@@ -886,8 +886,8 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rule: []*config.RulesBasedSamplerRule{
 					{
-						Name:      "Rule to match span",
-						MatchSpan: true,
+						Name:  "Rule to match span",
+						Scope: "span",
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "rule_test",
