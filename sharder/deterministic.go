@@ -229,7 +229,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 
 	// #454 -- index can get out of range if v is close to 0xFFFFFFFF and portion would be non-integral.
 	// Consider revisiting this with a different sharding mechanism if we rework our scaling behavior.
-	if index > uint32(len(d.peers)) {
+	if index >= uint32(len(d.peers)) {
 		index = 0
 	}
 
