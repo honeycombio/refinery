@@ -1,5 +1,23 @@
 # Refinery Changelog
 
+## 1.14.1 2022-05-16
+
+### Fixes
+
+- Fix crash bug related to sharding (#455) | [@kentquirk](https://github.com/kentquirk)
+
+### Maintenance
+
+- bump husky to 0.10.5 (#450) | [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Bump github.com/klauspost/compress from 1.15.2 to 1.15.4 (#451) | dependabot
+- Bump github.com/tidwall/gjson from 1.14.0 to 1.14.1 (#444) | dependabot
+- Bump github.com/fsnotify/fsnotify from 1.5.1 to 1.5.4 (#441) | dependabot
+
+### Documentation
+
+- add a note about reloading the configuration when running within docker (#448) | [@leviwilson](https://github.com/leviwilson)
+- README: remove incorrect mention of sending SIGUSR1 to trigger a configuration reload (#447) | [@jharley](https://github.com/jharley)
+
 ## 1.14.0 2022-05-03
 
 ### Enhancements
