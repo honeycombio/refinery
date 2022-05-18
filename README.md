@@ -73,18 +73,18 @@ In environments where domain name resolution is slow or unreliable, override the
 See the [Refinery documentation](https://docs.honeycomb.io/manage-data-volume/refinery/) for more details on tuning a cluster.
 
 
-### Mixing Legacy and Environment & Services Rule Definitions
+### Mixing Classic and Environment & Services Rule Definitions
 
-With the change to support environemt and services in Honeycomb, some users will want to support both sending telemetry to a legacy dataset and a new environment called the same thing (eg `production`).
+With the change to support environemt and services in Honeycomb, some users will want to support both sending telemetry to a classic dataset and a new environment called the same thing (eg `production`).
 
-This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for the legacy datasets.
+This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for the classic datasets.
 
-When Refinery receives telemetry using an API key associated to a legacy dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition.
+When Refinery receives telemetry using an API key associated to a classic dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition.
 
 For example
 config.toml
 ```toml
-DatasetPrefix = "legacy"
+DatasetPrefix = "classic"
 ```
 
 rules.toml
@@ -97,7 +97,7 @@ SampleRate = 1
     Sampler = "DeterministicSampler"
     SampleRate = 5
 
-    [legacy.production] # dataset called "production"
+    [classic.production] # dataset called "production"
     Sampler = "DeterministicSampler"
     SampleRate = 10
 ```
