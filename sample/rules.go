@@ -77,7 +77,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				"rule_name": rule.Name,
 				"scope":     rule.Scope,
 			}).Logf("invalid scope %s given for rule: %s", rule.Scope, rule.Name)
-			matched = false
+			matched = true
 		}
 
 		if matched {
