@@ -250,7 +250,7 @@ SampleRate = 1
 		#
 		# this is especially helpful when sampling a dataset written to
 		# by multiple services that call one another in normal operation –
-		# you can set MatchSpan to true to attribute traces to an origin
+		# you can set Scope to 'span' to attribute traces to an origin
 		# service in a way that would be difficult without it.
 		Scope = "span"
 		[[dataset4.rule.condition]]
