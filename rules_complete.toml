@@ -253,6 +253,7 @@ SampleRate = 1
 		# you can set Scope to 'span' to attribute traces to an origin
 		# service in a way that would be difficult without it.
 		Scope = "span"
+		SampleRate = 5
 		[[dataset4.rule.condition]]
 			field = "service name"
 			operator = "="
