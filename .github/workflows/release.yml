@@ -19,3 +19,4 @@ jobs:
 
           labels: |
             type: dependencies
+            status: oncall
