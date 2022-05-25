@@ -2,6 +2,7 @@ package sample
 
 import (
 	"crypto/sha1"
+	"encoding/binary"
 	"math"
 
 	"github.com/honeycombio/refinery/config"
@@ -39,12 +40,6 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		return 1, true
 	}
 	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
-	v := bytesToUint32be(sum[:4])
+	v := binary.BigEndian.Uint32(sum[:4])
 	return uint(d.sampleRate), v <= d.upperBound
-}
-
-// bytesToUint32 takes a slice of 4 bytes representing a big endian 32 bit
-// unsigned value and returns the equivalent uint32.
-func bytesToUint32be(b []byte) uint32 {
-	return uint32(b[3]) | (uint32(b[2]) << 8) | (uint32(b[1]) << 16) | (uint32(b[0]) << 24)
 }
