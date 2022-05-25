@@ -2,6 +2,7 @@ package sharder
 
 import (
 	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"net"
@@ -222,7 +223,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	// add in the sharding salt to ensure the sh1sum is spread differently from
 	// others that use the same algorithm
 	sum := sha1.Sum([]byte(traceID + shardingSalt))
-	v := bytesToUint32be(sum[:4])
+	v := binary.BigEndian.Uint32(sum[:4])
 
 	portion := math.MaxUint32 / len(d.peers)
 	index := v / uint32(portion)
@@ -234,10 +235,4 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	}
 
 	return d.peers[index]
-}
-
-// bytesToUint32 takes a slice of 4 bytes representing a big endian 32 bit
-// unsigned value and returns the equivalent uint32.
-func bytesToUint32be(b []byte) uint32 {
-	return uint32(b[3]) | (uint32(b[2]) << 8) | (uint32(b[1]) << 16) | (uint32(b[0]) << 24)
 }
