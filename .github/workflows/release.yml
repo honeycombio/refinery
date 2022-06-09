@@ -9,7 +9,7 @@ jobs:
       - name: Create an issue
         uses: actions-ecosystem/action-create-issue@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           repo: github.com/honeycombio/helm-charts
           title: ${{ steps.date.outputs.today }}
           body: |
