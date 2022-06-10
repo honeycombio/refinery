@@ -844,7 +844,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 					{
 						Name:       "Rule to match span",
 						Scope:      "span",
-						SampleRate: 10,
+						SampleRate: 1,
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "rule_test",
@@ -880,7 +880,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
-			ExpectedRate: 10,
+			ExpectedRate: 1,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -948,10 +948,6 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 		rate, keep := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
-
-		// we can only test when we don't expect to keep the trace
-		if !d.ExpectedKeep {
-			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
-		}
+		assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 	}
 }
