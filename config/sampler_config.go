@@ -62,6 +62,7 @@ type RulesBasedSamplerRule struct {
 	SampleRate int
 	Sampler    *RulesBasedDownstreamSampler
 	Drop       bool
+	Scope      string `validate:"oneof=span trace"`
 	Condition  []*RulesBasedSamplerCondition
 }
 

@@ -210,7 +210,7 @@ SampleRate = 1
 	CheckNestedFields = false
 
 	[[dataset4.rule]]
-		name = "drop healtchecks"
+		name = "drop healthchecks"
 		drop = true
 		[[dataset4.rule.condition]]
 			field = "http.route"
@@ -241,6 +241,27 @@ SampleRate = 1
 			FieldList = ["request.method", "request.route"]
 			AddSampleRateKeyToTrace = true
 			AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
+
+	[[dataset4.rule]]
+		name = "sample traces originating from a service"
+		# if scope is set to "span", a single span in the trace must match
+		# *all* of the conditions associated with this rule for the rule to
+		# apply to the trace.
+		#
+		# this is especially helpful when sampling a dataset written to
+		# by multiple services that call one another in normal operation –
+		# you can set Scope to 'span' to attribute traces to an origin
+		# service in a way that would be difficult without it.
+		Scope = "span"
+		SampleRate = 5
+		[[dataset4.rule.condition]]
+			field = "service name"
+			operator = "="
+			value = "users"
+		[[dataset4.rule.condition]]
+			field = "meta.span_type"
+			operator = "="
+			value = "root"
 
 	[[dataset4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 10
