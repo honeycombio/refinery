@@ -1,5 +1,27 @@
 # Refinery Changelog
 
+## 1.15.0 2022-07-01
+
+### Enhancements
+
+- Add rule Scope configuration option to rules-based sampler (#440) | [isnotajoke](https://github.com/isnotajoke)
+- Replace hand-rolled binary.BigEndian.Uint32 with the real deal (#459) | [toshok](https://github.com/toshok)
+- Validate successful span scoped rules test (#465) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Create helm-chart issue on release (#458) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+- github_token needs underscore not hyphen (#464) | [@JamieDanielson](https://github.com/JamieDanielson)
+
+### Maintenance
+
+- Replace legacy with classic in raadme (#457) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+### Dependencies
+
+- Bump github.com/spf13/viper from 1.10.1 to 1.12.0 (#461)
+- Bump github.com/stretchr/testify from 1.7.1 to 1.7.2 (#467)
+- Bump github.com/honeycombio/husky from 0.10.5 to 0.10.6 (#460)
+- Bump github.com/klauspost/compress from 1.15.4 to 1.15.6 (#466)
+- Bump github.com/prometheus/client_golang from 1.12.1 to 1.12.2 (#463)
+
 ## 1.14.1 2022-05-16
 
 ### Fixes
