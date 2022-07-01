@@ -28,7 +28,7 @@ require (
 	github.com/vmihailenco/msgpack/v4 v4.3.11
 	go.opentelemetry.io/proto/otlp v0.11.0
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
-	google.golang.org/grpc v1.46.2
+	google.golang.org/grpc v1.47.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 )
 
