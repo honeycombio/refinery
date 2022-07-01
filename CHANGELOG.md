@@ -12,7 +12,7 @@
 
 ### Maintenance
 
-- Replace legacy with classic in raadme (#457) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Replace legacy with classic in readme (#457) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
 
 ### Dependencies
 
