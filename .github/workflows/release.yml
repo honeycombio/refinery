@@ -2,6 +2,7 @@ name: Create helm chart issue on release
 on:
   release:
     types: [published]
+  workflow_dispatch:
 jobs:
   create_issue:
     runs-on: ubuntu-latest
@@ -11,7 +12,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           repo: github.com/honeycombio/helm-charts
-          title: ${{ steps.date.outputs.today }}
+          title: Bump Refinery to Latest Version
           body: |
             ## Bump Refinery
 
