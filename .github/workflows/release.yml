@@ -2,6 +2,7 @@ name: Create helm chart issue on release
 on:
   release:
     types: [published]
+  workflow_dispatch:
 jobs:
   create_issue:
     runs-on: ubuntu-latest
