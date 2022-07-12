@@ -11,7 +11,7 @@ jobs:
         uses: actions-ecosystem/action-create-issue@v1
         with:
           github_token: ${{ secrets.GHPROJECTS_TOKEN }}
-          repo: github.com/honeycombio/helm-charts
+          repo: honeycombio/helm-charts
           title: Bump Refinery to Latest Version
           body: |
             ## Bump Refinery
