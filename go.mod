@@ -26,7 +26,7 @@ require (
 	github.com/stretchr/testify v1.8.0
 	github.com/tidwall/gjson v1.14.1
 	github.com/vmihailenco/msgpack/v4 v4.3.11
-	go.opentelemetry.io/proto/otlp v0.11.0
+	go.opentelemetry.io/proto/otlp v0.18.0
 	golang.org/x/net v0.0.0-20220520000938-2e3eb7b945c2 // indirect
 	google.golang.org/grpc v1.46.2
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
@@ -41,7 +41,7 @@ require (
 	github.com/facebookgo/structtag v0.0.0-20150214074306-217e25fb9691 // indirect
 	github.com/go-playground/locales v0.13.0 // indirect
 	github.com/go-playground/universal-translator v0.17.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
