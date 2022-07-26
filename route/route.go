@@ -233,7 +233,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 }
 
 func (r *Router) Stop() error {
-	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	err := r.server.Shutdown(ctx)
 	if err != nil {
 		return err
