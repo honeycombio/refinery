@@ -14,10 +14,10 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/husky v0.10.6
-	github.com/honeycombio/libhoney-go v1.15.8
+	github.com/honeycombio/libhoney-go v1.16.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.15.6
+	github.com/klauspost/compress v1.15.7
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.12.2
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
