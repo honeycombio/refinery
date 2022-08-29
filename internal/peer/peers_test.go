@@ -39,6 +39,8 @@ func TestNewPeers(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, p)
 
+	assert.Equal(t, nil, err)
+
 	switch i := p.(type) {
 	case *redisPeers:
 	default:

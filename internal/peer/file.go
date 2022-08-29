@@ -1,6 +1,10 @@
 package peer
 
-import "github.com/honeycombio/refinery/config"
+import (
+	"context"
+
+	"github.com/honeycombio/refinery/config"
+)
 
 type filePeers struct {
 	c config.Config
@@ -19,4 +23,9 @@ func (p *filePeers) GetPeers() ([]string, error) {
 
 func (p *filePeers) RegisterUpdatedPeersCallback(callback func()) {
 	// do nothing, file based peers are not reloaded
+}
+
+func (p *filePeers) Close(ctx context.Context) error {
+	// do nothing, file based peers do not close
+	return nil
 }

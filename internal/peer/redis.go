@@ -133,6 +133,11 @@ func (p *redisPeers) RegisterUpdatedPeersCallback(cb func()) {
 	p.callbacks = append(p.callbacks, cb)
 }
 
+func (p *redisPeers) Close(ctx context.Context) error {
+	// Nothing to do here as the store closes the redis connection after each operation.
+	return nil
+}
+
 // registerSelf inserts self into the peer list and updates self's entry on a
 // regular basis so it doesn't time out and get removed from the list of peers.
 // If this function stops, this host will get ejected from other's peer lists.
@@ -236,8 +241,8 @@ func buildOptions(c config.Config) []redis.DialOption {
 	return options
 }
 
+// publicAddr computes the public version of my peer listen address
 func publicAddr(c config.Config) (string, error) {
-	// compute the public version of my peer listen address
 	listenAddr, _ := c.GetPeerListenAddr()
 	_, port, err := net.SplitHostPort(listenAddr)
 
@@ -245,8 +250,26 @@ func publicAddr(c config.Config) (string, error) {
 		return "", err
 	}
 
-	myIdentifier, _ := os.Hostname()
+	myIdentifier, err := identifierInterface(c)
+	if err != nil {
+		return "", err
+	}
+
+	redisIdentifier, _ := c.GetRedisIdentifier()
+
+	if redisIdentifier != "" {
+		myIdentifier = redisIdentifier
+		logrus.WithField("identifier", myIdentifier).Info("using specific identifier from config")
+	}
+
+	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
+
+	return publicListenAddr, nil
+}
+
+func identifierInterface(c config.Config) (string, error) {
 	identifierInterfaceName, _ := c.GetIdentifierInterfaceName()
+	myIdentifier, _ := os.Hostname()
 
 	if identifierInterfaceName != "" {
 		ifc, err := net.InterfaceByName(identifierInterfaceName)
@@ -283,17 +306,7 @@ func publicAddr(c config.Config) (string, error) {
 		myIdentifier = ipStr
 		logrus.WithField("identifier", myIdentifier).WithField("interface", ifc.Name).Info("using identifier from interface")
 	}
-
-	redisIdentifier, _ := c.GetRedisIdentifier()
-
-	if redisIdentifier != "" {
-		myIdentifier = redisIdentifier
-		logrus.WithField("identifier", myIdentifier).Info("using specific identifier from config")
-	}
-
-	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
-
-	return publicListenAddr, nil
+	return myIdentifier, nil
 }
 
 // equal tells whether a and b contain the same elements.

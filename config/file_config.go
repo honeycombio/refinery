@@ -10,9 +10,9 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/go-playground/validator"
-	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go"
 	"github.com/sirupsen/logrus"
-	viper "github.com/spf13/viper"
+	"github.com/spf13/viper"
 )
 
 type fileConfig struct {
@@ -92,6 +92,9 @@ type PeerManagementConfig struct {
 	UseIPV6Identifier       bool
 	RedisIdentifier         string
 	Timeout                 time.Duration
+	MemberListListenAddr    string
+	MemberListAdvertiseAddr string
+	MemberListKnownMembers  []string
 }
 
 // NewConfig creates a new config struct
@@ -102,10 +105,13 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
 	c.BindEnv("PeerManagement.RedisUsername", "REFINERY_REDIS_USERNAME")
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
+	c.BindEnv("PeerManagement.MemberListAdvertiseAddr", "REFINERY_MEMBER_LIST_ADVERTISE_ADDR")
+	c.BindEnv("PeerManagement.MemberListListenAddr", "REFINERY_MEMBER_LIST_LISTEN_ADDR")
 	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
+	c.SetDefault("MemberListListenAddr", "0.0.0.0:8519")
 	c.SetDefault("CompressPeerCommunication", true)
 	c.SetDefault("APIKeys", []string{"*"})
 	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
@@ -752,4 +758,25 @@ func (f *fileConfig) GetPeerTimeout() time.Duration {
 	defer f.mux.RUnlock()
 
 	return f.conf.PeerManagement.Timeout
+}
+
+func (f *fileConfig) GetMemberListListenAddr() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.PeerManagement.MemberListListenAddr
+}
+
+func (f *fileConfig) GetMemberListAdvertiseAddr() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.PeerManagement.MemberListAdvertiseAddr
+}
+
+func (f *fileConfig) GetMemberListKnownMembers() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.PeerManagement.MemberListKnownMembers
 }

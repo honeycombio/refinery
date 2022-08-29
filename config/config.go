@@ -142,5 +142,18 @@ type Config interface {
 
 	GetDatasetPrefix() string
 
+	// GetPeerTimeout returns the current timeout that is applied to all remote peer operations
 	GetPeerTimeout() time.Duration
+
+	// GetMemberListListenAddr returns the `address:port` the member-list will listen on to gossip
+	// with other members and notify of peer changes
+	GetMemberListListenAddr() string
+
+	// GetMemberListAdvertiseAddr returns the address which member-list will announce to other
+	// members in the member-list.
+	GetMemberListAdvertiseAddr() string
+
+	// GetMemberListKnownMembers returns a list of `host:port` members this instance can
+	// contact to discover other members.
+	GetMemberListKnownMembers() []string
 }

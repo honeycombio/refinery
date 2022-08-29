@@ -11,6 +11,8 @@ type Peers interface {
 	GetPeers() ([]string, error)
 
 	RegisterUpdatedPeersCallback(callback func())
+
+	Close(ctx context.Context) error
 }
 
 func NewPeers(ctx context.Context, c config.Config) (Peers, error) {
@@ -25,6 +27,8 @@ func NewPeers(ctx context.Context, c config.Config) (Peers, error) {
 		return newFilePeers(c), nil
 	case "redis":
 		return newRedisPeers(ctx, c)
+	case "member-list":
+		return newMemberList(ctx, c)
 	default:
 		return nil, errors.New("invalid config option 'PeerManagement.Type'")
 	}

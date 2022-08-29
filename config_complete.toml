@@ -181,7 +181,7 @@ Metrics = "honeycomb"
 
 # IdentifierInterfaceName is optional. By default, when using RedisHost, Refinery will use
 # the local hostname to identify itself to other peers in Redis. If your environment
-# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# requires that you use IPs as identifiers (for example, if peers can't resolve each other
 # by name), you can specify the network interface that Refinery is listening on here.
 # Refinery will use the first unicast address that it finds on the specified network
 # interface as its identifier.
@@ -195,13 +195,57 @@ Metrics = "honeycomb"
 
 # RedisIdentifier is optional. By default, when using RedisHost, Refinery will use
 # the local hostname to identify itself to other peers in Redis. If your environment
-# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# requires that you use IPs as identifiers (for example, if peers can't resolve each other
 # by name), you can specify the exact identifier (IP address, etc) to use here.
 # Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
 # RedisIdentifier = "192.168.1.1"
 
 # Timeout is optional. By default, when using RedisHost, Refinery will timeout
 # after 5s when communicating with Redis.
+# Timeout = "5s"
+
+# [PeerManagement]
+# Member-List is a peer discovery system that requires no external third-party system
+# (except maybe DNS) to discover and monitor the health of other Refinery peers in the
+# cluster. It uses a different address from PeerListenAddr to exchange gossip messages
+# within the cluster. See https://github.com/hashicorp/memberlist for details
+# Type = "member-list"
+
+# MemberListListenAddr is optional when using Type = "member-list". Refinery will use
+# this `address:port` to listen to gossip messages from other Refinery instances in
+# the cluster which will be used to notify when Refinery instances join or leave the
+# member-list cluster.
+# MemberListListenAddr = "0.0.0.0:8519"
+
+# MemberListKnownMembers is required when using Type = 'member-list". Refinery will use
+# this list of `host:port` entries as the initial seed nodes such that other instances
+# of refinery can discover the rest of the cluster through gossip messages. This is typically
+# a list or a single DNS name which will return the address of a running instance of refinery.
+# MemberListKnownMembers  = [
+   # "redis.service.us-east-1.consul:8519",
+   # "192.168.1.1:8519",
+   # "refinery-1231:8519"
+# ]
+
+# MemberListAdvertiseAddr is optional when using Type = "member-list". Refinery will use
+# this `address:port` to announce to other members in the member-list. Other Refinery
+# member-list members will connect to this instance to share gossip messages. Use this
+# when NAT traversal is required by your network configuration. If no value is supplied
+# Refinery will attempt to discover the local hostname or public ip address using the
+# IdentifierInterfaceName value if set.
+# MemberListAdvertiseAddr = "192.168.1.1:8519"
+
+# IdentifierInterfaceName is optional. Refinery will use the local hostname to identify
+# itself to other peers in the "member-list" cluster. If your environment requires that
+# you use IPs as identifiers (for example, if peers can't resolve each other by name),
+# you can specify the network interface that Refinery is listening on here. Refinery will
+# use the first unicast address that it finds on the specified network interface as its
+# identifier.
+# Not eligible for live reload.
+# IdentifierInterfaceName = "eth0"
+
+# Timeout is optional. By default Refinery will timeout after 5s when initially joining
+# the member-list cluster.
 # Timeout = "5s"
 
 #########################

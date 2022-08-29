@@ -22,10 +22,6 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
-	"github.com/klauspost/compress/zstd"
-	"github.com/stretchr/testify/assert"
-	"gopkg.in/alexcesaro/statsd.v2"
-
 	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/collect"
@@ -36,6 +32,9 @@ import (
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/klauspost/compress/zstd"
+	"github.com/stretchr/testify/assert"
+	"gopkg.in/alexcesaro/statsd.v2"
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
@@ -97,6 +96,10 @@ func (p *testPeers) GetPeers() ([]string, error) {
 }
 
 func (p *testPeers) RegisterUpdatedPeersCallback(callback func()) {
+}
+
+func (p *testPeers) Close(ctx context.Context) error {
+	return nil
 }
 
 func newStartedApp(

@@ -73,6 +73,9 @@ type MockConfig struct {
 	EnvironmentCacheTTL           time.Duration
 	DatasetPrefix                 string
 	PeerTimeout                   time.Duration
+	MemberListListenAddr          string
+	MemberListAdvertiseAddr       string
+	MemberListKnownMembers        []string
 
 	Mux sync.RWMutex
 }
@@ -324,23 +327,48 @@ func (m *MockConfig) GetAddHostMetadataToTrace() bool {
 	return m.AddHostMetadataToTrace
 }
 
-func (f *MockConfig) GetEnvironmentCacheTTL() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
+func (m *MockConfig) GetEnvironmentCacheTTL() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
 
-	return f.EnvironmentCacheTTL
+	return m.EnvironmentCacheTTL
 }
 
-func (f *MockConfig) GetDatasetPrefix() string {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
+func (m *MockConfig) GetDatasetPrefix() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
 
-	return f.DatasetPrefix
+	return m.DatasetPrefix
 }
 
-func (f *MockConfig) GetPeerTimeout() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
+func (m *MockConfig) GetPeerTimeout() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
 
-	return f.PeerTimeout
+	return m.PeerTimeout
+}
+
+func (m *MockConfig) GetMemberListListenAddr() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.MemberListListenAddr
+}
+
+func (m *MockConfig) GetMemberListAdvertiseAddr() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	if m.MemberListAdvertiseAddr == "" {
+		return m.MemberListListenAddr
+	}
+
+	return m.MemberListAdvertiseAddr
+}
+
+func (m *MockConfig) GetMemberListKnownMembers() []string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.MemberListKnownMembers
 }
