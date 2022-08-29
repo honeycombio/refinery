@@ -72,6 +72,7 @@ type MockConfig struct {
 	AddHostMetadataToTrace        bool
 	EnvironmentCacheTTL           time.Duration
 	DatasetPrefix                 string
+	PeerTimeout                   time.Duration
 
 	Mux sync.RWMutex
 }
@@ -335,4 +336,11 @@ func (f *MockConfig) GetDatasetPrefix() string {
 	defer f.Mux.RUnlock()
 
 	return f.DatasetPrefix
+}
+
+func (f *MockConfig) GetPeerTimeout() time.Duration {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.PeerTimeout
 }

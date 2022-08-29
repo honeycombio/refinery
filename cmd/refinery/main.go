@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -85,13 +86,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	peers, err := peer.NewPeers(c)
-
-	if err != nil {
-		fmt.Printf("unable to load peers: %+v\n", err)
-		os.Exit(1)
-	}
-
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
@@ -107,6 +101,15 @@ func main() {
 	}
 	if err := lgr.SetLevel(logLevel); err != nil {
 		fmt.Printf("unable to set logging level: %v\n", err)
+		os.Exit(1)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.GetPeerTimeout())
+	defer cancel()
+	peers, err := peer.NewPeers(ctx, c)
+
+	if err != nil {
+		fmt.Printf("unable to load peers: %+v\n", err)
 		os.Exit(1)
 	}
 

@@ -141,4 +141,6 @@ type Config interface {
 	GetEnvironmentCacheTTL() time.Duration
 
 	GetDatasetPrefix() string
+
+	GetPeerTimeout() time.Duration
 }

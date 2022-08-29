@@ -4,6 +4,7 @@
 package sharder
 
 import (
+	"context"
 	"testing"
 
 	"github.com/honeycombio/refinery/config"
@@ -28,7 +29,7 @@ func TestWhichShard(t *testing.T) {
 		GetPeersVal:          peers,
 		PeerManagementType:   "file",
 	}
-	filePeers, err := peer.NewPeers(config)
+	filePeers, err := peer.NewPeers(context.Background(), config)
 	assert.Equal(t, nil, err)
 	sharder := DeterministicSharder{
 		Config: config,
@@ -69,7 +70,7 @@ func TestWhichShardAtEdge(t *testing.T) {
 		GetPeersVal:          peers,
 		PeerManagementType:   "file",
 	}
-	filePeers, err := peer.NewPeers(config)
+	filePeers, err := peer.NewPeers(context.Background(), config)
 	assert.Equal(t, nil, err)
 	sharder := DeterministicSharder{
 		Config: config,
