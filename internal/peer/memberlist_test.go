@@ -11,7 +11,6 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,11 +21,12 @@ func TestNewPeersMemberList(t *testing.T) {
 	cbCh := make(chan struct{}, 10)
 	p0, err := peer.NewPeers(ctx, &config.MockConfig{
 		MemberListKnownMembers: []string{"127.0.0.1:8180"},
+		GetListenAddrVal:       "127.0.0.1:8180",
 		MemberListListenAddr:   "127.0.0.1:8180",
-		GetPeerListenAddrVal:   "0.0.0.0:8080",
+		GetPeerListenAddrVal:   "127.0.0.1:8080",
 		PeerManagementType:     "member-list",
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, p0)
 	defer p0.Close(context.Background())
 
@@ -41,11 +41,12 @@ func TestNewPeersMemberList(t *testing.T) {
 
 	p1, err := peer.NewPeers(ctx, &config.MockConfig{
 		MemberListKnownMembers: []string{"127.0.0.1:8180"},
+		GetListenAddrVal:       "127.0.0.1:8181",
 		MemberListListenAddr:   "127.0.0.1:8181",
-		GetPeerListenAddrVal:   "0.0.0.0:8081",
+		GetPeerListenAddrVal:   "127.0.0.1:8081",
 		PeerManagementType:     "member-list",
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, p1)
 	defer p1.Close(context.Background())
 
@@ -55,11 +56,12 @@ func TestNewPeersMemberList(t *testing.T) {
 
 	p2, err := peer.NewPeers(ctx, &config.MockConfig{
 		MemberListKnownMembers: []string{"127.0.0.1:8180"},
+		GetListenAddrVal:       "127.0.0.1:8182",
 		MemberListListenAddr:   "127.0.0.1:8182",
-		GetPeerListenAddrVal:   "0.0.0.0:8082",
+		GetPeerListenAddrVal:   "127.0.0.1:8082",
 		PeerManagementType:     "member-list",
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	require.NotNil(t, p2)
 
 	p2.RegisterUpdatedPeersCallback(func() {
@@ -85,5 +87,4 @@ func TestNewPeersMemberList(t *testing.T) {
 
 	peers, _ := p0.GetPeers()
 	t.Logf("Peers: %s", peers)
-
 }

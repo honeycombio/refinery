@@ -86,11 +86,9 @@ func (m *memberList) newMLConfig() (*ml.Config, error) {
 	config.LogOutput = newLogWriter(m.log)
 	config.PushPullInterval = 5 * time.Second
 
-	addr, err := m.computePublicAddr()
-	if err != nil {
-		return nil, err
-	}
+	addr := m.c.GetMemberListListenAddr()
 
+	var err error
 	config.BindAddr, config.BindPort, err = splitAddress(addr)
 	if err != nil {
 		return nil, fmt.Errorf("PeerManagement.ListenAddr `%s` is invalid: %w", addr, err)
@@ -133,21 +131,21 @@ func (m *memberList) GetPeers() ([]string, error) {
 	return m.events.GetPeers()
 }
 
-func (m *memberList) computePublicAddr() (string, error) {
-	listenAddr := m.c.GetMemberListListenAddr()
-	_, port, err := net.SplitHostPort(listenAddr)
-
-	if err != nil {
-		return "", err
-	}
-
-	myIdentifier, err := identifierInterface(m.c)
-	if err != nil {
-		return "", err
-	}
-
-	return net.JoinHostPort(myIdentifier, port), nil
-}
+// func (m *memberList) computePublicAddr() (string, error) {
+// 	listenAddr := m.c.GetMemberListListenAddr()
+// 	_, port, err := net.SplitHostPort(listenAddr)
+//
+// 	if err != nil {
+// 		return "", err
+// 	}
+//
+// 	myIdentifier, err := identifierInterface(m.c)
+// 	if err != nil {
+// 		return "", err
+// 	}
+//
+// 	return net.JoinHostPort(myIdentifier, port), nil
+// }
 
 type eventDelegate struct {
 	peers     map[string]struct{}
