@@ -81,7 +81,7 @@ type HoneycombMetricsConfig struct {
 }
 
 type PeerManagementConfig struct {
-	Type                    string   `validate:"required,oneof= file redis"`
+	Type                    string   `validate:"required,oneof= file redis member-list"`
 	Peers                   []string `validate:"dive,url"`
 	RedisHost               string
 	RedisUsername           string
