@@ -142,7 +142,7 @@ type eventDelegate struct {
 func (e *eventDelegate) NotifyJoin(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
-	e.log.Info("Peer join: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
+	e.log.Infof("Peer join: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
 	e.peers[node.Name] = struct{}{}
 	e.callOnUpdate()
 }
@@ -150,7 +150,7 @@ func (e *eventDelegate) NotifyJoin(node *ml.Node) {
 func (e *eventDelegate) NotifyLeave(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
-	e.log.Info("Peer leave: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
+	e.log.Infof("Peer leave: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
 	delete(e.peers, node.Name)
 	e.callOnUpdate()
 }
