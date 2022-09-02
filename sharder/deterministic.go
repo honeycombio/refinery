@@ -174,7 +174,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to get peer list config")
 	}
-	d.Logger.Debug().Logf("peerList: %#v", peerList)
+	d.Logger.Info().Logf("peerList: %#v", peerList)
 
 	if len(peerList) == 0 {
 		return errors.New("refusing to load empty peer list")
@@ -185,7 +185,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	for _, peer := range peerList {
 		peerURL, err := url.Parse(peer)
 		if err != nil {
-			return errors.Wrap(err, "couldn't parse peer as a URL")
+			return errors.Wrapf(err, "couldn't parse peer as a URL: %s", peer)
 		}
 		peerShard := &DetShard{
 			scheme:   peerURL.Scheme,

@@ -131,22 +131,6 @@ func (m *memberList) GetPeers() ([]string, error) {
 	return m.events.GetPeers()
 }
 
-// func (m *memberList) computePublicAddr() (string, error) {
-// 	listenAddr := m.c.GetMemberListListenAddr()
-// 	_, port, err := net.SplitHostPort(listenAddr)
-//
-// 	if err != nil {
-// 		return "", err
-// 	}
-//
-// 	myIdentifier, err := identifierInterface(m.c)
-// 	if err != nil {
-// 		return "", err
-// 	}
-//
-// 	return net.JoinHostPort(myIdentifier, port), nil
-// }
-
 type eventDelegate struct {
 	peers     map[string]struct{}
 	log       logrus.FieldLogger
@@ -158,6 +142,7 @@ type eventDelegate struct {
 func (e *eventDelegate) NotifyJoin(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
+	e.log.Info("Peer join: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
 	e.peers[node.Name] = struct{}{}
 	e.callOnUpdate()
 }
@@ -165,6 +150,7 @@ func (e *eventDelegate) NotifyJoin(node *ml.Node) {
 func (e *eventDelegate) NotifyLeave(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
+	e.log.Info("Peer leave: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
 	delete(e.peers, node.Name)
 	e.callOnUpdate()
 }
@@ -172,6 +158,8 @@ func (e *eventDelegate) NotifyLeave(node *ml.Node) {
 func (e *eventDelegate) NotifyUpdate(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
+	e.log.WithField("status", node.State).
+		Infof("Peer update: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
 	e.peers[node.Name] = struct{}{}
 	e.callOnUpdate()
 }
