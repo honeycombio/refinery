@@ -174,6 +174,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to get peer list config")
 	}
+	d.Logger.Debug().Logf("peerList: %#v", peerList)
 
 	if len(peerList) == 0 {
 		return errors.New("refusing to load empty peer list")
