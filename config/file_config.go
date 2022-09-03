@@ -521,6 +521,42 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
+func (f *fileConfig) GetAllSamplerConfigs() (map[string]interface{}, error) {
+	samplers := make(map[string]interface{})
+
+	keys := f.rules.AllKeys()
+	for _, key := range keys {
+		parts := strings.Split(key, ".")
+
+		// extract default sampler config
+		if parts[0] == "sampler" {
+			err := f.rules.Unmarshal(&samplers)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal sampler rule: %w", err)
+			}
+			t := f.rules.GetString(key)
+			samplers["sampler"] = t
+			continue
+		}
+
+		// extract dataset sampler configs
+		if len(parts) > 1 && parts[1] == "sampler" {
+			t := f.rules.GetString(key)
+			m := make(map[string]interface{})
+			datasetName := parts[0]
+			if sub := f.rules.Sub(datasetName); sub != nil {
+				err := sub.Unmarshal(&m)
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal sampler rule for dataset %s: %w", datasetName, err)
+				}
+			}
+			m["sampler"] = t
+			samplers[datasetName] = m
+		}
+	}
+	return samplers, nil
+}
+
 func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

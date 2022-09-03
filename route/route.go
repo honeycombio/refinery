@@ -14,16 +14,19 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/vmihailenco/msgpack/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/yaml.v2"
 
 	// grpc/gzip compressor, auto registers on import
 	_ "google.golang.org/grpc/encoding/gzip"
@@ -154,6 +157,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
 	muxxer.HandleFunc("/debug/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
+	muxxer.HandleFunc("/debug/config/{format}/{dataset}", r.getSamplerConfig).Name("get formatted sampler config for given dataset")
+	muxxer.HandleFunc("/debug/configs/{format}", r.getSamplerConfigs).Name("get formatted sampler config for all datasets")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -262,6 +267,85 @@ func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 	traceID := mux.Vars(req)["traceID"]
 	shard := r.Sharder.WhichShard(traceID)
 	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
+}
+
+func (r *Router) getSamplerConfig(w http.ResponseWriter, req *http.Request) {
+	format := strings.ToLower(mux.Vars(req)["format"])
+	dataset := mux.Vars(req)["dataset"]
+	cfg, err := r.Config.GetSamplerConfigForDataset(dataset)
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch config for dataset %s\n", err, dataset)))
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	var body []byte
+	switch format {
+	case "json":
+		body, err = json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal config to json for dataset %s\n", err, dataset)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	case "toml":
+		body, err = toml.Marshal(cfg)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal config to toml for dataset %s\n", err, dataset)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	case "yaml":
+		body, err = yaml.Marshal(cfg)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal config to toml for dataset %s\n", err, dataset)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	default:
+		w.Write([]byte(fmt.Sprintf("invalid format %s\n", format)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Write(body)
+}
+
+func (r *Router) getSamplerConfigs(w http.ResponseWriter, req *http.Request) {
+	format := strings.ToLower(mux.Vars(req)["format"])
+	cfgs, err := r.Config.GetAllSamplerConfigs()
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	var body []byte
+	switch format {
+	case "json":
+		body, err = json.MarshalIndent(cfgs, "", "  ")
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal configs to json\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	case "toml":
+		body, err = toml.Marshal(cfgs)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal configs to toml\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	case "yaml":
+		body, err = yaml.Marshal(cfgs)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal configs to toml\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	default:
+		w.Write([]byte(fmt.Sprintf("invalid format %s\n", format)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Write(body)
 }
 
 // event is handler for /1/event/

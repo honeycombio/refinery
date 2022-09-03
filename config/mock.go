@@ -247,6 +247,15 @@ func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
 }
 
+// GetAllSamplerConfigs returns all dataset configurations, including the default
+func (m *MockConfig) GetAllSamplerConfigs() (map[string]interface{}, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	v := map[string]interface{}{"dataset1": m.GetSamplerTypeVal}
+	return v, m.GetSamplerTypeErr
+}
+
 func (m *MockConfig) GetUpstreamBufferSize() int {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
