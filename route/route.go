@@ -23,6 +23,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vmihailenco/msgpack/v4"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
@@ -227,6 +228,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		}
 		r.grpcServer = grpc.NewServer(serverOpts...)
 		collectortrace.RegisterTraceServiceServer(r.grpcServer, r)
+		grpc_health_v1.RegisterHealthServer(r.grpcServer, r)
 		go r.grpcServer.Serve(l)
 	}
 
@@ -842,4 +844,18 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
 	return authinfo.Environment.Name, nil
+}
+
+func (r *Router) Check(ctx context.Context, req *grpc_health_v1.HealthCheckRequest) (*grpc_health_v1.HealthCheckResponse, error) {
+	r.iopLogger.Debug().Logf("answered grpc_health_v1 check")
+	return &grpc_health_v1.HealthCheckResponse{
+		Status: grpc_health_v1.HealthCheckResponse_SERVING,
+	}, nil
+}
+
+func (r *Router) Watch(req *grpc_health_v1.HealthCheckRequest, server grpc_health_v1.Health_WatchServer) error {
+	r.iopLogger.Debug().Logf("serving grpc_health_v1 watch")
+	return server.Send(&grpc_health_v1.HealthCheckResponse{
+		Status: grpc_health_v1.HealthCheckResponse_SERVING,
+	})
 }
