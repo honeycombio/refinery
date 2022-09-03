@@ -147,4 +147,14 @@ type Config interface {
 
 	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
 	GetQueryAuthToken() string
+
+	GetGRPCMaxConnectionIdle() time.Duration
+
+	GetGRPCMaxConnectionAge() time.Duration
+
+	GetGRPCMaxConnectionAgeGrace() time.Duration
+
+	GetGRPCTime() time.Duration
+
+	GetGRPCTimeout() time.Duration
 }

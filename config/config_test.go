@@ -20,7 +20,6 @@ func TestGRPCListenAddrEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -37,7 +36,6 @@ func TestRedisHostEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,7 +52,6 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -71,7 +68,6 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -124,7 +120,9 @@ func TestReload(t *testing.T) {
 
 	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
+	configFile.Close()
 
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	if err != nil {
 		t.Error(err)
 	}
@@ -177,12 +175,10 @@ func TestReload(t *testing.T) {
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
 		t.Error("received", d, "expected", "0.0.0.0:9000")
 	}
-
 }
 
 func TestReadDefaults(t *testing.T) {
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -245,7 +241,6 @@ func TestReadDefaults(t *testing.T) {
 
 func TestReadRulesConfig(t *testing.T) {
 	c, err := NewConfig("../config.toml", "../rules_complete.toml", func(err error) {})
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -615,6 +610,41 @@ func TestDatasetPrefix(t *testing.T) {
 func TestQueryAuthToken(t *testing.T) {
 	config, rules := createTempConfigs(t, `
 	QueryAuthToken = "MySeekretToken"
+	[InMemCollector]
+		CacheCapacity=1000
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	[HoneycombLogger]
+		LoggerHoneycombAPI="http://honeycomb.io"
+		LoggerAPIKey="1234"
+		LoggerDataset="loggerDataset"	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, "MySeekretToken", c.GetQueryAuthToken())
+}
+
+func TestGRPCServerParameters(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	_, err = configFile.Write([]byte(`
+	[GRPCServerParameters]
+		MaxConnectionIdle = "1m"
+		MaxConnectionAge = "2m"
+		MaxConnectionAgeGrace = "3m"
+		Time = "4m"
+		Timeout = "5m"
 
 	[InMemCollector]
 		CacheCapacity=1000
@@ -628,12 +658,20 @@ func TestQueryAuthToken(t *testing.T) {
 	[HoneycombLogger]
 		LoggerHoneycombAPI="http://honeycomb.io"
 		LoggerAPIKey="1234"
-		LoggerDataset="loggerDataset"	`, "")
-	defer os.Remove(rules)
-	defer os.Remove(config)
+		LoggerDataset="loggerDataset"
+	`))
+	assert.NoError(t, err)
+	configFile.Close()
 
-	c, err := NewConfig(config, rules, func(err error) {})
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
-	assert.Equal(t, "MySeekretToken", c.GetQueryAuthToken())
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1*time.Minute, c.GetGRPCMaxConnectionIdle())
+	assert.Equal(t, 2*time.Minute, c.GetGRPCMaxConnectionAge())
+	assert.Equal(t, 3*time.Minute, c.GetGRPCMaxConnectionAgeGrace())
+	assert.Equal(t, 4*time.Minute, c.GetGRPCTime())
+	assert.Equal(t, 5*time.Minute, c.GetGRPCTimeout())
 }

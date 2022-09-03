@@ -323,3 +323,44 @@ MetricsReportingInterval = 3
 # listener.
 # Not eligible for live reload.
 # MetricsListenAddr = "localhost:2112"
+
+###########################
+## gRPC ServerParameters ##
+###########################
+
+# Reflects: https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
+
+[GRPCServerParameters]
+
+# MaxConnectionIdle is a duration for the amount of time after which an
+# idle connection would be closed by sending a GoAway. Idleness duration is
+# defined since the most recent time the number of outstanding RPCs became
+# zero or the connection establishment.
+# Not eligible for live reload.
+# MaxConnectionIdle = "1m"
+
+# MaxConnectionAge is a duration for the maximum amount of time a
+# connection may exist before it will be closed by sending a GoAway. A
+# random jitter of +/-10% will be added to MaxConnectionAge to spread out
+# connection storms.
+# 0s sets duration to infinity which is the default.
+# Not eligible for live reload.
+# MaxConnectionAge = "0s"
+
+# MaxConnectionAgeGrace is an additive period after MaxConnectionAge after
+# which the connection will be forcibly closed.
+# 0s sets duration to infinity which is the default.
+# Not eligible for live reload.
+# MaxConnectionAgeGrace = "0s"
+
+# After a duration of this time if the server doesn't see any activity it
+# pings the client to see if the transport is still alive.
+# If set below 1s, a minimum value of 1s will be used instead.
+# Not eligible for live reload.
+# Time = "10s"
+
+# After having pinged for keepalive check, the server waits for a duration
+# of Timeout and if no activity is seen even after that the connection is
+# closed.
+# Not eligible for live reload.
+# Timeout = "2s"

@@ -51,6 +51,7 @@ type configContents struct {
 	EnvironmentCacheTTL       time.Duration
 	DatasetPrefix             string
 	QueryAuthToken            string
+	GRPCServerParameters      GRPCServerParameters
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -94,6 +95,17 @@ type PeerManagementConfig struct {
 	RedisIdentifier         string
 }
 
+// GRPCServerParameters allow you to configure the GRPC ServerParameters used
+// by refinery's own GRPC server:
+// https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
+type GRPCServerParameters struct {
+	MaxConnectionIdle     time.Duration
+	MaxConnectionAge      time.Duration
+	MaxConnectionAgeGrace time.Duration
+	Time                  time.Duration
+	Timeout               time.Duration
+}
+
 // NewConfig creates a new config struct
 func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
@@ -130,10 +142,14 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 	c.SetDefault("AddHostMetadataToTrace", false)
 	c.SetDefault("EnvironmentCacheTTL", time.Hour)
+	c.SetDefault("GRPCServerParameters.MaxConnectionIdle", 1*time.Minute)
+	c.SetDefault("GRPCServerParameters.MaxConnectionAge", time.Duration(0))
+	c.SetDefault("GRPCServerParameters.MaxConnectionAgeGrace", time.Duration(0))
+	c.SetDefault("GRPCServerParameters.Time", 10*time.Second)
+	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
-
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +238,6 @@ func (f *fileConfig) unmarshal() error {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 	err := f.config.Unmarshal(f.conf)
-
 	if err != nil {
 		return err
 	}
@@ -790,4 +805,39 @@ func (f *fileConfig) GetQueryAuthToken() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.QueryAuthToken
+}
+
+func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.MaxConnectionIdle
+}
+
+func (f *fileConfig) GetGRPCMaxConnectionAge() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.MaxConnectionAge
+}
+
+func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.MaxConnectionAgeGrace
+}
+
+func (f *fileConfig) GetGRPCTime() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.Time
+}
+
+func (f *fileConfig) GetGRPCTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.Timeout
 }
