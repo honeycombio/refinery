@@ -156,8 +156,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
 	muxxer.HandleFunc("/debug/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
-	muxxer.HandleFunc("/debug/config/{format}/{dataset}", r.getSamplerConfig).Name("get formatted sampler config for given dataset")
-	muxxer.HandleFunc("/debug/configs/{format}", r.getSamplerConfigs).Name("get formatted sampler config for all datasets")
+	muxxer.HandleFunc("/debug/rules/{format}/{dataset}", r.getSamplerRules).Name("get formatted sampler rules for given dataset")
+	muxxer.HandleFunc("/debug/allrules/{format}", r.getAllSamplerRules).Name("get formatted sampler rules for all datasets")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -269,7 +269,7 @@ func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
 }
 
-func (r *Router) getSamplerConfig(w http.ResponseWriter, req *http.Request) {
+func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
 	dataset := mux.Vars(req)["dataset"]
 	cfg, err := r.Config.GetSamplerConfigForDataset(dataset)
@@ -280,9 +280,9 @@ func (r *Router) getSamplerConfig(w http.ResponseWriter, req *http.Request) {
 	r.marshalToFormat(w, cfg, format)
 }
 
-func (r *Router) getSamplerConfigs(w http.ResponseWriter, req *http.Request) {
+func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
-	cfgs, err := r.Config.GetAllSamplerConfigs()
+	cfgs, err := r.Config.GetAllSamplerRules()
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
 		w.WriteHeader(http.StatusBadRequest)

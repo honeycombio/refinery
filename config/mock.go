@@ -247,8 +247,8 @@ func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
 }
 
-// GetAllSamplerConfigs returns all dataset configurations, including the default
-func (m *MockConfig) GetAllSamplerConfigs() (map[string]interface{}, error) {
+// GetAllSamplerRules returns all dataset rules, including the default
+func (m *MockConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 

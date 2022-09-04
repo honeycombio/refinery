@@ -102,8 +102,8 @@ type Config interface {
 	// GetSamplerConfigForDataset returns the sampler type to use for the given dataset
 	GetSamplerConfigForDataset(string) (interface{}, error)
 
-	// GetAllSamplerConfigs returns all dataset configurations in a map, including the default
-	GetAllSamplerConfigs() (map[string]interface{}, error)
+	// GetAllSamplerRules returns all dataset rules in a map, including the default
+	GetAllSamplerRules() (map[string]interface{}, error)
 
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package

@@ -133,7 +133,22 @@ Refinery emits a number of metrics to give some indication about the health of t
 
 ## Troubleshooting
 
+### Logging
+
 The default logging level of `warn` is almost entirely silent. The `debug` level emits too much data to be used in production, but contains excellent information in a pre-production environment. Setting the logging level to `debug` during initial configuration will help understand what's working and what's not, but when traffic volumes increase it should be set to `warn`.
+
+### Configuration
+
+Because the normal configuration file formats (TOML and YAML) can sometimes be confusing to read and write, it may be valuable to check the loaded configuration by using one of the debug endpoints from the command line:
+
+`curl --include --get $REFINERY_HOST/debug/allrules/$FORMAT` will retrieve the entire rules configuration.
+
+`curl --include --get $REFINERY_HOST/debug/rules/$FORMAT/$DATASET` will retrieve the rule set that refinery will use for the specified dataset.
+
+- `$REFINERY_HOST` should be the url of your refinery.
+- `$FORMAT` can be one of `json`, `yaml`, or `toml`.
+- `$DATASET` is the name of the dataset you want to check.
+
 
 ## Restarts
 

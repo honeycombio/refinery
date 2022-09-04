@@ -319,7 +319,7 @@ func TestDebugTrace(t *testing.T) {
 	}
 }
 
-func TestDebugConfigs(t *testing.T) {
+func TestDebugAllRules(t *testing.T) {
 	tests := []struct {
 		format string
 		expect string
@@ -345,7 +345,7 @@ func TestDebugConfigs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.format, func(t *testing.T) {
 
-			req, _ := http.NewRequest("GET", "/debug/configs/"+tt.format, nil)
+			req, _ := http.NewRequest("GET", "/debug/allrules/"+tt.format, nil)
 			req = mux.SetURLVars(req, map[string]string{"format": tt.format})
 
 			rr := httptest.NewRecorder()
@@ -355,13 +355,13 @@ func TestDebugConfigs(t *testing.T) {
 				},
 			}
 
-			router.getSamplerConfigs(rr, req)
+			router.getAllSamplerRules(rr, req)
 			assert.Equal(t, tt.expect, rr.Body.String())
 		})
 	}
 }
 
-func TestDebugConfig(t *testing.T) {
+func TestDebugRules(t *testing.T) {
 	tests := []struct {
 		format  string
 		dataset string
@@ -392,7 +392,7 @@ func TestDebugConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.format, func(t *testing.T) {
 
-			req, _ := http.NewRequest("GET", "/debug/config/"+tt.format+"/"+tt.format, nil)
+			req, _ := http.NewRequest("GET", "/debug/rules/"+tt.format+"/"+tt.format, nil)
 			req = mux.SetURLVars(req, map[string]string{
 				"format":  tt.format,
 				"dataset": tt.dataset,
@@ -405,7 +405,7 @@ func TestDebugConfig(t *testing.T) {
 				},
 			}
 
-			router.getSamplerConfig(rr, req)
+			router.getSamplerRules(rr, req)
 			assert.Equal(t, tt.expect, rr.Body.String())
 		})
 	}

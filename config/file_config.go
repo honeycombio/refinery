@@ -521,14 +521,14 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *fileConfig) GetAllSamplerConfigs() (map[string]interface{}, error) {
+func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 	samplers := make(map[string]interface{})
 
 	keys := f.rules.AllKeys()
 	for _, key := range keys {
 		parts := strings.Split(key, ".")
 
-		// extract default sampler config
+		// extract default sampler rules
 		if parts[0] == "sampler" {
 			err := f.rules.Unmarshal(&samplers)
 			if err != nil {
@@ -539,7 +539,7 @@ func (f *fileConfig) GetAllSamplerConfigs() (map[string]interface{}, error) {
 			continue
 		}
 
-		// extract dataset sampler configs
+		// extract all dataset sampler rules
 		if len(parts) > 1 && parts[1] == "sampler" {
 			t := f.rules.GetString(key)
 			m := make(map[string]interface{})
