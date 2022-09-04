@@ -3,7 +3,6 @@ package route
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -25,7 +24,7 @@ func (r *Router) proxy(w http.ResponseWriter, req *http.Request) {
 	// let's copy the request over to a new one and
 	// dispatch it upstream
 	defer req.Body.Close()
-	reqBod, _ := ioutil.ReadAll(req.Body)
+	reqBod, _ := io.ReadAll(req.Body)
 	buf := bytes.NewBuffer(reqBod)
 	upstreamReq, err := http.NewRequest(req.Method, upstreamTarget+req.URL.String(), buf)
 	if err != nil {

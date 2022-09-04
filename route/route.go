@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"net/http"
@@ -238,7 +237,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 }
 
 func (r *Router) Stop() error {
-	ctx, _ := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 	err := r.server.Shutdown(ctx)
 	if err != nil {
 		return err
@@ -277,36 +277,7 @@ func (r *Router) getSamplerConfig(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch config for dataset %s\n", err, dataset)))
 		w.WriteHeader(http.StatusBadRequest)
 	}
-
-	var body []byte
-	switch format {
-	case "json":
-		body, err = json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal config to json for dataset %s\n", err, dataset)))
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	case "toml":
-		body, err = toml.Marshal(cfg)
-		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal config to toml for dataset %s\n", err, dataset)))
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	case "yaml":
-		body, err = yaml.Marshal(cfg)
-		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal config to toml for dataset %s\n", err, dataset)))
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-	default:
-		w.Write([]byte(fmt.Sprintf("invalid format %s\n", format)))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	w.Write(body)
+	r.marshalToFormat(w, cfg, format)
 }
 
 func (r *Router) getSamplerConfigs(w http.ResponseWriter, req *http.Request) {
@@ -316,32 +287,36 @@ func (r *Router) getSamplerConfigs(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
 		w.WriteHeader(http.StatusBadRequest)
 	}
+	r.marshalToFormat(w, cfgs, format)
+}
 
+func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format string) {
 	var body []byte
+	var err error
 	switch format {
 	case "json":
-		body, err = json.MarshalIndent(cfgs, "", "  ")
+		body, err = json.Marshal(obj)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal configs to json\n", err)))
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to json\n", err)))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	case "toml":
-		body, err = toml.Marshal(cfgs)
+		body, err = toml.Marshal(obj)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal configs to toml\n", err)))
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to toml\n", err)))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	case "yaml":
-		body, err = yaml.Marshal(cfgs)
+		body, err = yaml.Marshal(obj)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal configs to toml\n", err)))
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to toml\n", err)))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	default:
-		w.Write([]byte(fmt.Sprintf("invalid format %s\n", format)))
+		w.Write([]byte(fmt.Sprintf("invalid format '%s' when marshaling\n", format)))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -359,7 +334,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reqBod, err := ioutil.ReadAll(bodyReader)
+	reqBod, err := io.ReadAll(bodyReader)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
@@ -435,7 +410,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reqBod, err := ioutil.ReadAll(bodyReader)
+	reqBod, err := io.ReadAll(bodyReader)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
