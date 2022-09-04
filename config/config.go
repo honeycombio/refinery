@@ -99,8 +99,8 @@ type Config interface {
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
 	GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error)
 
-	// GetSamplerConfigForDataset returns the sampler type to use for the given dataset
-	GetSamplerConfigForDataset(string) (interface{}, error)
+	// GetSamplerConfigForDataset returns the sampler type and name to use for the given dataset
+	GetSamplerConfigForDataset(string) (interface{}, string, error)
 
 	// GetAllSamplerRules returns all dataset rules in a map, including the default
 	GetAllSamplerRules() (map[string]interface{}, error)

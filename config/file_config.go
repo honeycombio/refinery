@@ -557,9 +557,11 @@ func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 	return samplers, nil
 }
 
-func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
+func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
+
+	const notfound = "not found"
 
 	key := fmt.Sprintf("%s.Sampler", dataset)
 	if ok := f.rules.IsSet(key); ok {
@@ -578,11 +580,11 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 		case "TotalThroughputSampler":
 			i = &TotalThroughputSamplerConfig{}
 		default:
-			return nil, errors.New("No Sampler found")
+			return nil, notfound, errors.New("No Sampler found")
 		}
 
 		if sub := f.rules.Sub(dataset); sub != nil {
-			return i, sub.Unmarshal(i)
+			return i, t, sub.Unmarshal(i)
 		}
 
 	} else if ok := f.rules.IsSet("Sampler"); ok {
@@ -601,13 +603,13 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 		case "TotalThroughputSampler":
 			i = &TotalThroughputSamplerConfig{}
 		default:
-			return nil, errors.New("No Sampler found")
+			return nil, notfound, errors.New("No Sampler found")
 		}
 
-		return i, f.rules.Unmarshal(i)
+		return i, t, f.rules.Unmarshal(i)
 	}
 
-	return nil, errors.New("No Sampler found")
+	return nil, notfound, errors.New("No Sampler found")
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {

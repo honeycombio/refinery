@@ -370,17 +370,17 @@ func TestDebugRules(t *testing.T) {
 		{
 			format:  "json",
 			dataset: "dataset1",
-			expect:  `"FakeSamplerType"`,
+			expect:  `{"FakeSamplerName":"FakeSamplerType"}`,
 		},
 		{
 			format:  "toml",
 			dataset: "dataset1",
-			expect:  "'FakeSamplerType'",
+			expect:  "FakeSamplerName = 'FakeSamplerType'\n",
 		},
 		{
 			format:  "yaml",
 			dataset: "dataset1",
-			expect:  "FakeSamplerType\n",
+			expect:  "FakeSamplerName: FakeSamplerType\n",
 		},
 		{
 			format:  "bogus",
@@ -401,7 +401,8 @@ func TestDebugRules(t *testing.T) {
 			rr := httptest.NewRecorder()
 			router := &Router{
 				Config: &config.MockConfig{
-					GetSamplerTypeVal: "FakeSamplerType",
+					GetSamplerTypeVal:  "FakeSamplerType",
+					GetSamplerTypeName: "FakeSamplerName",
 				},
 			}
 
