@@ -150,7 +150,9 @@ Because the normal configuration file formats (TOML and YAML) can sometimes be c
 - `$DATASET` is the name of the dataset you want to check.
 
 The /query endpoints are intended for debugging, and can be protected by specifying a QueryAuthToken in the
-configuration file or the environment.
+configuration file or the environment. If you do specify this token, the requests above must include the header `X-Honeycomb-Refinery-Query` with the value of the specified token. In curl, that looks like this:
+
+`curl --include --get $REFINERY_HOST/query/allrules/$FORMAT --header "x-honeycomb-refinery-query: my-token-value"`
 
 ## Restarts
 
