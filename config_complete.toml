@@ -110,7 +110,7 @@ EnvironmentCacheTTL = "1h"
 # These /query requests are intended for debugging refinery installations and
 # are not typically needed in normal operation.
 # Can be specified in the environment as REFINERY_QUERY_AUTH_TOKEN.
-# If unspecified, no token is required to handle these requests.
+# If left unspecified, the /query endpoints are inaccessible.
 # QueryAuthToken = "some-random-value"
 
 ############################
