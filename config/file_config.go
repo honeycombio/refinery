@@ -50,6 +50,7 @@ type configContents struct {
 	AddHostMetadataToTrace    bool
 	EnvironmentCacheTTL       time.Duration
 	DatasetPrefix             string
+	QueryAuthToken            string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -781,4 +782,11 @@ func (f *fileConfig) GetDatasetPrefix() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.DatasetPrefix
+}
+
+func (f *fileConfig) GetQueryAuthToken() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.QueryAuthToken
 }

@@ -144,4 +144,7 @@ type Config interface {
 	GetEnvironmentCacheTTL() time.Duration
 
 	GetDatasetPrefix() string
+
+	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
+	GetQueryAuthToken() string
 }
