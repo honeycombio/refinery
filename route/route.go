@@ -155,9 +155,14 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
-	muxxer.HandleFunc("/debug/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
-	muxxer.HandleFunc("/debug/rules/{format}/{dataset}", r.getSamplerRules).Name("get formatted sampler rules for given dataset")
-	muxxer.HandleFunc("/debug/allrules/{format}", r.getAllSamplerRules).Name("get formatted sampler rules for all datasets")
+
+	// require a local auth for query usage
+	queryMuxxer := muxxer.PathPrefix("/query/").Methods("GET").Subrouter()
+	queryMuxxer.Use(r.queryTokenChecker)
+
+	queryMuxxer.HandleFunc("/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
+	queryMuxxer.HandleFunc("/rules/{format}/{dataset}", r.getSamplerRules).Name("get formatted sampler rules for given dataset")
+	queryMuxxer.HandleFunc("/allrules/{format}", r.getAllSamplerRules).Name("get formatted sampler rules for all datasets")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()

@@ -139,16 +139,18 @@ The default logging level of `warn` is almost entirely silent. The `debug` level
 
 ### Configuration
 
-Because the normal configuration file formats (TOML and YAML) can sometimes be confusing to read and write, it may be valuable to check the loaded configuration by using one of the debug endpoints from the command line:
+Because the normal configuration file formats (TOML and YAML) can sometimes be confusing to read and write, it may be valuable to check the loaded configuration by using one of the query endpoints from the command line on a server that can access a refinery host.
 
-`curl --include --get $REFINERY_HOST/debug/allrules/$FORMAT` will retrieve the entire rules configuration.
+`curl --include --get $REFINERY_HOST/query/allrules/$FORMAT` will retrieve the entire rules configuration.
 
-`curl --include --get $REFINERY_HOST/debug/rules/$FORMAT/$DATASET` will retrieve the rule set that refinery will use for the specified dataset. It comes back as a map of the sampler type to its rule set.
+`curl --include --get $REFINERY_HOST/query/rules/$FORMAT/$DATASET` will retrieve the rule set that refinery will use for the specified dataset. It comes back as a map of the sampler type to its rule set.
 
 - `$REFINERY_HOST` should be the url of your refinery.
 - `$FORMAT` can be one of `json`, `yaml`, or `toml`.
 - `$DATASET` is the name of the dataset you want to check.
 
+The /query endpoints are intended for debugging, and can be protected by specifying a QueryAuthToken in the
+configuration file or the environment.
 
 ## Restarts
 

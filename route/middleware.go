@@ -17,6 +17,28 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requiredToken := r.Config.GetQueryAuthToken()
+		token := req.Header.Get(types.QueryTokenHeader)
+		fmt.Printf("required: %s  specified: %s\n", requiredToken, token)
+		if token == requiredToken {
+			// if they're equal (including both blank) we're good
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		// if the requiredToken is not blank, but the token is, tell them the header is missing
+		if token == "" {
+			err := fmt.Errorf("no %s header found for query auth", types.QueryTokenHeader)
+			r.handlerReturnWithError(w, ErrAuthNeeded, err)
+			return
+		}
+		err := fmt.Errorf("token %s found in %s not authorized for query", token, types.QueryTokenHeader)
+		r.handlerReturnWithError(w, ErrAuthNeeded, err)
+	})
+}
+
 func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		apiKey := req.Header.Get(types.APIKeyHeader)
