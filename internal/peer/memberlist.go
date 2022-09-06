@@ -26,14 +26,27 @@ type memberList struct {
 	mutex      sync.Mutex
 }
 
-func newMemberList(ctx context.Context, c config.Config) (Peers, error) {
+func newMemberListPeers(ctx context.Context, c config.Config) (Peers, error) {
 	log := logrus.WithField("category", "member-list")
+
+	// Get peer listener port.
+	addr, err := c.GetPeerListenAddr()
+	if err != nil {
+		return nil, errors.Wrap(err, "error getting peer listener port from config")
+	}
+
+	_, portStr, err := net.SplitHostPort(addr)
+	port, err := strconv.ParseUint(portStr, 10, 32)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error parsing peer listener port: %s", portStr)
+	}
 
 	m := &memberList{
 		log: log,
 		events: &eventDelegate{
 			peers: make(map[string]struct{}, 1),
 			c:     c,
+			port:  uint32(port),
 			log:   log,
 		},
 		c: c,
@@ -135,6 +148,7 @@ type eventDelegate struct {
 	peers     map[string]struct{}
 	log       logrus.FieldLogger
 	c         config.Config
+	port       uint32
 	mutex     sync.Mutex
 	callbacks []func()
 }
@@ -142,25 +156,33 @@ type eventDelegate struct {
 func (e *eventDelegate) NotifyJoin(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
-	e.log.Infof("Peer join: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
-	e.peers[node.Name] = struct{}{}
+	peerUrl := fmt.Sprintf("http://%s:%d", node.Addr.String(), e.port)
+	e.log.WithField("peer", peerUrl).
+		Infof("Peer join: %s", node.Name)
+	e.peers[peerUrl] = struct{}{}
 	e.callOnUpdate()
 }
 
 func (e *eventDelegate) NotifyLeave(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
-	e.log.Infof("Peer leave: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
-	delete(e.peers, node.Name)
+	peerUrl := fmt.Sprintf("http://%s:%d", node.Addr.String(), e.port)
+	e.log.WithField("peer", peerUrl).
+		Infof("Peer leave: %s", node.Name)
+	delete(e.peers, peerUrl)
 	e.callOnUpdate()
 }
 
 func (e *eventDelegate) NotifyUpdate(node *ml.Node) {
 	defer e.mutex.Unlock()
 	e.mutex.Lock()
-	e.log.WithField("status", node.State).
-		Infof("Peer update: %s (%s:%d)", node.Name, node.Addr.String(), node.Port)
-	e.peers[node.Name] = struct{}{}
+	peerUrl := fmt.Sprintf("http://%s:%d", node.Addr.String(), e.port)
+	e.log.WithFields(logrus.Fields{
+		"status": node.State,
+		"peer": peerUrl,
+	}).
+		Infof("Peer update: %s", node.Name)
+	e.peers[peerUrl] = struct{}{}
 	e.callOnUpdate()
 }
 
