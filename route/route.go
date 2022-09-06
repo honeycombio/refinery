@@ -276,6 +276,7 @@ func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch config for dataset %s\n", err, dataset)))
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	r.marshalToFormat(w, map[string]interface{}{name: cfg}, format)
 }
@@ -286,6 +287,7 @@ func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 	r.marshalToFormat(w, cfgs, format)
 }
