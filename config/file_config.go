@@ -50,6 +50,7 @@ type configContents struct {
 	AddHostMetadataToTrace    bool
 	EnvironmentCacheTTL       time.Duration
 	DatasetPrefix             string
+	QueryAuthToken            string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -103,6 +104,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
 	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_API_KEY")
+	c.BindEnv("QueryAuthToken", "REFINERY_QUERY_AUTH_TOKEN")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("CompressPeerCommunication", true)
@@ -781,4 +783,11 @@ func (f *fileConfig) GetDatasetPrefix() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.DatasetPrefix
+}
+
+func (f *fileConfig) GetQueryAuthToken() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.QueryAuthToken
 }

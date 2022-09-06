@@ -139,16 +139,17 @@ The default logging level of `warn` is almost entirely silent. The `debug` level
 
 ### Configuration
 
-Because the normal configuration file formats (TOML and YAML) can sometimes be confusing to read and write, it may be valuable to check the loaded configuration by using one of the debug endpoints from the command line:
+Because the normal configuration file formats (TOML and YAML) can sometimes be confusing to read and write, it may be valuable to check the loaded configuration by using one of the `/query` endpoints from the command line on a server that can access a refinery host.
 
-`curl --include --get $REFINERY_HOST/debug/allrules/$FORMAT` will retrieve the entire rules configuration.
+The `/query` endpoints are protected and can be enabled by specifying `QueryAuthToken` in the configuration file or specifying `REFINERY_QUERY_AUTH_TOKEN` in the environment. All requests to any `/query` endpoint must include the header `X-Honeycomb-Refinery-Query` set to the value of the specified token.
 
-`curl --include --get $REFINERY_HOST/debug/rules/$FORMAT/$DATASET` will retrieve the rule set that refinery will use for the specified dataset. It comes back as a map of the sampler type to its rule set.
+`curl --include --get $REFINERY_HOST/query/allrules/$FORMAT --header "x-honeycomb-refinery-query: my-local-token"` will retrieve the entire rules configuration.
+
+`curl --include --get $REFINERY_HOST/query/rules/$FORMAT/$DATASET --header "x-honeycomb-refinery-query: my-local-token"` will retrieve the rule set that refinery will use for the specified dataset. It comes back as a map of the sampler type to its rule set.
 
 - `$REFINERY_HOST` should be the url of your refinery.
 - `$FORMAT` can be one of `json`, `yaml`, or `toml`.
 - `$DATASET` is the name of the dataset you want to check.
-
 
 ## Restarts
 

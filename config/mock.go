@@ -73,6 +73,7 @@ type MockConfig struct {
 	AddHostMetadataToTrace        bool
 	EnvironmentCacheTTL           time.Duration
 	DatasetPrefix                 string
+	QueryAuthToken                string
 
 	Mux sync.RWMutex
 }
@@ -345,4 +346,11 @@ func (f *MockConfig) GetDatasetPrefix() string {
 	defer f.Mux.RUnlock()
 
 	return f.DatasetPrefix
+}
+
+func (f *MockConfig) GetQueryAuthToken() string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.QueryAuthToken
 }
