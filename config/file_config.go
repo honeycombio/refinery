@@ -150,6 +150,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
+
 	if err != nil {
 		return nil, err
 	}
@@ -238,6 +239,7 @@ func (f *fileConfig) unmarshal() error {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 	err := f.config.Unmarshal(f.conf)
+
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,7 @@ func TestGRPCListenAddrEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -36,6 +37,7 @@ func TestRedisHostEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,6 +54,7 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -68,6 +71,7 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	defer os.Unsetenv(envVarName)
 
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -120,9 +124,7 @@ func TestReload(t *testing.T) {
 
 	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
-	configFile.Close()
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 	if err != nil {
 		t.Error(err)
 	}
@@ -175,10 +177,12 @@ func TestReload(t *testing.T) {
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
 		t.Error("received", d, "expected", "0.0.0.0:9000")
 	}
+
 }
 
 func TestReadDefaults(t *testing.T) {
 	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -241,6 +245,7 @@ func TestReadDefaults(t *testing.T) {
 
 func TestReadRulesConfig(t *testing.T) {
 	c, err := NewConfig("../config.toml", "../rules_complete.toml", func(err error) {})
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -610,13 +615,16 @@ func TestDatasetPrefix(t *testing.T) {
 func TestQueryAuthToken(t *testing.T) {
 	config, rules := createTempConfigs(t, `
 	QueryAuthToken = "MySeekretToken"
+
 	[InMemCollector]
 		CacheCapacity=1000
+
 	[HoneycombMetrics]
 		MetricsHoneycombAPI="http://honeycomb.io"
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
+
 	[HoneycombLogger]
 		LoggerHoneycombAPI="http://honeycomb.io"
 		LoggerAPIKey="1234"
