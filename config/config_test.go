@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package config
@@ -212,9 +213,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", time.Hour)
 	}
 
-	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
+	d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	assert.Equal(t, "DeterministicSampler", name)
 
 	type imcConfig struct {
 		CacheCapacity int
@@ -234,15 +236,17 @@ func TestReadRulesConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
+	d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	assert.Equal(t, "DeterministicSampler", name)
 
-	d, err = c.GetSamplerConfigForDataset("dataset1")
+	d, name, err = c.GetSamplerConfigForDataset("dataset1")
 	assert.NoError(t, err)
 	assert.IsType(t, &DynamicSamplerConfig{}, d)
+	assert.Equal(t, "DynamicSampler", name)
 
-	d, err = c.GetSamplerConfigForDataset("dataset4")
+	d, name, err = c.GetSamplerConfigForDataset("dataset4")
 	assert.NoError(t, err)
 	switch r := d.(type) {
 	case *RulesBasedSamplerConfig:
@@ -267,6 +271,8 @@ func TestReadRulesConfig(t *testing.T) {
 		rule = r.Rule[4]
 		assert.Equal(t, 10, rule.SampleRate)
 		assert.Equal(t, "", rule.Scope)
+
+		assert.Equal(t, "RulesBasedSampler", name)
 
 	default:
 		assert.Fail(t, "dataset4 should have a rules based sampler", d)
@@ -512,24 +518,29 @@ func TestGetSamplerTypes(t *testing.T) {
 		t.Error(err)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+		assert.Equal(t, "DeterministicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset 1"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset 1"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DynamicSamplerConfig{}, d)
+		assert.Equal(t, "DynamicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset2"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset2"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+		assert.Equal(t, "DeterministicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset3"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset3"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
+		assert.Equal(t, "EMADynamicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset4"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset4"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &TotalThroughputSamplerConfig{}, d)
+		assert.Equal(t, "TotalThroughputSampler", name)
 	}
 }
 
@@ -563,9 +574,10 @@ func TestDefaultSampler(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	s, err := c.GetSamplerConfigForDataset("nonexistent")
+	s, name, err := c.GetSamplerConfigForDataset("nonexistent")
 
 	assert.NoError(t, err)
+	assert.Equal(t, "DeterministicSampler", name)
 
 	assert.IsType(t, &DeterministicSamplerConfig{}, s)
 }
