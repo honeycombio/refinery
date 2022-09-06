@@ -20,11 +20,11 @@ func TestNewPeersMemberList(t *testing.T) {
 
 	cbCh := make(chan struct{}, 10)
 	p0, err := peer.NewPeers(ctx, &config.MockConfig{
-		MemberListKnownMembers: []string{"127.0.0.1:8180"},
 		GetListenAddrVal:       "127.0.0.1:8180",
-		MemberListListenAddr:   "127.0.0.1:8180",
-		GetPeerListenAddrVal:   "127.0.0.1:8080",
 		PeerManagementType:     "member-list",
+		GetPeerListenAddrVal:   "127.0.0.1:8080",
+		MemberListListenAddr:   "127.0.0.1:8519",
+		MemberListKnownMembers: []string{"127.0.0.1"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p0)
@@ -40,11 +40,11 @@ func TestNewPeersMemberList(t *testing.T) {
 	})
 
 	p1, err := peer.NewPeers(ctx, &config.MockConfig{
-		MemberListKnownMembers: []string{"127.0.0.1:8180"},
-		GetListenAddrVal:       "127.0.0.1:8181",
-		MemberListListenAddr:   "127.0.0.1:8181",
-		GetPeerListenAddrVal:   "127.0.0.1:8081",
+		GetListenAddrVal:       "127.0.0.2:8181",
 		PeerManagementType:     "member-list",
+		GetPeerListenAddrVal:   "127.0.0.2:8081",
+		MemberListListenAddr:   "127.0.0.2:8519",
+		MemberListKnownMembers: []string{"127.0.0.1"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p1)
@@ -55,11 +55,11 @@ func TestNewPeersMemberList(t *testing.T) {
 	})
 
 	p2, err := peer.NewPeers(ctx, &config.MockConfig{
-		MemberListKnownMembers: []string{"127.0.0.1:8180"},
-		GetListenAddrVal:       "127.0.0.1:8182",
-		MemberListListenAddr:   "127.0.0.1:8182",
-		GetPeerListenAddrVal:   "127.0.0.1:8082",
+		GetListenAddrVal:       "127.0.0.3:8182",
 		PeerManagementType:     "member-list",
+		GetPeerListenAddrVal:   "127.0.0.3:8082",
+		MemberListListenAddr:   "127.0.0.3:8519",
+		MemberListKnownMembers: []string{"127.0.0.1"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, p2)
