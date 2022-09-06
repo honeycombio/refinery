@@ -151,6 +151,10 @@ The `/query` endpoints are protected and can be enabled by specifying `QueryAuth
 - `$FORMAT` can be one of `json`, `yaml`, or `toml`.
 - `$DATASET` is the name of the dataset you want to check.
 
+### Sampling
+
+Refinery can send telemetry that includes information that can help debug the sampling decisions that are made. To enable it, in the config file, set `AddRuleReasonToTrace` to `true`. This will cause traces that are sent to Honeycomb to include a field `meta.refinery.reason`, which will contain text indicating which rule was evaluated that caused the trace to be included.
+
 ## Restarts
 
 Refinery does not yet buffer traces or sampling decisions to disk. When you restart the process all in-flight traces will be flushed (sent upstream to Honeycomb), but you will lose the record of past trace decisions. When started back up, it will start with a clean slate.
