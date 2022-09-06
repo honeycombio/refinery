@@ -459,7 +459,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 
 	// make sampling decision and update the trace
-	rate, shouldSend := sampler.GetSampleRate(trace)
+	rate, shouldSend, why := sampler.GetSampleRate(trace)
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
 
@@ -484,6 +484,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
+		if i.Config.GetAddRuleReasonToTrace() {
+			sp.Data["meta.refinery.reason"] = why
+		}
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
 		}

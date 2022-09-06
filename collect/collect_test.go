@@ -1,5 +1,3 @@
-// +build all race
-
 package collect
 
 import (
@@ -210,12 +208,12 @@ func TestDryRunMode(t *testing.T) {
 	var traceID2 = "def456"
 	var traceID3 = "ghi789"
 	// sampling decisions based on trace ID
-	_, keepTraceID1 := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
+	_, keepTraceID1, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID1)
-	_, keepTraceID2 := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
+	_, keepTraceID2, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
 	assert.True(t, keepTraceID2)
-	_, keepTraceID3 := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
+	_, keepTraceID3, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID3)
 

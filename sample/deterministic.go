@@ -35,11 +35,11 @@ func (d *DeterministicSampler) Start() error {
 	return nil
 }
 
-func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool) {
+func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, why string) {
 	if d.sampleRate <= 1 {
-		return 1, true
+		return 1, true, "deterministic always"
 	}
 	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
 	v := binary.BigEndian.Uint32(sum[:4])
-	return uint(d.sampleRate), v <= d.upperBound
+	return uint(d.sampleRate), v <= d.upperBound, "deterministic chance"
 }

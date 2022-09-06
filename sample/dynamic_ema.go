@@ -62,7 +62,7 @@ func (d *EMADynamicSampler) Start() error {
 	return nil
 }
 
-func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
+func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, string) {
 	key := d.key.buildAndAdd(trace)
 	rate := d.dynsampler.GetSampleRate(key)
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
@@ -81,5 +81,5 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep
+	return uint(rate), shouldKeep, "ema for " + key
 }

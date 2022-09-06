@@ -45,7 +45,7 @@ func (d *TotalThroughputSampler) Start() error {
 	}
 	d.dynsampler.Start()
 
-	// Register stastics this package will produce
+	// Register statistics this package will produce
 	d.Metrics.Register("dynsampler_num_dropped", "counter")
 	d.Metrics.Register("dynsampler_num_kept", "counter")
 	d.Metrics.Register("dynsampler_sample_rate", "histogram")
@@ -53,7 +53,7 @@ func (d *TotalThroughputSampler) Start() error {
 	return nil
 }
 
-func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (uint, bool) {
+func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (uint, bool, string) {
 	key := d.key.buildAndAdd(trace)
 	rate := d.dynsampler.GetSampleRate(key)
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
@@ -72,5 +72,5 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (uint, bool) 
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep
+	return uint(rate), shouldKeep, "totalthroughput for " + key
 }
