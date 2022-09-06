@@ -99,8 +99,11 @@ type Config interface {
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
 	GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error)
 
-	// GetSamplerConfigForDataset returns the sampler type to use for the given dataset
-	GetSamplerConfigForDataset(string) (interface{}, error)
+	// GetSamplerConfigForDataset returns the sampler type and name to use for the given dataset
+	GetSamplerConfigForDataset(string) (interface{}, string, error)
+
+	// GetAllSamplerRules returns all dataset rules in a map, including the default
+	GetAllSamplerRules() (map[string]interface{}, error)
 
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
@@ -156,4 +159,7 @@ type Config interface {
 	// GetMemberListKnownMembers returns a list of `host:port` members this instance can
 	// contact to discover other members.
 	GetMemberListKnownMembers() []string
+
+	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
+	GetQueryAuthToken() string
 }

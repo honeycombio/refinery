@@ -8,22 +8,24 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/mux"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/vmihailenco/msgpack/v4"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
+	"gopkg.in/yaml.v2"
 
 	// grpc/gzip compressor, auto registers on import
 	_ "google.golang.org/grpc/encoding/gzip"
@@ -153,7 +155,14 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
-	muxxer.HandleFunc("/debug/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
+
+	// require a local auth for query usage
+	queryMuxxer := muxxer.PathPrefix("/query/").Methods("GET").Subrouter()
+	queryMuxxer.Use(r.queryTokenChecker)
+
+	queryMuxxer.HandleFunc("/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
+	queryMuxxer.HandleFunc("/rules/{format}/{dataset}", r.getSamplerRules).Name("get formatted sampler rules for given dataset")
+	queryMuxxer.HandleFunc("/allrules/{format}", r.getAllSamplerRules).Name("get formatted sampler rules for all datasets")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -266,6 +275,62 @@ func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
 }
 
+func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
+	format := strings.ToLower(mux.Vars(req)["format"])
+	dataset := mux.Vars(req)["dataset"]
+	cfg, name, err := r.Config.GetSamplerConfigForDataset(dataset)
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch config for dataset %s\n", err, dataset)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	r.marshalToFormat(w, map[string]interface{}{name: cfg}, format)
+}
+
+func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
+	format := strings.ToLower(mux.Vars(req)["format"])
+	cfgs, err := r.Config.GetAllSamplerRules()
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	r.marshalToFormat(w, cfgs, format)
+}
+
+func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format string) {
+	var body []byte
+	var err error
+	switch format {
+	case "json":
+		body, err = json.Marshal(obj)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to json\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	case "toml":
+		body, err = toml.Marshal(obj)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to toml\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	case "yaml":
+		body, err = yaml.Marshal(obj)
+		if err != nil {
+			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to toml\n", err)))
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	default:
+		w.Write([]byte(fmt.Sprintf("invalid format '%s' when marshaling\n", format)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	w.Write(body)
+}
+
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
@@ -277,7 +342,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reqBod, err := ioutil.ReadAll(bodyReader)
+	reqBod, err := io.ReadAll(bodyReader)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
@@ -353,7 +418,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	reqBod, err := ioutil.ReadAll(bodyReader)
+	reqBod, err := io.ReadAll(bodyReader)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return

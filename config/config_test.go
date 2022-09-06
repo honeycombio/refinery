@@ -1,3 +1,4 @@
+//go:build all || race
 // +build all race
 
 package config
@@ -80,18 +81,33 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	}
 }
 
-func TestReload(t *testing.T) {
+func createTempConfigs(t *testing.T, configBody string, rulesBody string) (string, string) {
 	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
-	dummy := []byte(`
+	if configBody != "" {
+		_, err = configFile.WriteString(configBody)
+		assert.NoError(t, err)
+	}
+	configFile.Close()
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	if rulesBody != "" {
+		_, err = rulesFile.WriteString(rulesBody)
+		assert.NoError(t, err)
+	}
+	rulesFile.Close()
+
+	return configFile.Name(), rulesFile.Name()
+}
+
+func TestReload(t *testing.T) {
+	config, rules := createTempConfigs(t, `
 	ListenAddr="0.0.0.0:8080"
 
 	[InMemCollector]
@@ -102,13 +118,12 @@ func TestReload(t *testing.T) {
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
-	`)
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	_, err = configFile.Write(dummy)
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
-	configFile.Close()
-
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
 
 	if err != nil {
 		t.Error(err)
@@ -152,7 +167,7 @@ func TestReload(t *testing.T) {
 		}
 	}()
 
-	if file, err := os.OpenFile(configFile.Name(), os.O_RDWR, 0644); err == nil {
+	if file, err := os.OpenFile(config, os.O_RDWR, 0644); err == nil {
 		file.WriteString(`ListenAddr = "0.0.0.0:9000"`)
 		file.Close()
 	}
@@ -212,9 +227,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", time.Hour)
 	}
 
-	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
+	d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	assert.Equal(t, "DeterministicSampler", name)
 
 	type imcConfig struct {
 		CacheCapacity int
@@ -234,15 +250,17 @@ func TestReadRulesConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
+	d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	assert.Equal(t, "DeterministicSampler", name)
 
-	d, err = c.GetSamplerConfigForDataset("dataset1")
+	d, name, err = c.GetSamplerConfigForDataset("dataset1")
 	assert.NoError(t, err)
 	assert.IsType(t, &DynamicSamplerConfig{}, d)
+	assert.Equal(t, "DynamicSampler", name)
 
-	d, err = c.GetSamplerConfigForDataset("dataset4")
+	d, name, err = c.GetSamplerConfigForDataset("dataset4")
 	assert.NoError(t, err)
 	switch r := d.(type) {
 	case *RulesBasedSamplerConfig:
@@ -268,23 +286,15 @@ func TestReadRulesConfig(t *testing.T) {
 		assert.Equal(t, 10, rule.SampleRate)
 		assert.Equal(t, "", rule.Scope)
 
+		assert.Equal(t, "RulesBasedSampler", name)
+
 	default:
 		assert.Fail(t, "dataset4 should have a rules based sampler", d)
 	}
 }
 
 func TestPeerManagementType(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -297,9 +307,11 @@ func TestPeerManagementType(t *testing.T) {
 	[PeerManagement]
 		Type = "redis"
 		Peers = ["http://refinery-1231:8080"]
-	`))
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
@@ -308,57 +320,34 @@ func TestPeerManagementType(t *testing.T) {
 }
 
 func TestAbsentTraceKeyField(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	config, rules := createTempConfigs(t, `
+	[InMemCollector]
+		CacheCapacity=1000
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`, `
+	[dataset1]
+		Sampler = "EMADynamicSampler"
+		GoalSampleRate = 10
+		UseTraceLength = true
+		AddSampleRateKeyToTrace = true
+		FieldList = "[request.method]"
+		Weight = 0.4
+	`)
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
-		[InMemCollector]
-			CacheCapacity=1000
-
-		[HoneycombMetrics]
-			MetricsHoneycombAPI="http://honeycomb.io"
-			MetricsAPIKey="1234"
-			MetricsDataset="testDatasetName"
-			MetricsReportingInterval=3
-	`))
-	assert.NoError(t, err)
-
-	_, err = rulesFile.Write([]byte(`
-		[dataset1]
-			Sampler = "EMADynamicSampler"
-			GoalSampleRate = 10
-			UseTraceLength = true
-			AddSampleRateKeyToTrace = true
-			FieldList = "[request.method]"
-			Weight = 0.4
-	`))
-
-	rulesFile.Close()
-
-	_, err = NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	_, err := NewConfig(config, rules, func(err error) {})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Error:Field validation for 'AddSampleRateKeyToTraceField'")
 }
 
 func TestDebugServiceAddr(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	DebugServiceAddr = "localhost:8085"
 
 	[InMemCollector]
@@ -369,9 +358,11 @@ func TestDebugServiceAddr(t *testing.T) {
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
-	`))
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetDebugServiceAddr(); d != "localhost:8085" {
@@ -380,14 +371,7 @@ func TestDebugServiceAddr(t *testing.T) {
 }
 
 func TestDryRun(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -396,16 +380,13 @@ func TestDryRun(t *testing.T) {
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
-	`))
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = rulesFile.Write([]byte(`
+	`, `
 	DryRun=true
-	`))
+	`)
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	if d := c.GetIsDryRun(); d != true {
@@ -414,17 +395,7 @@ func TestDryRun(t *testing.T) {
 }
 
 func TestMaxAlloc(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 		MaxAlloc=17179869184
@@ -434,9 +405,11 @@ func TestMaxAlloc(t *testing.T) {
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
-	`))
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	expected := uint64(16 * 1024 * 1024 * 1024)
@@ -446,14 +419,7 @@ func TestMaxAlloc(t *testing.T) {
 }
 
 func TestGetSamplerTypes(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -462,12 +428,7 @@ func TestGetSamplerTypes(t *testing.T) {
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
-	`))
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	dummyConfig := []byte(`
+	`, `
 	Sampler = "DeterministicSampler"
 	SampleRate = 2
 
@@ -500,51 +461,41 @@ func TestGetSamplerTypes(t *testing.T) {
 		Sampler = "TotalThroughputSampler"
 		GoalThroughputPerSec = 100
 		FieldList = "[request.method]"
-`)
+	`)
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	_, err = rulesFile.Write(dummyConfig)
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
-	rulesFile.Close()
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
-
-	if d, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+		assert.Equal(t, "DeterministicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset 1"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset 1"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DynamicSamplerConfig{}, d)
+		assert.Equal(t, "DynamicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset2"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset2"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+		assert.Equal(t, "DeterministicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset3"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset3"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
+		assert.Equal(t, "EMADynamicSampler", name)
 	}
 
-	if d, err := c.GetSamplerConfigForDataset("dataset4"); assert.Equal(t, nil, err) {
+	if d, name, err := c.GetSamplerConfigForDataset("dataset4"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &TotalThroughputSamplerConfig{}, d)
+		assert.Equal(t, "TotalThroughputSampler", name)
 	}
 }
 
 func TestDefaultSampler(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	dummy := []byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -553,35 +504,24 @@ func TestDefaultSampler(t *testing.T) {
 		MetricsAPIKey="1234"
 		MetricsDataset="testDatasetName"
 		MetricsReportingInterval=3
-	`)
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	_, err = configFile.Write(dummy)
-	assert.NoError(t, err)
-	configFile.Close()
-
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	c, err := NewConfig(config, rules, func(err error) {})
 
 	assert.NoError(t, err)
 
-	s, err := c.GetSamplerConfigForDataset("nonexistent")
+	s, name, err := c.GetSamplerConfigForDataset("nonexistent")
 
 	assert.NoError(t, err)
+	assert.Equal(t, "DeterministicSampler", name)
 
 	assert.IsType(t, &DeterministicSamplerConfig{}, s)
 }
 
 func TestHoneycombLoggerConfig(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	dummy := []byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -597,14 +537,11 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 		LoggerDataset="loggerDataset"
 		LoggerSamplerEnabled=true
 		LoggerSamplerThroughput=10
-	`)
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	_, err = configFile.Write(dummy)
-	assert.NoError(t, err)
-	configFile.Close()
-
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
-
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
@@ -619,17 +556,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 }
 
 func TestHoneycombLoggerConfigDefaults(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	dummy := []byte(`
+	config, rules := createTempConfigs(t, `
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -643,14 +570,11 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 		LoggerHoneycombAPI="http://honeycomb.io"
 		LoggerAPIKey="1234"
 		LoggerDataset="loggerDataset"
-	`)
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	_, err = configFile.Write(dummy)
-	assert.NoError(t, err)
-	configFile.Close()
-
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
-
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
@@ -662,14 +586,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 }
 
 func TestDatasetPrefix(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	DatasetPrefix = "dataset"
 
 	[InMemCollector]
@@ -685,15 +602,38 @@ func TestDatasetPrefix(t *testing.T) {
 		LoggerHoneycombAPI="http://honeycomb.io"
 		LoggerAPIKey="1234"
 		LoggerDataset="loggerDataset"
-	`))
-	assert.NoError(t, err)
-	configFile.Close()
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	c, err := NewConfig(config, rules, func(err error) {})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())
+}
+
+func TestQueryAuthToken(t *testing.T) {
+	config, rules := createTempConfigs(t, `
+	QueryAuthToken = "MySeekretToken"
+
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+
+	[HoneycombLogger]
+		LoggerHoneycombAPI="http://honeycomb.io"
+		LoggerAPIKey="1234"
+		LoggerDataset="loggerDataset"	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, "MySeekretToken", c.GetQueryAuthToken())
 }

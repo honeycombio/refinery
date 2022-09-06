@@ -105,6 +105,14 @@ AddHostMetadataToTrace = false
 # Not eligible for live reload.
 EnvironmentCacheTTL = "1h"
 
+# QueryAuthToken, if specified, provides a token that must be specified with
+# the header "X-Honeycomb-Refinery-Query" in order for a /query request to succeed.
+# These /query requests are intended for debugging refinery installations and
+# are not typically needed in normal operation.
+# Can be specified in the environment as REFINERY_QUERY_AUTH_TOKEN.
+# If left unspecified, the /query endpoints are inaccessible.
+# QueryAuthToken = "some-random-value"
+
 ############################
 ## Implementation Choices ##
 ############################

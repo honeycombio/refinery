@@ -31,7 +31,7 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 		}
 	}
 
-	c, err := s.Config.GetSamplerConfigForDataset(samplerKey)
+	c, _, err := s.Config.GetSamplerConfigForDataset(samplerKey)
 	if err != nil {
 		return nil
 	}

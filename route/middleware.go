@@ -17,6 +17,26 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		requiredToken := r.Config.GetQueryAuthToken()
+		if requiredToken == "" {
+			err := fmt.Errorf("/query endpoint is not authorized for use (specify QueryAuthToken in config)")
+			r.handlerReturnWithError(w, ErrAuthNeeded, err)
+		}
+
+		token := req.Header.Get(types.QueryTokenHeader)
+		if token == requiredToken {
+			// if they're equal (including both blank) we're good
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		err := fmt.Errorf("token %s found in %s not authorized for query", token, types.QueryTokenHeader)
+		r.handlerReturnWithError(w, ErrAuthNeeded, err)
+	})
+}
+
 func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		apiKey := req.Header.Get(types.APIKeyHeader)

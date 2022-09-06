@@ -47,6 +47,7 @@ type MockConfig struct {
 	GetUseTLSInsecureErr          error
 	GetUseTLSInsecureVal          bool
 	GetSamplerTypeErr             error
+	GetSamplerTypeName            string
 	GetSamplerTypeVal             interface{}
 	GetMetricsTypeErr             error
 	GetMetricsTypeVal             string
@@ -76,6 +77,7 @@ type MockConfig struct {
 	MemberListListenAddr          string
 	MemberListAdvertiseAddr       string
 	MemberListKnownMembers        []string
+	QueryAuthToken                string
 
 	Mux sync.RWMutex
 }
@@ -244,11 +246,20 @@ func (m *MockConfig) GetMaxBatchSize() uint {
 }
 
 // TODO: allow per-dataset mock values
-func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
+func (m *MockConfig) GetSamplerConfigForDataset(dataset string) (interface{}, string, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetSamplerTypeVal, m.GetSamplerTypeErr
+	return m.GetSamplerTypeVal, m.GetSamplerTypeName, m.GetSamplerTypeErr
+}
+
+// GetAllSamplerRules returns all dataset rules, including the default
+func (m *MockConfig) GetAllSamplerRules() (map[string]interface{}, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	v := map[string]interface{}{"dataset1": m.GetSamplerTypeVal}
+	return v, m.GetSamplerTypeErr
 }
 
 func (m *MockConfig) GetUpstreamBufferSize() int {
@@ -371,4 +382,11 @@ func (m *MockConfig) GetMemberListKnownMembers() []string {
 	defer m.Mux.RUnlock()
 
 	return m.MemberListKnownMembers
+}
+
+func (f *MockConfig) GetQueryAuthToken() string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.QueryAuthToken
 }
