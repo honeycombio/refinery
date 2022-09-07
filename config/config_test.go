@@ -637,3 +637,49 @@ func TestQueryAuthToken(t *testing.T) {
 
 	assert.Equal(t, "MySeekretToken", c.GetQueryAuthToken())
 }
+
+func TestGRPCServerParameters(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	_, err = configFile.Write([]byte(`
+	[GRPCServerParameters]
+		MaxConnectionIdle = "1m"
+		MaxConnectionAge = "2m"
+		MaxConnectionAgeGrace = "3m"
+		Time = "4m"
+		Timeout = "5m"
+
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+
+	[HoneycombLogger]
+		LoggerHoneycombAPI="http://honeycomb.io"
+		LoggerAPIKey="1234"
+		LoggerDataset="loggerDataset"
+	`))
+	assert.NoError(t, err)
+	configFile.Close()
+
+	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	assert.NoError(t, err)
+
+	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, 1*time.Minute, c.GetGRPCMaxConnectionIdle())
+	assert.Equal(t, 2*time.Minute, c.GetGRPCMaxConnectionAge())
+	assert.Equal(t, 3*time.Minute, c.GetGRPCMaxConnectionAgeGrace())
+	assert.Equal(t, 4*time.Minute, c.GetGRPCTime())
+	assert.Equal(t, 5*time.Minute, c.GetGRPCTimeout())
+}

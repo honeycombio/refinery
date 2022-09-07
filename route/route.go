@@ -221,9 +221,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 			grpc.MaxSendMsgSize(GRPCMessageSizeMax), // default is math.MaxInt32
 			grpc.MaxRecvMsgSize(GRPCMessageSizeMax), // default is 4MB
 			grpc.KeepaliveParams(keepalive.ServerParameters{
-				Time:              10 * time.Second,
-				Timeout:           2 * time.Second,
-				MaxConnectionIdle: time.Minute,
+				MaxConnectionIdle:     r.Config.GetGRPCMaxConnectionIdle(),
+				MaxConnectionAge:      r.Config.GetGRPCMaxConnectionAge(),
+				MaxConnectionAgeGrace: r.Config.GetGRPCMaxConnectionAgeGrace(),
+				Time:                  r.Config.GetGRPCTime(),
+				Timeout:               r.Config.GetGRPCTimeout(),
 			}),
 		}
 		r.grpcServer = grpc.NewServer(serverOpts...)
