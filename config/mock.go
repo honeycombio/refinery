@@ -71,6 +71,7 @@ type MockConfig struct {
 	DryRun                        bool
 	DryRunFieldName               string
 	AddHostMetadataToTrace        bool
+	AddRuleReasonToTrace          bool
 	EnvironmentCacheTTL           time.Duration
 	DatasetPrefix                 string
 	QueryAuthToken                string
@@ -362,6 +363,13 @@ func (m *MockConfig) GetAddHostMetadataToTrace() bool {
 	defer m.Mux.RUnlock()
 
 	return m.AddHostMetadataToTrace
+}
+
+func (m *MockConfig) GetAddRuleReasonToTrace() bool {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.AddRuleReasonToTrace
 }
 
 func (f *MockConfig) GetEnvironmentCacheTTL() time.Duration {

@@ -48,6 +48,7 @@ type configContents struct {
 	PeerManagement            PeerManagementConfig           `validate:"required"`
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 	AddHostMetadataToTrace    bool
+	AddRuleReasonToTrace      bool
 	EnvironmentCacheTTL       time.Duration
 	DatasetPrefix             string
 	QueryAuthToken            string
@@ -141,6 +142,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 	c.SetDefault("AddHostMetadataToTrace", false)
+	c.SetDefault("AddRuleReasonToTrace", false)
 	c.SetDefault("EnvironmentCacheTTL", time.Hour)
 	c.SetDefault("GRPCServerParameters.MaxConnectionIdle", 1*time.Minute)
 	c.SetDefault("GRPCServerParameters.MaxConnectionAge", time.Duration(0))
@@ -786,6 +788,13 @@ func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	defer f.mux.RUnlock()
 
 	return f.conf.AddHostMetadataToTrace
+}
+
+func (f *fileConfig) GetAddRuleReasonToTrace() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.AddRuleReasonToTrace
 }
 
 func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {

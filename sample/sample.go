@@ -11,7 +11,7 @@ import (
 )
 
 type Sampler interface {
-	GetSampleRate(trace *types.Trace) (rate uint, keep bool)
+	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string)
 	Start() error
 }
 

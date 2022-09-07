@@ -1,5 +1,3 @@
-// +build all race
-
 package app
 
 import (
@@ -262,8 +260,8 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 
 	var out bytes.Buffer
 	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
-	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {return "test", nil})
-	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {return "test", nil})
+	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -561,8 +559,8 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
 		app, graph := newStartedApp(t, senders[i], basePort, peers, false)
-		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil})
-		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil})
+		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
 		defer startstop.Stop(graph.Objects(), nil)
 

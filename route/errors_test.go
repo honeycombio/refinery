@@ -1,5 +1,3 @@
-// +build all race
-
 package route
 
 import (
