@@ -8,7 +8,7 @@ import (
 	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/types"
 
-	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	collectortrace "github.com/honeycombio/husky/proto/otlp/collector/trace/v1"
 )
 
 func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
