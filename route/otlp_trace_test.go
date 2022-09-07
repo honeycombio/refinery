@@ -12,17 +12,18 @@ import (
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	collectortrace "github.com/honeycombio/husky/proto/otlp/collector/trace/v1"
+	common "github.com/honeycombio/husky/proto/otlp/common/v1"
+	resource "github.com/honeycombio/husky/proto/otlp/resource/v1"
+	trace "github.com/honeycombio/husky/proto/otlp/trace/v1"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
-	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
-	common "go.opentelemetry.io/proto/otlp/common/v1"
-	resource "go.opentelemetry.io/proto/otlp/resource/v1"
-	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -67,7 +68,7 @@ func TestOTLPHandler(t *testing.T) {
 	t.Run("span with status", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: helperOTLPRequestSpansWithStatus(),
 				}},
 			}},
@@ -83,7 +84,7 @@ func TestOTLPHandler(t *testing.T) {
 	t.Run("span without status", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: helperOTLPRequestSpansWithoutStatus(),
 				}},
 			}},
@@ -105,7 +106,7 @@ func TestOTLPHandler(t *testing.T) {
 		spanID := []byte{1, 0, 0, 0, 0}
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: []*trace.Span{{
 						TraceId: traceID,
 						SpanId:  spanID,
@@ -153,7 +154,7 @@ func TestOTLPHandler(t *testing.T) {
 
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: []*trace.Span{{
 						Name:    "span_with_link",
 						TraceId: traceID,
@@ -191,7 +192,7 @@ func TestOTLPHandler(t *testing.T) {
 	t.Run("can receive OTLP over HTTP/protobuf", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: helperOTLPRequestSpansWithStatus(),
 				}},
 			}},
@@ -218,7 +219,7 @@ func TestOTLPHandler(t *testing.T) {
 	t.Run("can receive OTLP over HTTP/protobuf with gzip encoding", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: helperOTLPRequestSpansWithStatus(),
 				}},
 			}},
@@ -254,7 +255,7 @@ func TestOTLPHandler(t *testing.T) {
 	t.Run("can receive OTLP over HTTP/protobuf with zstd encoding", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: helperOTLPRequestSpansWithStatus(),
 				}},
 			}},
@@ -290,8 +291,20 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	t.Run("rejects OTLP over HTTP/JSON ", func(t *testing.T) {
-		request, _ := http.NewRequest("POST", "/v1/traces", strings.NewReader("{}"))
+	t.Run("accepts OTLP over HTTP/JSON ", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		if err != nil {
+			t.Error(err)
+		}
+
+		request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/json")
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
@@ -299,10 +312,10 @@ func TestOTLPHandler(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		router.postOTLP(w, request)
-		assert.Equal(t, w.Code, http.StatusNotImplemented)
-		assert.Equal(t, `{"source":"refinery","error":"invalid content-type - only 'application/protobuf' is supported"}`, string(w.Body.String()))
+		assert.Equal(t, w.Code, http.StatusOK)
+		assert.Equal(t, "", w.Body.String())
 
-		assert.Equal(t, 0, len(mockTransmission.Events))
+		assert.Equal(t, 2, len(mockTransmission.Events))
 		mockTransmission.Flush()
 	})
 
@@ -317,7 +330,7 @@ func TestOTLPHandler(t *testing.T) {
 						{Key: "service.name", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "my-service"}}},
 					},
 				},
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: []*trace.Span{{
 						Name: "my-span",
 					}},
@@ -350,7 +363,7 @@ func TestOTLPHandler(t *testing.T) {
 						{Key: "service.name", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "my-service"}}},
 					},
 				},
-				InstrumentationLibrarySpans: []*trace.InstrumentationLibrarySpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
 					Spans: []*trace.Span{{
 						Name: "my-span",
 					}},
