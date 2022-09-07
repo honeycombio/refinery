@@ -12,6 +12,7 @@ const (
 	DatasetHeader     = "X-Honeycomb-Dataset"
 	SampleRateHeader  = "X-Honeycomb-Samplerate"
 	TimestampHeader   = "X-Honeycomb-Event-Time"
+	QueryTokenHeader  = "X-Honeycomb-Refinery-Query"
 )
 
 // used to put a request ID into the request context for logging

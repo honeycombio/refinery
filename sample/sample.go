@@ -11,7 +11,7 @@ import (
 )
 
 type Sampler interface {
-	GetSampleRate(trace *types.Trace) (rate uint, keep bool)
+	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string)
 	Start() error
 }
 
@@ -31,7 +31,7 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 		}
 	}
 
-	c, err := s.Config.GetSamplerConfigForDataset(samplerKey)
+	c, _, err := s.Config.GetSamplerConfigForDataset(samplerKey)
 	if err != nil {
 		return nil
 	}

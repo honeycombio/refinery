@@ -3,10 +3,10 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,11 +19,13 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -38,7 +40,7 @@ func TestDecompression(t *testing.T) {
 
 	router := &Router{zstdDecoders: decoders}
 	req := &http.Request{
-		Body:   ioutil.NopCloser(pReader),
+		Body:   io.NopCloser(pReader),
 		Header: http.Header{},
 	}
 	reader, err := router.getMaybeCompressedBody(req)
@@ -46,7 +48,7 @@ func TestDecompression(t *testing.T) {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
 
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
@@ -62,14 +64,14 @@ func TestDecompression(t *testing.T) {
 	}
 	w.Close()
 
-	req.Body = ioutil.NopCloser(buf)
+	req.Body = io.NopCloser(buf)
 	req.Header.Set("Content-Encoding", "gzip")
 	reader, err = router.getMaybeCompressedBody(req)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
 
-	b, err = ioutil.ReadAll(reader)
+	b, err = io.ReadAll(reader)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
@@ -88,14 +90,14 @@ func TestDecompression(t *testing.T) {
 	}
 	zstdW.Close()
 
-	req.Body = ioutil.NopCloser(buf)
+	req.Body = io.NopCloser(buf)
 	req.Header.Set("Content-Encoding", "zstd")
 	reader, err = router.getMaybeCompressedBody(req)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
 
-	b, err = ioutil.ReadAll(reader)
+	b, err = io.ReadAll(reader)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
@@ -123,7 +125,7 @@ func unmarshalRequest(w *httptest.ResponseRecorder, content string, body io.Read
 
 		w.Write([]byte(traceID))
 	}).ServeHTTP(w, &http.Request{
-		Body: ioutil.NopCloser(body),
+		Body: io.NopCloser(body),
 		Header: http.Header{
 			"Content-Type": []string{content},
 		},
@@ -143,7 +145,7 @@ func unmarshalBatchRequest(w *httptest.ResponseRecorder, content string, body io
 
 		w.Write([]byte(e.getEventTime().Format(time.RFC3339Nano)))
 	}).ServeHTTP(w, &http.Request{
-		Body: ioutil.NopCloser(body),
+		Body: io.NopCloser(body),
 		Header: http.Header{
 			"Content-Type": []string{content},
 		},
@@ -319,6 +321,99 @@ func TestDebugTrace(t *testing.T) {
 	}
 }
 
+func TestDebugAllRules(t *testing.T) {
+	tests := []struct {
+		format string
+		expect string
+	}{
+		{
+			format: "json",
+			expect: `{"dataset1":"FakeSamplerType"}`,
+		},
+		{
+			format: "toml",
+			expect: "dataset1 = 'FakeSamplerType'\n",
+		},
+		{
+			format: "yaml",
+			expect: "dataset1: FakeSamplerType\n",
+		},
+		{
+			format: "bogus",
+			expect: "invalid format 'bogus' when marshaling\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+
+			req, _ := http.NewRequest("GET", "/debug/allrules/"+tt.format, nil)
+			req = mux.SetURLVars(req, map[string]string{"format": tt.format})
+
+			rr := httptest.NewRecorder()
+			router := &Router{
+				Config: &config.MockConfig{
+					GetSamplerTypeVal: "FakeSamplerType",
+				},
+			}
+
+			router.getAllSamplerRules(rr, req)
+			assert.Equal(t, tt.expect, rr.Body.String())
+		})
+	}
+}
+
+func TestDebugRules(t *testing.T) {
+	tests := []struct {
+		format  string
+		dataset string
+		expect  string
+	}{
+		{
+			format:  "json",
+			dataset: "dataset1",
+			expect:  `{"FakeSamplerName":"FakeSamplerType"}`,
+		},
+		{
+			format:  "toml",
+			dataset: "dataset1",
+			expect:  "FakeSamplerName = 'FakeSamplerType'\n",
+		},
+		{
+			format:  "yaml",
+			dataset: "dataset1",
+			expect:  "FakeSamplerName: FakeSamplerType\n",
+		},
+		{
+			format:  "bogus",
+			dataset: "dataset1",
+			expect:  "invalid format 'bogus' when marshaling\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+
+			req, _ := http.NewRequest("GET", "/debug/rules/"+tt.format+"/"+tt.format, nil)
+			req = mux.SetURLVars(req, map[string]string{
+				"format":  tt.format,
+				"dataset": tt.dataset,
+			})
+
+			rr := httptest.NewRecorder()
+			router := &Router{
+				Config: &config.MockConfig{
+					GetSamplerTypeVal:  "FakeSamplerType",
+					GetSamplerTypeName: "FakeSamplerName",
+				},
+			}
+
+			router.getSamplerRules(rr, req)
+			assert.Equal(t, tt.expect, rr.Body.String())
+		})
+	}
+}
+
 func TestDependencyInjection(t *testing.T) {
 	var g inject.Graph
 	err := g.Provide(
@@ -424,4 +519,41 @@ func TestEnvironmentCache(t *testing.T) {
 			t.Errorf("expected %e - got %e", expectedErr, err)
 		}
 	})
+}
+
+func TestGRPCHealthProbeCheck(t *testing.T) {
+	router := &Router{
+		Config: &config.MockConfig{},
+		iopLogger: iopLogger{
+			Logger:         &logger.MockLogger{},
+			incomingOrPeer: "incoming",
+		},
+	}
+
+	req := &grpc_health_v1.HealthCheckRequest{}
+	resp, err := router.Check(context.Background(), req)
+	if err != nil {
+		t.Errorf(`Unexpected error: %s`, err)
+	}
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, resp.Status)
+}
+
+func TestGRPCHealthProbeWatch(t *testing.T) {
+	router := &Router{
+		Config: &config.MockConfig{},
+		iopLogger: iopLogger{
+			Logger:         &logger.MockLogger{},
+			incomingOrPeer: "incoming",
+		},
+	}
+
+	mockServer := &MockGRPCHealthWatchServer{}
+	err := router.Watch(&grpc_health_v1.HealthCheckRequest{}, mockServer)
+	if err != nil {
+		t.Errorf(`Unexpected error: %s`, err)
+	}
+	assert.Equal(t, 1, len(mockServer.GetSentMessages()))
+
+	sentMessage := mockServer.GetSentMessages()[0]
+	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, sentMessage.Status)
 }

@@ -343,12 +343,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace = &types.Trace{
-			APIHost:   sp.APIHost,
-			APIKey:    sp.APIKey,
-			Dataset:   sp.Dataset,
-			TraceID:   sp.TraceID,
-			StartTime: time.Now(),
-			SendBy:    time.Now().Add(timeout),
+			APIHost:    sp.APIHost,
+			APIKey:     sp.APIKey,
+			Dataset:    sp.Dataset,
+			TraceID:    sp.TraceID,
+			StartTime:  time.Now(),
+			SendBy:     time.Now().Add(timeout),
+			SampleRate: sp.SampleRate, // if it had a sample rate, we want to keep it
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
@@ -358,7 +359,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
-	if trace.Sent == true {
+	if trace.Sent {
 		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
 	}
 
@@ -394,6 +395,9 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types
 	}
 	if keep {
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
+		if sp.SampleRate < 1 {
+			sp.SampleRate = 1
+		}
 		sp.SampleRate *= sampleRate
 		i.Transmission.EnqueueSpan(sp)
 		return
@@ -414,7 +418,7 @@ func isRootSpan(sp *types.Span) bool {
 }
 
 func (i *InMemCollector) send(trace *types.Trace) {
-	if trace.Sent == true {
+	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it. This happens
 		// when two timers race and two signals for the same trace are sent down the
 		// toSend channel
@@ -426,7 +430,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	trace.Sent = true
 
-	traceDur := time.Now().Sub(trace.StartTime)
+	traceDur := time.Since(trace.StartTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
 	if trace.HasRootSpan {
@@ -456,9 +460,10 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 
 	// make sampling decision and update the trace
-	rate, shouldSend := sampler.GetSampleRate(trace)
+	rate, shouldSend, reason := sampler.GetSampleRate(trace)
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
+	logFields["reason"] = reason
 
 	// record this decision in the sent record LRU for future spans
 	sentRecord := traceSentRecord{
@@ -481,6 +486,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
+		if i.Config.GetAddRuleReasonToTrace() {
+			sp.Data["meta.refinery.reason"] = reason
+		}
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1
 		}

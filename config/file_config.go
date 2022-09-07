@@ -48,8 +48,11 @@ type configContents struct {
 	PeerManagement            PeerManagementConfig           `validate:"required"`
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 	AddHostMetadataToTrace    bool
+	AddRuleReasonToTrace      bool
 	EnvironmentCacheTTL       time.Duration
 	DatasetPrefix             string
+	QueryAuthToken            string
+	GRPCServerParameters      GRPCServerParameters
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -94,6 +97,17 @@ type PeerManagementConfig struct {
 	Timeout                 time.Duration
 }
 
+// GRPCServerParameters allow you to configure the GRPC ServerParameters used
+// by refinery's own GRPC server:
+// https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
+type GRPCServerParameters struct {
+	MaxConnectionIdle     time.Duration
+	MaxConnectionAge      time.Duration
+	MaxConnectionAgeGrace time.Duration
+	Time                  time.Duration
+	Timeout               time.Duration
+}
+
 // NewConfig creates a new config struct
 func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
@@ -104,6 +118,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
 	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_API_KEY")
+	c.BindEnv("QueryAuthToken", "REFINERY_QUERY_AUTH_TOKEN")
 	c.SetDefault("ListenAddr", "0.0.0.0:8080")
 	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
 	c.SetDefault("CompressPeerCommunication", true)
@@ -129,7 +144,13 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
 	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
 	c.SetDefault("AddHostMetadataToTrace", false)
+	c.SetDefault("AddRuleReasonToTrace", false)
 	c.SetDefault("EnvironmentCacheTTL", time.Hour)
+	c.SetDefault("GRPCServerParameters.MaxConnectionIdle", 1*time.Minute)
+	c.SetDefault("GRPCServerParameters.MaxConnectionAge", time.Duration(0))
+	c.SetDefault("GRPCServerParameters.MaxConnectionAgeGrace", time.Duration(0))
+	c.SetDefault("GRPCServerParameters.Time", 10*time.Second)
+	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -523,9 +544,47 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
-func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, error) {
+func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
+	samplers := make(map[string]interface{})
+
+	keys := f.rules.AllKeys()
+	for _, key := range keys {
+		parts := strings.Split(key, ".")
+
+		// extract default sampler rules
+		if parts[0] == "sampler" {
+			err := f.rules.Unmarshal(&samplers)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unmarshal sampler rule: %w", err)
+			}
+			t := f.rules.GetString(key)
+			samplers["sampler"] = t
+			continue
+		}
+
+		// extract all dataset sampler rules
+		if len(parts) > 1 && parts[1] == "sampler" {
+			t := f.rules.GetString(key)
+			m := make(map[string]interface{})
+			datasetName := parts[0]
+			if sub := f.rules.Sub(datasetName); sub != nil {
+				err := sub.Unmarshal(&m)
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal sampler rule for dataset %s: %w", datasetName, err)
+				}
+			}
+			m["sampler"] = t
+			samplers[datasetName] = m
+		}
+	}
+	return samplers, nil
+}
+
+func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
+
+	const notfound = "not found"
 
 	key := fmt.Sprintf("%s.Sampler", dataset)
 	if ok := f.rules.IsSet(key); ok {
@@ -544,11 +603,11 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 		case "TotalThroughputSampler":
 			i = &TotalThroughputSamplerConfig{}
 		default:
-			return nil, errors.New("No Sampler found")
+			return nil, notfound, errors.New("No Sampler found")
 		}
 
 		if sub := f.rules.Sub(dataset); sub != nil {
-			return i, sub.Unmarshal(i)
+			return i, t, sub.Unmarshal(i)
 		}
 
 	} else if ok := f.rules.IsSet("Sampler"); ok {
@@ -567,13 +626,13 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, er
 		case "TotalThroughputSampler":
 			i = &TotalThroughputSamplerConfig{}
 		default:
-			return nil, errors.New("No Sampler found")
+			return nil, notfound, errors.New("No Sampler found")
 		}
 
-		return i, f.rules.Unmarshal(i)
+		return i, t, f.rules.Unmarshal(i)
 	}
 
-	return nil, errors.New("No Sampler found")
+	return nil, notfound, errors.New("No Sampler found")
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
@@ -733,6 +792,13 @@ func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	return f.conf.AddHostMetadataToTrace
 }
 
+func (f *fileConfig) GetAddRuleReasonToTrace() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.AddRuleReasonToTrace
+}
+
 func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -745,6 +811,48 @@ func (f *fileConfig) GetDatasetPrefix() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.DatasetPrefix
+}
+
+func (f *fileConfig) GetQueryAuthToken() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.QueryAuthToken
+}
+
+func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.MaxConnectionIdle
+}
+
+func (f *fileConfig) GetGRPCMaxConnectionAge() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.MaxConnectionAge
+}
+
+func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.MaxConnectionAgeGrace
+}
+
+func (f *fileConfig) GetGRPCTime() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.Time
+}
+
+func (f *fileConfig) GetGRPCTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.GRPCServerParameters.Timeout
 }
 
 func (f *fileConfig) GetPeerTimeout() time.Duration {

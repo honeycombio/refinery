@@ -99,8 +99,11 @@ type Config interface {
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
 	GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error)
 
-	// GetSamplerConfigForDataset returns the sampler type to use for the given dataset
-	GetSamplerConfigForDataset(string) (interface{}, error)
+	// GetSamplerConfigForDataset returns the sampler type and name to use for the given dataset
+	GetSamplerConfigForDataset(string) (interface{}, string, error)
+
+	// GetAllSamplerRules returns all dataset rules in a map, including the default
+	GetAllSamplerRules() (map[string]interface{}, error)
 
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
@@ -138,9 +141,24 @@ type Config interface {
 
 	GetAddHostMetadataToTrace() bool
 
+	GetAddRuleReasonToTrace() bool
+
 	GetEnvironmentCacheTTL() time.Duration
 
 	GetDatasetPrefix() string
+
+	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
+	GetQueryAuthToken() string
+
+	GetGRPCMaxConnectionIdle() time.Duration
+
+	GetGRPCMaxConnectionAge() time.Duration
+
+	GetGRPCMaxConnectionAgeGrace() time.Duration
+
+	GetGRPCTime() time.Duration
+
+	GetGRPCTimeout() time.Duration
 
 	GetPeerTimeout() time.Duration
 }
