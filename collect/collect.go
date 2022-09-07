@@ -343,12 +343,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace = &types.Trace{
-			APIHost:   sp.APIHost,
-			APIKey:    sp.APIKey,
-			Dataset:   sp.Dataset,
-			TraceID:   sp.TraceID,
-			StartTime: time.Now(),
-			SendBy:    time.Now().Add(timeout),
+			APIHost:    sp.APIHost,
+			APIKey:     sp.APIKey,
+			Dataset:    sp.Dataset,
+			TraceID:    sp.TraceID,
+			StartTime:  time.Now(),
+			SendBy:     time.Now().Add(timeout),
+			SampleRate: sp.SampleRate, // if it had a sample rate, we want to keep it
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
@@ -459,9 +460,10 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 
 	// make sampling decision and update the trace
-	rate, shouldSend, why := sampler.GetSampleRate(trace)
+	rate, shouldSend, reason := sampler.GetSampleRate(trace)
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
+	logFields["reason"] = reason
 
 	// record this decision in the sent record LRU for future spans
 	sentRecord := traceSentRecord{
@@ -485,7 +487,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
 		if i.Config.GetAddRuleReasonToTrace() {
-			sp.Data["meta.refinery.reason"] = why
+			sp.Data["meta.refinery.reason"] = reason
 		}
 		if sp.SampleRate < 1 {
 			sp.SampleRate = 1

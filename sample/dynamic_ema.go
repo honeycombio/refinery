@@ -81,5 +81,5 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, strin
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep, "ema for " + key
+	return uint(rate), shouldKeep, "emadynamic/" + key
 }

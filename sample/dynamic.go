@@ -69,5 +69,5 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, string) 
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep, "dynsampler for " + key
+	return uint(rate), shouldKeep, "dynamic/" + key
 }

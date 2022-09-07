@@ -511,14 +511,14 @@ func TestRules(t *testing.T) {
 			trace.AddSpan(span)
 		}
 
-		rate, keep, why := sampler.GetSampleRate(trace)
+		rate, keep, reason := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
 		if name == "" {
 			name = d.Rules.Rule[0].Name
 		}
-		assert.Contains(t, why, name)
+		assert.Contains(t, reason, name)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -665,14 +665,14 @@ func TestRulesWithNestedFields(t *testing.T) {
 			trace.AddSpan(span)
 		}
 
-		rate, keep, why := sampler.GetSampleRate(trace)
+		rate, keep, reason := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
 		if name == "" {
 			name = d.Rules.Rule[0].Name
 		}
-		assert.Contains(t, why, name)
+		assert.Contains(t, reason, name)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -743,14 +743,14 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, why := sampler.GetSampleRate(trace)
+		rate, keep, reason := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
 		if name == "" {
 			name = d.Rules.Rule[0].Name
 		}
-		assert.Contains(t, why, name)
+		assert.Contains(t, reason, name)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -831,14 +831,14 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, why := sampler.GetSampleRate(trace)
+		rate, keep, reason := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
 		if name == "" {
 			name = d.Rules.Rule[0].Name
 		}
-		assert.Contains(t, why, name)
+		assert.Contains(t, reason, name)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {

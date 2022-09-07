@@ -72,5 +72,5 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (uint, bool, 
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep, "totalthroughput for " + key
+	return uint(rate), shouldKeep, "totalthroughput/" + key
 }

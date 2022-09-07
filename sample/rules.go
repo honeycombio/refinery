@@ -59,35 +59,35 @@ func (s *RulesBasedSampler) Start() error {
 	return nil
 }
 
-func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, why string) {
+func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
 		"trace_id": trace.TraceID,
 	})
 
 	for _, rule := range s.Config.Rule {
 		var matched bool
-		var why string
+		var reason string
 
 		switch rule.Scope {
 		case "span":
 			matched = ruleMatchesSpanInTrace(trace, rule, s.Config.CheckNestedFields)
-			why = "matched span - "
+			reason = "rules/span/"
 		case "trace", "":
 			matched = ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
-			why = "matched trace - "
+			reason = "rules/trace/"
 		default:
 			logger.WithFields(map[string]interface{}{
 				"rule_name": rule.Name,
 				"scope":     rule.Scope,
 			}).Logf("invalid scope %s given for rule: %s", rule.Scope, rule.Name)
 			matched = true
-			why = "matched due to invalid scope - "
+			reason = "rules/invalid scope/"
 		}
 
 		if matched {
 			var rate uint
 			var keep bool
-			var samplerWhy string
+			var samplerReason string
 
 			if rule.Sampler != nil {
 				var sampler Sampler
@@ -96,14 +96,14 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					logger.WithFields(map[string]interface{}{
 						"rule_name": rule.Name,
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
-					return 1, true, why + "no downstream sampler for rule: " + rule.Name
+					return 1, true, reason + "bad_rule:" + rule.Name
 				}
-				rate, keep, samplerWhy = sampler.GetSampleRate(trace)
-				why += rule.Name + " - " + samplerWhy
+				rate, keep, samplerReason = sampler.GetSampleRate(trace)
+				reason += rule.Name + ":" + samplerReason
 			} else {
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
-				why += "rule name: " + rule.Name
+				reason += rule.Name
 			}
 
 			s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
@@ -117,7 +117,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				"keep":      keep,
 				"drop_rule": rule.Drop,
 			}).Logf("got sample rate and decision")
-			return rate, keep, why
+			return rate, keep, reason
 		}
 	}
 

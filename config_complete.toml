@@ -113,8 +113,8 @@ EnvironmentCacheTTL = "1h"
 # If left unspecified, the /query endpoints are inaccessible.
 # QueryAuthToken = "some-random-value"
 
-# AddRuleReasonToTrace causes traces that are sent to Honeycomb to include a field `meta.refinery.reason`,
-# which will contain text indicating which rule was evaluated that caused the trace to be included.
+# AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
+# This field contains text indicating which rule was evaluated that caused the trace to be included.
 # AddRuleReasonToTrace = true
 
 ############################
