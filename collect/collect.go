@@ -358,7 +358,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
-	if trace.Sent == true {
+	if trace.Sent {
 		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
 	}
 
@@ -394,6 +394,9 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types
 	}
 	if keep {
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
+		if sp.SampleRate < 1 {
+			sp.SampleRate = 1
+		}
 		sp.SampleRate *= sampleRate
 		i.Transmission.EnqueueSpan(sp)
 		return
@@ -414,7 +417,7 @@ func isRootSpan(sp *types.Span) bool {
 }
 
 func (i *InMemCollector) send(trace *types.Trace) {
-	if trace.Sent == true {
+	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it. This happens
 		// when two timers race and two signals for the same trace are sent down the
 		// toSend channel
@@ -426,7 +429,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	trace.Sent = true
 
-	traceDur := time.Now().Sub(trace.StartTime)
+	traceDur := time.Since(trace.StartTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
 	if trace.HasRootSpan {
