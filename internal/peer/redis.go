@@ -153,9 +153,11 @@ func (p *redisPeers) updatePeerListOnce() {
 
 	currentPeers, err := p.store.GetMembers(ctx)
 	if err != nil {
-		logrus.WithField("name", p.publicAddr).
-			WithField("timeout", p.c.GetPeerTimeout().String()).
-			WithField("err", err).
+		logrus.WithError(err).
+			WithFields(logrus.Fields{
+				"name":    p.publicAddr,
+				"timeout": p.c.GetPeerTimeout().String(),
+			}).
 			Error("get members failed")
 		return
 	}
@@ -177,10 +179,12 @@ func (p *redisPeers) watchPeers() {
 		cancel()
 
 		if err != nil {
-			logrus.WithField("name", p.publicAddr).
-				WithField("timeout", p.c.GetPeerTimeout().String()).
-				WithField("oldPeers", oldPeerList).
-				WithField("err", err).
+			logrus.WithError(err).
+				WithFields(logrus.Fields{
+					"name":     p.publicAddr,
+					"timeout":  p.c.GetPeerTimeout().String(),
+					"oldPeers": oldPeerList,
+				}).
 				Error("get members failed during watch")
 			continue
 		}
