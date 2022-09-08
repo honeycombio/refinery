@@ -403,13 +403,18 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types
 }
 
 func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint) {
-	if traceSampleRate < 1 {
+	if traceSampleRate != 1 {
 		// When the sample rate from the trace is not 1 that means we are
 		// going to mangle the span sample rate. Write down the original sample
 		// rate so that that information is more easily recovered
 		sp.Data["meta.refinery.original_sample_rate"] = sp.SampleRate
+	}
+
+	if sp.SampleRate < 1 {
+		// Don't pass along negative/zero sample rates
 		sp.SampleRate = 1
 	}
+
 	// if spans are already sampled, take that in to account when computing
 	// the final rate
 	sp.SampleRate *= traceSampleRate
@@ -499,6 +504,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
 		}
+
 		if i.Config.GetIsDryRun() {
 			field := i.Config.GetDryRunFieldName()
 			sp.Data[field] = shouldSend

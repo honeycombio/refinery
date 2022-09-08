@@ -157,6 +157,60 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	transmission.Mux.RUnlock()
 }
 
+// Where is the documentation that this is needed behavior?
+func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	span := &types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1),
+		Event: types.Event{
+			Dataset:    "aoeu",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0, // This should get lifted to 1
+			Data:       make(map[string]interface{}),
+		},
+	}
+
+	coll.AddSpan(span)
+
+	time.Sleep(conf.SendTickerVal * 2)
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 1, len(transmission.Events), "should be some events transmitted")
+	assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
+		"SampleRate should be reset to one after starting at zero")
+	transmission.Mux.RUnlock()
+}
+
 func getEventsLength(transmission *transmit.MockTransmission) int {
 	transmission.Mux.RLock()
 	defer transmission.Mux.RUnlock()
