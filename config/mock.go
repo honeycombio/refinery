@@ -80,6 +80,7 @@ type MockConfig struct {
 	GRPCMaxConnectionAgeGrace     time.Duration
 	GRPCTime                      time.Duration
 	GRPCTimeout                   time.Duration
+	PeerTimeout                   time.Duration
 
 	Mux sync.RWMutex
 }
@@ -426,4 +427,11 @@ func (f *MockConfig) GetGRPCTimeout() time.Duration {
 	defer f.Mux.RUnlock()
 
 	return f.GRPCTimeout
+}
+
+func (f *MockConfig) GetPeerTimeout() time.Duration {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.PeerTimeout
 }

@@ -159,4 +159,6 @@ type Config interface {
 	GetGRPCTime() time.Duration
 
 	GetGRPCTimeout() time.Duration
+
+	GetPeerTimeout() time.Duration
 }

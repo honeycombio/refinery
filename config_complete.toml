@@ -212,6 +212,10 @@ Metrics = "honeycomb"
 # Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
 # RedisIdentifier = "192.168.1.1"
 
+# Timeout is optional. By default, when using RedisHost, Refinery will timeout
+# after 5s when communicating with Redis.
+# Timeout = "5s"
+
 #########################
 ## In-Memory Collector ##
 #########################

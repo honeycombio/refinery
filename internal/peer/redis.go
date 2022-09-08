@@ -45,7 +45,7 @@ type redisPeers struct {
 }
 
 // NewRedisPeers returns a peers collection backed by redis
-func newRedisPeers(c config.Config) (Peers, error) {
+func newRedisPeers(ctx context.Context, c config.Config) (Peers, error) {
 	redisHost, _ := c.GetRedisHost()
 
 	if redisHost == "" {
@@ -101,9 +101,9 @@ func newRedisPeers(c config.Config) (Peers, error) {
 	}
 
 	// register myself once
-	err = peers.store.Register(context.TODO(), address, peerEntryTimeout)
+	err = peers.store.Register(ctx, address, peerEntryTimeout)
 	if err != nil {
-		logrus.WithError(err).Errorf("failed to register self with peer store")
+		logrus.WithError(err).Errorf("failed to register self with redis peer store")
 		return nil, err
 	}
 
@@ -139,15 +139,26 @@ func (p *redisPeers) RegisterUpdatedPeersCallback(cb func()) {
 func (p *redisPeers) registerSelf() {
 	tk := time.NewTicker(refreshCacheInterval)
 	for range tk.C {
-		// every 5 seconds, insert a 30sec timeout record
-		p.store.Register(context.TODO(), p.publicAddr, peerEntryTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
+		// every 5 seconds, insert a 30sec timeout record. we ignore the error
+		// here since Register() logs the error for us.
+		p.store.Register(ctx, p.publicAddr, peerEntryTimeout)
+		cancel()
 	}
 }
 
 func (p *redisPeers) updatePeerListOnce() {
-	currentPeers, err := p.store.GetMembers(context.TODO())
+	ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
+	defer cancel()
+
+	currentPeers, err := p.store.GetMembers(ctx)
 	if err != nil {
-		// TODO maybe do something better here?
+		logrus.WithError(err).
+			WithFields(logrus.Fields{
+				"name":    p.publicAddr,
+				"timeout": p.c.GetPeerTimeout().String(),
+			}).
+			Error("get members failed")
 		return
 	}
 	sort.Strings(currentPeers)
@@ -163,11 +174,21 @@ func (p *redisPeers) watchPeers() {
 	tk := time.NewTicker(refreshCacheInterval)
 
 	for range tk.C {
-		currentPeers, err := p.store.GetMembers(context.TODO())
+		ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
+		currentPeers, err := p.store.GetMembers(ctx)
+		cancel()
+
 		if err != nil {
-			// TODO maybe do something better here?
+			logrus.WithError(err).
+				WithFields(logrus.Fields{
+					"name":     p.publicAddr,
+					"timeout":  p.c.GetPeerTimeout().String(),
+					"oldPeers": oldPeerList,
+				}).
+				Error("get members failed during watch")
 			continue
 		}
+
 		sort.Strings(currentPeers)
 		if !equal(oldPeerList, currentPeers) {
 			// update peer list and trigger callbacks saying the peer list has changed

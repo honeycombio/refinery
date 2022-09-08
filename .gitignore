@@ -17,3 +17,6 @@ test_redimem
 !/cmd/test_redimem
 
 dockerize*
+
+# IDE configs
+.idea/

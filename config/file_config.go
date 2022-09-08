@@ -94,6 +94,7 @@ type PeerManagementConfig struct {
 	IdentifierInterfaceName string
 	UseIPV6Identifier       bool
 	RedisIdentifier         string
+	Timeout                 time.Duration
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
@@ -127,6 +128,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("PeerManagement.UseTLS", false)
 	c.SetDefault("PeerManagement.UseTLSInsecure", false)
 	c.SetDefault("PeerManagement.UseIPV6Identifier", false)
+	c.SetDefault("PeerManagement.Timeout", 5*time.Second)
 	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
 	c.SetDefault("Logger", "logrus")
 	c.SetDefault("LoggingLevel", "debug")
@@ -851,4 +853,11 @@ func (f *fileConfig) GetGRPCTimeout() time.Duration {
 	defer f.mux.RUnlock()
 
 	return f.conf.GRPCServerParameters.Timeout
+}
+
+func (f *fileConfig) GetPeerTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.PeerManagement.Timeout
 }
