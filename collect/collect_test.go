@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"fmt"
 	"runtime"
 	"strconv"
 	"testing"
@@ -96,6 +97,127 @@ func TestAddRootSpan(t *testing.T) {
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
+}
+
+// #490, SampleRate getting stomped could cause confusion if sampling was
+// happening upstream of refinery. Writing down what got sent to refinery
+// will help people figure out what is going on.
+func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
+		SendTickerVal:      2 * time.Millisecond,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	// Spin until a sample gets triggered
+	sendAttemptCount := 0
+	for getEventsLength(transmission) < 1 || sendAttemptCount > 10 {
+		sendAttemptCount++
+		span := &types.Span{
+			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
+			Event: types.Event{
+				Dataset:    "aoeu",
+				APIKey:     legacyAPIKey,
+				SampleRate: 50,
+				Data:       make(map[string]interface{}),
+			},
+		}
+		coll.AddSpan(span)
+		time.Sleep(conf.SendTickerVal * 2)
+	}
+
+	transmission.Mux.RLock()
+	assert.Greater(t, len(transmission.Events), 0, "should be some events transmitted")
+	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"], "metadata should be populated with original sample rate")
+	transmission.Mux.RUnlock()
+}
+
+// HoneyComb treats a missing or 0 SampleRate the same as 1, but
+// behaves better/more consistently if the SampleRate is explicitly
+// set instead of inferred
+func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	span := &types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1),
+		Event: types.Event{
+			Dataset:    "aoeu",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0, // This should get lifted to 1
+			Data:       make(map[string]interface{}),
+		},
+	}
+
+	coll.AddSpan(span)
+
+	time.Sleep(conf.SendTickerVal * 2)
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 1, len(transmission.Events), "should be some events transmitted")
+	assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
+		"SampleRate should be reset to one after starting at zero")
+	transmission.Mux.RUnlock()
+}
+
+func getEventsLength(transmission *transmit.MockTransmission) int {
+	transmission.Mux.RLock()
+	defer transmission.Mux.RUnlock()
+
+	return len(transmission.Events)
 }
 
 // TestAddSpan tests that adding a span winds up with a trace object in the
