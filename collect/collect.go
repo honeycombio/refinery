@@ -411,7 +411,11 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint) {
 	}
 
 	if sp.SampleRate < 1 {
-		// Don't pass along negative/zero sample rates
+		// See https://docs.honeycomb.io/manage-data-volume/sampling/
+		// SampleRate is the denominator of the ratio of sampled spans
+		// HoneyComb treats a missing or 0 SampleRate the same as 1, but
+		// behaves better/more consistently if the SampleRate is explicitly
+		// set instead of inferred
 		sp.SampleRate = 1
 	}
 

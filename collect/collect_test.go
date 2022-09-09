@@ -157,7 +157,9 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	transmission.Mux.RUnlock()
 }
 
-// Where is the documentation that this is needed behavior?
+// HoneyComb treats a missing or 0 SampleRate the same as 1, but
+// behaves better/more consistently if the SampleRate is explicitly
+// set instead of inferred
 func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
