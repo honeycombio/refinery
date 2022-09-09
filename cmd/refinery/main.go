@@ -138,7 +138,7 @@ func main() {
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
 			MaxBatchSize:          c.GetMaxBatchSize(),
-			BatchTimeout:          libhoney.DefaultBatchTimeout,
+			BatchTimeout:          c.GetBatchTimeout(),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:   uint(c.GetUpstreamBufferSize()),
 			UserAgentAddition:     userAgentAddition,
@@ -156,7 +156,7 @@ func main() {
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
 			MaxBatchSize:          c.GetMaxBatchSize(),
-			BatchTimeout:          libhoney.DefaultBatchTimeout,
+			BatchTimeout:          c.GetBatchTimeout(),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
 			UserAgentAddition:     userAgentAddition,

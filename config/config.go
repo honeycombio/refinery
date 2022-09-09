@@ -71,6 +71,9 @@ type Config interface {
 	// complete before sending it, to allow stragglers to arrive
 	GetSendDelay() (time.Duration, error)
 
+	// GetBatchTimeout returns how often to send off batches in seconds
+	GetBatchTimeout() time.Duration
+
 	// GetTraceTimeout is how long to wait before sending a trace even if it's
 	// not complete. This should be longer than the longest expected trace
 	// duration.
