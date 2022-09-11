@@ -1,5 +1,71 @@
 # Refinery Changelog
 
+## 1.16.0 2022-09-09
+
+This release contains a number of small new features to assist in running refinery more effectively:
+- Adds new endpoints to help in debugging refinery rules (see README.md)
+- Fixes issues with SampleRate
+- Adds some new configuration parameters (see the *_complete.toml files for more)
+- Conforms to the GRPC standard for health probes
+- Accepts OTLP/JSON traces and conforms to the most recent OTLP trace specification
+
+### Enhancements
+
+- Add /query endpoints to help debug refinery rules (#500, #502) | [kentquirk](https://github.com/kentquirk)
+- Implement grpc-health-probe (#498) | [abatilo](https://github.com/abatilo)
+- Make gRPC ServerParameters configurable (#499) | [abatilo](https://github.com/abatilo)
+- Fix sample rate for late spans (#504) | [kentquirk](https://github.com/kentquirk)
+- Optionally record why a sample decision was made (#503) | [kentquirk](https://github.com/kentquirk)
+- Added PeerManagement.Timeout config option (#491) | [thrawn01](https://github.com/thrawn01)
+- Add 'meta.refinery.original_sample_rate' (#508) | [epvanhouten](https://github.com/epvanhouten)
+
+### Maintenance
+
+- maint: improvements to GitHub operation (#474, #477, #478) | [JamieDanielson](https://github.com/JamieDanielson), [vreynolds](https://github.com/vreynolds)
+
+### Dependencies
+
+- Bump github.com/stretchr/testify from 1.7.2 to 1.8.0 (#472) | [dependabot](https://github.com/dependabot)
+- Bump github.com/sirupsen/logrus from 1.8.1 to 1.9.0 (#484) | [dependabot](https://github.com/dependabot)
+- Bump google.golang.org/grpc from 1.46.2 to 1.49.0 (#485, 494) | [dependabot](https://github.com/dependabot)
+- Bump github.com/honeycombio/libhoney-go from 1.15.8 to 1.16.0 (#487) | [dependabot](https://github.com/dependabot)
+- Bump github.com/gomodule/redigo from 1.8.8 to 1.8.9 (#488) | [dependabot](https://github.com/dependabot)
+- Bump github.com/klauspost/compress from 1.15.7 to 1.15.9 (#495) | [dependabot](https://github.com/dependabot)
+- Bump github.com/tidwall/gjson from 1.14.1 to 1.14.3 (#497) | [dependabot](https://github.com/dependabot)
+- Update github.com/honeycombio/husky to latest and fix breaking changes (#505) | [kentquirk](https://github.com/kentquirk)
+- Go mod tidy (#507) | [kentquirk](https://github.com/kentquirk)
+
+## New Contributors
+- @abatilo made their first contribution in https://github.com/honeycombio/refinery/pull/498
+- @thrawn01 made their first contribution in https://github.com/honeycombio/refinery/pull/491
+- @epvanhouten made their first contribution in https://github.com/honeycombio/refinery/pull/508
+
+**Full Changelog**: https://github.com/honeycombio/refinery/compare/v1.15.0...v1.16.0
+
+## 1.15.0 2022-07-01
+
+### Enhancements
+
+- Add rule Scope configuration option to rules-based sampler (#440) | [isnotajoke](https://github.com/isnotajoke)
+- Replace hand-rolled binary.BigEndian.Uint32 with the real deal (#459) | [toshok](https://github.com/toshok)
+- Validate successful span scoped rules test (#465) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Create helm-chart issue on release (#458) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+- github_token needs underscore not hyphen (#464) | [@JamieDanielson](https://github.com/JamieDanielson)
+
+### Maintenance
+
+- Replace legacy with classic in readme (#457) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
+
+### Dependencies
+
+- Bump github.com/spf13/viper from 1.10.1 to 1.12.0 (#461)
+- Bump github.com/stretchr/testify from 1.7.1 to 1.7.2 (#467)
+- Bump github.com/honeycombio/husky from 0.10.5 to 0.10.6 (#460)
+- Bump github.com/klauspost/compress from 1.15.4 to 1.15.6 (#466)
+- Bump github.com/prometheus/client_golang from 1.12.1 to 1.12.2 (#463)
+
+
+
 ## 1.15.0 2022-07-01
 
 ### Enhancements
