@@ -23,12 +23,10 @@ type HoneycombMetrics struct {
 	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
 	Version           string          `inject:"version"`
 
-	countersLock   sync.Mutex
-	counters       map[string]*counter
-	gaugesLock     sync.Mutex
-	gauges         map[string]*gauge
-	histogramsLock sync.Mutex
-	histograms     map[string]*histogram
+	lock       sync.Mutex
+	counters   map[string]*counter
+	gauges     map[string]*gauge
+	histograms map[string]*histogram
 
 	libhClient *libhoney.Client
 
@@ -228,16 +226,17 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 				"api_host": ev.APIHost,
 				"dataset":  ev.Dataset,
 			}
-			h.countersLock.Lock()
+
+			h.lock.Lock()
+			defer h.lock.Unlock()
+
 			for _, count := range h.counters {
 				count.lock.Lock()
 				ev.AddField(PrefixMetricName(h.prefix, count.name), count.val)
 				count.val = 0
 				count.lock.Unlock()
 			}
-			h.countersLock.Unlock()
 
-			h.gaugesLock.Lock()
 			for _, gauge := range h.gauges {
 				gauge.lock.Lock()
 				ev.AddField(PrefixMetricName(h.prefix, gauge.name), gauge.val)
@@ -245,9 +244,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 				// gauge.val = 0
 				gauge.lock.Unlock()
 			}
-			h.gaugesLock.Unlock()
 
-			h.histogramsLock.Lock()
 			for _, histogram := range h.histograms {
 				histogram.lock.Lock()
 				if len(histogram.vals) != 0 {
@@ -265,7 +262,6 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 				}
 				histogram.lock.Unlock()
 			}
-			h.histogramsLock.Unlock()
 
 			ev.Send()
 		}
@@ -281,10 +277,11 @@ func average(vals []float64) float64 {
 }
 
 func (h *HoneycombMetrics) Register(name string, metricType string) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	switch metricType {
 	case "counter":
-		h.countersLock.Lock()
-		defer h.countersLock.Unlock()
 		// inside the lock, let's not race to create the counter
 		_, ok := h.counters[name]
 		if !ok {
@@ -294,8 +291,6 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 			h.counters[name] = newCounter
 		}
 	case "gauge":
-		h.gaugesLock.Lock()
-		defer h.gaugesLock.Unlock()
 		_, ok := h.gauges[name]
 		if !ok {
 			newGauge := &gauge{
@@ -304,8 +299,6 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 			h.gauges[name] = newGauge
 		}
 	case "histogram":
-		h.histogramsLock.Lock()
-		defer h.histogramsLock.Unlock()
 		_, ok := h.histograms[name]
 		if !ok {
 			newGauge := &histogram{
@@ -320,6 +313,9 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 }
 
 func (h *HoneycombMetrics) Count(name string, n interface{}) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	count, ok := h.counters[name]
 	if !ok {
 		h.Register(name, "counter")
@@ -335,6 +331,9 @@ func (h *HoneycombMetrics) Increment(name string) {
 }
 
 func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	gauge, ok := h.gauges[name]
 	if !ok {
 		h.Register(name, "gauge")
@@ -346,6 +345,9 @@ func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
 }
 
 func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	histogram, ok := h.histograms[name]
 	if !ok {
 		h.Register(name, "histogram")
