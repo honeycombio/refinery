@@ -228,8 +228,6 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			}
 
 			h.lock.Lock()
-			defer h.lock.Unlock()
-
 			for _, count := range h.counters {
 				count.lock.Lock()
 				ev.AddField(PrefixMetricName(h.prefix, count.name), count.val)
@@ -262,6 +260,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 				}
 				histogram.lock.Unlock()
 			}
+			h.lock.Unlock()
 
 			ev.Send()
 		}
