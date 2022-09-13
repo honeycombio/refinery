@@ -23,7 +23,7 @@ type HoneycombMetrics struct {
 	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
 	Version           string          `inject:"version"`
 
-	lock       sync.Mutex
+	lock       sync.RWMutex
 	counters   map[string]*counter
 	gauges     map[string]*gauge
 	histograms map[string]*histogram
@@ -227,7 +227,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 				"dataset":  ev.Dataset,
 			}
 
-			h.lock.Lock()
+			h.lock.RLock()
 			for _, count := range h.counters {
 				count.lock.Lock()
 				ev.AddField(PrefixMetricName(h.prefix, count.name), count.val)
@@ -260,7 +260,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 				}
 				histogram.lock.Unlock()
 			}
-			h.lock.Unlock()
+			h.lock.RUnlock()
 
 			ev.Send()
 		}
@@ -312,17 +312,23 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 }
 
 func (h *HoneycombMetrics) Count(name string, n interface{}) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
+	// attempt to retrieve existing counter, with read lock
+	h.lock.RLock()
+	counter, ok := h.counters[name]
+	h.lock.RUnlock()
 
-	count, ok := h.counters[name]
 	if !ok {
+		// execute register outside of read lock so it can take write lock
 		h.Register(name, "counter")
-		count = h.counters[name]
+
+		// attempt to get counter again, with read lock
+		h.lock.RLock()
+		counter = h.counters[name]
+		h.lock.RUnlock()
 	}
-	count.lock.Lock()
-	defer count.lock.Unlock()
-	count.val = count.val + int(ConvertNumeric(n))
+	counter.lock.Lock()
+	defer counter.lock.Unlock()
+	counter.val = counter.val + int(ConvertNumeric(n))
 }
 
 func (h *HoneycombMetrics) Increment(name string) {
@@ -330,13 +336,19 @@ func (h *HoneycombMetrics) Increment(name string) {
 }
 
 func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
+	// attempt to retrieve existing gauge, with read lock
+	h.lock.RLock()
 	gauge, ok := h.gauges[name]
+	h.lock.RUnlock()
+
 	if !ok {
+		// execute metric of read lock so it can take write lock
 		h.Register(name, "gauge")
+
+		// attempt to get gauge again, with read lock
+		h.lock.RLock()
 		gauge = h.gauges[name]
+		h.lock.RUnlock()
 	}
 	gauge.lock.Lock()
 	defer gauge.lock.Unlock()
@@ -344,13 +356,19 @@ func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
 }
 
 func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
+	// attempt to retrieve existing histogram, with read lock
+	h.lock.RLock()
 	histogram, ok := h.histograms[name]
+	h.lock.RUnlock()
+
 	if !ok {
+		// execute register outside of read lock so it can take write lock
 		h.Register(name, "histogram")
+
+		// attempt to get histogram again, with read lock
+		h.lock.RLock()
 		histogram = h.histograms[name]
+		h.lock.RUnlock()
 	}
 	histogram.lock.Lock()
 	defer histogram.lock.Unlock()
