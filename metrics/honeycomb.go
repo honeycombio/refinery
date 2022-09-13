@@ -295,7 +295,7 @@ func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string,
 	// attempt to get metric by name using read lock
 	lock.RLock()
 	metric, ok := metrics[name]
-	lock.Unlock()
+	lock.RUnlock()
 
 	// if found, return existing metric
 	if ok {
