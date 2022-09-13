@@ -276,59 +276,71 @@ func average(vals []float64) float64 {
 }
 
 func (h *HoneycombMetrics) Register(name string, metricType string) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
 	switch metricType {
 	case "counter":
-		// inside the lock, let's not race to create the counter
-		_, ok := h.counters[name]
-		if !ok {
-			newCounter := &counter{
-				name: name,
-			}
-			h.counters[name] = newCounter
-		}
+		getOrAdd(&h.lock, name, h.counters, createCounter)
 	case "gauge":
-		_, ok := h.gauges[name]
-		if !ok {
-			newGauge := &gauge{
-				name: name,
-			}
-			h.gauges[name] = newGauge
-		}
+		getOrAdd(&h.lock, name, h.gauges, createGague)
 	case "histogram":
-		_, ok := h.histograms[name]
-		if !ok {
-			newGauge := &histogram{
-				name: name,
-				vals: make([]float64, 0),
-			}
-			h.histograms[name] = newGauge
-		}
+		getOrAdd(&h.lock, name, h.histograms, createHistogram)
 	default:
 		h.Logger.Debug().Logf("unspported metric type %s", metricType)
 	}
 }
 
-func (h *HoneycombMetrics) Count(name string, n interface{}) {
-	// attempt to retrieve existing counter, with read lock
-	h.lock.RLock()
-	counter, ok := h.counters[name]
-	h.lock.RUnlock()
+// getOrAdd attempts to retrieve a (generic) metric from the provided map by name, wrapping the read operation
+// with a read lock (RLock). If the metric is not present in the map, it aquire a write lock and executes
+// create function and add it's to the map.
+func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string, metrics map[string]T, createMetric func(name string) T) T {
+	// attempt to get metric by name using read lock
+	lock.RLock()
+	metric, ok := metrics[name]
+	lock.Unlock()
 
-	if !ok {
-		// execute register outside of read lock so it can take write lock
-		h.Register(name, "counter")
-
-		// attempt to get counter again, with read lock
-		h.lock.RLock()
-		counter = h.counters[name]
-		h.lock.RUnlock()
+	// if found, return existing metric
+	if ok {
+		return metric
 	}
+
+	// aquire write lock
+	lock.Lock()
+	// check again to see if it's been while waiting for write lock
+	metric, ok = metrics[name]
+	if !ok {
+		// create new metric using create function and add to map
+		metric := createMetric(name)
+		metrics[name] = metric
+	}
+	lock.Unlock()
+	return metric
+}
+
+func createCounter(name string) *counter {
+	return &counter{
+		name: name,
+	}
+}
+
+func createGague(name string) *gauge {
+	return &gauge{
+		name: name,
+	}
+}
+
+func createHistogram(name string) *histogram {
+	return &histogram{
+		name: name,
+		vals: make([]float64, 0),
+	}
+}
+
+func (h *HoneycombMetrics) Count(name string, n interface{}) {
+	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
+
+	// update value, using counter's lock
 	counter.lock.Lock()
-	defer counter.lock.Unlock()
 	counter.val = counter.val + int(ConvertNumeric(n))
+	counter.lock.Unlock()
 }
 
 func (h *HoneycombMetrics) Increment(name string) {
@@ -336,41 +348,19 @@ func (h *HoneycombMetrics) Increment(name string) {
 }
 
 func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
-	// attempt to retrieve existing gauge, with read lock
-	h.lock.RLock()
-	gauge, ok := h.gauges[name]
-	h.lock.RUnlock()
+	gauge := getOrAdd(&h.lock, name, h.gauges, createGague)
 
-	if !ok {
-		// execute metric of read lock so it can take write lock
-		h.Register(name, "gauge")
-
-		// attempt to get gauge again, with read lock
-		h.lock.RLock()
-		gauge = h.gauges[name]
-		h.lock.RUnlock()
-	}
+	// update value, using gauge's lock
 	gauge.lock.Lock()
-	defer gauge.lock.Unlock()
 	gauge.val = ConvertNumeric(val)
+	gauge.lock.Unlock()
 }
 
 func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
-	// attempt to retrieve existing histogram, with read lock
-	h.lock.RLock()
-	histogram, ok := h.histograms[name]
-	h.lock.RUnlock()
+	histogram := getOrAdd(&h.lock, name, h.histograms, createHistogram)
 
-	if !ok {
-		// execute register outside of read lock so it can take write lock
-		h.Register(name, "histogram")
-
-		// attempt to get histogram again, with read lock
-		h.lock.RLock()
-		histogram = h.histograms[name]
-		h.lock.RUnlock()
-	}
+	// update value, using histogram's lock
 	histogram.lock.Lock()
-	defer histogram.lock.Unlock()
 	histogram.vals = append(histogram.vals, ConvertNumeric(obs))
+	histogram.lock.Unlock()
 }
