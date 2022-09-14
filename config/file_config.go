@@ -37,6 +37,7 @@ type configContents struct {
 	Sampler                   string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler TotalThroughputSampler"`
 	Metrics                   string        `validate:"required,oneof= prometheus honeycomb"`
 	SendDelay                 time.Duration `validate:"required"`
+	BatchTimeout              time.Duration
 	TraceTimeout              time.Duration `validate:"required"`
 	MaxBatchSize              uint          `validate:"required"`
 	SendTicker                time.Duration `validate:"required"`
@@ -135,6 +136,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("Collector", "InMemCollector")
 	c.SetDefault("Metrics", "honeycomb")
 	c.SetDefault("SendDelay", 2*time.Second)
+	c.SetDefault("BatchTimeout", libhoney.DefaultBatchTimeout)
 	c.SetDefault("TraceTimeout", 60*time.Second)
 	c.SetDefault("MaxBatchSize", 500)
 	c.SetDefault("SendTicker", 100*time.Millisecond)
@@ -708,6 +710,13 @@ func (f *fileConfig) GetSendDelay() (time.Duration, error) {
 	defer f.mux.RUnlock()
 
 	return f.conf.SendDelay, nil
+}
+
+func (f *fileConfig) GetBatchTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.BatchTimeout
 }
 
 func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {

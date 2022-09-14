@@ -58,6 +58,11 @@ HoneycombAPI = "https://api.honeycomb.io"
 # Eligible for live reload.
 SendDelay = "2s"
 
+# BatchTimeout dictates how frequently to send unfulfilled batches. By default
+# this will use the DefaultBatchTimeout in libhoney as its value, which is 100ms.
+# Eligible for live reload.
+BatchTimeout = "1s"
+
 # TraceTimeout is a long timer; it represents the outside boundary of how long
 # to wait before sending an incomplete trace. Normally traces are sent when the
 # root span arrives. Sometimes the root span never arrives (due to crashes or

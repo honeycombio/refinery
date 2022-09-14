@@ -57,6 +57,7 @@ type MockConfig struct {
 	GetPrometheusMetricsConfigVal PrometheusMetricsConfig
 	GetSendDelayErr               error
 	GetSendDelayVal               time.Duration
+	GetBatchTimeoutVal            time.Duration
 	GetTraceTimeoutErr            error
 	GetTraceTimeoutVal            time.Duration
 	GetMaxBatchSizeVal            uint
@@ -256,6 +257,13 @@ func (m *MockConfig) GetSendDelay() (time.Duration, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetSendDelayVal, m.GetSendDelayErr
+}
+
+func (m *MockConfig) GetBatchTimeout() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetBatchTimeoutVal
 }
 
 func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
