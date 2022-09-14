@@ -53,6 +53,7 @@ type configContents struct {
 	DatasetPrefix             string
 	QueryAuthToken            string
 	GRPCServerParameters      GRPCServerParameters
+	AdditionalErrorFields     []string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -151,6 +152,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("GRPCServerParameters.MaxConnectionAgeGrace", time.Duration(0))
 	c.SetDefault("GRPCServerParameters.Time", 10*time.Second)
 	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
+	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -860,4 +862,11 @@ func (f *fileConfig) GetPeerTimeout() time.Duration {
 	defer f.mux.RUnlock()
 
 	return f.conf.PeerManagement.Timeout
+}
+
+func (f *fileConfig) GetAdditionalErrorFields() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.AdditionalErrorFields
 }

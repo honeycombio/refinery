@@ -111,11 +111,24 @@ EnvironmentCacheTTL = "1h"
 # are not typically needed in normal operation.
 # Can be specified in the environment as REFINERY_QUERY_AUTH_TOKEN.
 # If left unspecified, the /query endpoints are inaccessible.
+# Not eligible for live reload.
 # QueryAuthToken = "some-random-value"
 
 # AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
 # This field contains text indicating which rule was evaluated that caused the trace to be included.
+# Eligible for live reload.
 # AddRuleReasonToTrace = true
+
+# AdditionalErrorFields should be a list of span fields that should be included when logging
+# errors that happen during ingestion of events (for example, the span too large error).
+# This is primarily useful in trying to track down misbehaving senders in a large installation.
+# The fields `dataset`, `apihost`, and `environment` are always included.
+# If a field is not present in the span, it will not be present in the error log.
+# Default is ["trace.span_id"].
+# Eligible for live reload.
+AdditionalErrorFields = [
+	"trace.span_id"
+]
 
 ############################
 ## Implementation Choices ##
