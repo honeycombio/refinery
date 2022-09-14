@@ -280,7 +280,7 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 	case "counter":
 		getOrAdd(&h.lock, name, h.counters, createCounter)
 	case "gauge":
-		getOrAdd(&h.lock, name, h.gauges, createGague)
+		getOrAdd(&h.lock, name, h.gauges, createGauge)
 	case "histogram":
 		getOrAdd(&h.lock, name, h.histograms, createHistogram)
 	default:
@@ -321,7 +321,7 @@ func createCounter(name string) *counter {
 	}
 }
 
-func createGague(name string) *gauge {
+func createGauge(name string) *gauge {
 	return &gauge{
 		name: name,
 	}
@@ -348,7 +348,7 @@ func (h *HoneycombMetrics) Increment(name string) {
 }
 
 func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
-	gauge := getOrAdd(&h.lock, name, h.gauges, createGague)
+	gauge := getOrAdd(&h.lock, name, h.gauges, createGauge)
 
 	// update value, using gauge's lock
 	gauge.lock.Lock()
