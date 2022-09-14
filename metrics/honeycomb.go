@@ -289,8 +289,8 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 }
 
 // getOrAdd attempts to retrieve a (generic) metric from the provided map by name, wrapping the read operation
-// with a read lock (RLock). If the metric is not present in the map, it aquire a write lock and executes
-// create function and add it's to the map.
+// with a read lock (RLock). If the metric is not present in the map, it acquires a write lock and executes
+// a create function to add it to the map.
 func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string, metrics map[string]T, createMetric func(name string) T) T {
 	// attempt to get metric by name using read lock
 	lock.RLock()
@@ -302,9 +302,9 @@ func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string,
 		return metric
 	}
 
-	// aquire write lock
+	// acquire write lock
 	lock.Lock()
-	// check again to see if it's been while waiting for write lock
+	// check again to see if it's been added while waiting for write lock
 	metric, ok = metrics[name]
 	if !ok {
 		// create new metric using create function and add to map
