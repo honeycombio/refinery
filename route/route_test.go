@@ -9,23 +9,22 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/facebookgo/inject"
-	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
-	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/gorilla/mux"
+	"github.com/honeycombio/refinery/sharder"
+	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v4"
-	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 )
@@ -557,22 +556,4 @@ func TestGRPCHealthProbeWatch(t *testing.T) {
 
 	sentMessage := mockServer.GetSentMessages()[0]
 	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, sentMessage.Status)
-}
-
-func Test_getEventTime(t *testing.T) {
-	tests := []struct {
-		name string
-		time string
-		want time.Time
-	}{
-		{"check python", "2022-09-11T17:17:21.904Z", time.Time{}},
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := getEventTime(tt.time); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getEventTime() = %v, want %v", got, tt.want)
-			}
-		})
-	}
 }
