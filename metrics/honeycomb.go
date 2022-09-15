@@ -222,7 +222,7 @@ func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
 			return
 		case <-tick.C:
 			ev := h.libhClient.NewEvent()
-			ev.Metadata = map[string]string{
+			ev.Metadata = map[string]any{
 				"api_host": ev.APIHost,
 				"dataset":  ev.Dataset,
 			}
