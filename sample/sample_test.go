@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -30,11 +29,11 @@ func TestDependencyInjection(t *testing.T) {
 }
 
 func TestDatasetPrefix(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -57,7 +56,7 @@ func TestDatasetPrefix(t *testing.T) {
 	assert.NoError(t, err)
 	configFile.Close()
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	_, err = rulesFile.Write([]byte(`

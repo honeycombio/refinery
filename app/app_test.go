@@ -1,5 +1,4 @@
 //go:build all || race
-// +build all race
 
 package app
 
@@ -9,7 +8,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -215,7 +213,7 @@ func post(t testing.TB, req *http.Request) {
 	resp, err := httpClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	io.Copy(ioutil.Discard, resp.Body)
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 }
 
@@ -333,7 +331,7 @@ func TestPeerRouting(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	blob := `[` + string(spans[0]) + `]`
-	req.Body = ioutil.NopCloser(strings.NewReader(blob))
+	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
 		return len(senders[0].Events()) == 1
@@ -383,7 +381,7 @@ func TestPeerRouting(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	req.Body = ioutil.NopCloser(strings.NewReader(blob))
+	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
 		return len(senders[1].Events()) == 1
@@ -716,7 +714,7 @@ func BenchmarkTraces(b *testing.B) {
 
 	sender := &countingWriterSender{
 		WriterSender: transmission.WriterSender{
-			W: ioutil.Discard,
+			W: io.Discard,
 		},
 	}
 	_, graph := newStartedApp(b, sender, 11000, nil, false)
@@ -734,7 +732,7 @@ func BenchmarkTraces(b *testing.B) {
 		sender.resetCount()
 		for n := 0; n < b.N; n++ {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
-			req.Body = ioutil.NopCloser(strings.NewReader(blob))
+			req.Body = io.NopCloser(strings.NewReader(blob))
 			post(b, req)
 		}
 		sender.waitForCount(b, b.N)
@@ -752,7 +750,7 @@ func BenchmarkTraces(b *testing.B) {
 				blob = append(blob, ',')
 			}
 			blob[len(blob)-1] = ']'
-			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+			req.Body = io.NopCloser(bytes.NewReader(blob))
 
 			post(b, req)
 		}
@@ -776,13 +774,13 @@ func BenchmarkTraces(b *testing.B) {
 						blob = append(blob, ',')
 					}
 					blob[len(blob)-1] = ']'
-					req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+					req.Body = io.NopCloser(bytes.NewReader(blob))
 
 					resp, err := httpClient.Do(req)
 					assert.NoError(b, err)
 					if resp != nil {
 						assert.Equal(b, http.StatusOK, resp.StatusCode)
-						io.Copy(ioutil.Discard, resp.Body)
+						io.Copy(io.Discard, resp.Body)
 						resp.Body.Close()
 					}
 				}
@@ -799,7 +797,7 @@ func BenchmarkTraces(b *testing.B) {
 func BenchmarkDistributedTraces(b *testing.B) {
 	sender := &countingWriterSender{
 		WriterSender: transmission.WriterSender{
-			W: ioutil.Discard,
+			W: io.Discard,
 		},
 	}
 
@@ -837,7 +835,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		sender.resetCount()
 		for n := 0; n < b.N; n++ {
 			blob := `[` + string(spans[n%len(spans)]) + `]`
-			req.Body = ioutil.NopCloser(strings.NewReader(blob))
+			req.Body = io.NopCloser(strings.NewReader(blob))
 			req.URL.Host = addrs[n%len(addrs)]
 			post(b, req)
 		}
@@ -856,7 +854,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 				blob = append(blob, ',')
 			}
 			blob[len(blob)-1] = ']'
-			req.Body = ioutil.NopCloser(bytes.NewReader(blob))
+			req.Body = io.NopCloser(bytes.NewReader(blob))
 			req.URL.Host = addrs[n%len(addrs)]
 
 			post(b, req)

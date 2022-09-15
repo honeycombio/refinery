@@ -1,7 +1,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -79,10 +78,10 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 }
 
 func createTempConfigs(t *testing.T, configBody string, rulesBody string) (string, string) {
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	if configBody != "" {
@@ -91,7 +90,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 	}
 	configFile.Close()
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	if rulesBody != "" {
@@ -636,11 +635,11 @@ func TestQueryAuthToken(t *testing.T) {
 }
 
 func TestGRPCServerParameters(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	_, err = configFile.Write([]byte(`
@@ -668,7 +667,7 @@ func TestGRPCServerParameters(t *testing.T) {
 	assert.NoError(t, err)
 	configFile.Close()
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
