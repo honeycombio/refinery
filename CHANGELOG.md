@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 1.17.0 2022-09-16
+
+### Enhancements
+
+- Allow adding extra fields to error logs (#514) | [@kentquirk](https://github.com/kentquirk)
+- Allow BatchTimeout to be overriden on the libhoney Transmission (#509) | [@leviwilson](https://github.com/leviwilson)
+
+### Fixes
+
+- Consolidate honeycomb metrics to use single lock & fix concurrent read/write (#511)| [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+
 ## 1.16.0 2022-09-09
 
 This release contains a number of small new features to assist in running refinery more effectively:
