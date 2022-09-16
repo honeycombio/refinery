@@ -240,7 +240,7 @@ func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 	ev := h.builder.NewEvent()
 	msg := fmt.Sprintf(f, args...)
 	ev.AddField("msg", msg)
-	ev.Metadata = map[string]string{
+	ev.Metadata = map[string]any{
 		"api_host": ev.APIHost,
 		"dataset":  ev.Dataset,
 	}

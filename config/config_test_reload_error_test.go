@@ -3,7 +3,6 @@
 package config
 
 import (
-	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -13,14 +12,14 @@ import (
 )
 
 func TestErrorReloading(t *testing.T) {
-	tmpDir, err := ioutil.TempDir("", "")
+	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	rulesFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
-	configFile, err := ioutil.TempFile(tmpDir, "*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "*.toml")
 	assert.NoError(t, err)
 
 	dummy := []byte(`
@@ -76,7 +75,7 @@ func TestErrorReloading(t *testing.T) {
 		}
 	}()
 
-	err = ioutil.WriteFile(rulesFile.Name(), []byte(`Sampler="InvalidSampler"`), 0644)
+	err = os.WriteFile(rulesFile.Name(), []byte(`Sampler="InvalidSampler"`), 0644)
 
 	if err != nil {
 		t.Error(err)

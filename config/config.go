@@ -164,4 +164,6 @@ type Config interface {
 	GetGRPCTimeout() time.Duration
 
 	GetPeerTimeout() time.Duration
+
+	GetAdditionalErrorFields() []string
 }

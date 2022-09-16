@@ -98,11 +98,18 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	libhEv.SampleRate = ev.SampleRate
 	libhEv.Timestamp = ev.Timestamp
 	// metadata is used to make error logs more helpful when processing libhoney responses
-	libhEv.Metadata = map[string]string{
+	metadata := map[string]any{
 		"api_host":    ev.APIHost,
 		"dataset":     ev.Dataset,
 		"environment": ev.Environment,
 	}
+
+	for _, k := range d.Config.GetAdditionalErrorFields() {
+		if v, ok := ev.Data[k]; ok {
+			metadata[k] = v
+		}
+	}
+	libhEv.Metadata = metadata
 
 	for k, v := range ev.Data {
 		libhEv.AddField(k, v)
@@ -160,6 +167,11 @@ func (d *DefaultTransmission) processResponses(
 					"dataset":     dataset,
 					"environment": environment,
 				})
+				for _, k := range d.Config.GetAdditionalErrorFields() {
+					if v, ok := r.Metadata.(map[string]any)[k]; ok {
+						log = log.WithField(k, v)
+					}
+				}
 				if r.Err != nil {
 					log = log.WithField("error", r.Err.Error())
 				}

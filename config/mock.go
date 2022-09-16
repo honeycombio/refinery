@@ -82,6 +82,7 @@ type MockConfig struct {
 	GRPCTime                      time.Duration
 	GRPCTimeout                   time.Duration
 	PeerTimeout                   time.Duration
+	AdditionalErrorFields         []string
 
 	Mux sync.RWMutex
 }
@@ -442,4 +443,11 @@ func (f *MockConfig) GetPeerTimeout() time.Duration {
 	defer f.Mux.RUnlock()
 
 	return f.PeerTimeout
+}
+
+func (f *MockConfig) GetAdditionalErrorFields() []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.AdditionalErrorFields
 }
