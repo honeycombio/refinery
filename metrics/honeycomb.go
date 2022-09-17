@@ -138,9 +138,9 @@ func (h *HoneycombMetrics) initLibhoney(mc config.HoneycombMetricsConfig) error 
 	h.libhClient.AddDynamicField("memory_inuse", getAlloc)
 	startTime := time.Now()
 	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
-		return time.Now().Sub(startTime) / time.Second
+		return time.Since(startTime) / time.Second
 	})
-	go h.reportToHoneycommb(ctx)
+	go h.reportToHoneycomb(ctx)
 	return nil
 }
 
@@ -213,7 +213,7 @@ func (h *HoneycombMetrics) readMemStats(mem *runtime.MemStats) {
 	*mem = h.latestMemStats
 }
 
-func (h *HoneycombMetrics) reportToHoneycommb(ctx context.Context) {
+func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 	tick := time.NewTicker(time.Duration(h.reportingFreq) * time.Second)
 	for {
 		select {
@@ -284,7 +284,7 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 	case "histogram":
 		getOrAdd(&h.lock, name, h.histograms, createHistogram)
 	default:
-		h.Logger.Debug().Logf("unspported metric type %s", metricType)
+		h.Logger.Debug().Logf("unsupported metric type %s", metricType)
 	}
 }
 
@@ -308,7 +308,7 @@ func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string,
 	metric, ok = metrics[name]
 	if !ok {
 		// create new metric using create function and add to map
-		metric := createMetric(name)
+		metric = createMetric(name)
 		metrics[name] = metric
 	}
 	lock.Unlock()
