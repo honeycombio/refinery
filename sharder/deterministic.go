@@ -142,7 +142,10 @@ func (d *DeterministicSharder) Start() error {
 		// local interface. Note that this assumes only one instance of Refinery per
 		// host can run.
 		for i, peerShard := range d.peers {
-			d.Logger.Debug().WithField("peer", peerShard).WithField("self", localAddrCidrs).Logf("Considering peer looking for self")
+			d.Logger.Debug().WithFields(logrus.Fields{
+				"peer": peerShard,
+				"self": localAddrCidrs,
+			).Logf("Considering peer looking for self")
 			peerIPList, err := net.LookupHost(peerShard.ipOrHost)
 			if err != nil {
 				// TODO something better than fail to start if peer is missing
