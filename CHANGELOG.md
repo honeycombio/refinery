@@ -1,8 +1,21 @@
 # Refinery Changelog
 
+## 1.17.0 2022-09-16
+
+### Enhancements
+
+- Allow adding extra fields to error logs (#514) | [@kentquirk](https://github.com/kentquirk)
+- Allow BatchTimeout to be overriden on the libhoney Transmission (#509) | [@leviwilson](https://github.com/leviwilson)
+
+### Fixes
+
+- Consolidate honeycomb metrics to use single lock & fix concurrent read/write (#511)| [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Fix variable shadowing bug (#519)| [@kentquirk](https://github.com/kentquirk)
+
 ## 1.16.0 2022-09-09
 
 This release contains a number of small new features to assist in running refinery more effectively:
+
 - Adds new endpoints to help in debugging refinery rules (see README.md)
 - Fixes issues with SampleRate
 - Adds some new configuration parameters (see the *_complete.toml files for more)
@@ -36,35 +49,12 @@ This release contains a number of small new features to assist in running refine
 - Go mod tidy (#507) | [kentquirk](https://github.com/kentquirk)
 
 ## New Contributors
+
 - @abatilo made their first contribution in https://github.com/honeycombio/refinery/pull/498
 - @thrawn01 made their first contribution in https://github.com/honeycombio/refinery/pull/491
 - @epvanhouten made their first contribution in https://github.com/honeycombio/refinery/pull/508
 
 **Full Changelog**: https://github.com/honeycombio/refinery/compare/v1.15.0...v1.16.0
-
-## 1.15.0 2022-07-01
-
-### Enhancements
-
-- Add rule Scope configuration option to rules-based sampler (#440) | [isnotajoke](https://github.com/isnotajoke)
-- Replace hand-rolled binary.BigEndian.Uint32 with the real deal (#459) | [toshok](https://github.com/toshok)
-- Validate successful span scoped rules test (#465) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
-- Create helm-chart issue on release (#458) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
-- github_token needs underscore not hyphen (#464) | [@JamieDanielson](https://github.com/JamieDanielson)
-
-### Maintenance
-
-- Replace legacy with classic in readme (#457) | [MikeGoldsmith](https://github.com/MikeGoldsmith)
-
-### Dependencies
-
-- Bump github.com/spf13/viper from 1.10.1 to 1.12.0 (#461)
-- Bump github.com/stretchr/testify from 1.7.1 to 1.7.2 (#467)
-- Bump github.com/honeycombio/husky from 0.10.5 to 0.10.6 (#460)
-- Bump github.com/klauspost/compress from 1.15.4 to 1.15.6 (#466)
-- Bump github.com/prometheus/client_golang from 1.12.1 to 1.12.2 (#463)
-
-
 
 ## 1.15.0 2022-07-01
 
