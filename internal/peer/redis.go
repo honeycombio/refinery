@@ -83,7 +83,6 @@ func newRedisPeers(ctx context.Context, c config.Config) (Peers, error) {
 	}
 
 	// deal with this error
-	// address, err := c.GetPeerPublicAddr()
 	address, err := publicAddr(c)
 
 	if err != nil {
