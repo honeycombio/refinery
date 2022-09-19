@@ -145,7 +145,7 @@ func (d *DeterministicSharder) Start() error {
 			d.Logger.Debug().WithFields(logrus.Fields{
 				"peer": peerShard,
 				"self": localAddrCidrs,
-			).Logf("Considering peer looking for self")
+			}).Logf("Considering peer looking for self")
 			peerIPList, err := net.LookupHost(peerShard.ipOrHost)
 			if err != nil {
 				// TODO something better than fail to start if peer is missing
