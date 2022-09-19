@@ -10,6 +10,7 @@
 ### Fixes
 
 - Consolidate honeycomb metrics to use single lock & fix concurrent read/write (#511)| [@MikeGoldsmith](https://github.com/MikeGoldsmith)
+- Fix variable shadowing bug (#519)| [@kentquirk](https://github.com/kentquirk)
 
 ## 1.16.0 2022-09-09
 
