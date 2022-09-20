@@ -128,12 +128,11 @@ func (d *DeterministicSharder) Start() error {
 			localAddrCidrs[i] = addr.String()
 		}
 
-		// If RedisIdentifier is an IP, add it to localAddrs.
+		// If RedisIdentifier is an IP, add it to localAddrCidrs.
 		redisIdentifier, err := d.Config.GetRedisIdentifier()
-		if err == nil {
-			d.Logger.Debug().Logf("Using RedisIdentifier as self: %s", redisIdentifier)
+		if err == nil && redisIdentifier != "" {
 			if ip := net.ParseIP(redisIdentifier); ip != nil {
-				d.Logger.Debug().Logf("RedisIdentifier is an IP")
+				d.Logger.Debug().Logf("Using RedisIdentifier as public IP: %s", redisIdentifier)
 				localAddrCidrs = append(localAddrCidrs, fmt.Sprintf("%s/32", redisIdentifier))
 			}
 		}
