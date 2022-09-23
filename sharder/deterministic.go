@@ -118,26 +118,30 @@ func (d *DeterministicSharder) Start() error {
 		}
 		d.Logger.Debug().Logf("picked up local peer port of %s", localPort)
 
-		// get my local interfaces' IPs.
-		localAddrs, err := net.InterfaceAddrs()
-		if err != nil {
-			return errors.Wrap(err, "failed to get local interface list to initialize sharder")
-		}
-		localIPs := make([]string, len(localAddrs))
-		for i, addr := range localAddrs {
-			addrStr := addr.String()
-			ip, _, err := net.ParseCIDR(addrStr)
-			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", addrStr))
-			}
-			localIPs[i] = ip.String()
-		}
+		var localIPs []string
 
-		// If RedisIdentifier is an IP, add it to localIps.
+		// If RedisIdentifier is an IP, use as localIPs value.
 		if redisIdentifier, err := d.Config.GetRedisIdentifier(); err == nil && redisIdentifier != "" {
 			if ip := net.ParseIP(redisIdentifier); ip != nil {
 				d.Logger.Debug().Logf("Using RedisIdentifier as public IP: %s", redisIdentifier)
-				localIPs = append(localIPs, redisIdentifier)
+				localIPs = []string{redisIdentifier}
+			}
+		}
+
+		// Otherwise, get my local interfaces' IPs.
+		if len(localIPs) == 0 {
+			localAddrs, err := net.InterfaceAddrs()
+			if err != nil {
+				return errors.Wrap(err, "failed to get local interface list to initialize sharder")
+			}
+			localIPs = make([]string, len(localAddrs))
+			for i, addr := range localAddrs {
+				addrStr := addr.String()
+				ip, _, err := net.ParseCIDR(addrStr)
+				if err != nil {
+					return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", addrStr))
+				}
+				localIPs[i] = ip.String()
 			}
 		}
 
