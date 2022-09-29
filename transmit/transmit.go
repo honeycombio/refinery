@@ -156,10 +156,10 @@ func (d *DefaultTransmission) processResponses(
 		case r := <-responses:
 			if r.Err != nil || r.StatusCode > 202 {
 				var apiHost, dataset, environment string
-				if metadata, ok := r.Metadata.(map[string]string); ok {
-					apiHost = metadata["api_host"]
-					dataset = metadata["dataset"]
-					environment = metadata["environment"]
+				if metadata, ok := r.Metadata.(map[string]any); ok {
+					apiHost = metadata["api_host"].(string)
+					dataset = metadata["dataset"].(string)
+					environment = metadata["environment"].(string)
 				}
 				log := d.Logger.Error().WithFields(map[string]interface{}{
 					"status_code": r.StatusCode,
