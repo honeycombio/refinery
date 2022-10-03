@@ -78,9 +78,9 @@ type InMemCollector struct {
 // our decision for the future, so any delinquent spans that show up later can
 // be dropped or passed along.
 type traceSentRecord struct {
-	keep      bool // true if the trace was kept, false if it was dropped
-	rate      uint // sample rate used when sending the trace
-	spanCount int  // number of spans in the trace (we decorate the root span with this)
+	keep      bool  // true if the trace was kept, false if it was dropped
+	rate      uint  // sample rate used when sending the trace
+	spanCount int64 // number of spans in the trace (we decorate the root span with this)
 }
 
 func (i *InMemCollector) Start() error {
@@ -387,7 +387,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount int, sp *types.Span) {
+func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount int64, sp *types.Span) {
 	if i.Config.GetIsDryRun() {
 		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
@@ -479,6 +479,18 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		logFields["dataset"] = samplerKey
 	} else {
 		logFields["environment"] = samplerKey
+	}
+
+	// It's unfortunate to have to iterate here, but if we have to update the root span
+	// we need to do it before determining the SampleRate.
+	if i.Config.GetAddSpanCountToRoot() {
+		for _, sp := range trace.GetSpans() {
+			// update the root span (if we have one, which we might not if the trace timed out)
+			// with the final total as of our send time
+			if isRootSpan(sp) {
+				sp.Data["meta.span_count"] = trace.SpanCount()
+			}
+		}
 	}
 
 	// use sampler key to find sampler; create and cache if not found

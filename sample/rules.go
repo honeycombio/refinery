@@ -154,21 +154,19 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	}
 
 	for _, span := range trace.GetSpans() {
-		// the number of conditions that match this span.
-		// incremented later on after we match a condition
-		// since we need to match *all* conditions on a single span, we reset in each iteration of the loop.
-		matchCount := 0
+		ruleMatched := true
 		for _, condition := range rule.Condition {
 			// whether this condition is matched by this span.
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
 
-			if conditionMatchesValue(condition, value, exists) {
-				matchCount++
+			if !conditionMatchesValue(condition, value, exists) {
+				ruleMatched = false
+				break // if any condition fails, we can't possibly succeed, so exit inner loop early
 			}
 		}
 		// If this span was matched by every condition, then the rule as a whole
 		// matches (and we can return)
-		if matchCount == len(rule.Condition) {
+		if ruleMatched {
 			return true
 		}
 	}

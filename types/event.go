@@ -68,9 +68,9 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
-// SpanCount gets the number of spans currently in this trace
-func (t *Trace) SpanCount() int {
-	return len(t.spans)
+// SpanCount gets the number of spans currently in this trace as int64
+func (t *Trace) SpanCount() int64 {
+	return int64(len(t.spans))
 }
 
 func (t *Trace) GetSamplerKey() (string, bool) {
