@@ -77,6 +77,81 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	}
 }
 
+func TestMetricsAPIKeyEnvVar(t *testing.T) {
+	testCases := []struct {
+		name   string
+		envVar string
+		key    string
+	}{
+		{
+			name:   "Specific env var",
+			envVar: "REFINERY_HONEYCOMB_METRICS_API_KEY",
+			key:    "abc123",
+		},
+		{
+			name:   "Fallback env var",
+			envVar: "REFINERY_HONEYCOMB_API_KEY",
+			key:    "321cba",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Setenv(tc.envVar, tc.key)
+			defer os.Unsetenv(tc.envVar)
+
+			c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+			if err != nil {
+				t.Error(err)
+			}
+
+			if d, _ := c.GetHoneycombMetricsConfig(); d.MetricsAPIKey != tc.key {
+				t.Error("received", d, "expected", tc.key)
+			}
+		})
+	}
+}
+
+func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
+	const specificKey = "abc123"
+	const specificEnvVarName = "REFINERY_HONEYCOMB_METRICS_API_KEY"
+	const fallbackKey = "this should not be set in the config"
+	const fallbackEnvVarName = "REFINERY_HONEYCOMB_API_KEY"
+
+	os.Setenv(specificEnvVarName, specificKey)
+	defer os.Unsetenv(specificEnvVarName)
+	os.Setenv(fallbackEnvVarName, fallbackKey)
+	defer os.Unsetenv(fallbackEnvVarName)
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetHoneycombMetricsConfig(); d.MetricsAPIKey != specificKey {
+		t.Error("received", d, "expected", specificKey)
+	}
+}
+
+func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
+	const key = "abc1234"
+	const envVarName = "REFINERY_HONEYCOMB_API_KEY"
+	os.Setenv(envVarName, key)
+	defer os.Unsetenv(envVarName)
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d, _ := c.GetHoneycombMetricsConfig(); d.MetricsAPIKey != key {
+		t.Error("received", d, "expected", key)
+	}
+}
+
 // creates two temporary toml files from the strings passed in and returns their filenames
 func createTempConfigs(t *testing.T, configBody string, rulesBody string) (string, string) {
 	tmpDir, err := os.MkdirTemp("", "")
