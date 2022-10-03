@@ -166,4 +166,6 @@ type Config interface {
 	GetPeerTimeout() time.Duration
 
 	GetAdditionalErrorFields() []string
+
+	GetAddSpanCountToRoot() bool
 }

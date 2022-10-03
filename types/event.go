@@ -68,6 +68,11 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
+// SpanCount gets the number of spans currently in this trace
+func (t *Trace) SpanCount() int {
+	return len(t.spans)
+}
+
 func (t *Trace) GetSamplerKey() (string, bool) {
 	if IsLegacyAPIKey(t.APIKey) {
 		return t.Dataset, true

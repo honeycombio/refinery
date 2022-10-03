@@ -55,6 +55,7 @@ type configContents struct {
 	QueryAuthToken            string
 	GRPCServerParameters      GRPCServerParameters
 	AdditionalErrorFields     []string
+	AddSpanCountToRoot        bool
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -155,6 +156,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("GRPCServerParameters.Time", 10*time.Second)
 	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
 	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
+	c.SetDefault("AddSpanCountToRoot", false)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -878,4 +880,11 @@ func (f *fileConfig) GetAdditionalErrorFields() []string {
 	defer f.mux.RUnlock()
 
 	return f.conf.AdditionalErrorFields
+}
+
+func (f *fileConfig) GetAddSpanCountToRoot() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.AddSpanCountToRoot
 }
