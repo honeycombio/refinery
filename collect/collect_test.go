@@ -723,3 +723,72 @@ func TestDependencyInjection(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// TestAddSpanCount tests that adding a root span winds up with a trace object in
+// the cache and that that trace gets span count added to it
+func TestAddSpanCount(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		AddSpanCountToRoot: true,
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	var traceID = "mytrace"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+	time.Sleep(conf.SendTickerVal * 2)
+	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
+	// ok now let's add the root span and verify that both got sent
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+	}
+	coll.AddSpan(rootSpan)
+	time.Sleep(conf.SendTickerVal * 2)
+	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
+	transmission.Mux.RUnlock()
+}
