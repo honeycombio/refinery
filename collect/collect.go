@@ -380,7 +380,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace.SendBy = time.Now().Add(timeout)
-		trace.HasRootSpan = true
+		trace.RootSpan = sp
 	}
 }
 
@@ -461,7 +461,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	traceDur := time.Since(trace.StartTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(trace.SpanCount()))
-	if trace.HasRootSpan {
+	if trace.RootSpan != nil {
 		i.Metrics.Increment("trace_send_has_root")
 	} else {
 		i.Metrics.Increment("trace_send_no_root")
@@ -481,16 +481,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		logFields["environment"] = samplerKey
 	}
 
-	// It's unfortunate to have to iterate here, but if we have to update the root span
-	// we need to do it before determining the SampleRate.
-	if i.Config.GetAddSpanCountToRoot() {
-		for _, sp := range trace.GetSpans() {
-			// update the root span (if we have one, which we might not if the trace timed out)
-			// with the final total as of our send time
-			if isRootSpan(sp) {
-				sp.Data["meta.span_count"] = trace.SpanCount()
-			}
-		}
+	// If we have a root span, update it with the count before determining the SampleRate.
+	if i.Config.GetAddSpanCountToRoot() && trace.RootSpan != nil {
+		trace.RootSpan.Data["meta.span_count"] = trace.SpanCount()
 	}
 
 	// use sampler key to find sampler; create and cache if not found
