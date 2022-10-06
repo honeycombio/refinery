@@ -15,6 +15,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // shardingSalt is a random bit to make sure we don't shard the same as any
@@ -117,33 +118,58 @@ func (d *DeterministicSharder) Start() error {
 		}
 		d.Logger.Debug().Logf("picked up local peer port of %s", localPort)
 
-		// get my local interfaces
-		localAddrs, err := net.InterfaceAddrs()
-		if err != nil {
-			return errors.Wrap(err, "failed to get local interface list to initialize sharder")
+		var localIPs []string
+
+		// If RedisIdentifier is an IP, use as localIPs value.
+		if redisIdentifier, err := d.Config.GetRedisIdentifier(); err == nil && redisIdentifier != "" {
+			if ip := net.ParseIP(redisIdentifier); ip != nil {
+				d.Logger.Debug().Logf("Using RedisIdentifier as public IP: %s", redisIdentifier)
+				localIPs = []string{redisIdentifier}
+			}
+		}
+
+		// Otherwise, get my local interfaces' IPs.
+		if len(localIPs) == 0 {
+			localAddrs, err := net.InterfaceAddrs()
+			if err != nil {
+				return errors.Wrap(err, "failed to get local interface list to initialize sharder")
+			}
+			localIPs = make([]string, len(localAddrs))
+			for i, addr := range localAddrs {
+				addrStr := addr.String()
+				ip, _, err := net.ParseCIDR(addrStr)
+				if err != nil {
+					return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", addrStr))
+				}
+				localIPs[i] = ip.String()
+			}
 		}
 
 		// go through peer list, resolve each address, see if any of them match any
 		// local interface. Note that this assumes only one instance of Refinery per
 		// host can run.
 		for i, peerShard := range d.peers {
-			d.Logger.Debug().WithField("peer", peerShard).WithField("self", localAddrs).Logf("Considering peer looking for self")
+			d.Logger.Debug().WithFields(logrus.Fields{
+				"peer": peerShard,
+				"self": localIPs,
+			}).Logf("Considering peer looking for self")
 			peerIPList, err := net.LookupHost(peerShard.ipOrHost)
 			if err != nil {
 				// TODO something better than fail to start if peer is missing
 				return errors.Wrap(err, fmt.Sprintf("couldn't resolve peer hostname %s", peerShard.ipOrHost))
 			}
 			for _, peerIP := range peerIPList {
-				for _, localIP := range localAddrs {
-					ipAddr, _, err := net.ParseCIDR(localIP.String())
-					if err != nil {
-						return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", localIP.String()))
-					}
-					if peerIP == ipAddr.String() {
+				for _, ipAddr := range localIPs {
+					if peerIP == ipAddr {
 						if peerShard.port == localPort {
 							d.Logger.Debug().WithField("peer", peerShard).Logf("Found myself in peer list")
 							found = true
 							selfIndexIntoPeerList = i
+						} else {
+							d.Logger.Debug().WithFields(logrus.Fields{
+								"peer":         peerShard,
+								"expectedPort": localPort,
+							}).Logf("Peer port mismatch")
 						}
 					}
 				}

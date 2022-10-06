@@ -249,6 +249,27 @@ func publicAddr(c config.Config) (string, error) {
 		return "", err
 	}
 
+	var myIdentifier string
+
+	// If RedisIdentifier is set, use as identifier.
+	if redisIdentifier, _ := c.GetRedisIdentifier(); redisIdentifier != "" {
+		myIdentifier = redisIdentifier
+		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
+	} else {
+		// Otherwise, determine idenntifier from network interface.
+		myIdentifier, err = getIdentifierFromInterfaces(c)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
+
+	return publicListenAddr, nil
+}
+
+// Scan network interfaces to determine an identifier from either IP or hostname.
+func getIdentifierFromInterfaces(c config.Config) (string, error) {
 	myIdentifier, _ := os.Hostname()
 	identifierInterfaceName, _ := c.GetIdentifierInterfaceName()
 
@@ -288,16 +309,7 @@ func publicAddr(c config.Config) (string, error) {
 		logrus.WithField("identifier", myIdentifier).WithField("interface", ifc.Name).Info("using identifier from interface")
 	}
 
-	redisIdentifier, _ := c.GetRedisIdentifier()
-
-	if redisIdentifier != "" {
-		myIdentifier = redisIdentifier
-		logrus.WithField("identifier", myIdentifier).Info("using specific identifier from config")
-	}
-
-	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
-
-	return publicListenAddr, nil
+	return myIdentifier, nil
 }
 
 // equal tells whether a and b contain the same elements.
