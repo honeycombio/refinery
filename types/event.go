@@ -52,7 +52,7 @@ type Trace struct {
 	// Used to calculate how long traces spend sitting in Refinery
 	StartTime time.Time
 
-	HasRootSpan bool
+	RootSpan *Span
 
 	// spans is the list of spans in this trace
 	spans []*Span
@@ -66,6 +66,11 @@ func (t *Trace) AddSpan(sp *Span) {
 // GetSpans returns the list of spans in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
+}
+
+// SpanCount gets the number of spans currently in this trace as int64
+func (t *Trace) SpanCount() int64 {
+	return int64(len(t.spans))
 }
 
 func (t *Trace) GetSamplerKey() (string, bool) {

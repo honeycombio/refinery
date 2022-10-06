@@ -83,6 +83,7 @@ type MockConfig struct {
 	GRPCTimeout                   time.Duration
 	PeerTimeout                   time.Duration
 	AdditionalErrorFields         []string
+	AddSpanCountToRoot            bool
 
 	Mux sync.RWMutex
 }
@@ -450,4 +451,11 @@ func (f *MockConfig) GetAdditionalErrorFields() []string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalErrorFields
+}
+
+func (f *MockConfig) GetAddSpanCountToRoot() bool {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.AddSpanCountToRoot
 }

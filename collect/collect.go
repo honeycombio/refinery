@@ -78,8 +78,9 @@ type InMemCollector struct {
 // our decision for the future, so any delinquent spans that show up later can
 // be dropped or passed along.
 type traceSentRecord struct {
-	keep bool // true if the trace was kept, false if it was dropped
-	rate uint // sample rate used when sending the trace
+	keep      bool  // true if the trace was kept, false if it was dropped
+	rate      uint  // sample rate used when sending the trace
+	spanCount int64 // number of spans in the trace (we decorate the root span with this)
 }
 
 func (i *InMemCollector) Start() error {
@@ -271,7 +272,7 @@ func (i *InMemCollector) collect() {
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
 
-		// Always drain peer channel before doing anyhting else. By processing peer
+		// Always drain peer channel before doing anything else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
 		// deadlocks because peers are waiting to get their events handed off to each
 		// other.
@@ -329,7 +330,11 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
 			if sr, ok := sentRecord.(*traceSentRecord); ok {
 				i.Metrics.Increment("trace_sent_cache_hit")
-				i.dealWithSentTrace(sr.keep, sr.rate, sp)
+				// bump the count of records on this trace -- if the root span isn't
+				// the last late span, then it won't be perfect, but it will be better than
+				// having none at all
+				sentRecord.(*traceSentRecord).spanCount++
+				i.dealWithSentTrace(sr.keep, sr.rate, sentRecord.(*traceSentRecord).spanCount, sp)
 				return
 			}
 		}
@@ -360,7 +365,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, sp)
+		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, trace.SpanCount(), sp)
 	}
 
 	// great! trace is live. add the span.
@@ -375,14 +380,14 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace.SendBy = time.Now().Add(timeout)
-		trace.HasRootSpan = true
+		trace.RootSpan = sp
 	}
 }
 
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types.Span) {
+func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount int64, sp *types.Span) {
 	if i.Config.GetIsDryRun() {
 		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
@@ -396,6 +401,10 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, sp *types
 	if keep {
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		mergeTraceAndSpanSampleRates(sp, sampleRate)
+		// if this span is a late root span, possibly update it with our current span count
+		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
+			sp.Data["meta.span_count"] = spanCount
+		}
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
@@ -451,8 +460,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	traceDur := time.Since(trace.StartTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
-	i.Metrics.Histogram("trace_span_count", float64(len(trace.GetSpans())))
-	if trace.HasRootSpan {
+	i.Metrics.Histogram("trace_span_count", float64(trace.SpanCount()))
+	if trace.RootSpan != nil {
 		i.Metrics.Increment("trace_send_has_root")
 	} else {
 		i.Metrics.Increment("trace_send_no_root")
@@ -472,6 +481,11 @@ func (i *InMemCollector) send(trace *types.Trace) {
 		logFields["environment"] = samplerKey
 	}
 
+	// If we have a root span, update it with the count before determining the SampleRate.
+	if i.Config.GetAddSpanCountToRoot() && trace.RootSpan != nil {
+		trace.RootSpan.Data["meta.span_count"] = trace.SpanCount()
+	}
+
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
@@ -486,8 +500,9 @@ func (i *InMemCollector) send(trace *types.Trace) {
 
 	// record this decision in the sent record LRU for future spans
 	sentRecord := traceSentRecord{
-		keep: shouldSend,
-		rate: rate,
+		keep:      shouldSend,
+		rate:      rate,
+		spanCount: trace.SpanCount(),
 	}
 	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
 
@@ -507,6 +522,12 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	for _, sp := range trace.GetSpans() {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
+		}
+
+		// update the root span (if we have one, which we might not if the trace timed out)
+		// with the final total as of our send time
+		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
+			sp.Data["meta.span_count"] = sentRecord.spanCount
 		}
 
 		if i.Config.GetIsDryRun() {

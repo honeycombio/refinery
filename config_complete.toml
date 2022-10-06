@@ -135,6 +135,14 @@ AdditionalErrorFields = [
 	"trace.span_id"
 ]
 
+# AddSpanCountToRoot adds a new metadata field, `meta.span_count` to root spans to indicate
+# the number of child spans on the trace at the time the sampling decision was made.
+# This value is available to the rules-based sampler, making it possible to write rules that
+# are dependent upon the number of spans in the trace.
+# Default is false.
+# Eligible for live reload.
+# AddSpanCountToRoot = true
+
 ############################
 ## Implementation Choices ##
 ############################
