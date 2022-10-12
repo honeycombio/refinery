@@ -1,5 +1,33 @@
 # Refinery Changelog
 
+## 1.18.0 2022-10-12
+
+### Enhancements
+
+- Track span count and optionally add it to root (#532) | [@kentquirk](https://github.com/kentquirk)
+- Add support for metrics api key env var (#535) | [@TylerHelmuth](https://github.com/TylerHelmuth)
+
+### Fixes
+
+- RedisIdentifier now operates properly in more circumstances (#521) | [@Baliedge](https://github.com/Baliedge)
+- Properly set metadata to values that will work. (#523) | [@kentquirk](https://github.com/kentquirk)
+
+### Maintenance
+
+- maint: add new project workflow (#537) | [@vreynolds](https://github.com/vreynolds)
+- Bump go version to 1.19 (#534) | [@TylerHelmuth](https://github.com/TylerHelmuth)
+- Bump github.com/klauspost/compress from 1.15.9 to 1.15.11 (#531)
+- Bump github.com/honeycombio/husky from 0.15.0 to 0.16.1 (#529)
+- Bump github.com/prometheus/client_golang from 1.12.2 to 1.13.0 (#528)
+- Bump github.com/spf13/viper from 1.12.0 to 1.13.0 (#527)
+
+### New Contributors
+
+- @Baliedge made their first contribution in https://github.com/honeycombio/refinery/pull/521
+- @TylerHelmuth made their first contribution in https://github.com/honeycombio/refinery/pull/534
+
+**Full Changelog**: https://github.com/honeycombio/refinery/compare/v1.17.0...v1.18.0
+
 ## 1.17.0 2022-09-16
 
 ### Enhancements
