@@ -20,6 +20,7 @@
 - Bump github.com/honeycombio/husky from 0.15.0 to 0.16.1 (#529)
 - Bump github.com/prometheus/client_golang from 1.12.2 to 1.13.0 (#528)
 - Bump github.com/spf13/viper from 1.12.0 to 1.13.0 (#527)
+- Bump Husky to v0.17.0 (#538) | [@kentquirk](https://github.com/kentquirk)
 
 ### New Contributors
 
