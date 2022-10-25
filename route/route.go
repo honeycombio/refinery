@@ -164,6 +164,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	queryMuxxer.HandleFunc("/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
 	queryMuxxer.HandleFunc("/rules/{format}/{dataset}", r.getSamplerRules).Name("get formatted sampler rules for given dataset")
 	queryMuxxer.HandleFunc("/allrules/{format}", r.getAllSamplerRules).Name("get formatted sampler rules for all datasets")
+	queryMuxxer.HandleFunc("/config/{format}", r.getConfig).Name("get formatted running configuration")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -294,6 +295,17 @@ func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
 	cfgs, err := r.Config.GetAllSamplerRules()
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	r.marshalToFormat(w, cfgs, format)
+}
+
+func (r *Router) getConfig(w http.ResponseWriter, req *http.Request) {
+	format := strings.ToLower(mux.Vars(req)["format"])
+	cfgs, err := r.Config.GetRunningConfig()
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
 		w.WriteHeader(http.StatusBadRequest)

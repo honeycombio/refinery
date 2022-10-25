@@ -550,6 +550,22 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.conf.Collector, nil
 }
 
+func (f *fileConfig) GetRunningConfig() (map[string]interface{}, error) {
+	configs := make(map[string]interface{})
+	keys := f.config.AllKeys()
+	for _, key := range keys {
+		configs[key] = f.config.GetString(key)
+		// mask sensitive strings
+		maskKeys := []string{"key", "password", "token"}
+		for _, s := range maskKeys {
+			if(strings.Contains(strings.ToLower(key), s)) {
+				configs[key] = strings.Repeat("x", len(f.config.GetString(key)))
+			}	
+		}
+	}
+	return configs, nil
+}
+
 func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 	samplers := make(map[string]interface{})
 

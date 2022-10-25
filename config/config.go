@@ -108,6 +108,9 @@ type Config interface {
 	// GetAllSamplerRules returns all dataset rules in a map, including the default
 	GetAllSamplerRules() (map[string]interface{}, error)
 
+	// GetRunningConfig returns all configurations in a map, including the default
+	GetRunningConfig() (map[string]interface{}, error)
+
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
 	GetMetricsType() (string, error)
