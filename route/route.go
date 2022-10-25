@@ -332,6 +332,7 @@ func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	w.Header().Set("Content-Type", "application/" + format);
 	w.Write(body)
 }
 
