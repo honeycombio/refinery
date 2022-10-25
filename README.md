@@ -137,19 +137,31 @@ Refinery emits a number of metrics to give some indication about the health of t
 
 The default logging level of `warn` is almost entirely silent. The `debug` level emits too much data to be used in production, but contains excellent information in a pre-production environment. Setting the logging level to `debug` during initial configuration will help understand what's working and what's not, but when traffic volumes increase it should be set to `warn`.
 
-### Configuration
+### Running Configuration
 
 Because the normal configuration file formats (TOML and YAML) can sometimes be confusing to read and write, it may be valuable to check the loaded configuration by using one of the `/query` endpoints from the command line on a server that can access a refinery host.
 
 The `/query` endpoints are protected and can be enabled by specifying `QueryAuthToken` in the configuration file or specifying `REFINERY_QUERY_AUTH_TOKEN` in the environment. All requests to any `/query` endpoint must include the header `X-Honeycomb-Refinery-Query` set to the value of the specified token.
 
-`curl --include --get $REFINERY_HOST/query/allrules/$FORMAT --header "x-honeycomb-refinery-query: my-local-token"` will retrieve the entire rules configuration.
+Available query paths:
 
-`curl --include --get $REFINERY_HOST/query/rules/$FORMAT/$DATASET --header "x-honeycomb-refinery-query: my-local-token"` will retrieve the rule set that refinery will use for the specified dataset. It comes back as a map of the sampler type to its rule set.
+- `/query/allrules/$FORMAT` retrieves the whole rules configuration
+- `/query/rules/$FORMAT/$DATASET` retrieves the rule set that refinery will use for the specified dataset. It comes back as a map of the sampler type to its rule set
+- `/query/config/$FORMAT` retrieves the running configuration with keys and passwords masked
+
+Using these environment variables:
 
 - `$REFINERY_HOST` should be the url of your refinery.
 - `$FORMAT` can be one of `json`, `yaml`, or `toml`.
 - `$DATASET` is the name of the dataset you want to check.
+
+You can access these endpoints using a curl statement like the below:
+
+`curl --include --get $REFINERY_HOST/query/allrules/$FORMAT --header "x-honeycomb-refinery-query: my-local-token"` 
+
+`curl --include --get $REFINERY_HOST/query/rules/$FORMAT/$DATASET --header "x-honeycomb-refinery-query: my-local-token"`
+
+`curl --include --get $REFINERY_HOST/query/config/$FORMAT --header "x-honeycomb-refinery-query: my-local-token"`
 
 ### Sampling
 
