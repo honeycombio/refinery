@@ -299,6 +299,19 @@ func (m *MockConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 	return v, m.GetSamplerTypeErr
 }
 
+func (m *MockConfig) GetRunningConfig() (map[string]interface{}, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	v := map[string]interface{}{
+		"addhostmetadatatotrace": "false",
+		"additionalerrorfields":  "",
+		"addrulereasontotrace":   "false",
+		"addspancounttoroot":     "false",
+	}
+	return v, nil
+}
+
 func (m *MockConfig) GetUpstreamBufferSize() int {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
