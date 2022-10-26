@@ -554,13 +554,20 @@ func (f *fileConfig) GetRunningConfig() (map[string]interface{}, error) {
 	configs := make(map[string]interface{})
 	keys := f.config.AllKeys()
 	for _, key := range keys {
-		configs[key] = f.config.GetString(key)
-		// mask sensitive strings
-		maskKeys := []string{"key", "password", "token"}
-		for _, s := range maskKeys {
-			if(strings.Contains(strings.ToLower(key), s)) {
-				configs[key] = strings.Repeat("x", len(f.config.GetString(key)))
-			}	
+		parts := strings.Split(key, ".")
+		if len(parts) == 1 {
+			// lacking a period means it's a root level config
+			configs[key] = f.config.GetString(key)
+		} else {
+			// having a period means it's a multi-level config
+			m := make(map[string]interface{})
+			if sub := f.config.Sub(parts[0]); sub != nil {
+				err := sub.Unmarshal(&m)
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal config section %s: %w", parts[0], err)
+				}
+			}
+			configs[parts[0]] = m
 		}
 	}
 	return configs, nil
