@@ -47,6 +47,14 @@ func GetCollectorImplementation(c config.Config) Collector {
 	return collector
 }
 
+// These are the name of the metric to increment
+const (
+	TraceSendGotRoot        = "trace_send_got_root"
+	TraceSendExpired        = "trace_send_expired"
+	TraceSendEjectedFull    = "trace_send_ejected_full"
+	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
+)
+
 // InMemCollector is a single threaded collector
 type InMemCollector struct {
 	Config         config.Config          `inject:""`
@@ -100,12 +108,18 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("collector_tosend_queue", "histogram")
 	i.Metrics.Register("collector_incoming_queue", "histogram")
 	i.Metrics.Register("collector_peer_queue", "histogram")
+	i.Metrics.Register("collector_cache_size", "gauge")
+	i.Metrics.Register("memory_heap_allocation", "gauge")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
 	i.Metrics.Register("trace_send_dropped", "counter")
 	i.Metrics.Register("trace_send_has_root", "counter")
 	i.Metrics.Register("trace_send_no_root", "counter")
+	i.Metrics.Register(TraceSendGotRoot, "counter")
+	i.Metrics.Register(TraceSendExpired, "counter")
+	i.Metrics.Register(TraceSendEjectedFull, "counter")
+	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 
 	stc, err := lru.New(imcConfig.CacheCapacity * 5) // keep 5x ring buffer size
 	if err != nil {
@@ -155,7 +169,7 @@ func (i *InMemCollector) reloadConfigs() {
 			// pull the old cache contents into the new cache
 			for j, trace := range existingCache.GetAll() {
 				if j >= imcConfig.CacheCapacity {
-					i.send(trace)
+					i.send(trace, TraceSendEjectedFull)
 					continue
 				}
 				c.Set(trace)
@@ -174,17 +188,21 @@ func (i *InMemCollector) reloadConfigs() {
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
-func (i *InMemCollector) checkAlloc() {
+func (i *InMemCollector) oldCheckAlloc() {
 	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
+	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
 	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < inMemConfig.MaxAlloc {
 		return
 	}
 
 	existingCache, ok := i.cache.(*cache.DefaultInMemCache)
-	if !ok || existingCache.GetCacheSize() < 100 {
+	existingSize := existingCache.GetCacheSize()
+	i.Metrics.Gauge("collector_cache_size", existingSize)
+
+	if !ok || existingSize < 100 {
 		i.Logger.Error().WithField("alloc", mem.Alloc).Logf(
 			"total allocation exceeds limit, but unable to shrink cache",
 		)
@@ -194,14 +212,13 @@ func (i *InMemCollector) checkAlloc() {
 	// Reduce cache size by a fixed 10%, successive overages will continue to shrink.
 	// Base this on the total number of actual traces, which may be fewer than
 	// the cache capacity.
-	oldCap := existingCache.GetCacheSize()
 	oldTraces := existingCache.GetAll()
 	newCap := int(float64(len(oldTraces)) * 0.9)
 
 	// Treat any MaxAlloc overage as an error. The configured cache capacity
 	// should be reduced to avoid this condition.
 	i.Logger.Error().
-		WithField("cache_size.previous", oldCap).
+		WithField("cache_size.previous", existingSize).
 		WithField("cache_size.new", newCap).
 		WithField("alloc", mem.Alloc).
 		Logf("reducing cache size due to memory overage")
@@ -215,7 +232,7 @@ func (i *InMemCollector) checkAlloc() {
 
 	// Send the traces we can't keep, put the rest into the new cache.
 	for _, trace := range oldTraces[:len(oldTraces)-newCap] {
-		i.send(trace)
+		i.send(trace, TraceSendEjectedMemsize)
 	}
 	for _, trace := range oldTraces[len(oldTraces)-newCap:] {
 		c.Set(trace)
@@ -225,6 +242,76 @@ func (i *InMemCollector) checkAlloc() {
 	// Manually GC here - it's unfortunate to block this long, but without
 	// this we can easily end up shrinking more than we need to, since total
 	// alloc won't be updated until after a GC pass.
+	runtime.GC()
+}
+
+func (i *InMemCollector) newCheckAlloc() {
+	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
+	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < inMemConfig.MaxAlloc {
+		return
+	}
+
+	// Figure out what fraction of the total cache we should remove. We'd like it to be
+	// enough to get us below the max capacity, but not TOO much below.
+	// Because our impact numbers are only the data size, we shoot for 90% of max
+	// capacity and we should end up comfortably below that.
+	totalToRemove := mem.Alloc - inMemConfig.MaxAlloc //*9/10
+
+	// the size of the cache exceeds the user's intended allocation, so we're going to
+	// remove the traces from the cache that have had the most impact on allocation.
+	// To do this, we sort the traces by their CacheImpact value and then remove traces
+	// until the total size is less than 90% of the intended max.
+
+	existingCache, ok := i.cache.(*cache.DefaultInMemCache)
+	if !ok {
+		i.Logger.Error().WithField("alloc", mem.Alloc).Logf(
+			"total allocation exceeds limit, but unable to control cache",
+		)
+		return
+	}
+	allTraces := existingCache.GetAll()
+	timeout, err := i.Config.GetTraceTimeout()
+	if err != nil {
+		timeout = 60 * time.Second
+	} // Sort traces by CacheImpact, heaviest first
+	sort.Slice(allTraces, func(i, j int) bool {
+		return allTraces[i].CacheImpact(timeout) > allTraces[j].CacheImpact(timeout)
+	})
+
+	// Now start removing the biggest traces, by summing up DataSize for
+	// successive traces until we've crossed the totalToRemove threshold.
+
+	cap := existingCache.GetCacheSize()
+	i.Metrics.Gauge("collector_cache_size", cap)
+
+	totalDataSizeSent := 0
+	tracesSent := make(map[string]struct{})
+	// Send the traces we can't keep.
+	for _, trace := range allTraces {
+		tracesSent[trace.TraceID] = struct{}{}
+		totalDataSizeSent += trace.DataSize
+		i.send(trace, TraceSendEjectedMemsize)
+		if totalDataSizeSent > int(totalToRemove) {
+			break
+		}
+	}
+	existingCache.RemoveSentTraces(tracesSent)
+
+	// Treat any MaxAlloc overage as an error so we know it's happening
+	i.Logger.Error().
+		WithField("cache_size", cap).
+		WithField("alloc", mem.Alloc).
+		WithField("num_traces_sent", len(tracesSent)).
+		WithField("datasize_sent", totalDataSizeSent).
+		WithField("new_trace_count", existingCache.GetCacheSize()).
+		Logf("evicting large traces early due to memory overage")
+
+	// Manually GC here - without this we can easily end up evicting more than we
+	// need to, since total alloc won't be updated until after a GC pass.
 	runtime.GC()
 }
 
@@ -287,7 +374,11 @@ func (i *InMemCollector) collect() {
 			select {
 			case <-ticker.C:
 				i.sendTracesInCache(time.Now())
-				i.checkAlloc()
+				if i.Config.GetUseStableCacheManagement() {
+					i.newCheckAlloc()
+				} else {
+					i.oldCheckAlloc()
+				}
 
 				// Briefly unlock the cache, to allow test access.
 				i.mutex.Unlock()
@@ -317,7 +408,11 @@ func (i *InMemCollector) collect() {
 func (i *InMemCollector) sendTracesInCache(now time.Time) {
 	traces := i.cache.TakeExpiredTraces(now)
 	for _, t := range traces {
-		i.send(t)
+		if t.RootSpan != nil {
+			i.send(t, TraceSendGotRoot)
+		} else {
+			i.send(t, TraceSendExpired)
+		}
 	}
 }
 
@@ -348,18 +443,18 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 
 		trace = &types.Trace{
-			APIHost:    sp.APIHost,
-			APIKey:     sp.APIKey,
-			Dataset:    sp.Dataset,
-			TraceID:    sp.TraceID,
-			StartTime:  time.Now(),
-			SendBy:     time.Now().Add(timeout),
-			SampleRate: sp.SampleRate, // if it had a sample rate, we want to keep it
+			APIHost:     sp.APIHost,
+			APIKey:      sp.APIKey,
+			Dataset:     sp.Dataset,
+			TraceID:     sp.TraceID,
+			ArrivalTime: time.Now(),
+			SendBy:      time.Now().Add(timeout),
+			SampleRate:  sp.SampleRate, // if it had a sample rate, we want to keep it
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
 		if ejectedTrace != nil {
-			i.send(ejectedTrace)
+			i.send(ejectedTrace, TraceSendEjectedFull)
 		}
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
@@ -445,7 +540,7 @@ func isRootSpan(sp *types.Span) bool {
 	return false
 }
 
-func (i *InMemCollector) send(trace *types.Trace) {
+func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it. This happens
 		// when two timers race and two signals for the same trace are sent down the
@@ -458,7 +553,7 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	}
 	trace.Sent = true
 
-	traceDur := time.Since(trace.StartTime)
+	traceDur := time.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(trace.SpanCount()))
 	if trace.RootSpan != nil {
@@ -466,6 +561,8 @@ func (i *InMemCollector) send(trace *types.Trace) {
 	} else {
 		i.Metrics.Increment("trace_send_no_root")
 	}
+
+	i.Metrics.Increment(reason)
 
 	var sampler sample.Sampler
 	var found bool
@@ -554,7 +651,7 @@ func (i *InMemCollector) Stop() error {
 		traces := i.cache.GetAll()
 		for _, trace := range traces {
 			if trace != nil {
-				i.send(trace)
+				i.send(trace, TraceSendEjectedFull)
 			}
 		}
 	}

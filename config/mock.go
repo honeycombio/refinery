@@ -84,6 +84,7 @@ type MockConfig struct {
 	PeerTimeout                   time.Duration
 	AdditionalErrorFields         []string
 	AddSpanCountToRoot            bool
+	UseStableCacheManagement      bool
 
 	Mux sync.RWMutex
 }
@@ -458,4 +459,11 @@ func (f *MockConfig) GetAddSpanCountToRoot() bool {
 	defer f.Mux.RUnlock()
 
 	return f.AddSpanCountToRoot
+}
+
+func (f *MockConfig) GetUseStableCacheManagement() bool {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.UseStableCacheManagement
 }

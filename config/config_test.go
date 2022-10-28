@@ -336,7 +336,7 @@ func TestReadRulesConfig(t *testing.T) {
 	assert.NoError(t, err)
 	switch r := d.(type) {
 	case *RulesBasedSamplerConfig:
-		assert.Len(t, r.Rule, 5)
+		assert.Len(t, r.Rule, 6)
 
 		var rule *RulesBasedSamplerRule
 
@@ -350,11 +350,11 @@ func TestReadRulesConfig(t *testing.T) {
 		assert.Equal(t, "keep slow 500 errors", rule.Name)
 		assert.Len(t, rule.Condition, 2)
 
-		rule = r.Rule[3]
+		rule = r.Rule[4]
 		assert.Equal(t, 5, rule.SampleRate)
 		assert.Equal(t, "span", rule.Scope)
 
-		rule = r.Rule[4]
+		rule = r.Rule[5]
 		assert.Equal(t, 10, rule.SampleRate)
 		assert.Equal(t, "", rule.Scope)
 

@@ -48,11 +48,15 @@ type Trace struct {
 
 	SendBy time.Time
 
-	// StartTime is the server time when the first span arrived for this trace.
+	// ArrivalTime is the server time when the first span arrived for this trace.
 	// Used to calculate how long traces spend sitting in Refinery
-	StartTime time.Time
+	ArrivalTime time.Time
 
 	RootSpan *Span
+
+	// DataSize is the sum of the DataSize of spans that are added.
+	// It's used to help expire the most expensive traces.
+	DataSize int
 
 	// spans is the list of spans in this trace
 	spans []*Span
@@ -60,7 +64,25 @@ type Trace struct {
 
 // AddSpan adds a span to this trace
 func (t *Trace) AddSpan(sp *Span) {
+	// We've done all the work to know this is a trace we are putting in our cache, so
+	// now is when we can calculate the size of it so that our cache size management
+	// code works properly.
+	sp.ArrivalTime = time.Now()
+	sp.DataSize = sp.GetDataSize()
+	t.DataSize += sp.DataSize
 	t.spans = append(t.spans, sp)
+}
+
+// CacheImpact calculates an abstract value for something we're calling cache impact, which is
+// the sum of the CacheImpact of all of the spans in a trace. We use it to order traces
+// so we can eject the ones that having the most impact on the cache size, but balancing that
+// against preferring to keep newer spans.
+func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
+	totalImpact := 0
+	for _, sp := range t.GetSpans() {
+		totalImpact += sp.CacheImpact(traceTimeout)
+	}
+	return totalImpact
 }
 
 // GetSpans returns the list of spans in this trace
@@ -92,7 +114,46 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 // Span is an event that shows up with a trace ID, so will be part of a Trace
 type Span struct {
 	Event
-	TraceID string
+	TraceID     string
+	DataSize    int
+	ArrivalTime time.Time
+}
+
+// GetDataSize computes the size of the Data element of the Span.
+// Note that it's not the full size of the span, but we're mainly using this for
+// relative ordering, not absolute calculations.
+func (sp *Span) GetDataSize() int {
+	total := 0
+	// the data types we should be getting from JSON are:
+	// float64, int64, bool, string
+	for _, v := range sp.Data {
+		switch v.(type) {
+		case bool:
+			total += 1
+		case float64, int64, int:
+			total += 8
+		case string, []byte:
+			total += len(v.(string))
+		default:
+			total += 8 // catchall
+		}
+	}
+	return total
+}
+
+// cacheImpactFactor controls how much we overweight older spans compared to newer ones;
+// setting this to 1 means they're not weighted by duration
+const cacheImpactFactor = 4
+
+// CacheImpact calculates an abstract value for something we're calling cache impact, which is
+// the product of the size of the span and a factor related to the amount of time the span
+// has been stored in the cache, based on the TraceTimeout value.
+func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
+	// multiplier will be a value from 1-cacheImpactFactor, depending on how long the
+	// span has been in the cache compared to the traceTimeout.
+	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
+	// we can assume DataSize was set when the span was added
+	return multiplier * sp.DataSize
 }
 
 func IsLegacyAPIKey(apiKey string) bool {

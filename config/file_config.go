@@ -56,6 +56,7 @@ type configContents struct {
 	GRPCServerParameters      GRPCServerParameters
 	AdditionalErrorFields     []string
 	AddSpanCountToRoot        bool
+	UseStableCacheManagement  bool
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -157,6 +158,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
 	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
 	c.SetDefault("AddSpanCountToRoot", false)
+	c.SetDefault("UseStableCacheManagement", false)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -887,4 +889,11 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	defer f.mux.RUnlock()
 
 	return f.conf.AddSpanCountToRoot
+}
+
+func (f *fileConfig) GetUseStableCacheManagement() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.UseStableCacheManagement
 }

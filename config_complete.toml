@@ -143,6 +143,16 @@ AdditionalErrorFields = [
 # Eligible for live reload.
 # AddSpanCountToRoot = true
 
+# UseStableCacheManagement controls the use of a non-resizing cache management strategy.
+# It defaults to false, but is recommended to set to true, as the old strategy does not recover from
+# cache overruns.
+# In the previous strategy, under memory pressure the cache is shrunk and never grows again.
+# In the stable strategy, under memory pressure the items having the most impact on the cache size are
+# ejected from the cache early and the cache is not resized.
+# This only applies if MaxAlloc is nonzero.
+# Eligible for live reload.
+# UseStableCacheManagement = true
+
 ############################
 ## Implementation Choices ##
 ############################
