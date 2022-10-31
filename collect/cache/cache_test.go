@@ -98,7 +98,7 @@ func TestRemoveSentTraces(t *testing.T) {
 		"5": {}, // not present
 	}
 
-	c.RemoveSentTraces(deletes)
+	c.RemoveTraces(deletes)
 
 	all := c.GetAll()
 	assert.Equal(t, 1, len(all))

@@ -145,9 +145,9 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	return res
 }
 
-// RemoveSentTraces accepts a set of trace IDs and removes any matching ones from
+// RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
-func (d *DefaultInMemCache) RemoveSentTraces(toDelete map[string]struct{}) {
+func (d *DefaultInMemCache) RemoveTraces(toDelete map[string]struct{}) {
 	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.insertionOrder)))
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 

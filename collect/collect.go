@@ -257,9 +257,9 @@ func (i *InMemCollector) newCheckAlloc() {
 
 	// Figure out what fraction of the total cache we should remove. We'd like it to be
 	// enough to get us below the max capacity, but not TOO much below.
-	// Because our impact numbers are only the data size, we shoot for 90% of max
-	// capacity and we should end up comfortably below that.
-	totalToRemove := mem.Alloc - inMemConfig.MaxAlloc //*9/10
+	// Because our impact numbers are only the data size, reducing by enough to reach
+	// max alloc will actually do more than that.
+	totalToRemove := mem.Alloc - inMemConfig.MaxAlloc
 
 	// the size of the cache exceeds the user's intended allocation, so we're going to
 	// remove the traces from the cache that have had the most impact on allocation.
@@ -283,7 +283,8 @@ func (i *InMemCollector) newCheckAlloc() {
 	})
 
 	// Now start removing the biggest traces, by summing up DataSize for
-	// successive traces until we've crossed the totalToRemove threshold.
+	// successive traces until we've crossed the totalToRemove threshold
+	// or just run out of traces to delete.
 
 	cap := existingCache.GetCacheSize()
 	i.Metrics.Gauge("collector_cache_size", cap)
@@ -299,7 +300,7 @@ func (i *InMemCollector) newCheckAlloc() {
 			break
 		}
 	}
-	existingCache.RemoveSentTraces(tracesSent)
+	existingCache.RemoveTraces(tracesSent)
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
 	i.Logger.Error().
