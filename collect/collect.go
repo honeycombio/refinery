@@ -47,7 +47,7 @@ func GetCollectorImplementation(c config.Config) Collector {
 	return collector
 }
 
-// These are the name of the metric to increment
+// These are the names of the metrics we use to track our send decisions.
 const (
 	TraceSendGotRoot        = "trace_send_got_root"
 	TraceSendExpired        = "trace_send_expired"
@@ -55,7 +55,7 @@ const (
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 )
 
-// InMemCollector is a single threaded collector
+// InMemCollector is a single threaded collector.
 type InMemCollector struct {
 	Config         config.Config          `inject:""`
 	Logger         logger.Logger          `inject:""`
@@ -374,9 +374,12 @@ func (i *InMemCollector) collect() {
 			select {
 			case <-ticker.C:
 				i.sendTracesInCache(time.Now())
-				if i.Config.GetUseStableCacheManagement() {
+				switch i.Config.GetCacheOverrunStrategy() {
+				case "impact":
 					i.newCheckAlloc()
-				} else {
+				case "resize":
+					i.oldCheckAlloc()
+				default:
 					i.oldCheckAlloc()
 				}
 

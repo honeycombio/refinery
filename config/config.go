@@ -169,5 +169,5 @@ type Config interface {
 
 	GetAddSpanCountToRoot() bool
 
-	GetUseStableCacheManagement() bool
+	GetCacheOverrunStrategy() string
 }

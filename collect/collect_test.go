@@ -661,11 +661,11 @@ func TestStableMaxAlloc(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:          0,
-		GetTraceTimeoutVal:       10 * time.Minute,
-		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:            2 * time.Millisecond,
-		UseStableCacheManagement: true,
+		GetSendDelayVal:      0,
+		GetTraceTimeoutVal:   10 * time.Minute,
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:        2 * time.Millisecond,
+		CacheOverrunStrategy: "impact",
 	}
 	coll := &InMemCollector{
 		Config:       conf,
