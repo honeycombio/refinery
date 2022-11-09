@@ -60,6 +60,13 @@ type Trace struct {
 
 	// spans is the list of spans in this trace
 	spans []*Span
+
+	// totalImpact is the sum of the trace's cacheImpact; if this value is 0
+	// it is recalculated during CacheImpact(), otherwise this value is
+	// returned. We reset it to 0 when adding spans so it gets recalculated.
+	// This is used to memoize the impact calculation so that it doesn't get
+	// calculated over and over during a sort.
+	totalImpact int
 }
 
 // AddSpan adds a span to this trace
@@ -71,6 +78,7 @@ func (t *Trace) AddSpan(sp *Span) {
 	sp.DataSize = sp.GetDataSize()
 	t.DataSize += sp.DataSize
 	t.spans = append(t.spans, sp)
+	t.totalImpact = 0
 }
 
 // CacheImpact calculates an abstract value for something we're calling cache impact, which is
@@ -78,11 +86,12 @@ func (t *Trace) AddSpan(sp *Span) {
 // so we can eject the ones that having the most impact on the cache size, but balancing that
 // against preferring to keep newer spans.
 func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
-	totalImpact := 0
-	for _, sp := range t.GetSpans() {
-		totalImpact += sp.CacheImpact(traceTimeout)
+	if t.totalImpact == 0 {
+		for _, sp := range t.GetSpans() {
+			t.totalImpact += sp.CacheImpact(traceTimeout)
+		}
 	}
-	return totalImpact
+	return t.totalImpact
 }
 
 // GetSpans returns the list of spans in this trace
@@ -141,7 +150,7 @@ func (sp *Span) GetDataSize() int {
 	return total
 }
 
-// cacheImpactFactor controls how much we overweight older spans compared to newer ones;
+// cacheImpactFactor controls how much more we weigh older spans compared to newer ones;
 // setting this to 1 means they're not weighted by duration
 const cacheImpactFactor = 4
 
@@ -150,9 +159,10 @@ const cacheImpactFactor = 4
 // has been stored in the cache, based on the TraceTimeout value.
 func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 	// multiplier will be a value from 1-cacheImpactFactor, depending on how long the
-	// span has been in the cache compared to the traceTimeout.
+	// span has been in the cache compared to the traceTimeout. It might go higher
+	// during the brief period between traceTimeout and the time when the span is sent.
 	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
-	// we can assume DataSize was set when the span was added
+	// We can assume DataSize was set when the span was added.
 	return multiplier * sp.DataSize
 }
 

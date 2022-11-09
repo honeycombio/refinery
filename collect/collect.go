@@ -261,11 +261,10 @@ func (i *InMemCollector) newCheckAlloc() {
 	// max alloc will actually do more than that.
 	totalToRemove := mem.Alloc - inMemConfig.MaxAlloc
 
-	// the size of the cache exceeds the user's intended allocation, so we're going to
+	// The size of the cache exceeds the user's intended allocation, so we're going to
 	// remove the traces from the cache that have had the most impact on allocation.
 	// To do this, we sort the traces by their CacheImpact value and then remove traces
-	// until the total size is less than 90% of the intended max.
-
+	// until the total size is less than the amount to which we want to shrink.
 	existingCache, ok := i.cache.(*cache.DefaultInMemCache)
 	if !ok {
 		i.Logger.Error().WithField("alloc", mem.Alloc).Logf(
@@ -446,13 +445,14 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			timeout = 60 * time.Second
 		}
 
+		now := time.Now()
 		trace = &types.Trace{
 			APIHost:     sp.APIHost,
 			APIKey:      sp.APIKey,
 			Dataset:     sp.Dataset,
 			TraceID:     sp.TraceID,
-			ArrivalTime: time.Now(),
-			SendBy:      time.Now().Add(timeout),
+			ArrivalTime: now,
+			SendBy:      now.Add(timeout),
 			SampleRate:  sp.SampleRate, // if it had a sample rate, we want to keep it
 		}
 		// push this into the cache and if we eject an unsent trace, send it ASAP
