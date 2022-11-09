@@ -164,6 +164,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	queryMuxxer.HandleFunc("/trace/{traceID}", r.debugTrace).Name("get debug information for given trace ID")
 	queryMuxxer.HandleFunc("/rules/{format}/{dataset}", r.getSamplerRules).Name("get formatted sampler rules for given dataset")
 	queryMuxxer.HandleFunc("/allrules/{format}", r.getAllSamplerRules).Name("get formatted sampler rules for all datasets")
+	queryMuxxer.HandleFunc("/configmetadata", r.getConfigMetadata).Name("get configuration metadata")
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
@@ -300,6 +301,11 @@ func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	r.marshalToFormat(w, cfgs, format)
+}
+
+func (r *Router) getConfigMetadata(w http.ResponseWriter, req *http.Request) {
+	cm := r.Config.GetConfigMetadata()
+	r.marshalToFormat(w, cm, "json")
 }
 
 func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format string) {

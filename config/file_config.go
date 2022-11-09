@@ -1,9 +1,13 @@
 package config
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +26,7 @@ type fileConfig struct {
 	callbacks     []func()
 	errorCallback func(error)
 	mux           sync.RWMutex
+	lastLoadTime  time.Time
 }
 
 type configContents struct {
@@ -266,6 +271,8 @@ func (f *fileConfig) unmarshal() error {
 }
 
 func (f *fileConfig) validateGeneralConfigs() error {
+	f.lastLoadTime = time.Now()
+
 	// validate logger config
 	loggerType, err := f.GetLoggerType()
 	if err != nil {
@@ -905,4 +912,39 @@ func (f *fileConfig) GetCacheOverrunStrategy() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.CacheOverrunStrategy
+}
+
+// calculates an MD5 sum for a file that returns the same result as the md5sum command
+func calcMD5For(filename string) string {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err.Error()
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return err.Error()
+	}
+	h := md5.New()
+	if _, err := h.Write(data); err != nil {
+		return err.Error()
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
+	ret := make([]ConfigMetadata, 2)
+	ret[0] = ConfigMetadata{
+		Type:     "config",
+		ID:       f.config.ConfigFileUsed(),
+		Hash:     calcMD5For(f.config.ConfigFileUsed()),
+		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
+	}
+	ret[1] = ConfigMetadata{
+		Type:     "rules",
+		ID:       f.rules.ConfigFileUsed(),
+		Hash:     calcMD5For(f.rules.ConfigFileUsed()),
+		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
+	}
+	return ret
 }
