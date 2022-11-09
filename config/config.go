@@ -170,4 +170,13 @@ type Config interface {
 	GetAddSpanCountToRoot() bool
 
 	GetCacheOverrunStrategy() string
+
+	GetConfigMetadata() []ConfigMetadata
+}
+
+type ConfigMetadata struct {
+	Type     string `json:"type"`
+	ID       string `json:"id"`
+	Hash     string `json:"hash"`
+	LoadedAt string `json:"loaded_at"`
 }

@@ -85,6 +85,7 @@ type MockConfig struct {
 	AdditionalErrorFields         []string
 	AddSpanCountToRoot            bool
 	CacheOverrunStrategy          string
+	CfgMetadata                   []ConfigMetadata
 
 	Mux sync.RWMutex
 }
@@ -466,4 +467,11 @@ func (f *MockConfig) GetCacheOverrunStrategy() string {
 	defer f.Mux.RUnlock()
 
 	return f.CacheOverrunStrategy
+}
+
+func (f *MockConfig) GetConfigMetadata() []ConfigMetadata {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.CfgMetadata
 }
