@@ -1,5 +1,26 @@
 # Refinery Changelog
 
+## 1.19.0 2022-11-09
+
+Adds new query command to retrieve configuration metadata, and also allows for a new (optional) cache management strategy that should be more effective at preventing OOM crashes in situations where memory is under pressure.
+
+### Enhancements
+
+- Add command to query config metadata (#556) | [@kentquirk](https://github.com/kentquirk)
+- New cache management strategy (#547) | [@kentquirk](https://github.com/kentquirk)
+
+### Fixes
+
+- Set content-type on marshalToFormat (#548) | [@kentquirk](https://github.com/kentquirk)
+
+### Maintenance
+
+- Bump google.golang.org/grpc from 1.50.0 to 1.50.1 (#553)
+- Bump github.com/fsnotify/fsnotify from 1.5.4 to 1.6.0 (#552)
+- Bump github.com/stretchr/testify from 1.8.0 to 1.8.1 (#551)
+- Bump github.com/honeycombio/libhoney-go from 1.16.0 to 1.18.0 (#550)
+- Bump github.com/klauspost/compress from 1.15.11 to 1.15.12 (#549)
+
 ## 1.18.0 2022-10-12
 
 ### Enhancements
