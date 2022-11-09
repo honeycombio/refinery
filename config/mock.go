@@ -84,6 +84,7 @@ type MockConfig struct {
 	PeerTimeout                   time.Duration
 	AdditionalErrorFields         []string
 	AddSpanCountToRoot            bool
+	CacheOverrunStrategy          string
 
 	Mux sync.RWMutex
 }
@@ -458,4 +459,11 @@ func (f *MockConfig) GetAddSpanCountToRoot() bool {
 	defer f.Mux.RUnlock()
 
 	return f.AddSpanCountToRoot
+}
+
+func (f *MockConfig) GetCacheOverrunStrategy() string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.CacheOverrunStrategy
 }

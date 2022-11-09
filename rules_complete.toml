@@ -242,6 +242,22 @@ SampleRate = 1
 			AddSampleRateKeyToTrace = true
 			AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
 
+	# Note that Refinery comparisons are type-dependent. If you are operating in an environment where different
+	# telemetry may send the same field with different types (for example, some systems send status codes as "200"
+	# instead of 200), you may need to create additional rules to cover these cases.
+	[[dataset4.rule]]
+		name = "dynamically sample 200 string responses"
+		[[dataset4.rule.condition]]
+			field = "status_code"
+			operator = "="
+			value = "200"
+		[dataset4.rule.sampler.EMADynamicSampler]
+			Sampler = "EMADynamicSampler"
+			GoalSampleRate = 15
+			FieldList = ["request.method", "request.route"]
+			AddSampleRateKeyToTrace = true
+			AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
+
 	[[dataset4.rule]]
 		name = "sample traces originating from a service"
 		# if scope is set to "span", a single span in the trace must match

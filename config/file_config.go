@@ -56,6 +56,7 @@ type configContents struct {
 	GRPCServerParameters      GRPCServerParameters
 	AdditionalErrorFields     []string
 	AddSpanCountToRoot        bool
+	CacheOverrunStrategy      string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -157,6 +158,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
 	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
 	c.SetDefault("AddSpanCountToRoot", false)
+	c.SetDefault("CacheOverrunStrategy", "resize")
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -199,7 +201,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 		return nil, err
 	}
 
-	err = fc.validateConditionalConfigs()
+	err = fc.validateGeneralConfigs()
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +228,7 @@ func (f *fileConfig) onChange(in fsnotify.Event) {
 		return
 	}
 
-	err = f.validateConditionalConfigs()
+	err = f.validateGeneralConfigs()
 	if err != nil {
 		f.errorCallback(err)
 		return
@@ -263,7 +265,7 @@ func (f *fileConfig) unmarshal() error {
 	return nil
 }
 
-func (f *fileConfig) validateConditionalConfigs() error {
+func (f *fileConfig) validateGeneralConfigs() error {
 	// validate logger config
 	loggerType, err := f.GetLoggerType()
 	if err != nil {
@@ -292,6 +294,15 @@ func (f *fileConfig) validateConditionalConfigs() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// validate cache strategy
+	st := f.GetCacheOverrunStrategy()
+	switch st {
+	case "resize", "impact":
+		break
+	default:
+		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
 	}
 	return nil
 }
@@ -887,4 +898,11 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	defer f.mux.RUnlock()
 
 	return f.conf.AddSpanCountToRoot
+}
+
+func (f *fileConfig) GetCacheOverrunStrategy() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.CacheOverrunStrategy
 }

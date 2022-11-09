@@ -168,4 +168,6 @@ type Config interface {
 	GetAdditionalErrorFields() []string
 
 	GetAddSpanCountToRoot() bool
+
+	GetCacheOverrunStrategy() string
 }

@@ -2,8 +2,10 @@ package collect
 
 import (
 	"fmt"
+	"math/rand"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -562,7 +564,7 @@ func TestSampleConfigReload(t *testing.T) {
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 }
 
-func TestMaxAlloc(t *testing.T) {
+func TestOldMaxAlloc(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
@@ -638,7 +640,7 @@ func TestMaxAlloc(t *testing.T) {
 		time.Sleep(conf.SendTickerVal)
 	}
 
-	assert.Equal(t, 450, len(traces), "should have shrunk cache to 90% of previous size")
+	assert.Equal(t, 450, len(traces), "should have shrunk cache to 90%% of previous size")
 	for i, trace := range traces {
 		assert.False(t, trace.Sent)
 		assert.Equal(t, strconv.Itoa(i+50), trace.TraceID)
@@ -647,10 +649,109 @@ func TestMaxAlloc(t *testing.T) {
 
 	// We discarded the first 50 spans, and sent them.
 	transmission.Mux.Lock()
-	assert.Equal(t, 50, len(transmission.Events), "should have sent 10% of traces")
+	assert.Equal(t, 50, len(transmission.Events), "should have sent 10%% of traces")
 	for i, ev := range transmission.Events {
 		assert.Equal(t, i, ev.Data["id"])
 	}
+
+	transmission.Mux.Unlock()
+}
+
+func TestStableMaxAlloc(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:      0,
+		GetTraceTimeoutVal:   10 * time.Minute,
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:        2 * time.Millisecond,
+		CacheOverrunStrategy: "impact",
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+	spandata := make([]map[string]interface{}, 500)
+	for i := 0; i < 500; i++ {
+		spandata[i] = map[string]interface{}{
+			"trace.parent_id": "unused",
+			"id":              i,
+			"str1":            strings.Repeat("abc", rand.Intn(100)+1),
+			"str2":            strings.Repeat("def", rand.Intn(100)+1),
+		}
+	}
+
+	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := lru.New(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sentTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 1000)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	for i := 0; i < 500; i++ {
+		span := &types.Span{
+			TraceID: strconv.Itoa(i),
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data:    spandata[i],
+				APIKey:  legacyAPIKey,
+			},
+		}
+		coll.AddSpan(span)
+	}
+
+	for len(coll.incoming) > 0 {
+		time.Sleep(conf.SendTickerVal)
+	}
+
+	// Now there should be 500 traces in the cache.
+	coll.mutex.Lock()
+	assert.Equal(t, 500, len(coll.cache.GetAll()))
+
+	// We want to induce an eviction event, so set MaxAlloc a bit below
+	// our current post-GC alloc.
+	runtime.GC()
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	// Set MaxAlloc, which should cause cache evictions.
+	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = mem.Alloc * 99 / 100
+
+	coll.mutex.Unlock()
+
+	// wait for the cache to take some action
+	var traces []*types.Trace
+	for {
+		coll.mutex.Lock()
+		traces = coll.cache.GetAll()
+		if len(traces) < 500 {
+			break
+		}
+		coll.mutex.Unlock()
+
+		time.Sleep(conf.SendTickerVal)
+	}
+
+	assert.Equal(t, 1000, coll.cache.(*cache.DefaultInMemCache).GetCacheSize(), "cache size shouldn't change")
+
+	tracesLeft := len(traces)
+	assert.Less(t, tracesLeft, 480, "should have sent some traces")
+	assert.Greater(t, tracesLeft, 100, "should have NOT sent some traces")
+	coll.mutex.Unlock()
+
+	// We discarded the most costly spans, and sent them.
+	transmission.Mux.Lock()
+	assert.Equal(t, 500-len(traces), len(transmission.Events), "should have sent traces that weren't kept")
 
 	transmission.Mux.Unlock()
 }

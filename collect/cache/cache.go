@@ -128,6 +128,8 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 	return tmp
 }
 
+// TakeExpiredTraces should be called to decide which traces are past their expiration time;
+// It removes and returns them.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.insertionOrder)))
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
@@ -141,4 +143,20 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 		}
 	}
 	return res
+}
+
+// RemoveTraces accepts a set of trace IDs and removes any matching ones from
+// the insertion list. This is used in the case of a cache overrun.
+func (d *DefaultInMemCache) RemoveTraces(toDelete map[string]struct{}) {
+	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.insertionOrder)))
+	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
+
+	for i, t := range d.insertionOrder {
+		if t != nil {
+			if _, ok := toDelete[t.TraceID]; ok {
+				d.insertionOrder[i] = nil
+				delete(d.cache, t.TraceID)
+			}
+		}
+	}
 }
