@@ -22,7 +22,7 @@ Sampler = "DeterministicSampler"
 # Eligible for live reload.
 SampleRate = 1
 
-[dataset1]
+[environment1]
 
 	# Note: If your dataset name contains a space, you will have to escape the dataset name
 	# using single quotes, such as ['dataset 1']
@@ -87,7 +87,7 @@ SampleRate = 1
 	# Eligible for live reload.
 	ClearFrequencySec = 60
 
-[dataset2]
+[environment2]
 
 	# EMADynamicSampler is a section of the config for manipulating the Exponential
 	# Moving Average (EMA) Dynamic Sampler implementation. Like the simple DynamicSampler,
@@ -198,44 +198,44 @@ SampleRate = 1
 	# Eligible for live reload
 	BurstDetectionDelay = 3
 
-[dataset3]
+[environment3]
 
 	Sampler = "DeterministicSampler"
 	SampleRate = 10
 
-[dataset4]
+[environment4]
 
 	Sampler = "RulesBasedSampler"
 	# Optional, if set to true then the rules will also check nested json fields, in the format of parent.child
 	CheckNestedFields = false
 
-	[[dataset4.rule]]
+	[[environment4.rule]]
 		name = "drop healthchecks"
 		drop = true
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "http.route"
 			operator = "="
 			value = "/health-check"
 
-	[[dataset4.rule]]
+	[[environment4.rule]]
 		name = "keep slow 500 errors"
 		SampleRate = 1
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "status_code"
 			operator = "="
 			value = 500
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "duration_ms"
 			operator = ">="
 			value = 1000.789
 
-	[[dataset4.rule]]
+	[[environment4.rule]]
 		name = "dynamically sample 200 responses"
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "status_code"
 			operator = "="
 			value = 200
-		[dataset4.rule.sampler.EMADynamicSampler]
+		[environment4.rule.sampler.EMADynamicSampler]
 			Sampler = "EMADynamicSampler"
 			GoalSampleRate = 15
 			FieldList = ["request.method", "request.route"]
@@ -245,20 +245,20 @@ SampleRate = 1
 	# Note that Refinery comparisons are type-dependent. If you are operating in an environment where different
 	# telemetry may send the same field with different types (for example, some systems send status codes as "200"
 	# instead of 200), you may need to create additional rules to cover these cases.
-	[[dataset4.rule]]
+	[[environment4.rule]]
 		name = "dynamically sample 200 string responses"
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "status_code"
 			operator = "="
 			value = "200"
-		[dataset4.rule.sampler.EMADynamicSampler]
+		[environment4.rule.sampler.EMADynamicSampler]
 			Sampler = "EMADynamicSampler"
 			GoalSampleRate = 15
 			FieldList = ["request.method", "request.route"]
 			AddSampleRateKeyToTrace = true
 			AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
 
-	[[dataset4.rule]]
+	[[environment4.rule]]
 		name = "sample traces originating from a service"
 		# if scope is set to "span", a single span in the trace must match
 		# *all* of the conditions associated with this rule for the rule to
@@ -270,19 +270,19 @@ SampleRate = 1
 		# service in a way that would be difficult without it.
 		Scope = "span"
 		SampleRate = 5
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "service name"
 			operator = "="
 			value = "users"
-		[[dataset4.rule.condition]]
+		[[environment4.rule.condition]]
 			field = "meta.span_type"
 			operator = "="
 			value = "root"
 
-	[[dataset4.rule]]
+	[[environment4.rule]]
 		SampleRate = 10 # default when no rules match, if missing defaults to 10
 
-[dataset5]
+[environment5]
 
     Sampler = "TotalThroughputSampler"
     GoalThroughputPerSec = 100
