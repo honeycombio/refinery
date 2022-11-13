@@ -134,7 +134,7 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 	for _, condition := range rule.Condition {
 	span:
-		for _, span := range t.GetSpans() {
+		for _, span := range t.GetDescendants() {
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
 
 			if conditionMatchesValue(condition, value, exists) {
@@ -153,7 +153,7 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		return true
 	}
 
-	for _, span := range trace.GetSpans() {
+	for _, span := range trace.GetDescendants() {
 		ruleMatched := true
 		for _, condition := range rule.Condition {
 			// whether this condition is matched by this span.

@@ -600,7 +600,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
 	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
-	for _, sp := range trace.GetSpans() {
+	for _, sp := range trace.GetDescendants() {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
 		}

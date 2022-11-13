@@ -799,7 +799,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 		}
 
-		spans := trace.GetSpans()
+		spans := trace.GetDescendants()
 		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 		for _, span := range spans {
 			assert.Equal(t, span.Event.Data, map[string]interface{}{
@@ -887,7 +887,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 		}
 
-		spans := trace.GetSpans()
+		spans := trace.GetDescendants()
 		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 		for _, span := range spans {
 			assert.Equal(t, span.Event.Data, map[string]interface{}{
