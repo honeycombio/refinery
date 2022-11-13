@@ -32,7 +32,7 @@ func (d *traceKey) buildAndAdd(trace *types.Trace) string {
 	key := d.build(trace)
 
 	if d.addDynsampleKey {
-		for _, span := range trace.GetDescendants() {
+		for _, span := range trace.GetSpans() {
 			span.Data[d.addDynsampleField] = key
 		}
 	}
@@ -47,7 +47,7 @@ func (d *traceKey) build(trace *types.Trace) string {
 	fieldCollector := map[string][]string{}
 
 	// for each field, for each span, get the value of that field
-	spans := trace.GetDescendants()
+	spans := trace.GetSpans()
 	for _, field := range d.fields {
 		for _, span := range spans {
 			if val, ok := span.Data[field]; ok {
