@@ -26,7 +26,7 @@ func (t *legacySentRecord) Rate() uint {
 	return t.rate
 }
 
-func (t *legacySentRecord) Descendants() uint {
+func (t *legacySentRecord) DescendantCount() uint {
 	return uint(t.spanCount)
 }
 
@@ -57,7 +57,7 @@ func (c *legacySentCache) Record(trace *types.Trace, keep bool) {
 	sentRecord := legacySentRecord{
 		keep:      keep,
 		rate:      trace.SampleRate,
-		spanCount: trace.SpanCount(),
+		spanCount: trace.DescendantCount(),
 	}
 	c.sentTraceCache.Add(trace.TraceID, &sentRecord)
 }

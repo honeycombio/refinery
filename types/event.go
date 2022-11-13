@@ -87,20 +87,20 @@ func (t *Trace) AddSpan(sp *Span) {
 // against preferring to keep newer spans.
 func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
 	if t.totalImpact == 0 {
-		for _, sp := range t.GetSpans() {
+		for _, sp := range t.GetDescendants() {
 			t.totalImpact += sp.CacheImpact(traceTimeout)
 		}
 	}
 	return t.totalImpact
 }
 
-// GetSpans returns the list of spans in this trace
-func (t *Trace) GetSpans() []*Span {
+// GetDescendants returns the list of descendants in this trace
+func (t *Trace) GetDescendants() []*Span {
 	return t.spans
 }
 
-// SpanCount gets the number of spans currently in this trace
-func (t *Trace) SpanCount() uint {
+// DescendantCount gets the number of descendants of all kinds currently in this trace
+func (t *Trace) DescendantCount() uint {
 	return uint(len(t.spans))
 }
 
@@ -110,7 +110,7 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 	}
 
 	env := ""
-	for _, sp := range t.GetSpans() {
+	for _, sp := range t.GetDescendants() {
 		if sp.Event.Environment != "" {
 			env = sp.Event.Environment
 			break

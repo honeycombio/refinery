@@ -43,7 +43,7 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 	sampler.Start()
 	sampler.GetSampleRate(trace)
 
-	spans := trace.GetSpans()
+	spans := trace.GetDescendants()
 
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")
 	for _, span := range spans {

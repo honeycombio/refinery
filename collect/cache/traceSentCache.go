@@ -9,8 +9,8 @@ type TraceSentRecord interface {
 	Kept() bool
 	// Rate() returns the sample rate for the trace
 	Rate() uint
-	// Descendants returns the count of items associated with the trace, including all types of children like span links and span events.
-	Descendants() uint
+	// DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
+	DescendantCount() uint
 	Add(*types.Span)
 }
 

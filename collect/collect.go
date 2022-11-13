@@ -419,7 +419,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
 			// having none at all
-			i.dealWithSentTrace(sr.Kept(), sr.Rate(), sr.Descendants(), sp)
+			i.dealWithSentTrace(sr.Kept(), sr.Rate(), sr.DescendantCount(), sp)
 			return
 		}
 		// trace hasn't already been sent (or this span is really old); let's
@@ -450,7 +450,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, trace.SpanCount(), sp)
+		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, trace.DescendantCount(), sp)
 	}
 
 	// great! trace is live. add the span.
@@ -545,7 +545,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 	traceDur := time.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
-	i.Metrics.Histogram("trace_span_count", float64(trace.SpanCount()))
+	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
 	if trace.RootSpan != nil {
 		i.Metrics.Increment("trace_send_has_root")
 	} else {
@@ -570,7 +570,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if i.Config.GetAddSpanCountToRoot() && trace.RootSpan != nil {
-		trace.RootSpan.Data["meta.span_count"] = int64(trace.SpanCount())
+		trace.RootSpan.Data["meta.span_count"] = int64(trace.DescendantCount())
 	}
 
 	// use sampler key to find sampler; create and cache if not found
@@ -600,7 +600,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but dry run mode is enabled")
 	}
 	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
-	for _, sp := range trace.GetSpans() {
+	for _, sp := range trace.GetDescendants() {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
 		}
@@ -608,7 +608,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		// update the root span (if we have one, which we might not if the trace timed out)
 		// with the final total as of our send time
 		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
-			sp.Data["meta.span_count"] = int64(trace.SpanCount())
+			sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 		}
 
 		if i.Config.GetIsDryRun() {

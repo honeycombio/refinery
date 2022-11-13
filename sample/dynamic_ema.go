@@ -54,7 +54,7 @@ func (d *EMADynamicSampler) Start() error {
 	}
 	d.dynsampler.Start()
 
-	// Register stastics this package will produce
+	// Register statistics this package will produce
 	d.Metrics.Register("dynsampler_num_dropped", "counter")
 	d.Metrics.Register("dynsampler_num_kept", "counter")
 	d.Metrics.Register("dynsampler_sample_rate", "histogram")
