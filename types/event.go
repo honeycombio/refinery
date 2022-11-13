@@ -87,7 +87,7 @@ func (t *Trace) AddSpan(sp *Span) {
 // against preferring to keep newer spans.
 func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
 	if t.totalImpact == 0 {
-		for _, sp := range t.GetDescendants() {
+		for _, sp := range t.GetSpans() {
 			t.totalImpact += sp.CacheImpact(traceTimeout)
 		}
 	}
@@ -110,7 +110,7 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 	}
 
 	env := ""
-	for _, sp := range t.GetDescendants() {
+	for _, sp := range t.GetSpans() {
 		if sp.Event.Environment != "" {
 			env = sp.Event.Environment
 			break
