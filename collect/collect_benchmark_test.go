@@ -34,7 +34,7 @@ func BenchmarkCollect(b *testing.B) {
 	metric := &metrics.MockMetrics{}
 	metric.Start()
 
-	stc, err := cache.NewDefaultSentCache(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(b, err, "lru cache should start")
 
 	coll := &InMemCollector{

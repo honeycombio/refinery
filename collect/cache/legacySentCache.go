@@ -44,7 +44,7 @@ type legacySentCache struct {
 // Make sure it implements TraceSentCache
 var _ TraceSentCache = (*legacySentCache)(nil)
 
-func NewDefaultSentCache(capacity int) (TraceSentCache, error) {
+func NewLegacySentCache(capacity int) (TraceSentCache, error) {
 	stc, err := lru.New(capacity)
 	if err != nil {
 		return nil, err

@@ -111,7 +111,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 
-	i.sentTraceCache, err = cache.NewDefaultSentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
+	i.sentTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
 	if err != nil {
 		return err
 	}
