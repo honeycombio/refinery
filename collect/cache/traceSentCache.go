@@ -11,7 +11,8 @@ type TraceSentRecord interface {
 	Rate() uint
 	// DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
 	DescendantCount() uint
-	Add(*types.Span)
+	// Count records additional spans in the totals
+	Count(*types.Span)
 }
 
 type TraceSentCache interface {

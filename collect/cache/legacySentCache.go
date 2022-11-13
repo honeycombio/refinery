@@ -30,7 +30,7 @@ func (t *legacySentRecord) DescendantCount() uint {
 	return uint(t.spanCount)
 }
 
-func (t *legacySentRecord) Add(*types.Span) {
+func (t *legacySentRecord) Count(*types.Span) {
 	t.spanCount++
 }
 
@@ -65,7 +65,7 @@ func (c *legacySentCache) Record(trace *types.Trace, keep bool) {
 func (c *legacySentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 	if sentRecord, found := c.sentTraceCache.Get(span.TraceID); found {
 		if sr, ok := sentRecord.(*legacySentRecord); ok {
-			sr.Add(span)
+			sr.Count(span)
 			return sr, true
 		}
 	}
