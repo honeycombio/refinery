@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -35,7 +34,7 @@ func BenchmarkCollect(b *testing.B) {
 	metric := &metrics.MockMetrics{}
 	metric.Start()
 
-	stc, err := lru.New(15)
+	stc, err := cache.NewDefaultSentCache(15)
 	assert.NoError(b, err, "lru cache should start")
 
 	coll := &InMemCollector{
