@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -73,22 +72,13 @@ type InMemCollector struct {
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 
-	sentTraceCache *lru.Cache
+	sentTraceCache cache.TraceSentCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
 	reload   chan struct{}
 
 	hostname string
-}
-
-// traceSentRecord is the bit we leave behind when sending a trace to remember
-// our decision for the future, so any delinquent spans that show up later can
-// be dropped or passed along.
-type traceSentRecord struct {
-	keep      bool  // true if the trace was kept, false if it was dropped
-	rate      uint  // sample rate used when sending the trace
-	spanCount int64 // number of spans in the trace (we decorate the root span with this)
 }
 
 func (i *InMemCollector) Start() error {
@@ -121,11 +111,10 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 
-	stc, err := lru.New(imcConfig.CacheCapacity * 5) // keep 5x ring buffer size
+	i.sentTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
 	if err != nil {
 		return err
 	}
-	i.sentTraceCache = stc
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.fromPeer = make(chan *types.Span, imcConfig.CacheCapacity*3)
@@ -425,16 +414,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sentRecord, found := i.sentTraceCache.Get(sp.TraceID); found {
-			if sr, ok := sentRecord.(*traceSentRecord); ok {
-				i.Metrics.Increment("trace_sent_cache_hit")
-				// bump the count of records on this trace -- if the root span isn't
-				// the last late span, then it won't be perfect, but it will be better than
-				// having none at all
-				sentRecord.(*traceSentRecord).spanCount++
-				i.dealWithSentTrace(sr.keep, sr.rate, sentRecord.(*traceSentRecord).spanCount, sp)
-				return
-			}
+		if sr, found := i.sentTraceCache.Check(sp); found {
+			i.Metrics.Increment("trace_sent_cache_hit")
+			// bump the count of records on this trace -- if the root span isn't
+			// the last late span, then it won't be perfect, but it will be better than
+			// having none at all
+			i.dealWithSentTrace(sr.Kept(), sr.Rate(), sr.DescendantCount(), sp)
+			return
 		}
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
@@ -464,7 +450,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, trace.SpanCount(), sp)
+		i.dealWithSentTrace(trace.KeepSample, trace.SampleRate, trace.DescendantCount(), sp)
 	}
 
 	// great! trace is live. add the span.
@@ -486,7 +472,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount int64, sp *types.Span) {
+func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount uint, sp *types.Span) {
 	if i.Config.GetIsDryRun() {
 		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
@@ -502,7 +488,7 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 		mergeTraceAndSpanSampleRates(sp, sampleRate)
 		// if this span is a late root span, possibly update it with our current span count
 		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
-			sp.Data["meta.span_count"] = spanCount
+			sp.Data["meta.span_count"] = int64(spanCount)
 		}
 		i.Transmission.EnqueueSpan(sp)
 		return
@@ -559,7 +545,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 	traceDur := time.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
-	i.Metrics.Histogram("trace_span_count", float64(trace.SpanCount()))
+	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
 	if trace.RootSpan != nil {
 		i.Metrics.Increment("trace_send_has_root")
 	} else {
@@ -584,7 +570,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if i.Config.GetAddSpanCountToRoot() && trace.RootSpan != nil {
-		trace.RootSpan.Data["meta.span_count"] = trace.SpanCount()
+		trace.RootSpan.Data["meta.span_count"] = int64(trace.DescendantCount())
 	}
 
 	// use sampler key to find sampler; create and cache if not found
@@ -599,13 +585,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
 
-	// record this decision in the sent record LRU for future spans
-	sentRecord := traceSentRecord{
-		keep:      shouldSend,
-		rate:      rate,
-		spanCount: trace.SpanCount(),
-	}
-	i.sentTraceCache.Add(trace.TraceID, &sentRecord)
+	i.sentTraceCache.Record(trace, shouldSend)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
@@ -628,7 +608,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		// update the root span (if we have one, which we might not if the trace timed out)
 		// with the final total as of our send time
 		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
-			sp.Data["meta.span_count"] = sentRecord.spanCount
+			sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 		}
 
 		if i.Config.GetIsDryRun() {

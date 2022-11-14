@@ -94,14 +94,14 @@ func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
 	return t.totalImpact
 }
 
-// GetSpans returns the list of spans in this trace
+// GetSpans returns the list of descendants in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
-// SpanCount gets the number of spans currently in this trace as int64
-func (t *Trace) SpanCount() int64 {
-	return int64(len(t.spans))
+// DescendantCount gets the number of descendants of all kinds currently in this trace
+func (t *Trace) DescendantCount() uint {
+	return uint(len(t.spans))
 }
 
 func (t *Trace) GetSamplerKey() (string, bool) {

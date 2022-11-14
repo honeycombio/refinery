@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/facebookgo/inject"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -48,7 +47,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -126,7 +125,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -184,7 +183,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -245,7 +244,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -318,7 +317,7 @@ func TestDryRunMode(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -585,7 +584,7 @@ func TestOldMaxAlloc(t *testing.T) {
 	}
 	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -689,7 +688,7 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -777,7 +776,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	}
 	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -849,7 +848,7 @@ func TestAddSpanCount(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
@@ -918,7 +917,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := lru.New(15)
+	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
 	coll.sentTraceCache = stc
 
