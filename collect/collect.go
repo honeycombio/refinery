@@ -72,7 +72,7 @@ type InMemCollector struct {
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 
-	sentTraceCache cache.TraceSentCache
+	sampleTraceCache cache.TraceSentCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
@@ -111,9 +111,18 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 
-	i.sentTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
-	if err != nil {
-		return err
+	sampleCacheConfig := i.Config.GetSampleCacheConfig()
+	switch sampleCacheConfig.Type {
+	case "legacy":
+		i.sampleTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
+		if err != nil {
+			return err
+		}
+	case "cuckoo":
+		i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig)
+		if err != nil {
+			return err
+		}
 	}
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
@@ -414,7 +423,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, found := i.sentTraceCache.Check(sp); found {
+		if sr, found := i.sampleTraceCache.Check(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -585,7 +594,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
 
-	i.sentTraceCache.Record(trace, shouldSend)
+	i.sampleTraceCache.Record(trace, shouldSend)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
