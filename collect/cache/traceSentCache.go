@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -21,4 +22,8 @@ type TraceSentCache interface {
 	// Check tests if a trace corresponding to the span is in the cache; if found, it returns the appropriate TraceSentRecord and true,
 	// else nil and false.
 	Check(span *types.Span) (TraceSentRecord, bool)
+	// Stop halts the cache in preparation for shutdown
+	Stop()
+	// Resize adjusts the size of the cache according to the Config passed in
+	Resize(cfg config.SampleCacheConfig) error
 }

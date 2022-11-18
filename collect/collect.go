@@ -174,8 +174,10 @@ func (i *InMemCollector) reloadConfigs() {
 			}
 			i.cache = c
 		} else {
-			i.Logger.Debug().Logf("skipping reloading the cache on config reload because it hasn't changed capacity")
+			i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 		}
+
+		i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 	} else {
 		i.Logger.Error().WithField("cache", i.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
@@ -651,6 +653,9 @@ func (i *InMemCollector) Stop() error {
 	if i.Transmission != nil {
 		i.Transmission.Flush()
 	}
+
+	i.sampleTraceCache.Stop()
+
 	return nil
 }
 

@@ -27,6 +27,7 @@ func NewCuckooTraceChecker(capacity uint) *CuckooTraceChecker {
 	}
 }
 
+// Add puts a traceID into the filter.
 func (c *CuckooTraceChecker) Add(traceID string) {
 	c.mut.Lock()
 	defer c.mut.Unlock()
@@ -36,6 +37,7 @@ func (c *CuckooTraceChecker) Add(traceID string) {
 	}
 }
 
+// Check tests if a traceID is (very probably) in the filter.
 func (c *CuckooTraceChecker) Check(traceID string) bool {
 	b := []byte(traceID)
 	c.mut.RLock()
@@ -43,6 +45,8 @@ func (c *CuckooTraceChecker) Check(traceID string) bool {
 	return c.current.Lookup(b)
 }
 
+// Maintain should be called periodically; if the current filter is full, it replaces
+// it with the future filter and creates a new future filter.
 func (c *CuckooTraceChecker) Maintain() {
 	c.mut.RLock()
 	dropFactor := c.current.LoadFactor()
@@ -60,4 +64,11 @@ func (c *CuckooTraceChecker) Maintain() {
 		c.current = c.future
 		c.future = cuckoo.NewFilter(c.capacity)
 	}
+}
+
+// SetNextCapacity adjusts the capacity that will be set for the future filter on the next replacement.
+func (c *CuckooTraceChecker) SetNextCapacity(capacity uint) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	c.capacity = capacity
 }

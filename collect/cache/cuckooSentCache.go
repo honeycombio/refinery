@@ -66,6 +66,14 @@ var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 type cuckooSentCache struct {
 	kept    *lru.Cache
 	dropped *CuckooTraceChecker
+	cfg     config.SampleCacheConfig
+
+	// The done channel is used to decide when to terminate the monitor
+	// goroutine. When resizing the cache, we write to the channel, but
+	// when terminating the system, call Stop() to close the channel.
+	// Either one causes the goroutine to shut down, and in resizing
+	// we then restart the monitor.
+	done chan struct{}
 }
 
 // Make sure it implements TraceSentCache
@@ -78,20 +86,33 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig) (TraceSentCache, error) {
 	}
 	dropped := NewCuckooTraceChecker(cfg.DroppedSize)
 
-	// TODO: give this a shutdown channel
-	// also metrics for when this puppy gets cycled
-	go func() {
-		ticker := time.NewTicker(cfg.SizeCheckInterval)
-		for range ticker.C {
-			dropped.Maintain()
-		}
-		// done <- struct{}{}
-	}()
-
-	return &cuckooSentCache{
+	cache := &cuckooSentCache{
 		kept:    stc,
 		dropped: dropped,
-	}, nil
+		cfg:     cfg,
+		done:    make(chan struct{}),
+	}
+	// TODO: metrics for when this puppy gets cycled
+	go cache.monitor()
+	return cache, nil
+}
+
+// goroutine to monitor the cache and cycle the size check periodically
+func (c *cuckooSentCache) monitor() {
+	ticker := time.NewTicker(c.cfg.SizeCheckInterval)
+	for {
+		select {
+		case <-ticker.C:
+			c.dropped.Maintain()
+		case <-c.done:
+			return
+		}
+	}
+}
+
+// Stop halts the monitor goroutine
+func (c *cuckooSentCache) Stop() {
+	close(c.done)
 }
 
 func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
@@ -124,4 +145,35 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 	}
 	// we have no memory of this place
 	return nil, false
+}
+
+func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
+	stc, err := lru.New(int(cfg.KeptSize))
+	if err != nil {
+		return err
+	}
+
+	// grab all the items in the current cache; if it's larger than
+	// what will fit in the new one, discard the oldest ones
+	// (we don't have to do anything with the ones we discard, this is
+	// the trace decisions cache).
+	keys := c.kept.Keys()
+	if len(keys) > int(cfg.KeptSize) {
+		keys = keys[len(keys)-int(cfg.KeptSize):]
+	}
+	// copy all the keys to the new cache in order
+	for _, k := range keys {
+		if v, found := c.kept.Get(k); found {
+			stc.Add(k, v)
+		}
+	}
+	c.kept = stc
+
+	// also set up the drop cache size to change eventually
+	c.dropped.SetNextCapacity(cfg.DroppedSize)
+
+	// shut down the old monitor and create a new one
+	c.done <- struct{}{}
+	go c.monitor()
+	return nil
 }
