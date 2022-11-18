@@ -113,7 +113,7 @@ func (i *InMemCollector) Start() error {
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
 	switch sampleCacheConfig.Type {
-	case "legacy":
+	case "legacy", "":
 		i.sampleTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
 		if err != nil {
 			return err
@@ -123,6 +123,8 @@ func (i *InMemCollector) Start() error {
 		if err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("sampleTraceCache had impossible config type %s", sampleCacheConfig.Type)
 	}
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
