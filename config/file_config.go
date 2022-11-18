@@ -110,7 +110,7 @@ type PeerManagementConfig struct {
 type SampleCacheConfig struct {
 	Type              string        `validate:"required,oneof= legacy cuckoo"`
 	KeptSize          uint          `validate:"gte=500"`
-	DroppedSize       uint          `validate:"gte=100000`
+	DroppedSize       uint          `validate:"gte=100_000"`
 	SizeCheckInterval time.Duration `validate:"gte=1_000_000_000"` // 1 second minimum
 }
 
