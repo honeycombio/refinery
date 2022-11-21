@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -41,12 +42,12 @@ func (t *cuckooKeptRecord) Count(*types.Span) {
 // Make sure it implements TraceSentRecord
 var _ TraceSentRecord = (*cuckooKeptRecord)(nil)
 
-// cuckooSentRecord is what a TraceSentRecord we return when the trace was dropped.
+// cuckooSentRecord is what we return when the trace was dropped.
 // It's always the same one.
 type cuckooDroppedRecord struct{}
 
 func (t *cuckooDroppedRecord) Kept() bool {
-	return true
+	return false
 }
 
 func (t *cuckooDroppedRecord) Rate() uint {
@@ -72,8 +73,11 @@ type cuckooSentCache struct {
 	// goroutine. When resizing the cache, we write to the channel, but
 	// when terminating the system, call Stop() to close the channel.
 	// Either one causes the goroutine to shut down, and in resizing
-	// we then restart the monitor.
+	// we then start a new monitor.
 	done chan struct{}
+
+	// This mutex is for managing kept traces
+	keptMut sync.Mutex
 }
 
 // Make sure it implements TraceSentCache
@@ -122,6 +126,8 @@ func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 			rate:      trace.SampleRate,
 			spanCount: trace.DescendantCount(),
 		}
+		c.keptMut.Lock()
+		defer c.keptMut.Unlock()
 		c.kept.Add(trace.TraceID, &sentRecord)
 		return
 	}
@@ -136,6 +142,8 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 		return &cuckooDroppedRecord{}, false
 	}
 	// was it kept?
+	c.keptMut.Lock()
+	defer c.keptMut.Unlock()
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
 		if sr, ok := sentRecord.(*cuckooKeptRecord); ok {
 			// if we kept it, then this span being checked needs counting too
@@ -157,6 +165,8 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	// what will fit in the new one, discard the oldest ones
 	// (we don't have to do anything with the ones we discard, this is
 	// the trace decisions cache).
+	c.keptMut.Lock()
+	defer c.keptMut.Unlock()
 	keys := c.kept.Keys()
 	if len(keys) > int(cfg.KeptSize) {
 		keys = keys[len(keys)-int(cfg.KeptSize):]

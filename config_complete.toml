@@ -449,8 +449,8 @@ MetricsReportingInterval = 3
 
 
 # DroppedSize controls the size of the cuckoo dropped traces cache.
-# The only information needed about dropped traces is the fact that they were dropped,
-# so this cache consumes approximately 2 bits (not bytes) per trace.
+# This cache consumes 4-6 bytes per trace at a scale of millions of traces.
+# Changing its size with live reload sets a future limit, but does not have an immediate effect.
 # Default is 1_000_000 traces.
 # Does not apply to the "legacy" type of cache.
 # Eligible for live reload.

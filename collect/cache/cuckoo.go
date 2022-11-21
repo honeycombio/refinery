@@ -51,18 +51,17 @@ func (c *CuckooTraceChecker) Maintain() {
 	c.mut.RLock()
 	dropFactor := c.current.LoadFactor()
 	c.mut.RUnlock()
+
 	// once the current one is half full, we can drop the firstTime check
-	if c.firstTime && dropFactor > 0.5 {
+	if (c.firstTime && dropFactor > 0.5) || dropFactor > 0.99 {
 		c.mut.Lock()
 		defer c.mut.Unlock()
 		c.firstTime = false
-	}
-	// if the current one is full, cycle the filters
-	if dropFactor > 0.99 {
-		c.mut.Lock()
-		defer c.mut.Unlock()
-		c.current = c.future
-		c.future = cuckoo.NewFilter(c.capacity)
+		// if the current one is full, cycle the filters
+		if dropFactor > 0.99 {
+			c.current = c.future
+			c.future = cuckoo.NewFilter(c.capacity)
+		}
 	}
 }
 

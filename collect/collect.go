@@ -124,7 +124,7 @@ func (i *InMemCollector) Start() error {
 			return err
 		}
 	default:
-		return fmt.Errorf("sampleTraceCache had impossible config type %s", sampleCacheConfig.Type)
+		return fmt.Errorf("validation failure - sampleTraceCache had invalid config type '%s'", sampleCacheConfig.Type)
 	}
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
