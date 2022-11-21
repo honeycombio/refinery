@@ -447,7 +447,6 @@ MetricsReportingInterval = 3
 # Eligible for live reload.
 # KeptSize = 10_000
 
-
 # DroppedSize controls the size of the cuckoo dropped traces cache.
 # This cache consumes 4-6 bytes per trace at a scale of millions of traces.
 # Changing its size with live reload sets a future limit, but does not have an immediate effect.
