@@ -6,11 +6,13 @@ import (
 	cuckoo "github.com/panmari/cuckoofilter"
 )
 
-// This wraps a cuckoo filter implementation in a way that lets us keep it running forever without filling up.
+// This wraps a cuckoo filter implementation in a way that lets us keep it running forever
+// without filling up.
 // You must call Maintain() periodically, most likely from a goroutine.
-// We maintain two filters that are out of sync; when current is full, future is half full and we then discard current
-// and replace it with the future, and start with a new empty future.
-
+// We maintain two filters that are out of sync; when current is full, future is half full
+// and we then discard current and replace it with the future, and then create a new, empty future.
+// This means that we need to use the firstTime flag to avoid putting anything into future
+// until after current reaches .5.
 type CuckooTraceChecker struct {
 	current   *cuckoo.Filter
 	future    *cuckoo.Filter
@@ -32,6 +34,7 @@ func (c *CuckooTraceChecker) Add(traceID string) {
 	c.mut.Lock()
 	defer c.mut.Unlock()
 	c.current.Insert([]byte(traceID))
+	// don't add anything to future until we're no longer in the 'firstTime' section.
 	if !c.firstTime {
 		c.future.Insert([]byte(traceID))
 	}
