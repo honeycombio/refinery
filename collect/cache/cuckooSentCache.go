@@ -6,6 +6,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -83,12 +84,12 @@ type cuckooSentCache struct {
 // Make sure it implements TraceSentCache
 var _ TraceSentCache = (*cuckooSentCache)(nil)
 
-func NewCuckooSentCache(cfg config.SampleCacheConfig) (TraceSentCache, error) {
+func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
 	stc, err := lru.New(int(cfg.KeptSize))
 	if err != nil {
 		return nil, err
 	}
-	dropped := NewCuckooTraceChecker(cfg.DroppedSize)
+	dropped := NewCuckooTraceChecker(cfg.DroppedSize, met)
 
 	cache := &cuckooSentCache{
 		kept:    stc,
@@ -96,7 +97,6 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig) (TraceSentCache, error) {
 		cfg:     cfg,
 		done:    make(chan struct{}),
 	}
-	// TODO: metrics for when this puppy gets cycled
 	go cache.monitor()
 	return cache, nil
 }

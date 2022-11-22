@@ -119,7 +119,10 @@ func (i *InMemCollector) Start() error {
 			return err
 		}
 	case "cuckoo":
-		i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig)
+		i.Metrics.Register(cache.CurrentCapacity, "gauge")
+		i.Metrics.Register(cache.FutureLoadFactor, "gauge")
+		i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
+		i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
 		if err != nil {
 			return err
 		}
