@@ -356,9 +356,9 @@ MetricsDataset = "Refinery Metrics"
 MetricsReportingInterval = 3
 
 
-#####################@##
+#######################
 ## Prometheus Metrics ##
-#####################@##
+#######################
 
 [PrometheusMetrics]
 
@@ -416,3 +416,50 @@ MetricsReportingInterval = 3
 # https://github.com/grpc/grpc-go/blob/60a3a7e969c401ca16dbcd0108ad544fb35aa61c/internal/transport/http2_server.go#L231-L233
 # Not eligible for live reload.
 # Timeout = "2s"
+
+
+
+################################
+## Sample Cache Configuration ##
+################################
+
+# Sample Cache Configuration controls the sample cache used to retain information about trace
+# status after the sampling decision has been made.
+
+[SampleCacheConfig]
+
+# Type controls the type of sample cache used.
+# "legacy" is a strategy where both keep and drop decisions are stored in a circular buffer that is
+# 5x the size of the trace cache. This is Refinery's original sample cache strategy.
+# "cuckoo" is a strategy where dropped traces are preserved in a "Cuckoo Filter", which can remember
+# a much larger number of dropped traces, leaving capacity to retain a much larger number of kept traces.
+# It is also more configurable. The cuckoo filter is recommended for most installations.
+# Default is "legacy".
+# Not eligible for live reload (you cannot change the type of cache with reload).
+# Type = "cuckoo"
+
+# KeptSize controls the number of traces preserved in the cuckoo kept traces cache.
+# Refinery keeps a record of each trace that was kept and sent to Honeycomb, along with some
+# statistical information. This is most useful in cases where the trace was sent before sending
+# the root span, so that the root span can be decorated with accurate metadata.
+# Default is 10_000 traces (each trace in this cache consumes roughly 200 bytes).
+# Does not apply to the "legacy" type of cache.
+# Eligible for live reload.
+# KeptSize = 10_000
+
+# DroppedSize controls the size of the cuckoo dropped traces cache.
+# This cache consumes 4-6 bytes per trace at a scale of millions of traces.
+# Changing its size with live reload sets a future limit, but does not have an immediate effect.
+# Default is 1_000_000 traces.
+# Does not apply to the "legacy" type of cache.
+# Eligible for live reload.
+# DroppedSize = 1_000_000
+
+# SizeCheckInterval controls the duration of how often the cuckoo cache re-evaluates
+# the remaining capacity of its dropped traces cache and possibly cycles it.
+# This cache is quite resilient so it doesn't need to happen very often, but the
+# operation is also inexpensive.
+# Default is 10 seconds.
+# Does not apply to the "legacy" type of cache.
+# Eligible for live reload.
+# SizeCheckInterval = "10s"

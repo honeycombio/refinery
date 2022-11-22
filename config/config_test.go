@@ -814,3 +814,58 @@ func TestHoneycombAdditionalErrorDefaults(t *testing.T) {
 
 	assert.Equal(t, []string{"trace.span_id"}, c.GetAdditionalErrorFields())
 }
+
+func TestSampleCacheParameters(t *testing.T) {
+	config, rules := createTempConfigs(t, `
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	s := c.GetSampleCacheConfig()
+	assert.Equal(t, "legacy", s.Type)
+	assert.Equal(t, uint(10_000), s.KeptSize)
+	assert.Equal(t, uint(1_000_000), s.DroppedSize)
+	assert.Equal(t, 10*time.Second, s.SizeCheckInterval)
+}
+
+func TestSampleCacheParametersCuckoo(t *testing.T) {
+	config, rules := createTempConfigs(t, `
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+
+	[SampleCache]
+		Type="cuckoo"
+		KeptSize=100_000
+		DroppedSize=10_000_000
+		SizeCheckInterval="60s"
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	s := c.GetSampleCacheConfig()
+	assert.Equal(t, "cuckoo", s.Type)
+	assert.Equal(t, uint(100_000), s.KeptSize)
+	assert.Equal(t, uint(10_000_000), s.DroppedSize)
+	assert.Equal(t, 1*time.Minute, s.SizeCheckInterval)
+}

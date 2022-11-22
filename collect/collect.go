@@ -72,7 +72,7 @@ type InMemCollector struct {
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
 
-	sentTraceCache cache.TraceSentCache
+	sampleTraceCache cache.TraceSentCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
@@ -111,9 +111,23 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 
-	i.sentTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
-	if err != nil {
-		return err
+	sampleCacheConfig := i.Config.GetSampleCacheConfig()
+	switch sampleCacheConfig.Type {
+	case "legacy", "":
+		i.sampleTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
+		if err != nil {
+			return err
+		}
+	case "cuckoo":
+		i.Metrics.Register(cache.CurrentCapacity, "gauge")
+		i.Metrics.Register(cache.FutureLoadFactor, "gauge")
+		i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
+		i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("validation failure - sampleTraceCache had invalid config type '%s'", sampleCacheConfig.Type)
 	}
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
@@ -165,8 +179,10 @@ func (i *InMemCollector) reloadConfigs() {
 			}
 			i.cache = c
 		} else {
-			i.Logger.Debug().Logf("skipping reloading the cache on config reload because it hasn't changed capacity")
+			i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 		}
+
+		i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 	} else {
 		i.Logger.Error().WithField("cache", i.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
@@ -414,7 +430,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, found := i.sentTraceCache.Check(sp); found {
+		if sr, found := i.sampleTraceCache.Check(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -585,7 +601,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
 
-	i.sentTraceCache.Record(trace, shouldSend)
+	i.sampleTraceCache.Record(trace, shouldSend)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
@@ -642,6 +658,9 @@ func (i *InMemCollector) Stop() error {
 	if i.Transmission != nil {
 		i.Transmission.Flush()
 	}
+
+	i.sampleTraceCache.Stop()
+
 	return nil
 }
 

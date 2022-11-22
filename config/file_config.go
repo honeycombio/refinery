@@ -62,6 +62,7 @@ type configContents struct {
 	AdditionalErrorFields     []string
 	AddSpanCountToRoot        bool
 	CacheOverrunStrategy      string
+	SampleCache               SampleCacheConfig `validate:"required"`
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -104,6 +105,13 @@ type PeerManagementConfig struct {
 	UseIPV6Identifier       bool
 	RedisIdentifier         string
 	Timeout                 time.Duration
+}
+
+type SampleCacheConfig struct {
+	Type              string        `validate:"required,oneof= legacy cuckoo"`
+	KeptSize          uint          `validate:"gte=500"`
+	DroppedSize       uint          `validate:"gte=100_000"`
+	SizeCheckInterval time.Duration `validate:"gte=1_000_000_000"` // 1 second minimum
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
@@ -164,6 +172,10 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
 	c.SetDefault("AddSpanCountToRoot", false)
 	c.SetDefault("CacheOverrunStrategy", "resize")
+	c.SetDefault("SampleCache.Type", "legacy")
+	c.SetDefault("SampleCache.KeptSize", 10_000)
+	c.SetDefault("SampleCache.DroppedSize", 1_000_000)
+	c.SetDefault("SampleCache.SizeCheckInterval", 10*time.Second)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -912,6 +924,13 @@ func (f *fileConfig) GetCacheOverrunStrategy() string {
 	defer f.mux.RUnlock()
 
 	return f.conf.CacheOverrunStrategy
+}
+
+func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.SampleCache
 }
 
 // calculates an MD5 sum for a file that returns the same result as the md5sum command

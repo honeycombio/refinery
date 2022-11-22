@@ -172,6 +172,8 @@ type Config interface {
 	GetCacheOverrunStrategy() string
 
 	GetConfigMetadata() []ConfigMetadata
+
+	GetSampleCacheConfig() SampleCacheConfig
 }
 
 type ConfigMetadata struct {

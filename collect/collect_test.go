@@ -49,7 +49,7 @@ func TestAddRootSpan(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -127,7 +127,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -185,7 +185,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -246,7 +246,7 @@ func TestAddSpan(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -319,7 +319,7 @@ func TestDryRunMode(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -586,7 +586,7 @@ func TestOldMaxAlloc(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -690,7 +690,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -778,7 +778,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 3)
 	coll.fromPeer = make(chan *types.Span, 3)
@@ -850,7 +850,7 @@ func TestAddSpanCount(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -919,7 +919,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	coll.cache = c
 	stc, err := cache.NewLegacySentCache(15)
 	assert.NoError(t, err, "lru cache should start")
-	coll.sentTraceCache = stc
+	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)

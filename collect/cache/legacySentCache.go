@@ -2,6 +2,7 @@ package cache
 
 import (
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -70,4 +71,14 @@ func (c *legacySentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 		}
 	}
 	return nil, false
+}
+
+// legacy Stop does nothing
+// Stop halts the monitor goroutine
+func (c *legacySentCache) Stop() {
+}
+
+// legacy Resize does nothing
+func (c *legacySentCache) Resize(cfg config.SampleCacheConfig) error {
+	return nil
 }
