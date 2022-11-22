@@ -17,7 +17,7 @@ const (
 // This wraps a cuckoo filter implementation in a way that lets us keep it running forever
 // without filling up.
 // A cuckoo filter can't be emptied (you can delete individual items if you know what they are,
-// but you can't get their names from the filter. Consequently, what we do is keep *two* filters,
+// but you can't get their names from the filter). Consequently, what we do is keep *two* filters,
 // current and future. The current one is the one we use to check against, and when we add, we
 // add to both. But the future one is started *after* the current one, so that when the current
 // gets too full, we can discard it, replace it with future, and then start a new, empty future.
