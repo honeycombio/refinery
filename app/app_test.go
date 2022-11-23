@@ -1,5 +1,3 @@
-//go:build all || race
-
 package app
 
 import (
@@ -123,7 +121,7 @@ func newStartedApp(
 
 	var err error
 	if peers == nil {
-		peers, err = peer.NewPeers(context.Background(), c)
+		peers, err = peer.NewPeers(context.Background(), c, make(chan struct{}))
 		assert.NoError(t, err)
 	}
 

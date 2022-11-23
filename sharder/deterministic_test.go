@@ -26,7 +26,9 @@ func TestWhichShard(t *testing.T) {
 		GetPeersVal:          peers,
 		PeerManagementType:   "file",
 	}
-	filePeers, err := peer.NewPeers(context.Background(), config)
+	done := make(chan struct{})
+	defer close(done)
+	filePeers, err := peer.NewPeers(context.Background(), config, done)
 	assert.Equal(t, nil, err)
 	sharder := DeterministicSharder{
 		Config: config,
@@ -67,7 +69,9 @@ func TestWhichShardAtEdge(t *testing.T) {
 		GetPeersVal:          peers,
 		PeerManagementType:   "file",
 	}
-	filePeers, err := peer.NewPeers(context.Background(), config)
+	done := make(chan struct{})
+	defer close(done)
+	filePeers, err := peer.NewPeers(context.Background(), config, done)
 	assert.Equal(t, nil, err)
 	sharder := DeterministicSharder{
 		Config: config,

@@ -20,6 +20,10 @@ type Membership interface {
 	// in order to remain a member of the group.
 	Register(ctx context.Context, memberName string, timeout time.Duration) error
 
+	// Unregister removes a name from the list immediately. It's intended to be
+	// used during shutdown so that there's no delay in the case of deliberate downsizing.
+	Unregister(ctx context.Context, memberName string) error
+
 	// GetMembers retrieves the list of all currently registered members. Members
 	// that have registered but timed out will not be returned.
 	GetMembers(ctx context.Context) ([]string, error)
@@ -82,6 +86,27 @@ func (rm *RedisMembership) Register(ctx context.Context, memberName string, time
 			WithField("timeoutSec", timeoutSec).
 			WithField("err", err).
 			Error("registration failed")
+		return err
+	}
+	return nil
+}
+
+func (rm *RedisMembership) Unregister(ctx context.Context, memberName string) error {
+	err := rm.validateDefaults()
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s•%s•%s", globalPrefix, rm.Prefix, memberName)
+	conn, err := rm.Pool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.Do("DEL", key)
+	if err != nil {
+		logrus.WithField("name", memberName).
+			WithField("err", err).
+			Error("unregistration failed")
 		return err
 	}
 	return nil
@@ -189,10 +214,8 @@ func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string, timeout 
 				break
 			}
 
-			if keys != nil {
-				for _, key := range keys {
-					keyChan <- key
-				}
+			for _, key := range keys {
+				keyChan <- key
 			}
 
 			// redis will return 0 when we have iterated over the entire set

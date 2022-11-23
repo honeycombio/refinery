@@ -1,5 +1,3 @@
-//go:build all || !race
-
 package config
 
 import (

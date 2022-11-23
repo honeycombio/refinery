@@ -106,7 +106,8 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.GetPeerTimeout())
 	defer cancel()
-	peers, err := peer.NewPeers(ctx, c)
+	done := make(chan struct{})
+	peers, err := peer.NewPeers(ctx, c, done)
 
 	if err != nil {
 		fmt.Printf("unable to load peers: %+v\n", err)
@@ -226,5 +227,8 @@ func main() {
 
 	// block on our signal handler to exit
 	sig := <-sigsToExit
+	// unregister ourselves before we go
+	close(done)
+	time.Sleep(100 * time.Millisecond)
 	a.Logger.Error().Logf("Caught signal \"%s\"", sig)
 }
