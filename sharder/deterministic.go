@@ -267,21 +267,31 @@ func (d *DeterministicSharder) loadPeerList() error {
 	// make sure the list is in a stable, comparable order
 	sort.Sort(SortableShardList(newPeers))
 
-	// PartitionCount controls the minimum number of partitions used to control node assignment
-	// when we use the "hash" strategy.
-	// Ideally, this value should be 3-5x the maximum expected number of nodes.
-	// If necessary, it will (effectively) be increased to equal the number of nodes.
-	// A larger value will achieve more even trace distribution, at the cost of a minor performance
-	// hit once per span (roughly 1 microsecond per 50 partitions). Since the distribution isn't
-	// that even anyway (yay randomness) 50 seems to be a good balance; it helps with small
-	// installations and doesn't hurt for big ones.
+	// In general, the variation in the traffic assigned to a randomly partitioned space is
+	// controlled by the number of partitions. PartitionCount controls the minimum number
+	// of partitions used to control node assignment when we use the "hash" strategy.
+	// When there's a small number of partitions, the two-layer hash strategy can end up giving
+	// one partition a disproportionate fraction of the traffic. So we create a large number of
+	// random partitions and then assign (potentially) multiple partitions to individual nodes.
+	// We're asserting that if we randomly divide the space among at this many partitions, the variation
+	// between them is likely to be acceptable. (As this is random, there might be exceptions.)
+	// The reason not to make this value much larger, say 1000, is that finding the right partition
+	// is linear -- O(number of partitions) and so we want it to be as small as possible
+	// while still being big enough.
+	// PartitionCount, therefore, is the smallest value that we believe will yield reasonable
+	// distribution between nodes. We divide it by the number of nodes using integer division
+	// and add 1 to get partitionsPerPeer. We then actually create (nNodes*partitionsPerPeer)
+	// partitions, which will always be greater than or equal to partitionCount.
+	// Examples: if we have 6 nodes, then partitionsPerPeer will be 9, and we will create
+	// 54 partitions. If we have 85 nodes, then partitionsPerPeer will be 1, and we will create
+	// 85 partitions.
 	const partitionCount = 50
 	// now build the hash list;
 	// We make a list of hash value and an index to a peer.
 	hashes := make([]hashShard, 0)
-	hashesPerPeer := partitionCount/len(peerList) + 1
+	partitionsPerPeer := partitionCount/len(peerList) + 1
 	for ix := range newPeers {
-		hashes = append(hashes, newPeers[ix].GetHashesFor(ix, hashesPerPeer, peerSeed)...)
+		hashes = append(hashes, newPeers[ix].GetHashesFor(ix, partitionsPerPeer, peerSeed)...)
 	}
 	// now sort the hash list by hash value so we can search it efficiently
 	sort.Slice(hashes, func(i, j int) bool {
