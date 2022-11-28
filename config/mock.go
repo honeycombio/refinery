@@ -68,6 +68,7 @@ type MockConfig struct {
 	UseIPV6Identifier             bool
 	RedisIdentifier               string
 	PeerManagementType            string
+	PeerManagementStrategy        string
 	DebugServiceAddr              string
 	DryRun                        bool
 	DryRunFieldName               string
@@ -349,6 +350,13 @@ func (m *MockConfig) GetPeerManagementType() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.PeerManagementType, nil
+}
+
+func (m *MockConfig) GetPeerManagementStrategy() (string, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.PeerManagementStrategy, nil
 }
 
 func (m *MockConfig) GetDebugServiceAddr() (string, error) {

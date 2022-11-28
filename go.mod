@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/davecgh/go-spew v1.1.1
+	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371
 	github.com/facebookgo/inject v0.0.0-20180706035515-f23751cae28b
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
 	github.com/fsnotify/fsnotify v1.6.0
@@ -17,6 +18,7 @@ require (
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.15.12
+	github.com/panmari/cuckoofilter v1.0.3
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
@@ -26,7 +28,6 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/tidwall/gjson v1.14.3
 	github.com/vmihailenco/msgpack/v4 v4.3.11
-	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b // indirect
 	google.golang.org/grpc v1.50.1
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
@@ -52,7 +53,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/panmari/cuckoofilter v1.0.3 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
@@ -68,6 +68,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser v0.1.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+	golang.org/x/net v0.0.0-20220826154423-83b083e8dc8b // indirect
 	golang.org/x/sys v0.0.0-20220908164124-27713097b956 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/appengine v1.6.7 // indirect

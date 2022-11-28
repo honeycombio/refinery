@@ -252,6 +252,16 @@ Metrics = "honeycomb"
 # after 5s when communicating with Redis.
 # Timeout = "5s"
 
+# Strategy controls the way that traces are assigned to refinery nodes.
+# The "legacy" strategy uses a simple algorithm that unfortunately causes
+# 1/2 of the in-flight traces to be assigned to a different node whenever the
+# number of nodes changes.
+# The legacy strategy is deprecated and is intended to be removed in a future release.
+# The "hash" strategy is strongly recommended, as only 1/N traces (where N is the
+# number of nodes) are disrupted when the node count changes.
+# Not eligible for live reload.
+# Strategy = "hash"
+
 #########################
 ## In-Memory Collector ##
 #########################
@@ -275,7 +285,8 @@ CacheCapacity = 1000
 # supported.
 # If set to a non-zero value, once per tick (see SendTicker) the collector
 # will compare total allocated bytes to this value. If allocation is too
-# high, cache capacity will be reduced and an error will be logged.
+# high, cache capacity will be adjusted according to the setting for
+# CacheOverrunStrategy.
 # Useful values for this setting are generally in the range of 75%-90% of
 # available system memory.
 MaxAlloc = 0
