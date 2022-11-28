@@ -24,7 +24,6 @@ import (
 const (
 	shardingSalt        = "gf4LqTwcJ6PEj2vO"
 	peerSeed     uint64 = 6789531204236
-	traceSeed    uint64 = 5498616120353
 )
 
 // DetShard implements Shard
