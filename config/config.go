@@ -41,6 +41,10 @@ type Config interface {
 
 	GetPeerManagementType() (string, error)
 
+	// GetPeerManagementStrategy returns the strategy specified for
+	// Peer management.
+	GetPeerManagementStrategy() (string, error)
+
 	// GetRedisHost returns the address of a Redis instance to use for peer
 	// management.
 	GetRedisHost() (string, error)

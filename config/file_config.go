@@ -105,6 +105,7 @@ type PeerManagementConfig struct {
 	UseIPV6Identifier       bool
 	RedisIdentifier         string
 	Timeout                 time.Duration
+	Strategy                string `validate:"required,oneof= legacy hash"`
 }
 
 type SampleCacheConfig struct {
@@ -146,6 +147,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("PeerManagement.UseTLSInsecure", false)
 	c.SetDefault("PeerManagement.UseIPV6Identifier", false)
 	c.SetDefault("PeerManagement.Timeout", 5*time.Second)
+	c.SetDefault("PeerManagement.Strategy", "legacy")
 	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
 	c.SetDefault("Logger", "logrus")
 	c.SetDefault("LoggingLevel", "debug")
@@ -459,6 +461,13 @@ func (f *fileConfig) GetPeerManagementType() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.conf.PeerManagement.Type, nil
+}
+
+func (f *fileConfig) GetPeerManagementStrategy() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.PeerManagement.Strategy, nil
 }
 
 func (f *fileConfig) GetPeers() ([]string, error) {

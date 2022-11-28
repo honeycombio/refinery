@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -18,15 +19,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// shardingSalt is a random bit to make sure we don't shard the same as any
-// other sharding that uses the trace ID (eg deterministic sampling)
-const shardingSalt = "gf4LqTwcJ6PEj2vO"
+// These are random bits to make sure we differentiate between different
+// hash cases even if we use the same value (traceID).
+const (
+	shardingSalt        = "gf4LqTwcJ6PEj2vO"
+	peerSeed     uint64 = 6789531204236
+)
 
 // DetShard implements Shard
 type DetShard struct {
 	scheme   string
 	ipOrHost string
 	port     string
+}
+
+type hashShard struct {
+	uhash      uint64
+	shardIndex int
 }
 
 func (d *DetShard) Equals(other Shard) bool {
@@ -75,13 +84,32 @@ func (d *DetShard) String() string {
 	return d.GetAddress()
 }
 
+// GetHashesFor generates a number of hashShards for a given DetShard by repeatedly hashing the
+// seed with itself. The intent is to generate a repeatable pseudo-random sequence.
+func (d *DetShard) GetHashesFor(index int, n int, seed uint64) []hashShard {
+	hashes := make([]hashShard, 0)
+	addr := d.GetAddress()
+	for i := 0; i < n; i++ {
+		hashes = append(hashes, hashShard{
+			uhash:      wyhash.Hash([]byte(addr), seed),
+			shardIndex: index,
+		})
+		// generate another seed from the previous seed; we want this to be the same
+		// sequence for everything.
+		seed = wyhash.Hash([]byte("anything"), seed)
+	}
+	return hashes
+}
+
 type DeterministicSharder struct {
 	Config config.Config `inject:""`
 	Logger logger.Logger `inject:""`
 	Peers  peer.Peers    `inject:""`
 
-	myShard *DetShard
-	peers   []*DetShard
+	myShard   *DetShard
+	peers     []*DetShard
+	hashes    []hashShard
+	shardFunc func(traceID string) Shard
 
 	peerLock sync.RWMutex
 }
@@ -97,6 +125,21 @@ func (d *DeterministicSharder) Start() error {
 			d.Logger.Error().Logf("failed to reload peer list: %+v", err)
 		}
 	})
+
+	// this isn't runtime-reloadable because it would
+	// reassign nearly every trace to a new shard.
+	strat, err := d.Config.GetPeerManagementStrategy()
+	if err != nil {
+		return errors.Wrap(err, "failed to get peer management strategy")
+	}
+	switch strat {
+	case "legacy", "":
+		d.shardFunc = d.WhichShardLegacy
+	case "hash":
+		d.shardFunc = d.WhichShardHashed
+	default:
+		return fmt.Errorf("unknown PeerManagementStrategy '%s'", strat)
+	}
 
 	// Try up to 5 times to find myself in the peer list before giving up
 	var found bool
@@ -205,9 +248,10 @@ func (d *DeterministicSharder) loadPeerList() error {
 		return errors.New("refusing to load empty peer list")
 	}
 
-	// turn my peer list into a list of shards
-	newPeers := make([]*DetShard, 0, len(peerList))
-	for _, peer := range peerList {
+	// turn the peer list into a list of shards
+	// and a list of hashes
+	newPeers := make([]*DetShard, len(peerList))
+	for ix, peer := range peerList {
 		peerURL, err := url.Parse(peer)
 		if err != nil {
 			return errors.Wrap(err, "couldn't parse peer as a URL")
@@ -217,12 +261,42 @@ func (d *DeterministicSharder) loadPeerList() error {
 			ipOrHost: peerURL.Hostname(),
 			port:     peerURL.Port(),
 		}
-		newPeers = append(newPeers, peerShard)
+		newPeers[ix] = peerShard
 	}
 
-	// the redis peer discovery already sorts its content. Does every backend?
-	// well, it's not too much work, let's sort it one more time.
+	// make sure the list is in a stable, comparable order
 	sort.Sort(SortableShardList(newPeers))
+
+	// In general, the variation in the traffic assigned to a randomly partitioned space is
+	// controlled by the number of partitions. PartitionCount controls the minimum number
+	// of partitions used to control node assignment when we use the "hash" strategy.
+	// When there's a small number of partitions, the two-layer hash strategy can end up giving
+	// one partition a disproportionate fraction of the traffic. So we create a large number of
+	// random partitions and then assign (potentially) multiple partitions to individual nodes.
+	// We're asserting that if we randomly divide the space among at this many partitions, the variation
+	// between them is likely to be acceptable. (As this is random, there might be exceptions.)
+	// The reason not to make this value much larger, say 1000, is that finding the right partition
+	// is linear -- O(number of partitions) and so we want it to be as small as possible
+	// while still being big enough.
+	// PartitionCount, therefore, is the smallest value that we believe will yield reasonable
+	// distribution between nodes. We divide it by the number of nodes using integer division
+	// and add 1 to get partitionsPerPeer. We then actually create (nNodes*partitionsPerPeer)
+	// partitions, which will always be greater than or equal to partitionCount.
+	// Examples: if we have 6 nodes, then partitionsPerPeer will be 9, and we will create
+	// 54 partitions. If we have 85 nodes, then partitionsPerPeer will be 1, and we will create
+	// 85 partitions.
+	const partitionCount = 50
+	// now build the hash list;
+	// We make a list of hash value and an index to a peer.
+	hashes := make([]hashShard, 0)
+	partitionsPerPeer := partitionCount/len(peerList) + 1
+	for ix := range newPeers {
+		hashes = append(hashes, newPeers[ix].GetHashesFor(ix, partitionsPerPeer, peerSeed)...)
+	}
+	// now sort the hash list by hash value so we can search it efficiently
+	sort.Slice(hashes, func(i, j int) bool {
+		return hashes[i].uhash < hashes[j].uhash
+	})
 
 	// if the peer list changed, load the new list
 	d.peerLock.RLock()
@@ -231,6 +305,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 		d.peerLock.RUnlock()
 		d.peerLock.Lock()
 		d.peers = newPeers
+		d.hashes = hashes
 		d.peerLock.Unlock()
 	} else {
 		d.peerLock.RUnlock()
@@ -243,6 +318,16 @@ func (d *DeterministicSharder) MyShard() Shard {
 }
 
 func (d *DeterministicSharder) WhichShard(traceID string) Shard {
+	return d.shardFunc(traceID)
+}
+
+// WhichShardLegacy is the original sharding decider. It uses sha1, which is
+// slow and not well-distributed, and also simply partitions the sharding
+// space into N evenly-divided buckets, which means that on every change in
+// shard count, half of the traces get reassigned (which leads to broken traces).
+// We leave it here to avoid disrupting things and provide a fallback if needed,
+// but the intent is eventually to delete this.
+func (d *DeterministicSharder) WhichShardLegacy(traceID string) Shard {
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
 
@@ -261,4 +346,30 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	}
 
 	return d.peers[index]
+}
+
+// WhichShardHashed calculates which shard we want by keeping a list of partitions. Each
+// partition has a different hash value and a map from partition to a given shard.
+// We take the traceID and calculate a hash for each partition, using the partition
+// hash as the seed for the trace hash. Whichever one has the highest value is the
+// partition we use, which determines the shard we use.
+// This is O(N) where N is the number of partitions, but because we use an efficient hash,
+// (as opposed to SHA1) it executes in 1 uSec for 50 partitions, so it works out to about
+// the same cost as the legacy sharder.
+func (d *DeterministicSharder) WhichShardHashed(traceID string) Shard {
+	d.peerLock.RLock()
+	defer d.peerLock.RUnlock()
+
+	tid := []byte(traceID)
+
+	bestix := 0
+	var maxHash uint64
+	for _, hash := range d.hashes {
+		h := wyhash.Hash(tid, hash.uhash)
+		if h > maxHash {
+			maxHash = h
+			bestix = hash.shardIndex
+		}
+	}
+	return d.peers[bestix]
 }
