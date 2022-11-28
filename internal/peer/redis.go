@@ -45,7 +45,7 @@ type redisPeers struct {
 }
 
 // NewRedisPeers returns a peers collection backed by redis
-func newRedisPeers(ctx context.Context, c config.Config) (Peers, error) {
+func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Peers, error) {
 	redisHost, _ := c.GetRedisHost()
 
 	if redisHost == "" {
@@ -108,7 +108,7 @@ func newRedisPeers(ctx context.Context, c config.Config) (Peers, error) {
 	}
 
 	// go establish a regular registration heartbeat to ensure I stay alive in redis
-	go peers.registerSelf()
+	go peers.registerSelf(done)
 
 	// get our peer list once to seed ourselves
 	peers.updatePeerListOnce()
@@ -116,7 +116,7 @@ func newRedisPeers(ctx context.Context, c config.Config) (Peers, error) {
 	// go watch the list of peers and trigger callbacks whenever it changes.
 	// populate my local list of peers so each request can hit memory and only hit
 	// redis on a ticker
-	go peers.watchPeers()
+	go peers.watchPeers(done)
 
 	return peers, nil
 }
@@ -135,15 +135,24 @@ func (p *redisPeers) RegisterUpdatedPeersCallback(cb func()) {
 
 // registerSelf inserts self into the peer list and updates self's entry on a
 // regular basis so it doesn't time out and get removed from the list of peers.
-// If this function stops, this host will get ejected from other's peer lists.
-func (p *redisPeers) registerSelf() {
+// When this function stops, it tries to remove the registered key.
+func (p *redisPeers) registerSelf(done chan struct{}) {
 	tk := time.NewTicker(refreshCacheInterval)
-	for range tk.C {
-		ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
-		// every 5 seconds, insert a 30sec timeout record. we ignore the error
-		// here since Register() logs the error for us.
-		p.store.Register(ctx, p.publicAddr, peerEntryTimeout)
-		cancel()
+	for {
+		select {
+		case <-tk.C:
+			ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
+			// every interval, insert a timeout record. we ignore the error
+			// here since Register() logs the error for us.
+			p.store.Register(ctx, p.publicAddr, peerEntryTimeout)
+			cancel()
+		case <-done:
+			// unregister ourselves
+			ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
+			p.store.Unregister(ctx, p.publicAddr)
+			cancel()
+			return
+		}
 	}
 }
 
@@ -168,38 +177,46 @@ func (p *redisPeers) updatePeerListOnce() {
 	p.peerLock.Unlock()
 }
 
-func (p *redisPeers) watchPeers() {
+func (p *redisPeers) watchPeers(done chan struct{}) {
 	oldPeerList := p.peers
 	sort.Strings(oldPeerList)
 	tk := time.NewTicker(refreshCacheInterval)
 
-	for range tk.C {
-		ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
-		currentPeers, err := p.store.GetMembers(ctx)
-		cancel()
+	for {
+		select {
+		case <-tk.C:
+			ctx, cancel := context.WithTimeout(context.Background(), p.c.GetPeerTimeout())
+			currentPeers, err := p.store.GetMembers(ctx)
+			cancel()
 
-		if err != nil {
-			logrus.WithError(err).
-				WithFields(logrus.Fields{
-					"name":     p.publicAddr,
-					"timeout":  p.c.GetPeerTimeout().String(),
-					"oldPeers": oldPeerList,
-				}).
-				Error("get members failed during watch")
-			continue
-		}
-
-		sort.Strings(currentPeers)
-		if !equal(oldPeerList, currentPeers) {
-			// update peer list and trigger callbacks saying the peer list has changed
-			p.peerLock.Lock()
-			p.peers = currentPeers
-			oldPeerList = currentPeers
-			p.peerLock.Unlock()
-			for _, callback := range p.callbacks {
-				// don't block on any of the callbacks.
-				go callback()
+			if err != nil {
+				logrus.WithError(err).
+					WithFields(logrus.Fields{
+						"name":     p.publicAddr,
+						"timeout":  p.c.GetPeerTimeout().String(),
+						"oldPeers": oldPeerList,
+					}).
+					Error("get members failed during watch")
+				continue
 			}
+
+			sort.Strings(currentPeers)
+			if !equal(oldPeerList, currentPeers) {
+				// update peer list and trigger callbacks saying the peer list has changed
+				p.peerLock.Lock()
+				p.peers = currentPeers
+				oldPeerList = currentPeers
+				p.peerLock.Unlock()
+				for _, callback := range p.callbacks {
+					// don't block on any of the callbacks.
+					go callback()
+				}
+			}
+		case <-done:
+			p.peerLock.Lock()
+			p.peers = []string{}
+			p.peerLock.Unlock()
+			return
 		}
 	}
 }

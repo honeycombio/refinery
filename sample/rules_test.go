@@ -538,6 +538,59 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 1,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Check root span for span count",
+						Drop:       true,
+						SampleRate: 0,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "meta.span_count",
+								Operator: ">=",
+								Value:    int(2),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "54321",
+							"meta.span_count": int64(2),
+							"test":            int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "654321",
+							"trace.parent_id": "54321",
+							"test":            int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54321",
+							"test":            int64(3),
+						},
+					},
+				},
+			},
+			ExpectedName: "Check root span for span count",
+			ExpectedKeep: false,
+			ExpectedRate: 0,
+		},
 	}
 
 	for _, d := range data {

@@ -3,6 +3,7 @@ package peer
 import (
 	"context"
 	"errors"
+
 	"github.com/honeycombio/refinery/config"
 )
 
@@ -13,7 +14,7 @@ type Peers interface {
 	RegisterUpdatedPeersCallback(callback func())
 }
 
-func NewPeers(ctx context.Context, c config.Config) (Peers, error) {
+func NewPeers(ctx context.Context, c config.Config, done chan struct{}) (Peers, error) {
 	t, err := c.GetPeerManagementType()
 
 	if err != nil {
@@ -24,7 +25,7 @@ func NewPeers(ctx context.Context, c config.Config) (Peers, error) {
 	case "file":
 		return newFilePeers(c), nil
 	case "redis":
-		return newRedisPeers(ctx, c)
+		return newRedisPeers(ctx, c, done)
 	default:
 		return nil, errors.New("invalid config option 'PeerManagement.Type'")
 	}
