@@ -124,7 +124,9 @@ func BenchmarkShardBulk(b *testing.B) {
 		PeerManagementType:     "file",
 		PeerManagementStrategy: "legacy",
 	}
-	filePeers, err := peer.NewPeers(context.Background(), config)
+	done := make(chan struct{})
+	defer close(done)
+	filePeers, err := peer.NewPeers(context.Background(), config, done)
 	assert.Equal(b, nil, err)
 	sharder := DeterministicSharder{
 		Config: config,
@@ -170,7 +172,9 @@ func TestShardBulk(t *testing.T) {
 					PeerManagementType:     "file",
 					PeerManagementStrategy: strategy,
 				}
-				filePeers, err := peer.NewPeers(context.Background(), config)
+				done := make(chan struct{})
+				defer close(done)
+				filePeers, err := peer.NewPeers(context.Background(), config, done)
 				assert.Equal(t, nil, err)
 				sharder := DeterministicSharder{
 					Config: config,
@@ -234,7 +238,9 @@ func TestShardDrop(t *testing.T) {
 				PeerManagementType:     "file",
 				PeerManagementStrategy: "hash",
 			}
-			filePeers, err := peer.NewPeers(context.Background(), config)
+			done := make(chan struct{})
+			defer close(done)
+			filePeers, err := peer.NewPeers(context.Background(), config, done)
 			assert.Equal(t, nil, err)
 			sharder := DeterministicSharder{
 				Config: config,
@@ -306,7 +312,9 @@ func TestShardAddHash(t *testing.T) {
 				PeerManagementType:     "file",
 				PeerManagementStrategy: "hash",
 			}
-			filePeers, err := peer.NewPeers(context.Background(), config)
+			done := make(chan struct{})
+			defer close(done)
+			filePeers, err := peer.NewPeers(context.Background(), config, done)
 			assert.Equal(t, nil, err)
 			sharder := DeterministicSharder{
 				Config: config,
@@ -376,7 +384,9 @@ func BenchmarkDeterministicShard(b *testing.B) {
 					PeerManagementType:     "file",
 					PeerManagementStrategy: strat,
 				}
-				filePeers, err := peer.NewPeers(context.Background(), config)
+				done := make(chan struct{})
+				defer close(done)
+				filePeers, err := peer.NewPeers(context.Background(), config, done)
 				assert.Equal(b, nil, err)
 				sharder := DeterministicSharder{
 					Config: config,
