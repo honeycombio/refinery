@@ -11,7 +11,6 @@ require (
 	github.com/go-playground/validator v9.31.0+incompatible
 	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/mux v1.8.0
-	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.2.1
 	github.com/honeycombio/husky v0.17.0
 	github.com/honeycombio/libhoney-go v1.18.0
