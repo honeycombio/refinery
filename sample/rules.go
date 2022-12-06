@@ -67,11 +67,20 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	for _, rule := range s.Config.Rule {
 		var matched bool
 		var reason string
+		var condition bool
 
 		switch rule.Scope {
 		case "span":
 			matched = ruleMatchesSpanInTrace(trace, rule, s.Config.CheckNestedFields)
 			reason = "rules/span/"
+			if len(rule.Condition) > 0 {
+				condition = true 
+			} else {
+				condition = false
+			}
+			if matched == condition {
+				break
+			}
 		case "trace", "":
 			matched = ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
 			reason = "rules/trace/"
