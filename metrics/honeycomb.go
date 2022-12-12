@@ -246,7 +246,7 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 			for _, updown := range h.updowns {
 				updown.lock.Lock()
 				ev.AddField(PrefixMetricName(h.prefix, updown.name), updown.val)
-				// count.val = 0   // updowns are never reset to 0
+				// updown.val = 0   // updowns are never reset to 0
 				updown.lock.Unlock()
 			}
 
@@ -389,7 +389,7 @@ func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
 }
 
 func (h *HoneycombMetrics) Up(name string) {
-	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
+	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
 	// update value, using counter's lock
 	counter.lock.Lock()
@@ -398,7 +398,7 @@ func (h *HoneycombMetrics) Up(name string) {
 }
 
 func (h *HoneycombMetrics) Down(name string) {
-	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
+	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
 	// update value, using counter's lock
 	counter.lock.Lock()
