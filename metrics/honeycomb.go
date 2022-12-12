@@ -27,6 +27,7 @@ type HoneycombMetrics struct {
 	counters   map[string]*counter
 	gauges     map[string]*gauge
 	histograms map[string]*histogram
+	updowns    map[string]*updown
 
 	libhClient *libhoney.Client
 
@@ -58,6 +59,12 @@ type histogram struct {
 	vals []float64
 }
 
+type updown struct {
+	lock sync.Mutex
+	name string
+	val  int
+}
+
 func (h *HoneycombMetrics) Start() error {
 	h.Logger.Debug().Logf("Starting HoneycombMetrics")
 	defer func() { h.Logger.Debug().Logf("Finished starting HoneycombMetrics") }()
@@ -77,6 +84,7 @@ func (h *HoneycombMetrics) Start() error {
 	h.counters = make(map[string]*counter)
 	h.gauges = make(map[string]*gauge)
 	h.histograms = make(map[string]*histogram)
+	h.updowns = make(map[string]*updown)
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
@@ -235,6 +243,13 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 				count.lock.Unlock()
 			}
 
+			for _, updown := range h.updowns {
+				updown.lock.Lock()
+				ev.AddField(PrefixMetricName(h.prefix, updown.name), updown.val)
+				// count.val = 0   // updowns are never reset to 0
+				updown.lock.Unlock()
+			}
+
 			for _, gauge := range h.gauges {
 				gauge.lock.Lock()
 				ev.AddField(PrefixMetricName(h.prefix, gauge.name), gauge.val)
@@ -283,6 +298,8 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 		getOrAdd(&h.lock, name, h.gauges, createGauge)
 	case "histogram":
 		getOrAdd(&h.lock, name, h.histograms, createHistogram)
+	case "updown":
+		getOrAdd(&h.lock, name, h.updowns, createUpdown)
 	default:
 		h.Logger.Debug().Logf("unsupported metric type %s", metricType)
 	}
@@ -291,7 +308,7 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 // getOrAdd attempts to retrieve a (generic) metric from the provided map by name, wrapping the read operation
 // with a read lock (RLock). If the metric is not present in the map, it acquires a write lock and executes
 // a create function to add it to the map.
-func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string, metrics map[string]T, createMetric func(name string) T) T {
+func getOrAdd[T *counter | *gauge | *histogram | *updown](lock *sync.RWMutex, name string, metrics map[string]T, createMetric func(name string) T) T {
 	// attempt to get metric by name using read lock
 	lock.RLock()
 	metric, ok := metrics[name]
@@ -334,6 +351,12 @@ func createHistogram(name string) *histogram {
 	}
 }
 
+func createUpdown(name string) *updown {
+	return &updown{
+		name: name,
+	}
+}
+
 func (h *HoneycombMetrics) Count(name string, n interface{}) {
 	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
 
@@ -363,4 +386,22 @@ func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
 	histogram.lock.Lock()
 	histogram.vals = append(histogram.vals, ConvertNumeric(obs))
 	histogram.lock.Unlock()
+}
+
+func (h *HoneycombMetrics) Up(name string) {
+	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
+
+	// update value, using counter's lock
+	counter.lock.Lock()
+	counter.val++
+	counter.lock.Unlock()
+}
+
+func (h *HoneycombMetrics) Down(name string) {
+	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
+
+	// update value, using counter's lock
+	counter.lock.Lock()
+	counter.val--
+	counter.lock.Unlock()
 }

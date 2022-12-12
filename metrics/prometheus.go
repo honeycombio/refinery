@@ -61,7 +61,7 @@ func (p *PromMetrics) Register(name string, metricType string) {
 			Namespace: p.prefix,
 			Help:      name,
 		})
-	case "gauge":
+	case "gauge", "updown": // updown is a special gauge
 		newmet = promauto.NewGauge(prometheus.GaugeOpts{
 			Name:      name,
 			Namespace: p.prefix,
@@ -118,6 +118,26 @@ func (p *PromMetrics) Histogram(name string, obs interface{}) {
 	if histIface, ok := p.metrics[name]; ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
 			hist.Observe(ConvertNumeric(obs))
+		}
+	}
+}
+func (p *PromMetrics) Up(name string) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	if gaugeIface, ok := p.metrics[name]; ok {
+		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
+			gauge.Inc()
+		}
+	}
+}
+func (p *PromMetrics) Down(name string) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	if gaugeIface, ok := p.metrics[name]; ok {
+		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
+			gauge.Dec()
 		}
 	}
 }

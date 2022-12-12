@@ -92,3 +92,34 @@ func Test_getOrAdd_histogram(t *testing.T) {
 	var h *histogram = getOrAdd(lock, "foo", metrics, createHistogram)
 	assert.Equal(t, float64(nthreads*1000), h.vals[0])
 }
+
+func Test_getOrAdd_updown(t *testing.T) {
+	var lock *sync.RWMutex = &sync.RWMutex{}
+	var metrics map[string]*updown = make(map[string]*updown)
+
+	const nthreads = 6 // must be even, since half count up and the other half count down
+
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < nthreads; i++ {
+		wg.Add(1)
+		go func(direction bool) {
+			for j := 0; j < 1000; j++ {
+				name := "foo"
+				var ctr *updown = getOrAdd(lock, name, metrics, createUpdown)
+				ctr.lock.Lock()
+				if direction {
+					ctr.val++
+				} else {
+					ctr.val--
+				}
+				ctr.lock.Unlock()
+			}
+			wg.Done()
+		}(i%2 == 0)
+	}
+	wg.Wait()
+
+	var ctr *updown = getOrAdd(lock, "foo", metrics, createUpdown)
+	assert.Equal(t, 0, ctr.val)
+}

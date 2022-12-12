@@ -8,12 +8,14 @@ import (
 )
 
 type Metrics interface {
-	// Register declares a metric; metricType should be one of counter, gauge, histogram
+	// Register declares a metric; metricType should be one of counter, gauge, histogram, updown
 	Register(name string, metricType string)
-	Increment(name string)
-	Gauge(name string, val interface{})
-	Count(name string, n interface{})
-	Histogram(name string, obs interface{})
+	Increment(name string)                  // for counters
+	Gauge(name string, val interface{})     // for gauges
+	Count(name string, n interface{})       // for counters
+	Histogram(name string, obs interface{}) // for histogram
+	Up(name string)                         // for updown
+	Down(name string)                       // for updown
 }
 
 func GetMetricsImplementation(c config.Config, prefix string) Metrics {

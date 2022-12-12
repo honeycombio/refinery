@@ -9,6 +9,7 @@ type MockMetrics struct {
 	CounterIncrements map[string]int
 	GaugeRecords      map[string]float64
 	Histograms        map[string][]float64
+	UpdownIncrements  map[string]int
 
 	lock sync.Mutex
 }
@@ -19,6 +20,7 @@ func (m *MockMetrics) Start() {
 	m.CounterIncrements = make(map[string]int)
 	m.GaugeRecords = make(map[string]float64)
 	m.Histograms = make(map[string][]float64)
+	m.UpdownIncrements = make(map[string]int)
 }
 
 func (m *MockMetrics) Register(name string, metricType string) {
@@ -54,4 +56,16 @@ func (m *MockMetrics) Histogram(name string, val interface{}) {
 		m.Histograms[name] = make([]float64, 0)
 	}
 	m.Histograms[name] = append(m.Histograms[name], ConvertNumeric(val))
+}
+func (m *MockMetrics) Up(name string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.CounterIncrements[name]++
+}
+func (m *MockMetrics) Down(name string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.CounterIncrements[name]--
 }
