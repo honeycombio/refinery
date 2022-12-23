@@ -19,7 +19,10 @@ type PromMetrics struct {
 	// metrics keeps a record of all the registered metrics so we can increment
 	// them by name
 	metrics map[string]interface{}
-	lock    sync.RWMutex
+	// values keeps a map of all the non-histogram metrics and their current value
+	// so that we can retrieve them with Get()
+	values map[string]float64
+	lock   sync.RWMutex
 
 	prefix string
 }
@@ -33,6 +36,7 @@ func (p *PromMetrics) Start() error {
 	}
 
 	p.metrics = make(map[string]interface{})
+	p.values = make(map[string]float64)
 
 	muxxer := mux.NewRouter()
 
@@ -79,6 +83,12 @@ func (p *PromMetrics) Register(name string, metricType string) {
 	}
 
 	p.metrics[name] = newmet
+	p.values[PrefixMetricName(p.prefix, name)] = 0
+}
+
+func (p *PromMetrics) Get(name string) (float64, bool) {
+	v, ok := p.values[PrefixMetricName(p.prefix, name)]
+	return v, ok
 }
 
 func (p *PromMetrics) Increment(name string) {
@@ -88,6 +98,7 @@ func (p *PromMetrics) Increment(name string) {
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
 			counter.Inc()
+			p.values[PrefixMetricName(p.prefix, name)]++
 		}
 	}
 }
@@ -97,7 +108,9 @@ func (p *PromMetrics) Count(name string, n interface{}) {
 
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
-			counter.Add(ConvertNumeric(n))
+			f := ConvertNumeric(n)
+			counter.Add(f)
+			p.values[PrefixMetricName(p.prefix, name)] += f
 		}
 	}
 }
@@ -107,7 +120,9 @@ func (p *PromMetrics) Gauge(name string, val interface{}) {
 
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
-			gauge.Set(ConvertNumeric(val))
+			f := ConvertNumeric(val)
+			gauge.Set(f)
+			p.values[PrefixMetricName(p.prefix, name)] = f
 		}
 	}
 }
@@ -128,6 +143,7 @@ func (p *PromMetrics) Up(name string) {
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
 			gauge.Inc()
+			p.values[PrefixMetricName(p.prefix, name)]++
 		}
 	}
 }
@@ -138,6 +154,14 @@ func (p *PromMetrics) Down(name string) {
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
 			gauge.Dec()
+			p.values[PrefixMetricName(p.prefix, name)]--
 		}
 	}
+}
+
+func (p *PromMetrics) Store(name string, val float64) {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	p.values[PrefixMetricName(p.prefix, name)] = val
 }

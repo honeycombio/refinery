@@ -13,3 +13,5 @@ func (n *NullMetrics) Count(name string, val interface{})      {}
 func (n *NullMetrics) Histogram(name string, obs interface{})  {}
 func (n *NullMetrics) Up(name string)                          {}
 func (n *NullMetrics) Down(name string)                        {}
+func (n *NullMetrics) Store(name string, value float64)        {}
+func (n *NullMetrics) Get(name string) (float64, bool)         { return 0, true }

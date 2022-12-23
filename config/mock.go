@@ -87,6 +87,7 @@ type MockConfig struct {
 	AddSpanCountToRoot            bool
 	CacheOverrunStrategy          string
 	SampleCache                   SampleCacheConfig
+	StressRelief                  StressReliefConfig
 	CfgMetadata                   []ConfigMetadata
 
 	Mux sync.RWMutex
@@ -483,6 +484,13 @@ func (f *MockConfig) GetSampleCacheConfig() SampleCacheConfig {
 	defer f.Mux.RUnlock()
 
 	return f.SampleCache
+}
+
+func (f *MockConfig) GetStressReliefConfig() StressReliefConfig {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.StressRelief
 }
 
 func (f *MockConfig) GetConfigMetadata() []ConfigMetadata {

@@ -7,6 +7,9 @@ import (
 	"github.com/honeycombio/refinery/config"
 )
 
+// The Metrics object supports "constants", which are just float values that can be attached to the
+// metrics system. They do not need to be (and should not) be registered in advance; they are just
+// a bucket of key-float pairs that can be used in combination with other metrics.
 type Metrics interface {
 	// Register declares a metric; metricType should be one of counter, gauge, histogram, updown
 	Register(name string, metricType string)
@@ -16,6 +19,8 @@ type Metrics interface {
 	Histogram(name string, obs interface{}) // for histogram
 	Up(name string)                         // for updown
 	Down(name string)                       // for updown
+	Get(name string) (float64, bool)        // for reading back a counter or a gauge
+	Store(name string, val float64)         // for storing a rarely-changing value not sent as a metric
 }
 
 func GetMetricsImplementation(c config.Config, prefix string) Metrics {

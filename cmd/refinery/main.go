@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "go.uber.org/automaxprocs"
+
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -168,9 +170,11 @@ func main() {
 		},
 	})
 	if err != nil {
-		fmt.Printf("unable to initialize upstream libhoney client")
+		fmt.Printf("unable to initialize peer libhoney client")
 		os.Exit(1)
 	}
+
+	stressRelief := &collect.StressRelief{Done: done}
 
 	var g inject.Graph
 	err = g.Provide(
@@ -188,6 +192,7 @@ func main() {
 		&inject.Object{Value: peerMetricsConfig, Name: "peerMetrics"},
 		&inject.Object{Value: version, Name: "version"},
 		&inject.Object{Value: samplerFactory},
+		&inject.Object{Value: stressRelief},
 		&inject.Object{Value: &a},
 	)
 	if err != nil {
@@ -220,6 +225,10 @@ func main() {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
 	}
+
+	// these need the injection of metrics to be done already
+	upstreamMetricsConfig.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
+	peerMetricsConfig.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
 	// set up signal channel to exit
 	sigsToExit := make(chan os.Signal, 1)

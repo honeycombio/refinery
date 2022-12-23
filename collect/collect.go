@@ -27,6 +27,9 @@ type Collector interface {
 	// scheduled for transmission.
 	AddSpan(*types.Span) error
 	AddSpanFromPeer(*types.Span) error
+	Stressed() bool
+	GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string)
+	SendSpanImmediately(sp *types.Span, keep bool, sampleRate uint)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -61,6 +64,7 @@ type InMemCollector struct {
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
 	Metrics        metrics.Metrics        `inject:"metrics"`
 	SamplerFactory *sample.SamplerFactory `inject:""`
+	StressRelief   *StressRelief          `inject:""`
 
 	// For test use only
 	BlockOnAddSpan bool
@@ -89,17 +93,24 @@ func (i *InMemCollector) Start() error {
 		return err
 	}
 	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
+	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
 	i.Metrics.Register("trace_duration_ms", "histogram")
 	i.Metrics.Register("trace_span_count", "histogram")
-	i.Metrics.Register("collector_tosend_queue", "histogram")
 	i.Metrics.Register("collector_incoming_queue", "histogram")
+	i.Metrics.Register("collector_peer_queue_length", "gauge")
+	i.Metrics.Register("collector_incoming_queue_length", "gauge")
 	i.Metrics.Register("collector_peer_queue", "histogram")
+	i.Metrics.Register("stress_level", "gauge")
+	i.Metrics.Register("stress_relief_activated", "gauge")
 	i.Metrics.Register("collector_cache_size", "gauge")
 	i.Metrics.Register("memory_heap_allocation", "gauge")
+	i.Metrics.Register("span_received", "counter")
+	i.Metrics.Register("span_processed", "counter")
+	i.Metrics.Register("spans_waiting", "updown")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
@@ -132,6 +143,8 @@ func (i *InMemCollector) Start() error {
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)
 	i.fromPeer = make(chan *types.Span, imcConfig.CacheCapacity*3)
+	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
+	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
 
@@ -186,6 +199,8 @@ func (i *InMemCollector) reloadConfigs() {
 	} else {
 		i.Logger.Error().WithField("cache", i.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
+
+	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
@@ -330,14 +345,27 @@ func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
 	return i.add(sp, i.fromPeer)
 }
 
+// Stressed returns true if the collector is undergoing significant stress
+func (i *InMemCollector) Stressed() bool {
+	return i.StressRelief.Stressed()
+}
+
+func (i *InMemCollector) GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	return i.StressRelief.GetSampleRate(traceID)
+}
+
 func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	if i.BlockOnAddSpan {
 		ch <- sp
+		i.Metrics.Increment("span_received")
+		i.Metrics.Up("spans_waiting")
 		return nil
 	}
 
 	select {
 	case ch <- sp:
+		i.Metrics.Increment("span_received")
+		i.Metrics.Up("spans_waiting")
 		return nil
 	default:
 		return ErrWouldBlock
@@ -360,9 +388,17 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
-		// record channel lengths
+		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
+		i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
+		i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
+		i.Metrics.Gauge("stress_level", float64(i.StressRelief.StressLevel()))
+		if i.StressRelief.Stressed() {
+			i.Metrics.Gauge("stress_relief_activated", 1)
+		} else {
+			i.Metrics.Gauge("stress_relief_activated", 0)
+		}
 
 		// Always drain peer channel before doing anything else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
@@ -427,6 +463,11 @@ func (i *InMemCollector) sendTracesInCache(now time.Time) {
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
 func (i *InMemCollector) processSpan(sp *types.Span) {
+	defer func() {
+		i.Metrics.Increment("span_processed")
+		i.Metrics.Down("spans_waiting")
+	}()
+
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
@@ -483,6 +524,31 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		trace.SendBy = time.Now().Add(timeout)
 		trace.RootSpan = sp
 	}
+	i.Metrics.Increment("span_processed")
+}
+
+// SendSpanImmediately is an escape hatch used under stressful conditions -- it
+// submits a span for immediate transmission without enqueuing it for normal
+// processing. This means it ignores dry run mode and doesn't build a complete
+// trace context or cache the trace in the active trace buffer. It only gets
+// called on the first span for a trace under stressful conditions; we got here
+// because the StressRelief system detected that this is a new trace AND that it
+// is being sampled. Therefore, we also put the traceID into the sent traces
+// cache as "kept".
+// It doesn't do any logging either; this is about as minimal as we can make it.
+func (i *InMemCollector) SendSpanImmediately(sp *types.Span, keep bool, sampleRate uint) {
+	now := time.Now()
+	trace := &types.Trace{
+		APIHost:     sp.APIHost,
+		APIKey:      sp.APIKey,
+		Dataset:     sp.Dataset,
+		TraceID:     sp.TraceID,
+		ArrivalTime: now,
+		SendBy:      now,
+	}
+	i.sampleTraceCache.Record(trace, keep)
+	mergeTraceAndSpanSampleRates(sp, sampleRate)
+	i.Transmission.EnqueueSpan(sp)
 }
 
 // dealWithSentTrace handles a span that has arrived after the sampling decision
@@ -548,9 +614,7 @@ func isRootSpan(sp *types.Span) bool {
 
 func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	if trace.Sent {
-		// someone else already sent this so we shouldn't also send it. This happens
-		// when two timers race and two signals for the same trace are sent down the
-		// toSend channel
+		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
 			WithString("trace_id", trace.TraceID).
 			WithString("dataset", trace.Dataset).

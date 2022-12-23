@@ -4,6 +4,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -122,4 +124,18 @@ func Test_getOrAdd_updown(t *testing.T) {
 
 	var ctr *updown = getOrAdd(lock, "foo", metrics, createUpdown)
 	assert.Equal(t, 0, ctr.val)
+}
+
+func TestMetricsUpdown(t *testing.T) {
+	conf := &config.MockConfig{}
+	m := HoneycombMetrics{
+		Config: conf,
+		Logger: &logger.NullLogger{},
+	}
+	m.Start()
+	m.Register("foo", "updown")
+	m.Up("foo")
+	m.Up("foo")
+	m.Down("foo")
+	assert.Equal(t, 1, m.updowns["foo"].val)
 }

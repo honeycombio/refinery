@@ -190,6 +190,8 @@ func newStartedApp(
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
 		&inject.Object{Value: metricsr, Name: "metrics"},
+		&inject.Object{Value: metricsr, Name: "upstreamMetrics"},
+		&inject.Object{Value: metricsr, Name: "peerMetrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &a},

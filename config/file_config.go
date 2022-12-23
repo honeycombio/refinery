@@ -62,7 +62,8 @@ type configContents struct {
 	AdditionalErrorFields     []string
 	AddSpanCountToRoot        bool
 	CacheOverrunStrategy      string
-	SampleCache               SampleCacheConfig `validate:"required"`
+	SampleCache               SampleCacheConfig  `validate:"required"`
+	StressRelief              StressReliefConfig `validate:"required"`
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -126,6 +127,13 @@ type GRPCServerParameters struct {
 	Timeout               time.Duration
 }
 
+type StressReliefConfig struct {
+	Mode               string `validate:"required,oneof= always never monitor"`
+	ActivationLevel    uint
+	DeactivationLevel  uint
+	StressSamplingRate uint64
+}
+
 // NewConfig creates a new config struct
 func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
 	c := viper.New()
@@ -178,6 +186,10 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("SampleCache.KeptSize", 10_000)
 	c.SetDefault("SampleCache.DroppedSize", 1_000_000)
 	c.SetDefault("SampleCache.SizeCheckInterval", 10*time.Second)
+	c.SetDefault("StressRelief.Mode", "never")
+	c.SetDefault("StressRelief.ActivationLevel", 75)
+	c.SetDefault("StressRelief.DeactivationLevel", 25)
+	c.SetDefault("StressRelief.StressSamplingRate", 100)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -940,6 +952,13 @@ func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {
 	defer f.mux.RUnlock()
 
 	return f.conf.SampleCache
+}
+
+func (f *fileConfig) GetStressReliefConfig() StressReliefConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.StressRelief
 }
 
 // calculates an MD5 sum for a file that returns the same result as the md5sum command

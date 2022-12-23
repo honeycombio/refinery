@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ type HoneycombMetrics struct {
 	gauges     map[string]*gauge
 	histograms map[string]*histogram
 	updowns    map[string]*updown
+	constants  map[string]*gauge
 
 	libhClient *libhoney.Client
 
@@ -85,6 +87,7 @@ func (h *HoneycombMetrics) Start() error {
 	h.gauges = make(map[string]*gauge)
 	h.histograms = make(map[string]*histogram)
 	h.updowns = make(map[string]*updown)
+	h.constants = make(map[string]*gauge)
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
@@ -282,6 +285,49 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 	}
 }
 
+// Retrieves the current value of a gauge, constant, counter, or updown as a float64
+// (even if it's an integer value). Returns 0 if the name isn't found.
+func (h *HoneycombMetrics) Get(name string) (float64, bool) {
+	oldname := name
+	if h.prefix != "" && strings.HasPrefix(name, h.prefix) {
+		name = name[len(h.prefix)+1:]
+	}
+	h.Logger.Debug().Logf("metrics prefix %s Getting name %s (orig %s)", h.prefix, name, oldname)
+
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	if m, ok := h.counters[name]; ok {
+		return float64(m.val), true
+	}
+	if m, ok := h.updowns[name]; ok {
+		return float64(m.val), true
+	}
+	if m, ok := h.gauges[name]; ok {
+		return m.val, true
+	}
+	if m, ok := h.constants[name]; ok {
+		return m.val, true
+	}
+	return 0, false
+}
+
+func (h *HoneycombMetrics) GetAllNames() []string {
+	names := []string{h.prefix}
+	for name := range h.counters {
+		names = append(names, name)
+	}
+	for name := range h.updowns {
+		names = append(names, name)
+	}
+	for name := range h.gauges {
+		names = append(names, name)
+	}
+	for name := range h.constants {
+		names = append(names, name)
+	}
+	return names
+}
+
 func average(vals []float64) float64 {
 	var total float64
 	for _, val := range vals {
@@ -291,6 +337,7 @@ func average(vals []float64) float64 {
 }
 
 func (h *HoneycombMetrics) Register(name string, metricType string) {
+	h.Logger.Debug().Logf("metrics prefix %s registering %s with name %s", h.prefix, metricType, name)
 	switch metricType {
 	case "counter":
 		getOrAdd(&h.lock, name, h.counters, createCounter)
@@ -404,4 +451,13 @@ func (h *HoneycombMetrics) Down(name string) {
 	counter.lock.Lock()
 	counter.val--
 	counter.lock.Unlock()
+}
+
+func (h *HoneycombMetrics) Store(name string, val float64) {
+	constant := getOrAdd(&h.lock, name, h.constants, createGauge)
+
+	// update value, using constant's lock
+	constant.lock.Lock()
+	constant.val = ConvertNumeric(val)
+	constant.lock.Unlock()
 }

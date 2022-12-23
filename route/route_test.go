@@ -427,6 +427,8 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &TestSharder{}},
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "upstreamMetrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "peerMetrics"},
 	)
 	if err != nil {
 		t.Error(err)
