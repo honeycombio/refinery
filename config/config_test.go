@@ -343,12 +343,12 @@ func TestReadRulesConfig(t *testing.T) {
 		rule = r.Rule[0]
 		assert.True(t, rule.Drop)
 		assert.Equal(t, 0, rule.SampleRate)
-		assert.Len(t, rule.Condition, 1)
+		assert.Len(t, rule.Conditions, 1)
 
 		rule = r.Rule[1]
 		assert.Equal(t, 1, rule.SampleRate)
 		assert.Equal(t, "keep slow 500 errors", rule.Name)
-		assert.Len(t, rule.Condition, 2)
+		assert.Len(t, rule.Conditions, 2)
 
 		rule = r.Rule[4]
 		assert.Equal(t, 5, rule.SampleRate)
