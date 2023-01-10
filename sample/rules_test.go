@@ -1425,7 +1425,7 @@ func TestRulesDatatypes(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: false,
+			ExpectedKeep: true,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{

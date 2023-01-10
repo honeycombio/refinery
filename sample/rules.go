@@ -40,7 +40,6 @@ func (s *RulesBasedSampler) Start() error {
 				}).Logf("error creating rule evaluation function: %s", err)
 				continue
 			}
-			fmt.Println("condition", cond)
 		}
 		if rule.Sampler != nil {
 			var sampler Sampler
