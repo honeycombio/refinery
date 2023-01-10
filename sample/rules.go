@@ -2,7 +2,6 @@ package sample
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"strings"
 
@@ -147,8 +146,11 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 		for _, span := range t.GetSpans() {
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
 			if condition.Matches == nil {
-				fmt.Printf("Trace condition matches was not set: %v\n", condition)
-				continue
+				if conditionMatchesValue(condition, value, exists) {
+					matched++
+					break span
+				}
+				return matched == len(rule.Conditions)
 			}
 			if condition.Matches(value, exists) {
 				matched++
@@ -173,8 +175,10 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 			// whether this condition is matched by this span.
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
 			if condition.Matches == nil {
-				fmt.Printf("Span condition matches was not set: %v\n", condition)
-				continue
+				if !conditionMatchesValue(condition, value, exists) {
+					ruleMatched = false
+					break // if any condition fails, we can't possibly succeed, so exit inner loop early
+				}
 			}
 
 			if !condition.Matches(value, exists) {
