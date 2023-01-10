@@ -1425,7 +1425,7 @@ func TestRulesDatatypes(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: true,
+			ExpectedKeep: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1437,7 +1437,7 @@ func TestRulesDatatypes(t *testing.T) {
 							{
 								Field:    "test",
 								Operator: "!=",
-								Value:    "notRigthValue",
+								Value:    "notRightValue",
 								Datatype: "string",
 							},
 						},
@@ -1481,7 +1481,7 @@ func TestRulesDatatypes(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: true,
+			ExpectedKeep: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1509,89 +1509,8 @@ func TestRulesDatatypes(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: true,
+			ExpectedKeep: false,
 		},
-		// {
-		// 	Rules: &config.RulesBasedSamplerConfig{
-		// 		Rule: []*config.RulesBasedSamplerRule{
-		// 			{
-		// 				Name:       "",
-		// 				SampleRate: 10,
-		// 				Conditions: []*config.RulesBasedSamplerCondition{
-		// 					{
-		// 						Field:    "",
-		// 						Operator: "",
-		// 						Value:    "",
-		// 						Datatype: "",
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	Spans: []*types.Span{
-		// 		{
-		// 			Event: types.Event{
-		// 				Data: map[string]interface{}{
-		// 					"": "",
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	Rules: &config.RulesBasedSamplerConfig{
-		// 		Rule: []*config.RulesBasedSamplerRule{
-		// 			{
-		// 				Name:       "",
-		// 				SampleRate: 10,
-		// 				Conditions: []*config.RulesBasedSamplerCondition{
-		// 					{
-		// 						Field:    "",
-		// 						Operator: "",
-		// 						Value:    "",
-		// 						Datatype: "",
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	Spans: []*types.Span{
-		// 		{
-		// 			Event: types.Event{
-		// 				Data: map[string]interface{}{
-		// 					"": "",
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	Rules: &config.RulesBasedSamplerConfig{
-		// 		Rule: []*config.RulesBasedSamplerRule{
-		// 			{
-		// 				Name:       "",
-		// 				SampleRate: 10,
-		// 				Conditions: []*config.RulesBasedSamplerCondition{
-		// 					{
-		// 						Field:    "",
-		// 						Operator: "",
-		// 						Value:    "",
-		// 						Datatype: "",
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// 	Spans: []*types.Span{
-		// 		{
-		// 			Event: types.Event{
-		// 				Data: map[string]interface{}{
-		// 					"": "",
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
 	}
 
 	for _, d := range data {

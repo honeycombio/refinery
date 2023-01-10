@@ -119,7 +119,28 @@ func tryConvertToInt(v any) (int, bool) {
 		}
 		return 0, false
 	default:
-		return 0, false // TODO: Make sure this is correct and there are no other cases
+		return 0, false
+	}
+}
+
+func tryConvertToInt64(v any) (int64, bool) {
+	switch value := v.(type) {
+	case int:
+		return int64(value), true
+	case int64:
+		return value, true
+	case float64:
+		return int64(value), true
+	case bool:
+		return 0, false
+	case string:
+		n, err := strconv.ParseInt(value, 10, 64)
+		if err == nil {
+			return n, true
+		}
+		return 0, false
+	default:
+		return 0, false
 	}
 }
 
@@ -192,7 +213,6 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			}
 			return nil
 		}
-
 	case int:
 		// check if conditionValue and spanValue are not equal
 		switch condition {
@@ -239,6 +259,58 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 		case "<=":
 			r.Matches = func(spanValue any, exists bool) bool {
 				if n, ok := tryConvertToInt(spanValue); exists && ok {
+					return n <= conditionValue
+				}
+				return false
+			}
+			return nil
+		}
+	case int64:
+		// check if conditionValue and spanValue are not equal
+		switch condition {
+		case "!=":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToInt64(spanValue); exists && ok {
+					return n != conditionValue
+				}
+				return false
+			}
+			return nil
+		case "=":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToInt64(spanValue); exists && ok {
+					return n == conditionValue
+				}
+				return false
+			}
+			return nil
+		case ">":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToInt64(spanValue); exists && ok {
+					return n > conditionValue
+				}
+				return false
+			}
+			return nil
+		case ">=":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToInt64(spanValue); exists && ok {
+					return n >= conditionValue
+				}
+				return false
+			}
+			return nil
+		case "<":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToInt64(spanValue); exists && ok {
+					return n < conditionValue
+				}
+				return false
+			}
+			return nil
+		case "<=":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToInt64(spanValue); exists && ok {
 					return n <= conditionValue
 				}
 				return false
