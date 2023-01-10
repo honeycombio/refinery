@@ -396,16 +396,12 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 }
 
 func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition string) error {
-	// config file time: check that that condition value is the right type
 	conditionValue, ok := r.Value.(string)
-	// if ok
 	if !ok {
 		return fmt.Errorf("%s value must be a string, but was '%s'", condition, r.Value)
 	}
 
-	// span evaluation time: check that that condition value is the right type
 	r.Matches = func(spanValue any, exists bool) bool {
-		// make sure that value is a string, and if not, return false
 		s, ok := spanValue.(string)
 		if !ok {
 			return false
