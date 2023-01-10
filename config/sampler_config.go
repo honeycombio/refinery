@@ -213,10 +213,6 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			}
 			return nil
 		}
-<<<<<<< HEAD
-=======
-
->>>>>>> d8538e3 (refactor: update sampler config)
 	case int:
 		// check if conditionValue and spanValue are not equal
 		switch condition {
