@@ -72,6 +72,21 @@ By default, a Refinery process will register itself in Redis using its local hos
 In environments where domain name resolution is slow or unreliable, override the reliance on name lookups by specifying the name of the peering network interface with the `IdentifierInterfaceName` configuration option.
 See the [Refinery documentation](https://docs.honeycomb.io/manage-data-volume/refinery/) for more details on tuning a cluster.
 
+### Environment Variables
+
+Refinery supports the following environment variables.  Environment variables take precedence over file configuration.
+
+| Environment Variable                                              | Config Field                     |
+|-------------------------------------------------------------------|----------------------------------|
+| `REFINERY_GRPC_LISTEN_ADDRESS`                                    | `GRPCListenAddr`                 |
+| `REFINERY_REDIS_HOST`                                             | `PeerManagement.RedisHost`       |
+| `REFINERY_REDIS_USERNAME`                                         | `PeerManagement.RedisUsername`   |
+| `REFINERY_REDIS_PASSWORD`                                         | `PeerManagement.RedisPassword`   |
+| `REFINERY_HONEYCOMB_API_KEY`                                      | `HoneycombLogger.LoggerAPIKey`   |
+| `REFINERY_HONEYCOMB_METRICS_API_KEY` `REFINERY_HONEYCOMB_API_KEY` | `HoneycombMetrics.MetricsAPIKey` |
+| `REFINERY_QUERY_AUTH_TOKEN`                                       | `QueryAuthToken`                 |
+
+Note, `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `HoneycombMetrics.MetricsAPIKey` configuration.
 
 ### Mixing Classic and Environment & Services Rule Definitions
 
