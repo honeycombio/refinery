@@ -62,7 +62,7 @@ type InMemCollector struct {
 	Config         config.Config          `inject:""`
 	Logger         logger.Logger          `inject:""`
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
-	Metrics        metrics.Metrics        `inject:"metrics"`
+	Metrics        metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 	StressRelief   *StressRelief          `inject:""`
 

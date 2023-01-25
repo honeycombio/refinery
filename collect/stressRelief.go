@@ -33,8 +33,6 @@ type StressRelief struct {
 	stressLevel     uint
 	stressed        bool
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
-	UpstreamMetrics metrics.Metrics `inject:"upstreamMetrics"`
-	PeerMetrics     metrics.Metrics `inject:"peerMetrics"`
 	Logger          logger.Logger   `inject:""`
 	Done            chan struct{}
 
@@ -104,13 +102,17 @@ func (d *StressRelief) getMetric(name string) (float64, bool) {
 	if v, ok := d.RefineryMetrics.Get(name); ok {
 		return v, true
 	}
-	if v, ok := d.PeerMetrics.Get(name); ok {
-		return v, true
-	}
-	if v, ok := d.UpstreamMetrics.Get(name); ok {
-		return v, true
-	}
 	return 0, false
+}
+
+func clamp(f float64, min float64, max float64) float64 {
+	if f < min {
+		return min
+	}
+	if f > max {
+		return max
+	}
+	return f
 }
 
 // We want to calculate the stress from various values around the system. Each key value
@@ -128,8 +130,6 @@ func (d *StressRelief) Recalc() {
 		"libhoney_upstream_queue_length":  "UPSTREAM_BUFFER_SIZE",
 	}
 	d.Logger.Debug().Logf("stress recalc: Ref: '%v'", d.RefineryMetrics.(*metrics.HoneycombMetrics).GetAllNames())
-	d.Logger.Debug().Logf("stress recalc: Peer: '%v'", d.PeerMetrics.(*metrics.HoneycombMetrics).GetAllNames())
-	d.Logger.Debug().Logf("stress recalc: Upstr: '%v'", d.UpstreamMetrics.(*metrics.HoneycombMetrics).GetAllNames())
 
 	var level float64
 	for num, denom := range queues {
@@ -144,7 +144,7 @@ func (d *StressRelief) Recalc() {
 			continue
 		}
 		if denominator != 0 {
-			stress := 100 * numerator / denominator
+			stress := 100 * math.Sqrt(clamp(numerator/denominator, 0, 1))
 			if stress > level {
 				level = stress
 			}

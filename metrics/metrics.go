@@ -23,7 +23,7 @@ type Metrics interface {
 	Store(name string, val float64)         // for storing a rarely-changing value not sent as a metric
 }
 
-func GetMetricsImplementation(c config.Config, prefix string) Metrics {
+func GetMetricsImplementation(c config.Config) Metrics {
 	var metricsr Metrics
 	metricsType, err := c.GetMetricsType()
 	if err != nil {
@@ -32,9 +32,9 @@ func GetMetricsImplementation(c config.Config, prefix string) Metrics {
 	}
 	switch metricsType {
 	case "honeycomb":
-		metricsr = &HoneycombMetrics{prefix: prefix}
+		metricsr = &HoneycombMetrics{}
 	case "prometheus":
-		metricsr = &PromMetrics{prefix: prefix}
+		metricsr = &PromMetrics{}
 	default:
 		fmt.Printf("unknown metrics type %s. Exiting.\n", metricsType)
 		os.Exit(1)

@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -39,8 +38,6 @@ type HoneycombMetrics struct {
 	//reportingFreq is the interval with which to report statistics
 	reportingFreq       int64
 	reportingCancelFunc func()
-
-	prefix string
 }
 
 type counter struct {
@@ -241,21 +238,21 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 			h.lock.RLock()
 			for _, count := range h.counters {
 				count.lock.Lock()
-				ev.AddField(PrefixMetricName(h.prefix, count.name), count.val)
+				ev.AddField(count.name, count.val)
 				count.val = 0
 				count.lock.Unlock()
 			}
 
 			for _, updown := range h.updowns {
 				updown.lock.Lock()
-				ev.AddField(PrefixMetricName(h.prefix, updown.name), updown.val)
+				ev.AddField(updown.name, updown.val)
 				// updown.val = 0   // updowns are never reset to 0
 				updown.lock.Unlock()
 			}
 
 			for _, gauge := range h.gauges {
 				gauge.lock.Lock()
-				ev.AddField(PrefixMetricName(h.prefix, gauge.name), gauge.val)
+				ev.AddField(gauge.name, gauge.val)
 				// gauges should remain where they are until changed
 				// gauge.val = 0
 				gauge.lock.Unlock()
@@ -268,12 +265,12 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 					p50Index := int(math.Floor(float64(len(histogram.vals)) * 0.5))
 					p95Index := int(math.Floor(float64(len(histogram.vals)) * 0.95))
 					p99Index := int(math.Floor(float64(len(histogram.vals)) * 0.99))
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p50", histogram.vals[p50Index])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p95", histogram.vals[p95Index])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p99", histogram.vals[p99Index])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_min", histogram.vals[0])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_max", histogram.vals[len(histogram.vals)-1])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_avg", average(histogram.vals))
+					ev.AddField(histogram.name+"_p50", histogram.vals[p50Index])
+					ev.AddField(histogram.name+"_p95", histogram.vals[p95Index])
+					ev.AddField(histogram.name+"_p99", histogram.vals[p99Index])
+					ev.AddField(histogram.name+"_min", histogram.vals[0])
+					ev.AddField(histogram.name+"_max", histogram.vals[len(histogram.vals)-1])
+					ev.AddField(histogram.name+"_avg", average(histogram.vals))
 					histogram.vals = histogram.vals[:0]
 				}
 				histogram.lock.Unlock()
@@ -288,12 +285,6 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 // Retrieves the current value of a gauge, constant, counter, or updown as a float64
 // (even if it's an integer value). Returns 0 if the name isn't found.
 func (h *HoneycombMetrics) Get(name string) (float64, bool) {
-	oldname := name
-	if h.prefix != "" && strings.HasPrefix(name, h.prefix) {
-		name = name[len(h.prefix)+1:]
-	}
-	h.Logger.Debug().Logf("metrics prefix %s Getting name %s (orig %s)", h.prefix, name, oldname)
-
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	if m, ok := h.counters[name]; ok {
@@ -312,7 +303,7 @@ func (h *HoneycombMetrics) Get(name string) (float64, bool) {
 }
 
 func (h *HoneycombMetrics) GetAllNames() []string {
-	names := []string{h.prefix}
+	names := []string{}
 	for name := range h.counters {
 		names = append(names, name)
 	}
@@ -337,7 +328,7 @@ func average(vals []float64) float64 {
 }
 
 func (h *HoneycombMetrics) Register(name string, metricType string) {
-	h.Logger.Debug().Logf("metrics prefix %s registering %s with name %s", h.prefix, metricType, name)
+	h.Logger.Debug().Logf("metrics registering %s with name %s", metricType, name)
 	switch metricType {
 	case "counter":
 		getOrAdd(&h.lock, name, h.counters, createCounter)
@@ -432,6 +423,8 @@ func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
 	// update value, using histogram's lock
 	histogram.lock.Lock()
 	histogram.vals = append(histogram.vals, ConvertNumeric(obs))
+	// we want to average the peak values in our counter where the peaks go up fast but down slower
+	// like a VU meter for audio. (This is only for Get().)
 	histogram.lock.Unlock()
 }
 
