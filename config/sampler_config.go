@@ -47,7 +47,6 @@ type RulesBasedSamplerCondition struct {
 	Field    string
 	Operator string
 	Value    interface{}
-	Datatype string
 	Matches  func(value any, exists bool) bool
 }
 
@@ -65,10 +64,12 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 		r.Matches = func(value any, exists bool) bool {
 			return exists
 		}
+		return nil
 	case "not-exists":
 		r.Matches = func(value any, exists bool) bool {
 			return !exists
 		}
+		return nil
 	case "!=":
 		return setCompareOperators(r, "!=")
 	case "=":
@@ -392,7 +393,7 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 	default:
 		return fmt.Errorf("%s value's type must be either string, int, float or bool, but was '%T'", conditionValue, conditionValue)
 	}
-	return nil // what return was missing?
+	return nil
 }
 
 func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition string) error {
@@ -401,22 +402,33 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 		return fmt.Errorf("%s value must be a string, but was '%s'", condition, r.Value)
 	}
 
-	r.Matches = func(spanValue any, exists bool) bool {
-		s, ok := spanValue.(string)
-		if !ok {
+	switch condition {
+	case "starts-with":
+		r.Matches = func(spanValue any, exists bool) bool {
+			s, ok := spanValue.(string)
+			if ok {
+				return strings.HasPrefix(s, conditionValue)
+			}
 			return false
 		}
-
-		switch condition {
-		case "starts-with":
-			return strings.HasPrefix(s, conditionValue)
-		case "contains":
-			return strings.Contains(s, conditionValue)
-		case "does-not-contain":
-			return !strings.Contains(s, conditionValue)
+	case "contains":
+		r.Matches = func(spanValue any, exists bool) bool {
+			s, ok := spanValue.(string)
+			if ok {
+				return strings.Contains(s, conditionValue)
+			}
+			return false
 		}
-		return false
+	case "does-not-contain":
+		r.Matches = func(spanValue any, exists bool) bool {
+			s, ok := spanValue.(string)
+			if ok {
+				return !strings.Contains(s, conditionValue)
+			}
+			return false
+		}
 	}
+
 	return nil
 }
 
