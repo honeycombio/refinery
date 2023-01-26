@@ -47,6 +47,7 @@ type RulesBasedSamplerCondition struct {
 	Field    string
 	Operator string
 	Value    interface{}
+	Datatype string
 	Matches  func(value any, exists bool) bool
 }
 
@@ -70,30 +71,10 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 			return !exists
 		}
 		return nil
-	case "!=":
-		return setCompareOperators(r, "!=")
-	case "=":
-		return setCompareOperators(r, "=")
-	case ">":
-		return setCompareOperators(r, ">")
-	case ">=":
-		return setCompareOperators(r, ">=")
-	case "<":
-		return setCompareOperators(r, "<")
-	case "<=":
-		return setCompareOperators(r, "<=") //which format is better?
-	case "starts-with":
-		err := setMatchStringBasedOperators(r, "starts-with")
-		if err != nil {
-			return err
-		}
-	case "contains":
-		err := setMatchStringBasedOperators(r, "contains")
-		if err != nil {
-			return err
-		}
-	case "does-not-contain":
-		err := setMatchStringBasedOperators(r, "does-not-contain")
+	case "!=", "=", ">", "<", "<=", ">=":
+		return setCompareOperators(r, r.Operator)
+	case "starts-with", "contains", "does-not-contain":
+		err := setMatchStringBasedOperators(r, r.Operator)
 		if err != nil {
 			return err
 		}
@@ -193,8 +174,13 @@ func tryConvertToBool(v any) bool {
 }
 
 func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error {
-	switch conditionValue := r.Value.(type) {
-	case string:
+	switch r.Datatype {
+	case "string":
+		conditionValue, ok := tryConvertToString(r.Value)
+		if !ok {
+			return fmt.Errorf("could not convert %v to string", r.Value)
+		}
+
 		// check if conditionValue and spanValue are not equal
 		switch condition {
 		case "!=":
@@ -213,9 +199,37 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 				return false
 			}
 			return nil
+		case ">":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToString(spanValue); exists && ok {
+					return n > conditionValue
+				}
+				return false
+			}
+			return nil
+		case "<":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToString(spanValue); exists && ok {
+					return n < conditionValue
+				}
+				return false
+			}
+			return nil
+		case "<=":
+			r.Matches = func(spanValue any, exists bool) bool {
+				if n, ok := tryConvertToString(spanValue); exists && ok {
+					return n <= conditionValue
+				}
+				return false
+			}
+			return nil
 		}
-	case int:
+	case "int":
 		// check if conditionValue and spanValue are not equal
+		conditionValue, ok := tryConvertToInt(r.Value)
+		if !ok {
+			return fmt.Errorf("could not convert %v to string", r.Value)
+		}
 		switch condition {
 		case "!=":
 			r.Matches = func(spanValue any, exists bool) bool {
@@ -266,59 +280,11 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			}
 			return nil
 		}
-	case int64:
-		// check if conditionValue and spanValue are not equal
-		switch condition {
-		case "!=":
-			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToInt64(spanValue); exists && ok {
-					return n != conditionValue
-				}
-				return false
-			}
-			return nil
-		case "=":
-			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToInt64(spanValue); exists && ok {
-					return n == conditionValue
-				}
-				return false
-			}
-			return nil
-		case ">":
-			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToInt64(spanValue); exists && ok {
-					return n > conditionValue
-				}
-				return false
-			}
-			return nil
-		case ">=":
-			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToInt64(spanValue); exists && ok {
-					return n >= conditionValue
-				}
-				return false
-			}
-			return nil
-		case "<":
-			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToInt64(spanValue); exists && ok {
-					return n < conditionValue
-				}
-				return false
-			}
-			return nil
-		case "<=":
-			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToInt64(spanValue); exists && ok {
-					return n <= conditionValue
-				}
-				return false
-			}
-			return nil
+	case "float":
+		conditionValue, ok := tryConvertToFloat(r.Value)
+		if !ok {
+			return fmt.Errorf("could not convert %v to string", r.Value)
 		}
-	case float64:
 		// check if conditionValue and spanValue are not equal
 		switch condition {
 		case "!=":
@@ -370,8 +336,9 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			}
 			return nil
 		}
-	case bool:
-		// check if conditionValue and spanValue are not equal
+	case "bool":
+		conditionValue := tryConvertToBool(r.Value)
+
 		switch condition {
 		case "!=":
 			r.Matches = func(spanValue any, exists bool) bool {
@@ -390,20 +357,23 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			}
 			return nil
 		}
+	case "":
+		// user did not specify dataype, so do not specify matches function
 	default:
-		return fmt.Errorf("%s value's type must be either string, int, float or bool, but was '%T'", conditionValue, conditionValue)
+		return fmt.Errorf("%s must be either string, int, float or bool", r.Datatype)
 	}
 	return nil
 }
 
 func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition string) error {
-	conditionValue, ok := r.Value.(string)
+	conditionValue, ok := tryConvertToString(r.Value)
 	if !ok {
 		return fmt.Errorf("%s value must be a string, but was '%s'", condition, r.Value)
 	}
 
 	switch condition {
 	case "starts-with":
+		// datatype := r.datatype
 		r.Matches = func(spanValue any, exists bool) bool {
 			s, ok := spanValue.(string)
 			if ok {
@@ -444,7 +414,7 @@ type RulesBasedSamplerRule struct {
 	Sampler    *RulesBasedDownstreamSampler
 	Drop       bool
 	Scope      string `validate:"oneof=span trace"`
-	Conditions []*RulesBasedSamplerCondition
+	Condition  []*RulesBasedSamplerCondition
 }
 
 func (r *RulesBasedSamplerRule) String() string {

@@ -31,7 +31,7 @@ func (s *RulesBasedSampler) Start() error {
 
 	// Check if any rule has a downstream sampler and create it
 	for _, rule := range s.Config.Rule {
-		for _, cond := range rule.Conditions {
+		for _, cond := range rule.Condition {
 			if err := cond.Init(); err != nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
@@ -135,13 +135,13 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
-	if rule.Conditions == nil {
+	if rule.Condition == nil {
 		return true
 	}
 
 	var matched int
 
-	for _, condition := range rule.Conditions {
+	for _, condition := range rule.Condition {
 	span:
 		for _, span := range t.GetSpans() {
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
@@ -150,7 +150,7 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 					matched++
 					break span
 				}
-				return matched == len(rule.Conditions)
+				continue
 			}
 			if condition.Matches(value, exists) {
 				matched++
@@ -159,19 +159,18 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 		}
 	}
-
-	return matched == len(rule.Conditions)
+	return matched == len(rule.Condition)
 }
 
 func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
-	if rule.Conditions == nil {
+	if rule.Condition == nil {
 		return true
 	}
 
 	for _, span := range trace.GetSpans() {
 		ruleMatched := true
-		for _, condition := range rule.Conditions {
+		for _, condition := range rule.Condition {
 			// whether this condition is matched by this span.
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
 			if condition.Matches == nil {

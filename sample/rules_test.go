@@ -26,7 +26,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "int64equals",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -54,7 +54,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "int64greaterthan",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: ">",
@@ -82,7 +82,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "int64lessthan",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "<",
@@ -110,7 +110,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "int64float64lessthan",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "<",
@@ -138,7 +138,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "rule that wont be hit",
 						SampleRate: 0,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: ">",
@@ -171,7 +171,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "multiple matches",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "<=",
@@ -217,7 +217,7 @@ func TestRules(t *testing.T) {
 					{
 						Name: "drop",
 						Drop: true,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: ">",
@@ -266,7 +266,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "test multiple rules must all be matched",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "=",
@@ -308,7 +308,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "not equal test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "!=",
@@ -336,7 +336,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "exists test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "exists",
@@ -363,7 +363,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "not exists test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "not-exists",
@@ -390,7 +390,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "starts with test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "starts-with",
@@ -418,7 +418,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "contains test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "contains",
@@ -446,7 +446,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "does not contain test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
 								Operator: "does-not-contain",
@@ -474,7 +474,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "YAMLintgeaterthan",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: ">",
@@ -502,7 +502,7 @@ func TestRules(t *testing.T) {
 					{
 						Name:       "Check root span for span count",
 						SampleRate: 1,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "meta.span_count",
 								Operator: "=",
@@ -545,7 +545,7 @@ func TestRules(t *testing.T) {
 						Name:       "Check root span for span count",
 						Drop:       true,
 						SampleRate: 0,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "meta.span_count",
 								Operator: ">=",
@@ -630,7 +630,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 					{
 						Name:       "nested field",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
 								Operator: "=",
@@ -661,7 +661,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 					{
 						Name:       "field not nested",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
 								Operator: "=",
@@ -690,7 +690,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 					{
 						Name:       "not exists test",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
 								Operator: "not-exists",
@@ -720,7 +720,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 					{
 						Name:       "do not check nested",
 						SampleRate: 4,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
 								Operator: "exists",
@@ -783,7 +783,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 				Rule: []*config.RulesBasedSamplerRule{
 					{
 						Name: "downstream-dynamic",
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "rule_test",
 								Operator: "=",
@@ -871,7 +871,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 				Rule: []*config.RulesBasedSamplerRule{
 					{
 						Name: "downstream-dynamic",
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "rule_test",
 								Operator: "=",
@@ -1017,7 +1017,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 								Name:       "Rule to match span",
 								Scope:      scope,
 								SampleRate: 1,
-								Conditions: []*config.RulesBasedSamplerCondition{
+								Condition: []*config.RulesBasedSamplerCondition{
 									{
 										Field:    "rule_test",
 										Operator: "=",
@@ -1069,7 +1069,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "int64Unchanged",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1096,7 +1096,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "floatUnchanged",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1123,7 +1123,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "stringUnchanged",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1150,7 +1150,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "boolUnchanged",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1177,7 +1177,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "boolShouldChangeToFalse",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1204,7 +1204,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "intToFloat",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1231,7 +1231,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "floatToInt",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1258,7 +1258,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "invalidConfigComparesStringWithInt",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1285,7 +1285,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "stringToInt",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
@@ -1312,7 +1312,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "intToString",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: ">",
@@ -1339,7 +1339,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "floatToString",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "<",
@@ -1366,7 +1366,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "stringToFloat",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "<=",
@@ -1393,7 +1393,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "stringToFloatInvalid",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: ">=",
@@ -1420,7 +1420,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "stringNotEqual",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "!=",
@@ -1447,7 +1447,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "toStringNotEqual",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "!=",
@@ -1474,7 +1474,7 @@ func TestRulesDatatypes(t *testing.T) {
 					{
 						Name:       "shouldFail",
 						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
+						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
 								Operator: "=",
