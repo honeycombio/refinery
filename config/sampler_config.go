@@ -105,27 +105,6 @@ func tryConvertToInt(v any) (int, bool) {
 	}
 }
 
-func tryConvertToInt64(v any) (int64, bool) {
-	switch value := v.(type) {
-	case int:
-		return int64(value), true
-	case int64:
-		return value, true
-	case float64:
-		return int64(value), true
-	case bool:
-		return 0, false
-	case string:
-		n, err := strconv.ParseInt(value, 10, 64)
-		if err == nil {
-			return n, true
-		}
-		return 0, false
-	default:
-		return 0, false
-	}
-}
-
 func tryConvertToFloat(v any) (float64, bool) {
 	switch value := v.(type) {
 	case float64:
@@ -373,7 +352,6 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 
 	switch condition {
 	case "starts-with":
-		// datatype := r.datatype
 		r.Matches = func(spanValue any, exists bool) bool {
 			s, ok := spanValue.(string)
 			if ok {
