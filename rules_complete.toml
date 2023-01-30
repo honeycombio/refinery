@@ -45,21 +45,23 @@ SampleRate = 1
 	# Eligible for live reload.
 	SampleRate = 2
 
-	# FieldList is a list of all the field names to use to form the key that will be
-	# handed to the dynamic sampler. The cardinality of the combination of values
-	# from all of these keys should be reasonable in the face of the frequency of
-	# those keys. If the combination of fields in these keys essentially makes them
-	# unique, the dynamic sampler will do no sampling.  If the keys have too few
-	# values, you won't get samples of the most interesting traces. A good key
-	# selection will have consistent values for high frequency boring traffic and
-	# unique values for outliers and interesting traffic. Including an error field
-	# (or something like HTTP status code) is an excellent choice. As an example,
-	# assuming 30 or so endpoints, a combination of HTTP endpoint and status code
-	# would be a good set of keys in order to let you see accurately use of all
-	# endpoints and call out when there is failing traffic to any endpoint. Field
-	# names may come from any span in the trace.
+	# FieldList is a list of all the field names to use to form the key that will be handed to the dynamic sampler.
+	# The combination of values from all of these fields should reflect how interesting the trace is compared to
+	# another. A good field selection has consistent values for high-frequency, boring traffic, and unique values for
+	# outliers and interesting traffic. Including an error field (or something like HTTP status code) is an excellent
+	# choice. Using fields with very high cardinality (like `k8s.pod.id`), is a bad choice. If the combination of
+	# fields essentially makes them unique, the dynamic sampler will sample everything. If the combination of fields is
+	# not unique enough, you will not be guaranteed samples of the most interesting traces. As an example, consider a
+	# combination of HTTP endpoint (high-frequency and boring), HTTP method, and status code (normally boring but can
+	# become interesting when indicating an error) as a good set of fields since it will allowing proper sampling
+	# of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+	# For example, in contrast, consider a combination of HTTP endpoint, status code, and pod id as a bad set of
+	# fields, since it would result in keys that are all unique, and therefore results in sampling 100% of traces.
+	# Using only the HTTP endpoint field would be a **bad** choice, as it is not unique enough and therefore
+	# interesting traces, like traces that experienced a `500`, might not be sampled.
+	# Field names may come from any span in the trace.
 	# Eligible for live reload.
-	FieldList = ["request.method","response.status_code"]
+	FieldList = ["request.method", "http.target", "response.status_code"]
 
 	# UseTraceLength will add the number of spans in the trace in to the dynamic
 	# sampler as part of the key. The number of spans is exact, so if there are
@@ -119,21 +121,23 @@ SampleRate = 1
 	# Eligible for live reload.
 	GoalSampleRate = 2
 
-	# FieldList is a list of all the field names to use to form the key that will be
-	# handed to the dynamic sampler. The cardinality of the combination of values
-	# from all of these keys should be reasonable in the face of the frequency of
-	# those keys. If the combination of fields in these keys essentially makes them
-	# unique, the dynamic sampler will do no sampling.  If the keys have too few
-	# values, you won't get samples of the most interesting traces. A good key
-	# selection will have consistent values for high frequency boring traffic and
-	# unique values for outliers and interesting traffic. Including an error field
-	# (or something like HTTP status code) is an excellent choice. As an example,
-	# assuming 30 or so endpoints, a combination of HTTP endpoint and status code
-	# would be a good set of keys in order to let you see accurately use of all
-	# endpoints and call out when there is failing traffic to any endpoint. Field
-	# names may come from any span in the trace.
+	# FieldList is a list of all the field names to use to form the key that will be handed to the dynamic sampler.
+	# The combination of values from all of these fields should reflect how interesting the trace is compared to
+    # another. A good field selection has consistent values for high-frequency, boring traffic, and unique values for
+	# outliers and interesting traffic. Including an error field (or something like HTTP status code) is an excellent
+	# choice. Using fields with very high cardinality (like `k8s.pod.id`), is a bad choice. If the combination of
+	# fields essentially makes them unique, the dynamic sampler will sample everything. If the combination of fields is
+	# not unique enough, you will not be guaranteed samples of the most interesting traces. As an example, consider a
+	# combination of HTTP endpoint (high-frequency and boring), HTTP method, and status code (normally boring but can
+	# become interesting when indicating an error) as a good set of fields since it will allowing proper sampling
+	# of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+	# For example, in contrast, consider a combination of HTTP endpoint, status code, and pod id as a bad set of
+	# fields, since it would result in keys that are all unique, and therefore results in sampling 100% of traces.
+	# Using only the HTTP endpoint field would be a **bad** choice, as it is not unique enough and therefore
+	# interesting traces, like traces that experienced a `500`, might not be sampled.
+	# Field names may come from any span in the trace.
 	# Eligible for live reload.
-	FieldList = ["request.method","response.status_code"]
+	FieldList = ["request.method", "http.target", "response.status_code"]
 
 	# UseTraceLength will add the number of spans in the trace in to the dynamic
 	# sampler as part of the key. The number of spans is exact, so if there are
