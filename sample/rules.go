@@ -180,9 +180,11 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 				}
 			}
 
-			if !condition.Matches(value, exists) {
-				ruleMatched = false
-				break // if any condition fails, we can't possibly succeed, so exit inner loop early
+			if condition.Matches != nil {
+				if !condition.Matches(value, exists) {
+					ruleMatched = false
+					break // if any condition fails, we can't possibly succeed, so exit inner loop early
+				}
 			}
 		}
 		// If this span was matched by every condition, then the rule as a whole
