@@ -1090,6 +1090,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1118,6 +1119,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1146,6 +1148,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1174,6 +1177,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1202,6 +1206,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1212,8 +1217,8 @@ func TestRulesDatatypes(t *testing.T) {
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
-								Value:    "blaaahhhh",
+								Operator: "contains",
+								Value:    "ru",
 								Datatype: "string",
 							},
 						},
@@ -1224,12 +1229,13 @@ func TestRulesDatatypes(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"test": false,
+							"test": true,
 						},
 					},
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1258,6 +1264,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1268,7 +1275,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: "<",
 								Value:    float64(100.01),
 								Datatype: "float",
 							},
@@ -1286,6 +1293,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1314,6 +1322,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1342,6 +1351,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1370,6 +1380,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1380,7 +1391,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "<",
+								Operator: ">",
 								Value:    "10.3",
 								Datatype: "string",
 							},
@@ -1392,12 +1403,13 @@ func TestRulesDatatypes(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"test": 9.3,
+							"test": 9.3, // "9.3" is greater than "10.3" when compared as a string
 						},
 					},
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1426,6 +1438,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1454,6 +1467,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 1,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1482,6 +1496,7 @@ func TestRulesDatatypes(t *testing.T) {
 				},
 			},
 			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1509,18 +1524,19 @@ func TestRulesDatatypes(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: false,
+			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
 				Rule: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "shouldFail",
+						Name:       "intsNotEqual",
 						SampleRate: 10,
 						Condition: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: "!=",
 								Value:    int64(1),
 								Datatype: "int",
 							},
@@ -1532,35 +1548,38 @@ func TestRulesDatatypes(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"test": int64(1),
+							"test": int64(11),
 						},
 					},
 				},
 			},
-			ExpectedKeep: false,
+			ExpectedKeep: true,
+			ExpectedRate: 10,
 		},
 	}
 
 	for _, d := range data {
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
-			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
-		}
+		t.Run(d.Rules.Rule[0].Name, func(t *testing.T) {
+			sampler := &RulesBasedSampler{
+				Config:  d.Rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
 
-		sampler.Start()
+			sampler.Start()
 
-		trace := &types.Trace{}
+			trace := &types.Trace{}
 
-		for _, span := range d.Spans {
-			trace.AddSpan(span)
-		}
+			for _, span := range d.Spans {
+				trace.AddSpan(span)
+			}
 
-		_, keep, _ := sampler.GetSampleRate(trace)
-
-		// // we can only test when we don't expect to keep the trace
-		if !d.ExpectedKeep {
-			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
-		}
+			rate, keep, _ := sampler.GetSampleRate(trace)
+			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+			// because keep depends on sampling rate, we can only test expectedKeep when it should be false
+			if !d.ExpectedKeep {
+				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+			}
+		})
 	}
 }
