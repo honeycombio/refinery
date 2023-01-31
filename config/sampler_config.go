@@ -141,13 +141,17 @@ func tryConvertToString(v any) (string, bool) {
 }
 
 func tryConvertToBool(v any) bool {
-	switch value := v.(type) {
-	case string:
-		if value == "true" {
-			return true
-		}
+	value, ok := tryConvertToString(v)
+	if !ok {
 		return false
-	default:
+	}
+	str, err := strconv.ParseBool(value)
+	if err != nil {
+		return false
+	}
+	if str {
+		return true
+	} else {
 		return false
 	}
 }
