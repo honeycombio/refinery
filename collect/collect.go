@@ -498,7 +498,6 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		trace.SendBy = time.Now().Add(timeout)
 		trace.RootSpan = sp
 	}
-	i.Metrics.Increment("span_processed")
 }
 
 // dealWithSentTrace handles a span that has arrived after the sampling decision
