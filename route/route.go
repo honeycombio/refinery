@@ -499,7 +499,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		WithString("dataset", ev.Dataset).
 		WithString("environment", ev.Environment)
 
-	// extract trace ID, route to self or peer, pass on to collector
+	// extract trace ID
 	// TODO make trace ID field configurable
 	var traceID string
 	if trID, ok := ev.Data["trace.trace_id"]; ok {
@@ -518,7 +518,22 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 	debugLog = debugLog.WithString("trace_id", traceID)
 
-	// ok, we're a span. Figure out if we should handle locally or pass on to a peer
+	span := &types.Span{
+		Event:   *ev,
+		TraceID: traceID,
+	}
+
+	// we know we're a span, but we need to check if we're in Stress Relief mode;
+	// if we are, then we want to make an immediate, deterministic trace decision
+	// and either drop or send the trace without even trying to cache or forward it.
+	if r.Collector.Stressed() {
+		rate, keep, reason := r.Collector.GetStressedSampleRate(traceID)
+
+		r.Collector.ProcessSpanImmediately(span, keep, rate, reason)
+		return nil
+	}
+
+	// Figure out if we should handle this span locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
 	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
 		r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
@@ -533,12 +548,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		return nil
 	}
 
-	// we're supposed to handle it
+	// we're supposed to handle it normally
 	var err error
-	span := &types.Span{
-		Event:   *ev,
-		TraceID: traceID,
-	}
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)
 	} else {
@@ -551,7 +562,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
-	debugLog.Logf("Accepting span from batch for collection into a trace")
+
+	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
 	return nil
 }
 

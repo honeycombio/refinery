@@ -39,6 +39,7 @@ func TestAddRootSpan(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -117,6 +118,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -175,6 +177,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -237,6 +240,7 @@ func TestAddSpan(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -313,6 +317,7 @@ func TestDryRunMode(t *testing.T) {
 		Logger:         &logger.NullLogger{},
 		Transmission:   transmission,
 		Metrics:        &metrics.NullMetrics{},
+		StressRelief:   &MockStressReliever{},
 		SamplerFactory: samplerFactory,
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
@@ -430,6 +435,7 @@ func TestCacheSizeReload(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -504,6 +510,7 @@ func TestSampleConfigReload(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -577,6 +584,7 @@ func TestOldMaxAlloc(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -671,6 +679,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -769,6 +778,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -815,6 +825,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
+		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
 	)
 	if err != nil {
 		t.Error(err)
@@ -841,6 +852,7 @@ func TestAddSpanCount(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},
@@ -910,6 +922,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config: conf,
 			Logger: &logger.NullLogger{},

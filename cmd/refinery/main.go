@@ -184,6 +184,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	stressRelief := &collect.StressRelief{Done: done}
+
 	var g inject.Graph
 	if opts.Debug {
 		g.Logger = graphLogger{}
@@ -204,6 +206,7 @@ func main() {
 		&inject.Object{Value: peerMetricsRecorder, Name: "peerMetrics"},
 		&inject.Object{Value: version, Name: "version"},
 		&inject.Object{Value: samplerFactory},
+		&inject.Object{Value: stressRelief, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)
 	if err != nil {
@@ -236,6 +239,10 @@ func main() {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
 	}
+
+	// these have to be done after the injection (of metrics)
+	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
+	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
 	// set up signal channel to exit
 	sigsToExit := make(chan os.Signal, 1)

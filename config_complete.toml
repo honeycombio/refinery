@@ -474,3 +474,70 @@ MetricsReportingInterval = 3
 # Does not apply to the "legacy" type of cache.
 # Eligible for live reload.
 # SizeCheckInterval = "10s"
+
+
+#################################
+## Stress Relief Configuration ##
+#################################
+
+[StressRelief]
+
+# Controls the parameters of the stress relief system. There is a metric called
+# stress_level that is emitted as part of refinery metrics. It is a measure of
+# refinery's throughput rate relative to its processing rate, combined with the
+# amount of room in its internal queues, and ranges from 0 to 100. It is
+# generally expected to be 0 except under heavy load. When stress levels reach
+# 100, there is an increased chance that refinery will become unstable.
+#
+# To avoid this problem, the Stress Relief system can do deterministic sampling
+# on new trace traffic based solely on TraceID, without having to store traces
+# in the cache or take the time processing sampling rules. Existing traces in
+# flight will be processed normally, but when Stress Relief is active, trace
+# decisions are made deterministically on a per-span basis; all spans will be
+# sampled according to the SamplingRate specified here.
+#
+# Once Stress Relief activates (by exceeding the ActivationLevel), it will not
+# deactivate until stress_level falls below the DeactivationLevel. When it
+# deactivates, normal trace decisions are made -- and any additional spans that
+# arrive for traces that were active during Stress Relief will respect those
+# decisions.
+#
+# The measurement of stress is a lagging indicator and is highly dependent on
+# Refinery configuration and scaling. Other configuration values should be well
+# tuned first, before adjusting the Stress Relief Activation parameters.
+
+# Mode is a string indicating how to use Stress Relief. Options are:
+# - "never" means that Stress Relief will never activate
+# - "monitor" is the recommended setting, and means that Stress Relief will monitor
+#     the status of refinery and activate according to the levels set below.
+# - "always" means that Stress Relief is always on, which may be useful in an
+#     emergency situation.
+# Default is "never".
+# Eligible for live reload.
+# Mode = "monitor"
+
+# ActivationLevel is the stress_level (from 0-100) at which Stress Relief is
+# triggered.
+# Default = 75
+# Eligible for live reload.
+# ActivationLevel = 75
+
+# DeactivationLevel is the stress_level (from 0-100) at which Stress Relief is
+# turned off (subject to MinimumActivationDuration). Under normal circumstances,
+# it should be well below ActivationLevel to avoid oscillations.
+# Default = 25
+# Eligible for live reload.
+# DeactivationLevel = 25
+
+# StressSamplingRate is the sampling rate to use when Stress Relief is
+# activated. All new traces will be deterministically sampled at this rate based
+# only on the traceID.
+# Default = 100
+# Eligible for live reload.
+# StressSamplingRate = 100
+
+# MinimumActivationDuration is the minimum time that stress relief will stay
+# enabled, once activated. This prevents oscillations.
+# Default = 10s
+# Eligible for live reload.
+# MinimumActivationDuration = 10s

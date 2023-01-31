@@ -302,25 +302,6 @@ func (h *HoneycombMetrics) Get(name string) (float64, bool) {
 	return 0, false
 }
 
-func (h *HoneycombMetrics) GetAllNames() []string {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
-	names := []string{}
-	for name := range h.counters {
-		names = append(names, name)
-	}
-	for name := range h.updowns {
-		names = append(names, name)
-	}
-	for name := range h.gauges {
-		names = append(names, name)
-	}
-	for name := range h.constants {
-		names = append(names, name)
-	}
-	return names
-}
-
 func average(vals []float64) float64 {
 	var total float64
 	for _, val := range vals {
