@@ -29,7 +29,7 @@ type Collector interface {
 	AddSpanFromPeer(*types.Span) error
 	Stressed() bool
 	GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string)
-	SendSpanImmediately(sp *types.Span, keep bool, sampleRate uint)
+	ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -267,6 +267,7 @@ func (i *InMemCollector) oldCheckAlloc() {
 
 func (i *InMemCollector) newCheckAlloc() {
 	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
+	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(inMemConfig.MaxAlloc))
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
@@ -527,7 +528,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	i.Metrics.Increment("span_processed")
 }
 
-// SendSpanImmediately is an escape hatch used under stressful conditions -- it
+// ProcessSpanImmediately is an escape hatch used under stressful conditions -- it
 // submits a span for immediate transmission without enqueuing it for normal
 // processing. This means it ignores dry run mode and doesn't build a complete
 // trace context or cache the trace in the active trace buffer. It only gets
@@ -536,7 +537,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 // is being sampled. Therefore, we also put the traceID into the sent traces
 // cache as "kept".
 // It doesn't do any logging either; this is about as minimal as we can make it.
-func (i *InMemCollector) SendSpanImmediately(sp *types.Span, keep bool, sampleRate uint) {
+func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
 	now := time.Now()
 	trace := &types.Trace{
 		APIHost:     sp.APIHost,
@@ -546,7 +547,16 @@ func (i *InMemCollector) SendSpanImmediately(sp *types.Span, keep bool, sampleRa
 		ArrivalTime: now,
 		SendBy:      now,
 	}
+	// we do want a record of how we disposed of traces in case more come in after we've
+	// turned off stress relief (if stress relief is on we'll keep making the same decisions)
 	i.sampleTraceCache.Record(trace, keep)
+	if !keep {
+		i.Metrics.Increment("dropped_from_stress")
+		return
+	}
+	// ok, we're sending it, so decorate it first
+	sp.Event.Data["meta.stressed"] = true
+	sp.Event.Data["meta.refinery.reason"] = reason
 	mergeTraceAndSpanSampleRates(sp, sampleRate)
 	i.Transmission.EnqueueSpan(sp)
 }

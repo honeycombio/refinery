@@ -303,6 +303,8 @@ func (h *HoneycombMetrics) Get(name string) (float64, bool) {
 }
 
 func (h *HoneycombMetrics) GetAllNames() []string {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
 	names := []string{}
 	for name := range h.counters {
 		names = append(names, name)

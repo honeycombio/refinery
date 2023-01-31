@@ -186,10 +186,10 @@ func main() {
 
 	stressRelief := &collect.StressRelief{Done: done}
 
-	gl := graphLogger{}
-
 	var g inject.Graph
-	g.Logger = gl
+	if opts.Debug {
+		g.Logger = graphLogger{}
+	}
 	err = g.Provide(
 		&inject.Object{Value: c},
 		&inject.Object{Value: peers},
@@ -240,9 +240,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// these need the injection of metrics to be done already
-	upstreamMetricsRecorder.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
-	peerMetricsRecorder.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
+	// these have to be done after the injection (of metrics)
+	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
+	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
 	// set up signal channel to exit
 	sigsToExit := make(chan os.Signal, 1)

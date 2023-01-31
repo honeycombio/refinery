@@ -31,21 +31,41 @@ type StressRelief struct {
 	sampleRate      uint64
 	upperBound      uint64
 	stressLevel     uint
+	reason          string
 	stressed        bool
+	belowMin        bool
+	minDuration     time.Duration
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
 	Logger          logger.Logger   `inject:""`
 	Done            chan struct{}
 
-	lock sync.RWMutex
+	algorithms map[string]func(string, string) float64
+	calcs      []StressReliefCalculation
+	lock       sync.RWMutex
 }
 
-func (d *StressRelief) Start() error {
-	d.Logger.Debug().Logf("Starting StressRelief system")
-	defer func() { d.Logger.Debug().Logf("Finished starting StressRelief system") }()
+func (s *StressRelief) Start() error {
+	s.Logger.Debug().Logf("Starting StressRelief system")
+	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
+
+	s.algorithms = map[string]func(string, string) float64{
+		"linear":  s.linear,
+		"sqrt":    s.sqrt,
+		"square":  s.square,
+		"sigmoid": s.sigmoid,
+	}
+
+	s.calcs = []StressReliefCalculation{
+		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (peer)"},
+		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (incoming)"},
+		{Numerator: "libhoney_peer_queue_length", Denominator: "PEER_BUFFER_SIZE", Algorithm: "sqrt", Reason: "PeerBufferSize"},
+		{Numerator: "libhoney_upstream_queue_length", Denominator: "UPSTREAM_BUFFER_SIZE", Algorithm: "sqrt", Reason: "UpstreamBufferSize"},
+		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
+	}
 
 	// start our monitor goroutine that periodically calls recalc
 	go func(d *StressRelief) {
-		tick := time.NewTicker(1000 * time.Millisecond)
+		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {
@@ -56,53 +76,47 @@ func (d *StressRelief) Start() error {
 				return
 			}
 		}
-	}(d)
+	}(s)
 	return nil
 }
 
-func (d *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
-	d.lock.Lock()
-	defer d.lock.Unlock()
+func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	switch cfg.Mode {
 	case "never", "":
-		d.mode = Never
-		d.Logger.Debug().Logf("StressRelief mode is 'never'")
+		s.mode = Never
 	case "monitor":
-		d.mode = Monitor
-		d.Logger.Debug().Logf("StressRelief mode is 'monitor'")
+		s.mode = Monitor
 	case "always":
-		d.mode = Always
-		d.Logger.Debug().Logf("StressRelief mode is 'always'")
+		s.mode = Always
 	default: // validation shouldn't let this happen but we'll be safe...
-		d.mode = Never
-		d.Logger.Debug().Logf("StressRelief mode is %s which shouldn't happen - using 'never'", cfg.Mode)
+		s.mode = Never
+		s.Logger.Error().Logf("StressRelief mode is '%s' which shouldn't happen", cfg.Mode)
 	}
+	s.Logger.Debug().WithField("mode", s.mode).Logf("setting StressRelief mode")
 
-	d.activateLevel = cfg.ActivationLevel
-	d.deactivateLevel = cfg.DeactivationLevel
-	d.sampleRate = cfg.StressSamplingRate
-	if d.sampleRate == 0 {
-		d.sampleRate = 1
+	s.activateLevel = cfg.ActivationLevel
+	s.deactivateLevel = cfg.DeactivationLevel
+	s.sampleRate = cfg.StressSamplingRate
+	if s.sampleRate == 0 {
+		s.sampleRate = 1
 	}
-	d.Logger.Debug().Logf(
-		"StressRelief ActivationLevel %d, DeactivationLevel %d, SamplingRate %d'",
-		d.activateLevel, d.deactivateLevel, d.sampleRate)
+	s.minDuration = cfg.MinimumActivationDuration
+	s.Logger.Debug().
+		WithField("activation_level", s.activateLevel).
+		WithField("deactivation_level", s.deactivateLevel).
+		WithField("sampling_rate", s.sampleRate).
+		WithField("min_duration", s.minDuration).
+		Logf("StressRelief parameters")
 
 	// Get the actual upper bound - the largest possible value divided by
 	// the sample rate. In the case where the sample rate is 1, this should
 	// sample every value.
-	d.upperBound = math.MaxUint64 / d.sampleRate
+	s.upperBound = math.MaxUint64 / s.sampleRate
 
 	return nil
-}
-
-// getMetric retrieves a named value from one of the sources of metrics.
-func (d *StressRelief) getMetric(name string) (float64, bool) {
-	if v, ok := d.RefineryMetrics.Get(name); ok {
-		return v, true
-	}
-	return 0, false
 }
 
 func clamp(f float64, min float64, max float64) float64 {
@@ -115,78 +129,159 @@ func clamp(f float64, min float64, max float64) float64 {
 	return f
 }
 
+// ratio is a function that returns the ratio of two values looked up in the metrics,
+// clamped between 0 and 1. Since we know this is the range, we know that
+// sqrt has the effect of making small values larger, and square has the
+// effect of making large values smaller. We can use these functions to bias the
+// weighting of our calculations.
+func (s *StressRelief) ratio(num, denom string) float64 {
+	numerator, ok := s.RefineryMetrics.Get(num)
+	if !ok {
+		s.Logger.Debug().Logf("stress recalc: missing numerator %s", num)
+		return 0
+	}
+	denominator, ok := s.RefineryMetrics.Get(denom)
+	if !ok {
+		s.Logger.Debug().Logf("stress recalc: missing denominator %s", denom)
+		return 0
+	}
+	if denominator != 0 {
+		stress := clamp(numerator/denominator, 0, 1)
+		s.Logger.Debug().
+			WithField("numerator_name", num).
+			WithField("numerator_value", numerator).
+			WithField("denominator_name", denom).
+			WithField("denominator_value", denominator).
+			WithField("unscaled_result", stress).
+			Logf("stress recalc: detail")
+		return stress
+	}
+	return 0
+}
+
+// linear simply returns the value it calculates
+func (s *StressRelief) linear(num, denom string) float64 {
+	stress := s.ratio(num, denom)
+	s.Logger.Debug().
+		WithField("algorithm", "linear").
+		WithField("result", stress).
+		Logf("stress recalc: result")
+	return stress
+}
+
+// sqrt returns the square root of the value calculated, which (in the range [0-1])
+// inflates them a bit without affecting the ends of the range.
+func (s *StressRelief) sqrt(num, denom string) float64 {
+	stress := math.Sqrt(s.ratio(num, denom))
+	s.Logger.Debug().
+		WithField("algorithm", "sqrt").
+		WithField("result", stress).
+		Logf("stress recalc: result")
+	return stress
+}
+
+// square returns the square of the value calculated, which (in the range [0-1])
+// deflates them a bit without affecting the ends of the range.
+func (s *StressRelief) square(num, denom string) float64 {
+	r := s.ratio(num, denom)
+	stress := r * r
+	s.Logger.Debug().
+		WithField("algorithm", "square").
+		WithField("result", stress).
+		Logf("stress recalc: result")
+	return stress
+}
+
+// sigmoid returns a value along a sigmoid (s-shaped) curve of the value
+// calculated, which (in the range [0-1]) deflates low values and inflates high
+// values without affecting the ends of the range. We use this one for memory pressure,
+// under the presumption that if we're using less than half of RAM,
+func (s *StressRelief) sigmoid(num, denom string) float64 {
+	r := s.ratio(num, denom)
+	// this is an S curve from 0 to 1, centered around 0.5 -- determined
+	// by messing around with a graphing calculator
+	stress := .395*math.Atan(6*(r-0.5)) + 0.5
+	s.Logger.Debug().
+		WithField("algorithm", "sigmoid").
+		WithField("result", stress).
+		Logf("stress recalc: result")
+	return stress
+}
+
+type StressReliefCalculation struct {
+	Numerator   string
+	Denominator string
+	Algorithm   string
+	Reason      string
+}
+
 // We want to calculate the stress from various values around the system. Each key value
 // can be reported as a key-value.
 // This should be called periodically.
-func (d *StressRelief) Recalc() {
+func (s *StressRelief) Recalc() {
 	// we have multiple queues to watch, and for each we calculate a stress level for that queue, which is
 	// 100 * the fraction of its capacity in use. Our overall stress level is the max of those values.
-	// The numerators and denominators here need to be in the same order.
-
-	queues := map[string]string{
-		"collector_peer_queue_length":     "PEER_CAP",
-		"collector_incoming_queue_length": "INCOMING_CAP",
-		"libhoney_peer_queue_length":      "PEER_BUFFER_SIZE",
-		"libhoney_upstream_queue_length":  "UPSTREAM_BUFFER_SIZE",
-	}
-	d.Logger.Debug().Logf("stress recalc: Ref: '%v'", d.RefineryMetrics.(*metrics.HoneycombMetrics).GetAllNames())
+	// We track the config value that is under stress as "reason".
 
 	var level float64
-	for num, denom := range queues {
-		numerator, ok := d.getMetric(num)
-		if !ok {
-			d.Logger.Debug().Logf("stress recalc: missing numerator %s", num)
-			continue
+	var reason string
+	for _, c := range s.calcs {
+		stress := 100 * s.algorithms[c.Algorithm](c.Numerator, c.Denominator)
+		if stress > level {
+			level = stress
+			reason = c.Reason
 		}
-		denominator, ok := d.getMetric(denom)
-		if !ok {
-			d.Logger.Debug().Logf("stress recalc: missing denominator %s", num)
-			continue
-		}
-		if denominator != 0 {
-			stress := 100 * math.Sqrt(clamp(numerator/denominator, 0, 1))
-			if stress > level {
-				level = stress
-			}
-		}
-		d.Logger.Debug().Logf("stress recalc: %s=%v/%s=%v", num, numerator, denom, denominator)
 	}
-	d.Logger.Debug().Logf("calculated stress_level = %v", level)
+	s.Logger.Debug().WithField("stress_level", level).WithField("reason", reason).Logf("calculated stress level")
 
-	d.lock.Lock()
-	d.stressLevel = uint(level)
-	d.lock.Unlock()
+	s.lock.Lock()
+	s.stressLevel = uint(level)
+	s.reason = reason
+	s.lock.Unlock()
 }
 
-func (d *StressRelief) StressLevel() uint {
-	return d.stressLevel
+func (s *StressRelief) StressLevel() uint {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return s.stressLevel
 }
 
 // Stressed() indicates whether the system should act as if it's stressed.
 // Note that the stress_level metric is independent of mode.
-func (d *StressRelief) Stressed() bool {
-	switch d.mode {
+func (s *StressRelief) Stressed() bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	switch s.mode {
 	case Never:
-		d.stressed = false
+		s.stressed = false
 	case Always:
-		d.stressed = true
+		s.stressed = true
 	case Monitor:
-		if d.stressLevel >= d.activateLevel {
-			d.stressed = true
-			d.Logger.Debug().Logf("StressRelief has been activated at stressLevel %d", d.stressLevel)
+		if !s.stressed && s.stressLevel >= s.activateLevel {
+			s.stressed = true
+			// we want make sure that stress relief is on for a minimum time
+			s.belowMin = true
+			time.AfterFunc(s.minDuration, func() {
+				s.lock.Lock()
+				s.belowMin = false
+				s.lock.Unlock()
+			})
+			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
 		}
-		if d.stressed && d.stressLevel < d.deactivateLevel {
-			d.stressed = false
-			d.Logger.Debug().Logf("StressRelief has been deactivated at stressLevel %d", d.stressLevel)
+		if s.stressed && !s.belowMin && s.stressLevel < s.deactivateLevel {
+			s.stressed = false
+			s.Logger.Info().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
 		}
 	}
-	return d.stressed
+	return s.stressed
 }
 
-func (d *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
-	if d.sampleRate <= 1 {
+func (s *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if s.sampleRate <= 1 {
 		return 1, true, "stress_relief/always"
 	}
 	hash := wyhash.Hash([]byte(traceID), hashSeed)
-	return uint(d.sampleRate), hash <= d.upperBound, "stress_relief/deterministic"
+	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic"
 }

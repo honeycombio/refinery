@@ -517,22 +517,27 @@ MetricsReportingInterval = 3
 # Mode = "monitor"
 
 # ActivationLevel is the stress_level (from 0-100) at which Stress Relief is
-# triggered. Set it to greater than 100 only if you want to prevent the Stress
-# Relief system from activating.
+# triggered.
 # Default = 75
 # Eligible for live reload.
 # ActivationLevel = 75
 
-# DeactivationLevel is the stress_level (from 0-100) at which Stress
-# Relief is turned off. Under normal circumstances, it should be well below
-# ActivationLevel to avoid oscillations.
+# DeactivationLevel is the stress_level (from 0-100) at which Stress Relief is
+# turned off (subject to MinimumActivationDuration). Under normal circumstances,
+# it should be well below ActivationLevel to avoid oscillations.
 # Default = 25
 # Eligible for live reload.
 # DeactivationLevel = 25
 
-# StressSamplingRate is the sampling rate to used when Stress Relief is activated.
-# All new traces will be deterministically sampled at this rate based only on
-# the traceID.
+# StressSamplingRate is the sampling rate to use when Stress Relief is
+# activated. All new traces will be deterministically sampled at this rate based
+# only on the traceID.
 # Default = 100
 # Eligible for live reload.
 # StressSamplingRate = 100
+
+# MinimumActivationDuration is the minimum time that stress relief will stay
+# enabled, once activated. This prevents oscillations.
+# Default = 10s
+# Eligible for live reload.
+# MinimumActivationDuration = 10s

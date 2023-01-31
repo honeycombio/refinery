@@ -128,10 +128,11 @@ type GRPCServerParameters struct {
 }
 
 type StressReliefConfig struct {
-	Mode               string `validate:"required,oneof= always never monitor"`
-	ActivationLevel    uint
-	DeactivationLevel  uint
-	StressSamplingRate uint64
+	Mode                      string `validate:"required,oneof= always never monitor"`
+	ActivationLevel           uint
+	DeactivationLevel         uint
+	StressSamplingRate        uint64
+	MinimumActivationDuration time.Duration
 }
 
 // NewConfig creates a new config struct
@@ -190,6 +191,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("StressRelief.ActivationLevel", 75)
 	c.SetDefault("StressRelief.DeactivationLevel", 25)
 	c.SetDefault("StressRelief.StressSamplingRate", 100)
+	c.SetDefault("StressRelief.MinimumActivationDuration", 10*time.Second)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
