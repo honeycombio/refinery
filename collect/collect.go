@@ -59,7 +59,7 @@ type InMemCollector struct {
 	Config         config.Config          `inject:""`
 	Logger         logger.Logger          `inject:""`
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
-	Metrics        metrics.Metrics        `inject:"metrics"`
+	Metrics        metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory `inject:""`
 
 	// For test use only
@@ -95,11 +95,15 @@ func (i *InMemCollector) Start() error {
 
 	i.Metrics.Register("trace_duration_ms", "histogram")
 	i.Metrics.Register("trace_span_count", "histogram")
-	i.Metrics.Register("collector_tosend_queue", "histogram")
 	i.Metrics.Register("collector_incoming_queue", "histogram")
+	i.Metrics.Register("collector_peer_queue_length", "gauge")
+	i.Metrics.Register("collector_incoming_queue_length", "gauge")
 	i.Metrics.Register("collector_peer_queue", "histogram")
 	i.Metrics.Register("collector_cache_size", "gauge")
 	i.Metrics.Register("memory_heap_allocation", "gauge")
+	i.Metrics.Register("span_received", "counter")
+	i.Metrics.Register("span_processed", "counter")
+	i.Metrics.Register("spans_waiting", "updown")
 	i.Metrics.Register("trace_sent_cache_hit", "counter")
 	i.Metrics.Register("trace_accepted", "counter")
 	i.Metrics.Register("trace_send_kept", "counter")
@@ -333,11 +337,15 @@ func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
 func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	if i.BlockOnAddSpan {
 		ch <- sp
+		i.Metrics.Increment("span_received")
+		i.Metrics.Up("spans_waiting")
 		return nil
 	}
 
 	select {
 	case ch <- sp:
+		i.Metrics.Increment("span_received")
+		i.Metrics.Up("spans_waiting")
 		return nil
 	default:
 		return ErrWouldBlock
@@ -360,9 +368,11 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
-		// record channel lengths
+		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
+		i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
+		i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
 
 		// Always drain peer channel before doing anything else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
@@ -427,6 +437,11 @@ func (i *InMemCollector) sendTracesInCache(now time.Time) {
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
 func (i *InMemCollector) processSpan(sp *types.Span) {
+	defer func() {
+		i.Metrics.Increment("span_processed")
+		i.Metrics.Down("spans_waiting")
+	}()
+
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
@@ -483,6 +498,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		trace.SendBy = time.Now().Add(timeout)
 		trace.RootSpan = sp
 	}
+	i.Metrics.Increment("span_processed")
 }
 
 // dealWithSentTrace handles a span that has arrived after the sampling decision
@@ -548,9 +564,7 @@ func isRootSpan(sp *types.Span) bool {
 
 func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	if trace.Sent {
-		// someone else already sent this so we shouldn't also send it. This happens
-		// when two timers race and two signals for the same trace are sent down the
-		// toSend channel
+		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
 			WithString("trace_id", trace.TraceID).
 			WithString("dataset", trace.Dataset).

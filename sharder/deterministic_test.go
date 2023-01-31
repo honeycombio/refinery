@@ -267,7 +267,6 @@ func TestShardDrop(t *testing.T) {
 				results[s.GetAddress()]++
 				placements[i].shard = s.GetAddress()
 			}
-			fmt.Println(results)
 
 			// reach in and delete one of the peers, then reshard
 			config.GetPeersVal = config.GetPeersVal[1:]
@@ -341,7 +340,6 @@ func TestShardAddHash(t *testing.T) {
 				results[s.GetAddress()]++
 				placements[i].shard = s.GetAddress()
 			}
-			fmt.Println(results)
 
 			// reach in and add a peer, then reshard
 			config.GetPeersVal = append(config.GetPeersVal, "http://2.2.2.255/:8081")

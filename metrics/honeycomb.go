@@ -27,6 +27,8 @@ type HoneycombMetrics struct {
 	counters   map[string]*counter
 	gauges     map[string]*gauge
 	histograms map[string]*histogram
+	updowns    map[string]*updown
+	constants  map[string]*gauge
 
 	libhClient *libhoney.Client
 
@@ -36,8 +38,6 @@ type HoneycombMetrics struct {
 	//reportingFreq is the interval with which to report statistics
 	reportingFreq       int64
 	reportingCancelFunc func()
-
-	prefix string
 }
 
 type counter struct {
@@ -56,6 +56,12 @@ type histogram struct {
 	lock sync.Mutex
 	name string
 	vals []float64
+}
+
+type updown struct {
+	lock sync.Mutex
+	name string
+	val  int
 }
 
 func (h *HoneycombMetrics) Start() error {
@@ -77,6 +83,8 @@ func (h *HoneycombMetrics) Start() error {
 	h.counters = make(map[string]*counter)
 	h.gauges = make(map[string]*gauge)
 	h.histograms = make(map[string]*histogram)
+	h.updowns = make(map[string]*updown)
+	h.constants = make(map[string]*gauge)
 
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
@@ -230,14 +238,21 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 			h.lock.RLock()
 			for _, count := range h.counters {
 				count.lock.Lock()
-				ev.AddField(PrefixMetricName(h.prefix, count.name), count.val)
+				ev.AddField(count.name, count.val)
 				count.val = 0
 				count.lock.Unlock()
 			}
 
+			for _, updown := range h.updowns {
+				updown.lock.Lock()
+				ev.AddField(updown.name, updown.val)
+				// updown.val = 0   // updowns are never reset to 0
+				updown.lock.Unlock()
+			}
+
 			for _, gauge := range h.gauges {
 				gauge.lock.Lock()
-				ev.AddField(PrefixMetricName(h.prefix, gauge.name), gauge.val)
+				ev.AddField(gauge.name, gauge.val)
 				// gauges should remain where they are until changed
 				// gauge.val = 0
 				gauge.lock.Unlock()
@@ -250,12 +265,12 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 					p50Index := int(math.Floor(float64(len(histogram.vals)) * 0.5))
 					p95Index := int(math.Floor(float64(len(histogram.vals)) * 0.95))
 					p99Index := int(math.Floor(float64(len(histogram.vals)) * 0.99))
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p50", histogram.vals[p50Index])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p95", histogram.vals[p95Index])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_p99", histogram.vals[p99Index])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_min", histogram.vals[0])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_max", histogram.vals[len(histogram.vals)-1])
-					ev.AddField(PrefixMetricName(h.prefix, histogram.name)+"_avg", average(histogram.vals))
+					ev.AddField(histogram.name+"_p50", histogram.vals[p50Index])
+					ev.AddField(histogram.name+"_p95", histogram.vals[p95Index])
+					ev.AddField(histogram.name+"_p99", histogram.vals[p99Index])
+					ev.AddField(histogram.name+"_min", histogram.vals[0])
+					ev.AddField(histogram.name+"_max", histogram.vals[len(histogram.vals)-1])
+					ev.AddField(histogram.name+"_avg", average(histogram.vals))
 					histogram.vals = histogram.vals[:0]
 				}
 				histogram.lock.Unlock()
@@ -267,6 +282,45 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 	}
 }
 
+// Retrieves the current value of a gauge, constant, counter, or updown as a float64
+// (even if it's an integer value). Returns 0 if the name isn't found.
+func (h *HoneycombMetrics) Get(name string) (float64, bool) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	if m, ok := h.counters[name]; ok {
+		return float64(m.val), true
+	}
+	if m, ok := h.updowns[name]; ok {
+		return float64(m.val), true
+	}
+	if m, ok := h.gauges[name]; ok {
+		return m.val, true
+	}
+	if m, ok := h.constants[name]; ok {
+		return m.val, true
+	}
+	return 0, false
+}
+
+func (h *HoneycombMetrics) GetAllNames() []string {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+	names := []string{}
+	for name := range h.counters {
+		names = append(names, name)
+	}
+	for name := range h.updowns {
+		names = append(names, name)
+	}
+	for name := range h.gauges {
+		names = append(names, name)
+	}
+	for name := range h.constants {
+		names = append(names, name)
+	}
+	return names
+}
+
 func average(vals []float64) float64 {
 	var total float64
 	for _, val := range vals {
@@ -276,6 +330,7 @@ func average(vals []float64) float64 {
 }
 
 func (h *HoneycombMetrics) Register(name string, metricType string) {
+	h.Logger.Debug().Logf("metrics registering %s with name %s", metricType, name)
 	switch metricType {
 	case "counter":
 		getOrAdd(&h.lock, name, h.counters, createCounter)
@@ -283,6 +338,8 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 		getOrAdd(&h.lock, name, h.gauges, createGauge)
 	case "histogram":
 		getOrAdd(&h.lock, name, h.histograms, createHistogram)
+	case "updown":
+		getOrAdd(&h.lock, name, h.updowns, createUpdown)
 	default:
 		h.Logger.Debug().Logf("unsupported metric type %s", metricType)
 	}
@@ -291,7 +348,7 @@ func (h *HoneycombMetrics) Register(name string, metricType string) {
 // getOrAdd attempts to retrieve a (generic) metric from the provided map by name, wrapping the read operation
 // with a read lock (RLock). If the metric is not present in the map, it acquires a write lock and executes
 // a create function to add it to the map.
-func getOrAdd[T *counter | *gauge | *histogram](lock *sync.RWMutex, name string, metrics map[string]T, createMetric func(name string) T) T {
+func getOrAdd[T *counter | *gauge | *histogram | *updown](lock *sync.RWMutex, name string, metrics map[string]T, createMetric func(name string) T) T {
 	// attempt to get metric by name using read lock
 	lock.RLock()
 	metric, ok := metrics[name]
@@ -334,6 +391,12 @@ func createHistogram(name string) *histogram {
 	}
 }
 
+func createUpdown(name string) *updown {
+	return &updown{
+		name: name,
+	}
+}
+
 func (h *HoneycombMetrics) Count(name string, n interface{}) {
 	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
 
@@ -363,4 +426,31 @@ func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
 	histogram.lock.Lock()
 	histogram.vals = append(histogram.vals, ConvertNumeric(obs))
 	histogram.lock.Unlock()
+}
+
+func (h *HoneycombMetrics) Up(name string) {
+	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
+
+	// update value, using counter's lock
+	counter.lock.Lock()
+	counter.val++
+	counter.lock.Unlock()
+}
+
+func (h *HoneycombMetrics) Down(name string) {
+	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
+
+	// update value, using counter's lock
+	counter.lock.Lock()
+	counter.val--
+	counter.lock.Unlock()
+}
+
+func (h *HoneycombMetrics) Store(name string, val float64) {
+	constant := getOrAdd(&h.lock, name, h.constants, createGauge)
+
+	// update value, using constant's lock
+	constant.lock.Lock()
+	constant.val = ConvertNumeric(val)
+	constant.lock.Unlock()
 }

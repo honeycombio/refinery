@@ -3,6 +3,7 @@ package transmit
 import (
 	"context"
 	"sync"
+	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
@@ -25,14 +26,20 @@ const (
 	counterEnqueueErrors  = "enqueue_errors"
 	counterResponse20x    = "response_20x"
 	counterResponseErrors = "response_errors"
+	updownQueuedItems     = "queued_items"
+	histogramQueueTime    = "queue_time"
 )
 
 type DefaultTransmission struct {
 	Config     config.Config   `inject:""`
 	Logger     logger.Logger   `inject:""`
-	Metrics    metrics.Metrics `inject:"metrics"`
+	Metrics    metrics.Metrics // constructed, not injected
 	Version    string          `inject:"version"`
 	LibhClient *libhoney.Client
+
+	// This has to exist to fool the injection system into making sure this shows up later
+	// than metrics on the injection graph. Have I mentioned how much I hate injection systems?
+	FakeMetrics metrics.Metrics `inject:"metrics"`
 
 	// Type is peer or upstream, and used only for naming metrics
 	Name string
@@ -42,6 +49,10 @@ type DefaultTransmission struct {
 }
 
 var once sync.Once
+
+func NewDefaultTransmission(client *libhoney.Client, m metrics.Metrics, name string) *DefaultTransmission {
+	return &DefaultTransmission{LibhClient: client, Metrics: m, Name: name}
+}
 
 func (d *DefaultTransmission) Start() error {
 	d.Logger.Debug().Logf("Starting DefaultTransmission: %s type", d.Name)
@@ -61,9 +72,11 @@ func (d *DefaultTransmission) Start() error {
 		libhoney.UserAgentAddition = "refinery/" + d.Version
 	})
 
-	d.Metrics.Register(d.Name+counterEnqueueErrors, "counter")
-	d.Metrics.Register(d.Name+counterResponse20x, "counter")
-	d.Metrics.Register(d.Name+counterResponseErrors, "counter")
+	d.Metrics.Register(counterEnqueueErrors, "counter")
+	d.Metrics.Register(counterResponse20x, "counter")
+	d.Metrics.Register(counterResponseErrors, "counter")
+	d.Metrics.Register(updownQueuedItems, "updown")
+	d.Metrics.Register(histogramQueueTime, "histogram")
 
 	processCtx, canceler := context.WithCancel(context.Background())
 	d.responseCanceler = canceler
@@ -102,6 +115,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 		"api_host":    ev.APIHost,
 		"dataset":     ev.Dataset,
 		"environment": ev.Environment,
+		"enqueued_at": time.Now().UnixMicro(),
 	}
 
 	for _, k := range d.Config.GetAdditionalErrorFields() {
@@ -117,7 +131,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 
 	err := libhEv.SendPresampled()
 	if err != nil {
-		d.Metrics.Increment(d.Name + counterEnqueueErrors)
+		d.Metrics.Increment(counterEnqueueErrors)
 		d.Logger.Error().
 			WithString("error", err.Error()).
 			WithField("request_id", ev.Context.Value(types.RequestIDContextKey{})).
@@ -126,6 +140,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 			WithString("environment", ev.Environment).
 			Logf("failed to enqueue event")
 	}
+	d.Metrics.Up(updownQueuedItems)
 }
 
 func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
@@ -154,18 +169,22 @@ func (d *DefaultTransmission) processResponses(
 	for {
 		select {
 		case r := <-responses:
+			var enqueuedAt, dequeuedAt int64
 			if r.Err != nil || r.StatusCode > 202 {
 				var apiHost, dataset, environment string
 				if metadata, ok := r.Metadata.(map[string]any); ok {
 					apiHost = metadata["api_host"].(string)
 					dataset = metadata["dataset"].(string)
 					environment = metadata["environment"].(string)
+					enqueuedAt = metadata["enqueued_at"].(int64)
+					dequeuedAt = time.Now().UnixMicro()
 				}
 				log := d.Logger.Error().WithFields(map[string]interface{}{
-					"status_code": r.StatusCode,
-					"api_host":    apiHost,
-					"dataset":     dataset,
-					"environment": environment,
+					"status_code":    r.StatusCode,
+					"api_host":       apiHost,
+					"dataset":        dataset,
+					"environment":    environment,
+					"roundtrip_usec": dequeuedAt - enqueuedAt,
 				})
 				for _, k := range d.Config.GetAdditionalErrorFields() {
 					if v, ok := r.Metadata.(map[string]any)[k]; ok {
@@ -176,10 +195,16 @@ func (d *DefaultTransmission) processResponses(
 					log = log.WithField("error", r.Err.Error())
 				}
 				log.Logf("error when sending event")
-				d.Metrics.Increment(d.Name + counterResponseErrors)
+				d.Metrics.Increment(counterResponseErrors)
 			} else {
-				d.Metrics.Increment(d.Name + counterResponse20x)
+				if metadata, ok := r.Metadata.(map[string]any); ok {
+					enqueuedAt = metadata["enqueued_at"].(int64)
+					dequeuedAt = time.Now().UnixMicro()
+				}
+				d.Metrics.Increment(counterResponse20x)
 			}
+			d.Metrics.Down(updownQueuedItems)
+			d.Metrics.Histogram(histogramQueueTime, dequeuedAt-enqueuedAt)
 		case <-ctx.Done():
 			return
 		}
