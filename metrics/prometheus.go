@@ -82,13 +82,15 @@ func (p *PromMetrics) Register(name string, metricType string) {
 }
 
 func (p *PromMetrics) Get(name string) (float64, bool) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	v, ok := p.values[name]
 	return v, ok
 }
 
 func (p *PromMetrics) Increment(name string) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
@@ -98,8 +100,8 @@ func (p *PromMetrics) Increment(name string) {
 	}
 }
 func (p *PromMetrics) Count(name string, n interface{}) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
@@ -110,8 +112,8 @@ func (p *PromMetrics) Count(name string, n interface{}) {
 	}
 }
 func (p *PromMetrics) Gauge(name string, val interface{}) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
@@ -122,8 +124,8 @@ func (p *PromMetrics) Gauge(name string, val interface{}) {
 	}
 }
 func (p *PromMetrics) Histogram(name string, obs interface{}) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if histIface, ok := p.metrics[name]; ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
@@ -132,8 +134,8 @@ func (p *PromMetrics) Histogram(name string, obs interface{}) {
 	}
 }
 func (p *PromMetrics) Up(name string) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
@@ -143,8 +145,8 @@ func (p *PromMetrics) Up(name string) {
 	}
 }
 func (p *PromMetrics) Down(name string) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
@@ -155,8 +157,8 @@ func (p *PromMetrics) Down(name string) {
 }
 
 func (p *PromMetrics) Store(name string, val float64) {
-	p.lock.RLock()
-	defer p.lock.RUnlock()
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	p.values[name] = val
 }

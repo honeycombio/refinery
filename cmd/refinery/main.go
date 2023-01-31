@@ -206,7 +206,7 @@ func main() {
 		&inject.Object{Value: peerMetricsRecorder, Name: "peerMetrics"},
 		&inject.Object{Value: version, Name: "version"},
 		&inject.Object{Value: samplerFactory},
-		&inject.Object{Value: stressRelief},
+		&inject.Object{Value: stressRelief, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)
 	if err != nil {

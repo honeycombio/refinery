@@ -11,6 +11,26 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 )
 
+type StressReliever interface {
+	Start() error
+	UpdateFromConfig(cfg config.StressReliefConfig) error
+	Recalc()
+	StressLevel() uint
+	Stressed() bool
+	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
+}
+
+type MockStressReliever struct{}
+
+func (m *MockStressReliever) Start() error                                         { return nil }
+func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) error { return nil }
+func (m *MockStressReliever) Recalc()                                              {}
+func (m *MockStressReliever) StressLevel() uint                                    { return 0 }
+func (m *MockStressReliever) Stressed() bool                                       { return false }
+func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	return 1, false, ""
+}
+
 // hashSeed is a random value to seed the hash generator for the sampler.
 // We want it to be a constant that's the same across all nodes so that they
 // all make the same sampling decisions during stress relief.

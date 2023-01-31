@@ -563,7 +563,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
 
-	debugLog.WithField("source", r.incomingOrPeer).WithField("datasize", span.GetDataSize()).Logf("Accepting span from batch for collection into a trace")
+	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
 	return nil
 }
 

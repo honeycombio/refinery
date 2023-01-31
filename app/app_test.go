@@ -195,6 +195,7 @@ func newStartedApp(
 		&inject.Object{Value: metricsr, Name: "peerMetrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
+		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)
 	assert.NoError(t, err)

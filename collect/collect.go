@@ -64,7 +64,7 @@ type InMemCollector struct {
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
 	Metrics        metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory `inject:""`
-	StressRelief   *StressRelief          `inject:""`
+	StressRelief   StressReliever         `inject:"stressRelief"`
 
 	// For test use only
 	BlockOnAddSpan bool

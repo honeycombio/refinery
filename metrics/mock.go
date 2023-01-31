@@ -73,6 +73,9 @@ func (m *MockMetrics) Down(name string) {
 }
 
 func (m *MockMetrics) Get(name string) (float64, bool) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	if v, ok := m.CounterIncrements[name]; ok {
 		return float64(v), true
 	}
