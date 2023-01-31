@@ -1060,3 +1060,507 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 		})
 	}
 }
+
+func TestRulesDatatypes(t *testing.T) {
+	data := []TestRulesData{
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "int64Unchanged",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    int64(1),
+								Datatype: "int",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": int64(1),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "floatUnchanged",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    float64(1.01),
+								Datatype: "float",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": float64(1.01),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "stringUnchanged",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    "foo",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "boolUnchanged",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    "true",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": true,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "bool",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    true,
+								Datatype: "bool",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": true,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "boolShouldChangeToFalse",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    "blaaahhhh",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": false,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "intToFloat",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    int64(10),
+								Datatype: "int",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": 10.,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "floatToInt",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    float64(100.01),
+								Datatype: "float",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": 100,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "invalidConfigComparesStringWithInt",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    "500",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "500",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "stringToInt",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    500,
+								Datatype: "int",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "500",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "intToString",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: ">",
+								Value:    "1",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": 2,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "floatToString",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "<",
+								Value:    "10.3",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": 9.3,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "stringToFloat",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "<=",
+								Value:    4.13,
+								Datatype: "float",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "4.13",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "stringToFloatInvalid",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: ">=",
+								Value:    4.13,
+								Datatype: "float",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "fourPointOneThree",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "stringNotEqual",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "!=",
+								Value:    "notRightValue",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "rightValue",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "toStringNotEqual",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "!=",
+								Value:    "667",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": 777,
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rule: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "shouldFail",
+						SampleRate: 10,
+						Condition: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: "=",
+								Value:    int64(1),
+								Datatype: "int",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": int64(1),
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+		},
+	}
+
+	for _, d := range data {
+		sampler := &RulesBasedSampler{
+			Config:  d.Rules,
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+
+		sampler.Start()
+
+		trace := &types.Trace{}
+
+		for _, span := range d.Spans {
+			trace.AddSpan(span)
+		}
+
+		_, keep, _ := sampler.GetSampleRate(trace)
+
+		// // we can only test when we don't expect to keep the trace
+		if !d.ExpectedKeep {
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+		}
+	}
+}

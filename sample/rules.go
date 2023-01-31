@@ -31,6 +31,15 @@ func (s *RulesBasedSampler) Start() error {
 
 	// Check if any rule has a downstream sampler and create it
 	for _, rule := range s.Config.Rule {
+		for _, cond := range rule.Condition {
+			if err := cond.Init(); err != nil {
+				s.Logger.Debug().WithFields(map[string]interface{}{
+					"rule_name": rule.Name,
+					"condition": cond.String(),
+				}).Logf("error creating rule evaluation function: %s", err)
+				continue
+			}
+		}
 		if rule.Sampler != nil {
 			var sampler Sampler
 			if rule.Sampler.DynamicSampler != nil {
@@ -136,14 +145,19 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 	span:
 		for _, span := range t.GetSpans() {
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
-
-			if conditionMatchesValue(condition, value, exists) {
+			if condition.Matches == nil {
+				if conditionMatchesValue(condition, value, exists) {
+					matched++
+					break span
+				}
+				continue
+			} else if condition.Matches(value, exists) {
 				matched++
 				break span
 			}
+
 		}
 	}
-
 	return matched == len(rule.Condition)
 }
 
@@ -158,10 +172,18 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		for _, condition := range rule.Condition {
 			// whether this condition is matched by this span.
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+			if condition.Matches == nil {
+				if !conditionMatchesValue(condition, value, exists) {
+					ruleMatched = false
+					break // if any condition fails, we can't possibly succeed, so exit inner loop early
+				}
+			}
 
-			if !conditionMatchesValue(condition, value, exists) {
-				ruleMatched = false
-				break // if any condition fails, we can't possibly succeed, so exit inner loop early
+			if condition.Matches != nil {
+				if !condition.Matches(value, exists) {
+					ruleMatched = false
+					break // if any condition fails, we can't possibly succeed, so exit inner loop early
+				}
 			}
 		}
 		// If this span was matched by every condition, then the rule as a whole
