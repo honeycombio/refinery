@@ -151,8 +151,7 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 					break span
 				}
 				continue
-			}
-			if condition.Matches(value, exists) {
+			} else if condition.Matches(value, exists) {
 				matched++
 				break span
 			}
