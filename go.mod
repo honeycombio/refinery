@@ -13,7 +13,7 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.3.0
-	github.com/honeycombio/husky v0.17.0
+	github.com/honeycombio/husky v0.19.0
 	github.com/honeycombio/libhoney-go v1.18.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
@@ -28,6 +28,7 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/tidwall/gjson v1.14.4
 	github.com/vmihailenco/msgpack/v4 v4.3.11
+	go.opentelemetry.io/proto/otlp v0.19.0
 	google.golang.org/grpc v1.52.3
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
@@ -76,3 +77,5 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace go.opentelemetry.io/proto/otlp => github.com/honeycombio/opentelemetry-proto-go/otlp v0.19.0-compat
