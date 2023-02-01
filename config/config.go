@@ -178,6 +178,8 @@ type Config interface {
 	GetConfigMetadata() []ConfigMetadata
 
 	GetSampleCacheConfig() SampleCacheConfig
+
+	GetStressReliefConfig() StressReliefConfig
 }
 
 type ConfigMetadata struct {

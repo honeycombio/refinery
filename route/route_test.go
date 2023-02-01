@@ -428,6 +428,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 	)
 	if err != nil {
 		t.Error(err)
