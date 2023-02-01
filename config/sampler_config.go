@@ -123,21 +123,12 @@ func tryConvertToFloat(v any) (float64, bool) {
 	}
 }
 
+// In the case of strings, we want to stringize everything we get through a
+// "standard" format, which we are defining as whatever Go does with the %v
+// operator to sprintf. This will make sure that no matter how people encode
+// their values, they compare on an equal footing.
 func tryConvertToString(v any) (string, bool) {
-	switch value := v.(type) {
-	case string:
-		return value, true
-	case int:
-		return strconv.Itoa(value), true
-	case int64:
-		return strconv.FormatInt(value, 10), true
-	case float64:
-		return strconv.FormatFloat(value, 'E', -1, 64), false
-	case bool:
-		return strconv.FormatBool(value), true
-	default:
-		return "", false
-	}
+	return fmt.Sprintf("%v", v), true
 }
 
 func tryConvertToBool(v any) bool {
@@ -357,7 +348,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 	switch condition {
 	case "starts-with":
 		r.Matches = func(spanValue any, exists bool) bool {
-			s, ok := spanValue.(string)
+			s, ok := tryConvertToString(spanValue)
 			if ok {
 				return strings.HasPrefix(s, conditionValue)
 			}
@@ -365,7 +356,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 		}
 	case "contains":
 		r.Matches = func(spanValue any, exists bool) bool {
-			s, ok := spanValue.(string)
+			s, ok := tryConvertToString(spanValue)
 			if ok {
 				return strings.Contains(s, conditionValue)
 			}
@@ -373,7 +364,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 		}
 	case "does-not-contain":
 		r.Matches = func(spanValue any, exists bool) bool {
-			s, ok := spanValue.(string)
+			s, ok := tryConvertToString(spanValue)
 			if ok {
 				return !strings.Contains(s, conditionValue)
 			}
