@@ -68,11 +68,17 @@ func (s *StressRelief) Start() error {
 	s.Logger.Debug().Logf("Starting StressRelief system")
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
 
+	// We use an algorithms map so that we can name these algorithms, which makes it easier for several things:
+	// - change our mind about which algorithm to use
+	// - logging the algorithm actually used
+	// - making it easier to make them configurable
+	// At the moment, we are not permitting these to be configurable, but we might change our minds on this.
+	// Thus, we're also including a couple of algorithms we don't currently use for convenience.
 	s.algorithms = map[string]func(string, string) float64{
-		"linear":  s.linear,
-		"sqrt":    s.sqrt,
-		"square":  s.square,
-		"sigmoid": s.sigmoid,
+		"linear":  s.linear,  // just use the ratio
+		"sqrt":    s.sqrt,    // small values are inflated
+		"square":  s.square,  // big values are deflated
+		"sigmoid": s.sigmoid, // don't worry about small stuff, but if we cross the midline, start worrying quickly
 	}
 
 	s.calcs = []StressReliefCalculation{

@@ -525,18 +525,18 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		trace.SendBy = time.Now().Add(timeout)
 		trace.RootSpan = sp
 	}
-	i.Metrics.Increment("span_processed")
 }
 
-// ProcessSpanImmediately is an escape hatch used under stressful conditions -- it
-// submits a span for immediate transmission without enqueuing it for normal
+// ProcessSpanImmediately is an escape hatch used under stressful conditions --
+// it submits a span for immediate transmission without enqueuing it for normal
 // processing. This means it ignores dry run mode and doesn't build a complete
 // trace context or cache the trace in the active trace buffer. It only gets
 // called on the first span for a trace under stressful conditions; we got here
 // because the StressRelief system detected that this is a new trace AND that it
 // is being sampled. Therefore, we also put the traceID into the sent traces
 // cache as "kept".
-// It doesn't do any logging either; this is about as minimal as we can make it.
+// It doesn't do any logging and barely touches metrics; this is about as
+// minimal as we can make it.
 func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
 	now := time.Now()
 	trace := &types.Trace{
