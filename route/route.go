@@ -61,7 +61,7 @@ type Router struct {
 	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
 	Sharder              sharder.Sharder       `inject:""`
 	Collector            collect.Collector     `inject:""`
-	Metrics              metrics.Metrics       `inject:"metrics"`
+	Metrics              metrics.Metrics       `inject:"genericMetrics"`
 
 	// version is set on startup so that the router may answer HTTP requests for
 	// the version

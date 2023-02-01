@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	_ "go.uber.org/automaxprocs"
+
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -39,6 +41,15 @@ type Options struct {
 	Version        bool   `short:"v" long:"version" description:"Print version number and exit"`
 	Debug          bool   `short:"d" long:"debug" description:"If enabled, runs debug service (runs on the first open port between localhost:6060 and :6069 by default)"`
 	InterfaceNames bool   `long:"interface-names" description:"If set, print system's network interface names and exit."`
+}
+
+type graphLogger struct {
+}
+
+// TODO: make this log properly
+func (g graphLogger) Debugf(format string, v ...interface{}) {
+	fmt.Printf(format, v...)
+	fmt.Println()
 }
 
 func main() {
@@ -89,7 +100,7 @@ func main() {
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
-	metricsConfig := metrics.GetMetricsImplementation(c, "")
+	metricsSingleton := metrics.GetMetricsImplementation(c)
 	shrdr := sharder.GetSharderImplementation(c)
 	samplerFactory := &sample.SamplerFactory{}
 
@@ -132,8 +143,9 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 	}
 
-	upstreamMetricsConfig := metrics.GetMetricsImplementation(c, "libhoney_upstream")
-	peerMetricsConfig := metrics.GetMetricsImplementation(c, "libhoney_peer")
+	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
+	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
+	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
 
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
@@ -146,7 +158,7 @@ func main() {
 			Transport:             upstreamTransport,
 			BlockOnSend:           true,
 			EnableMsgpackEncoding: true,
-			Metrics:               upstreamMetricsConfig,
+			Metrics:               upstreamMetricsRecorder,
 		},
 	})
 	if err != nil {
@@ -164,28 +176,32 @@ func main() {
 			Transport:             peerTransport,
 			DisableCompression:    !c.GetCompressPeerCommunication(),
 			EnableMsgpackEncoding: true,
-			Metrics:               peerMetricsConfig,
+			Metrics:               peerMetricsRecorder,
 		},
 	})
 	if err != nil {
-		fmt.Printf("unable to initialize upstream libhoney client")
+		fmt.Printf("unable to initialize peer libhoney client")
 		os.Exit(1)
 	}
 
 	var g inject.Graph
+	if opts.Debug {
+		g.Logger = graphLogger{}
+	}
 	err = g.Provide(
 		&inject.Object{Value: c},
 		&inject.Object{Value: peers},
 		&inject.Object{Value: lgr},
 		&inject.Object{Value: upstreamTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: peerTransport, Name: "peerTransport"},
-		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: upstreamClient, Name: "upstream_"}, Name: "upstreamTransmission"},
-		&inject.Object{Value: &transmit.DefaultTransmission{LibhClient: peerClient, Name: "peer_"}, Name: "peerTransmission"},
+		&inject.Object{Value: transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream"), Name: "upstreamTransmission"},
+		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer"), Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
-		&inject.Object{Value: metricsConfig, Name: "metrics"},
-		&inject.Object{Value: upstreamMetricsConfig, Name: "upstreamMetrics"},
-		&inject.Object{Value: peerMetricsConfig, Name: "peerMetrics"},
+		&inject.Object{Value: metricsSingleton, Name: "metrics"},
+		&inject.Object{Value: genericMetricsRecorder, Name: "genericMetrics"},
+		&inject.Object{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
+		&inject.Object{Value: peerMetricsRecorder, Name: "peerMetrics"},
 		&inject.Object{Value: version, Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &a},

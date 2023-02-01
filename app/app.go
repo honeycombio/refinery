@@ -14,7 +14,7 @@ type App struct {
 	IncomingRouter route.Router      `inject:"inline"`
 	PeerRouter     route.Router      `inject:"inline"`
 	Collector      collect.Collector `inject:""`
-	Metrics        metrics.Metrics   `inject:"metrics"`
+	Metrics        metrics.Metrics   `inject:"genericMetrics"`
 
 	// Version is the build ID for Refinery so that the running process may answer
 	// requests for the version
