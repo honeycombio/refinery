@@ -39,7 +39,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
-	collectortrace "github.com/honeycombio/husky/proto/otlp/collector/trace/v1"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
 const (
