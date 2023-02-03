@@ -53,7 +53,7 @@ type StressRelief struct {
 	stressLevel     uint
 	reason          string
 	stressed        bool
-	belowMin        bool
+	stayOnUntil     time.Time
 	minDuration     time.Duration
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
 	Logger          logger.Logger   `inject:""`
@@ -226,7 +226,7 @@ func (s *StressRelief) sigmoid(num, denom string) float64 {
 	r := s.ratio(num, denom)
 	// this is an S curve from 0 to 1, centered around 0.5 -- determined
 	// by messing around with a graphing calculator
-	stress := .395*math.Atan(6*(r-0.5)) + 0.5
+	stress := 0.400305589*math.Atan(6*(r-0.5)) + 0.5
 	s.Logger.Debug().
 		WithField("algorithm", "sigmoid").
 		WithField("result", stress).
@@ -261,9 +261,32 @@ func (s *StressRelief) Recalc() {
 	s.Logger.Debug().WithField("stress_level", level).WithField("reason", reason).Logf("calculated stress level")
 
 	s.lock.Lock()
+	defer s.lock.Unlock()
+
 	s.stressLevel = uint(level)
 	s.reason = reason
-	s.lock.Unlock()
+
+	if s.stressLevel >= s.deactivateLevel {
+		// we want make sure that stress relief is below the deactivate level for a minimum time after the last time we
+		// said it should be, so whenever it's above that value we push the time out
+		s.stayOnUntil = time.Now().Add(10 * time.Second)
+	}
+
+	switch s.mode {
+	case Never:
+		s.stressed = false
+	case Always:
+		s.stressed = true
+	case Monitor:
+		if !s.stressed && s.stressLevel >= s.activateLevel {
+			s.stressed = true
+			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
+		}
+		if s.stressed && s.stressLevel < s.deactivateLevel && time.Now().After(s.stayOnUntil) {
+			s.stressed = false
+			s.Logger.Info().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
+		}
+	}
 }
 
 func (s *StressRelief) StressLevel() uint {
@@ -277,28 +300,6 @@ func (s *StressRelief) StressLevel() uint {
 func (s *StressRelief) Stressed() bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	switch s.mode {
-	case Never:
-		s.stressed = false
-	case Always:
-		s.stressed = true
-	case Monitor:
-		if !s.stressed && s.stressLevel >= s.activateLevel {
-			s.stressed = true
-			// we want make sure that stress relief is on for a minimum time
-			s.belowMin = true
-			time.AfterFunc(s.minDuration, func() {
-				s.lock.Lock()
-				s.belowMin = false
-				s.lock.Unlock()
-			})
-			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
-		}
-		if s.stressed && !s.belowMin && s.stressLevel < s.deactivateLevel {
-			s.stressed = false
-			s.Logger.Info().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
-		}
-	}
 	return s.stressed
 }
 
