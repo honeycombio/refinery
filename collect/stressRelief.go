@@ -298,8 +298,8 @@ func (s *StressRelief) StressLevel() uint {
 // Stressed() indicates whether the system should act as if it's stressed.
 // Note that the stress_level metric is independent of mode.
 func (s *StressRelief) Stressed() bool {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.stressed
 }
 
