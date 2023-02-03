@@ -846,7 +846,7 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 
 	req.Header.Set("x-Honeycomb-team", apiKey)
 
-	r.Logger.Debug().WithString("api_key", apiKey).WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
+	r.Logger.Debug().WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
 	resp, err := r.proxyClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
