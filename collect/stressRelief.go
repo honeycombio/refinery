@@ -224,8 +224,10 @@ func (s *StressRelief) square(num, denom string) float64 {
 // under the presumption that if we're using less than half of RAM,
 func (s *StressRelief) sigmoid(num, denom string) float64 {
 	r := s.ratio(num, denom)
-	// this is an S curve from 0 to 1, centered around 0.5 -- determined
-	// by messing around with a graphing calculator
+	// This is an S curve from 0 to 1, centered around 0.5 -- constants were
+	// empirically determined by messing around with a graphing calculator. The
+	// only reason you might change these is if you want to change the bendiness
+	// of the S curve.
 	stress := 0.400305589*math.Atan(6*(r-0.5)) + 0.5
 	s.Logger.Debug().
 		WithField("algorithm", "sigmoid").
@@ -266,22 +268,24 @@ func (s *StressRelief) Recalc() {
 	s.stressLevel = uint(level)
 	s.reason = reason
 
-	if s.stressLevel >= s.deactivateLevel {
-		// we want make sure that stress relief is below the deactivate level for a minimum time after the last time we
-		// said it should be, so whenever it's above that value we push the time out
-		s.stayOnUntil = time.Now().Add(10 * time.Second)
-	}
-
 	switch s.mode {
 	case Never:
 		s.stressed = false
 	case Always:
 		s.stressed = true
 	case Monitor:
+		// If it's off, should we activate it?
 		if !s.stressed && s.stressLevel >= s.activateLevel {
 			s.stressed = true
 			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
 		}
+		// We want make sure that stress relief is below the deactivate level
+		// for a minimum time after the last time we said it should be, so
+		// whenever it's above that value we push the time out.
+		if s.stressLevel >= s.deactivateLevel {
+			s.stayOnUntil = time.Now().Add(10 * time.Second)
+		}
+		// If it's on, should we deactivate it?
 		if s.stressed && s.stressLevel < s.deactivateLevel && time.Now().After(s.stayOnUntil) {
 			s.stressed = false
 			s.Logger.Info().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
