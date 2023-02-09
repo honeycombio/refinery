@@ -90,19 +90,24 @@ func (s *StressRelief) Start() error {
 	}
 
 	// start our monitor goroutine that periodically calls recalc
-	go func(d *StressRelief) {
+	go func(s *StressRelief) {
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {
 			case <-tick.C:
-				d.Recalc()
-			case <-d.Done:
-				d.Logger.Debug().Logf("Stopping StressRelief system")
+				s.Recalc()
+			case <-s.Done:
+				s.Logger.Debug().Logf("Stopping StressRelief system")
 				return
 			}
 		}
 	}(s)
+	return nil
+}
+
+func (s *StressRelief) Stop() error {
+	close(s.Done)
 	return nil
 }
 
@@ -114,6 +119,16 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 	case "never", "":
 		s.mode = Never
 	case "monitor":
+		// If we're switching into monitor mode from some other state (which
+		// happens on startup), we will start up in stressed mode for a
+		// configurable time to try to make sure that we can handle the load
+		// before we start processing it in earnest. This is to help address the
+		// problem of trying to bring a new node into an already-overloaded
+		// cluster. If the time is 0 we won't do this at all.
+		if s.mode != Monitor && cfg.StartStressedDuration != 0 {
+			s.stressed = true
+			s.stayOnUntil = time.Now().Add(cfg.StartStressedDuration)
+		}
 		s.mode = Monitor
 	case "always":
 		s.mode = Always
@@ -130,16 +145,19 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 		s.sampleRate = 1
 	}
 	s.minDuration = cfg.MinimumActivationDuration
+
 	s.Logger.Debug().
 		WithField("activation_level", s.activateLevel).
 		WithField("deactivation_level", s.deactivateLevel).
 		WithField("sampling_rate", s.sampleRate).
 		WithField("min_duration", s.minDuration).
+		WithField("startup_duration", cfg.MinimumActivationDuration).
 		Logf("StressRelief parameters")
 
-	// Get the actual upper bound - the largest possible value divided by
-	// the sample rate. In the case where the sample rate is 1, this should
-	// sample every value.
+	// Get the actual upper bound - the largest possible 64-bit value divided by
+	// the sample rate. This is used because the hash with which we sample is a
+	// uint64. In the case where the sample rate is 1, this should sample every
+	// value.
 	s.upperBound = math.MaxUint64 / s.sampleRate
 
 	return nil
@@ -283,7 +301,7 @@ func (s *StressRelief) Recalc() {
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
 		if s.stressLevel >= s.deactivateLevel {
-			s.stayOnUntil = time.Now().Add(10 * time.Second)
+			s.stayOnUntil = time.Now().Add(s.minDuration)
 		}
 		// If it's on, should we deactivate it?
 		if s.stressed && s.stressLevel < s.deactivateLevel && time.Now().After(s.stayOnUntil) {
