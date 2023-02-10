@@ -82,9 +82,6 @@ type Router struct {
 	grpcServer *grpc.Server
 	doneWG     sync.WaitGroup
 
-	// used to identify Router as a OTLP TraceServer
-	collectortrace.UnimplementedTraceServiceServer
-
 	environmentCache *environmentCache
 }
 
@@ -229,8 +226,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 				Timeout:               r.Config.GetGRPCTimeout(),
 			}),
 		}
+		traceServer := NewTraceServer(r)
 		r.grpcServer = grpc.NewServer(serverOpts...)
-		collectortrace.RegisterTraceServiceServer(r.grpcServer, r)
+		collectortrace.RegisterTraceServiceServer(r.grpcServer, traceServer)
 		grpc_health_v1.RegisterHealthServer(r.grpcServer, r)
 		go r.grpcServer.Serve(l)
 	}

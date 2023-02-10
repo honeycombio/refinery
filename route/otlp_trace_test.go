@@ -73,7 +73,8 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		_, err := router.Export(ctx, req)
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -89,7 +90,8 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		_, err := router.Export(ctx, req)
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -122,7 +124,8 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		_, err := router.Export(ctx, req)
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -171,7 +174,8 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		_, err := router.Export(ctx, req)
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -337,7 +341,8 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		_, err := router.Export(ctx, req)
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -370,7 +375,8 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		_, err := router.Export(ctx, req)
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
