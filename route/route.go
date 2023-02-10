@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	healthserver "google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -45,6 +47,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	collectormetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
@@ -75,7 +78,8 @@ type Router struct {
 	// the version
 	versionStr string
 
-	proxyClient *http.Client
+	proxyClient         *http.Client
+	grpcProxyClientConn *grpc.ClientConn
 
 	// type indicates whether this should listen for incoming events or content
 	// redirected from a peer
@@ -206,6 +210,16 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	r.donech = make(chan struct{})
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
+		clientOpts := []grpc.DialOption{
+			grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{})),
+		}
+		conn, err := grpc.NewClient("api.honeycomb.io:443", clientOpts...)
+		if err != nil {
+			r.iopLogger.Error().Logf("failed to make grpc connection with api.honeycomb.io:443: %s", err)
+			return
+		}
+		r.grpcProxyClientConn = conn
+
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
 			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
@@ -231,6 +245,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 		logsServer := NewLogsServer(r)
 		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
+
+		metricServer := NewMetricServer(r)
+		collectormetrics.RegisterMetricsServiceServer(r.grpcServer, metricServer)
 
 		// health check -- manufactured by grpc health package
 		r.hsrv = healthserver.NewServer()
@@ -261,6 +278,10 @@ func (r *Router) Stop() error {
 	}
 	if r.grpcServer != nil {
 		r.grpcServer.GracefulStop()
+		err = r.grpcProxyClientConn.Close()
+		if err != nil {
+			return err
+		}
 	}
 	close(r.donech)
 	r.doneWG.Wait()
