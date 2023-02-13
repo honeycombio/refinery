@@ -11,29 +11,39 @@ import (
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
-func (router *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
+func (r *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
-			router.handlerReturnWithError(w, ErrInvalidContentType, err)
+			r.handlerReturnWithError(w, ErrInvalidContentType, err)
 		} else {
-			router.handlerReturnWithError(w, ErrAuthNeeded, err)
+			r.handlerReturnWithError(w, ErrAuthNeeded, err)
 		}
 		return
 	}
 
 	result, err := huskyotlp.TranslateTraceRequestFromReader(req.Body, ri)
 	if err != nil {
-		router.handlerReturnWithError(w, ErrUpstreamFailed, err)
+		r.handlerReturnWithError(w, ErrUpstreamFailed, err)
 		return
 	}
 
-	if err := processTraceRequest(req.Context(), router, result.Batches, ri.ApiKey); err != nil {
-		router.handlerReturnWithError(w, ErrUpstreamFailed, err)
+	if err := processTraceRequest(req.Context(), r, result.Batches, ri.ApiKey); err != nil {
+		r.handlerReturnWithError(w, ErrUpstreamFailed, err)
 	}
 }
 
-func (router *Router) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
+type TraceServer struct {
+	router *Router
+	collectortrace.UnimplementedTraceServiceServer
+}
+
+func NewTraceServer(router *Router) *TraceServer {
+	traceServer := TraceServer{router: router}
+	return &traceServer
+}
+
+func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
@@ -44,7 +54,7 @@ func (router *Router) Export(ctx context.Context, req *collectortrace.ExportTrac
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := processTraceRequest(ctx, router, result.Batches, ri.ApiKey); err != nil {
+	if err := processTraceRequest(ctx, t.router, result.Batches, ri.ApiKey); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
