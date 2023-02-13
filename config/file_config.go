@@ -133,6 +133,7 @@ type StressReliefConfig struct {
 	DeactivationLevel         uint
 	StressSamplingRate        uint64
 	MinimumActivationDuration time.Duration
+	StartStressedDuration     time.Duration
 }
 
 // NewConfig creates a new config struct
@@ -192,6 +193,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("StressRelief.DeactivationLevel", 25)
 	c.SetDefault("StressRelief.StressSamplingRate", 100)
 	c.SetDefault("StressRelief.MinimumActivationDuration", 10*time.Second)
+	c.SetDefault("StressRelief.StartStressedDuration", 3*time.Second)
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
