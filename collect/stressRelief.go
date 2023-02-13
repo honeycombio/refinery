@@ -300,7 +300,7 @@ func (s *StressRelief) Recalc() {
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
-		if s.stressLevel >= s.deactivateLevel {
+		if s.stressed && s.stressLevel >= s.deactivateLevel {
 			s.stayOnUntil = time.Now().Add(s.minDuration)
 		}
 		// If it's on, should we deactivate it?
