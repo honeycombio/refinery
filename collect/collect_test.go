@@ -336,14 +336,17 @@ func TestDryRunMode(t *testing.T) {
 	var traceID2 = "def456"
 	var traceID3 = "ghi789"
 	// sampling decisions based on trace ID
-	_, keepTraceID1, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
+	sampleRate1, keepTraceID1, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID1)
-	_, keepTraceID2, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
+	assert.Equal(t, uint(10), sampleRate1)
+	sampleRate2, keepTraceID2, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
 	assert.True(t, keepTraceID2)
-	_, keepTraceID3, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
+	assert.Equal(t, uint(10), sampleRate2)
+	sampleRate3, keepTraceID3, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID3)
+	assert.Equal(t, uint(10), sampleRate3)
 
 	span := &types.Span{
 		TraceID: traceID1,
@@ -394,6 +397,11 @@ func TestDryRunMode(t *testing.T) {
 	// both spans should be marked with the sampling decision
 	assert.Equal(t, keepTraceID2, transmission.Events[1].Data[field], "field should match sampling decision for its trace ID")
 	assert.Equal(t, keepTraceID2, transmission.Events[2].Data[field], "field should match sampling decision for its trace ID")
+	// check that meta value associated with dry run mode is properly applied
+	assert.Equal(t, uint(10), transmission.Events[1].Data["meta.dryrun.sample_rate"])
+	// check expected sampleRate against span data
+	assert.Equal(t, sampleRate1, transmission.Events[0].Data["meta.dryrun.sample_rate"])
+	assert.Equal(t, sampleRate2, transmission.Events[1].Data["meta.dryrun.sample_rate"])
 	transmission.Mux.RUnlock()
 
 	span = &types.Span{
