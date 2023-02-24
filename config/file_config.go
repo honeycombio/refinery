@@ -100,6 +100,8 @@ type PeerManagementConfig struct {
 	RedisHost               string
 	RedisUsername           string
 	RedisPassword           string
+	RedisPrefix             string `validate:"required"`
+	RedisDatabase           int    `validate:"gte=0,lte=15"`
 	UseTLS                  bool
 	UseTLSInsecure          bool
 	IdentifierInterfaceName string
@@ -152,6 +154,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("CompressPeerCommunication", true)
 	c.SetDefault("APIKeys", []string{"*"})
 	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
+	c.SetDefault("PeerManagement.RedisPrefix", "refinery")
 	c.SetDefault("PeerManagement.Type", "file")
 	c.SetDefault("PeerManagement.UseTLS", false)
 	c.SetDefault("PeerManagement.UseTLSInsecure", false)
@@ -507,11 +510,25 @@ func (f *fileConfig) GetRedisUsername() (string, error) {
 	return f.config.GetString("PeerManagement.RedisUsername"), nil
 }
 
+func (f *fileConfig) GetRedisPrefix() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetString("PeerManagement.RedisPrefix")
+}
+
 func (f *fileConfig) GetRedisPassword() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	return f.config.GetString("PeerManagement.RedisPassword"), nil
+}
+
+func (f *fileConfig) GetRedisDatabase() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetInt("PeerManagement.RedisDatabase")
 }
 
 func (f *fileConfig) GetUseTLS() (bool, error) {
