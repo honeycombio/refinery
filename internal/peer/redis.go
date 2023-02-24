@@ -91,7 +91,7 @@ func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Pe
 
 	peers := &redisPeers{
 		store: &redimem.RedisMembership{
-			Prefix: "refinery",
+			Prefix: c.GetRedisPrefix(),
 			Pool:   pool,
 		},
 		peers:      make([]string, 1),
@@ -225,7 +225,7 @@ func buildOptions(c config.Config) []redis.DialOption {
 	options := []redis.DialOption{
 		redis.DialReadTimeout(1 * time.Second),
 		redis.DialConnectTimeout(1 * time.Second),
-		redis.DialDatabase(0), // TODO enable multiple databases for multiple samproxies
+		redis.DialDatabase(c.GetRedisDatabase()),
 	}
 
 	username, _ := c.GetRedisUsername()

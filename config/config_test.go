@@ -379,6 +379,8 @@ func TestPeerManagementType(t *testing.T) {
 	[PeerManagement]
 		Type = "redis"
 		Peers = ["http://refinery-1231:8080"]
+		RedisPrefix = "testPrefix"
+		RedisDatabase = 9
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
@@ -388,6 +390,14 @@ func TestPeerManagementType(t *testing.T) {
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
 		t.Error("received", d, "expected", "redis")
+	}
+
+	if s := c.GetRedisPrefix(); s != "testPrefix" {
+		t.Error("received", s, "expected", "testPrefix")
+	}
+
+	if db := c.GetRedisDatabase(); db != 9 {
+		t.Error("received", db, "expected", 9)
 	}
 }
 
