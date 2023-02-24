@@ -159,16 +159,16 @@ jobs:
           aws-secret-access-key: AWS_SECRET_ACCESS_KEY
           aws-region: AWS_REGION
       - run:
-        name: publish docker image to aws ecr
-        command: |
-          set -x
+          name: publish docker image to aws ecr
+          command: |
+            set -x
 
-          export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
-          export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
+            export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
+            export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
 
-          aws ecr get-login-password --region us-east-1 \
-            | docker login --username AWS --password-stdin "${ECR_HOST}"
-          docker push ${ECR_HOST}/refinery-artifact:${TAG}
+            aws ecr get-login-password --region us-east-1 \
+              | docker login --username AWS --password-stdin "${ECR_HOST}"
+            docker push ${ECR_HOST}/refinery-artifact:${TAG}
 
   publish_docker_to_dockerhub:
     docker:
