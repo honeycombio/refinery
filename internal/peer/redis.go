@@ -225,7 +225,7 @@ func buildOptions(c config.Config) []redis.DialOption {
 	options := []redis.DialOption{
 		redis.DialReadTimeout(1 * time.Second),
 		redis.DialConnectTimeout(1 * time.Second),
-		redis.DialDatabase(0), // TODO enable multiple databases for multiple samproxies
+		redis.DialDatabase(c.GetRedisDatabase()),
 	}
 
 	username, _ := c.GetRedisUsername()

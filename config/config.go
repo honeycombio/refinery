@@ -57,6 +57,9 @@ type Config interface {
 	// management.
 	GetRedisPassword() (string, error)
 
+	// GetRedisDatabase returns the ID of the Redis database to use for peer management.
+	GetRedisDatabase() int
+
 	// GetUseTLS returns true when TLS must be enabled to dial the Redis instance to
 	// use for peer management.
 	GetUseTLS() (bool, error)

@@ -42,6 +42,7 @@ type MockConfig struct {
 	GetRedisUsernameVal           string
 	GetRedisPasswordErr           error
 	GetRedisPasswordVal           string
+	GetRedisDatabaseVal           int
 	GetUseTLSErr                  error
 	GetUseTLSVal                  bool
 	GetUseTLSInsecureErr          error
@@ -222,6 +223,13 @@ func (m *MockConfig) GetRedisPassword() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetRedisPasswordVal, m.GetRedisPasswordErr
+}
+
+func (m *MockConfig) GetRedisDatabase() int {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisDatabaseVal
 }
 
 func (m *MockConfig) GetUseTLS() (bool, error) {

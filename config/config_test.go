@@ -77,6 +77,23 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	}
 }
 
+func TestRedisDatabaseEnvVar(t *testing.T) {
+	const db = "7"
+	const envVarName = "REFINERY_REDIS_DATABASE"
+	os.Setenv(envVarName, db)
+	defer os.Unsetenv(envVarName)
+
+	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if d := c.GetRedisDatabase(); d != 7 {
+		t.Error("received", d, "expected", 7)
+	}
+}
+
 func TestMetricsAPIKeyEnvVar(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -379,6 +396,7 @@ func TestPeerManagementType(t *testing.T) {
 	[PeerManagement]
 		Type = "redis"
 		Peers = ["http://refinery-1231:8080"]
+		RedisDatabase = 9
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
@@ -388,6 +406,10 @@ func TestPeerManagementType(t *testing.T) {
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
 		t.Error("received", d, "expected", "redis")
+	}
+
+	if db := c.GetRedisDatabase(); db != 9 {
+		t.Error("received", db, "expected", 9)
 	}
 }
 
