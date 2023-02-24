@@ -557,7 +557,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	// ok, we're sending it, so decorate it first
 	sp.Event.Data["meta.stressed"] = true
 	sp.Event.Data["meta.refinery.reason"] = reason
-	mergeTraceAndSpanSampleRates(sp, sampleRate)
+	mergeTraceAndSpanSampleRates(sp, sampleRate, i.Config.GetIsDryRun())
 	i.Transmission.EnqueueSpan(sp)
 }
 
@@ -565,7 +565,8 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount uint, sp *types.Span) {
-	if i.Config.GetIsDryRun() {
+	isDryRun := i.Config.GetIsDryRun()
+	if isDryRun {
 		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
 		sp.Data[field] = keep
@@ -577,7 +578,7 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 	}
 	if keep {
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
-		mergeTraceAndSpanSampleRates(sp, sampleRate)
+		mergeTraceAndSpanSampleRates(sp, sampleRate, isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
 		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
 			sp.Data["meta.span_count"] = int64(spanCount)
@@ -588,7 +589,8 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 	i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Dropping span because of previous decision to drop trace")
 }
 
-func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint) {
+func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMode bool) {
+	tempSampleRate := sp.SampleRate
 	if traceSampleRate != 1 {
 		// When the sample rate from the trace is not 1 that means we are
 		// going to mangle the span sample rate. Write down the original sample
@@ -596,18 +598,23 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint) {
 		sp.Data["meta.refinery.original_sample_rate"] = sp.SampleRate
 	}
 
-	if sp.SampleRate < 1 {
+	if tempSampleRate < 1 {
 		// See https://docs.honeycomb.io/manage-data-volume/sampling/
 		// SampleRate is the denominator of the ratio of sampled spans
 		// HoneyComb treats a missing or 0 SampleRate the same as 1, but
 		// behaves better/more consistently if the SampleRate is explicitly
 		// set instead of inferred
-		sp.SampleRate = 1
+		tempSampleRate = 1
 	}
 
 	// if spans are already sampled, take that in to account when computing
 	// the final rate
-	sp.SampleRate *= traceSampleRate
+	if dryRunMode {
+		sp.Data["meta.dryrun.sample_rate"] = tempSampleRate * traceSampleRate
+		sp.SampleRate = tempSampleRate
+	} else {
+		sp.SampleRate = tempSampleRate * traceSampleRate
+	}
 }
 
 func isRootSpan(sp *types.Span) bool {
@@ -701,14 +708,15 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 			sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 		}
 
-		if i.Config.GetIsDryRun() {
+		isDryRun := i.Config.GetIsDryRun()
+		if isDryRun {
 			field := i.Config.GetDryRunFieldName()
 			sp.Data[field] = shouldSend
 		}
 		if i.hostname != "" {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname
 		}
-		mergeTraceAndSpanSampleRates(sp, trace.SampleRate)
+		mergeTraceAndSpanSampleRates(sp, trace.SampleRate, isDryRun)
 		i.Transmission.EnqueueSpan(sp)
 	}
 }
