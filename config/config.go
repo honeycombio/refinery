@@ -57,6 +57,10 @@ type Config interface {
 	// management.
 	GetRedisPassword() (string, error)
 
+	// GetRedisPrefix returns the prefix string used in the keys for peer
+	// management.
+	GetRedisPrefix() string
+
 	// GetRedisDatabase returns the ID of the Redis database to use for peer management.
 	GetRedisDatabase() int
 

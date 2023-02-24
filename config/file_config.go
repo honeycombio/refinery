@@ -100,7 +100,8 @@ type PeerManagementConfig struct {
 	RedisHost               string
 	RedisUsername           string
 	RedisPassword           string
-	RedisDatabase           int `validate:"gte=0,lte=15"`
+	RedisPrefix             string `validate:"required"`
+	RedisDatabase           int    `validate:"gte=0,lte=15"`
 	UseTLS                  bool
 	UseTLSInsecure          bool
 	IdentifierInterfaceName string
@@ -145,7 +146,6 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
 	c.BindEnv("PeerManagement.RedisUsername", "REFINERY_REDIS_USERNAME")
 	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
-	c.BindEnv("PeerManagement.RedisDatabase", "REFINERY_REDIS_DATABASE")
 	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
 	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_METRICS_API_KEY", "REFINERY_HONEYCOMB_API_KEY")
 	c.BindEnv("QueryAuthToken", "REFINERY_QUERY_AUTH_TOKEN")
@@ -154,6 +154,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("CompressPeerCommunication", true)
 	c.SetDefault("APIKeys", []string{"*"})
 	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
+	c.SetDefault("PeerManagement.RedisPrefix", "refinery")
 	c.SetDefault("PeerManagement.Type", "file")
 	c.SetDefault("PeerManagement.UseTLS", false)
 	c.SetDefault("PeerManagement.UseTLSInsecure", false)
@@ -507,6 +508,13 @@ func (f *fileConfig) GetRedisUsername() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.config.GetString("PeerManagement.RedisUsername"), nil
+}
+
+func (f *fileConfig) GetRedisPrefix() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.config.GetString("PeerManagement.RedisPrefix")
 }
 
 func (f *fileConfig) GetRedisPassword() (string, error) {

@@ -91,7 +91,7 @@ func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Pe
 
 	peers := &redisPeers{
 		store: &redimem.RedisMembership{
-			Prefix: "refinery",
+			Prefix: c.GetRedisPrefix(),
 			Pool:   pool,
 		},
 		peers:      make([]string, 1),

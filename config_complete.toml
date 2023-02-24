@@ -219,11 +219,15 @@ Metrics = "honeycomb"
 # Not eligible for live reload.
 # RedisPassword = ""
 
+# RedisPrefix is a string used as a prefix for the keys in redis while storing
+# the peer membership. It might be useful to set this in any situation where multiple refinery clusters
+# or multiple applications want to share a single Redis instance. It may not be blank.
+# Default = "refinery"
+# RedisPrefix = "customPrefix"
+
 # RedisDatabase is an integer indicating the database number to use for the Redis instance storing
 # the peer membership. It might be useful to set this in any situation where multiple refinery clusters
 # or multiple applications want to share a single Redis instance.
-# If the environment variable 'REFINERY_REDIS_DATABASE' is set it takes
-# precedence and this value is ignored.
 # Default = 0
 # RedisDatabase = 1
 
