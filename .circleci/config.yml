@@ -149,7 +149,28 @@ jobs:
           name: build docker images and publish locally
           command: ./build-docker.sh
 
-  publish_docker:
+  publish_docker_to_ecr:
+    executor: aws-cli/default
+    steps:
+      - attach_workspace:
+          at: ~/
+      - aws-cli/setup:
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          aws-region: AWS_REGION
+      - run:
+        name: publish docker image to aws ecr
+        command: |
+          set -x
+
+          export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
+          export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
+
+          aws ecr get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin "${ECR_HOST}"
+          docker push ${ECR_HOST}/refinery-artifact:${TAG}
+
+  publish_docker_to_dockerhub:
     docker:
       - image: cimg/go:1.19
     steps:
@@ -183,6 +204,14 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - publish_docker_to_ecr:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build_binaries
+            - build_docker
+          filters:
+            tags:
+              only: /.*/
       - publish_github:
           context: Honeycomb Secrets for Public Repos
           requires:
@@ -203,7 +232,7 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - publish_docker:
+      - publish_docker_to_dockerhub:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
