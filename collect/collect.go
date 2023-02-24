@@ -557,6 +557,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	// ok, we're sending it, so decorate it first
 	sp.Event.Data["meta.stressed"] = true
 	sp.Event.Data["meta.refinery.reason"] = reason
+	i.addAdditionalAttributes(sp)
 	mergeTraceAndSpanSampleRates(sp, sampleRate, i.Config.GetIsDryRun())
 	i.Transmission.EnqueueSpan(sp)
 }
@@ -572,6 +573,7 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 		sp.Data[field] = keep
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
+			i.addAdditionalAttributes(sp)
 			i.Transmission.EnqueueSpan(sp)
 			return
 		}
@@ -583,6 +585,7 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp) {
 			sp.Data["meta.span_count"] = int64(spanCount)
 		}
+		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
@@ -717,6 +720,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname
 		}
 		mergeTraceAndSpanSampleRates(sp, trace.SampleRate, isDryRun)
+		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
 	}
 }
@@ -752,4 +756,10 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 	defer i.mutex.RUnlock()
 
 	return i.cache.Get(traceID)
+}
+
+func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
+	for k, v := range i.Config.GetAdditionalAttributes() {
+		sp.Data[k] = v
+	}
 }
