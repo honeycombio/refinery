@@ -220,14 +220,16 @@ Metrics = "honeycomb"
 # RedisPassword = ""
 
 # RedisPrefix is a string used as a prefix for the keys in redis while storing
-# the peer membership. It might be useful to set this in any situation where multiple refinery clusters
-# or multiple applications want to share a single Redis instance. It may not be blank.
+# the peer membership. It might be useful to set this in any situation where
+# multiple refinery clusters or multiple applications want to share a single
+# Redis instance. It may not be blank.
 # Default = "refinery"
 # RedisPrefix = "customPrefix"
 
-# RedisDatabase is an integer indicating the database number to use for the Redis instance storing
-# the peer membership. It might be useful to set this in any situation where multiple refinery clusters
-# or multiple applications want to share a single Redis instance.
+# RedisDatabase is an integer from 0-15 indicating the database number to use
+# for the Redis instance storing the peer membership. It might be useful to set
+# this in any situation where multiple refinery clusters or multiple
+# applications want to share a single Redis instance.
 # Default = 0
 # RedisDatabase = 1
 
