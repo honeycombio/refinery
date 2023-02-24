@@ -219,6 +219,14 @@ Metrics = "honeycomb"
 # Not eligible for live reload.
 # RedisPassword = ""
 
+# RedisDatabase is an integer indicating the database number to use for the Redis instance storing
+# the peer membership. It might be useful to set this in any situation where multiple refinery clusters
+# or multiple applications want to share a single Redis instance.
+# If the environment variable 'REFINERY_REDIS_DATABASE' is set it takes
+# precedence and this value is ignored.
+# Default = 0
+# RedisDatabase = 1
+
 # UseTLS enables TLS when connecting to redis for peer cluster membership management, and sets the MinVersion to 1.2.
 # Not eligible for live reload.
 # UseTLS = false
