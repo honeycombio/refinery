@@ -166,10 +166,11 @@ jobs:
 
             export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
             export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
+            export KO_DOCKER_REPO=${ECR_HOST}
 
             aws ecr get-login-password --region us-east-1 \
               | docker login --username AWS --password-stdin "${ECR_HOST}"
-            docker push ${ECR_HOST}/refinery-artifact:${TAG}
+            ./build-docker.sh
 
   publish_docker_to_dockerhub:
     docker:
@@ -183,7 +184,7 @@ jobs:
           environment:
             KO_DOCKER_REPO: honeycombio
           command: |
-            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             ./build-docker.sh
 
 workflows:
