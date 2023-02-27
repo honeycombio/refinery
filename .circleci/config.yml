@@ -150,7 +150,8 @@ jobs:
           command: ./build-docker.sh
 
   publish_docker_to_ecr:
-    executor: aws-cli/default
+    docker:
+      - image: cimg/go:1.19
     steps:
       - setup_googleko
       - checkout
