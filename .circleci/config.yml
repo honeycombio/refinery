@@ -31,7 +31,8 @@ commands:
       - restore_cache:
           keys:
             - v1-googleko
-      - run: go install github.com/google/ko@latest
+      # we're pinning to ko 11.2 because it v0.12 can't push to ecr
+      - run: go install github.com/google/ko@v0.11.2
       - save_cache:
           key: v1-googleko
           paths:
@@ -149,7 +150,31 @@ jobs:
           name: build docker images and publish locally
           command: ./build-docker.sh
 
-  publish_docker:
+  publish_docker_to_ecr:
+    docker:
+      - image: cimg/go:1.19
+    steps:
+      - setup_googleko
+      - checkout
+      - setup_remote_docker
+      - aws-cli/setup:
+          aws-access-key-id: AWS_ACCESS_KEY_ID
+          aws-secret-access-key: AWS_SECRET_ACCESS_KEY
+          aws-region: AWS_REGION
+      - run:
+          name: publish docker image to aws ecr
+          command: |
+            set -x
+
+            export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
+            export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
+            export KO_DOCKER_REPO=${ECR_HOST}
+
+            aws ecr get-login-password --region us-east-1 \
+              | docker login --username AWS --password-stdin "${ECR_HOST}"
+            ./build-docker.sh
+
+  publish_docker_to_dockerhub:
     docker:
       - image: cimg/go:1.19
     steps:
@@ -161,7 +186,7 @@ jobs:
           environment:
             KO_DOCKER_REPO: honeycombio
           command: |
-            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin;
+            echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             ./build-docker.sh
 
 workflows:
@@ -180,6 +205,14 @@ workflows:
       - build_docker:
           requires:
             - test
+          filters:
+            tags:
+              only: /.*/
+      - publish_docker_to_ecr:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build_binaries
+            - build_docker
           filters:
             tags:
               only: /.*/
@@ -203,7 +236,7 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - publish_docker:
+      - publish_docker_to_dockerhub:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
