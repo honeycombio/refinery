@@ -167,7 +167,7 @@ jobs:
 
             export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
             export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
-            export KO_DOCKER_REPO=${ECR_HOST}
+            export KO_DOCKER_REPO=${ECR_HOST}/refinery
 
             aws ecr get-login-password --region us-east-1 \
               | docker login --username AWS --password-stdin "${ECR_HOST}"
