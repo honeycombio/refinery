@@ -31,7 +31,8 @@ commands:
       - restore_cache:
           keys:
             - v1-googleko
-      - run: go install github.com/google/ko@latest
+      # we're pinning to ko 11.2 because it v0.12 can't push to ecr
+      - run: go install github.com/google/ko@v0.11.2
       - save_cache:
           key: v1-googleko
           paths:
@@ -167,7 +168,7 @@ jobs:
 
             export TAG="$(test "${CIRCLE_BRANCH}" == "main" && echo "" || echo "branch-")${BUILD_ID}"
             export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
-            export KO_DOCKER_REPO=${ECR_HOST}/refinery
+            export KO_DOCKER_REPO=${ECR_HOST}
 
             aws ecr get-login-password --region us-east-1 \
               | docker login --username AWS --password-stdin "${ECR_HOST}"
