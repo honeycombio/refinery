@@ -565,6 +565,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount uint, sp *types.Span) {
+	sp.Data["meta.refinery.reason"] = "late"
 	isDryRun := i.Config.GetIsDryRun()
 	if isDryRun {
 		field := i.Config.GetDryRunFieldName()
