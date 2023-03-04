@@ -1,0 +1,64 @@
+############################
+## Sampling Rules Config ##
+############################
+
+# Defaults for the rules configuration are set in file_config.go.
+# For an example file with various sampling methods and their configurations, see rules_complete.toml.
+
+Sampler = "DeterministicSampler"
+SampleRate = 1
+
+[thenewworld]
+	Sampler = "RulesBasedSampler"
+	# Optional, if set to true then the rules will check nested json fields, in the format of parent.child
+	CheckNestedFields = false
+
+	[[thenewworld.rule]]
+		name = "drop healthchecks"
+		drop = true
+		[[thenewworld.rule.condition]]
+			field = "http.route"
+			operator = "="
+			value = "/health-check"
+
+	[[thenewworld.rule]]
+		name = "keep all errors"
+		SampleRate = 1
+		[[thenewworld.rule.condition]]
+			field = "is_error"
+			operator = "="
+			value = true
+
+	[[thenewworld.rule]]
+		name = "big traces get sampled more heavily"
+		SampleRate = 7
+		Scope = "span"
+		[[thenewworld.rule.condition]]
+			field = "meta.span_count"
+			operator = ">"
+			value = 10
+		[[thenewworld.rule.condition]]
+			field = "trace.parent_id"
+			operator = "not-exists"
+
+	[[thenewworld.rule]]
+		name = "sample non-error responses at 1 in 5"
+        SampleRate = 5
+		[[thenewworld.rule.condition]]
+			field = "is_error"
+			operator = "not-exists"
+
+
+	[[thenewworld.rule]]
+		name = "dynamically sample http requests -- express convention"
+		[[thenewworld.rule.condition]]
+			field = "http.route"
+			operator = "exists"
+		[[thenewworld.rule.condition]]
+			field = "http.route"
+			operator = "!="
+			value = ""
+		[[thenewworld.rule.condition]]
+			field = "http.route"
+			operator = "!="
+			value = "/"

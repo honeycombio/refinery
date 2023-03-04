@@ -1,0 +1,13 @@
+{
+    "LIBHONEY_WRITE_KEY": "YOUR KEY GOES HERE",
+    "batch_endpoint": "/1/batch/",
+    "dataset": "loadtest",
+    "event_width": 15,
+    "extras": {},
+    "hosts": {
+        "kube": "http://localhost:31333",
+        "local": "http://localhost:8888",
+        "honeycomb": "https://api.honeycomb.io"
+    },
+    "host": "kube"
+}
