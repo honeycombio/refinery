@@ -498,12 +498,12 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		WithString("environment", ev.Environment)
 
 	// extract trace ID
-	// TODO make trace ID field configurable
 	var traceID string
-	if trID, ok := ev.Data["trace.trace_id"]; ok {
-		traceID = trID.(string)
-	} else if trID, ok := ev.Data["traceId"]; ok {
-		traceID = trID.(string)
+	for _, traceIdFieldName := range r.Config.GetTraceIdFieldNames() {
+		if trID, ok := ev.Data[traceIdFieldName]; ok {
+			traceID = trID.(string)
+			break
+		}
 	}
 	if traceID == "" {
 		// not part of a trace. send along upstream

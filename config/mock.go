@@ -91,6 +91,8 @@ type MockConfig struct {
 	SampleCache                   SampleCacheConfig
 	StressRelief                  StressReliefConfig
 	AdditionalAttributes          map[string]string
+	TraceIdFieldNames				  		[]string
+	ParentIdFieldNames						[]string
 	CfgMetadata                   []ConfigMetadata
 
 	Mux sync.RWMutex
@@ -508,6 +510,19 @@ func (f *MockConfig) GetStressReliefConfig() StressReliefConfig {
 	defer f.Mux.RUnlock()
 
 	return f.StressRelief
+}
+func (f *MockConfig) GetTraceIdFieldNames() []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.TraceIdFieldNames
+}
+
+func (f *MockConfig) GetParentIdFieldNames() []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.ParentIdFieldNames
 }
 
 func (f *MockConfig) GetConfigMetadata() []ConfigMetadata {

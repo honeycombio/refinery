@@ -904,3 +904,63 @@ func TestAdditionalAttributes(t *testing.T) {
 
 	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, c.GetAdditionalAttributes())
 }
+
+func TestHoneycombIdFieldsConfig(t *testing.T) {
+	config, rules := createTempConfigs(t, `
+	TraceIdFieldNames = [
+		"first",
+		"second"
+	]
+	ParentIdFieldNames = [
+		"zero",
+		"one"
+	]
+	[InMemCollector]
+		CacheCapacity=1000
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	[HoneycombLogger]
+		LoggerHoneycombAPI="http://honeycomb.io"
+		LoggerAPIKey="1234"
+		LoggerDataset="loggerDataset"
+		LoggerSamplerEnabled=true
+		LoggerSamplerThroughput=10
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{"first", "second"}, c.GetTraceIdFieldNames())
+	assert.Equal(t, []string{"zero", "one"}, c.GetParentIdFieldNames())
+}
+
+func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
+	config, rules := createTempConfigs(t, `
+	[InMemCollector]
+		CacheCapacity=1000
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	[HoneycombLogger]
+		LoggerHoneycombAPI="http://honeycomb.io"
+		LoggerAPIKey="1234"
+		LoggerDataset="loggerDataset"
+		LoggerSamplerEnabled=true
+		LoggerSamplerThroughput=10
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, []string{"trace.trace_id", "traceId"}, c.GetTraceIdFieldNames())
+	assert.Equal(t, []string{"trace.parent_id", "parentId"}, c.GetParentIdFieldNames())
+}
