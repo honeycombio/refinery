@@ -1,0 +1,59 @@
+######################################
+## Honeycomb Refinery Configuration ##
+######################################
+# created on {{ .Now }} from {{ .Input }}
+
+#########################
+#    Network Section    #
+#########################
+# This section contains network addresses
+Network:
+
+    # ListenAddr is the IP and port on which to listen for incoming events. Incoming
+    # traffic is expected to be HTTP, so if using SSL put something like nginx in
+    # front to do the decryption.
+    {{ formatExample "ipport" 8080 }}
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "ListenAddr" "0.0.0.0:8080" }}
+
+    # GRPCListenAddr is the IP and port on which to listen for incoming events over
+    # gRPC. Incoming traffic is expected to be unencrypted, so if using SSL put
+    # something like nginx in front to do the decryption.
+    {{ formatExample "ipport" 4317 }}
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "GRPCListenAddr" "0.0.0.0:4317" }}
+
+    # PeerListenAddr is the IP and port on which to listen for traffic being
+    # rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
+    # put something like nginx in front to do the decryption. Must be different from
+    # ListenAddr.
+    {{ formatExample "ipport" 8081 }}
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "PeerListenAddr" "0.0.0.0:8081" }}
+
+    # CompressPeerCommunication determines whether refinery will compress span data
+    # it forwards to peers. If it costs money to transmit data between refinery
+    # instances (e.g. they're spread across AWS availability zones), then you
+    # almost certainly want compression enabled to reduce your bill. The option to
+    # disable it is provided as an escape hatch for deployments that value lower CPU
+    # utilization over data transfer costs.
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "CompressPeerCommunication" true }}
+
+
+Keys:
+
+    # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
+    # only applies to events - other Honeycomb API actions will fall through to the
+    # upstream API directly.
+    # Adding keys here causes events arriving with API keys not in this list to be
+    # rejected with an HTTP 401 error. If an API key that is a literal '*' is in the
+    # list, all API keys are accepted.
+    {{ apikeys .Data "APIKeys" 6 "# - \"an actual key\"" "# - \"another key\"" "- \"*\" # accept all keys" }}
+
+
+# AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
+# This field contains text indicating which rule was evaluated that caused the trace to be included.
+{{ reload true }}
+{{ nonDefaultOnly .Data "AddRuleReasonToTrace" true }}
+
