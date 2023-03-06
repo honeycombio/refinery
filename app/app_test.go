@@ -117,6 +117,9 @@ func newStartedApp(
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 		AddHostMetadataToTrace:               enableHostMetadata,
+		TraceIdFieldNames:								 		[]string{"trace.trace_id"},
+		SpanIdFieldNames:								 			[]string{"trace.span_id"},
+		ParentIdFieldNames:								 		[]string{"trace.parent_id"},
 	}
 
 	var err error
