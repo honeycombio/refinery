@@ -1,12 +1,17 @@
-######################################
-## Honeycomb Refinery Configuration ##
-######################################
+{{ box "Honeycomb Refinery Configuration" }}
+#
 # created on {{ .Now }} from {{ .Input }}
 
-#########################
-#    Network Section    #
-#########################
-# This section contains network addresses
+# ConfigurationVersion specifies the file format of this particular configuration file.
+ConfigurationVersion: 2
+
+# MinRefineryVersion specifies the lowest Refinery version capable of loading all of the
+# features used in this file. Refinery will refuse to start if its version is less than
+# this.
+MinRefineryVersion: "v2.0"
+
+{{ box "Network" }}
+# This section contains network addresses.
 Network:
 
     # ListenAddr is the IP and port on which to listen for incoming events. Incoming
@@ -40,7 +45,8 @@ Network:
     {{ reload false }}
     {{ nonDefaultOnly .Data "CompressPeerCommunication" true }}
 
-
+{{ box "Keys" }}
+# This section contains access keys.
 Keys:
 
     # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
@@ -51,9 +57,80 @@ Keys:
     # list, all API keys are accepted.
     {{ apikeys .Data "APIKeys" 6 "# - \"an actual key\"" "# - \"another key\"" "- \"*\" # accept all keys" }}
 
+{{ box "Destinations" }}
+# This section contains the destinations to which data will be sent.
+Destinations:
 
-# AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
-# This field contains text indicating which rule was evaluated that caused the trace to be included.
-{{ reload true }}
-{{ nonDefaultOnly .Data "AddRuleReasonToTrace" true }}
+    # HoneycombAPI is the URL for the upstream Honeycomb API; this is the destination to which
+    # refinery sends all events that it decides to keep.
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "HoneycombAPI" "https://api.honeycomb.io" }}
+
+{{ box "Telemetry" }}
+# This section contains configuration info for the telemetry that Refinery uses to record its own operation.
+Telemetry:
+
+    # AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
+    # This field contains text indicating which rule was evaluated that caused the trace to be included.
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "AddRuleReasonToTrace" true }}
+
+{{ box "Traces" }}
+# This section contains configuration for how traces are managed.
+Traces:
+
+    # SendDelay is a short timer that will be triggered when a trace is complete.
+    # Refinery will wait this duration before actually sending the trace.  The
+    # reason for this short delay is to allow for small network delays or clock
+    # jitters to elapse and any final spans to arrive before actually sending the
+    # trace. Set to 0 for immediate sends.
+    {{ formatExample "duration" "2s" }}
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "SendDelay" "2s" }}
+
+    # BatchTimeout dictates how frequently to send unfulfilled batches. By default
+    # this will use the DefaultBatchTimeout in libhoney as its value, which is 100ms.
+    {{ formatExample "duration" "1s" }}
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "BatchTimeout" "1s" }}
+
+    # TraceTimeout is a long timer; it represents the outside boundary of how long
+    # to wait before sending an incomplete trace. Normally traces are sent when the
+    # root span arrives. Sometimes the root span never arrives (due to crashes or
+    # whatever), and this timer will send a trace even without having received the
+    # root span. If you have particularly long-lived traces you should increase this
+    # timer. Note that this will also increase the memory requirements for refinery.
+    {{ formatExample "duration" "60s" }}
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "TraceTimeout" "60s" }}
+
+    # MaxBatchSize is the maximum number of events to be included in each batch for sending.
+    {{ nonDefaultOnly .Data "MaxBatchSize" 500 }}
+
+    # SendTicker is a short timer; it determines the duration to use to check for traces to send.
+    {{ nonDefaultOnly .Data "SendTicker" "100ms" }}
+
+{{ box "Debugging" }}
+# This section contains configuration used when debugging Refinery.
+Debugging:
+
+    # LoggingLevel is the level above which we should log. Debug is very verbose,
+    # and should only be used in pre-production environments. Info is the
+    # recommended level.
+    # Valid options are "debug", "info", "error", and "panic".
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "LoggingLevel" "debug" }}
+
+    # DebugServiceAddr sets the IP and port the debug service will run on.
+    # The debug service will only run if the command line flag -d is specified.
+    # The debug service runs on the first open port between localhost:6060 and :6069 by default.
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "DebugServiceAddr" "localhost:6060" }}
+
+
+ThingsIHaveNotDoneYet:
+    # UpstreamBufferSize and PeerBufferSize control how large of an event queue to use
+    # when buffering events that will be forwarded to peers or the upstream API.
+    UpstreamBufferSize = 10000
+    PeerBufferSize = 10000
 

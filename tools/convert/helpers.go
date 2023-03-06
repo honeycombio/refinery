@@ -10,19 +10,27 @@ import (
 // map if they're going to be available to the template
 func helpers() template.FuncMap {
 	return map[string]any{
+		"apikeys":        apikeys,
+		"box":            box,
+		"formatExample":  formatExample,
 		"nonDefaultOnly": nonDefaultOnly,
 		"reload":         reload,
-		"formatExample":  formatExample,
-		"apikeys":        apikeys,
 	}
 }
 
+// internal function to compare two "any" values for equivalence
+func equivalent(a, b any) bool {
+	va := fmt.Sprintf("%v", a)
+	vb := fmt.Sprintf("%v", b)
+	return va == vb
+}
+
 // Takes a key that may or may not be in the incoming data, and a default value.
-// If the key exists, AND the value is not equal to the default value,
+// If the key exists, AND the value is not equivalent to the default value,
 // it returns "Key: value" for the value found.
 // Otherwise, it returns "# Key: default" to show a default value.
 func nonDefaultOnly(data map[string]any, key string, def any) string {
-	if value, ok := data[key]; ok && value != def {
+	if value, ok := data[key]; ok && !equivalent(value, def) {
 		return fmt.Sprintf("%s: %v", key, value)
 	}
 	return fmt.Sprintf("# %s: %v", key, def)
@@ -71,4 +79,12 @@ func formatExample(name string, example any) (string, error) {
 	default:
 		return "", fmt.Errorf("requires a known example type")
 	}
+}
+
+func box(s string) string {
+	boxwidth := len(s) + 6
+	result := strings.Repeat("#", boxwidth)
+	result += fmt.Sprintf("\n## %s ##\n", s)
+	result += strings.Repeat("#", boxwidth)
+	return result
 }
