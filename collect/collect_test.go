@@ -982,6 +982,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, "late", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
 	transmission.Mux.RUnlock()
 
 }
