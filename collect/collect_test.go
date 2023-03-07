@@ -1048,8 +1048,8 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 5)
-	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
 	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
 	assert.Equal(t, "foo", transmission.Events[0].Data["name"], "new attribute should appear in data")
 	assert.Equal(t, "bar", transmission.Events[0].Data["other"], "new attribute should appear in data")
 	transmission.Mux.RUnlock()
