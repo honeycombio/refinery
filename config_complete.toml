@@ -572,4 +572,4 @@ MetricsReportingInterval = 3
 
 [[AdditionalAttributes]] 
 	ClusterName="MyCluster"
-	UserDefinedAttribute="Attribute2"
+	environment="production"
