@@ -879,3 +879,28 @@ func TestSampleCacheParametersCuckoo(t *testing.T) {
 	assert.Equal(t, uint(10_000_000), s.DroppedSize)
 	assert.Equal(t, 1*time.Minute, s.SizeCheckInterval)
 }
+
+func TestAdditionalAttributes(t *testing.T) {
+	config, rules := createTempConfigs(t, `
+	[[AdditionalAttributes]] 
+		name="foo"
+		other="bar"
+		another="OneHundred"
+
+	[InMemCollector]
+		CacheCapacity=1000
+
+	[HoneycombMetrics]
+		MetricsHoneycombAPI="http://honeycomb.io"
+		MetricsAPIKey="1234"
+		MetricsDataset="testDatasetName"
+		MetricsReportingInterval=3
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+
+	c, err := NewConfig(config, rules, func(err error) {})
+	assert.NoError(t, err)
+
+	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, c.GetAdditionalAttributes())
+}

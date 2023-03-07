@@ -90,6 +90,7 @@ type MockConfig struct {
 	CacheOverrunStrategy          string
 	SampleCache                   SampleCacheConfig
 	StressRelief                  StressReliefConfig
+	AdditionalAttributes          map[string]string
 	CfgMetadata                   []ConfigMetadata
 
 	Mux sync.RWMutex
@@ -514,4 +515,11 @@ func (f *MockConfig) GetConfigMetadata() []ConfigMetadata {
 	defer f.Mux.RUnlock()
 
 	return f.CfgMetadata
+}
+
+func (f *MockConfig) GetAdditionalAttributes() map[string]string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.AdditionalAttributes
 }

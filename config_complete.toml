@@ -564,3 +564,12 @@ MetricsReportingInterval = 3
 # cluster. If this duration is 0, Refinery will not start in stressed mode.
 # This can provide faster startup at the possible cost of startup instability.
 # MinimumStartupDuration = 3s
+
+
+# AdditionalAttributes is a map that can be used for defining user defined 
+# attributes. This could be used for naming refinery clusters or other uses. 
+# The map is currently limted to both string keys and string values. 
+
+[[AdditionalAttributes]] 
+	ClusterName="MyCluster"
+	environment="production"

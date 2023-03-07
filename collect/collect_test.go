@@ -986,3 +986,72 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	transmission.Mux.RUnlock()
 
 }
+
+func TestAddAdditionalAttributes(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		AdditionalAttributes: map[string]string{
+			"name":  "foo",
+			"other": "bar",
+		},
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+	}
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := cache.NewLegacySentCache(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	var traceID = "trace123"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+	time.Sleep(conf.SendTickerVal * 2)
+
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+	}
+	coll.AddSpan(rootSpan)
+	time.Sleep(conf.SendTickerVal * 5)
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
+	assert.Equal(t, "foo", transmission.Events[0].Data["name"], "new attribute should appear in data")
+	assert.Equal(t, "bar", transmission.Events[0].Data["other"], "new attribute should appear in data")
+	transmission.Mux.RUnlock()
+
+}

@@ -64,6 +64,7 @@ type configContents struct {
 	CacheOverrunStrategy      string
 	SampleCache               SampleCacheConfig  `validate:"required"`
 	StressRelief              StressReliefConfig `validate:"required"`
+	AdditionalAttributes      map[string]string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -197,6 +198,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("StressRelief.StressSamplingRate", 100)
 	c.SetDefault("StressRelief.MinimumActivationDuration", 10*time.Second)
 	c.SetDefault("StressRelief.StartStressedDuration", 3*time.Second)
+	c.SetDefault("AdditionalAttributes", make(map[string]string))
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -1015,4 +1017,11 @@ func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}
 	return ret
+}
+
+func (f *fileConfig) GetAdditionalAttributes() map[string]string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.AdditionalAttributes
 }
