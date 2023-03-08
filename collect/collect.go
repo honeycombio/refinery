@@ -624,13 +624,11 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
 	for _, parentIdFieldName := range i.Config.GetParentIdFieldNames() {
 		parentId := sp.Data[parentIdFieldName]
-		if parentId == nil {
-			continue
-		} else {
-			return true
+		if _, ok := parentId.(string); ok {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func (i *InMemCollector) send(trace *types.Trace, reason string) {
