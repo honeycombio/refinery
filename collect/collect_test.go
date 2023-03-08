@@ -33,6 +33,7 @@ func TestAddRootSpan(t *testing.T) {
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	coll := &InMemCollector{
 		Config:       conf,
@@ -112,6 +113,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
 		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	coll := &InMemCollector{
 		Config:       conf,
@@ -171,6 +173,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	coll := &InMemCollector{
 		Config:       conf,

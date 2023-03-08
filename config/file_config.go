@@ -202,7 +202,7 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("StressRelief.StartStressedDuration", 3*time.Second)
 	c.SetDefault("AdditionalAttributes", make(map[string]string))
 	c.SetDefault("TraceIdFieldNames", []string{"trace.trace_id", "traceId"})
-	c.SetDefault("ParentIdFieldNames", []string{"trace.parent_id, ParentId"})
+	c.SetDefault("ParentIdFieldNames", []string{"trace.parent_id", "parentId"})
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()

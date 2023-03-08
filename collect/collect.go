@@ -515,7 +515,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace.AddSpan(sp)
 
 	// if this is a root span, send the trace
-	if isRootSpan(sp, i.Config) {
+	if i.isRootSpan(sp) {
 		timeout, err := i.Config.GetSendDelay()
 
 		if err != nil {
@@ -583,7 +583,7 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		mergeTraceAndSpanSampleRates(sp, sampleRate, isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
-		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp, i.Config) {
+		if i.Config.GetAddSpanCountToRoot() && i.isRootSpan(sp) {
 			sp.Data["meta.span_count"] = int64(spanCount)
 		}
 		i.addAdditionalAttributes(sp)
@@ -621,17 +621,14 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	}
 }
 
-func isRootSpan(sp *types.Span, c config.Config ) bool {
-	var parentID string
-	for _, ParentSpanId := range c.GetParentIdFieldNames() {
-		if pID, ok := sp.Data[ParentSpanId]; ok {
-			parentID = pID.(string)
-			break
+func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
+	for _, parentIdFieldName := range i.Config.GetParentIdFieldNames() {
+		parentId := sp.Data[parentIdFieldName]
+		if parentId == nil {
+			continue
+		} else {
+			return true
 		}
-	}
-	if parentID == "" {
-		// no parent ID present; it's a root span
-		return true
 	}
 	return false
 }
@@ -711,7 +708,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 		// update the root span (if we have one, which we might not if the trace timed out)
 		// with the final total as of our send time
-		if i.Config.GetAddSpanCountToRoot() && isRootSpan(sp, i.Config) {
+		if i.Config.GetAddSpanCountToRoot() && i.isRootSpan(sp) {
 			sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 		}
 

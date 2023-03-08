@@ -158,26 +158,18 @@ AdditionalErrorFields = [
 ############################
 
 # Set the field names to use for the event ID fields. These fields are used to
-# identify events that are part of the same trace. The default values are
-# "trace.trace_id", "trace.span_id", "trace.parent_id". These values are 
-# compatible with the OpenTelemetry semantic conventions for trace, span, and parent IDs.
-
-# TraceIdFieldNames are used to determine if an event is a Trace or another event type
+# identify events that are part of the same trace. TraceIdFieldNames are used
+# to determine if an event is a Trace or another event type. ParentIdFieldNames
+# are used to determine if an event is a root span or not.
 
 # TraceIdFieldNames = [
-#   "trace.trace_id"
+#   "trace.trace_id",
+#   "traceId"
 # ]
-
-# ParentIdFieldNames are used when determining whether a span is a root span or not
 
 # ParentIdFieldNames = [
-#   "trace.parent_id"
-# ]
-
-# SpanIdFieldNames are not currently used, but might be used in the future
-
-# SpanIdFieldNames = [
-#   "trace.span_id"
+#   "trace.parent_id",
+#   "parentId"
 # ]
 
 ############################
