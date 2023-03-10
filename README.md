@@ -5,6 +5,11 @@
 [![OSS Lifecycle](https://img.shields.io/osslifecycle/honeycombio/refinery?color=success)](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)
 [![Build Status](https://circleci.com/gh/honeycombio/refinery.svg?style=shield)](https://circleci.com/gh/honeycombio/refinery)
 
+## Release Information
+
+For a detailed list of linked pull requests merged in each release, see [CHANGELOG.md](./CHANGELOG.md).
+For more readable information about recent changes, please see [RELEASE_NOTES.md](./RELEASE_NOTES.md).
+
 ## Purpose
 
 Refinery is a trace-aware sampling proxy. It collects spans emitted by your application, gathers them into traces, and examines them as a whole. This enables Refinery to make an intelligent sampling decision (whether to keep or discard) based on the entire trace. Buffering the spans allows you to use fields that might be present in different spans within the trace to influence the sampling decision. For example, the root span might have HTTP status code, whereas another span might have information on whether the request was served from a cache. Using Refinery, you can choose to keep only traces that had a 500 status code and were also served from a cache.

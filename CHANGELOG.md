@@ -5,21 +5,12 @@
 ### Summary
 This is a significant new release of Refinery, with several features designed to help when operating Refinery at scale:
 
-- Changes the cache model for recording the history of kept and dropped traces; changing the SampleCacheStrategy `Type` to `cuckoo` will enable trace decisions to be kept for much longer durations. See the [Sample Cache Strategy](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L447) section of config_complete.toml for more.
-- When refinery shuts down, it will try to remove itself from the peers list, which should shorten the time of instability in the cluster.
-- The algorithm controlling how traces are distributed to nodes in the cluster has been revamped so that traces are much more likely to stay on the same node during reconfiguration. Set the [Peer Management](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L269) `Strategy` to `hash` to enable it.
-- A [Stress Relief](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L493) system has been added. When properly configured, it tracks refinery's load, and if it gets in danger of instability, switches into a high-performance mode designed to relieve stress on the system. When Activated, refinery samples spans at a deterministic rate and will continue doing so until the load is reduced. It also indicates which of its configuration values is most under stress, which should help tune it.
-- Several new metrics have been added and the internal metrics system has been unified. This is to support the stress relief system.
-- Dry Run mode no longer sets the Sample Rate, which means that Honeycomb queries will be accurate in this mode.
-- More Redis configuration is available to make it possible to do blue-green deployments with a single Redis instance.
-- Spans arriving after the trace's sampling decision has already been made will have their `meta.refinery.reason` set to `late` before sending to Honeycomb. This will help in diagnosing timeout issues.
-- An additional field may be specified in rules -- if `Datatype` is specified (must be one of bool, int, float, or string) both the field and the comparison value are converted to that datatype before the comparison. This allows a single rule to handle multiple datatypes; an example is `http.status` which is sometimes a string and sometimes an integer.
-- The names that Refinery uses for traceID and parentID are now configurable.
-
+For details on all of the new features, please see the [new Release Notes document](./RELEASE_NOTES.md)
 New features must be enabled by adjusting configuration.
 
 ### Enhancements
 - feat: Add configuration for trace and parent ID field names (#630) | [Davin Taddeo](https://github.com/tdarwin)
+- feat: allow ability to add new attributes to refinery data (#621) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - feat: Add ability to set Redis database and prefix in config (#614) | [Kent Quirk](https://github.com/kentquirk)
 - perf: Improve performance of stress relief (#604) | [Kent Quirk](https://github.com/kentquirk)
 - feat: Stress Relief system (#594) | [Kent Quirk](https://github.com/kentquirk)
