@@ -1,5 +1,67 @@
 # Refinery Changelog
 
+## 1.20.0 2023-03-10
+
+### Summary
+This is a significant new release of Refinery, with several features designed to help when operating Refinery at scale:
+
+- Changes the cache model for recording the history of kept and dropped traces; changing the SampleCacheStrategy `Type` to `cuckoo` will enable trace decisions to be kept for much longer durations. See the [Sample Cache Strategy](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L447) section of config_complete.toml for more.
+- When refinery shuts down, it will try to remove itself from the peers list, which should shorten the time of instability in the cluster.
+- The algorithm controlling how traces are distributed to nodes in the cluster has been revamped so that traces are much more likely to stay on the same node during reconfiguration. Set the [Peer Management](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L269) `Strategy` to `hash` to enable it.
+- A [Stress Relief](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L493) system has been added. When properly configured, it tracks refinery's load, and if it gets in danger of instability, switches into a high-performance mode designed to relieve stress on the system. When Activated, refinery samples spans at a deterministic rate and will continue doing so until the load is reduced. It also indicates which of its configuration values is most under stress, which should help tune it.
+- Several new metrics have been added and the internal metrics system has been unified. This is to support the stress relief system.
+- Dry Run mode no longer sets the Sample Rate, which means that Honeycomb queries will be accurate in this mode.
+- More Redis configuration is available to make it possible to do blue-green deployments with a single Redis instance.
+- Spans arriving after the trace's sampling decision has already been made will have their `meta.refinery.reason` set to `late` before sending to Honeycomb. This will help in diagnosing timeout issues.
+- An additional field may be specified in rules -- if `Datatype` is specified (must be one of bool, int, float, or string) both the field and the comparison value are converted to that datatype before the comparison. This allows a single rule to handle multiple datatypes; an example is `http.status` which is sometimes a string and sometimes an integer.
+- The names that Refinery uses for traceID and parentID are now configurable.
+
+New features must be enabled by adjusting configuration.
+
+### Enhancements
+- feat: Add configuration for trace and parent ID field names (#630) | [Davin Taddeo](https://github.com/tdarwin)
+- feat: Add ability to set Redis database and prefix in config (#614) | [Kent Quirk](https://github.com/kentquirk)
+- perf: Improve performance of stress relief (#604) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Stress Relief system (#594) | [Kent Quirk](https://github.com/kentquirk)
+- feat: extend and unify metrics system (#593) | [Kent Quirk](https://github.com/kentquirk)
+- feat: allow user to convert datatype if valid (#585) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- feat: Implement alternative sharding using rendezvous hash to improve dynamic scalability (#570) | [Kent Quirk](https://github.com/kentquirk)
+- feat: On shutdown, remove ourself from the peers list (#569) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add cuckoo-based drop cache (#567) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Extract Sent Cache to an interface for future expansion (#561) | [Kent Quirk](https://github.com/kentquirk)
+
+### Bug fixes
+- fix: do not send sample rate in dry run (#611) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- fix: Remove API key logging (#606) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Fix flaky tests, clean up logic on rules (#596) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Add missing done channel to fix build (#573) | [Kent Quirk](https://github.com/kentquirk)
+
+### Maintenance
+- chore: publish should only happen on main (#627) | [Kent Quirk](https://github.com/kentquirk)
+- chore: Publish every build to honeycomb's ecr (#613) | [Kent Quirk](https://github.com/kentquirk)
+- docs: update FieldList (#591) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- docs: add environment variables (#589) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- chore: Update CODEOWNERS (#588) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- chore: Change workflow to use Collections board (#587) | [Kent Quirk](https://github.com/kentquirk)
+- chore: update dependabot (#583) | [Kent Quirk](https://github.com/kentquirk)
+- chore: update validate PR title workflow (#572) | [Purvi Kanal](https://github.com/pkanal)
+- chore: validate PR title (#571) | [Purvi Kanal](https://github.com/pkanal)
+- refactor: Change Router to use TraceServer (#607) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint(deps): bump golang.org/x/net from 0.4.0 to 0.7.0 (#628) | dependabot[bot]
+- maint(deps): bump github.com/pelletier/go-toml/v2 from 2.0.6 to 2.0.7 (#620) | dependabot[bot]
+- maint(deps): bump github.com/honeycombio/husky from 0.19.0 to 0.21.0 (#619) | dependabot[bot]
+- maint(deps): bump github.com/klauspost/compress from 1.15.15 to 1.16.0 (#618) | dependabot[bot]
+- maint(deps): bump github.com/stretchr/testify from 1.8.1 to 1.8.2 (#616) | dependabot[bot]
+- maint(deps): bump github.com/honeycombio/husky from 0.17.0 to 0.19.0 (#603) | dependabot[bot]
+- maint(deps): bump github.com/hashicorp/golang-lru from 0.5.4 to 1.0.1 (#602) | dependabot[bot]
+- maint(deps): bump github.com/klauspost/compress from 1.15.12 to 1.15.15 (#601) | dependabot[bot]
+- maint(deps): bump github.com/honeycombio/dynsampler-go from 0.2.1 to 0.3.0 (#600) | dependabot[bot]
+- maint(deps): bump grpc to 1.52.3 (#599) | [Kent Quirk](https://github.com/kentquirk)
+- maint(deps): bump github.com/spf13/viper from 1.13.0 to 1.15.0 (#597) | dependabot[bot]
+- maint(deps): Bump github.com/prometheus/client_golang from 1.13.0 to 1.14.0 (#576) | dependabot[bot]
+- maint(deps): Bump github.com/tidwall/gjson from 1.14.3 to 1.14.4 (#575) | dependabot[bot]
+- maint(deps): Bump github.com/hashicorp/golang-lru from 0.5.4 to 1.0.1 (#574) | dependabot[bot]
+
 ## 1.19.0 2022-11-09
 
 Adds new query command to retrieve configuration metadata, and also allows for a new (optional) cache management strategy that should be more effective at preventing OOM crashes in situations where memory is under pressure.

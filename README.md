@@ -90,7 +90,7 @@ Note, `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEY
 
 ### Mixing Classic and Environment & Services Rule Definitions
 
-With the change to support environemt and services in Honeycomb, some users will want to support both sending telemetry to a classic dataset and a new environment called the same thing (eg `production`).
+With the change to support Environments in Honeycomb, some users will want to support both sending telemetry to a classic dataset and a new environment called the same thing (eg `production`).
 
 This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for the classic datasets.
 
@@ -127,7 +127,7 @@ For more detail on how this algorithm works, please refer to the `dynsampler` pa
 
 ## Dry Run Mode
 
-When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. By enabling dry run mode, all spans in each trace will be marked with the sampling decision in a field called `refinery_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. You can then run queries in Honeycomb on this field to check your results and verify that the rules are working as intended. Enable dry run mode by adding `DryRun = true` in your configuration, as noted in `rules_complete.toml`.
+When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. By enabling dry run mode, all spans in each trace will be marked with the sampling decision in a field called `refinery_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. The SampleRate will not be changed, but the calculated SampleRate will be stored in a field called `meta.dryrun.sample_rate`. You can then run queries in Honeycomb to check your results and verify that the rules are working as intended. Enable dry run mode by adding `DryRun = true` in your configuration, as noted in `rules_complete.toml`.
 
 When dry run mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain 0, reflecting that we are sending all traces to Honeycomb.
 
