@@ -248,13 +248,14 @@ SampleRate = 1
 
 	# Note that Refinery comparisons are type-dependent. If you are operating in an environment where different
 	# telemetry may send the same field with different types (for example, some systems send status codes as "200"
-	# instead of 200), you may need to create additional rules to cover these cases.
+	# instead of 200), you may wish to use the "datatype" setting to force them all to the same type.
 	[[dataset4.rule]]
 		name = "dynamically sample 200 string responses"
 		[[dataset4.rule.condition]]
 			field = "status_code"
 			operator = "="
 			value = "200"
+			datatype = "int"
 		[dataset4.rule.sampler.EMADynamicSampler]
 			Sampler = "EMADynamicSampler"
 			GoalSampleRate = 15

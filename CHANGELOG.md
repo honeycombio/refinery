@@ -1,5 +1,58 @@
 # Refinery Changelog
 
+## 1.20.0 2023-03-10
+
+### Summary
+This is a significant new release of Refinery, with several features designed to help when operating Refinery at scale:
+
+For details on all of the new features, please see the [new Release Notes document](./RELEASE_NOTES.md)
+New features must be enabled by adjusting configuration.
+
+### Enhancements
+- feat: Add configuration for trace and parent ID field names (#630) | [Davin Taddeo](https://github.com/tdarwin)
+- feat: allow ability to add new attributes to refinery data (#621) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- feat: Add ability to set Redis database and prefix in config (#614) | [Kent Quirk](https://github.com/kentquirk)
+- perf: Improve performance of stress relief (#604) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Stress Relief system (#594) | [Kent Quirk](https://github.com/kentquirk)
+- feat: extend and unify metrics system (#593) | [Kent Quirk](https://github.com/kentquirk)
+- feat: allow user to convert datatype if valid (#585) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- feat: Implement alternative sharding using rendezvous hash to improve dynamic scalability (#570) | [Kent Quirk](https://github.com/kentquirk)
+- feat: On shutdown, remove ourself from the peers list (#569) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add cuckoo-based drop cache (#567) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Extract Sent Cache to an interface for future expansion (#561) | [Kent Quirk](https://github.com/kentquirk)
+
+### Bug fixes
+- fix: do not send sample rate in dry run (#611) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- fix: Remove API key logging (#606) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Fix flaky tests, clean up logic on rules (#596) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Add missing done channel to fix build (#573) | [Kent Quirk](https://github.com/kentquirk)
+
+### Maintenance
+- chore: publish should only happen on main (#627) | [Kent Quirk](https://github.com/kentquirk)
+- chore: Publish every build to honeycomb's ecr (#613) | [Kent Quirk](https://github.com/kentquirk)
+- docs: update FieldList (#591) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- docs: add environment variables (#589) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- chore: Update CODEOWNERS (#588) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- chore: Change workflow to use Collections board (#587) | [Kent Quirk](https://github.com/kentquirk)
+- chore: update dependabot (#583) | [Kent Quirk](https://github.com/kentquirk)
+- chore: update validate PR title workflow (#572) | [Purvi Kanal](https://github.com/pkanal)
+- chore: validate PR title (#571) | [Purvi Kanal](https://github.com/pkanal)
+- refactor: Change Router to use TraceServer (#607) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint(deps): bump golang.org/x/net from 0.4.0 to 0.7.0 (#628) | dependabot[bot]
+- maint(deps): bump github.com/pelletier/go-toml/v2 from 2.0.6 to 2.0.7 (#620) | dependabot[bot]
+- maint(deps): bump github.com/honeycombio/husky from 0.19.0 to 0.21.0 (#619) | dependabot[bot]
+- maint(deps): bump github.com/klauspost/compress from 1.15.15 to 1.16.0 (#618) | dependabot[bot]
+- maint(deps): bump github.com/stretchr/testify from 1.8.1 to 1.8.2 (#616) | dependabot[bot]
+- maint(deps): bump github.com/honeycombio/husky from 0.17.0 to 0.19.0 (#603) | dependabot[bot]
+- maint(deps): bump github.com/hashicorp/golang-lru from 0.5.4 to 1.0.1 (#602) | dependabot[bot]
+- maint(deps): bump github.com/klauspost/compress from 1.15.12 to 1.15.15 (#601) | dependabot[bot]
+- maint(deps): bump github.com/honeycombio/dynsampler-go from 0.2.1 to 0.3.0 (#600) | dependabot[bot]
+- maint(deps): bump grpc to 1.52.3 (#599) | [Kent Quirk](https://github.com/kentquirk)
+- maint(deps): bump github.com/spf13/viper from 1.13.0 to 1.15.0 (#597) | dependabot[bot]
+- maint(deps): Bump github.com/prometheus/client_golang from 1.13.0 to 1.14.0 (#576) | dependabot[bot]
+- maint(deps): Bump github.com/tidwall/gjson from 1.14.3 to 1.14.4 (#575) | dependabot[bot]
+- maint(deps): Bump github.com/hashicorp/golang-lru from 0.5.4 to 1.0.1 (#574) | dependabot[bot]
+
 ## 1.19.0 2022-11-09
 
 Adds new query command to retrieve configuration metadata, and also allows for a new (optional) cache management strategy that should be more effective at preventing OOM crashes in situations where memory is under pressure.
