@@ -189,6 +189,10 @@ type Config interface {
 	GetStressReliefConfig() StressReliefConfig
 
 	GetAdditionalAttributes() map[string]string
+
+	GetTraceIdFieldNames() []string
+
+	GetParentIdFieldNames() []string
 }
 
 type ConfigMetadata struct {

@@ -154,6 +154,25 @@ AdditionalErrorFields = [
 # CacheOverrunStrategy = "impact"
 
 ############################
+## Event ID Field Names   ##
+############################
+
+# Set the field names to use for the event ID fields. These fields are used to
+# identify events that are part of the same trace. TraceIdFieldNames are used
+# to determine if an event is a Trace or another event type. ParentIdFieldNames
+# are used to determine if an event is a root span or not.
+
+# TraceIdFieldNames = [
+#   "trace.trace_id",
+#   "traceId"
+# ]
+
+# ParentIdFieldNames = [
+#   "trace.parent_id",
+#   "parentId"
+# ]
+
+############################
 ## Implementation Choices ##
 ############################
 

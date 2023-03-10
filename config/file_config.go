@@ -65,6 +65,8 @@ type configContents struct {
 	SampleCache               SampleCacheConfig  `validate:"required"`
 	StressRelief              StressReliefConfig `validate:"required"`
 	AdditionalAttributes      map[string]string
+	TraceIdFieldNames				  []string
+	ParentIdFieldNames				[]string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -199,6 +201,8 @@ func NewConfig(config, rules string, errorCallback func(error)) (Config, error) 
 	c.SetDefault("StressRelief.MinimumActivationDuration", 10*time.Second)
 	c.SetDefault("StressRelief.StartStressedDuration", 3*time.Second)
 	c.SetDefault("AdditionalAttributes", make(map[string]string))
+	c.SetDefault("TraceIdFieldNames", []string{"trace.trace_id", "traceId"})
+	c.SetDefault("ParentIdFieldNames", []string{"trace.parent_id", "parentId"})
 
 	c.SetConfigFile(config)
 	err := c.ReadInConfig()
@@ -982,6 +986,20 @@ func (f *fileConfig) GetStressReliefConfig() StressReliefConfig {
 	defer f.mux.RUnlock()
 
 	return f.conf.StressRelief
+}
+
+func (f *fileConfig) GetTraceIdFieldNames() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.TraceIdFieldNames
+}
+
+func (f *fileConfig) GetParentIdFieldNames() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.conf.ParentIdFieldNames
 }
 
 // calculates an MD5 sum for a file that returns the same result as the md5sum command

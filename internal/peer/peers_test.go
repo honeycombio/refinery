@@ -15,6 +15,8 @@ func TestNewPeers(t *testing.T) {
 	c := &config.MockConfig{
 		PeerManagementType: "file",
 		PeerTimeout:        5 * time.Second,
+		TraceIdFieldNames:	[]string{"trace.trace_id"},
+		ParentIdFieldNames:	[]string{"trace.parent_id"},
 	}
 
 	done := make(chan struct{})

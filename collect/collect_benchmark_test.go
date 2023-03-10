@@ -25,6 +25,8 @@ func BenchmarkCollect(b *testing.B) {
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
+		// TraceIdFieldNames: []string{"trace.trace_id", "traceId"},
+		// ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 
 	log := &logger.LogrusLogger{}
