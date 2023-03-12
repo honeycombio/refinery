@@ -49,13 +49,13 @@ Network:
 # This section contains access keys.
 Keys:
 
-    # APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
+    # APIKeys is a list of exact Honeycomb API keys that the proxy will accept. This list
     # only applies to events - other Honeycomb API actions will fall through to the
     # upstream API directly.
     # Adding keys here causes events arriving with API keys not in this list to be
     # rejected with an HTTP 401 error. If an API key that is a literal '*' is in the
     # list, all API keys are accepted.
-    {{ apikeys .Data "APIKeys" 6 "# - \"an actual key\"" "# - \"another key\"" "- \"*\" # accept all keys" }}
+    {{ stringArray .Data "APIKeys" 6 "*" }}
 
 {{ box "Destinations" }}
 # This section contains the destinations to which data will be sent.
@@ -111,7 +111,7 @@ Traces:
     {{ nonDefaultOnly .Data "SendTicker" "100ms" }}
 
 {{ box "Debugging" }}
-# This section contains configuration used when debugging Refinery.
+# This section contains configuration mainly used when debugging Refinery.
 Debugging:
 
     # LoggingLevel is the level above which we should log. Debug is very verbose,
@@ -126,6 +126,50 @@ Debugging:
     # The debug service runs on the first open port between localhost:6060 and :6069 by default.
     {{ reload false }}
     {{ nonDefaultOnly .Data "DebugServiceAddr" "localhost:6060" }}
+
+    # QueryAuthToken, if specified, provides a token that must be specified with
+    # the header "X-Honeycomb-Refinery-Query" in order for a /query request to succeed.
+    # These /query requests are intended for debugging refinery installations and
+    # are not typically needed in normal operation.
+    {{ envvar "REFINERY_QUERY_AUTH_TOKEN" }}
+    # If not specified, the /query endpoints are inaccessible.
+    {{ reload false }}
+    {{ nonEmptyString .Data "QueryAuthToken" "some-private-value" }}
+
+    # AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
+    # This field contains text indicating which rule was evaluated that caused the trace to be included.
+    # Default is true.
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "AddRuleReasonToTrace" true }}
+
+    # AdditionalErrorFields should be a list of span fields that should be included when logging
+    # errors that happen during ingestion of events (for example, the span too large error).
+    # This is primarily useful in trying to track down misbehaving senders in a large installation.
+    # The fields `dataset`, `apihost`, and `environment` are always included.
+    # If a field is not present in the span, it will not be present in the error log.
+    # Default is ["trace.span_id"].
+    {{ reload true }}
+    {{ stringArray .Data "AdditionalErrorFields" 6 "trace.span_id" }}
+
+    # AddSpanCountToRoot adds a new metadata field, `meta.span_count` to root spans to indicate
+    # the number of child spans on the trace at the time the sampling decision was made.
+    # This value is available to the rules-based sampler, making it possible to write rules that
+    # are dependent upon the number of spans in the trace.
+    # Default is true.
+    {{ reload true }}
+    {{ nonDefaultOnly .Data "AddSpanCountToRoot" true }}
+
+
+{{ box "Specialized" }}
+# This section contains special-purpose configuration items that most users will not need to adjust.
+Specialized:
+
+    # EnvironmentCacheTTL is the duration used to retain cache entries that associate
+    # an API key with an environment name.
+    # A cache miss looks up the environment name using the HoneycombAPI config value.
+    {{ formatExample "duration" "1h" }}
+    {{ reload false }}
+    {{ nonDefaultOnly .Data "EnvironmentCacheTTL" "1h" }}
 
 
 ThingsIHaveNotDoneYet:

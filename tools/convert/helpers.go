@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"regexp"
 	"strings"
 )
 
@@ -10,11 +11,13 @@ import (
 // map if they're going to be available to the template
 func helpers() template.FuncMap {
 	return map[string]any{
-		"apikeys":        apikeys,
 		"box":            box,
+		"envvar":         envvar,
 		"formatExample":  formatExample,
 		"nonDefaultOnly": nonDefaultOnly,
+		"nonEmptyString": nonEmptyString,
 		"reload":         reload,
+		"stringArray":    stringArray,
 	}
 }
 
@@ -25,36 +28,69 @@ func equivalent(a, b any) bool {
 	return va == vb
 }
 
+// simplistic YAML formatting of a value
+func yamlFormat(a any) string {
+	switch v := a.(type) {
+	case string:
+		pat := regexp.MustCompile("^[a-zA-z][a-zA-z0-9]*$")
+		if pat.MatchString(v) {
+			return v
+		}
+		return fmt.Sprintf(`"%s"`, v)
+	default:
+		return fmt.Sprintf("%v", a)
+	}
+}
+
 // Takes a key that may or may not be in the incoming data, and a default value.
 // If the key exists, AND the value is not equivalent to the default value,
 // it returns "Key: value" for the value found.
 // Otherwise, it returns "# Key: default" to show a default value.
 func nonDefaultOnly(data map[string]any, key string, def any) string {
 	if value, ok := data[key]; ok && !equivalent(value, def) {
-		return fmt.Sprintf("%s: %v", key, value)
+		return fmt.Sprintf("%s: %s", key, yamlFormat(value))
 	}
-	return fmt.Sprintf("# %s: %v", key, def)
+	return fmt.Sprintf("# %s: %v", key, yamlFormat(def))
 }
 
-// we want to show a good example for API keys if the data is just ["*"],
-// but if the user has done something meaningful we want to keep it
-func apikeys(data map[string]any, key string, indent int, examples ...string) string {
-	var keys []string
+// Takes a key that may or may not be in the incoming data, and an example value.
+// If the key exists, AND the value is not an empty string,
+// it returns "Key: value" for the value found.
+// Otherwise, it returns "# Key: example" to show the example value.
+func nonEmptyString(data map[string]any, key string, example string) string {
+	if value, ok := data[key]; ok && value != "" {
+		return fmt.Sprintf("%s: %v", key, yamlFormat(value))
+	}
+	return fmt.Sprintf(`# %s: %v`, key, yamlFormat(example))
+}
+
+// Prints a nicely-formatted string array; if the incoming string array doesn't exist, or
+// exactly matches the default, then it's commented out.
+func stringArray(data map[string]any, key string, indent int, examples ...string) string {
+	var keys []string = examples
+	var userdata []string
+
+	comment := "# "
 
 	// if the user has keys we want them, unless it's bad or just ["*"]
 	if value, ok := data[key]; ok {
 		if userkeys, ok := value.([]any); ok {
 			for _, u := range userkeys {
-				keys = append(keys, fmt.Sprintf(`- "%s"`, u.(string)))
+				if uv, ok := u.(string); ok {
+					userdata = append(userdata, uv)
+				}
 			}
 		}
+
+		if !equivalent(keys, userdata) {
+			comment = ""
+			keys = userdata
+		}
 	}
-	if len(keys) == 0 || (len(keys) == 1 && keys[0] == `- "*"`) {
-		keys = examples
-	}
-	s := "APIKeys:\n"
+
+	s := fmt.Sprintf("%s%s:\n", comment, key)
 	for _, k := range keys {
-		s += fmt.Sprintf("%s%v\n", strings.Repeat(" ", indent), k)
+		s += fmt.Sprintf("%s%s- %v\n", strings.Repeat(" ", indent), comment, yamlFormat(k))
 	}
 	return s
 }
@@ -65,6 +101,11 @@ func reload(b bool) string {
 		return "# Eligible for live reload."
 	}
 	return "# Not eligible for live reload."
+}
+
+// Describes an environment variable
+func envvar(s string) string {
+	return fmt.Sprintf("# May be specified in the environment as %s.", s)
 }
 
 // Returns standardized format text
