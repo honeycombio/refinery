@@ -56,3 +56,16 @@ dockerize.tar.gz:
 clean:
 	rm -f dockerize.tar.gz
 	rm -f dockerize
+
+.PHONY: verify-licenses
+verify-licenses:
+	go install github.com/google/go-licenses@latest; \
+	go-licenses save ./cmd/refinery --save_path temp; \
+    if diff temp LICENSES > /dev/null; then \
+      echo "Passed"; \
+      rm -rf temp; \
+    else \
+      echo "LICENSES directory must be updated"; \
+      rm -rf temp; \
+      exit 1; \
+    fi; \
