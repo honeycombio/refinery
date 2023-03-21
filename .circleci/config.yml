@@ -49,6 +49,7 @@ jobs:
           keys:
             - v1-dockerize-{{ checksum "Makefile" }}
             - v1-dockerize-
+      - run: make verify-licenses
       - run: make dockerize
       - save_cache:
           key: v1-dockerize-{{ checksum "Makefile" }}
