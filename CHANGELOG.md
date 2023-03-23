@@ -108,7 +108,7 @@ Adds new query command to retrieve configuration metadata, and also allows for a
 ### Enhancements
 
 - Allow adding extra fields to error logs (#514) | [@kentquirk](https://github.com/kentquirk)
-- Allow BatchTimeout to be overriden on the libhoney Transmission (#509) | [@leviwilson](https://github.com/leviwilson)
+- Allow BatchTimeout to be overridden on the libhoney Transmission (#509) | [@leviwilson](https://github.com/leviwilson)
 
 ### Fixes
 
