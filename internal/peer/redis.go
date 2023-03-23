@@ -28,7 +28,7 @@ const (
 	refreshCacheInterval = 3 * time.Second
 
 	// peerEntryTimeout is how long redis will wait before expiring a peer that
-	// doesn't check in. The ratio of refresh to peer timout should be 1/3. Redis
+	// doesn't check in. The ratio of refresh to peer timeout should be 1/3. Redis
 	// timeouts are in seconds and entries can last up to 2 seconds longer than
 	// their expected timeout (in my load testing), so the lower bound for this
 	// timer should be ... 5sec?
