@@ -22,7 +22,7 @@ const (
 	// refreshCacheInterval is how frequently this host will re-register itself
 	// with Redis. This should happen about 3x during each timeout phase in order
 	// to allow multiple timeouts to fail and yet still keep the host in the mix.
-	// Falling out of Redis will result in re-hashing the host-trace afinity and
+	// Falling out of Redis will result in re-hashing the host-trace affinity and
 	// will cause broken traces for those that fall on both sides of the rehashing.
 	// This is why it's important to ensure hosts stay in the pool.
 	refreshCacheInterval = 3 * time.Second
