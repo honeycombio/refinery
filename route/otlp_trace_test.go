@@ -353,7 +353,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	t.Run("events created with non-legacy keys lookup and use envionment name", func(t *testing.T) {
+	t.Run("events created with non-legacy keys lookup and use environment name", func(t *testing.T) {
 		apiKey := "my-api-key"
 		md := metadata.New(map[string]string{"x-honeycomb-team": apiKey})
 		ctx := metadata.NewIncomingContext(context.Background(), md)
