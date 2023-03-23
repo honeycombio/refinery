@@ -4,6 +4,9 @@ jobs:
   apply-labels:
     runs-on: ubuntu-latest
     name: Apply common project labels
+    permissions:
+      pull-requests: write
+
     steps:
       - uses: honeycombio/oss-management-actions/labels@v1
         with:
