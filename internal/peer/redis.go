@@ -273,7 +273,7 @@ func publicAddr(c config.Config) (string, error) {
 		myIdentifier = redisIdentifier
 		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
 	} else {
-		// Otherwise, determine idenntifier from network interface.
+		// Otherwise, determine identifier from network interface.
 		myIdentifier, err = getIdentifierFromInterfaces(c)
 		if err != nil {
 			return "", err
