@@ -99,7 +99,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	// TODO: (MG) figuure out how we can test JSON created from OTLP requests
+	// TODO: (MG) figure out how we can test JSON created from OTLP requests
 	// Below is example, but requires significant usage of collector, sampler, conf, etc
 	t.Run("creates events for span events", func(t *testing.T) {
 		t.Skip("need additional work to support inspecting outbound JSON")
