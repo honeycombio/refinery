@@ -30,7 +30,7 @@ Additional RAM and CPU can be used by increasing configuration values to have a 
 
 ### Builds
 
-Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/refinery). Released versions of Refinery are available via Github under the Releases tab.
+Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/refinery). Released versions of Refinery are available via GitHub under the Releases tab.
 
 ## Configuration
 
