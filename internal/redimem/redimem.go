@@ -114,7 +114,7 @@ func (rm *RedisMembership) Unregister(ctx context.Context, memberName string) er
 
 // GetMembers reaches out to Redis to retrieve a list of all members in the
 // cluster. It does this multiple times (how many is configured on
-// initializition) and takes the union of the results returned.
+// initialization) and takes the union of the results returned.
 func (rm *RedisMembership) GetMembers(ctx context.Context) ([]string, error) {
 	err := rm.validateDefaults()
 	if err != nil {
