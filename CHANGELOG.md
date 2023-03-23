@@ -365,7 +365,7 @@ Do **not** use this version with Environment & Services.
 ### Maintenance
 
 - Adds Stalebot (#321) [@JamieDanielson](https://github.com/JamieDanielson)
-- Switch licecycle terminology to maintained (#315) [cartermp](https://github.com/cartermp)
+- Switch lifecycle terminology to maintained (#315) [cartermp](https://github.com/cartermp)
 - Add NOTICE (#314) [cartermp](https://github.com/cartermp)
 - Add issue and PR templates (#307) [@vreynolds](https://github.com/vreynolds)
 - Add OSS lifecycle badge (#304) [@vreynolds](https://github.com/vreynolds)
