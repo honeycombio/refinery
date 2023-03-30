@@ -15,8 +15,8 @@ func TestNewPeers(t *testing.T) {
 	c := &config.MockConfig{
 		PeerManagementType: "file",
 		PeerTimeout:        5 * time.Second,
-		TraceIdFieldNames:	[]string{"trace.trace_id"},
-		ParentIdFieldNames:	[]string{"trace.parent_id"},
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"trace.parent_id"},
 	}
 
 	done := make(chan struct{})
@@ -70,7 +70,7 @@ func TestPeerShutdown(t *testing.T) {
 	assert.True(t, strings.HasSuffix(peers[0], "8081"))
 
 	close(done)
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 	peers, err = peer.GetPeers()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(peers))

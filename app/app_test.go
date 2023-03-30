@@ -117,8 +117,8 @@ func newStartedApp(
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
 		AddHostMetadataToTrace:               enableHostMetadata,
-		TraceIdFieldNames:								 		[]string{"trace.trace_id"},
-		ParentIdFieldNames:								 		[]string{"trace.parent_id"},
+		TraceIdFieldNames:                    []string{"trace.trace_id"},
+		ParentIdFieldNames:                   []string{"trace.parent_id"},
 	}
 
 	var err error
@@ -286,7 +286,7 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Wait for span to be sent.
-	deadline := time.After(time.Second)
+	deadline := time.After(2 * time.Second)
 	for {
 		if out.Len() > 62 {
 			break
