@@ -22,13 +22,13 @@ const (
 	// refreshCacheInterval is how frequently this host will re-register itself
 	// with Redis. This should happen about 3x during each timeout phase in order
 	// to allow multiple timeouts to fail and yet still keep the host in the mix.
-	// Falling out of Redis will result in re-hashing the host-trace afinity and
+	// Falling out of Redis will result in re-hashing the host-trace affinity and
 	// will cause broken traces for those that fall on both sides of the rehashing.
 	// This is why it's important to ensure hosts stay in the pool.
 	refreshCacheInterval = 3 * time.Second
 
 	// peerEntryTimeout is how long redis will wait before expiring a peer that
-	// doesn't check in. The ratio of refresh to peer timout should be 1/3. Redis
+	// doesn't check in. The ratio of refresh to peer timeout should be 1/3. Redis
 	// timeouts are in seconds and entries can last up to 2 seconds longer than
 	// their expected timeout (in my load testing), so the lower bound for this
 	// timer should be ... 5sec?
@@ -273,7 +273,7 @@ func publicAddr(c config.Config) (string, error) {
 		myIdentifier = redisIdentifier
 		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
 	} else {
-		// Otherwise, determine idenntifier from network interface.
+		// Otherwise, determine identifier from network interface.
 		myIdentifier, err = getIdentifierFromInterfaces(c)
 		if err != nil {
 			return "", err

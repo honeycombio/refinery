@@ -22,7 +22,7 @@ import (
 var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
 
 type Collector interface {
-	// AddSpan adds a span to be collected, buffered, and merged in to a trace.
+	// AddSpan adds a span to be collected, buffered, and merged into a trace.
 	// Once the trace is "complete", it'll be passed off to the sampler then
 	// scheduled for transmission.
 	AddSpan(*types.Span) error
@@ -611,7 +611,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 		tempSampleRate = 1
 	}
 
-	// if spans are already sampled, take that in to account when computing
+	// if spans are already sampled, take that into account when computing
 	// the final rate
 	if dryRunMode {
 		sp.Data["meta.dryrun.sample_rate"] = tempSampleRate * traceSampleRate

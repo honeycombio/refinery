@@ -17,8 +17,8 @@ jobs:
           start-date: '2021-09-01T00:00:00Z'
           stale-issue-message: 'Marking this issue as stale because it has been open 14 days with no activity. Please add a comment if this is still an ongoing issue; otherwise this issue will be automatically closed in 7 days.'
           stale-pr-message: 'Marking this PR as stale because it has been open 30 days with no activity. Please add a comment if this PR is still relevant; otherwise this PR will be automatically closed in 7 days.'
-          close-issue-message: 'Closing this issue due to inactivity. Please see our [Honeycomb OSS Lifecyle and Practices](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md).'
-          close-pr-message: 'Closing this PR due to inactivity. Please see our [Honeycomb OSS Lifecyle and Practices](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md).'
+          close-issue-message: 'Closing this issue due to inactivity. Please see our [Honeycomb OSS Lifecycle and Practices](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md).'
+          close-pr-message: 'Closing this PR due to inactivity. Please see our [Honeycomb OSS Lifecycle and Practices](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md).'
           days-before-issue-stale: 14
           days-before-pr-stale: 30
           days-before-issue-close: 7

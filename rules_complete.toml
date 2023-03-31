@@ -63,7 +63,7 @@ SampleRate = 1
 	# Eligible for live reload.
 	FieldList = ["request.method", "http.target", "response.status_code"]
 
-	# UseTraceLength will add the number of spans in the trace in to the dynamic
+	# UseTraceLength will add the number of spans in the trace into the dynamic
 	# sampler as part of the key. The number of spans is exact, so if there are
 	# normally small variations in trace length you may want to leave this off. If
 	# traces are consistent lengths and changes in trace length is a useful
@@ -139,7 +139,7 @@ SampleRate = 1
 	# Eligible for live reload.
 	FieldList = ["request.method", "http.target", "response.status_code"]
 
-	# UseTraceLength will add the number of spans in the trace in to the dynamic
+	# UseTraceLength will add the number of spans in the trace into the dynamic
 	# sampler as part of the key. The number of spans is exact, so if there are
 	# normally small variations in trace length you may want to leave this off. If
 	# traces are consistent lengths and changes in trace length is a useful
