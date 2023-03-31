@@ -769,7 +769,7 @@ func (c *environmentCache) get(key string) (string, error) {
 	}
 
 	// get write lock early so we don't execute getFn in parallel so the
-	// the result will be cached before the next lock is aquired to prevent
+	// the result will be cached before the next lock is acquired to prevent
 	// subsequent calls to getFn for the same key
 	c.mutex.Lock()
 	defer c.mutex.Unlock()

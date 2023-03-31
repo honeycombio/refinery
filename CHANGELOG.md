@@ -108,7 +108,7 @@ Adds new query command to retrieve configuration metadata, and also allows for a
 ### Enhancements
 
 - Allow adding extra fields to error logs (#514) | [@kentquirk](https://github.com/kentquirk)
-- Allow BatchTimeout to be overriden on the libhoney Transmission (#509) | [@leviwilson](https://github.com/leviwilson)
+- Allow BatchTimeout to be overridden on the libhoney Transmission (#509) | [@leviwilson](https://github.com/leviwilson)
 
 ### Fixes
 
@@ -365,7 +365,7 @@ Do **not** use this version with Environment & Services.
 ### Maintenance
 
 - Adds Stalebot (#321) [@JamieDanielson](https://github.com/JamieDanielson)
-- Switch licecycle terminology to maintained (#315) [cartermp](https://github.com/cartermp)
+- Switch lifecycle terminology to maintained (#315) [cartermp](https://github.com/cartermp)
 - Add NOTICE (#314) [cartermp](https://github.com/cartermp)
 - Add issue and PR templates (#307) [@vreynolds](https://github.com/vreynolds)
 - Add OSS lifecycle badge (#304) [@vreynolds](https://github.com/vreynolds)
