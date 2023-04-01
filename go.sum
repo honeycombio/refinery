@@ -186,8 +186,8 @@ github.com/hashicorp/golang-lru v0.5.4 h1:YDjusn29QI/Das2iO9M0BHnIbxPeyuCHsjMW+l
 github.com/hashicorp/golang-lru v0.5.4/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
-github.com/honeycombio/dynsampler-go v0.3.0 h1:JttJgzOgFphbPLdsXhnNhBOqOQw89iwQbTasu3ZgLlE=
-github.com/honeycombio/dynsampler-go v0.3.0/go.mod h1:cwCXnr2kvMGtZk3+HaaKbnLym+cJduB6tiukUOyotxU=
+github.com/honeycombio/dynsampler-go v0.4.0 h1:80Hj9M9r23deTUXV7A22pY07agtCxKBjXn/SeC4w5zc=
+github.com/honeycombio/dynsampler-go v0.4.0/go.mod h1:8AoR25Xt1YR6LcCoPIm2rkozXXjSPCb/xFp5g8BSsXo=
 github.com/honeycombio/husky v0.21.0 h1:FUvLfxDeNFi/GfSx7FXtQ6sq14WxvN0Fobnz+89ctkw=
 github.com/honeycombio/husky v0.21.0/go.mod h1:q3mqYSL1/0Vjd2AIReV2QisUQCsH+ahUU0ILwuIJ5f0=
 github.com/honeycombio/libhoney-go v1.18.0 h1:OYHOP381r3Ea76BhUYeza8PUTMDp8MByoOxDn3qtEq8=
