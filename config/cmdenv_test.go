@@ -40,7 +40,7 @@ func TestApplyCmdEnvTags(t *testing.T) {
 	}{
 		{"normal", &TestFielder{"foo", 1, 2.3}, &TestConfig{}, &TestConfig{"foo", 1, 2.3, ""}, false},
 		{"bad", &TestFielder{"foo", 1, 2.3}, &BadTestConfig1{}, &BadTestConfig1{}, true},
-		{"type mismatch", &TestFielder{"foo", 1, 2.3}, &BadTestConfig2{17}, &BadTestConfig2{17}, false},
+		{"type mismatch", &TestFielder{"foo", 1, 2.3}, &BadTestConfig2{17}, &BadTestConfig2{17}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
