@@ -10,6 +10,8 @@ type MockLogger struct {
 	Events []*MockLoggerEvent
 }
 
+var _ = Logger((*MockLogger)(nil))
+
 type MockLoggerEvent struct {
 	l      *MockLogger
 	level  config.HoneycombLevel
@@ -28,6 +30,14 @@ func (l *MockLogger) Info() Entry {
 	return &MockLoggerEvent{
 		l:      l,
 		level:  InfoLevel,
+		Fields: make(map[string]interface{}),
+	}
+}
+
+func (l *MockLogger) Warn() Entry {
+	return &MockLoggerEvent{
+		l:      l,
+		level:  WarnLevel,
 		Fields: make(map[string]interface{}),
 	}
 }

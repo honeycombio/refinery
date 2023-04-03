@@ -15,6 +15,8 @@ type LogrusLogger struct {
 	level  logrus.Level
 }
 
+var _ = Logger((*LogrusLogger)(nil))
+
 type LogrusEntry struct {
 	entry *logrus.Entry
 	level logrus.Level
@@ -45,6 +47,17 @@ func (l *LogrusLogger) Info() Entry {
 	return &LogrusEntry{
 		entry: logrus.NewEntry(l.logger),
 		level: logrus.InfoLevel,
+	}
+}
+
+func (l *LogrusLogger) Warn() Entry {
+	if !l.logger.IsLevelEnabled(logrus.WarnLevel) {
+		return nullEntry
+	}
+
+	return &LogrusEntry{
+		entry: logrus.NewEntry(l.logger),
+		level: logrus.WarnLevel,
 	}
 }
 
