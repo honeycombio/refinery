@@ -257,7 +257,7 @@ func TestAppIntegration(t *testing.T) {
 		case <-time.After(time.Millisecond):
 		}
 	}
-	assert.Equal(t, `{"data":{"foo":"bar","trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
@@ -298,7 +298,7 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 		case <-time.After(time.Millisecond):
 		}
 	}
-	assert.Equal(t, `{"data":{"foo":"bar","trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
 }
 
 func TestPeerRouting(t *testing.T) {
@@ -348,23 +348,24 @@ func TestPeerRouting(t *testing.T) {
 		APIHost:    "http://api.honeycomb.io",
 		Timestamp:  now,
 		Data: map[string]interface{}{
-			"trace.trace_id":  "1",
-			"trace.span_id":   "0",
-			"trace.parent_id": "0000000000",
-			"key":             "value",
-			"field0":          float64(0),
-			"field1":          float64(1),
-			"field2":          float64(2),
-			"field3":          float64(3),
-			"field4":          float64(4),
-			"field5":          float64(5),
-			"field6":          float64(6),
-			"field7":          float64(7),
-			"field8":          float64(8),
-			"field9":          float64(9),
-			"field10":         float64(10),
-			"long":            "this is a test of the emergency broadcast system",
-			"foo":             "bar",
+			"trace.trace_id":                     "1",
+			"trace.span_id":                      "0",
+			"trace.parent_id":                    "0000000000",
+			"key":                                "value",
+			"field0":                             float64(0),
+			"field1":                             float64(1),
+			"field2":                             float64(2),
+			"field3":                             float64(3),
+			"field4":                             float64(4),
+			"field5":                             float64(5),
+			"field6":                             float64(6),
+			"field7":                             float64(7),
+			"field8":                             float64(8),
+			"field9":                             float64(9),
+			"field10":                            float64(10),
+			"long":                               "this is a test of the emergency broadcast system",
+			"meta.refinery.original_sample_rate": uint(2),
+			"foo":                                "bar",
 		},
 		Metadata: map[string]any{
 			"api_host":    "http://api.honeycomb.io",
@@ -432,7 +433,7 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 		}
 	}
 
-	expectedSpan := `{"data":{"foo":"bar","meta.refinery.local_hostname":"%s","trace.trace_id":"1"},"dataset":"dataset"}` + "\n"
+	expectedSpan := `{"data":{"foo":"bar","meta.refinery.local_hostname":"%s","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}` + "\n"
 	assert.Equal(t, fmt.Sprintf(expectedSpan, hostname), out.String())
 }
 
@@ -488,8 +489,9 @@ func TestEventsEndpoint(t *testing.T) {
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
 			Data: map[string]interface{}{
-				"trace.trace_id": "1",
-				"foo":            "bar",
+				"trace.trace_id":                     "1",
+				"foo":                                "bar",
+				"meta.refinery.original_sample_rate": 10,
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -604,8 +606,9 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
 			Data: map[string]interface{}{
-				"trace.trace_id": "1",
-				"foo":            "bar",
+				"trace.trace_id":                     "1",
+				"foo":                                "bar",
+				"meta.refinery.original_sample_rate": 10,
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
