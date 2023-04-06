@@ -307,9 +307,9 @@ func TestDryRunMode(t *testing.T) {
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
 			SampleRate: 10,
 		},
-		SendTickerVal:   2 * time.Millisecond,
-		DryRun:          true,
-		DryRunFieldName: field,
+		SendTickerVal:      2 * time.Millisecond,
+		DryRun:             true,
+		DryRunFieldName:    field,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	samplerFactory := &sample.SamplerFactory{
@@ -516,7 +516,7 @@ func TestSampleConfigReload(t *testing.T) {
 		GetTraceTimeoutVal:                   60 * time.Second,
 		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:                        2 * time.Millisecond,
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		ParentIdFieldNames:                   []string{"trace.parent_id", "parentId"},
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
 	}
 
@@ -689,7 +689,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:        2 * time.Millisecond,
 		CacheOverrunStrategy: "impact",
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 	}
 	coll := &InMemCollector{
 		Config:       conf,
