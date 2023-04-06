@@ -106,11 +106,6 @@ func (s *StressRelief) Start() error {
 	return nil
 }
 
-func (s *StressRelief) Stop() error {
-	close(s.Done)
-	return nil
-}
-
 func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
