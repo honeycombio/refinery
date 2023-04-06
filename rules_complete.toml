@@ -280,7 +280,7 @@ SampleRate = 1
 			operator = "="
 			value = "users"
 		[[dataset4.rule.condition]]
-			field = "meta.span_type"
+			field = "trace.parent_id"
 			operator = "="
 			value = "root"
 
