@@ -491,7 +491,7 @@ func TestEventsEndpoint(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.trace_id":                     "1",
 				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": 10,
+				"meta.refinery.original_sample_rate": uint(10),
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -538,8 +538,9 @@ func TestEventsEndpoint(t *testing.T) {
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
 			Data: map[string]interface{}{
-				"trace.trace_id": "1",
-				"foo":            "bar",
+				"trace.trace_id":                     "1",
+				"foo":                                "bar",
+				"meta.refinery.original_sample_rate": uint(10),
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -608,7 +609,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.trace_id":                     "1",
 				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": 10,
+				"meta.refinery.original_sample_rate": uint(10),
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -655,8 +656,9 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
 			Data: map[string]interface{}{
-				"trace.trace_id": "1",
-				"foo":            "bar",
+				"trace.trace_id":                     "1",
+				"foo":                                "bar",
+				"meta.refinery.original_sample_rate": uint(10),
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
