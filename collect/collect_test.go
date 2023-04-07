@@ -158,7 +158,28 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	transmission.Mux.RLock()
 	assert.Greater(t, len(transmission.Events), 0, "should be some events transmitted")
-	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"], "metadata should be populated with original sample rate")
+	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"],
+		"metadata should be populated with original sample rate")
+	transmission.Mux.RUnlock()
+
+	span := &types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1000),
+		Event: types.Event{
+			Dataset:    "aoeu",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0,
+			Data:       make(map[string]interface{}),
+		},
+	}
+
+	coll.AddSpan(span)
+
+	time.Sleep(conf.SendTickerVal * 2)
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
+	assert.Nil(t, transmission.Events[1].Data["meta.refinery.original_sample_rate"],
+		"metadata should not be populated when zero")
 	transmission.Mux.RUnlock()
 }
 
