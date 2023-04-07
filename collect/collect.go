@@ -597,7 +597,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	tempSampleRate := sp.SampleRate
 	if sp.SampleRate != 0 {
 		// Write down the original sample rate so that that information
-		//is more easily recovered
+		// is more easily recovered
 		sp.Data["meta.refinery.original_sample_rate"] = sp.SampleRate
 	}
 
