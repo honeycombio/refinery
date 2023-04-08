@@ -48,7 +48,7 @@ func TestErrorReloading(t *testing.T) {
 
 	ch := make(chan interface{}, 1)
 
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) { ch <- 1 })
+	c, err := getConfig([]string{"--config", configFile.Name(), "--rules", rulesFile.Name()})
 
 	if err != nil {
 		t.Error(err)

@@ -6,9 +6,10 @@ import (
 )
 
 type TestFielder struct {
-	S string
-	I int
-	F float64
+	S  string
+	S2 string
+	I  int
+	F  float64
 }
 
 // implement getFielder
@@ -21,6 +22,10 @@ type TestConfig struct {
 	It int     `cmdenv:"I"`
 	Fl float64 `cmdenv:"F"`
 	No string
+}
+
+type FallbackConfig struct {
+	St string `cmdenv:"S,S2"`
 }
 
 type BadTestConfig1 struct {
@@ -38,9 +43,11 @@ func TestApplyCmdEnvTags(t *testing.T) {
 		want    any
 		wantErr bool
 	}{
-		{"normal", &TestFielder{"foo", 1, 2.3}, &TestConfig{}, &TestConfig{"foo", 1, 2.3, ""}, false},
-		{"bad", &TestFielder{"foo", 1, 2.3}, &BadTestConfig1{}, &BadTestConfig1{}, true},
-		{"type mismatch", &TestFielder{"foo", 1, 2.3}, &BadTestConfig2{17}, &BadTestConfig2{17}, true},
+		{"normal", &TestFielder{"foo", "bar", 1, 2.3}, &TestConfig{}, &TestConfig{"foo", 1, 2.3, ""}, false},
+		{"bad", &TestFielder{"foo", "bar", 1, 2.3}, &BadTestConfig1{}, &BadTestConfig1{}, true},
+		{"type mismatch", &TestFielder{"foo", "bar", 1, 2.3}, &BadTestConfig2{17}, &BadTestConfig2{17}, true},
+		{"fallback1", &TestFielder{"foo", "bar", 1, 2.3}, &FallbackConfig{}, &FallbackConfig{"foo"}, false},
+		{"fallback2", &TestFielder{"", "bar", 1, 2.3}, &FallbackConfig{}, &FallbackConfig{"bar"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
