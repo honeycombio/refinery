@@ -23,6 +23,7 @@ func TestErrorReloading(t *testing.T) {
 	assert.NoError(t, err)
 
 	dummy := []byte(`
+	ConfigReloadInterval="1s"
 	[InMemCollector]
 		CacheCapacity=1000
 
@@ -46,13 +47,11 @@ func TestErrorReloading(t *testing.T) {
 	assert.NoError(t, err)
 	rulesFile.Close()
 
+	opts, err := NewCmdEnvOptions([]string{"--config", configFile.Name(), "--rules_config", rulesFile.Name()})
+	assert.NoError(t, err)
 	ch := make(chan interface{}, 1)
-
-	c, err := getConfig([]string{"--config", configFile.Name(), "--rules", rulesFile.Name()})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := NewConfig(opts, func(err error) { ch <- 1 })
+	assert.NoError(t, err)
 
 	d, name, _ := c.GetSamplerConfigForDataset("dataset5")
 	if _, ok := d.(DeterministicSamplerConfig); ok {

@@ -1,25 +1,44 @@
 package config
 
 import (
-	"crypto/md5"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"strings"
 	"sync"
 	"time"
 )
 
+// In order to be able to unmarshal "15s" etc. into time.Duration, we need to
+// define a new type and implement MarshalText and UnmarshalText.
+// We want this to be just inside config, though, so the accessors will still
+// return time.Duration.
+type Duration time.Duration
+
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(time.Duration(d).String()), nil
+}
+
+func (d *Duration) UnmarshalText(text []byte) error {
+	dur, err := time.ParseDuration(string(text))
+	if err != nil {
+		return err
+	}
+	*d = Duration(dur)
+	return nil
+}
+
 type fileConfig struct {
 	// config        *viper.Viper
 	// rules         *viper.Viper
 	mainConfig    *configContents
+	mainHash      string
 	rulesConfig   *rulesContents
+	rulesHash     string
 	opts          *CmdEnv
 	callbacks     []func()
 	errorCallback func(error)
+	done          chan struct{}
+	ticker        *time.Ticker
 	mux           sync.RWMutex
 	lastLoadTime  time.Time
 }
@@ -35,11 +54,11 @@ type configContents struct {
 	LoggingLevel              string                         `default:"info" validate:"required,oneof= debug info warn error"`
 	Collector                 string                         `default:"InMemCollector" validate:"required,oneof= InMemCollector"`
 	Metrics                   string                         `default:"honeycomb" validate:"required,oneof= prometheus honeycomb"`
-	SendDelay                 time.Duration                  `default:"2s" validate:"required"`
-	BatchTimeout              time.Duration                  `default:"100ms"`
-	TraceTimeout              time.Duration                  `default:"60s" validate:"required"`
+	SendDelay                 Duration                       `default:"2s" validate:"required"`
+	BatchTimeout              Duration                       `default:"100ms"`
+	TraceTimeout              Duration                       `default:"60s" validate:"required"`
 	MaxBatchSize              uint                           `default:"500" validate:"required"`
-	SendTicker                time.Duration                  `default:"100ms" validate:"required"`
+	SendTicker                Duration                       `default:"100ms" validate:"required"`
 	UpstreamBufferSize        int                            `default:"10_000" validate:"required"`
 	PeerBufferSize            int                            `default:"10_000" validate:"required"`
 	DebugServiceAddr          string                         ``
@@ -47,7 +66,7 @@ type configContents struct {
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
 	AddHostMetadataToTrace    bool                           ``
 	AddRuleReasonToTrace      bool                           ``
-	EnvironmentCacheTTL       time.Duration                  `default:"1h"`
+	EnvironmentCacheTTL       Duration                       `default:"1h"`
 	DatasetPrefix             string                         ``
 	QueryAuthToken            string                         `cmdenv:"QueryAuthToken"`
 	AdditionalErrorFields     []string                       `default:"[\"trace.span_id\"]"`
@@ -58,6 +77,7 @@ type configContents struct {
 	AdditionalAttributes      map[string]string              `default:"{}"`
 	TraceIdFieldNames         []string                       `default:"[\"trace.trace_id\",\"traceId\"]"`
 	ParentIdFieldNames        []string                       `default:"[\"trace.parent_id\",\"parentId\"]"`
+	ConfigReloadInterval      Duration                       `default:"30s"`
 	GRPCServerParameters      *GRPCServerParameters
 	HoneycombLogger           *HoneycombLoggerConfig
 	HoneycombMetrics          *HoneycombMetricsConfig
@@ -83,7 +103,7 @@ type HoneycombLoggerConfig struct {
 	LoggerAPIKey            string         `cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey" validate:"required"`
 	LoggerDataset           string         `default:"Refinery Logs" validate:"required"`
 	LoggerSamplerEnabled    bool           ``
-	LoggerSamplerThroughput int            ``
+	LoggerSamplerThroughput int            `default:"5"`
 	Level                   HoneycombLevel `default:"Warn"`
 }
 
@@ -99,75 +119,131 @@ type HoneycombMetricsConfig struct {
 }
 
 type PeerManagementConfig struct {
-	Type                    string        `default:"file" validate:"required,oneof= file redis"`
-	Peers                   []string      `default:"[\"http://127.0.0.1:8081\"]" validate:"dive,url"`
-	RedisHost               string        `cmdenv:"RedisHost"`
-	RedisUsername           string        `cmdenv:"RedisUsername"`
-	RedisPassword           string        `cmdenv:"RedisPassword"`
-	RedisPrefix             string        `default:"refinery" validate:"required"`
-	RedisDatabase           int           `validate:"gte=0,lte=15"`
-	RedisIdentifier         string        ``
-	UseTLS                  bool          ``
-	UseTLSInsecure          bool          ``
-	IdentifierInterfaceName string        ``
-	UseIPV6Identifier       bool          ``
-	Timeout                 time.Duration `default:"5s" validate:"gte=1_000_000_000"`
-	Strategy                string        `default:"legacy" validate:"required,oneof= legacy hash"`
+	Type                    string   `default:"file" validate:"required,oneof= file redis"`
+	Peers                   []string `default:"[\"http://127.0.0.1:8081\"]" validate:"dive,url"`
+	RedisHost               string   `cmdenv:"RedisHost"`
+	RedisUsername           string   `cmdenv:"RedisUsername"`
+	RedisPassword           string   `cmdenv:"RedisPassword"`
+	RedisPrefix             string   `default:"refinery" validate:"required"`
+	RedisDatabase           int      `validate:"gte=0,lte=15"`
+	RedisIdentifier         string   ``
+	UseTLS                  bool     ``
+	UseTLSInsecure          bool     ``
+	IdentifierInterfaceName string   ``
+	UseIPV6Identifier       bool     ``
+	Timeout                 Duration `default:"5s" validate:"gte=1_000_000_000"`
+	Strategy                string   `default:"legacy" validate:"required,oneof= legacy hash"`
 }
 
 type SampleCacheConfig struct {
-	Type              string        `default:"legacy" validate:"required,oneof= legacy cuckoo"`
-	KeptSize          uint          `default:"10_000" validate:"gte=500"`
-	DroppedSize       uint          `default:"1_000_000" validate:"gte=100_000"`
-	SizeCheckInterval time.Duration `default:"10s" validate:"gte=1_000_000_000"` // 1 second minimum
+	Type              string   `default:"legacy" validate:"required,oneof= legacy cuckoo"`
+	KeptSize          uint     `default:"10_000" validate:"gte=500"`
+	DroppedSize       uint     `default:"1_000_000" validate:"gte=100_000"`
+	SizeCheckInterval Duration `default:"10s" validate:"gte=1_000_000_000"` // 1 second minimum
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	MaxConnectionIdle     time.Duration `default:"1s"`
-	MaxConnectionAge      time.Duration `default:"5s"`
-	MaxConnectionAgeGrace time.Duration `default:"3s"`
-	Time                  time.Duration `default:"10s"`
-	Timeout               time.Duration `default:"2s"`
+	MaxConnectionIdle     Duration `default:"1s"`
+	MaxConnectionAge      Duration `default:"5s"`
+	MaxConnectionAgeGrace Duration `default:"3s"`
+	Time                  Duration `default:"10s"`
+	Timeout               Duration `default:"2s"`
 }
 
 type StressReliefConfig struct {
-	Mode                      string        `default:"never" validate:"required,oneof= always never monitor"`
-	ActivationLevel           uint          `default:"90" validate:"gte=0,lte=100"`
-	DeactivationLevel         uint          `default:"75" validate:"gte=0,lte=100"`
-	StressSamplingRate        uint64        `default:"1000" validate:"gte=1"`
-	MinimumActivationDuration time.Duration `default:"10s"`
-	StartStressedDuration     time.Duration `default:"3s"`
+	Mode                      string   `default:"never" validate:"required,oneof= always never monitor"`
+	ActivationLevel           uint     `default:"90" validate:"gte=0,lte=100"`
+	DeactivationLevel         uint     `default:"75" validate:"gte=0,lte=100"`
+	StressSamplingRate        uint64   `default:"1000" validate:"gte=1"`
+	MinimumActivationDuration Duration `default:"10s"`
+	StartStressedDuration     Duration `default:"3s"`
 }
 
-// NewConfig creates a new Config object from the given arguments; if args is
-// nil, it uses the command line arguments
-func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
+// newConfig does the work of creating and loading the start of a config object
+// from the given arguments; if args is nil, it uses the command line arguments.
+// It's used by both the main init as well as the reload code.
+func newConfig(opts *CmdEnv) (*fileConfig, error) {
 	mainconf := &configContents{}
-	err := readConfigInto(mainconf, opts.ConfigLocation, opts)
+	mainhash, err := readConfigInto(mainconf, opts.ConfigLocation, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	rulesconf := &rulesContents{}
-	err = readConfigInto(rulesconf, opts.RulesLocation, opts)
+	ruleshash, err := readConfigInto(rulesconf, opts.RulesLocation, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: these callbacks aren't called because the new system doesn't
-	// yet monitor for changes. It will in a future PR.
 	cfg := &fileConfig{
-		mainConfig:    mainconf,
-		rulesConfig:   rulesconf,
-		opts:          opts,
-		callbacks:     make([]func(), 0),
-		errorCallback: errorCallback,
+		mainConfig:  mainconf,
+		mainHash:    mainhash,
+		rulesConfig: rulesconf,
+		rulesHash:   ruleshash,
+		opts:        opts,
 	}
 
 	return cfg, nil
+}
+
+// NewConfig creates a new Config object from the given arguments; if args is
+// nil, it uses the command line arguments
+func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
+	cfg, err := newConfig(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.callbacks = make([]func(), 0)
+	cfg.errorCallback = errorCallback
+
+	go cfg.monitor()
+
+	return cfg, nil
+}
+
+func (f *fileConfig) monitor() {
+	f.done = make(chan struct{})
+	f.ticker = time.NewTicker(time.Duration(f.mainConfig.ConfigReloadInterval))
+	for {
+		select {
+		case <-f.done:
+			return
+		case <-f.ticker.C:
+			// reread the configs
+			cfg, err := newConfig(f.opts)
+			if err != nil {
+				f.errorCallback(err)
+				continue
+			}
+
+			// if nothing's changed, we're fine
+			if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
+				continue
+			}
+
+			// otherwise, update our state and call the callbacks
+			f.mux.Lock()
+			f.mainConfig = cfg.mainConfig
+			f.mainHash = cfg.mainHash
+			f.rulesConfig = cfg.rulesConfig
+			f.rulesHash = cfg.rulesHash
+			for _, cb := range f.callbacks {
+				cb()
+			}
+			f.mux.Unlock() // can't defer since the goroutine never ends
+		}
+	}
+}
+
+// Stop halts the monitor goroutine
+func (f *fileConfig) Stop() {
+	f.ticker.Stop()
+	close(f.done)
+	f.done = nil
 }
 
 // // NewConfig creates a new config struct
@@ -212,8 +288,8 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 // 	c.SetDefault("AddRuleReasonToTrace", false)
 // 	c.SetDefault("EnvironmentCacheTTL", time.Hour)
 // 	c.SetDefault("GRPCServerParameters.MaxConnectionIdle", 1*time.Minute)
-// 	c.SetDefault("GRPCServerParameters.MaxConnectionAge", time.Duration(0))
-// 	c.SetDefault("GRPCServerParameters.MaxConnectionAgeGrace", time.Duration(0))
+// 	c.SetDefault("GRPCServerParameters.MaxConnectionAge", Duration(0))
+// 	c.SetDefault("GRPCServerParameters.MaxConnectionAgeGrace", Duration(0))
 // 	c.SetDefault("GRPCServerParameters.Time", 10*time.Second)
 // 	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
 // 	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
@@ -639,7 +715,7 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 	samplers := make(map[string]interface{})
 
-	err := readConfigInto(samplers, f.opts.RulesLocation, f.opts)
+	_, err := readConfigInto(samplers, f.opts.RulesLocation, f.opts)
 	if err != nil {
 		return nil, err
 	}
@@ -650,8 +726,9 @@ func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
 
 // getValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]interface{}
 // for the given key, ignoring case of the key. It returns ok=true only if the key was found
-// and could be converted to the required type.
-func getValueForCaseInsensitiveKey[T any](m map[string]interface{}, key string) (T, bool) {
+// and could be converted to the required type. Otherwise it returns the default value
+// and ok=false.
+func getValueForCaseInsensitiveKey[T any](m map[string]interface{}, key string, def T) (T, bool) {
 	for k, v := range m {
 		if strings.EqualFold(k, key) {
 			if t, ok := v.(T); ok {
@@ -659,27 +736,19 @@ func getValueForCaseInsensitiveKey[T any](m map[string]interface{}, key string) 
 			}
 		}
 	}
-	var zero T
-	return zero, false
+	return def, false
 }
 
-// reloadInto accepts a map[string]any and a struct, and loads the map into the struct
-// by re-marshalling the map into JSON and then unmarshalling the JSON into the struct.
-func reloadInto(m map[string]any, s interface{}) error {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, s)
-}
-
+// GetSamplerConfigForDataset returns the sampler config for the given dataset,
+// as well as the name of the sampler. If the dataset-specific sampler config
+// is not found, it returns the default sampler config.
 func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	config := make(map[string]any)
 
-	err := readConfigInto(config, f.opts.RulesLocation, f.opts)
+	_, err := readConfigInto(&config, f.opts.RulesLocation, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -690,13 +759,13 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, er
 	// both fail will we return not found.
 
 	const notfound = "not found"
-	if v, ok := getValueForCaseInsensitiveKey[map[string]any](config, dataset); ok {
+	if v, ok := getValueForCaseInsensitiveKey(config, dataset, map[string]any{}); ok {
 		// we have a dataset-specific sampler, so we extract that sampler's config
 		config = v
 	}
 
 	// now we need the name of the sampler
-	samplerName, _ := getValueForCaseInsensitiveKey[string](config, "sampler")
+	samplerName, _ := getValueForCaseInsensitiveKey(config, "sampler", "DeterministicSampler")
 
 	var i any
 	switch samplerName {
@@ -715,7 +784,7 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, er
 	}
 
 	// now we need to unmarshal the config into the sampler config struct
-	err = reloadInto(config, i)
+	err = reloadInto(config, i, f.opts)
 	return i, samplerName, err
 }
 
@@ -751,21 +820,21 @@ func (f *fileConfig) GetSendDelay() (time.Duration, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.SendDelay, nil
+	return time.Duration(f.mainConfig.SendDelay), nil
 }
 
 func (f *fileConfig) GetBatchTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.BatchTimeout
+	return time.Duration(f.mainConfig.BatchTimeout)
 }
 
 func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.TraceTimeout, nil
+	return time.Duration(f.mainConfig.TraceTimeout), nil
 }
 
 func (f *fileConfig) GetMaxBatchSize() uint {
@@ -793,7 +862,7 @@ func (f *fileConfig) GetSendTickerValue() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.SendTicker
+	return time.Duration(f.mainConfig.SendTicker)
 }
 
 func (f *fileConfig) GetDebugServiceAddr() (string, error) {
@@ -839,7 +908,7 @@ func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.EnvironmentCacheTTL
+	return time.Duration(f.mainConfig.EnvironmentCacheTTL)
 }
 
 func (f *fileConfig) GetDatasetPrefix() string {
@@ -860,42 +929,42 @@ func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.GRPCServerParameters.MaxConnectionIdle
+	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionIdle)
 }
 
 func (f *fileConfig) GetGRPCMaxConnectionAge() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.GRPCServerParameters.MaxConnectionAge
+	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAge)
 }
 
 func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.GRPCServerParameters.MaxConnectionAgeGrace
+	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAgeGrace)
 }
 
 func (f *fileConfig) GetGRPCTime() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.GRPCServerParameters.Time
+	return time.Duration(f.mainConfig.GRPCServerParameters.Time)
 }
 
 func (f *fileConfig) GetGRPCTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.GRPCServerParameters.Timeout
+	return time.Duration(f.mainConfig.GRPCServerParameters.Timeout)
 }
 
 func (f *fileConfig) GetPeerTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.Timeout
+	return time.Duration(f.mainConfig.PeerManagement.Timeout)
 }
 
 func (f *fileConfig) GetAdditionalErrorFields() []string {
@@ -947,36 +1016,18 @@ func (f *fileConfig) GetParentIdFieldNames() []string {
 	return f.mainConfig.ParentIdFieldNames
 }
 
-// calculates an MD5 sum for a file that returns the same result as the md5sum command
-func calcMD5For(location string) string {
-	r, _, err := getReaderFor(location)
-	if err != nil {
-		return err.Error()
-	}
-	defer r.Close()
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return err.Error()
-	}
-	h := md5.New()
-	if _, err := h.Write(data); err != nil {
-		return err.Error()
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
 	ret := make([]ConfigMetadata, 2)
 	ret[0] = ConfigMetadata{
 		Type:     "config",
 		ID:       f.opts.ConfigLocation,
-		Hash:     calcMD5For(f.opts.ConfigLocation),
+		Hash:     f.mainHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}
 	ret[1] = ConfigMetadata{
 		Type:     "rules",
 		ID:       f.opts.RulesLocation,
-		Hash:     calcMD5For(f.opts.RulesLocation),
+		Hash:     f.rulesHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}
 	return ret

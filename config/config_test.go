@@ -146,7 +146,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 
-	configFile, err := os.CreateTemp(tmpDir, "*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "cfg_*.toml")
 	assert.NoError(t, err)
 
 	if configBody != "" {
@@ -155,7 +155,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 	}
 	configFile.Close()
 
-	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "rules_*.toml")
 	assert.NoError(t, err)
 
 	if rulesBody != "" {
@@ -170,6 +170,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 func TestReload(t *testing.T) {
 	config, rules := createTempConfigs(t, `
 	ListenAddr="0.0.0.0:8080"
+	ConfigReloadInterval="1s"
 
 	[InMemCollector]
 		CacheCapacity=1000
@@ -385,13 +386,16 @@ func TestAbsentTraceKeyField(t *testing.T) {
 		GoalSampleRate = 10
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
-		FieldList = "[request.method]"
+		FieldList = [ "request.method" ]
 		Weight = 0.4
 	`)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	_, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	cfg, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+	_, samplerName, err := cfg.GetSamplerConfigForDataset("dataset1")
 	assert.Error(t, err)
+	assert.Equal(t, "EMADynamicSampler", samplerName)
 	assert.Contains(t, err.Error(), "Error:Field validation for 'AddSampleRateKeyToTraceField'")
 }
 
@@ -499,14 +503,14 @@ func TestGetSamplerTypes(t *testing.T) {
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
 		AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
-		FieldList = "[request.method]"
+		FieldList = ["request.method"]
 		Weight = 0.3
 
 	[dataset4]
 
 		Sampler = "TotalThroughputSampler"
 		GoalThroughputPerSec = 100
-		FieldList = "[request.method]"
+		FieldList = ["request.method"]
 	`)
 	defer os.Remove(rules)
 	defer os.Remove(config)
@@ -679,43 +683,6 @@ func TestQueryAuthToken(t *testing.T) {
 }
 
 func TestGRPCServerParameters(t *testing.T) {
-	// tmpDir, err := os.MkdirTemp("", "")
-	// assert.NoError(t, err)
-	// defer os.RemoveAll(tmpDir)
-
-	// configFile, err := os.CreateTemp(tmpDir, "*.toml")
-	// assert.NoError(t, err)
-
-	// _, err = configFile.Write([]byte(`
-	// [GRPCServerParameters]
-	// 	MaxConnectionIdle = "1m"
-	// 	MaxConnectionAge = "2m"
-	// 	MaxConnectionAgeGrace = "3m"
-	// 	Time = "4m"
-	// 	Timeout = "5m"
-
-	// [InMemCollector]
-	// 	CacheCapacity=1000
-
-	// [HoneycombMetrics]
-	// 	MetricsHoneycombAPI="http://honeycomb.io"
-	// 	MetricsAPIKey="1234"
-	// 	MetricsDataset="testDatasetName"
-	// 	MetricsReportingInterval=3
-
-	// [HoneycombLogger]
-	// 	LoggerHoneycombAPI="http://honeycomb.io"
-	// 	LoggerAPIKey="1234"
-	// 	LoggerDataset="loggerDataset"
-	// `))
-	// assert.NoError(t, err)
-	// configFile.Close()
-
-	// rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
-	// assert.NoError(t, err)
-
-	// c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
-
 	config, rules := createTempConfigs(t, `
 	[GRPCServerParameters]
 		MaxConnectionIdle = "1m"
@@ -828,7 +795,7 @@ func TestSampleCacheParameters(t *testing.T) {
 	assert.Equal(t, "legacy", s.Type)
 	assert.Equal(t, uint(10_000), s.KeptSize)
 	assert.Equal(t, uint(1_000_000), s.DroppedSize)
-	assert.Equal(t, 10*time.Second, s.SizeCheckInterval)
+	assert.Equal(t, 10*time.Second, time.Duration(s.SizeCheckInterval))
 }
 
 func TestSampleCacheParametersCuckoo(t *testing.T) {
@@ -857,12 +824,12 @@ func TestSampleCacheParametersCuckoo(t *testing.T) {
 	assert.Equal(t, "cuckoo", s.Type)
 	assert.Equal(t, uint(100_000), s.KeptSize)
 	assert.Equal(t, uint(10_000_000), s.DroppedSize)
-	assert.Equal(t, 1*time.Minute, s.SizeCheckInterval)
+	assert.Equal(t, 1*time.Minute, time.Duration(s.SizeCheckInterval))
 }
 
 func TestAdditionalAttributes(t *testing.T) {
 	config, rules := createTempConfigs(t, `
-	[[AdditionalAttributes]]
+	[AdditionalAttributes]
 		name="foo"
 		other="bar"
 		another="OneHundred"

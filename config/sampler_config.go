@@ -7,7 +7,7 @@ import (
 )
 
 type DeterministicSamplerConfig struct {
-	SampleRate int `validate:"required,gte=1"`
+	SampleRate int `default:"1" validate:"required,gte=1"`
 }
 
 type DynamicSamplerConfig struct {

@@ -127,7 +127,7 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 		// cluster. If the time is 0 we won't do this at all.
 		if s.mode != Monitor && cfg.StartStressedDuration != 0 {
 			s.stressed = true
-			s.stayOnUntil = time.Now().Add(cfg.StartStressedDuration)
+			s.stayOnUntil = time.Now().Add(time.Duration(cfg.StartStressedDuration))
 		}
 		s.mode = Monitor
 	case "always":
@@ -144,7 +144,7 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 	if s.sampleRate == 0 {
 		s.sampleRate = 1
 	}
-	s.minDuration = cfg.MinimumActivationDuration
+	s.minDuration = time.Duration(cfg.MinimumActivationDuration)
 
 	s.Logger.Debug().
 		WithField("activation_level", s.activateLevel).

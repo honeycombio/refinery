@@ -11,6 +11,41 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// These two helper functions are copied from config/config_test.go
+func getConfig(args []string) (config.Config, error) {
+	opts, err := config.NewCmdEnvOptions(args)
+	if err != nil {
+		return nil, err
+	}
+	return config.NewConfig(opts, func(err error) {})
+}
+
+// creates two temporary toml files from the strings passed in and returns their filenames
+func createTempConfigs(t *testing.T, configBody string, rulesBody string) (string, string) {
+	tmpDir, err := os.MkdirTemp("", "")
+	assert.NoError(t, err)
+
+	configFile, err := os.CreateTemp(tmpDir, "cfg_*.toml")
+	assert.NoError(t, err)
+
+	if configBody != "" {
+		_, err = configFile.WriteString(configBody)
+		assert.NoError(t, err)
+	}
+	configFile.Close()
+
+	rulesFile, err := os.CreateTemp(tmpDir, "rules_*.toml")
+	assert.NoError(t, err)
+
+	if rulesBody != "" {
+		_, err = rulesFile.WriteString(rulesBody)
+		assert.NoError(t, err)
+	}
+	rulesFile.Close()
+
+	return configFile.Name(), rulesFile.Name()
+}
+
 func TestDependencyInjection(t *testing.T) {
 	var g inject.Graph
 	err := g.Provide(
@@ -29,14 +64,7 @@ func TestDependencyInjection(t *testing.T) {
 }
 
 func TestDatasetPrefix(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := os.CreateTemp(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	cfg, rules := createTempConfigs(t, `
 	DatasetPrefix = "dataset"
 
 	[InMemCollector]
@@ -52,14 +80,7 @@ func TestDatasetPrefix(t *testing.T) {
 		LoggerHoneycombAPI="http://honeycomb.io"
 		LoggerAPIKey="1234"
 		LoggerDataset="loggerDataset"
-	`))
-	assert.NoError(t, err)
-	configFile.Close()
-
-	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = rulesFile.Write([]byte(`
+	`, `
 	Sampler = "DeterministicSampler"
 	SampleRate = 1
 
@@ -67,14 +88,13 @@ func TestDatasetPrefix(t *testing.T) {
 		Sampler = "DeterministicSampler"
 		SampleRate = 10
 
-	[dataset.production]
+	["dataset.production"]
 		Sampler = "DeterministicSampler"
 		SampleRate = 20
-	`))
-	assert.NoError(t, err)
-	rulesFile.Close()
-
-	c, err := config.NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	`)
+	defer os.Remove(rules)
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())

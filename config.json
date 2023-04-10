@@ -1,0 +1,11 @@
+{
+    "InMemCollector": {
+        "CacheCapacity": 1000
+    },
+    "HoneycombMetrics": {
+        "MetricsHoneycombAPI": "https://api.honeycomb.io",
+        "MetricsAPIKey": "abcd1234",
+        "MetricsDataset": "Refinery Metrics",
+        "MetricsReportingInterval": 3
+    }
+}

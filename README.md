@@ -99,7 +99,7 @@ With the change to support Environments in Honeycomb, some users will want to su
 
 This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for the classic datasets.
 
-When Refinery receives telemetry using an API key associated to a classic dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition.
+When Refinery receives telemetry using an API key associated to a classic dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition. Note that when doing so, you should quote the entire name.
 
 For example
 config.toml

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -106,32 +108,74 @@ func load(r io.Reader, format Format, into any) error {
 }
 
 // readConfigInto reads the config from the given location and applies it to the given struct.
-func readConfigInto(dest any, location string, opts *CmdEnv) error {
+func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	r, format, err := getReaderFor(location)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer r.Close()
 
-	if err := load(r, format, dest); err != nil {
-		return err
+	// we're going to use a TeeReader to calculate the hash while also reading the data
+	h := md5.New()
+	rdr := io.TeeReader(r, h)
+
+	if err := load(rdr, format, dest); err != nil {
+		return "", fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
+	}
+	// the hash is now the MD5 of the config file
+	hash := hex.EncodeToString(h.Sum(nil))
+
+	// don't apply options and defaults if we're not given any
+	if opts == nil {
+		return hash, nil
 	}
 
 	// now we've got the config, apply defaults to zero values
 	if err := defaults.Set(dest); err != nil {
-		return err
+		return hash, fmt.Errorf("readConfigInto unable to apply defaults: %w", err)
 	}
 
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
-		return err
+		return hash, fmt.Errorf("readConfigInto unable to apply command line options: %w", err)
 	}
 
 	// validate the config
 	v := validator.New()
 	if err := v.Struct(dest); err != nil {
-		return err
+		return hash, fmt.Errorf("readConfigInto config validation failed: %w", err)
 	}
 
+	return hash, nil
+}
+
+// reloadInto accepts a map[string]any and a struct, and loads the map into the struct
+// by re-marshalling the map into JSON and then unmarshalling the JSON into the struct.
+func reloadInto(m map[string]any, dest interface{}, opts *CmdEnv) error {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("reloadInto unable to marshal config: %w", err)
+	}
+	err = json.Unmarshal(b, dest)
+	if err != nil {
+		return fmt.Errorf("reloadInto unable to unmarshal config: %w", err)
+	}
+
+	// now we've got the config, apply defaults to zero values
+	if err := defaults.Set(dest); err != nil {
+		return fmt.Errorf("reloadInto unable to apply defaults: %w", err)
+	}
+
+	// apply command line options
+	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
+		return fmt.Errorf("reloadInto unable to apply command line options: %w", err)
+	}
+
+	// validate the config
+	v := validator.New()
+	err = v.Struct(dest)
+	if err != nil {
+		return fmt.Errorf("reloadInto unable to validate config: %w", err)
+	}
 	return nil
 }

@@ -588,7 +588,6 @@ MetricsReportingInterval = 3
 # AdditionalAttributes is a map that can be used for injecting user-defined
 # attributes. For example, it could be used for naming a refinery cluster.
 # Both keys and values must be strings.
-
-# [[AdditionalAttributes]]
+# [AdditionalAttributes]
 # 	ClusterName="MyCluster"
 #   environment="production"
