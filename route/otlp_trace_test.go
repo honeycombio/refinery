@@ -99,7 +99,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	// TODO: (MG) figuure out how we can test JSON created from OTLP requests
+	// TODO: (MG) figure out how we can test JSON created from OTLP requests
 	// Below is example, but requires significant usage of collector, sampler, conf, etc
 	t.Run("creates events for span events", func(t *testing.T) {
 		t.Skip("need additional work to support inspecting outbound JSON")
@@ -353,7 +353,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	t.Run("events created with non-legacy keys lookup and use envionment name", func(t *testing.T) {
+	t.Run("events created with non-legacy keys lookup and use environment name", func(t *testing.T) {
 		apiKey := "my-api-key"
 		md := metadata.New(map[string]string{"x-honeycomb-team": apiKey})
 		ctx := metadata.NewIncomingContext(context.Background(), md)

@@ -331,7 +331,7 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			return nil
 		}
 	case "":
-		// user did not specify dataype, so do not specify matches function
+		// user did not specify datatype, so do not specify matches function
 	default:
 		return fmt.Errorf("%s must be either string, int, float or bool", r.Datatype)
 	}

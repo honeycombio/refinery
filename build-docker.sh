@@ -21,4 +21,7 @@ ko publish \
   --tags "${TAGS}" \
   --base-import-paths \
   --platform "linux/amd64,linux/arm64" \
+  --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
+  --image-label org.opencontainers.image.licenses=Apache-2.0 \
+  --image-label org.opencontainers.image.revision=${CIRCLE_SHA1} \
   ./cmd/refinery

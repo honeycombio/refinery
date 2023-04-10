@@ -573,7 +573,7 @@ MetricsReportingInterval = 3
 # enabled, once activated. This prevents oscillations.
 # Default = 10s
 # Eligible for live reload.
-# MinimumActivationDuration = 10s
+# MinimumActivationDuration = "10s"
 
 # MinimumStartupDuration is used when switching into Monitor mode.
 # When stress monitoring is enabled, it will start up in stressed mode for a
@@ -582,7 +582,7 @@ MetricsReportingInterval = 3
 # problem of trying to bring a new node into an already-overloaded
 # cluster. If this duration is 0, Refinery will not start in stressed mode.
 # This can provide faster startup at the possible cost of startup instability.
-# MinimumStartupDuration = 3s
+# MinimumStartupDuration = "3s"
 
 
 # AdditionalAttributes is a map that can be used for injecting user-defined

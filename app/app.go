@@ -21,7 +21,7 @@ type App struct {
 	Version string
 }
 
-// Start on the App obect should block until the proxy is shutting down. After
+// Start on the App object should block until the proxy is shutting down. After
 // Start exits, Stop will be called on all dependencies then on App then the
 // program will exit.
 func (a *App) Start() error {

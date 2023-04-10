@@ -206,7 +206,7 @@ func TestShardBulk(t *testing.T) {
 					}
 				}
 
-				// This is probabalistic, so could fail, but shouldn't be flaky as long as
+				// This is probabilistic, so could fail, but shouldn't be flaky as long as
 				// expectedResult is at least 20 or so.
 				expectedResult := ntraces / npeers
 				assert.Greater(t, expectedResult*2, max, "expected smaller max, got %d: %v", max, results)

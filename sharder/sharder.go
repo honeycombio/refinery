@@ -7,7 +7,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 )
 
-// Shard repreesents a single instance of Refinery.
+// Shard represents a single instance of Refinery.
 type Shard interface {
 	Equals(Shard) bool
 	// GetAddress returns a string suitable for use in building a URL, eg
