@@ -28,8 +28,6 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type fileConfig struct {
-	// config        *viper.Viper
-	// rules         *viper.Viper
 	mainConfig    *configContents
 	mainHash      string
 	rulesConfig   *rulesContents
