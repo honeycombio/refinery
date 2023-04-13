@@ -1020,7 +1020,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	transmission.Mux.RUnlock()
 }
 
-// TestLateRootNotDecorated tests that the root span does not get decorated with 'meta.refinery.reason' meta field
+// TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
 // if the AddRuleReasonToTrace attribute not set in config
 func TestLateSpanNotDecorated(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
