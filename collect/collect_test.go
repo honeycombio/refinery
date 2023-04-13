@@ -158,7 +158,28 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	transmission.Mux.RLock()
 	assert.Greater(t, len(transmission.Events), 0, "should be some events transmitted")
-	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"], "metadata should be populated with original sample rate")
+	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"],
+		"metadata should be populated with original sample rate")
+	transmission.Mux.RUnlock()
+
+	span := &types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1000),
+		Event: types.Event{
+			Dataset:    "aoeu",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0,
+			Data:       make(map[string]interface{}),
+		},
+	}
+
+	coll.AddSpan(span)
+
+	time.Sleep(conf.SendTickerVal * 2)
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
+	assert.Nil(t, transmission.Events[1].Data["meta.refinery.original_sample_rate"],
+		"metadata should not be populated when zero")
 	transmission.Mux.RUnlock()
 }
 
@@ -307,9 +328,9 @@ func TestDryRunMode(t *testing.T) {
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
 			SampleRate: 10,
 		},
-		SendTickerVal:   2 * time.Millisecond,
-		DryRun:          true,
-		DryRunFieldName: field,
+		SendTickerVal:      2 * time.Millisecond,
+		DryRun:             true,
+		DryRunFieldName:    field,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	samplerFactory := &sample.SamplerFactory{
@@ -516,7 +537,7 @@ func TestSampleConfigReload(t *testing.T) {
 		GetTraceTimeoutVal:                   60 * time.Second,
 		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:                        2 * time.Millisecond,
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		ParentIdFieldNames:                   []string{"trace.parent_id", "parentId"},
 		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
 	}
 
@@ -689,7 +710,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:        2 * time.Millisecond,
 		CacheOverrunStrategy: "impact",
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 	}
 	coll := &InMemCollector{
 		Config:       conf,
