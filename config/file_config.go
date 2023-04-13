@@ -165,13 +165,13 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	}
 
 	var rulesconf map[string]any
-	ruleshash, err := readConfigInto(rulesconf, opts.RulesLocation, opts)
+	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocation, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: this is temporary while we still conform to the old config format;
-	// once we're fully migrated, we can remove this
+	// once we're fully migrated, we can remove this stuff.
 	if dryRun, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrun", false); ok {
 		mainconf.DryRun = dryRun
 	}
@@ -185,6 +185,11 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		rulesConfig: rulesconf,
 		rulesHash:   ruleshash,
 		opts:        opts,
+	}
+
+	// Run a basic validation on the sampler config; we can do better after a reorganization of this.
+	if _, _, err := cfg.GetSamplerConfigForDataset("**invalid dataset name**"); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
