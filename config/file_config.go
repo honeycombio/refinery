@@ -65,8 +65,8 @@ type configContents struct {
 	SampleCache               SampleCacheConfig  `validate:"required"`
 	StressRelief              StressReliefConfig `validate:"required"`
 	AdditionalAttributes      map[string]string
-	TraceIdFieldNames				  []string
-	ParentIdFieldNames				[]string
+	TraceIdFieldNames         []string
+	ParentIdFieldNames        []string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -132,6 +132,8 @@ type GRPCServerParameters struct {
 	Timeout               time.Duration
 }
 
+type CacheOverrunStrategy string
+
 type StressReliefConfig struct {
 	Mode                      string `validate:"required,oneof= always never monitor"`
 	ActivationLevel           uint
@@ -139,6 +141,7 @@ type StressReliefConfig struct {
 	StressSamplingRate        uint64
 	MinimumActivationDuration time.Duration
 	StartStressedDuration     time.Duration
+	Strategy                  CacheOverrunStrategy
 }
 
 // NewConfig creates a new config struct
@@ -349,6 +352,14 @@ func (f *fileConfig) validateGeneralConfigs() error {
 		break
 	default:
 		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
+	}
+
+	stressReliefConfig := f.GetStressReliefConfig()
+	switch stressReliefConfig.Strategy {
+	case "legacy":
+		return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
+	default:
+		break
 	}
 	return nil
 }
