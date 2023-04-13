@@ -47,7 +47,7 @@ func (g graphLogger) Debugf(format string, v ...interface{}) {
 func main() {
 	opts, err := config.NewCmdEnvOptions(os.Args)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
+		fmt.Printf("Command line parsing error '%s' -- call with --help for usage.\n", err)
 		os.Exit(1)
 	}
 

@@ -10,8 +10,6 @@ import (
 
 // In order to be able to unmarshal "15s" etc. into time.Duration, we need to
 // define a new type and implement MarshalText and UnmarshalText.
-// We want this to be just inside config, though, so the accessors will still
-// return time.Duration.
 type Duration time.Duration
 
 func (d Duration) MarshalText() ([]byte, error) {
@@ -30,7 +28,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 type fileConfig struct {
 	mainConfig    *configContents
 	mainHash      string
-	rulesConfig   *rulesContents
+	rulesConfig   map[string]any
 	rulesHash     string
 	opts          *CmdEnv
 	callbacks     []func()
@@ -76,16 +74,12 @@ type configContents struct {
 	TraceIdFieldNames         []string                       `default:"[\"trace.trace_id\",\"traceId\"]"`
 	ParentIdFieldNames        []string                       `default:"[\"trace.parent_id\",\"parentId\"]"`
 	ConfigReloadInterval      Duration                       `default:"30s"`
+	DryRun                    bool                           ``
+	DryRunFieldName           string                         `default:"refinery_kept"`
 	GRPCServerParameters      *GRPCServerParameters
 	HoneycombLogger           *HoneycombLoggerConfig
 	HoneycombMetrics          *HoneycombMetricsConfig
 	PrometheusMetrics         *PrometheusMetricsConfig
-}
-
-type rulesContents struct {
-	Sampler         string `default:"DeterministicSampler" validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler TotalThroughputSampler"`
-	DryRun          bool   ``
-	DryRunFieldName string `default:"refinery_kept"`
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -160,20 +154,29 @@ type StressReliefConfig struct {
 	StartStressedDuration     Duration `default:"3s"`
 }
 
-// newConfig does the work of creating and loading the start of a config object
-// from the given arguments; if args is nil, it uses the command line arguments.
+// newFileConfig does the work of creating and loading the start of a config object
+// from the given arguments.
 // It's used by both the main init as well as the reload code.
-func newConfig(opts *CmdEnv) (*fileConfig, error) {
+func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	mainconf := &configContents{}
 	mainhash, err := readConfigInto(mainconf, opts.ConfigLocation, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	rulesconf := &rulesContents{}
+	var rulesconf map[string]any
 	ruleshash, err := readConfigInto(rulesconf, opts.RulesLocation, opts)
 	if err != nil {
 		return nil, err
+	}
+
+	// TODO: this is temporary while we still conform to the old config format;
+	// once we're fully migrated, we can remove this
+	if dryRun, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrun", false); ok {
+		mainconf.DryRun = dryRun
+	}
+	if dryRunFieldName, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrunfieldname", ""); ok && dryRunFieldName != "" {
+		mainconf.DryRunFieldName = dryRunFieldName
 	}
 
 	cfg := &fileConfig{
@@ -190,7 +193,7 @@ func newConfig(opts *CmdEnv) (*fileConfig, error) {
 // NewConfig creates a new Config object from the given arguments; if args is
 // nil, it uses the command line arguments
 func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
-	cfg, err := newConfig(opts)
+	cfg, err := newFileConfig(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +215,7 @@ func (f *fileConfig) monitor() {
 			return
 		case <-f.ticker.C:
 			// reread the configs
-			cfg, err := newConfig(f.opts)
+			cfg, err := newFileConfig(f.opts)
 			if err != nil {
 				f.errorCallback(err)
 				continue
@@ -427,23 +430,19 @@ func (f *fileConfig) GetCollectorType() (string, error) {
 	return f.mainConfig.Collector, nil
 }
 
-func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
-	samplers := make(map[string]interface{})
-
-	_, err := readConfigInto(samplers, f.opts.RulesLocation, f.opts)
-	if err != nil {
-		return nil, err
-	}
+func (f *fileConfig) GetAllSamplerRules() (map[string]any, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
 
 	// This is probably good enough for debug; if not we can extend it.
-	return samplers, nil
+	return f.rulesConfig, nil
 }
 
-// getValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]interface{}
+// getValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]any
 // for the given key, ignoring case of the key. It returns ok=true only if the key was found
 // and could be converted to the required type. Otherwise it returns the default value
 // and ok=false.
-func getValueForCaseInsensitiveKey[T any](m map[string]interface{}, key string, def T) (T, bool) {
+func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
 	for k, v := range m {
 		if strings.EqualFold(k, key) {
 			if t, ok := v.(T); ok {
@@ -461,13 +460,7 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, er
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	config := make(map[string]any)
-
-	_, err := readConfigInto(&config, f.opts.RulesLocation, nil)
-	if err != nil {
-		return nil, "", err
-	}
-
+	config := f.rulesConfig
 	// If we have a dataset-specific sampler, we extract the sampler config
 	// corresponding to the [dataset]["sampler"] key. Otherwise we try to use
 	// the default sampler config corresponding to the "sampler" key. Only if
@@ -499,7 +492,7 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, er
 	}
 
 	// now we need to unmarshal the config into the sampler config struct
-	err = reloadInto(config, i, f.opts)
+	err := reloadInto(config, i, f.opts)
 	return i, samplerName, err
 }
 
@@ -595,14 +588,14 @@ func (f *fileConfig) GetIsDryRun() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.rulesConfig.DryRun
+	return f.mainConfig.DryRun
 }
 
 func (f *fileConfig) GetDryRunFieldName() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.rulesConfig.DryRunFieldName
+	return f.mainConfig.DryRunFieldName
 }
 
 func (f *fileConfig) GetAddHostMetadataToTrace() bool {
