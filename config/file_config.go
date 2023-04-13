@@ -132,8 +132,6 @@ type GRPCServerParameters struct {
 	Timeout               time.Duration
 }
 
-type CacheOverrunStrategy string
-
 type StressReliefConfig struct {
 	Mode                      string `validate:"required,oneof= always never monitor"`
 	ActivationLevel           uint
