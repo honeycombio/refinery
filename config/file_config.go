@@ -141,7 +141,6 @@ type StressReliefConfig struct {
 	StressSamplingRate        uint64
 	MinimumActivationDuration time.Duration
 	StartStressedDuration     time.Duration
-	Strategy                  CacheOverrunStrategy
 }
 
 // NewConfig creates a new config struct
@@ -354,12 +353,13 @@ func (f *fileConfig) validateGeneralConfigs() error {
 		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
 	}
 
-	stressReliefConfig := f.GetStressReliefConfig()
-	switch stressReliefConfig.Strategy {
-	case "legacy":
+	switch st {
+	case "impact":
+		if f.GetStressReliefConfig().Mode == "never" || f.GetStressReliefConfig().Mode == "always" {
+			return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
+		}
+	default: // return error if cache overrun strategy not "impact" i.e. "legacy"
 		return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
-	default:
-		break
 	}
 	return nil
 }
