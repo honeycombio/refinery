@@ -65,8 +65,8 @@ type configContents struct {
 	SampleCache               SampleCacheConfig  `validate:"required"`
 	StressRelief              StressReliefConfig `validate:"required"`
 	AdditionalAttributes      map[string]string
-	TraceIdFieldNames				  []string
-	ParentIdFieldNames				[]string
+	TraceIdFieldNames         []string
+	ParentIdFieldNames        []string
 }
 
 type InMemoryCollectorCacheCapacity struct {
@@ -349,6 +349,10 @@ func (f *fileConfig) validateGeneralConfigs() error {
 		break
 	default:
 		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
+	}
+
+	if st != "impact" && (f.GetStressReliefConfig().Mode == "monitor" || f.GetStressReliefConfig().Mode == "always"){
+		return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
 	}
 	return nil
 }

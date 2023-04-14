@@ -13,11 +13,11 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.4.0
-	github.com/honeycombio/husky v0.21.0
+	github.com/honeycombio/husky v0.22.2
 	github.com/honeycombio/libhoney-go v1.18.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.16.3
+	github.com/klauspost/compress v1.16.4
 	github.com/panmari/cuckoofilter v1.0.3
 	github.com/pelletier/go-toml/v2 v2.0.7
 	github.com/pkg/errors v0.9.1
@@ -31,7 +31,7 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0
 	go.uber.org/automaxprocs v1.5.2
 	google.golang.org/grpc v1.54.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.30.0
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
 )
