@@ -11,7 +11,7 @@ This is a small release with mostly bug fixes and minor changes related to Stres
 This update includes many small changes geared at making Stress Relief Mode work better. 
 - Hostname is now annotated when Stress Relief is active. 
 - Stress Relief Mode can now only be activated when CacheOverrunStrategy is set to "impact" since it is not compatible with "legacy".
-- The `Stop()` function was removed from Stress Relief Mode since it was causing confusing crashes in production. 
+- The `Stop()` function was removed from Stress Relief Mode; it wasn't needed and was causing confusing errors. 
 
 ### General Bug Fixes 
 
