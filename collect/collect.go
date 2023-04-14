@@ -561,7 +561,6 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	}
 	if i.Config.GetStressReliefConfig().Mode != "" {
 		sp.Event.Data["meta.refinery.local_hostname"] = i.hostname
-
 	}
 	i.addAdditionalAttributes(sp)
 	mergeTraceAndSpanSampleRates(sp, sampleRate, i.Config.GetIsDryRun())
@@ -715,7 +714,6 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		}
 		if i.Config.GetStressReliefConfig().Mode != "" {
 			sp.Event.Data["meta.refinery.local_hostname"] = i.hostname
-
 		}
 
 		// update the root span (if we have one, which we might not if the trace timed out)
