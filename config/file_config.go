@@ -351,13 +351,12 @@ func (f *fileConfig) validateGeneralConfigs() error {
 		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
 	}
 
-	switch st {
-	case "impact":
-		if f.GetStressReliefConfig().Mode == "never" || f.GetStressReliefConfig().Mode == "always" {
+	print("strat:", st)
+
+	if st != "impact" {
+		if f.GetStressReliefConfig().Mode == "monitor" || f.GetStressReliefConfig().Mode == "always" {
 			return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
 		}
-	default: // return error if cache overrun strategy not "impact" i.e. "legacy"
-		return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
 	}
 	return nil
 }
