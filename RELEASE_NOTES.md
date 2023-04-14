@@ -2,6 +2,24 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 1.21.0
+
+This is a small release with mostly bug fixes and minor changes related to Stress Relief Mode. 
+
+### Fixes for Stress Relief 
+
+This update includes many small changes geared at making Stress Relief Mode work better. 
+- Hostname is now annotated when Stress Relief is active. 
+- Stress Relief Mode can now only be activated when CacheOverrunStrategy is set to "impact" since it is not compatible with "legacy".
+- The `Stop()` function was removed from Stress Relief Mode since it was causing confusing crashes in production. 
+
+### General Bug Fixes 
+
+There were other small changes to other parts of refinery. 
+- Systemd `Alias=` directive was replaced with `WantedBy=` directive which is more in line with best practices. 
+- Late spans are now only decoreated when `AddRuleReasonToTrace` is set. 
+- Some potential fixes for flaky tests were added. We are waiting to see if these changes are significant. 
+
 ## Version 1.20.0
 
 This is a significant new release of Refinery, with several features designed to help when operating Refinery at scale:
