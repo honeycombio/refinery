@@ -15,7 +15,7 @@ were already set upstream before refinery sampling for debugging purposes.
 - fix: only decorate late spans when configured to do so (#665) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - fix: validate cache overrun strategy for stress relief mode (#664) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - docs: update doc to remove deprecated field name (#659) | [Faith Chikwekwe](https://github.com/fchikwekwe)
-- fix: Remove Stop() function from stress relief (#645) | [Kent Quirk](https://github.com/ketquirk)
+- fix: Remove Stop() function from stress relief (#645) | [Kent Quirk](https://github.com/kentquirk)
 - chore: Spelling (#644) | [Josh Soref](https://github.com/JoshSoref)
 - fix: tweak timeouts (#647) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - fix: correct syntax error in config_complete.toml (#639) | [Hazel Weakly](https://github.com/HazelWeakly)
