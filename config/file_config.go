@@ -351,8 +351,6 @@ func (f *fileConfig) validateGeneralConfigs() error {
 		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
 	}
 
-	print("strat:", st)
-
 	if st != "impact" {
 		if f.GetStressReliefConfig().Mode == "monitor" || f.GetStressReliefConfig().Mode == "always" {
 			return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
