@@ -559,7 +559,9 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	if i.Config.GetAddRuleReasonToTrace() {
 		sp.Event.Data["meta.refinery.reason"] = reason
 	}
-
+	if i.hostname != "" {
+		sp.Data["meta.refinery.local_hostname"] = i.hostname
+	}
 	i.addAdditionalAttributes(sp)
 	mergeTraceAndSpanSampleRates(sp, sampleRate, i.Config.GetIsDryRun())
 	i.Transmission.EnqueueSpan(sp)
@@ -571,6 +573,9 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount uint, sp *types.Span) {
 	if i.Config.GetAddRuleReasonToTrace() {
 		sp.Data["meta.refinery.reason"] = "late"
+	}
+	if i.hostname != "" {
+		sp.Data["meta.refinery.local_hostname"] = i.hostname
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	if isDryRun {
