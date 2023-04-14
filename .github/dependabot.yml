@@ -12,7 +12,7 @@ updates:
     labels:
       - "type: dependencies"
     reviewers:
-      - "honeycombio/telemetry-team"
+      - "honeycombio/collection-team"
     commit-message:
       prefix: "maint"
       include: "scope"

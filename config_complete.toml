@@ -397,7 +397,7 @@ MetricsDataset = "Refinery Metrics"
 # MetricsReportingInterval is the frequency (in seconds) to send metric events
 # to Honeycomb. Between 1 and 60 is recommended.
 # Not eligible for live reload.
-MetricsReportingInterval = 3
+MetricsReportingInterval = 30
 
 
 #######################

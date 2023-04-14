@@ -1,5 +1,39 @@
 # Refinery Changelog
 
+## 1.21.0 2023-04-14
+
+### Summary
+Adds many fixes for existing features such as meta fields for use with stress relief mode. Adds ability to annotate sample rates that 
+were already set upstream before refinery sampling for debugging purposes. 
+ 
+### Enhancements
+- feat: annotate incoming sample rate (#658) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+
+### Bug Fixes
+- fix: Replace incorrectly used Systemd Alias directive with a WantedBy (#657) | [Irving Popovetsky](https://github.com/IrvingPopovetsky)
+- fix: add hostname to span during stress relief mode (#666) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- fix: only decorate late spans when configured to do so (#665) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- fix: validate cache overrun strategy for stress relief mode (#664) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- docs: update doc to remove deprecated field name (#659) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- fix: Remove Stop() function from stress relief (#645) | [Kent Quirk](https://github.com/kentquirk)
+- chore: Spelling (#644) | [Josh Soref](https://github.com/JoshSoref)
+- fix: tweak timeouts (#647) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- fix: correct syntax error in config_complete.toml (#639) | [Hazel Weakly](https://github.com/HazelWeakly)
+
+### Maintenance 
+- chore: Update MetricsReportingInterval in config_complete.toml (#653) | [Davin](https://github.com/Davin)
+- maint: switch dependabot to collection (#660) | [Vera Reynolds](https://github.com/Vera Reynolds)
+- maint(deps): bump google.golang.org/protobuf from 1.28.1 to 1.30.0 (#663) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#662) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump github.com/klauspost/compress from 1.16.3 to 1.16.4 (#661) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump go.uber.org/automaxprocs from 1.5.1 to 1.5.2 (#650) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump github.com/honeycombio/dynsampler-go from 0.3.0 to 0.4.0 (#649) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump google.golang.org/grpc from 1.52.3 to 1.54.0 (#652) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#651) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump github.com/klauspost/compress from 1.16.0 to 1.16.3 (#648) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint: Add labels to docker image (#640) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: Add LICENSES dir (#638) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
 ## 1.20.0 2023-03-10
 
 ### Summary

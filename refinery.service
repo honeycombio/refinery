@@ -11,4 +11,4 @@ Group=honeycomb
 LimitNOFILE=infinity
 
 [Install]
-Alias=refinery refinery.service
+WantedBy=multi-user.target
