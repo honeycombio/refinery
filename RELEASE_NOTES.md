@@ -17,7 +17,7 @@ This update includes many small changes geared at making Stress Relief Mode work
 
 There were other small changes to other parts of refinery. 
 - Systemd `Alias=` directive was replaced with `WantedBy=` directive which is more in line with best practices. 
-- Late spans are now only decoreated when `AddRuleReasonToTrace` is set. 
+- Late spans are now only decorated when `AddRuleReasonToTrace` is set. 
 - Some potential fixes for flaky tests were added. We are waiting to see if these changes are significant. 
 
 ## Version 1.20.0
