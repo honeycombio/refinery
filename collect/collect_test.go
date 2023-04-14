@@ -1027,7 +1027,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 5 * time.Millisecond,
+		GetTraceTimeoutVal: 5 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -1070,13 +1070,19 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.SendTickerVal * 2)
 
-	trace := coll.getFromCache(traceID)
-	assert.Nil(t, trace, "trace should have been sent although the root span hasn't arrived")
-	assert.Equal(t, 1, len(transmission.Events), "adding a non-root span and waiting should send the span")
-
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+	}
+	coll.AddSpan(rootSpan)
+	time.Sleep(conf.SendTickerVal * 2)
 	transmission.Mux.RLock()
-
-	assert.Equal(t, nil, transmission.Events[0].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
+	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
 	transmission.Mux.RUnlock()
 }
 
