@@ -1154,3 +1154,77 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	transmission.Mux.RUnlock()
 
 }
+
+// TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
+// StressReliefMode is active
+func TestStressReliefDecorateHostname(t *testing.T) {
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 5 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		StressRelief: config.StressReliefConfig{
+			Mode:               "monitor",
+			ActivationLevel:    75,
+			DeactivationLevel:  25,
+			StressSamplingRate: 100,
+		},
+	}
+	coll := &InMemCollector{
+		Config:       conf,
+		Logger:       &logger.NullLogger{},
+		Transmission: transmission,
+		Metrics:      &metrics.NullMetrics{},
+		StressRelief: &MockStressReliever{},
+		SamplerFactory: &sample.SamplerFactory{
+			Config: conf,
+			Logger: &logger.NullLogger{},
+		},
+		hostname: "host123",
+	}
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := cache.NewLegacySentCache(15)
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	var traceID = "traceABC"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+	time.Sleep(conf.SendTickerVal * 2)
+
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+	}
+	coll.AddSpan(rootSpan)
+	time.Sleep(conf.SendTickerVal * 2)
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, "host123", transmission.Events[1].Data["meta.refinery.local_hostname"])
+	transmission.Mux.RUnlock()
+
+}
