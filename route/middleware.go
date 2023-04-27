@@ -39,6 +39,9 @@ func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
 
 func (r *Router) isKeyAllowed(key string) bool {
 	allowedKeys, err := r.Config.GetAPIKeys()
+	if len(allowedKeys) == 0 {
+		return true
+	}
 	if err != nil {
 		return false
 	}

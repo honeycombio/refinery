@@ -261,7 +261,8 @@ func TestAppIntegration(t *testing.T) {
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
-	t.Parallel()
+	// This is failing in Parallel, so disable it for now.
+	// t.Parallel()
 
 	var out bytes.Buffer
 	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
