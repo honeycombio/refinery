@@ -301,6 +301,35 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
 }
 
+func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
+	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+
+	// Send a root span, it should be sent in short order.
+	req := httptest.NewRequest(
+		"POST",
+		"http://localhost:10500/v1/traces",
+		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+	)
+	req.Header.Set("X-Honeycomb-Team", "badkey")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 400, resp.StatusCode)
+	data, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "not found in list of authed keys")
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+}
+
 func TestPeerRouting(t *testing.T) {
 	t.Parallel()
 

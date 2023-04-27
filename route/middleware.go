@@ -37,6 +37,22 @@ func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
 	})
 }
 
+func (r *Router) isKeyAllowed(key string) bool {
+	allowedKeys, err := r.Config.GetAPIKeys()
+	if err != nil {
+		return false
+	}
+	for _, allowedKey := range allowedKeys {
+		if allowedKey == "*" {
+			return true
+		}
+		if allowedKey == key {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		apiKey := req.Header.Get(types.APIKeyHeader)
@@ -48,24 +64,11 @@ func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 			r.handlerReturnWithError(w, ErrAuthNeeded, err)
 			return
 		}
-		allowedKeys, err := r.Config.GetAPIKeys()
-		if err != nil {
-			r.handlerReturnWithError(w, ErrConfigReadFailed, err)
+		if r.isKeyAllowed(apiKey) {
+			next.ServeHTTP(w, req)
 			return
 		}
-		for _, key := range allowedKeys {
-			if key == "*" {
-				// all keys are allowed, it's all good
-				next.ServeHTTP(w, req)
-				return
-			}
-			if apiKey == key {
-				// we're in the allowlist, it's all good
-				next.ServeHTTP(w, req)
-				return
-			}
-		}
-		err = fmt.Errorf("api key %s not found in list of authed keys", apiKey)
+		err := fmt.Errorf("api key %s not found in list of authed keys", apiKey)
 		r.handlerReturnWithError(w, ErrAuthNeeded, err)
 	})
 }
