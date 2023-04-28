@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -13,6 +14,13 @@ import (
 
 func (r *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
+
+	if !r.isKeyAllowed(ri.ApiKey) {
+		err := fmt.Errorf("api key %s not found in list of authed keys", ri.ApiKey)
+		r.handlerReturnWithError(w, ErrAuthNeeded, err)
+		return
+	}
+
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
 			r.handlerReturnWithError(w, ErrInvalidContentType, err)

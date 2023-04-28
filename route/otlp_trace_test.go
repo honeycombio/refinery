@@ -386,6 +386,36 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, "local", event.Environment)
 		mockTransmission.Flush()
 	})
+
+	t.Run("rejects bad API keys", func(t *testing.T) {
+		router.Config.(*config.MockConfig).GetAPIKeysVal = []string{"bad-key"}
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		if err != nil {
+			t.Error(err)
+		}
+
+		request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+		request.Header = http.Header{}
+		request.Header.Set("content-type", "application/json")
+		request.Header.Set("x-honeycomb-team", legacyAPIKey)
+		request.Header.Set("x-honeycomb-dataset", "dataset")
+
+		w := httptest.NewRecorder()
+		router.postOTLP(w, request)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "not found in list of authed keys")
+
+		assert.Equal(t, 0, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
+
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
