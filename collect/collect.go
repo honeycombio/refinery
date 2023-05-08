@@ -556,7 +556,12 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	}
 	// ok, we're sending it, so decorate it first
 	sp.Event.Data["meta.stressed"] = true
-	sp.Event.Data["meta.refinery.reason"] = reason
+	if i.Config.GetAddRuleReasonToTrace() {
+		sp.Event.Data["meta.refinery.reason"] = reason
+	}
+	if i.hostname != "" {
+		sp.Data["meta.refinery.local_hostname"] = i.hostname
+	}
 	i.addAdditionalAttributes(sp)
 	mergeTraceAndSpanSampleRates(sp, sampleRate, i.Config.GetIsDryRun())
 	i.Transmission.EnqueueSpan(sp)
@@ -566,7 +571,12 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount uint, sp *types.Span) {
-	sp.Data["meta.refinery.reason"] = "late"
+	if i.Config.GetAddRuleReasonToTrace() {
+		sp.Data["meta.refinery.reason"] = "late"
+	}
+	if i.hostname != "" {
+		sp.Data["meta.refinery.local_hostname"] = i.hostname
+	}
 	isDryRun := i.Config.GetIsDryRun()
 	if isDryRun {
 		field := i.Config.GetDryRunFieldName()

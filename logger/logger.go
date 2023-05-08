@@ -10,6 +10,7 @@ import (
 type Logger interface {
 	Debug() Entry
 	Info() Entry
+	Warn() Entry
 	Error() Entry
 	// SetLevel sets the logging level (debug, info, warn, error)
 	SetLevel(level string) error

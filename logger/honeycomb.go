@@ -1,7 +1,6 @@
 package logger
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -27,6 +26,8 @@ type HoneycombLogger struct {
 	builder           *libhoney.Builder
 	sampler           dynsampler.Sampler
 }
+
+var _ = Logger((*HoneycombLogger)(nil))
 
 type HoneycombEntry struct {
 	loggerConfig config.HoneycombLoggerConfig
@@ -98,7 +99,7 @@ func (h *HoneycombLogger) Start() error {
 	}
 	startTime := time.Now()
 	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
-		return time.Now().Sub(startTime) / time.Second
+		return time.Since(startTime) / time.Second
 	})
 
 	h.builder = h.libhClient.NewBuilder()
@@ -186,6 +187,21 @@ func (h *HoneycombLogger) Info() Entry {
 	return ev
 }
 
+func (h *HoneycombLogger) Warn() Entry {
+	if h.loggerConfig.Level > WarnLevel {
+		return nullEntry
+	}
+
+	ev := &HoneycombEntry{
+		loggerConfig: h.loggerConfig,
+		builder:      h.builder.Clone(),
+		sampler:      h.sampler,
+	}
+	ev.builder.AddField("level", "warn")
+
+	return ev
+}
+
 func (h *HoneycombLogger) Error() Entry {
 	if h.loggerConfig.Level > ErrorLevel {
 		return nullEntry
@@ -216,7 +232,7 @@ func (h *HoneycombLogger) SetLevel(level string) error {
 	case "panic":
 		lvl = PanicLevel
 	default:
-		return errors.New(fmt.Sprintf("unrecognized logging level: %s", level))
+		return fmt.Errorf("unrecognized logging level: %s", level)
 	}
 	h.loggerConfig.Level = lvl
 	return nil

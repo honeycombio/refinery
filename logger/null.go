@@ -4,8 +4,11 @@ var nullEntry = &NullLoggerEntry{}
 
 type NullLogger struct{}
 
+var _ = Logger((*NullLogger)(nil))
+
 func (n *NullLogger) Debug() Entry          { return nullEntry }
 func (n *NullLogger) Info() Entry           { return nullEntry }
+func (n *NullLogger) Warn() Entry           { return nullEntry }
 func (n *NullLogger) Error() Entry          { return nullEntry }
 func (n *NullLogger) SetLevel(string) error { return nil }
 
