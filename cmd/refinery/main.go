@@ -11,12 +11,12 @@ import (
 	"time"
 
 	_ "go.uber.org/automaxprocs"
+	"golang.org/x/exp/slices"
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-	flag "github.com/jessevdk/go-flags"
 	"github.com/sirupsen/logrus"
 
 	"github.com/honeycombio/refinery/app"
@@ -35,14 +35,6 @@ import (
 var BuildID string
 var version string
 
-type Options struct {
-	ConfigFile     string `short:"c" long:"config" description:"Path to config file" default:"/etc/refinery/refinery.toml"`
-	RulesFile      string `short:"r" long:"rules_config" description:"Path to rules config file" default:"/etc/refinery/rules.toml"`
-	Version        bool   `short:"v" long:"version" description:"Print version number and exit"`
-	Debug          bool   `short:"d" long:"debug" description:"If enabled, runs debug service (runs on the first open port between localhost:6060 and :6069 by default)"`
-	InterfaceNames bool   `long:"interface-names" description:"If set, print system's network interface names and exit."`
-}
-
 type graphLogger struct {
 }
 
@@ -53,10 +45,9 @@ func (g graphLogger) Debugf(format string, v ...interface{}) {
 }
 
 func main() {
-	var opts Options
-	flagParser := flag.NewParser(&opts, flag.Default)
-	if extraArgs, err := flagParser.Parse(); err != nil || len(extraArgs) != 0 {
-		fmt.Println("command line parsing error - call with --help for usage")
+	opts, err := config.NewCmdEnvOptions(os.Args)
+	if err != nil {
+		fmt.Printf("Command line parsing error '%s' -- call with --help for usage.\n", err)
 		os.Exit(1)
 	}
 
@@ -77,6 +68,10 @@ func main() {
 			fmt.Printf("Error: %s\n", err)
 			os.Exit(1)
 		}
+		// sort interfaces by name since there are a lot of them
+		slices.SortFunc(ifaces, func(i, j net.Interface) bool {
+			return i.Name < j.Name
+		})
 		for _, i := range ifaces {
 			fmt.Println(i.Name)
 		}
@@ -87,7 +82,7 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts.ConfigFile, opts.RulesFile, func(err error) {
+	c, err := config.NewConfig(opts, func(err error) {
 		if a.Logger != nil {
 			a.Logger.Error().WithField("error", err).Logf("error reloading config")
 		}

@@ -93,12 +93,6 @@ type Config interface {
 	// GetMaxBatchSize is the number of events to be included in the batch for sending
 	GetMaxBatchSize() uint
 
-	// GetOtherConfig attempts to fill the passed in struct with the contents of
-	// a subsection of the config.   This is used by optional configurations to
-	// allow different implementations of necessary interfaces configure
-	// themselves
-	GetOtherConfig(name string, configStruct interface{}) error
-
 	// GetLoggerType returns the type of the logger to use. Valid types are in
 	// the logger package
 	GetLoggerType() (string, error)

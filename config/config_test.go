@@ -9,17 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func getConfig(args []string) (Config, error) {
+	opts, err := NewCmdEnvOptions(args)
+	if err != nil {
+		return nil, err
+	}
+	return NewConfig(opts, func(err error) {})
+}
+
 func TestGRPCListenAddrEnvVar(t *testing.T) {
 	const address = "127.0.0.1:4317"
-	const envVarName = "REFINERY_GRPC_LISTEN_ADDRESS"
+	const envVarName = "REFINERY_GRPC_LISTEN_ADDR"
 	os.Setenv(envVarName, address)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if a, _ := c.GetGRPCListenAddr(); a != address {
 		t.Error("received", a, "expected", address)
@@ -32,11 +37,8 @@ func TestRedisHostEnvVar(t *testing.T) {
 	os.Setenv(envVarName, host)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if d, _ := c.GetRedisHost(); d != host {
 		t.Error("received", d, "expected", host)
@@ -49,11 +51,8 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	os.Setenv(envVarName, username)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if d, _ := c.GetRedisUsername(); d != username {
 		t.Error("received", d, "expected", username)
@@ -66,11 +65,8 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	os.Setenv(envVarName, password)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if d, _ := c.GetRedisPassword(); d != password {
 		t.Error("received", d, "expected", password)
@@ -100,8 +96,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 			os.Setenv(tc.envVar, tc.key)
 			defer os.Unsetenv(tc.envVar)
 
-			c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
+			c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
 			if err != nil {
 				t.Error(err)
 			}
@@ -124,11 +119,8 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	os.Setenv(fallbackEnvVarName, fallbackKey)
 	defer os.Unsetenv(fallbackEnvVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if d, _ := c.GetHoneycombMetricsConfig(); d.MetricsAPIKey != specificKey {
 		t.Error("received", d, "expected", specificKey)
@@ -141,11 +133,8 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	os.Setenv(envVarName, key)
 	defer os.Unsetenv(envVarName)
 
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if d, _ := c.GetHoneycombMetricsConfig(); d.MetricsAPIKey != key {
 		t.Error("received", d, "expected", key)
@@ -157,7 +146,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 
-	configFile, err := os.CreateTemp(tmpDir, "*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "cfg_*.toml")
 	assert.NoError(t, err)
 
 	if configBody != "" {
@@ -166,7 +155,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 	}
 	configFile.Close()
 
-	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "rules_*.toml")
 	assert.NoError(t, err)
 
 	if rulesBody != "" {
@@ -181,6 +170,7 @@ func createTempConfigs(t *testing.T, configBody string, rulesBody string) (strin
 func TestReload(t *testing.T) {
 	config, rules := createTempConfigs(t, `
 	ListenAddr="0.0.0.0:8080"
+	ConfigReloadInterval="1s"
 
 	[InMemCollector]
 		CacheCapacity=1000
@@ -193,13 +183,8 @@ func TestReload(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
-
-	if err != nil {
-		t.Error(err)
-	}
 
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
 		t.Error("received", d, "expected", "0.0.0.0:8080")
@@ -253,11 +238,8 @@ func TestReload(t *testing.T) {
 }
 
 func TestReadDefaults(t *testing.T) {
-	c, err := NewConfig("../config.toml", "../rules.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules.toml"})
+	assert.NoError(t, err)
 
 	if d, _ := c.GetSendDelay(); d != 2*time.Second {
 		t.Error("received", d, "expected", 2*time.Second)
@@ -303,24 +285,12 @@ func TestReadDefaults(t *testing.T) {
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)
-
-	type imcConfig struct {
-		CacheCapacity int
-	}
-	collectorConfig := &imcConfig{}
-	err = c.GetOtherConfig("InMemCollector", collectorConfig)
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Equal(t, collectorConfig.CacheCapacity, 1000)
 }
 
 func TestReadRulesConfig(t *testing.T) {
-	c, err := NewConfig("../config.toml", "../rules_complete.toml", func(err error) {})
-
-	if err != nil {
-		t.Error(err)
-	}
+	// TODO: convert these to YAML
+	c, err := getConfig([]string{"--config", "../config.toml", "--rules_config", "../rules_complete.toml"})
+	assert.NoError(t, err)
 
 	d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist")
 	assert.NoError(t, err)
@@ -384,8 +354,7 @@ func TestPeerManagementType(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
@@ -417,14 +386,16 @@ func TestAbsentTraceKeyField(t *testing.T) {
 		GoalSampleRate = 10
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
-		FieldList = "[request.method]"
+		FieldList = [ "request.method" ]
 		Weight = 0.4
 	`)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	_, err := NewConfig(config, rules, func(err error) {})
+	cfg, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+	_, samplerName, err := cfg.GetSamplerConfigForDataset("dataset1")
 	assert.Error(t, err)
+	assert.Equal(t, "EMADynamicSampler", samplerName)
 	assert.Contains(t, err.Error(), "Error:Field validation for 'AddSampleRateKeyToTraceField'")
 }
 
@@ -443,8 +414,7 @@ func TestDebugServiceAddr(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetDebugServiceAddr(); d != "localhost:8085" {
@@ -467,8 +437,7 @@ func TestDryRun(t *testing.T) {
 	`)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d := c.GetIsDryRun(); d != true {
@@ -490,8 +459,7 @@ func TestMaxAlloc(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	expected := uint64(16 * 1024 * 1024 * 1024)
@@ -535,19 +503,18 @@ func TestGetSamplerTypes(t *testing.T) {
 		UseTraceLength = true
 		AddSampleRateKeyToTrace = true
 		AddSampleRateKeyToTraceField = "meta.refinery.dynsampler_key"
-		FieldList = "[request.method]"
+		FieldList = ["request.method"]
 		Weight = 0.3
 
 	[dataset4]
 
 		Sampler = "TotalThroughputSampler"
 		GoalThroughputPerSec = 100
-		FieldList = "[request.method]"
+		FieldList = ["request.method"]
 	`)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, name, err := c.GetSamplerConfigForDataset("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
@@ -589,8 +556,7 @@ func TestDefaultSampler(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 
 	assert.NoError(t, err)
 
@@ -622,8 +588,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
@@ -655,8 +620,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
@@ -687,8 +651,7 @@ func TestDatasetPrefix(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())
@@ -713,22 +676,14 @@ func TestQueryAuthToken(t *testing.T) {
 		LoggerDataset="loggerDataset"	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "MySeekretToken", c.GetQueryAuthToken())
 }
 
 func TestGRPCServerParameters(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	configFile, err := os.CreateTemp(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	_, err = configFile.Write([]byte(`
+	config, rules := createTempConfigs(t, `
 	[GRPCServerParameters]
 		MaxConnectionIdle = "1m"
 		MaxConnectionAge = "2m"
@@ -749,14 +704,10 @@ func TestGRPCServerParameters(t *testing.T) {
 		LoggerHoneycombAPI="http://honeycomb.io"
 		LoggerAPIKey="1234"
 		LoggerDataset="loggerDataset"
-	`))
-	assert.NoError(t, err)
-	configFile.Close()
-
-	rulesFile, err := os.CreateTemp(tmpDir, "*.toml")
-	assert.NoError(t, err)
-
-	c, err := NewConfig(configFile.Name(), rulesFile.Name(), func(err error) {})
+	`, "")
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, 1*time.Minute, c.GetGRPCMaxConnectionIdle())
@@ -791,8 +742,7 @@ func TestHoneycombAdditionalErrorConfig(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"first", "second"}, c.GetAdditionalErrorFields())
@@ -818,8 +768,7 @@ func TestHoneycombAdditionalErrorDefaults(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"trace.span_id"}, c.GetAdditionalErrorFields())
@@ -839,15 +788,14 @@ func TestSampleCacheParameters(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	s := c.GetSampleCacheConfig()
 	assert.Equal(t, "legacy", s.Type)
 	assert.Equal(t, uint(10_000), s.KeptSize)
 	assert.Equal(t, uint(1_000_000), s.DroppedSize)
-	assert.Equal(t, 10*time.Second, s.SizeCheckInterval)
+	assert.Equal(t, 10*time.Second, time.Duration(s.SizeCheckInterval))
 }
 
 func TestSampleCacheParametersCuckoo(t *testing.T) {
@@ -869,20 +817,19 @@ func TestSampleCacheParametersCuckoo(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	s := c.GetSampleCacheConfig()
 	assert.Equal(t, "cuckoo", s.Type)
 	assert.Equal(t, uint(100_000), s.KeptSize)
 	assert.Equal(t, uint(10_000_000), s.DroppedSize)
-	assert.Equal(t, 1*time.Minute, s.SizeCheckInterval)
+	assert.Equal(t, 1*time.Minute, time.Duration(s.SizeCheckInterval))
 }
 
 func TestAdditionalAttributes(t *testing.T) {
 	config, rules := createTempConfigs(t, `
-	[[AdditionalAttributes]] 
+	[AdditionalAttributes]
 		name="foo"
 		other="bar"
 		another="OneHundred"
@@ -898,8 +845,7 @@ func TestAdditionalAttributes(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, c.GetAdditionalAttributes())
@@ -931,8 +877,7 @@ func TestHoneycombIdFieldsConfig(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"first", "second"}, c.GetTraceIdFieldNames())
@@ -957,78 +902,9 @@ func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
 	`, "")
 	defer os.Remove(rules)
 	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"trace.trace_id", "traceId"}, c.GetTraceIdFieldNames())
 	assert.Equal(t, []string{"trace.parent_id", "parentId"}, c.GetParentIdFieldNames())
-}
-
-func TestStressReliefValidation(t *testing.T) {
-	config, rules := createTempConfigs(t, `
-	CacheOverrunStrategy = "impact"
-
-	[InMemCollector]
-		CacheCapacity=1000
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	[HoneycombLogger]
-		LoggerHoneycombAPI="http://honeycomb.io"
-		LoggerAPIKey="1234"
-		LoggerDataset="loggerDataset"
-		LoggerSamplerEnabled=true
-		LoggerSamplerThroughput=10
-	
-	[StressRelief]
-		Mode = "monitor"
-		ActivationLevel = 75
-		DeactivationLevel = 25
-		StressSamplingRate = 100
-		MinimumActivationDuration = "10s"
-		MinimumStartupDuration = "3s"
-	`, "")
-	defer os.Remove(rules)
-	defer os.Remove(config)
-
-	c, err := NewConfig(config, rules, func(err error) {})
-	assert.NoError(t, err)
-
-	assert.Equal(t, []string{"trace.trace_id", "traceId"}, c.GetTraceIdFieldNames())
-	assert.Equal(t, []string{"trace.parent_id", "parentId"}, c.GetParentIdFieldNames())
-
-	config2, rules2 := createTempConfigs(t, `
-	CacheOverrunStrategy = "legacy"
-
-	[InMemCollector]
-		CacheCapacity=1000
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	[HoneycombLogger]
-		LoggerHoneycombAPI="http://honeycomb.io"
-		LoggerAPIKey="1234"
-		LoggerDataset="loggerDataset"
-		LoggerSamplerEnabled=true
-		LoggerSamplerThroughput=10
-
-	[StressRelief]
-		Mode = "always"
-		ActivationLevel = 75
-		DeactivationLevel = 25
-		StressSamplingRate = 100
-		MinimumActivationDuration = "10s"
-		MinimumStartupDuration = "3s"
-	`, "")
-	defer os.Remove(rules2)
-	defer os.Remove(config2)
-
-	_, err = NewConfig(config2, rules2, func(err error) {})
-
-	assert.Error(t, err, "invalid CacheOverrunStrategy for StressReliefMode: 'legacy'")
 }

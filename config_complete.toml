@@ -276,7 +276,7 @@ Metrics = "honeycomb"
 
 # RedisIdentifier is optional. By default, when using RedisHost, Refinery will use
 # the local hostname to identify itself to other peers in Redis. If your environment
-# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# requires that you use IPs as identifiers (for example, if peers can't resolve each other
 # by name), you can specify the exact identifier (IP address, etc) to use here.
 # Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
 # RedisIdentifier = "192.168.1.1"
@@ -588,7 +588,6 @@ MetricsReportingInterval = 30
 # AdditionalAttributes is a map that can be used for injecting user-defined
 # attributes. For example, it could be used for naming a refinery cluster.
 # Both keys and values must be strings.
-
-# [[AdditionalAttributes]]
+# [AdditionalAttributes]
 # 	ClusterName="MyCluster"
 #   environment="production"

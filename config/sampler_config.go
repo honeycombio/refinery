@@ -7,47 +7,46 @@ import (
 )
 
 type DeterministicSamplerConfig struct {
-	SampleRate int `validate:"required,gte=1"`
+	SampleRate int `default:"1" validate:"required,gte=1"`
 }
 
 type DynamicSamplerConfig struct {
-	SampleRate                   int64 `validate:"required,gte=1"`
-	ClearFrequencySec            int64
+	SampleRate                   int64    `validate:"required,gte=1"`
+	ClearFrequencySec            int64    ``
 	FieldList                    []string `validate:"required"`
-	UseTraceLength               bool
-	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
+	UseTraceLength               bool     ``
+	AddSampleRateKeyToTrace      bool     ``
+	AddSampleRateKeyToTraceField string   `validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type EMADynamicSamplerConfig struct {
-	GoalSampleRate      int `validate:"gte=1"`
-	AdjustmentInterval  int
-	Weight              float64 `validate:"gt=0,lt=1"`
-	AgeOutValue         float64
-	BurstMultiple       float64
-	BurstDetectionDelay uint
-	MaxKeys             int
-
+	GoalSampleRate               int      `validate:"gte=1"`
+	AdjustmentInterval           int      ``
+	Weight                       float64  `validate:"gt=0,lt=1"`
+	AgeOutValue                  float64  ``
+	BurstMultiple                float64  ``
+	BurstDetectionDelay          uint     ``
+	MaxKeys                      int      ``
 	FieldList                    []string `validate:"required"`
-	UseTraceLength               bool
-	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
+	UseTraceLength               bool     ``
+	AddSampleRateKeyToTrace      bool     ``
+	AddSampleRateKeyToTraceField string   `validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type TotalThroughputSamplerConfig struct {
-	GoalThroughputPerSec         int64 `validate:"gte=1"`
-	ClearFrequencySec            int64
+	GoalThroughputPerSec         int64    `validate:"gte=1"`
+	ClearFrequencySec            int64    ``
 	FieldList                    []string `validate:"required"`
-	UseTraceLength               bool
-	AddSampleRateKeyToTrace      bool
-	AddSampleRateKeyToTraceField string `validate:"required_with=AddSampleRateKeyToTrace"`
+	UseTraceLength               bool     ``
+	AddSampleRateKeyToTrace      bool     ``
+	AddSampleRateKeyToTraceField string   `validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type RulesBasedSamplerCondition struct {
-	Field    string
-	Operator string
-	Value    interface{}
-	Datatype string
+	Field    string      `validate:"required"`
+	Operator string      `validate:"required"`
+	Value    interface{} ``
+	Datatype string      ``
 	Matches  func(value any, exists bool) bool
 }
 
@@ -382,12 +381,12 @@ type RulesBasedDownstreamSampler struct {
 }
 
 type RulesBasedSamplerRule struct {
-	Name       string
-	SampleRate int
-	Sampler    *RulesBasedDownstreamSampler
-	Drop       bool
-	Scope      string `validate:"oneof=span trace"`
-	Condition  []*RulesBasedSamplerCondition
+	Name       string                        ``
+	SampleRate int                           ``
+	Sampler    *RulesBasedDownstreamSampler  ``
+	Drop       bool                          ``
+	Scope      string                        `validate:"oneof=span trace"`
+	Condition  []*RulesBasedSamplerCondition ``
 }
 
 func (r *RulesBasedSamplerRule) String() string {
@@ -395,8 +394,8 @@ func (r *RulesBasedSamplerRule) String() string {
 }
 
 type RulesBasedSamplerConfig struct {
-	Rule              []*RulesBasedSamplerRule
-	CheckNestedFields bool
+	Rule              []*RulesBasedSamplerRule ``
+	CheckNestedFields bool                     ``
 }
 
 func (r *RulesBasedSamplerConfig) String() string {

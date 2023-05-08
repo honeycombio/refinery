@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"sync"
 	"time"
 )
@@ -31,69 +30,66 @@ type MockConfig struct {
 	GetHoneycombLoggerConfigVal          HoneycombLoggerConfig
 	GetLoggingLevelErr                   error
 	GetLoggingLevelVal                   string
-	GetOtherConfigErr                    error
-	// GetOtherConfigVal must be a JSON representation of the config struct to be populated.
-	GetOtherConfigVal             string
-	GetPeersErr                   error
-	GetPeersVal                   []string
-	GetRedisHostErr               error
-	GetRedisHostVal               string
-	GetRedisUsernameErr           error
-	GetRedisUsernameVal           string
-	GetRedisPasswordErr           error
-	GetRedisPasswordVal           string
-	GetRedisDatabaseVal           int
-	GetRedisPrefixVal             string
-	GetUseTLSErr                  error
-	GetUseTLSVal                  bool
-	GetUseTLSInsecureErr          error
-	GetUseTLSInsecureVal          bool
-	GetSamplerTypeErr             error
-	GetSamplerTypeName            string
-	GetSamplerTypeVal             interface{}
-	GetMetricsTypeErr             error
-	GetMetricsTypeVal             string
-	GetHoneycombMetricsConfigErr  error
-	GetHoneycombMetricsConfigVal  HoneycombMetricsConfig
-	GetPrometheusMetricsConfigErr error
-	GetPrometheusMetricsConfigVal PrometheusMetricsConfig
-	GetSendDelayErr               error
-	GetSendDelayVal               time.Duration
-	GetBatchTimeoutVal            time.Duration
-	GetTraceTimeoutErr            error
-	GetTraceTimeoutVal            time.Duration
-	GetMaxBatchSizeVal            uint
-	GetUpstreamBufferSizeVal      int
-	GetPeerBufferSizeVal          int
-	SendTickerVal                 time.Duration
-	IdentifierInterfaceName       string
-	UseIPV6Identifier             bool
-	RedisIdentifier               string
-	PeerManagementType            string
-	PeerManagementStrategy        string
-	DebugServiceAddr              string
-	DryRun                        bool
-	DryRunFieldName               string
-	AddHostMetadataToTrace        bool
-	AddRuleReasonToTrace          bool
-	EnvironmentCacheTTL           time.Duration
-	DatasetPrefix                 string
-	QueryAuthToken                string
-	GRPCMaxConnectionIdle         time.Duration
-	GRPCMaxConnectionAge          time.Duration
-	GRPCMaxConnectionAgeGrace     time.Duration
-	GRPCTime                      time.Duration
-	GRPCTimeout                   time.Duration
-	PeerTimeout                   time.Duration
-	AdditionalErrorFields         []string
-	AddSpanCountToRoot            bool
-	CacheOverrunStrategy          string
-	SampleCache                   SampleCacheConfig
-	StressRelief                  StressReliefConfig
-	AdditionalAttributes          map[string]string
-	TraceIdFieldNames				  		[]string
-	ParentIdFieldNames						[]string
-	CfgMetadata                   []ConfigMetadata
+	GetPeersErr                          error
+	GetPeersVal                          []string
+	GetRedisHostErr                      error
+	GetRedisHostVal                      string
+	GetRedisUsernameErr                  error
+	GetRedisUsernameVal                  string
+	GetRedisPasswordErr                  error
+	GetRedisPasswordVal                  string
+	GetRedisDatabaseVal                  int
+	GetRedisPrefixVal                    string
+	GetUseTLSErr                         error
+	GetUseTLSVal                         bool
+	GetUseTLSInsecureErr                 error
+	GetUseTLSInsecureVal                 bool
+	GetSamplerTypeErr                    error
+	GetSamplerTypeName                   string
+	GetSamplerTypeVal                    interface{}
+	GetMetricsTypeErr                    error
+	GetMetricsTypeVal                    string
+	GetHoneycombMetricsConfigErr         error
+	GetHoneycombMetricsConfigVal         HoneycombMetricsConfig
+	GetPrometheusMetricsConfigErr        error
+	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
+	GetSendDelayErr                      error
+	GetSendDelayVal                      time.Duration
+	GetBatchTimeoutVal                   time.Duration
+	GetTraceTimeoutErr                   error
+	GetTraceTimeoutVal                   time.Duration
+	GetMaxBatchSizeVal                   uint
+	GetUpstreamBufferSizeVal             int
+	GetPeerBufferSizeVal                 int
+	SendTickerVal                        time.Duration
+	IdentifierInterfaceName              string
+	UseIPV6Identifier                    bool
+	RedisIdentifier                      string
+	PeerManagementType                   string
+	PeerManagementStrategy               string
+	DebugServiceAddr                     string
+	DryRun                               bool
+	DryRunFieldName                      string
+	AddHostMetadataToTrace               bool
+	AddRuleReasonToTrace                 bool
+	EnvironmentCacheTTL                  time.Duration
+	DatasetPrefix                        string
+	QueryAuthToken                       string
+	GRPCMaxConnectionIdle                time.Duration
+	GRPCMaxConnectionAge                 time.Duration
+	GRPCMaxConnectionAgeGrace            time.Duration
+	GRPCTime                             time.Duration
+	GRPCTimeout                          time.Duration
+	PeerTimeout                          time.Duration
+	AdditionalErrorFields                []string
+	AddSpanCountToRoot                   bool
+	CacheOverrunStrategy                 string
+	SampleCache                          SampleCacheConfig
+	StressRelief                         StressReliefConfig
+	AdditionalAttributes                 map[string]string
+	TraceIdFieldNames                    []string
+	ParentIdFieldNames                   []string
+	CfgMetadata                          []ConfigMetadata
 
 	Mux sync.RWMutex
 }
@@ -188,17 +184,6 @@ func (m *MockConfig) GetLoggingLevel() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetLoggingLevelVal, m.GetLoggingLevelErr
-}
-
-func (m *MockConfig) GetOtherConfig(name string, iface interface{}) error {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	err := json.Unmarshal([]byte(m.GetOtherConfigVal), iface)
-	if err != nil {
-		return err
-	}
-	return m.GetOtherConfigErr
 }
 
 func (m *MockConfig) GetPeers() ([]string, error) {

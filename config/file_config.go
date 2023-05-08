@@ -1,89 +1,102 @@
 package config
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
-	"fmt"
-	"io"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
-	"github.com/go-playground/validator"
-	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/sirupsen/logrus"
-	viper "github.com/spf13/viper"
 )
 
+// In order to be able to unmarshal "15s" etc. into time.Duration, we need to
+// define a new type and implement MarshalText and UnmarshalText.
+type Duration time.Duration
+
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(time.Duration(d).String()), nil
+}
+
+func (d *Duration) UnmarshalText(text []byte) error {
+	dur, err := time.ParseDuration(string(text))
+	if err != nil {
+		return err
+	}
+	*d = Duration(dur)
+	return nil
+}
+
 type fileConfig struct {
-	config        *viper.Viper
-	rules         *viper.Viper
-	conf          *configContents
+	mainConfig    *configContents
+	mainHash      string
+	rulesConfig   map[string]any
+	rulesHash     string
+	opts          *CmdEnv
 	callbacks     []func()
 	errorCallback func(error)
+	done          chan struct{}
+	ticker        *time.Ticker
 	mux           sync.RWMutex
 	lastLoadTime  time.Time
 }
 
 type configContents struct {
-	ListenAddr                string `validate:"required"`
-	PeerListenAddr            string `validate:"required"`
-	CompressPeerCommunication bool
-	GRPCListenAddr            string
-	APIKeys                   []string      `validate:"required"`
-	HoneycombAPI              string        `validate:"required,url"`
-	Logger                    string        `validate:"required,oneof= logrus honeycomb"`
-	LoggingLevel              string        `validate:"required"`
-	Collector                 string        `validate:"required,oneof= InMemCollector"`
-	Sampler                   string        `validate:"required,oneof= DeterministicSampler DynamicSampler EMADynamicSampler RulesBasedSampler TotalThroughputSampler"`
-	Metrics                   string        `validate:"required,oneof= prometheus honeycomb"`
-	SendDelay                 time.Duration `validate:"required"`
-	BatchTimeout              time.Duration
-	TraceTimeout              time.Duration `validate:"required"`
-	MaxBatchSize              uint          `validate:"required"`
-	SendTicker                time.Duration `validate:"required"`
-	UpstreamBufferSize        int           `validate:"required"`
-	PeerBufferSize            int           `validate:"required"`
-	DebugServiceAddr          string
-	DryRun                    bool
-	DryRunFieldName           string
+	ListenAddr                string                         `default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr" validate:"required"`
+	PeerListenAddr            string                         `default:"0.0.0.0:8081" cmdenv:"PeerListenAddr" validate:"required"`
+	CompressPeerCommunication bool                           `default:"true"`
+	GRPCListenAddr            string                         `cmdenv:"GRPCListenAddr"`
+	APIKeys                   []string                       `default:"[\"*\"]" validate:"required"`
+	HoneycombAPI              string                         `default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI" validate:"required,url"`
+	Logger                    string                         `default:"logrus" validate:"required,oneof= logrus honeycomb"`
+	LoggingLevel              string                         `default:"info" validate:"required,oneof= debug info warn error"`
+	Collector                 string                         `default:"InMemCollector" validate:"required,oneof= InMemCollector"`
+	Metrics                   string                         `default:"honeycomb" validate:"required,oneof= prometheus honeycomb"`
+	SendDelay                 Duration                       `default:"2s" validate:"required"`
+	BatchTimeout              Duration                       `default:"100ms"`
+	TraceTimeout              Duration                       `default:"60s" validate:"required"`
+	MaxBatchSize              uint                           `default:"500" validate:"required"`
+	SendTicker                Duration                       `default:"100ms" validate:"required"`
+	UpstreamBufferSize        int                            `default:"10_000" validate:"required"`
+	PeerBufferSize            int                            `default:"10_000" validate:"required"`
+	DebugServiceAddr          string                         ``
 	PeerManagement            PeerManagementConfig           `validate:"required"`
 	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
-	AddHostMetadataToTrace    bool
-	AddRuleReasonToTrace      bool
-	EnvironmentCacheTTL       time.Duration
-	DatasetPrefix             string
-	QueryAuthToken            string
-	GRPCServerParameters      GRPCServerParameters
-	AdditionalErrorFields     []string
-	AddSpanCountToRoot        bool
-	CacheOverrunStrategy      string
-	SampleCache               SampleCacheConfig  `validate:"required"`
-	StressRelief              StressReliefConfig `validate:"required"`
-	AdditionalAttributes      map[string]string
-	TraceIdFieldNames         []string
-	ParentIdFieldNames        []string
+	AddHostMetadataToTrace    bool                           ``
+	AddRuleReasonToTrace      bool                           ``
+	EnvironmentCacheTTL       Duration                       `default:"1h"`
+	DatasetPrefix             string                         ``
+	QueryAuthToken            string                         `cmdenv:"QueryAuthToken"`
+	AdditionalErrorFields     []string                       `default:"[\"trace.span_id\"]"`
+	AddSpanCountToRoot        bool                           ``
+	CacheOverrunStrategy      string                         `default:"impact"`
+	SampleCache               SampleCacheConfig              `validate:"required"`
+	StressRelief              StressReliefConfig             `validate:"required"`
+	AdditionalAttributes      map[string]string              `default:"{}"`
+	TraceIdFieldNames         []string                       `default:"[\"trace.trace_id\",\"traceId\"]"`
+	ParentIdFieldNames        []string                       `default:"[\"trace.parent_id\",\"parentId\"]"`
+	ConfigReloadInterval      Duration                       `default:"30s"`
+	DryRun                    bool                           ``
+	DryRunFieldName           string                         `default:"refinery_kept"`
+	GRPCServerParameters      *GRPCServerParameters
+	HoneycombLogger           *HoneycombLoggerConfig
+	HoneycombMetrics          *HoneycombMetricsConfig
+	PrometheusMetrics         *PrometheusMetricsConfig
 }
 
 type InMemoryCollectorCacheCapacity struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity int `validate:"required,lt=2147483647"`
-	MaxAlloc      uint64
+	CacheCapacity int    `default:"10_000" validate:"required,lt=2147483647"`
+	MaxAlloc      uint64 ``
 }
 
 type HoneycombLevel int
 
 type HoneycombLoggerConfig struct {
-	LoggerHoneycombAPI      string `validate:"required,url"`
-	LoggerAPIKey            string `validate:"required"`
-	LoggerDataset           string `validate:"required"`
-	LoggerSamplerEnabled    bool
-	LoggerSamplerThroughput int
-	Level                   HoneycombLevel
+	LoggerHoneycombAPI      string         `validate:"required,url"`
+	LoggerAPIKey            string         `cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey" validate:"required"`
+	LoggerDataset           string         `default:"Refinery Logs" validate:"required"`
+	LoggerSamplerEnabled    bool           ``
+	LoggerSamplerThroughput int            `default:"5"`
+	Level                   HoneycombLevel `default:"Warn"`
 }
 
 type PrometheusMetricsConfig struct {
@@ -92,340 +105,151 @@ type PrometheusMetricsConfig struct {
 
 type HoneycombMetricsConfig struct {
 	MetricsHoneycombAPI      string `validate:"required,url"`
-	MetricsAPIKey            string `validate:"required"`
+	MetricsAPIKey            string `cmdenv:"HoneycombMetricsAPIKey,HoneycombAPIKey" validate:"required"`
 	MetricsDataset           string `validate:"required"`
-	MetricsReportingInterval int64  `validate:"required"`
+	MetricsReportingInterval int64  `default:"3s" validate:"required"`
 }
 
 type PeerManagementConfig struct {
-	Type                    string   `validate:"required,oneof= file redis"`
-	Peers                   []string `validate:"dive,url"`
-	RedisHost               string
-	RedisUsername           string
-	RedisPassword           string
-	RedisPrefix             string `validate:"required"`
-	RedisDatabase           int    `validate:"gte=0,lte=15"`
-	UseTLS                  bool
-	UseTLSInsecure          bool
-	IdentifierInterfaceName string
-	UseIPV6Identifier       bool
-	RedisIdentifier         string
-	Timeout                 time.Duration
-	Strategy                string `validate:"required,oneof= legacy hash"`
+	Type                    string   `default:"file" validate:"required,oneof= file redis"`
+	Peers                   []string `default:"[\"http://127.0.0.1:8081\"]" validate:"dive,url"`
+	RedisHost               string   `cmdenv:"RedisHost"`
+	RedisUsername           string   `cmdenv:"RedisUsername"`
+	RedisPassword           string   `cmdenv:"RedisPassword"`
+	RedisPrefix             string   `default:"refinery" validate:"required"`
+	RedisDatabase           int      `validate:"gte=0,lte=15"`
+	RedisIdentifier         string   ``
+	UseTLS                  bool     ``
+	UseTLSInsecure          bool     ``
+	IdentifierInterfaceName string   ``
+	UseIPV6Identifier       bool     ``
+	Timeout                 Duration `default:"5s" validate:"gte=1_000_000_000"`
+	Strategy                string   `default:"legacy" validate:"required,oneof= legacy hash"`
 }
 
 type SampleCacheConfig struct {
-	Type              string        `validate:"required,oneof= legacy cuckoo"`
-	KeptSize          uint          `validate:"gte=500"`
-	DroppedSize       uint          `validate:"gte=100_000"`
-	SizeCheckInterval time.Duration `validate:"gte=1_000_000_000"` // 1 second minimum
+	Type              string   `default:"legacy" validate:"required,oneof= legacy cuckoo"`
+	KeptSize          uint     `default:"10_000" validate:"gte=500"`
+	DroppedSize       uint     `default:"1_000_000" validate:"gte=100_000"`
+	SizeCheckInterval Duration `default:"10s" validate:"gte=1_000_000_000"` // 1 second minimum
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	MaxConnectionIdle     time.Duration
-	MaxConnectionAge      time.Duration
-	MaxConnectionAgeGrace time.Duration
-	Time                  time.Duration
-	Timeout               time.Duration
+	MaxConnectionIdle     Duration `default:"1s"`
+	MaxConnectionAge      Duration `default:"5s"`
+	MaxConnectionAgeGrace Duration `default:"3s"`
+	Time                  Duration `default:"10s"`
+	Timeout               Duration `default:"2s"`
 }
 
 type StressReliefConfig struct {
-	Mode                      string `validate:"required,oneof= always never monitor"`
-	ActivationLevel           uint
-	DeactivationLevel         uint
-	StressSamplingRate        uint64
-	MinimumActivationDuration time.Duration
-	StartStressedDuration     time.Duration
+	Mode                      string   `default:"never" validate:"required,oneof= always never monitor"`
+	ActivationLevel           uint     `default:"90" validate:"gte=0,lte=100"`
+	DeactivationLevel         uint     `default:"75" validate:"gte=0,lte=100"`
+	StressSamplingRate        uint64   `default:"1000" validate:"gte=1"`
+	MinimumActivationDuration Duration `default:"10s"`
+	StartStressedDuration     Duration `default:"3s"`
 }
 
-// NewConfig creates a new config struct
-func NewConfig(config, rules string, errorCallback func(error)) (Config, error) {
-	c := viper.New()
-
-	c.BindEnv("GRPCListenAddr", "REFINERY_GRPC_LISTEN_ADDRESS")
-	c.BindEnv("PeerManagement.RedisHost", "REFINERY_REDIS_HOST")
-	c.BindEnv("PeerManagement.RedisUsername", "REFINERY_REDIS_USERNAME")
-	c.BindEnv("PeerManagement.RedisPassword", "REFINERY_REDIS_PASSWORD")
-	c.BindEnv("HoneycombLogger.LoggerAPIKey", "REFINERY_HONEYCOMB_API_KEY")
-	c.BindEnv("HoneycombMetrics.MetricsAPIKey", "REFINERY_HONEYCOMB_METRICS_API_KEY", "REFINERY_HONEYCOMB_API_KEY")
-	c.BindEnv("QueryAuthToken", "REFINERY_QUERY_AUTH_TOKEN")
-	c.SetDefault("ListenAddr", "0.0.0.0:8080")
-	c.SetDefault("PeerListenAddr", "0.0.0.0:8081")
-	c.SetDefault("CompressPeerCommunication", true)
-	c.SetDefault("APIKeys", []string{"*"})
-	c.SetDefault("PeerManagement.Peers", []string{"http://127.0.0.1:8081"})
-	c.SetDefault("PeerManagement.RedisPrefix", "refinery")
-	c.SetDefault("PeerManagement.Type", "file")
-	c.SetDefault("PeerManagement.UseTLS", false)
-	c.SetDefault("PeerManagement.UseTLSInsecure", false)
-	c.SetDefault("PeerManagement.UseIPV6Identifier", false)
-	c.SetDefault("PeerManagement.Timeout", 5*time.Second)
-	c.SetDefault("PeerManagement.Strategy", "legacy")
-	c.SetDefault("HoneycombAPI", "https://api.honeycomb.io")
-	c.SetDefault("Logger", "logrus")
-	c.SetDefault("LoggingLevel", "debug")
-	c.SetDefault("Collector", "InMemCollector")
-	c.SetDefault("Metrics", "honeycomb")
-	c.SetDefault("SendDelay", 2*time.Second)
-	c.SetDefault("BatchTimeout", libhoney.DefaultBatchTimeout)
-	c.SetDefault("TraceTimeout", 60*time.Second)
-	c.SetDefault("MaxBatchSize", 500)
-	c.SetDefault("SendTicker", 100*time.Millisecond)
-	c.SetDefault("UpstreamBufferSize", libhoney.DefaultPendingWorkCapacity)
-	c.SetDefault("PeerBufferSize", libhoney.DefaultPendingWorkCapacity)
-	c.SetDefault("MaxAlloc", uint64(0))
-	c.SetDefault("HoneycombLogger.LoggerSamplerEnabled", false)
-	c.SetDefault("HoneycombLogger.LoggerSamplerThroughput", 5)
-	c.SetDefault("AddHostMetadataToTrace", false)
-	c.SetDefault("AddRuleReasonToTrace", false)
-	c.SetDefault("EnvironmentCacheTTL", time.Hour)
-	c.SetDefault("GRPCServerParameters.MaxConnectionIdle", 1*time.Minute)
-	c.SetDefault("GRPCServerParameters.MaxConnectionAge", time.Duration(0))
-	c.SetDefault("GRPCServerParameters.MaxConnectionAgeGrace", time.Duration(0))
-	c.SetDefault("GRPCServerParameters.Time", 10*time.Second)
-	c.SetDefault("GRPCServerParameters.Timeout", 2*time.Second)
-	c.SetDefault("AdditionalErrorFields", []string{"trace.span_id"})
-	c.SetDefault("AddSpanCountToRoot", false)
-	c.SetDefault("CacheOverrunStrategy", "resize")
-	c.SetDefault("SampleCache.Type", "legacy")
-	c.SetDefault("SampleCache.KeptSize", 10_000)
-	c.SetDefault("SampleCache.DroppedSize", 1_000_000)
-	c.SetDefault("SampleCache.SizeCheckInterval", 10*time.Second)
-	c.SetDefault("StressRelief.Mode", "never")
-	c.SetDefault("StressRelief.ActivationLevel", 75)
-	c.SetDefault("StressRelief.DeactivationLevel", 25)
-	c.SetDefault("StressRelief.StressSamplingRate", 100)
-	c.SetDefault("StressRelief.MinimumActivationDuration", 10*time.Second)
-	c.SetDefault("StressRelief.StartStressedDuration", 3*time.Second)
-	c.SetDefault("AdditionalAttributes", make(map[string]string))
-	c.SetDefault("TraceIdFieldNames", []string{"trace.trace_id", "traceId"})
-	c.SetDefault("ParentIdFieldNames", []string{"trace.parent_id", "parentId"})
-
-	c.SetConfigFile(config)
-	err := c.ReadInConfig()
-
+// newFileConfig does the work of creating and loading the start of a config object
+// from the given arguments.
+// It's used by both the main init as well as the reload code.
+func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
+	mainconf := &configContents{}
+	mainhash, err := readConfigInto(mainconf, opts.ConfigLocation, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	r := viper.New()
-
-	r.SetDefault("Sampler", "DeterministicSampler")
-	r.SetDefault("SampleRate", 1)
-	r.SetDefault("DryRun", false)
-	r.SetDefault("DryRunFieldName", "refinery_kept")
-
-	r.SetConfigFile(rules)
-	err = r.ReadInConfig()
-
+	var rulesconf map[string]any
+	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocation, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	fc := &fileConfig{
-		config:        c,
-		rules:         r,
-		conf:          &configContents{},
-		callbacks:     make([]func(), 0),
-		errorCallback: errorCallback,
+	// TODO: this is temporary while we still conform to the old config format;
+	// once we're fully migrated, we can remove this stuff.
+	if dryRun, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrun", false); ok {
+		mainconf.DryRun = dryRun
+	}
+	if dryRunFieldName, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrunfieldname", ""); ok && dryRunFieldName != "" {
+		mainconf.DryRunFieldName = dryRunFieldName
 	}
 
-	err = fc.unmarshal()
+	cfg := &fileConfig{
+		mainConfig:  mainconf,
+		mainHash:    mainhash,
+		rulesConfig: rulesconf,
+		rulesHash:   ruleshash,
+		opts:        opts,
+	}
 
-	if err != nil {
+	// Run a basic validation on the sampler config; we can do better after a reorganization of this.
+	if _, _, err := cfg.GetSamplerConfigForDataset("**invalid dataset name**"); err != nil {
 		return nil, err
 	}
 
-	v := validator.New()
-	err = v.Struct(fc.conf)
-	if err != nil {
-		return nil, err
-	}
-
-	err = fc.validateGeneralConfigs()
-	if err != nil {
-		return nil, err
-	}
-
-	err = fc.validateSamplerConfigs()
-	if err != nil {
-		return nil, err
-	}
-
-	c.WatchConfig()
-	c.OnConfigChange(fc.onChange)
-
-	r.WatchConfig()
-	r.OnConfigChange(fc.onChange)
-
-	return fc, nil
+	return cfg, nil
 }
 
-func (f *fileConfig) onChange(in fsnotify.Event) {
-	v := validator.New()
-	err := v.Struct(f.conf)
+// NewConfig creates a new Config object from the given arguments; if args is
+// nil, it uses the command line arguments
+func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
+	cfg, err := newFileConfig(opts)
 	if err != nil {
-		f.errorCallback(err)
-		return
+		return nil, err
 	}
 
-	err = f.validateGeneralConfigs()
-	if err != nil {
-		f.errorCallback(err)
-		return
-	}
+	cfg.callbacks = make([]func(), 0)
+	cfg.errorCallback = errorCallback
 
-	err = f.validateSamplerConfigs()
-	if err != nil {
-		f.errorCallback(err)
-		return
-	}
+	go cfg.monitor()
 
-	f.unmarshal()
-
-	for _, c := range f.callbacks {
-		c()
-	}
+	return cfg, nil
 }
 
-func (f *fileConfig) unmarshal() error {
-	f.mux.Lock()
-	defer f.mux.Unlock()
-	err := f.config.Unmarshal(f.conf)
-
-	if err != nil {
-		return err
-	}
-
-	err = f.rules.Unmarshal(f.conf)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (f *fileConfig) validateGeneralConfigs() error {
-	f.lastLoadTime = time.Now()
-
-	// validate logger config
-	loggerType, err := f.GetLoggerType()
-	if err != nil {
-		return err
-	}
-	if loggerType == "honeycomb" {
-		_, err = f.GetHoneycombLoggerConfig()
-		if err != nil {
-			return err
-		}
-	}
-
-	// validate metrics config
-	metricsType, err := f.GetMetricsType()
-	if err != nil {
-		return err
-	}
-	if metricsType == "honeycomb" {
-		_, err = f.GetHoneycombMetricsConfig()
-		if err != nil {
-			return err
-		}
-	}
-	if metricsType == "prometheus" {
-		_, err = f.GetPrometheusMetricsConfig()
-		if err != nil {
-			return err
-		}
-	}
-
-	// validate cache strategy
-	st := f.GetCacheOverrunStrategy()
-	switch st {
-	case "resize", "impact":
-		break
-	default:
-		return fmt.Errorf("invalid CacheOverrunStrategy: '%s'", st)
-	}
-
-	if st != "impact" && (f.GetStressReliefConfig().Mode == "monitor" || f.GetStressReliefConfig().Mode == "always"){
-		return fmt.Errorf("invalid CacheOverrunStrategy for StressReliefMode: '%s'", st)
-	}
-	return nil
-}
-
-func (f *fileConfig) validateSamplerConfigs() error {
-	logrus.Debugf("Sampler rules config: %+v", f.rules)
-
-	keys := f.rules.AllKeys()
-	for _, key := range keys {
-		parts := strings.Split(key, ".")
-
-		// verify default sampler config
-		if parts[0] == "sampler" {
-			t := f.rules.GetString(key)
-			var i interface{}
-			switch t {
-			case "DeterministicSampler":
-				i = &DeterministicSamplerConfig{}
-			case "DynamicSampler":
-				i = &DynamicSamplerConfig{}
-			case "EMADynamicSampler":
-				i = &EMADynamicSamplerConfig{}
-			case "RulesBasedSampler":
-				i = &RulesBasedSamplerConfig{}
-			case "TotalThroughputSampler":
-				i = &TotalThroughputSamplerConfig{}
-			default:
-				return fmt.Errorf("Invalid or missing default sampler type: %s", t)
-			}
-			err := f.rules.Unmarshal(i)
+func (f *fileConfig) monitor() {
+	f.done = make(chan struct{})
+	f.ticker = time.NewTicker(time.Duration(f.mainConfig.ConfigReloadInterval))
+	for {
+		select {
+		case <-f.done:
+			return
+		case <-f.ticker.C:
+			// reread the configs
+			cfg, err := newFileConfig(f.opts)
 			if err != nil {
-				return fmt.Errorf("Failed to unmarshal sampler rule: %w", err)
+				f.errorCallback(err)
+				continue
 			}
-			v := validator.New()
-			err = v.Struct(i)
-			if err != nil {
-				return fmt.Errorf("Failed to validate sampler rule: %w", err)
-			}
-		}
 
-		// verify dataset sampler configs
-		if len(parts) > 1 && parts[1] == "sampler" {
-			t := f.rules.GetString(key)
-			var i interface{}
-			switch t {
-			case "DeterministicSampler":
-				i = &DeterministicSamplerConfig{}
-			case "DynamicSampler":
-				i = &DynamicSamplerConfig{}
-			case "EMADynamicSampler":
-				i = &EMADynamicSamplerConfig{}
-			case "RulesBasedSampler":
-				i = &RulesBasedSamplerConfig{}
-			case "TotalThroughputSampler":
-				i = &TotalThroughputSamplerConfig{}
-			default:
-				return fmt.Errorf("Invalid or missing dataset sampler type: %s", t)
+			// if nothing's changed, we're fine
+			if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
+				continue
 			}
-			datasetName := parts[0]
-			if sub := f.rules.Sub(datasetName); sub != nil {
-				err := sub.Unmarshal(i)
-				if err != nil {
-					return fmt.Errorf("Failed to unmarshal dataset sampler rule: %w", err)
-				}
-				v := validator.New()
-				err = v.Struct(i)
-				if err != nil {
-					return fmt.Errorf("Failed to validate dataset sampler rule: %w", err)
-				}
+
+			// otherwise, update our state and call the callbacks
+			f.mux.Lock()
+			f.mainConfig = cfg.mainConfig
+			f.mainHash = cfg.mainHash
+			f.rulesConfig = cfg.rulesConfig
+			f.rulesHash = cfg.rulesHash
+			for _, cb := range f.callbacks {
+				cb()
 			}
+			f.mux.Unlock() // can't defer since the goroutine never ends
 		}
 	}
-	return nil
+}
+
+// Stop halts the monitor goroutine
+func (f *fileConfig) Stop() {
+	f.ticker.Stop()
+	close(f.done)
+	f.done = nil
 }
 
 func (f *fileConfig) RegisterReloadCallback(cb func()) {
@@ -439,29 +263,29 @@ func (f *fileConfig) GetListenAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	_, _, err := net.SplitHostPort(f.conf.ListenAddr)
+	_, _, err := net.SplitHostPort(f.mainConfig.ListenAddr)
 	if err != nil {
 		return "", err
 	}
-	return f.conf.ListenAddr, nil
+	return f.mainConfig.ListenAddr, nil
 }
 
 func (f *fileConfig) GetPeerListenAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	_, _, err := net.SplitHostPort(f.conf.PeerListenAddr)
+	_, _, err := net.SplitHostPort(f.mainConfig.PeerListenAddr)
 	if err != nil {
 		return "", err
 	}
-	return f.conf.PeerListenAddr, nil
+	return f.mainConfig.PeerListenAddr, nil
 }
 
 func (f *fileConfig) GetCompressPeerCommunication() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.CompressPeerCommunication
+	return f.mainConfig.CompressPeerCommunication
 }
 
 func (f *fileConfig) GetGRPCListenAddr() (string, error) {
@@ -469,573 +293,454 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 	defer f.mux.RUnlock()
 
 	// GRPC listen addr is optional, only check value is valid if not empty
-	if f.conf.GRPCListenAddr != "" {
-		_, _, err := net.SplitHostPort(f.conf.GRPCListenAddr)
+	if f.mainConfig.GRPCListenAddr != "" {
+		_, _, err := net.SplitHostPort(f.mainConfig.GRPCListenAddr)
 		if err != nil {
 			return "", err
 		}
 	}
-	return f.conf.GRPCListenAddr, nil
+	return f.mainConfig.GRPCListenAddr, nil
 }
 
 func (f *fileConfig) GetAPIKeys() ([]string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.APIKeys, nil
+	return f.mainConfig.APIKeys, nil
 }
 
 func (f *fileConfig) GetPeerManagementType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.PeerManagement.Type, nil
+	return f.mainConfig.PeerManagement.Type, nil
 }
 
 func (f *fileConfig) GetPeerManagementStrategy() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.PeerManagement.Strategy, nil
+	return f.mainConfig.PeerManagement.Strategy, nil
 }
 
 func (f *fileConfig) GetPeers() ([]string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.PeerManagement.Peers, nil
+	return f.mainConfig.PeerManagement.Peers, nil
 }
 
 func (f *fileConfig) GetRedisHost() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetString("PeerManagement.RedisHost"), nil
+	return f.mainConfig.PeerManagement.RedisHost, nil
 }
 
 func (f *fileConfig) GetRedisUsername() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetString("PeerManagement.RedisUsername"), nil
+	return f.mainConfig.PeerManagement.RedisUsername, nil
 }
 
 func (f *fileConfig) GetRedisPrefix() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetString("PeerManagement.RedisPrefix")
+	return f.mainConfig.PeerManagement.RedisPrefix
 }
 
 func (f *fileConfig) GetRedisPassword() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetString("PeerManagement.RedisPassword"), nil
+	return f.mainConfig.PeerManagement.RedisPassword, nil
 }
 
 func (f *fileConfig) GetRedisDatabase() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetInt("PeerManagement.RedisDatabase")
+	return f.mainConfig.PeerManagement.RedisDatabase
 }
 
 func (f *fileConfig) GetUseTLS() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetBool("PeerManagement.UseTLS"), nil
+	return f.mainConfig.PeerManagement.UseTLS, nil
 }
 
 func (f *fileConfig) GetUseTLSInsecure() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetBool("PeerManagement.UseTLSInsecure"), nil
+	return f.mainConfig.PeerManagement.UseTLSInsecure, nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetString("PeerManagement.IdentifierInterfaceName"), nil
+	return f.mainConfig.PeerManagement.IdentifierInterfaceName, nil
 }
 
 func (f *fileConfig) GetUseIPV6Identifier() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetBool("PeerManagement.UseIPV6Identifier"), nil
+	return f.mainConfig.PeerManagement.UseIPV6Identifier, nil
 }
 
 func (f *fileConfig) GetRedisIdentifier() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.config.GetString("PeerManagement.RedisIdentifier"), nil
+	return f.mainConfig.PeerManagement.RedisIdentifier, nil
 }
 
 func (f *fileConfig) GetHoneycombAPI() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.HoneycombAPI, nil
+	return f.mainConfig.HoneycombAPI, nil
 }
 
 func (f *fileConfig) GetLoggingLevel() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.LoggingLevel, nil
+	return f.mainConfig.LoggingLevel, nil
 }
 
 func (f *fileConfig) GetLoggerType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.Logger, nil
+	return f.mainConfig.Logger, nil
 }
 
 func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	hlConfig := &HoneycombLoggerConfig{}
-	if sub := f.config.Sub("HoneycombLogger"); sub != nil {
-		err := sub.UnmarshalExact(hlConfig)
-		if err != nil {
-			return *hlConfig, err
-		}
-
-		hlConfig.LoggerAPIKey = f.config.GetString("HoneycombLogger.LoggerAPIKey")
-
-		// https://github.com/spf13/viper/issues/747
-		hlConfig.LoggerSamplerEnabled = f.config.GetBool("HoneycombLogger.LoggerSamplerEnabled")
-		hlConfig.LoggerSamplerThroughput = f.config.GetInt("HoneycombLogger.LoggerSamplerThroughput")
-
-		v := validator.New()
-		err = v.Struct(hlConfig)
-		if err != nil {
-			return *hlConfig, err
-		}
-
-		return *hlConfig, nil
-	}
-	return *hlConfig, errors.New("No config found for HoneycombLogger")
+	return *f.mainConfig.HoneycombLogger, nil
 }
 
 func (f *fileConfig) GetCollectorType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.Collector, nil
+	return f.mainConfig.Collector, nil
 }
 
-func (f *fileConfig) GetAllSamplerRules() (map[string]interface{}, error) {
-	samplers := make(map[string]interface{})
-
-	keys := f.rules.AllKeys()
-	for _, key := range keys {
-		parts := strings.Split(key, ".")
-
-		// extract default sampler rules
-		if parts[0] == "sampler" {
-			err := f.rules.Unmarshal(&samplers)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal sampler rule: %w", err)
-			}
-			t := f.rules.GetString(key)
-			samplers["sampler"] = t
-			continue
-		}
-
-		// extract all dataset sampler rules
-		if len(parts) > 1 && parts[1] == "sampler" {
-			t := f.rules.GetString(key)
-			m := make(map[string]interface{})
-			datasetName := parts[0]
-			if sub := f.rules.Sub(datasetName); sub != nil {
-				err := sub.Unmarshal(&m)
-				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal sampler rule for dataset %s: %w", datasetName, err)
-				}
-			}
-			m["sampler"] = t
-			samplers[datasetName] = m
-		}
-	}
-	return samplers, nil
-}
-
-func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (interface{}, string, error) {
+func (f *fileConfig) GetAllSamplerRules() (map[string]any, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
+	// This is probably good enough for debug; if not we can extend it.
+	return f.rulesConfig, nil
+}
+
+// getValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]any
+// for the given key, ignoring case of the key. It returns ok=true only if the key was found
+// and could be converted to the required type. Otherwise it returns the default value
+// and ok=false.
+func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			if t, ok := v.(T); ok {
+				return t, true
+			}
+		}
+	}
+	return def, false
+}
+
+// GetSamplerConfigForDataset returns the sampler config for the given dataset,
+// as well as the name of the sampler. If the dataset-specific sampler config
+// is not found, it returns the default sampler config.
+func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	config := f.rulesConfig
+	// If we have a dataset-specific sampler, we extract the sampler config
+	// corresponding to the [dataset]["sampler"] key. Otherwise we try to use
+	// the default sampler config corresponding to the "sampler" key. Only if
+	// both fail will we return not found.
+
 	const notfound = "not found"
-
-	key := fmt.Sprintf("%s.Sampler", dataset)
-	if ok := f.rules.IsSet(key); ok {
-		t := f.rules.GetString(key)
-		var i interface{}
-
-		switch t {
-		case "DeterministicSampler":
-			i = &DeterministicSamplerConfig{}
-		case "DynamicSampler":
-			i = &DynamicSamplerConfig{}
-		case "EMADynamicSampler":
-			i = &EMADynamicSamplerConfig{}
-		case "RulesBasedSampler":
-			i = &RulesBasedSamplerConfig{}
-		case "TotalThroughputSampler":
-			i = &TotalThroughputSamplerConfig{}
-		default:
-			return nil, notfound, errors.New("No Sampler found")
-		}
-
-		if sub := f.rules.Sub(dataset); sub != nil {
-			return i, t, sub.Unmarshal(i)
-		}
-
-	} else if ok := f.rules.IsSet("Sampler"); ok {
-		t := f.rules.GetString("Sampler")
-		var i interface{}
-
-		switch t {
-		case "DeterministicSampler":
-			i = &DeterministicSamplerConfig{}
-		case "DynamicSampler":
-			i = &DynamicSamplerConfig{}
-		case "EMADynamicSampler":
-			i = &EMADynamicSamplerConfig{}
-		case "RulesBasedSampler":
-			i = &RulesBasedSamplerConfig{}
-		case "TotalThroughputSampler":
-			i = &TotalThroughputSamplerConfig{}
-		default:
-			return nil, notfound, errors.New("No Sampler found")
-		}
-
-		return i, t, f.rules.Unmarshal(i)
+	if v, ok := getValueForCaseInsensitiveKey(config, dataset, map[string]any{}); ok {
+		// we have a dataset-specific sampler, so we extract that sampler's config
+		config = v
 	}
 
-	return nil, notfound, errors.New("No Sampler found")
+	// now we need the name of the sampler
+	samplerName, _ := getValueForCaseInsensitiveKey(config, "sampler", "DeterministicSampler")
+
+	var i any
+	switch samplerName {
+	case "DeterministicSampler":
+		i = &DeterministicSamplerConfig{}
+	case "DynamicSampler":
+		i = &DynamicSamplerConfig{}
+	case "EMADynamicSampler":
+		i = &EMADynamicSamplerConfig{}
+	case "RulesBasedSampler":
+		i = &RulesBasedSamplerConfig{}
+	case "TotalThroughputSampler":
+		i = &TotalThroughputSamplerConfig{}
+	default:
+		return nil, notfound, errors.New("no sampler found")
+	}
+
+	// now we need to unmarshal the config into the sampler config struct
+	err := reloadInto(config, i, f.opts)
+	return i, samplerName, err
 }
 
 func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	capacity := &InMemoryCollectorCacheCapacity{}
-	if sub := f.config.Sub("InMemCollector"); sub != nil {
-		err := sub.UnmarshalExact(capacity)
-		if err != nil {
-			return *capacity, err
-		}
-		return *capacity, nil
-	}
-	return *capacity, errors.New("No config found for inMemCollector")
+	return f.mainConfig.InMemCollector, nil
 }
 
 func (f *fileConfig) GetMetricsType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.Metrics, nil
+	return f.mainConfig.Metrics, nil
 }
 
 func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	hmConfig := &HoneycombMetricsConfig{}
-	if sub := f.config.Sub("HoneycombMetrics"); sub != nil {
-		err := sub.UnmarshalExact(hmConfig)
-		if err != nil {
-			return *hmConfig, err
-		}
-
-		hmConfig.MetricsAPIKey = f.config.GetString("HoneycombMetrics.MetricsAPIKey")
-
-		v := validator.New()
-		err = v.Struct(hmConfig)
-		if err != nil {
-			return *hmConfig, err
-		}
-
-		return *hmConfig, nil
-	}
-	return *hmConfig, errors.New("No config found for HoneycombMetrics")
+	return *f.mainConfig.HoneycombMetrics, nil
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	pcConfig := &PrometheusMetricsConfig{}
-	if sub := f.config.Sub("PrometheusMetrics"); sub != nil {
-		err := sub.UnmarshalExact(pcConfig)
-		if err != nil {
-			return *pcConfig, err
-		}
-
-		v := validator.New()
-		err = v.Struct(pcConfig)
-		if err != nil {
-			return *pcConfig, err
-		}
-
-		return *pcConfig, nil
-	}
-	return *pcConfig, errors.New("No config found for PrometheusMetrics")
+	return *f.mainConfig.PrometheusMetrics, nil
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.SendDelay, nil
+	return time.Duration(f.mainConfig.SendDelay), nil
 }
 
 func (f *fileConfig) GetBatchTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.BatchTimeout
+	return time.Duration(f.mainConfig.BatchTimeout)
 }
 
 func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.TraceTimeout, nil
+	return time.Duration(f.mainConfig.TraceTimeout), nil
 }
 
 func (f *fileConfig) GetMaxBatchSize() uint {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.MaxBatchSize
-}
-
-func (f *fileConfig) GetOtherConfig(name string, iface interface{}) error {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	if sub := f.config.Sub(name); sub != nil {
-		return sub.Unmarshal(iface)
-	}
-
-	if sub := f.rules.Sub(name); sub != nil {
-		return sub.Unmarshal(iface)
-	}
-
-	return fmt.Errorf("failed to find config tree for %s", name)
+	return f.mainConfig.MaxBatchSize
 }
 
 func (f *fileConfig) GetUpstreamBufferSize() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.UpstreamBufferSize
+	return f.mainConfig.UpstreamBufferSize
 }
 
 func (f *fileConfig) GetPeerBufferSize() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.PeerBufferSize
+	return f.mainConfig.PeerBufferSize
 }
 
 func (f *fileConfig) GetSendTickerValue() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.SendTicker
+	return time.Duration(f.mainConfig.SendTicker)
 }
 
 func (f *fileConfig) GetDebugServiceAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	_, _, err := net.SplitHostPort(f.conf.DebugServiceAddr)
+	_, _, err := net.SplitHostPort(f.mainConfig.DebugServiceAddr)
 	if err != nil {
 		return "", err
 	}
-	return f.conf.DebugServiceAddr, nil
+	return f.mainConfig.DebugServiceAddr, nil
 }
 
 func (f *fileConfig) GetIsDryRun() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.DryRun
+	return f.mainConfig.DryRun
 }
 
 func (f *fileConfig) GetDryRunFieldName() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.DryRunFieldName
+	return f.mainConfig.DryRunFieldName
 }
 
 func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.AddHostMetadataToTrace
+	return f.mainConfig.AddHostMetadataToTrace
 }
 
 func (f *fileConfig) GetAddRuleReasonToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.AddRuleReasonToTrace
+	return f.mainConfig.AddRuleReasonToTrace
 }
 
 func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.EnvironmentCacheTTL
+	return time.Duration(f.mainConfig.EnvironmentCacheTTL)
 }
 
 func (f *fileConfig) GetDatasetPrefix() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.DatasetPrefix
+	return f.mainConfig.DatasetPrefix
 }
 
 func (f *fileConfig) GetQueryAuthToken() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.QueryAuthToken
+	return f.mainConfig.QueryAuthToken
 }
 
 func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.GRPCServerParameters.MaxConnectionIdle
+	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionIdle)
 }
 
 func (f *fileConfig) GetGRPCMaxConnectionAge() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.GRPCServerParameters.MaxConnectionAge
+	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAge)
 }
 
 func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.GRPCServerParameters.MaxConnectionAgeGrace
+	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAgeGrace)
 }
 
 func (f *fileConfig) GetGRPCTime() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.GRPCServerParameters.Time
+	return time.Duration(f.mainConfig.GRPCServerParameters.Time)
 }
 
 func (f *fileConfig) GetGRPCTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.GRPCServerParameters.Timeout
+	return time.Duration(f.mainConfig.GRPCServerParameters.Timeout)
 }
 
 func (f *fileConfig) GetPeerTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.PeerManagement.Timeout
+	return time.Duration(f.mainConfig.PeerManagement.Timeout)
 }
 
 func (f *fileConfig) GetAdditionalErrorFields() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.AdditionalErrorFields
+	return f.mainConfig.AdditionalErrorFields
 }
 
 func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.AddSpanCountToRoot
+	return f.mainConfig.AddSpanCountToRoot
 }
 
 func (f *fileConfig) GetCacheOverrunStrategy() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.CacheOverrunStrategy
+	return f.mainConfig.CacheOverrunStrategy
 }
 
 func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.SampleCache
+	return f.mainConfig.SampleCache
 }
 
 func (f *fileConfig) GetStressReliefConfig() StressReliefConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.StressRelief
+	return f.mainConfig.StressRelief
 }
 
 func (f *fileConfig) GetTraceIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.TraceIdFieldNames
+	return f.mainConfig.TraceIdFieldNames
 }
 
 func (f *fileConfig) GetParentIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.ParentIdFieldNames
-}
-
-// calculates an MD5 sum for a file that returns the same result as the md5sum command
-func calcMD5For(filename string) string {
-	f, err := os.Open(filename)
-	if err != nil {
-		return err.Error()
-	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return err.Error()
-	}
-	h := md5.New()
-	if _, err := h.Write(data); err != nil {
-		return err.Error()
-	}
-	return hex.EncodeToString(h.Sum(nil))
+	return f.mainConfig.ParentIdFieldNames
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
 	ret := make([]ConfigMetadata, 2)
 	ret[0] = ConfigMetadata{
 		Type:     "config",
-		ID:       f.config.ConfigFileUsed(),
-		Hash:     calcMD5For(f.config.ConfigFileUsed()),
+		ID:       f.opts.ConfigLocation,
+		Hash:     f.mainHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}
 	ret[1] = ConfigMetadata{
 		Type:     "rules",
-		ID:       f.rules.ConfigFileUsed(),
-		Hash:     calcMD5For(f.rules.ConfigFileUsed()),
+		ID:       f.opts.RulesLocation,
+		Hash:     f.rulesHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}
 	return ret
@@ -1045,5 +750,5 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.conf.AdditionalAttributes
+	return f.mainConfig.AdditionalAttributes
 }

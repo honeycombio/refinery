@@ -103,7 +103,7 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 
 // goroutine to monitor the cache and cycle the size check periodically
 func (c *cuckooSentCache) monitor() {
-	ticker := time.NewTicker(c.cfg.SizeCheckInterval)
+	ticker := time.NewTicker(time.Duration(c.cfg.SizeCheckInterval))
 	for {
 		select {
 		case <-ticker.C:
