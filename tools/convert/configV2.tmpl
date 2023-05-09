@@ -56,16 +56,6 @@ Network:
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "PeerListenAddr" "PeerListenAddr" "0.0.0.0:8081" }}
 
-    ## If it costs money to transmit data between refinery instances (e.g. 
-    ## they're spread across AWS availability zones), then you almost 
-    ## certainly want compression enabled to reduce your bill. The option to 
-    ## disable it is provided as an escape hatch for deployments that value 
-    ## lower CPU utilization over data transfer costs. 
-    ##  
-    ## 
-    ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "CompressPeerCommunication" "CompressPeerCommunication" true }}
-
 ##############################
 ## Access Key Configuration ##
 ##############################
@@ -279,6 +269,44 @@ Logging:
     ## Options: debug info warn error panic
     {{ choice .Data "LoggingLevel" "LoggingLevel" (makeSlice "debug" "info" "warn" "error" "panic") "warn" }}
 
+    ## HoneycombAPI is the URL for the upstream Honeycomb API for logs; this 
+    ## is the destination to which refinery sends its own logs. Only used if 
+    ## the logging type is "honeycomb". TODO: Is it ok to duplicate the names 
+    ## across groups? 
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombLogger.LoggerHoneycombAPI" "https://api.honeycomb.io" }}
+
+    ## APIKey is the API key to use when sending logs to Honeycomb. Only used 
+    ## if the logging type is "honeycomb". 
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonEmptyString .Data "APIKey" "HoneycombLogger.LoggerAPIKey" "" }}
+
+    ## Dataset is the dataset to which logs will be sent. Only used if the 
+    ## logging type is "honeycomb". 
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonEmptyString .Data "Dataset" "HoneycombLogger.LoggerDataset" "" }}
+
+    ## SamplerEnabled controls whether to sample logs. Only used if the 
+    ## logging type is "honeycomb". 
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "SamplerEnabled" "HoneycombLogger.LoggerSamplerEnabled" true }}
+
+    ## SamplerThroughput is the sampling rate for logs. Only used if the 
+    ## logging type is "honeycomb". TODO: should use a different default 
+    ## sampler and it's hard to convert the value. 
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "SamplerThroughput" "HoneycombLogger.LoggerSamplerThroughput" 1 }}
+
 ######################
 ## Refinery Metrics ##
 ######################
@@ -289,13 +317,15 @@ Metrics:
     ## sent. If "prometheus" is specified, then metrics will be exposed on 
     ## the /metrics endpoint at the PrometheusListenAddr address. If 
     ## "honeycomb" is specified, then metrics will be sent to Honeycomb 
-    ## according to the settings below. TODO: there should just be separate 
-    ## groups for each metrics destination. 
+    ## according to the settings below. If "otel" is specified, then metrics 
+    ## will be sent to an OpenTelemetry endpoint according to the settings 
+    ## below. TODO: there should just be separate groups for each metrics 
+    ## destination. 
     ##  
     ## 
     ## Not eligible for live reload.
-    ## Options: honeycomb prometheus
-    {{ choice .Data "Destinations" "Destinations" (makeSlice "honeycomb" "prometheus") "" }}
+    ## Options: honeycomb prometheus otel
+    {{ choice .Data "Destinations" "Destinations" (makeSlice "honeycomb" "prometheus" "otel") "" }}
 
     ## PrometheusListenAddr determines the interface and port on which 
     ## Prometheus will listen for requests for /metrics. Must be different 
@@ -306,35 +336,35 @@ Metrics:
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "PrometheusListenAddr" "MetricsListenAddr" "localhost:2112" }}
 
-    ## MetricsHoneycombAPI is the URL for the upstream Honeycomb API; this is 
-    ## the destination to which refinery sends its own metrics. Only used if 
-    ## "honeycomb" is specified in Destinations. 
+    ## HoneycombAPI is the URL for the upstream Honeycomb API for metrics; 
+    ## this is the destination to which refinery sends its own metrics. Only 
+    ## used if "honeycomb" is specified in Destinations. 
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "MetricsHoneycombAPI" "HoneycombMetrics.MetricsHoneycombAPI" "https://api.honeycomb.io" }}
+    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombMetrics.MetricsHoneycombAPI" "https://api.honeycomb.io" }}
 
-    ## MetricsDataset is the dataset to which refinery sends its own metrics. 
-    ## Only used if "honeycomb" is specified in Destinations. 
+    ## Dataset is the dataset to which refinery sends its own metrics. Only 
+    ## used if "honeycomb" is specified in Destinations. 
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "MetricsAPIKey" "HoneycombMetrics.MetricsAPIKey" "" }}
+    {{ nonDefaultOnly .Data "APIKey" "HoneycombMetrics.MetricsAPIKey" "" }}
 
-    ## MetricsDataset is the dataset to which refinery sends its own metrics. 
-    ## Only used if "honeycomb" is specified in Destinations. 
+    ## Dataset is the dataset to which refinery sends its own metrics. Only 
+    ## used if "honeycomb" is specified in Destinations. 
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "MetricsDataset" "HoneycombMetrics.MetricsDataset" "Refinery Metrics" }}
+    {{ nonDefaultOnly .Data "Dataset" "HoneycombMetrics.MetricsDataset" "Refinery Metrics" }}
 
-    ## MetricsReportingInterval is the interval between sending metrics to 
+    ## ReportingInterval is the interval between sending metrics to 
     ## Honeycomb. Between 1 and 60 seconds is typical. Only used if 
     ## "honeycomb" is specified in Destinations. 
     ##  
     ## Accepts a duration string with units, like "30s".
     ## Not eligible for live reload.
-    {{ secondsToDuration .Data "MetricsReportingInterval" "HoneycombMetrics.MetricsReportingInterval" "" }}
+    {{ secondsToDuration .Data "ReportingInterval" "HoneycombMetrics.MetricsReportingInterval" "" }}
 
 #####################
 ## Peer Management ##
@@ -343,14 +373,14 @@ PeerManagement:
   ## Controls how the Refinery cluster communicates between peers. 
   ####
     ## Type is the type of peer management to use. "file" means that Refinery 
-    ## gets its peer list from the Peers list in the config file. "redis" 
+    ## gets its peer list from the Peers list in this config file. "redis" 
     ## means that refinery self-registers with a redis instance and gets its 
     ## peer list from there. 
     ##  
     ## 
     ## Not eligible for live reload.
     ## Options: redis file
-    {{ choice .Data "Type" "Type" (makeSlice "redis" "file") "redis" }}
+    {{ choice .Data "Type" "PeerManagement.Type" (makeSlice "redis" "file") "redis" }}
 
     ## Peers is the list of peers to use when Type is "file", excluding self. 
     ## This list is ignored when Type is "redis". The format is a list of 
@@ -358,14 +388,14 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ renderStringarray .Data "Peers" "Peers" "192.168.1.11:8081,192.168.1.12:8081" }}
+    {{ renderStringarray .Data "Peers" "PeerManagement.Peers" "192.168.1.11:8081,192.168.1.12:8081" }}
 
     ## RedisHost is the host and port of the redis instance to use when Type 
     ## is "redis". This value is ignored when Type is "file". 
     ##  
     ## Should be an ip:port like "localhost:6379".
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisHost" "RedisHost" "localhost:6379" }}
+    {{ nonEmptyString .Data "RedisHost" "PeerManagement.RedisHost" "localhost:6379" }}
 
     ## RedisUsername is the username used to connect to redis for peer 
     ## cluster membership management. This value is ignored when Type is 
@@ -373,7 +403,7 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisUsername" "RedisUsername" "" }}
+    {{ nonEmptyString .Data "RedisUsername" "PeerManagement.RedisUsername" "" }}
 
     ## RedisPassword is the password used to connect to redis for peer 
     ## cluster membership management. This value is ignored when Type is 
@@ -381,7 +411,7 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisPassword" "RedisPassword" "" }}
+    {{ nonEmptyString .Data "RedisPassword" "PeerManagement.RedisPassword" "" }}
 
     ## RedisPrefix is a string used as a prefix for the keys in redis while 
     ## storing the peer membership. It might be useful to set this in any 
@@ -390,7 +420,7 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "RedisPrefix" "RedisPrefix" "refinery" }}
+    {{ nonDefaultOnly .Data "RedisPrefix" "PeerManagement.RedisPrefix" "refinery" }}
 
     ## RedisDatabase is an integer from 0-15 indicating the database number 
     ## to use for the Redis instance storing the peer membership. It might be 
@@ -399,7 +429,7 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "RedisDatabase" "RedisDatabase" 0 }}
+    {{ nonDefaultOnly .Data "RedisDatabase" "PeerManagement.RedisDatabase" 0 }}
 
     ## UseTLS enables TLS when connecting to redis for peer cluster 
     ## membership management, and sets the MinVersion in the TLS 
@@ -407,14 +437,14 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseTLS" "UseTLS" false }}
+    {{ nonDefaultOnly .Data "UseTLS" "PeerManagement.UseTLS" false }}
 
     ## UseTLSInsecure disables certificate checks when connecting to redis 
     ## for peer cluster membership management. 
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseTLSInsecure" "UseTLSInsecure" false }}
+    {{ nonDefaultOnly .Data "UseTLSInsecure" "PeerManagement.UseTLSInsecure" false }}
 
     ## IdentifierInterfaceName is optional. By default, when using RedisHost, 
     ## Refinery will use the local hostname to identify itself to other peers 
@@ -426,7 +456,7 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "IdentifierInterfaceName" "IdentifierInterfaceName" "eth0" }}
+    {{ nonEmptyString .Data "IdentifierInterfaceName" "PeerManagement.IdentifierInterfaceName" "eth0" }}
 
     ## If using IdentifierInterfaceName, Refinery will default to the first 
     ## IPv4 unicast address it finds for the specified interface. If 
@@ -435,7 +465,7 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseIPV6Identifier" "UseIPV6Identifier" false }}
+    {{ nonDefaultOnly .Data "UseIPV6Identifier" "PeerManagement.UseIPV6Identifier" false }}
 
     ## By default, when using RedisHost, Refinery will use the local hostname 
     ## to identify itself to other peers in Redis. If your environment 
@@ -445,14 +475,14 @@ PeerManagement:
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisIdentifier" "RedisIdentifier" "192.168.1.1" }}
+    {{ nonEmptyString .Data "RedisIdentifier" "PeerManagement.RedisIdentifier" "192.168.1.1" }}
 
     ## Timeout is optional. By default, when using RedisHost, Refinery will 
     ## timeout after 5s when communicating with Redis. 
     ##  
     ## Accepts a duration string with units, like "5s".
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Timeout" "Timeout" "5s" }}
+    {{ nonDefaultOnly .Data "Timeout" "PeerManagement.Timeout" "5s" }}
 
 #########################
 ## Collection Settings ##
@@ -555,6 +585,18 @@ Specialized:
     ## Accepts a duration string with units, like "1h".
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "EnvironmentCacheTTL" "EnvironmentCacheTTL" "1h" }}
+
+    ## CompressPeerCommunication determines whether refinery will compress 
+    ## span data it forwards to peers. If it costs money to transmit data 
+    ## between refinery instances (e.g. they're spread across AWS 
+    ## availability zones), then you almost certainly want compression 
+    ## enabled to reduce your bill. The option to disable it is provided as 
+    ## an escape hatch for deployments that value lower CPU utilization over 
+    ## data transfer costs. 
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "CompressPeerCommunication" "CompressPeerCommunication" true }}
 
     ## AdditionalAttributes is a map that can be used for injecting 
     ## user-defined attributes into every span. For example, it could be used 
@@ -678,7 +720,7 @@ SampleCache:
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "KeptSize" "KeptSize" 10000 }}
+    {{ nonDefaultOnly .Data "KeptSize" "SampleCacheConfig.KeptSize" 10000 }}
 
     ## DroppedSize controls the size of the cuckoo dropped traces cache. This 
     ## cache consumes 4-6 bytes per trace at a scale of millions of traces. 
@@ -688,7 +730,7 @@ SampleCache:
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "DroppedSize" "DroppedSize" 1000000 }}
+    {{ nonDefaultOnly .Data "DroppedSize" "SampleCacheConfig.DroppedSize" 1000000 }}
 
     ## SizeCheckInterval controls the duration of how often the cuckoo cache 
     ## re-evaluates the remaining capacity of its dropped traces cache and 
@@ -698,7 +740,7 @@ SampleCache:
     ##  
     ## Accepts a duration string with units, like "10s".
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SizeCheckInterval" "SizeCheckInterval" "10s" }}
+    {{ nonDefaultOnly .Data "SizeCheckInterval" "SampleCacheConfig.SizeCheckInterval" "10s" }}
 
 ###################
 ## Stress Relief ##
@@ -745,14 +787,14 @@ StressRelief:
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "Mode" "Mode" "never" }}
+    {{ nonDefaultOnly .Data "Mode" "StressRelief.Mode" "never" }}
 
     ## ActivationLevel is the stress_level (from 0-100) at which Stress 
     ## Relief is triggered. 
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "ActivationLevel" "ActivationLevel" 90 }}
+    {{ nonDefaultOnly .Data "ActivationLevel" "StressRelief.ActivationLevel" 90 }}
 
     ## DeactivationLevel is the stress_level (from 0-100) at which Stress 
     ## Relief is turned off (subject to MinimumActivationDuration). It must 
@@ -760,7 +802,7 @@ StressRelief:
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "DeactivationLevel" "DeactivationLevel" 70 }}
+    {{ nonDefaultOnly .Data "DeactivationLevel" "StressRelief.DeactivationLevel" 70 }}
 
     ## SamplingRate is the sampling rate to use when Stress Relief is 
     ## activated. All new traces will be deterministically sampled at this 
@@ -772,14 +814,14 @@ StressRelief:
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SamplingRate" "SamplingRate" 100 }}
+    {{ nonDefaultOnly .Data "SamplingRate" "StressRelief.StressSamplingRate" 100 }}
 
     ## MinimumActivationDuration is the minimum time that stress relief will 
     ## stay enabled, once activated. This helps to prevent oscillations. 
     ##  
     ## Accepts a duration string with units, like "10s".
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "MinimumActivationDuration" "MinimumActivationDuration" "10s" }}
+    {{ nonDefaultOnly .Data "MinimumActivationDuration" "StressRelief.MinimumActivationDuration" "10s" }}
 
     ## MinimumStartupDuration is used when switching into Monitor mode. When 
     ## stress monitoring is enabled, it will start up in stressed mode for a 
@@ -792,4 +834,4 @@ StressRelief:
     ##  
     ## Accepts a duration string with units, like "3s".
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "MinimumStartupDuration" "MinimumStartupDuration" "3s" }}
+    {{ nonDefaultOnly .Data "MinimumStartupDuration" "StressRelief.MinimumStartupDuration" "3s" }}

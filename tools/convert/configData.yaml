@@ -84,20 +84,6 @@ groups:
           Incoming traffic is expected to be HTTP, so if using SSL
           use something like nginx or a load balancer to do the decryption.
 
-      - name: CompressPeerCommunication
-        type: bool
-        default: true
-        valuetype: nondefault
-        reload: false
-        summary: determines whether refinery will compress span data it forwards to peers.
-        description: >
-          If it costs money to transmit data between refinery instances (e.g.
-          they're spread across AWS availability zones), then you almost
-          certainly want compression enabled to reduce your bill. The option to
-          disable it is provided as an escape hatch for deployments that value
-          lower CPU utilization over data transfer costs.
-
-
   - name: AccessKeys
     title: "Access Key Configuration"
     description: >
@@ -352,6 +338,70 @@ groups:
           the logger. Debug is very verbose, and should only be used in
           pre-production environments. Warn is the recommended level.
 
+      - name: HoneycombAPI
+        v1group: HoneycombLogger
+        v1name: LoggerHoneycombAPI
+        type: url
+        valuetype: nondefault
+        default: "https://api.honeycomb.io"
+        reload: false
+        envvar: REFINERY_LOGS_HONEYCOMB_API
+        summary: is the URL of the Honeycomb API to which logs will be sent.
+        description: >
+          HoneycombAPI is the URL for the upstream Honeycomb API for logs; this is
+          the destination to which refinery sends its own logs. Only used if
+          the logging type is "honeycomb".
+          TODO: Is it ok to duplicate the names across groups?
+
+      - name: APIKey
+        v1group: HoneycombLogger
+        v1name: LoggerAPIKey
+        type: string
+        valuetype: nonemptystring
+        reload: false
+        envvar: REFINERY_LOGS_API_KEY
+        summary: is the API key to use when sending logs to Honeycomb.
+        description: >
+          APIKey is the API key to use when sending logs to Honeycomb. Only used if
+          the logging type is "honeycomb".
+
+      - name: Dataset
+        v1group: HoneycombLogger
+        v1name: LoggerDataset
+        type: string
+        valuetype: nonemptystring
+        reload: false
+        envvar: REFINERY_LOGS_DATASET
+        summary: is the dataset to which logs will be sent.
+        description: >
+          Dataset is the dataset to which logs will be sent. Only used if
+          the logging type is "honeycomb".
+
+      - name: SamplerEnabled
+        v1group: HoneycombLogger
+        v1name: LoggerSamplerEnabled
+        type: bool
+        valuetype: nondefault
+        default: true
+        reload: false
+        summary: controls whether to sample logs.
+        description: >
+          SamplerEnabled controls whether to sample logs. Only used if
+          the logging type is "honeycomb".
+
+      - name: SamplerThroughput
+        v1group: HoneycombLogger
+        v1name: LoggerSamplerThroughput
+        type: float
+        valuetype: nondefault
+        default: 1.0
+        reload: false
+        summary: is the sampling rate for logs.
+        description: >
+          SamplerThroughput is the sampling rate for logs. Only used if
+          the logging type is "honeycomb".
+          TODO: should use a different default sampler and it's hard to convert the value.
+
   - name: Metrics
     title: "Refinery Metrics"
     description: Configuration for metrics.
@@ -359,7 +409,7 @@ groups:
       - name: Destinations
         type: string
         valuetype: choice
-        choices: ["honeycomb", "prometheus"]
+        choices: ["honeycomb", "prometheus", "otel"]
         default: ""
         reload: false
         summary: is the list of destinations to which metrics will be sent.
@@ -368,7 +418,9 @@ groups:
           sent. If "prometheus" is specified, then metrics will be exposed on
           the /metrics endpoint at the PrometheusListenAddr address. If
           "honeycomb" is specified, then metrics will be sent to Honeycomb
-          according to the settings below.
+          according to the settings below. If "otel" is specified, then metrics
+          will be sent to an OpenTelemetry endpoint according to the settings
+          below.
           TODO: there should just be separate groups for each metrics destination.
 
       - name: PrometheusListenAddr
@@ -384,7 +436,7 @@ groups:
           from the main Refinery listener. Only used if "prometheus" is
           specified in Destinations.
 
-      - name: MetricsHoneycombAPI
+      - name: HoneycombAPI
         v1group: HoneycombMetrics
         v1name: MetricsHoneycombAPI
         type: url
@@ -394,11 +446,11 @@ groups:
         envvar: REFINERY_METRICS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API to which metrics will be sent.
         description: >
-          MetricsHoneycombAPI is the URL for the upstream Honeycomb API; this is
+          HoneycombAPI is the URL for the upstream Honeycomb API for metrics; this is
           the destination to which refinery sends its own metrics. Only used if
           "honeycomb" is specified in Destinations.
 
-      - name: MetricsAPIKey
+      - name: APIKey
         v1group: HoneycombMetrics
         v1name: MetricsAPIKey
         type: string
@@ -409,10 +461,10 @@ groups:
         envvar: REFINERY_METRICS_API_KEY
         summary: is the API key used to send Honeycomb metrics.
         description: >
-          MetricsDataset is the dataset to which refinery sends its own metrics.
+          Dataset is the dataset to which refinery sends its own metrics.
           Only used if "honeycomb" is specified in Destinations.
 
-      - name: MetricsDataset
+      - name: Dataset
         v1group: HoneycombMetrics
         v1name: MetricsDataset
         type: string
@@ -422,10 +474,10 @@ groups:
         envvar: REFINERY_METRICS_DATASET
         summary: is the Honeycomb dataset to which metrics will be sent.
         description: >
-          MetricsDataset is the dataset to which refinery sends its own metrics.
+          Dataset is the dataset to which refinery sends its own metrics.
           Only used if "honeycomb" is specified in Destinations.
 
-      - name: MetricsReportingInterval
+      - name: ReportingInterval
         v1group: HoneycombMetrics
         v1name: MetricsReportingInterval
         type: duration
@@ -434,7 +486,7 @@ groups:
         reload: false
         summary: is the interval between sending metrics to honeycomb.
         description: >
-          MetricsReportingInterval is the interval between sending metrics to
+          ReportingInterval is the interval between sending metrics to
           Honeycomb. Between 1 and 60 seconds is typical. Only used if
           "honeycomb" is specified in Destinations.
 
@@ -443,6 +495,8 @@ groups:
     description: Controls how the Refinery cluster communicates between peers.
     fields:
       - name: Type
+        v1group: PeerManagement
+        v1name: Type
         type: string
         valuetype: choice
         choices: ["redis", "file"]
@@ -451,11 +505,13 @@ groups:
         summary: is the type of peer management to use.
         description: >
           Type is the type of peer management to use. "file" means that Refinery
-          gets its peer list from the Peers list in the config file. "redis"
+          gets its peer list from the Peers list in this config file. "redis"
           means that refinery self-registers with a redis instance and gets its
           peer list from there.
 
       - name: Peers
+        v1group: PeerManagement
+        v1name: Peers
         type: stringarray
         valuetype: stringarray
         example: "192.168.1.11:8081,192.168.1.12:8081"
@@ -467,6 +523,8 @@ groups:
           strings of the form "host:port".
 
       - name: RedisHost
+        v1group: PeerManagement
+        v1name: RedisHost
         type: ipport
         valuetype: nonemptystring
         example: "localhost:6379"
@@ -478,6 +536,8 @@ groups:
           This value is ignored when Type is "file".
 
       - name: RedisUsername
+        v1group: PeerManagement
+        v1name: RedisUsername
         type: string
         valuetype: nonemptystring
         reload: false
@@ -488,6 +548,8 @@ groups:
           This value is ignored when Type is "file".
 
       - name: RedisPassword
+        v1group: PeerManagement
+        v1name: RedisPassword
         type: string
         valuetype: nonemptystring
         reload: false
@@ -498,6 +560,8 @@ groups:
           This value is ignored when Type is "file".
 
       - name: RedisPrefix
+        v1group: PeerManagement
+        v1name: RedisPrefix
         type: string
         valuetype: nondefault
         default: "refinery"
@@ -512,6 +576,8 @@ groups:
           Redis instance. It may not be blank.
 
       - name: RedisDatabase
+        v1group: PeerManagement
+        v1name: RedisDatabase
         type: int
         valuetype: nondefault
         default: 0
@@ -526,6 +592,8 @@ groups:
           applications want to share a single Redis instance.
 
       - name: UseTLS
+        v1group: PeerManagement
+        v1name: UseTLS
         type: bool
         valuetype: nondefault
         default: false
@@ -536,6 +604,8 @@ groups:
           and sets the MinVersion in the TLS configuration to 1.2.
 
       - name: UseTLSInsecure
+        v1group: PeerManagement
+        v1name: UseTLSInsecure
         type: bool
         valuetype: nondefault
         default: false
@@ -546,6 +616,8 @@ groups:
 
 
       - name: IdentifierInterfaceName
+        v1group: PeerManagement
+        v1name: IdentifierInterfaceName
         type: string
         valuetype: nonemptystring
         example: "eth0"
@@ -560,6 +632,8 @@ groups:
           interface as its identifier.
 
       - name: UseIPV6Identifier
+        v1group: PeerManagement
+        v1name: UseIPV6Identifier
         type: bool
         valuetype: nondefault
         default: false
@@ -572,6 +646,8 @@ groups:
           address found.
 
       - name: RedisIdentifier
+        v1group: PeerManagement
+        v1name: RedisIdentifier
         type: string
         valuetype: nonemptystring
         example: "192.168.1.1"
@@ -585,6 +661,8 @@ groups:
           to use here. Overrides IdentifierInterfaceName, if both are set.
 
       - name: Timeout
+        v1group: PeerManagement
+        v1name: Timeout
         type: duration
         valuetype: nondefault
         default: 5s
@@ -595,6 +673,8 @@ groups:
           after 5s when communicating with Redis.
 
       - name: Strategy
+        v1group: PeerManagement
+        v1name: Strategy
         type: string
         valuetype: choice
         choices: ["legacy", "hash"]
@@ -731,6 +811,21 @@ groups:
           This information is used when making sampling decisions.
           If you have a very large number of environments, you may want to increase this value.
           If you have a very small number of environments, you may want to decrease this value.
+
+      - name: CompressPeerCommunication
+        type: bool
+        default: true
+        valuetype: nondefault
+        reload: false
+        summary: determines whether refinery will compress span data it forwards to peers.
+        description: >
+          CompressPeerCommunication determines whether refinery will compress
+          span data it forwards to peers. If it costs money to transmit data
+          between refinery instances (e.g. they're spread across AWS
+          availability zones), then you almost certainly want compression
+          enabled to reduce your bill. The option to disable it is provided as
+          an escape hatch for deployments that value lower CPU utilization over
+          data transfer costs.
 
       - name: Collector
         type: string
@@ -916,6 +1011,8 @@ groups:
       status after the sampling decision has been made.
     fields:
       - name: Type
+        v1group: SampleCacheConfig
+        v1name: Type
         type: string
         valuetype: nondefault
         default: "cuckoo"
@@ -932,6 +1029,8 @@ groups:
           and is the only option available in Refinery 2.0 and later.
 
       - name: KeptSize
+        v1group: SampleCacheConfig
+        v1name: KeptSize
         type: int
         valuetype: nondefault
         default: 10_000
@@ -947,6 +1046,8 @@ groups:
           200 bytes). Does not apply to the "legacy" type of cache.
 
       - name: DroppedSize
+        v1group: SampleCacheConfig
+        v1name: DroppedSize
         type: int
         valuetype: nondefault
         default: 1_000_000
@@ -959,6 +1060,8 @@ groups:
           Does not apply to the "legacy" type of cache.
 
       - name: SizeCheckInterval
+        v1group: SampleCacheConfig
+        v1name: SizeCheckInterval
         type: duration
         valuetype: nondefault
         default: 10s
@@ -1008,6 +1111,8 @@ groups:
       under heavy load.
     fields:
       - name: Mode
+        v1group: StressRelief
+        v1name: Mode
         type: string
         valuetype: nondefault
         default: "never"
@@ -1022,6 +1127,8 @@ groups:
               emergency situation.
 
       - name: ActivationLevel
+        v1group: StressRelief
+        v1name: ActivationLevel
         type: int
         valuetype: nondefault
         default: 90
@@ -1032,6 +1139,8 @@ groups:
           triggered.
 
       - name: DeactivationLevel
+        v1group: StressRelief
+        v1name: DeactivationLevel
         type: int
         valuetype: nondefault
         default: 70
@@ -1043,6 +1152,8 @@ groups:
           be less than ActivationLevel.
 
       - name: SamplingRate
+        v1group: StressRelief
+        v1name: StressSamplingRate
         type: int
         valuetype: nondefault
         default: 100
@@ -1058,6 +1169,8 @@ groups:
           to sample at a rate of at least 1 in 30.
 
       - name: MinimumActivationDuration
+        v1group: StressRelief
+        v1name: MinimumActivationDuration
         type: duration
         valuetype: nondefault
         default: 10s
@@ -1068,6 +1181,8 @@ groups:
           enabled, once activated. This helps to prevent oscillations.
 
       - name: MinimumStartupDuration
+        v1group: StressRelief
+        v1name: MinimumStartupDuration
         type: duration
         valuetype: nondefault
         default: 3s
