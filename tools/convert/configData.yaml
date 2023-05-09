@@ -1,0 +1,1068 @@
+# this contains a list of all of the config items supported by refinery
+# if v1name is missing, it's the same as name
+# if firstversion is missing, it's v1.x (meaning it's part of the legacy config)
+# if lastversion is present, it was valid in that version but not after
+
+# fields
+    # - v1name -- the name of this field in v1 (if empty, same as name)
+    # - v1group -- the group of this field in v1 (if empty, no group)
+    # - name -- the name of this field in v2 (required)
+    # - group -- the group of this field in v2 (if empty, no group)
+    # - firstversion -- the version where the property was introduced (if empty, it's v1)
+    # - lastversion -- the version where this property was obsoleted (allows for deleted properties to stay in config files without error)
+    # - type -- bool, string, int, float, duration, ipport, url
+    # - default -- default value (if empty, the zero value of the type)
+    # - validation -- validation flags
+    # - reload -- (bool) can be reloaded at runtime
+    # - summary -- brief description for tools
+    # - details -- could be extended description for documentation
+    # - envvar -- if present, environment variable name. If specified, overrides config files
+    # - commandLine -- if present, overrides envvar
+
+groups:
+  - name: "General"
+    title: "General Configuration"
+    description: Contains general configuration options that apply to the entire refinery process.
+    fields:
+      - name: ConfigurationVersion
+        type: int
+        valuetype: new
+        default: 3
+        validation: required
+        reload: false
+        firstversion: v2.0
+        summary: is the file format of this particular configuration file.
+        description: >
+          This file is version 2.
+
+          This field is required and must be the first field in the file. It exists
+          to allow the configuration system to adapt to file format changes.
+
+      - name: MinRefineryVersion
+        type: string
+        valuetype: new
+        default: "v2.0"
+        validation: required
+        reload: false
+        firstversion: v2.0
+        summary: is the minimum version of Refinery that can load this configuration file.
+        description: >
+          MinRefineryVersion specifies the lowest Refinery version capable of loading all of the
+          features used in this file. Refinery will refuse to start if its version is less than
+          this.
+
+  - name: Network
+    title: "Network Configuration"
+    description: Contains network configuration options.
+    fields:
+      - name: ListenAddr
+        type: ipport
+        valuetype: nondefault
+        default: "0.0.0.0:8080"
+        validation: required
+        reload: false
+        envvar: REFINERY_LISTEN_ADDRESS
+        commandLine: ListenAddr
+        summary: is the address refinery listens to for incoming requests.
+        description: >
+          ListenAddr is the IP and port on which to listen for incoming HTTP
+          requests. These requests include traffic formatted as Honeycomb
+          events, proxied requests to the Honeycomb API, and Open Telemetry data
+          using the http protocol. Incoming traffic is expected to be HTTP, so
+          if SSL is a requirement, put something like nginx in front to do the
+          decryption.
+
+          Should be an ip:port like "0.0.0.0:8080".
+
+      - name: PeerListenAddr
+        default: "0.0.0.0:8081"
+        type: ipport
+        valuetype: nondefault
+        reload: false
+        envvar: REFINERY_PEER_LISTEN_ADDRESS
+        commandLine: PeerListenAddr
+        summary: is the IP and port on which to listen for traffic being rerouted from a peer.
+        description: >
+          Incoming traffic is expected to be HTTP, so if using SSL
+          use something like nginx or a load balancer to do the decryption.
+
+      - name: CompressPeerCommunication
+        type: bool
+        default: true
+        valuetype: nondefault
+        reload: false
+        summary: determines whether refinery will compress span data it forwards to peers.
+        description: >
+          If it costs money to transmit data between refinery instances (e.g.
+          they're spread across AWS availability zones), then you almost
+          certainly want compression enabled to reduce your bill. The option to
+          disable it is provided as an escape hatch for deployments that value
+          lower CPU utilization over data transfer costs.
+
+
+  - name: AccessKeys
+    title: "Access Key Configuration"
+    description: >
+      Contains access keys -- API keys that the proxy will treat specially, and other
+      flags that control how the proxy handles API keys.
+    fields:
+      - name: ReceiveKeys
+        type: stringarray
+        valuetype: stringarray
+        example: "your-key-goes-here"
+        reload: false
+        envvar: REFINERY_RECEIVE_KEYS
+        commandLine: APIKeys
+        summary: is a set of Honeycomb API keys that the proxy will treat specially.
+        description: >
+          Should be a list of Honeycomb API keys that the proxy will treat specially when they are attached to incoming traffic.
+
+          This list only applies to span traffic - other Honeycomb API actions will be proxied through to the
+          upstream API directly without modifying keys.
+
+      - name: AcceptOnlyListedKeys
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: -- if true, only traffic using the keys listed in APIKeys is accepted.
+        description: >
+          Setting this flag causes events arriving with API keys not in the ReceiveKeys list to be
+          rejected with an HTTP 401 error.
+
+      - name: SendKey
+        type: string
+        valuetype: nondefault
+        default: ""
+        reload: true
+        summary: is the API key to use when sending data to Honeycomb.
+        description: >
+          If set, this API key may be used when sending data to Honeycomb, depending on the state of ForwardListedKeys.
+
+      - name: ReplaceListedKeys
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: controls whether to forward API keys from incoming traffic to Honeycomb.
+        description: >
+          If false, traffic using a key listed in APIKeys preserves that key when forwarded to Honeycomb.
+          If true, traffic using a key listed in APIKeys is forwarded to Honeycomb using the SendKey.
+
+      - name: AllowMissingKeys
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: controls whether to allow traffic without an API key to be forwarded to Honeycomb.
+        description: >
+          If false, traffic without an API key is rejected with an HTTP 401 error.
+          If true, traffic without an API key is forwarded to Honeycomb using the SendKey.
+
+
+  - name: Destinations
+    title: "Destinations"
+    description: Configuration for destinations to which data will be sent.
+    fields:
+      - name: HoneycombAPI
+        type: url
+        valuetype: nondefault
+        default: "https://api.honeycomb.io"
+        reload: true
+        envvar: REFINERY_HONEYCOMB_API
+        commandLine: HoneycombAPI
+        summary: is the URL of the Honeycomb API to which data will be sent.
+        description: >
+          HoneycombAPI is the URL for the upstream Honeycomb API; this is the
+          destination to which refinery sends all events that it decides to
+          keep.
+
+  - name: Telemetry
+    title: "Telemetry"
+    description: Configuration info for the telemetry that Refinery uses to record its own operation.
+    fields:
+      - name: AddRuleReasonToTrace
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: controls whether to decorate traces with refinery rule evaluation results.
+        description: >
+          AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
+          This field contains text indicating which rule was evaluated that caused the trace to be included.
+
+      - name: AddSpanCountToRoot
+        type: bool
+        valuetype: nondefault
+        default: true
+        reload: true
+        summary: controls whether to add a metadata field to root spans indicating the number of child spans.
+        description: >
+          AddSpanCountToRoot adds a new metadata field, `meta.span_count` to root spans to indicate
+          the number of child spans on the trace at the time the sampling decision was made.
+          This value is available to the rules-based sampler, making it possible to write rules that
+          are dependent upon the number of spans in the trace.
+
+  - name: Traces
+    title: "Traces"
+    description: Configuration for how traces are managed.
+    fields:
+      - name: SendDelay
+        type: duration
+        valuetype: nondefault
+        default: 2s
+        reload: true
+        summary: is the duration to wait before sending a trace.
+        description: >
+          SendDelay is a short timer that will be triggered when a trace is complete.
+          Refinery will wait this duration before actually sending the trace.  The
+          reason for this short delay is to allow for small network delays or clock
+          jitters to elapse and any final spans to arrive before actually sending the
+          trace. Set to 0 for immediate sends.
+
+      - name: BatchTimeout
+        type: duration
+        valuetype: nonzero
+        example: 500ms
+        reload: true
+        summary: is how frequently Refinery sends unfulfilled batches.
+        description: >
+          BatchTimeout dictates how frequently to send unfulfilled batches. By default
+          this will use the DefaultBatchTimeout in libhoney as its value, which is 100ms.
+
+      - name: TraceTimeout
+        type: duration
+        valuetype: nondefault
+        default: 60s
+        reload: true
+        summary: is the duration to wait before making the trace decision on an incomplete trace.
+        description: >
+          TraceTimeout is a long timer; it represents the outside boundary of
+          how long to wait before making the trace decision about an incomplete
+          trace. Normally traces are sent or dropped when the root span arrives.
+          Sometimes the root span never arrives (due to crashes or whatever),
+          and this timer will send a trace even without having received the root
+          span. If you have particularly long-lived traces you should increase
+          this timer. Note that this will also increase the memory requirements
+          for refinery.
+
+      - name: MaxBatchSize
+        type: int
+        valuetype: nondefault
+        default: 500
+        reload: true
+        summary: is the maximum number of events to be included in each batch for sending.
+        description: >
+          MaxBatchSize is the maximum number of events to be included in each batch sent to Honeycomb.
+
+      - name: SendTicker
+        type: duration
+        valuetype: nondefault
+        default: 100ms
+        reload: true
+        summary: is the interval between checks for traces to send.
+        description: >
+          SendTicker is a short timer; it determines the duration to use to check for traces to send.
+
+  - name: Debugging
+    title: "Debugging"
+    description: Configuration values used when setting up and debugging Refinery.
+    fields:
+      - name: DebugServiceAddr
+        type: ipport
+        valuetype: nonemptystring
+        example: "localhost:6060"
+        reload: false
+        summary: is the IP and port the debug service will run on.
+        description: >
+          DebugServiceAddr sets the IP and port the debug service will run on.
+          The debug service is generally only used when debugging Refinery
+          itself, and will only run if the command line flag -d is specified. If
+          this value is not specified, the debug service runs on the first open
+          port between localhost:6060 and :6069.
+
+      - name: QueryAuthToken
+        type: string
+        valuetype: nonemptystring
+        example: "some-private-value"
+        reload: false
+        envvar: REFINERY_QUERY_AUTH_TOKEN
+        summary: is the token that must be specified to access the /query endpoint.
+        description: >
+          QueryAuthToken, if specified, provides a token that must be specified
+          with the header "X-Honeycomb-Refinery-Query" in order for a /query
+          request to succeed. These /query requests are intended for debugging
+          refinery during setup and are not typically needed in normal
+          operation. If not specified, the /query endpoints are inaccessible.
+
+      - name: AdditionalErrorFields
+        type: stringarray
+        valuetype: stringarray
+        example: "trace.span_id"
+        reload: true
+        summary: is a list of span fields to include when logging errors.
+        description: >
+          AdditionalErrorFields is a list of span fields that should be included
+          when logging errors that happen during ingestion of events (for
+          example, the span too large error). This is primarily useful in trying
+          to track down misbehaving senders in a large installation. The fields
+          `dataset`, `apihost`, and `environment` are always included. If a
+          field is not present in the span, it will not be present in the error
+          log.
+
+      - name: AddRuleReasonToTrace
+        type: bool
+        valuetype: nondefault
+        default: false
+        example: true
+        reload: true
+        summary: controls whether to decorate traces with refinery rule evaluation results.
+        description: >
+          AddRuleReasonToTrace causes traces that are sent to Honeycomb to
+          include the field `meta.refinery.reason`. This field contains text
+          indicating which rule was evaluated that caused the trace to be
+          included. We recommend enabling this field whenever a rules-based
+          sampler is in use, as it is useful for debugging and understanding the
+          behavior of your refinery installation.
+
+  - name: Logging
+    title: "Refinery Logging"
+    description: Configuration for logging.
+    fields:
+      - name: Type
+        type: string
+        valuetype: choice
+        choices: ["stdout", "honeycomb", "none"]
+        default: "stdout"
+        reload: false
+        summary: is the type of logging to use.
+        description: >
+          Type is the type of logging to use. "none" means that logs are
+          discarded. "honeycomb" means that logs will be forwarded to honeycomb
+          according to the settings below. "stdout" means that logs will be
+          written to stdout.
+
+      - name: LoggingLevel
+        type: string
+        valuetype: choice
+        choices: ["debug", "info", "warn", "error", "panic"]
+        default: "warn"
+        reload: false
+        summary: is the message level above which we should send a log.
+        description: >
+          LoggingLevel is the message level above which we should send logs to
+          the logger. Debug is very verbose, and should only be used in
+          pre-production environments. Warn is the recommended level.
+
+  - name: Metrics
+    title: "Refinery Metrics"
+    description: Configuration for metrics.
+    fields:
+      - name: Destinations
+        type: string
+        valuetype: choice
+        choices: ["honeycomb", "prometheus"]
+        default: ""
+        reload: false
+        summary: is the list of destinations to which metrics will be sent.
+        description: >
+          Destinations is the list of destinations to which metrics will be
+          sent. If "prometheus" is specified, then metrics will be exposed on
+          the /metrics endpoint at the PrometheusListenAddr address. If
+          "honeycomb" is specified, then metrics will be sent to Honeycomb
+          according to the settings below.
+          TODO: there should just be separate groups for each metrics destination.
+
+      - name: PrometheusListenAddr
+        v1name: MetricsListenAddr
+        type: ipport
+        valuetype: nondefault
+        default: "localhost:2112"
+        reload: false
+        summary: is the IP and port the prometheus metrics server will run on.
+        description: >
+          PrometheusListenAddr determines the interface and port on which
+          Prometheus will listen for requests for /metrics. Must be different
+          from the main Refinery listener. Only used if "prometheus" is
+          specified in Destinations.
+
+      - name: MetricsHoneycombAPI
+        type: url
+        valuetype: nondefault
+        default: "https://api.honeycomb.io"
+        reload: false
+        envvar: REFINERY_METRICS_HONEYCOMB_API
+        summary: is the URL of the Honeycomb API to which metrics will be sent.
+        description: >
+          MetricsHoneycombAPI is the URL for the upstream Honeycomb API; this is
+          the destination to which refinery sends its own metrics. Only used if
+          "honeycomb" is specified in Destinations.
+
+      - name: MetricsDataset
+        type: string
+        valuetype: nondefault
+        default: "Refinery Metrics"
+        reload: false
+        envvar: REFINERY_METRICS_DATASET
+        summary: is the Honeycomb dataset to which metrics will be sent.
+        description: >
+          MetricsDataset is the dataset to which refinery sends its own metrics.
+          Only used if "honeycomb" is specified in Destinations.
+
+      - name: MetricsReportingInterval
+        type: duration
+        valuetype: nondefault
+        default: 30s
+        reload: false
+        summary: is the interval between sending metrics to honeycomb.
+        description: >
+          MetricsReportingInterval is the interval between sending metrics to
+          Honeycomb. Between 1 and 60 seconds is typical. Only used if
+          "honeycomb" is specified in Destinations.
+
+  - name: PeerManagement
+    title: "Peer Management"
+    description: Controls how the Refinery cluster communicates between peers.
+    fields:
+      - name: Type
+        type: string
+        valuetype: choice
+        choices: ["redis", "file"]
+        default: "redis"
+        reload: false
+        summary: is the type of peer management to use.
+        description: >
+          Type is the type of peer management to use. "file" means that Refinery
+          gets its peer list from the Peers list in the config file. "redis"
+          means that refinery self-registers with a redis instance and gets its
+          peer list from there.
+
+      - name: Peers
+        type: stringarray
+        valuetype: stringarray
+        example: "192.168.1.11:8081,192.168.1.12:8081"
+        reload: false
+        summary: is the list of peers to use when Type is "file".
+        description: >
+          Peers is the list of peers to use when Type is "file", excluding self.
+          This list is ignored when Type is "redis". The format is a list of
+          strings of the form "host:port".
+
+      - name: RedisHost
+        type: ipport
+        valuetype: nonemptystring
+        example: "localhost:6379"
+        reload: false
+        envvar: REFINERY_REDIS_HOST
+        summary: is the host and port of the redis instance to use when Type is "redis".
+        description: >
+          RedisHost is the host and port of the redis instance to use when Type is "redis".
+          This value is ignored when Type is "file".
+
+      - name: RedisUsername
+        type: string
+        valuetype: nonemptystring
+        reload: false
+        envvar: REFINERY_REDIS_USERNAME
+        summary: is the username used to connect to redis for peer cluster membership management.
+        description: >
+          RedisUsername is the username used to connect to redis for peer cluster membership management.
+          This value is ignored when Type is "file".
+
+      - name: RedisPassword
+        type: string
+        valuetype: nonemptystring
+        reload: false
+        envvar: REFINERY_REDIS_PASSWORD
+        summary: is the password used to connect to redis for peer cluster membership management.
+        description: >
+          RedisPassword is the password used to connect to redis for peer cluster membership management.
+          This value is ignored when Type is "file".
+
+      - name: RedisPrefix
+        type: string
+        valuetype: nondefault
+        default: "refinery"
+        example: "customPrefix"
+        reload: false
+        envvar: REFINERY_REDIS_PREFIX
+        summary: is a string used as a prefix for the keys in redis while storing the peer membership.
+        description: >
+          RedisPrefix is a string used as a prefix for the keys in redis while storing
+          the peer membership. It might be useful to set this in any situation where
+          multiple refinery clusters or multiple applications want to share a single
+          Redis instance. It may not be blank.
+
+      - name: RedisDatabase
+        type: int
+        valuetype: nondefault
+        default: 0
+        example: 1
+        reload: false
+        envvar: REFINERY_REDIS_DATABASE
+        summary: is the database number to use for the Redis instance storing the peer membership.
+        description: >
+          RedisDatabase is an integer from 0-15 indicating the database number to use
+          for the Redis instance storing the peer membership. It might be useful to set
+          this in any situation where multiple refinery clusters or multiple
+          applications want to share a single Redis instance.
+
+      - name: UseTLS
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: enables TLS when connecting to redis.
+        description: >
+          UseTLS enables TLS when connecting to redis for peer cluster membership management,
+          and sets the MinVersion in the TLS configuration to 1.2.
+
+      - name: UseTLSInsecure
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: disables certificate checks when connecting to redis.
+        description: >
+          UseTLSInsecure disables certificate checks when connecting to redis for peer cluster membership management.
+
+
+      - name: IdentifierInterfaceName
+        type: string
+        valuetype: nonemptystring
+        example: "eth0"
+        reload: false
+        summary: specifies a network interface to use when finding a local hostname.
+        description: >
+          IdentifierInterfaceName is optional. By default, when using RedisHost, Refinery will use
+          the local hostname to identify itself to other peers in Redis. If your environment
+          requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+          by name), you can specify the network interface that Refinery is listening on here.
+          Refinery will use the first unicast address that it finds on the specified network
+          interface as its identifier.
+
+      - name: UseIPV6Identifier
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: specifies that Refinery should use an IPV6 address as its identifier.
+        description: >
+          If using IdentifierInterfaceName, Refinery will default to the first
+          IPv4 unicast address it finds for the specified interface. If
+          UseIPV6Identifier is used, Refinery will use the first IPV6 unicast
+          address found.
+
+      - name: RedisIdentifier
+        type: string
+        valuetype: nonemptystring
+        example: "192.168.1.1"
+        reload: false
+        summary: specifies the identifier to use when registering with redis.
+        description: >
+          By default, when using RedisHost, Refinery will use the local hostname
+          to identify itself to other peers in Redis. If your environment
+          requires something else, (for example, if peers can't resolve each
+          other by name), you can specify the exact identifier (IP address, etc)
+          to use here. Overrides IdentifierInterfaceName, if both are set.
+
+      - name: Timeout
+        type: duration
+        valuetype: nondefault
+        default: 5s
+        reload: false
+        summary: is the timeout to use when communicating with Redis.
+        description: >
+          Timeout is optional. By default, when using RedisHost, Refinery will timeout
+          after 5s when communicating with Redis.
+
+      - name: Strategy
+        type: string
+        valuetype: choice
+        choices: ["legacy", "hash"]
+        default: "hash"
+        lastversion: v1.21
+        reload: false
+        summary: controls the way that traces are assigned to refinery nodes.
+        description: >
+          Strategy controls the way that traces are assigned to refinery nodes.
+          The "legacy" strategy uses a simple algorithm that unfortunately causes
+          1/2 of the in-flight traces to be assigned to a different node whenever the
+          number of nodes changes.
+          The legacy strategy is deprecated and is intended to be removed in a future release.
+          The "hash" strategy is strongly recommended, as only 1/N traces (where N is the
+          number of nodes) are disrupted when the node count changes.
+          In v2.0, the legacy strategy will be removed along with this setting.
+
+  - name: Collection
+    title: "Collection Settings"
+    description: >
+      Brings together the settings that are relevant to
+      collecting spans together to make traces.
+    fields:
+      - name: CacheCapacity
+        v1group: InMemCollector
+        v1name: CacheCapacity
+        type: int
+        valuetype: nondefault
+        default: 10_000
+        reload: true
+        summary: is the number of traces to keep in the cache's circular buffer.
+        description: >
+          The collection cache is used to collect all spans into a trace as well as
+          remember the sampling decision for any spans that might come in after the
+          trace has been marked "complete" (either by timing out or seeing the root
+          span). The number of traces in the cache should be many multiples (100x to
+          1000x) of the total number of concurrently active traces (trace throughput *
+          trace duration).
+
+      - name: MaxAlloc
+        v1group: InMemCollector
+        v1name: MaxAlloc
+        type: int
+        valuetype: nondefault
+        default: 0
+        reload: true
+        summary: is the maximum number of bytes that should be allocated by the collector.
+        description: >
+          If set, it must be an integer >= 0. 64-bit values are
+          supported.
+          If set to a non-zero value, once per tick (see SendTicker) the collector
+          will compare total allocated bytes to this value. If allocation is too
+          high, traces will be ejected from the cache early to reduce memory.
+          Useful values for this setting are generally in the range of 70%-90% of
+          available system memory.
+          TODO: can we read the available memory size from a container and set this automatically?
+
+  - name: BufferSizes
+    title: "Buffer Sizes"
+    description: >
+      Brings together the settings that are relevant to
+      the sizes of communications buffers.
+    fields:
+      - name: UpstreamBufferSize
+        type: int
+        valuetype: nondefault
+        default: 10_000
+        reload: true
+        summary: is the size of the queue used to buffer spans to send to the upstream API.
+        description: >
+          UpstreamBufferSize is the size of the buffer (measured in spans) used
+          to send spans to the upstream collector. If the buffer fills up,
+          performance will degrade because Refinery will block while waiting for
+          space to become available. If this happens, you should increase the
+          buffer size.
+
+      - name: PeerBufferSize
+        type: int
+        valuetype: nondefault
+        default: 100_000
+        reload: true
+        summary: is the size of the queue used to buffer spans to send to peer nodes.
+        description: >
+          PeerBufferSize is the size of the buffer (measured in spans) used
+          to send spans to peer nodes. If the buffer fills up, performance will
+          degrade because Refinery will block while waiting for space to become
+          available. If this happens, you should increase the buffer size.
+
+  - name: Undecided
+    title: "I dunno"
+    description: >
+      These settings are not yet categorized.
+    fields:
+      - name: AddHostMetadataToTrace
+        type: bool
+        valuetype: nondefault
+        default: true
+        reload: true
+        summary: specifies whether to add host metadata to traces.
+        description: >
+          AddHostMetadataToTrace specifies whether to add host metadata to traces.
+          If true, Refinery will add the following tags to all traces:
+          - meta.refinery.local_hostname: the hostname of the Refinery node
+          (we should consider adding more metadata here, like IP address, etc)
+
+      - name: AddSpanCountToRoot
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: specifies whether to add the span count to the root span.
+        description: >
+          AddSpanCountToRoot specifies whether to add the span count to the root
+          span to indicate the number of child spans on the trace at the time
+          the sampling decision was made. This value is available to the
+          rules-based sampler, making it possible to write rules that are
+          dependent upon the number of spans in the trace.
+          If true, Refinery will add meta.span_count to the root span.
+
+
+  - name: Specialized
+    title: "Specialized Configuration"
+    description: Special-purpose configuration options that are not typically needed.
+    fields:
+      - name: EnvironmentCacheTTL
+        type: duration
+        valuetype: nondefault
+        default: 1h
+        reload: true
+        summary: is the duration for which environment information is cached.
+        description: >
+          EnvironmentCacheTTL is the duration for which refinery caches environment information, which
+          it looks up from Honeycomb for each different APIKey.
+          This information is used when making sampling decisions.
+          If you have a very large number of environments, you may want to increase this value.
+          If you have a very small number of environments, you may want to decrease this value.
+
+      - name: Collector
+        type: string
+        valuetype: choice
+        choices: ["InMemCollector"]
+        default: "InMemCollector"
+        lastversion: v1.21
+        reload: false
+        summary: is the collector to use for collecting traces.
+        description: >
+          Collector is the collector to use for collecting traces
+          Currently the only supported value is "InMemCollector".
+          This setting will be removed in v2.0.
+
+      - name: CacheOverrunStrategy
+        type: string
+        valuetype: choice
+        choices: ["resize", "impact"]
+        default: "resize"
+        reload: true
+        lastversion: v1.21
+        summary: controls how the cache is managed when memory pressure is high.
+        description: >
+          CacheOverrunStrategy controls the cache management behavior under memory pressure.
+          "resize" means that when a cache overrun occurs, the cache is shrunk and never grows again,
+          which is generally not helpful unless it occurs because of a permanent change in traffic patterns.
+          In the "impact" strategy, the items having the most impact on the cache size are
+          ejected from the cache earlier than normal but the cache is not resized.
+          In all cases, it only applies if MaxAlloc is nonzero.
+          Default is "resize" for compatibility but "impact" is recommended for most installations.
+          In v2.0, the only available strategy is "impact", and this setting will be removed.
+
+      - name: AdditionalAttributes
+        type: map
+        valuetype: map
+        example: "ClusterName:MyCluster,environment:production"
+        reload: true
+        summary: is a map that can be used for injecting user-defined attributes.
+        description: >
+          AdditionalAttributes is a map that can be used for injecting
+          user-defined attributes into every span. For example, it could be used
+          for naming a refinery cluster. Both keys and values must be strings.
+
+  - name: IDFieldNames
+    title: "ID Field Names"
+    description: >
+      Controls the field names to use for the event ID fields. These fields are
+      used to identify events that are part of the same trace.
+    fields:
+      - name: TraceIDFieldNames
+        type: stringarray
+        valuetype: stringarray
+        example: "trace.trace_id,traceId"
+        reload: true
+        summary: is the list of field names to use for the trace ID.
+        description: >
+          TraceIDFieldNames is the list of field names to use for the trace ID.
+          The first field in the list that is present in an incoming span will be used
+          as the trace ID. If none of the fields are present, refinery treats the
+          span as not being part of a trace and forwards it immediately to Honeycomb.
+
+      - name: ParentIDFieldNames
+        type: stringarray
+        valuetype: stringarray
+        example: "trace.parent_id,parentId"
+        reload: true
+        summary: is the list of field names to use for the parent ID.
+        description: >
+          ParentIDFieldNames is the list of field names to use for the parent ID.
+          The first field in the list that is present in an event will be used
+          as the parent ID.
+
+  - name: GRPCServerParameters
+    title: "gRPC Server Parameters"
+    description: >
+      Controls the parameters of the gRPC server used to receive Open Telemetry
+      data in gRPC format.
+    fields:
+      - name: Enabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: specifies whether the gRPC server is enabled.
+        description: >
+          Enabled specifies whether the gRPC server is enabled.
+          If false, the gRPC server is not started and no gRPC traffic is accepted.
+          NOTE: WE NEED TO DEFAULT THIS TO TRUE IF PREVIOUS CONFIG HAS A LISTEN ADDRESS
+
+      - name: ListenAddr
+        v1name: GRPCListenAddr
+        type: ipport
+        valuetype: nondefault
+        default: ""
+        reload: false
+        envvar: REFINERY_GRPC_LISTEN_ADDRESS
+        commandLine: GRPCListenAddr
+        summary: is the address refinery listens to for incoming GRPC Open Telemetry events.
+        description: >
+          ListenAddr is the address refinery listens to for incoming GRPC Open Telemetry events.
+          Incoming traffic is expected to be unencrypted, so if using SSL put
+          something like nginx in front to do the decryption.
+
+      - name: MaxConnectionIdle
+        v1group: GRPCServerParameters
+        v1name: MaxConnectionIdle
+        type: duration
+        valuetype: nondefault
+        default: 0s
+        example: 1m
+        reload: false
+        summary: is the amount of time to permit an idle connection.
+        description: >
+          MaxConnectionIdle is a duration for the amount of time after which an
+          idle connection would be closed by sending a GoAway. "Idle" means that
+          there are no active RPCs.
+          0s sets duration to infinity.
+
+
+      - name: MaxConnectionAge
+        v1group: GRPCServerParameters
+        v1name: MaxConnectionAge
+        type: duration
+        valuetype: nondefault
+        default: 3m
+        reload: false
+        summary: is the maximum amount of time a gRPC connection may exist.
+        description: >
+          MaxConnectionAge is a duration for the maximum amount of time a
+          connection may exist before it will be closed by sending a GoAway. A
+          random jitter of +/-10% will be added to MaxConnectionAge to spread out
+          connection storms.
+          0s sets duration to infinity; a value measured in low minutes will help
+          load balancers to distribute load among peers more evenly.
+
+      - name: MaxConnectionAgeGrace
+        v1group: GRPCServerParameters
+        v1name: MaxConnectionAgeGrace
+        type: duration
+        valuetype: nondefault
+        default: 60s
+        reload: false
+        summary: is the duration beyond MaxConnectionAge after which the connection will be forcibly closed.
+        description: >
+          MaxConnectionAgeGrace is an additive period after MaxConnectionAge after
+          which the connection will be forcibly closed (in case the upstream node ignores
+          the GoAway request).
+          0s sets duration to infinity.
+
+      - name: KeepAlive
+        v1group: GRPCServerParameters
+        v1name: Time
+        type: duration
+        valuetype: nondefault
+        default: 1m
+        reload: false
+        summary: is the duration between keep-alive pings.
+        description: >
+          KeepAlive is a duration for the amount of time after which if the client
+          doesn't see any activity it pings the server to see if the transport is
+          still alive. If set below 1s, a minimum value of 1s will be used instead.
+          0s sets duration to 2 hours.
+
+      - name: KeepAliveTimeout
+        v1group: GRPCServerParameters
+        v1name: Timeout
+        type: duration
+        valuetype: nondefault
+        default: 20s
+        reload: false
+        summary: is the duration the server waits for activity on the connection.
+        description: >
+          KeepAliveTimeout is a duration for the amount of time after which if the
+          server doesn't see any activity it pings the client to see if the
+          transport is still alive. If set below 1s, a minimum value of 1s will be
+          used instead.
+          0s sets duration to 20 seconds.
+
+  - name: SampleCache
+    title: "Sample Cache"
+    description: >
+      Controls the sample cache used to retain information about trace
+      status after the sampling decision has been made.
+    fields:
+      - name: Type
+        type: string
+        valuetype: nondefault
+        default: "cuckoo"
+        reload: false
+        lastversion: v1.21
+        summary: is the type of sample cache used.
+        description: >
+          Type controls the type of sample cache used.
+          "legacy" is a strategy where both keep and drop decisions are stored in a circular buffer that is
+          5x the size of the trace cache. This is Refinery's original sample cache strategy.
+          "cuckoo" is a strategy where dropped traces are preserved in a "Cuckoo Filter", which can remember
+          a much larger number of dropped traces, leaving capacity to retain a much larger number of kept traces.
+          It is also more configurable. The cuckoo filter is recommended for most installations
+          and is the only option available in Refinery 2.0 and later.
+
+      - name: KeptSize
+        type: int
+        valuetype: nondefault
+        default: 10_000
+        reload: true
+        summary: is the number of traces preserved in the cuckoo kept traces cache.
+        description: >
+          KeptSize controls the number of traces preserved in the cuckoo kept
+          traces cache. Refinery keeps a record of each trace that was kept and
+          sent to Honeycomb, along with some statistical information. This is
+          most useful in cases where the trace was sent before sending the root
+          span, so that the root span can be decorated with accurate metadata.
+          Default is 10_000 traces (each trace in this cache consumes roughly
+          200 bytes). Does not apply to the "legacy" type of cache.
+
+      - name: DroppedSize
+        type: int
+        valuetype: nondefault
+        default: 1_000_000
+        reload: true
+        summary: is the size of the cuckoo dropped traces cache.
+        description: >
+          DroppedSize controls the size of the cuckoo dropped traces cache.
+          This cache consumes 4-6 bytes per trace at a scale of millions of traces.
+          Changing its size with live reload sets a future limit, but does not have an immediate effect.
+          Does not apply to the "legacy" type of cache.
+
+      - name: SizeCheckInterval
+        type: duration
+        valuetype: nondefault
+        default: 10s
+        reload: true
+        summary: controls how often the cuckoo cache re-evaluates its capacity.
+        description: >
+          SizeCheckInterval controls the duration of how often the cuckoo cache
+          re-evaluates the remaining capacity of its dropped traces cache and
+          possibly cycles it.
+          This cache is quite resilient so it doesn't need to happen very often,
+          but the operation is also inexpensive.
+          Default is 10 seconds.
+          Does not apply to the "legacy" type of cache.
+
+  - name: StressRelief
+    title: "Stress Relief"
+    description: >
+      Controls the stress relief mechanism, which is used to prevent
+      Refinery from being overwhelmed by a large number of traces.
+
+      There is a metric called stress_level that is emitted as part of refinery
+      metrics. It is a measure of refinery's throughput rate relative to its
+      processing rate, combined with the amount of room in its internal queues,
+      and ranges from 0 to 100. It is generally expected to be 0 except under
+      heavy load. When stress levels reach 100, there is an increased chance
+      that refinery will become unstable.
+
+      To avoid this problem, the Stress Relief system can do deterministic sampling
+      on new trace traffic based solely on TraceID, without having to store traces
+      in the cache or take the time processing sampling rules. Existing traces in
+      flight will be processed normally, but when Stress Relief is active, trace
+      decisions are made deterministically on a per-span basis; all spans will be
+      sampled according to the SamplingRate specified here.
+
+      Once Stress Relief activates (by exceeding the ActivationLevel), it will not
+      deactivate until stress_level falls below the DeactivationLevel. When it
+      deactivates, normal trace decisions are made -- and any additional spans that
+      arrive for traces that were active during Stress Relief will respect the
+      decisions made during that time.
+
+      The measurement of stress is a lagging indicator and is highly dependent on
+      Refinery configuration and scaling. Other configuration values should be well
+      tuned first, before adjusting the Stress Relief Activation parameters.
+
+      Stress Relief is not a substitute for proper configuration and scaling, but
+      it can be used as a safety valve to prevent Refinery from becoming unstable
+      under heavy load.
+    fields:
+      - name: Mode
+        type: string
+        valuetype: nondefault
+        default: "never"
+        reload: true
+        summary: is a string indicating how to use Stress Relief.
+        description: >
+          Mode is a string indicating how to use Stress Relief. Options are:
+          "never" means that Stress Relief will never activate
+          "monitor" is the recommended setting, and means that Stress Relief will monitor
+              the status of refinery and activate according to the levels set below.
+          "always" means that Stress Relief is always on, which may be useful in an
+              emergency situation.
+
+      - name: ActivationLevel
+        type: int
+        valuetype: nondefault
+        default: 90
+        reload: true
+        summary: is the stress_level (from 0-100) at which Stress Relief is triggered.
+        description: >
+          ActivationLevel is the stress_level (from 0-100) at which Stress Relief is
+          triggered.
+
+      - name: DeactivationLevel
+        type: int
+        valuetype: nondefault
+        default: 70
+        reload: true
+        summary: is the stress_level (from 0-100) at which Stress Relief is turned off.
+        description: >
+          DeactivationLevel is the stress_level (from 0-100) at which Stress
+          Relief is turned off (subject to MinimumActivationDuration). It must
+          be less than ActivationLevel.
+
+      - name: SamplingRate
+        type: int
+        valuetype: nondefault
+        default: 100
+        reload: true
+        summary: is the sampling rate to use when Stress Relief is activated.
+        description: >
+          SamplingRate is the sampling rate to use when Stress Relief is
+          activated. All new traces will be deterministically sampled at this
+          rate based only on the traceID. It should be chosen to be a rate that
+          sends fewer samples than the average sampling rate Refinery is
+          configured to use. For example, if Refinery is configured to normally
+          sample at a rate of 1 in 10, then Stress Relief should be configured
+          to sample at a rate of at least 1 in 30.
+
+      - name: MinimumActivationDuration
+        type: duration
+        valuetype: nondefault
+        default: 10s
+        reload: true
+        summary: is the minimum time that stress relief will stay enabled.
+        description: >
+          MinimumActivationDuration is the minimum time that stress relief will stay
+          enabled, once activated. This helps to prevent oscillations.
+
+      - name: MinimumStartupDuration
+        type: duration
+        valuetype: nondefault
+        default: 3s
+        reload: true
+        summary: is the minimum time that stress relief will stay enabled.
+        description: >
+          MinimumStartupDuration is used when switching into Monitor mode. When
+          stress monitoring is enabled, it will start up in stressed mode for a
+          at least this amount of time to try to make sure that Refinery can
+          handle the load before it begins processing it in earnest. This is to
+          help address the problem of trying to bring a new node into an
+          already-overloaded cluster. If this duration is 0, Refinery will not
+          start in stressed mode, which will provide faster startup at the
+          possible cost of startup instability.
+
+
