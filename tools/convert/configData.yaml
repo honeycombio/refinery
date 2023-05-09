@@ -72,8 +72,6 @@ groups:
           if SSL is a requirement, put something like nginx in front to do the
           decryption.
 
-          Should be an ip:port like "0.0.0.0:8080".
-
       - name: PeerListenAddr
         default: "0.0.0.0:8081"
         type: ipport
@@ -387,6 +385,8 @@ groups:
           specified in Destinations.
 
       - name: MetricsHoneycombAPI
+        v1group: HoneycombMetrics
+        v1name: MetricsHoneycombAPI
         type: url
         valuetype: nondefault
         default: "https://api.honeycomb.io"
@@ -398,7 +398,23 @@ groups:
           the destination to which refinery sends its own metrics. Only used if
           "honeycomb" is specified in Destinations.
 
+      - name: MetricsAPIKey
+        v1group: HoneycombMetrics
+        v1name: MetricsAPIKey
+        type: string
+        valuetype: nondefault
+        default: ""
+        example: "set-this-to-your-api-key"
+        reload: false
+        envvar: REFINERY_METRICS_API_KEY
+        summary: is the API key used to send Honeycomb metrics.
+        description: >
+          MetricsDataset is the dataset to which refinery sends its own metrics.
+          Only used if "honeycomb" is specified in Destinations.
+
       - name: MetricsDataset
+        v1group: HoneycombMetrics
+        v1name: MetricsDataset
         type: string
         valuetype: nondefault
         default: "Refinery Metrics"
@@ -410,8 +426,10 @@ groups:
           Only used if "honeycomb" is specified in Destinations.
 
       - name: MetricsReportingInterval
+        v1group: HoneycombMetrics
+        v1name: MetricsReportingInterval
         type: duration
-        valuetype: nondefault
+        valuetype: secondstoduration
         default: 30s
         reload: false
         summary: is the interval between sending metrics to honeycomb.

@@ -39,27 +39,38 @@ var groupTemplate = `
 var fieldTemplate = `
 {{- define "field" -}}
 {{- $field := . -}}
+{{- $oldname := $field.Name -}}
+{{- if $field.V1Name -}}
+  {{- if $field.V1Group -}}
+    {{- $oldname = (print $field.V1Group "." $field.V1Name) -}}
+  {{- else -}}
+    {{- $oldname = $field.V1Name -}}
+  {{- end -}}
+{{- end -}}
 {{/* {{ print $field.Name " " $field.Summary | wordwrap | comment | indent 4 }} */}}
 {{- if $field.Description }}
 {{ $field.Description | wci 4 }}
+{{ formatExample $field.Type $field.Default $field.Example | comment | indent 4 }}
 {{ reload $field.Reload | indent 4 }}
 {{- if eq $field.ValueType "nondefault" }}
-{{ printf "nonDefaultOnly .Data \"%s\" %#v" $field.Name $field.Default | meta | indent 4 }}
+{{ printf "nonDefaultOnly .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Default | meta | indent 4 }}
 {{- else if eq $field.ValueType "nonzero" }}
-{{ printf "nonZero .Data \"%s\" %#v" $field.Name $field.Example | meta | indent 4 }}
+{{ printf "nonZero .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Example | meta | indent 4 }}
 {{- else if eq $field.ValueType "nonemptystring" }}
-{{ printf "nonEmptyString .Data \"%s\" %#v" $field.Name $field.Example| meta | indent 4 }}
+{{ printf "nonEmptyString .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Example| meta | indent 4 }}
+{{- else if eq $field.ValueType "secondstoduration" }}
+{{ printf "secondsToDuration .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Example| meta | indent 4 }}
 {{- else if eq $field.ValueType "choice" }}
 {{ printf "Options: %s" (join $field.Choices " ") | comment | indent 4 }}
-{{ printf "choice .Data \"%s\" %s \"%s\"" $field.Name (genSlice $field.Choices) $field.Default | meta | indent 4 }}
+{{ printf "choice .Data \"%s\" \"%s\" %s \"%s\"" $field.Name $oldname (genSlice $field.Choices) $field.Default | meta | indent 4 }}
 {{- else if eq $field.ValueType "new" }}
 {{ print $field.Name ": " $field.Default | indent 4 }}
 {{- else if eq $field.ValueType "map" }}
-{{ printf "renderMap .Data \"%s\" \"%s\"" $field.Name $field.Example | meta | indent 4 }}
+{{ printf "renderMap .Data \"%s\" \"%s\" \"%s\"" $field.Name $oldname $field.Example | meta | indent 4 }}
 {{- else if eq $field.ValueType "stringarray" }}
-{{ printf "renderStringarray .Data \"%s\" \"%s\"" $field.Name $field.Example | meta | indent 4 }}
+{{ printf "renderStringarray .Data \"%s\" \"%s\" \"%s\"" $field.Name $oldname $field.Example | meta | indent 4 }}
 {{- else }}
-{{ printf ">%#v<" $field | comment | indent 4 }}
+{{ printf "******** ERROR %#v has bad ValueType %v" $field.Name $field.ValueType }}
 {{ end -}}
 {{ end }}
 {{ end -}}
