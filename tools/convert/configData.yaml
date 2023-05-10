@@ -84,6 +84,19 @@ groups:
           Incoming traffic is expected to be HTTP, so if using SSL
           use something like nginx or a load balancer to do the decryption.
 
+      - name: HoneycombAPI
+        type: url
+        valuetype: nondefault
+        default: "https://api.honeycomb.io"
+        reload: true
+        envvar: REFINERY_HONEYCOMB_API
+        commandLine: HoneycombAPI
+        summary: is the URL of the Honeycomb API to which data will be sent.
+        description: >
+          HoneycombAPI is the URL for the upstream Honeycomb API; this is the
+          destination to which refinery sends all events that it decides to
+          keep.
+
   - name: AccessKeys
     title: "Access Key Configuration"
     description: >
@@ -106,7 +119,8 @@ groups:
 
       - name: AcceptOnlyListedKeys
         type: bool
-        valuetype: nondefault
+        valuetype: conditional
+        extra: APIKeys does-not-contain "*" and APIKeys is-not-empty
         default: false
         reload: true
         summary: -- if true, only traffic using the keys listed in APIKeys is accepted.
@@ -114,55 +128,8 @@ groups:
           Setting this flag causes events arriving with API keys not in the ReceiveKeys list to be
           rejected with an HTTP 401 error.
 
-      - name: SendKey
-        type: string
-        valuetype: nondefault
-        default: ""
-        reload: true
-        summary: is the API key to use when sending data to Honeycomb.
-        description: >
-          If set, this API key may be used when sending data to Honeycomb, depending on the state of ForwardListedKeys.
-
-      - name: ReplaceListedKeys
-        type: bool
-        valuetype: nondefault
-        default: false
-        reload: true
-        summary: controls whether to forward API keys from incoming traffic to Honeycomb.
-        description: >
-          If false, traffic using a key listed in APIKeys preserves that key when forwarded to Honeycomb.
-          If true, traffic using a key listed in APIKeys is forwarded to Honeycomb using the SendKey.
-
-      - name: AllowMissingKeys
-        type: bool
-        valuetype: nondefault
-        default: false
-        reload: true
-        summary: controls whether to allow traffic without an API key to be forwarded to Honeycomb.
-        description: >
-          If false, traffic without an API key is rejected with an HTTP 401 error.
-          If true, traffic without an API key is forwarded to Honeycomb using the SendKey.
-
-
-  - name: Destinations
-    title: "Destinations"
-    description: Configuration for destinations to which data will be sent.
-    fields:
-      - name: HoneycombAPI
-        type: url
-        valuetype: nondefault
-        default: "https://api.honeycomb.io"
-        reload: true
-        envvar: REFINERY_HONEYCOMB_API
-        commandLine: HoneycombAPI
-        summary: is the URL of the Honeycomb API to which data will be sent.
-        description: >
-          HoneycombAPI is the URL for the upstream Honeycomb API; this is the
-          destination to which refinery sends all events that it decides to
-          keep.
-
-  - name: Telemetry
-    title: "Telemetry"
+  - name: RefineryTelemetry
+    title: "Refinery Telemetry"
     description: Configuration info for the telemetry that Refinery uses to record its own operation.
     fields:
       - name: AddRuleReasonToTrace
@@ -186,6 +153,32 @@ groups:
           the number of child spans on the trace at the time the sampling decision was made.
           This value is available to the rules-based sampler, making it possible to write rules that
           are dependent upon the number of spans in the trace.
+
+      - name: AddHostMetadataToTrace
+        type: bool
+        valuetype: nondefault
+        default: true
+        reload: true
+        summary: specifies whether to add host metadata to traces.
+        description: >
+          AddHostMetadataToTrace specifies whether to add host metadata to traces.
+          If true, Refinery will add the following tags to all traces:
+          - meta.refinery.local_hostname: the hostname of the Refinery node
+          (we should consider adding more metadata here, like IP address, etc)
+
+      - name: AddSpanCountToRoot
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: specifies whether to add the span count to the root span.
+        description: >
+          AddSpanCountToRoot specifies whether to add the span count to the root
+          span to indicate the number of child spans on the trace at the time
+          the sampling decision was made. This value is available to the
+          rules-based sampler, making it possible to write rules that are
+          dependent upon the number of spans in the trace.
+          If true, Refinery will add meta.span_count to the root span.
 
   - name: Traces
     title: "Traces"
@@ -309,8 +302,8 @@ groups:
           sampler is in use, as it is useful for debugging and understanding the
           behavior of your refinery installation.
 
-  - name: Logging
-    title: "Refinery Logging"
+  - name: Logger
+    title: "Refinery Logger"
     description: Configuration for logging.
     fields:
       - name: Type
@@ -319,12 +312,12 @@ groups:
         choices: ["stdout", "honeycomb", "none"]
         default: "stdout"
         reload: false
-        summary: is the type of logging to use.
+        summary: is the type of logger to use.
         description: >
           Type is the type of logging to use. "none" means that logs are
           discarded. "honeycomb" means that logs will be forwarded to honeycomb
-          according to the settings below. "stdout" means that logs will be
-          written to stdout.
+          as events according to the settings below. "stdout" means that logs will be
+          written to stdout as structured JSON.
 
       - name: LoggingLevel
         type: string
@@ -338,7 +331,11 @@ groups:
           the logger. Debug is very verbose, and should only be used in
           pre-production environments. Warn is the recommended level.
 
-      - name: HoneycombAPI
+  - name: HoneycombLogger
+    title: "Honeycomb Logger"
+    description: Configuration for logging to Honeycomb. Only used if Logger.Type is "honeycomb".
+    fields:
+      - name: APIHost
         v1group: HoneycombLogger
         v1name: LoggerHoneycombAPI
         type: url
@@ -349,9 +346,7 @@ groups:
         summary: is the URL of the Honeycomb API to which logs will be sent.
         description: >
           HoneycombAPI is the URL for the upstream Honeycomb API for logs; this is
-          the destination to which refinery sends its own logs. Only used if
-          the logging type is "honeycomb".
-          TODO: Is it ok to duplicate the names across groups?
+          the destination to which refinery sends its own logs.
 
       - name: APIKey
         v1group: HoneycombLogger
@@ -364,8 +359,7 @@ groups:
         envvar: REFINERY_LOGS_API_KEY
         summary: is the API key to use when sending logs to Honeycomb.
         description: >
-          APIKey is the API key to use when sending logs to Honeycomb. Only used if
-          the logging type is "honeycomb".
+          APIKey is the API key to use when sending logs to Honeycomb.
 
       - name: Dataset
         v1group: HoneycombLogger
@@ -377,8 +371,7 @@ groups:
         envvar: REFINERY_LOGS_DATASET
         summary: is the dataset to which logs will be sent.
         description: >
-          Dataset is the dataset to which logs will be sent. Only used if
-          the logging type is "honeycomb".
+          Dataset is the dataset to which logs will be sent.
 
       - name: SamplerEnabled
         v1group: HoneycombLogger
@@ -389,44 +382,47 @@ groups:
         reload: false
         summary: controls whether to sample logs.
         description: >
-          SamplerEnabled controls whether to sample logs. Only used if
-          the logging type is "honeycomb".
+          SamplerEnabled controls whether to sample logs.
 
       - name: SamplerThroughput
-        v1group: HoneycombLogger
-        v1name: LoggerSamplerThroughput
+        valuetype: new
         type: float
-        valuetype: nondefault
-        default: 1.0
+        default: 10
         reload: false
-        summary: is the sampling rate for logs.
+        summary: is the sampling throughput for logs in events per second.
         description: >
-          SamplerThroughput is the sampling rate for logs. Only used if
-          the logging type is "honeycomb".
-          TODO: should use a different default sampler and it's hard to convert the value.
+          SamplerThroughput is the sampling throughput for logs measured in events per second.
+          TODO: FOR THE CLUSTER
 
-  - name: Metrics
-    title: "Refinery Metrics"
-    description: Configuration for metrics.
+  - name: StdoutLogger
+    title: "Stdout Logger"
+    description: Configuration for logging to stdout. Only used if Logger.Type is "stdout".
     fields:
-      - name: Destinations
-        type: string
-        valuetype: choice
-        choices: ["honeycomb", "prometheus", "otel"]
-        default: ""
+      - name: Structured
+        type: bool
+        valuetype: nondefault
+        default: false
         reload: false
-        summary: is the list of destinations to which metrics will be sent.
+        summary: controls whether to used structured logging.
         description: >
-          Destinations is the list of destinations to which metrics will be
-          sent. If "prometheus" is specified, then metrics will be exposed on
-          the /metrics endpoint at the PrometheusListenAddr address. If
-          "honeycomb" is specified, then metrics will be sent to Honeycomb
-          according to the settings below. If "otel" is specified, then metrics
-          will be sent to an OpenTelemetry endpoint according to the settings
-          below.
-          TODO: there should just be separate groups for each metrics destination.
+          Structured specifies whether the stdout logger sends structured logs (JSON) or not (plain text).
+
+  - name: PrometheusMetrics
+    title: "Prometheus Metrics"
+    description: Configuration for Refinery's internally-generated metrics as made available through Prometheus.
+    fields:
+      - name: Enabled
+        type: bool
+        valuetype: conditional
+        extra: "eq Metrics prometheus"
+        default: false
+        reload: false
+        summary: controls whether to expose refinery metrics over PromethusListenAddr
+        description: >
+          Enabled controls whether to expose refinery metrics over PromethusListenAddr.
 
       - name: PrometheusListenAddr
+        v1group: PrometheusMetrics
         v1name: MetricsListenAddr
         type: ipport
         valuetype: nondefault
@@ -436,10 +432,26 @@ groups:
         description: >
           PrometheusListenAddr determines the interface and port on which
           Prometheus will listen for requests for /metrics. Must be different
-          from the main Refinery listener. Only used if "prometheus" is
-          specified in Destinations.
+          from the main Refinery listener. Only used if "Enabled" is true in
+          PrometheusMetrics.
 
-      - name: HoneycombAPI
+  - name: LegacyMetrics
+    title: "Legacy Metrics"
+    description: Configuration for Refinery's legacy metrics. Version 1.x of Refinery used this configuration
+      for sending Metrics to Honeycomb. The metrics generated that way are nonstandard and will be deprecated
+      in a future release. New installations should prefer OTelMetrics.
+    fields:
+      - name: Enabled
+        type: bool
+        valuetype: conditional
+        extra: "eq Metrics honeycomb"
+        default: false
+        reload: false
+        summary: controls whether to send metrics to Honeycomb.
+        description: >
+          Enabled controls whether to send metrics to Honeycomb.
+
+      - name: APIHost
         v1group: HoneycombMetrics
         v1name: MetricsHoneycombAPI
         type: url
@@ -450,8 +462,7 @@ groups:
         summary: is the URL of the Honeycomb API to which metrics will be sent.
         description: >
           HoneycombAPI is the URL for the upstream Honeycomb API for metrics; this is
-          the destination to which refinery sends its own metrics. Only used if
-          "honeycomb" is specified in Destinations.
+          the destination to which refinery sends its own metrics.
 
       - name: APIKey
         v1group: HoneycombMetrics
@@ -465,7 +476,6 @@ groups:
         summary: is the API key used to send Honeycomb metrics.
         description: >
           Dataset is the dataset to which refinery sends its own metrics.
-          Only used if "honeycomb" is specified in Destinations.
 
       - name: Dataset
         v1group: HoneycombMetrics
@@ -478,7 +488,6 @@ groups:
         summary: is the Honeycomb dataset to which metrics will be sent.
         description: >
           Dataset is the dataset to which refinery sends its own metrics.
-          Only used if "honeycomb" is specified in Destinations.
 
       - name: ReportingInterval
         v1group: HoneycombMetrics
@@ -487,11 +496,15 @@ groups:
         valuetype: secondstoduration
         default: 30s
         reload: false
-        summary: is the interval between sending metrics to honeycomb.
+        summary: is the interval between sending legacy metrics to honeycomb.
         description: >
           ReportingInterval is the interval between sending metrics to
-          Honeycomb. Between 1 and 60 seconds is typical. Only used if
-          "honeycomb" is specified in Destinations.
+          Honeycomb. Between 1 and 60 seconds is typical.
+
+  - name: OTelMetrics
+    title: "OpenTelemetry Metrics"
+    description: Configuration for Refinery's OpenTelemetry metrics. This is the preferred way to send metrics
+      to Honeycomb. New installations should prefer OTelMetrics.
 
   - name: PeerManagement
     title: "Peer Management"
@@ -512,6 +525,52 @@ groups:
           means that refinery self-registers with a redis instance and gets its
           peer list from there.
 
+      - name: IdentifierInterfaceName
+        v1group: PeerManagement
+        v1name: IdentifierInterfaceName
+        type: string
+        valuetype: nonemptystring
+        example: "eth0"
+        reload: false
+        summary: specifies a network interface to use when finding a local hostname.
+        description: >
+          IdentifierInterfaceName is optional. By default, when using a peer
+          registry, Refinery will use the local hostname to identify itself to
+          other peers. If your environment requires that you use IPs as
+          identifiers (for example, if peers can't resolve eachother by name),
+          you can specify the network interface that Refinery is listening on
+          here. Refinery will use the first unicast address that it finds on the
+          specified network interface as its identifier.
+
+      - name: UseIPV6Identifier
+        v1group: PeerManagement
+        v1name: UseIPV6Identifier
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: specifies that Refinery should use an IPV6 address as its identifier.
+        description: >
+          If using IdentifierInterfaceName, Refinery will default to the first
+          IPv4 unicast address it finds for the specified interface. If
+          UseIPV6Identifier is used, Refinery will use the first IPV6 unicast
+          address found.
+
+      - name: RedisIdentifier
+        v1group: PeerManagement
+        v1name: RedisIdentifier
+        type: string
+        valuetype: nonemptystring
+        example: "192.168.1.1"
+        reload: false
+        summary: specifies the identifier to use when registering itself with peers.
+        description: >
+          By default, when using a peer registry, Refinery will use the local
+          hostname to identify itself to other peers. If your environment
+          requires something else, (for example, if peers can't resolve each
+          other by name), you can specify the exact identifier (IP address, etc)
+          to use here. Overrides IdentifierInterfaceName, if both are set.
+
       - name: Peers
         v1group: PeerManagement
         v1name: Peers
@@ -525,7 +584,14 @@ groups:
           This list is ignored when Type is "redis". The format is a list of
           strings of the form "host:port".
 
-      - name: RedisHost
+  - name: RedisPeerManagement
+    title: "Redis Peer Management"
+    description: >
+      Controls how the Refinery cluster communicates between peers when using Redis.
+      Only applies when PeerManagement.Type is "redis"
+
+    fields:
+      - name: Host
         v1group: PeerManagement
         v1name: RedisHost
         type: ipport
@@ -533,12 +599,11 @@ groups:
         example: "localhost:6379"
         reload: false
         envvar: REFINERY_REDIS_HOST
-        summary: is the host and port of the redis instance to use when Type is "redis".
+        summary: is the host and port of the redis instance to use.
         description: >
-          RedisHost is the host and port of the redis instance to use when Type is "redis".
-          This value is ignored when Type is "file".
+          Host is the host and port of the redis instance to use for peer cluster membership management.
 
-      - name: RedisUsername
+      - name: Username
         v1group: PeerManagement
         v1name: RedisUsername
         type: string
@@ -547,24 +612,22 @@ groups:
         envvar: REFINERY_REDIS_USERNAME
         summary: is the username used to connect to redis for peer cluster membership management.
         description: >
-          RedisUsername is the username used to connect to redis for peer cluster membership management.
-          This value is ignored when Type is "file".
+          Username is the username used to connect to redis for peer cluster membership management.
 
-      - name: RedisPassword
+      - name: Password
         v1group: PeerManagement
-        v1name: RedisPassword
+        v1name: Password
         type: string
         valuetype: nonemptystring
         reload: false
         envvar: REFINERY_REDIS_PASSWORD
         summary: is the password used to connect to redis for peer cluster membership management.
         description: >
-          RedisPassword is the password used to connect to redis for peer cluster membership management.
-          This value is ignored when Type is "file".
+          Password is the password used to connect to redis for peer cluster membership management.
 
-      - name: RedisPrefix
+      - name: Prefix
         v1group: PeerManagement
-        v1name: RedisPrefix
+        v1name: Prefix
         type: string
         valuetype: nondefault
         default: "refinery"
@@ -573,14 +636,14 @@ groups:
         envvar: REFINERY_REDIS_PREFIX
         summary: is a string used as a prefix for the keys in redis while storing the peer membership.
         description: >
-          RedisPrefix is a string used as a prefix for the keys in redis while storing
+          Prefix is a string used as a prefix for the keys in redis while storing
           the peer membership. It might be useful to set this in any situation where
           multiple refinery clusters or multiple applications want to share a single
           Redis instance. It may not be blank.
 
-      - name: RedisDatabase
+      - name: Database
         v1group: PeerManagement
-        v1name: RedisDatabase
+        v1name: Database
         type: int
         valuetype: nondefault
         default: 0
@@ -589,7 +652,7 @@ groups:
         envvar: REFINERY_REDIS_DATABASE
         summary: is the database number to use for the Redis instance storing the peer membership.
         description: >
-          RedisDatabase is an integer from 0-15 indicating the database number to use
+          Database is an integer from 0-15 indicating the database number to use
           for the Redis instance storing the peer membership. It might be useful to set
           this in any situation where multiple refinery clusters or multiple
           applications want to share a single Redis instance.
@@ -617,52 +680,6 @@ groups:
         description: >
           UseTLSInsecure disables certificate checks when connecting to redis for peer cluster membership management.
 
-
-      - name: IdentifierInterfaceName
-        v1group: PeerManagement
-        v1name: IdentifierInterfaceName
-        type: string
-        valuetype: nonemptystring
-        example: "eth0"
-        reload: false
-        summary: specifies a network interface to use when finding a local hostname.
-        description: >
-          IdentifierInterfaceName is optional. By default, when using RedisHost, Refinery will use
-          the local hostname to identify itself to other peers in Redis. If your environment
-          requires that you use IPs as identifiers (for example, if peers can't resolve eachother
-          by name), you can specify the network interface that Refinery is listening on here.
-          Refinery will use the first unicast address that it finds on the specified network
-          interface as its identifier.
-
-      - name: UseIPV6Identifier
-        v1group: PeerManagement
-        v1name: UseIPV6Identifier
-        type: bool
-        valuetype: nondefault
-        default: false
-        reload: false
-        summary: specifies that Refinery should use an IPV6 address as its identifier.
-        description: >
-          If using IdentifierInterfaceName, Refinery will default to the first
-          IPv4 unicast address it finds for the specified interface. If
-          UseIPV6Identifier is used, Refinery will use the first IPV6 unicast
-          address found.
-
-      - name: RedisIdentifier
-        v1group: PeerManagement
-        v1name: RedisIdentifier
-        type: string
-        valuetype: nonemptystring
-        example: "192.168.1.1"
-        reload: false
-        summary: specifies the identifier to use when registering with redis.
-        description: >
-          By default, when using RedisHost, Refinery will use the local hostname
-          to identify itself to other peers in Redis. If your environment
-          requires something else, (for example, if peers can't resolve each
-          other by name), you can specify the exact identifier (IP address, etc)
-          to use here. Overrides IdentifierInterfaceName, if both are set.
-
       - name: Timeout
         v1group: PeerManagement
         v1name: Timeout
@@ -672,8 +689,7 @@ groups:
         reload: false
         summary: is the timeout to use when communicating with Redis.
         description: >
-          Timeout is optional. By default, when using RedisHost, Refinery will timeout
-          after 5s when communicating with Redis.
+          Timeout is optional. Refinery will timeout after this duration when communicating with Redis.
 
       - name: Strategy
         v1group: PeerManagement
@@ -717,6 +733,23 @@ groups:
           1000x) of the total number of concurrently active traces (trace throughput *
           trace duration).
 
+      - name: MaxMemory
+        type: percentage
+        valuetype: new
+        default: 75
+        reload: true
+        summary: is the maximum percentage of memory that should be allocated by the collector.
+        description: >
+          If set, it must be an integer value between 0 and 100, representing
+          the target maximum percentage of memory that should be allocated by
+          the collector. If set to a non-zero value, once per tick (see
+          SendTicker) the collector will compare total allocated bytes to this
+          calculated value. If allocation is too high, traces will be ejected
+          from the cache early to reduce memory. Useful values for this setting
+          are generally in the range of 70-90. Depending on deployment details,
+          system memory information may not be available; if it is not, a
+          warning will be logged and the value of MaxAlloc will be used.
+
       - name: MaxAlloc
         v1group: InMemCollector
         v1name: MaxAlloc
@@ -728,12 +761,7 @@ groups:
         description: >
           If set, it must be an integer >= 0. 64-bit values are
           supported.
-          If set to a non-zero value, once per tick (see SendTicker) the collector
-          will compare total allocated bytes to this value. If allocation is too
-          high, traces will be ejected from the cache early to reduce memory.
-          Useful values for this setting are generally in the range of 70%-90% of
-          available system memory.
-          TODO: can we read the available memory size from a container and set this automatically?
+          See MaxMemory for more details.
 
   - name: BufferSizes
     title: "Buffer Sizes"
@@ -765,38 +793,6 @@ groups:
           to send spans to peer nodes. If the buffer fills up, performance will
           degrade because Refinery will block while waiting for space to become
           available. If this happens, you should increase the buffer size.
-
-  - name: Undecided
-    title: "I dunno"
-    description: >
-      These settings are not yet categorized.
-    fields:
-      - name: AddHostMetadataToTrace
-        type: bool
-        valuetype: nondefault
-        default: true
-        reload: true
-        summary: specifies whether to add host metadata to traces.
-        description: >
-          AddHostMetadataToTrace specifies whether to add host metadata to traces.
-          If true, Refinery will add the following tags to all traces:
-          - meta.refinery.local_hostname: the hostname of the Refinery node
-          (we should consider adding more metadata here, like IP address, etc)
-
-      - name: AddSpanCountToRoot
-        type: bool
-        valuetype: nondefault
-        default: false
-        reload: true
-        summary: specifies whether to add the span count to the root span.
-        description: >
-          AddSpanCountToRoot specifies whether to add the span count to the root
-          span to indicate the number of child spans on the trace at the time
-          the sampling decision was made. This value is available to the
-          rules-based sampler, making it possible to write rules that are
-          dependent upon the number of spans in the trace.
-          If true, Refinery will add meta.span_count to the root span.
-
 
   - name: Specialized
     title: "Specialized Configuration"
@@ -1132,7 +1128,7 @@ groups:
       - name: ActivationLevel
         v1group: StressRelief
         v1name: ActivationLevel
-        type: int
+        type: percentage
         valuetype: nondefault
         default: 90
         reload: true
@@ -1144,7 +1140,7 @@ groups:
       - name: DeactivationLevel
         v1group: StressRelief
         v1name: DeactivationLevel
-        type: int
+        type: percentage
         valuetype: nondefault
         default: 70
         reload: true

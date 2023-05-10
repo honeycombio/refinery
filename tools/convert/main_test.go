@@ -103,6 +103,9 @@ func TestPrintNames(t *testing.T) {
 				{{- end -}}
 				{{- print $field.V1Name ")" -}}
 			{{- end -}}
+			{{ if eq $field.LastVersion "v1.21" -}}
+				{{- print " (**removed in v2**)" -}}
+			{{- end -}}
 		{{ end }}
 	{{- end -}}
 	{{- end -}}
