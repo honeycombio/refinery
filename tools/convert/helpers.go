@@ -35,8 +35,10 @@ func helpers() template.FuncMap {
 		"renderStringarray": renderStringarray,
 		"secondsToDuration": secondsToDuration,
 		"stringArray":       stringArray,
+		"split":             split,
 		"wci":               wci,
 		"wordwrap":          wordwrap,
+		"yamlf":             yamlf,
 	}
 }
 
@@ -51,16 +53,16 @@ func box(s string) string {
 func choice(data map[string]any, key, oldkey string, choices []string, def string) string {
 	if value, ok := _fetch(data, oldkey); ok {
 		if _equivalent(value, def) {
-			return fmt.Sprintf("# %s: %v", key, _yamlFormat(def))
+			return fmt.Sprintf("# %s: %v", key, yamlf(def))
 		}
 		for _, c := range choices {
 			if _equivalent(value, c) {
-				return fmt.Sprintf("%s: %v", key, _yamlFormat(value))
+				return fmt.Sprintf("%s: %v", key, yamlf(value))
 			}
 		}
-		return fmt.Sprintf("# %s: %v  ### Invalid option!", key, _yamlFormat(value))
+		return fmt.Sprintf("# %s: %v  ### Invalid option!", key, yamlf(value))
 	}
-	return fmt.Sprintf("# %s: %v", key, _yamlFormat(def))
+	return fmt.Sprintf("# %s: %v", key, yamlf(def))
 }
 
 func comment(s string) string {
@@ -95,12 +97,13 @@ func genSlice(s []string) string {
 	return fmt.Sprintf("(makeSlice %s)", strings.Join(quoted, " "))
 }
 
-func indent(spaces int, s string) string {
-	return strings.Repeat(" ", spaces) + indentRest(spaces, s)
+func indent(count int, s string) string {
+	return strings.Repeat(" ", count) + indentRest(count, s)
 }
 
-func indentRest(spaces int, s string) string {
-	return strings.Replace(s, "\n", "\n"+strings.Repeat(" ", spaces), -1)
+func indentRest(count int, s string) string {
+	eolpat := regexp.MustCompile(`[ \t]*\n[ \t]*`)
+	return eolpat.ReplaceAllString(s, "\n"+strings.Repeat(" ", count))
 }
 
 func join(a []string, sep string) string {
@@ -121,9 +124,9 @@ func meta(s string) string {
 // Otherwise, it returns "# Key: default" to show a default value.
 func nonDefaultOnly(data map[string]any, key, oldkey string, def any) string {
 	if value, ok := _fetch(data, oldkey); ok && !_equivalent(value, def) {
-		return fmt.Sprintf("%s: %s", key, _yamlFormat(value))
+		return fmt.Sprintf("%s: %s", key, yamlf(value))
 	}
-	return fmt.Sprintf("# %s: %v", key, _yamlFormat(def))
+	return fmt.Sprintf("# %s: %v", key, yamlf(def))
 }
 
 // Takes a key that may or may not be in the incoming data, and an example value.
@@ -132,9 +135,9 @@ func nonDefaultOnly(data map[string]any, key, oldkey string, def any) string {
 // Otherwise, it returns "# Key: example" to show the example value.
 func nonEmptyString(data map[string]any, key, oldkey string, example string) string {
 	if value, ok := _fetch(data, oldkey); ok && value != "" {
-		return fmt.Sprintf("%s: %v", key, _yamlFormat(value))
+		return fmt.Sprintf("%s: %v", key, yamlf(value))
 	}
-	return fmt.Sprintf(`# %s: %v`, key, _yamlFormat(example))
+	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }
 
 // Takes a key that may or may not be in the incoming data.
@@ -147,9 +150,9 @@ func nonZero(data map[string]any, key, oldkey string, example string) string {
 		if _isZeroValue(value) {
 			comment = "# "
 		}
-		return fmt.Sprintf(`%s%s: %v`, comment, key, _yamlFormat(value))
+		return fmt.Sprintf(`%s%s: %v`, comment, key, yamlf(value))
 	}
-	return fmt.Sprintf(`# %s: %v`, key, _yamlFormat(example))
+	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }
 
 // Returns the reload eligibility string
@@ -204,9 +207,13 @@ func renderStringarray(data map[string]any, key, oldkey string, example string) 
 func secondsToDuration(data map[string]any, key, oldkey string, example string) string {
 	if value, ok := _fetch(data, oldkey); ok && value != "" {
 		dur := time.Duration(value.(int64)) * time.Second
-		return fmt.Sprintf("%s: %v", key, _yamlFormat(dur))
+		return fmt.Sprintf("%s: %v", key, yamlf(dur))
 	}
-	return fmt.Sprintf(`# %s: %v`, key, _yamlFormat(example))
+	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
+}
+
+func split(s, sep string) []string {
+	return strings.Split(s, sep)
 }
 
 // Prints a nicely-formatted string array; if the incoming string array doesn't exist, or
@@ -235,7 +242,7 @@ func stringArray(data map[string]any, key, oldkey string, indent int, examples .
 
 	s := fmt.Sprintf("%s%s:\n", comment, key)
 	for _, k := range keys {
-		s += fmt.Sprintf("%s%s- %v\n", strings.Repeat(" ", indent), comment, _yamlFormat(k))
+		s += fmt.Sprintf("%s%s- %v\n", strings.Repeat(" ", indent), comment, yamlf(k))
 	}
 	return s
 }
@@ -266,6 +273,24 @@ func wordwrap(s string) string {
 	return strings.Join(output, "\n")
 }
 
+// simplistic YAML formatting of a value
+func yamlf(a any) string {
+	switch v := a.(type) {
+	case string:
+		pat := regexp.MustCompile("^[a-zA-z][a-zA-z0-9]*$")
+		if pat.MatchString(v) {
+			return v
+		}
+		return fmt.Sprintf(`"%s"`, v)
+	case int:
+		return _formatIntWithUnderscores(v)
+	case time.Duration:
+		return v.String()
+	default:
+		return fmt.Sprintf("%v", a)
+	}
+}
+
 // The functions below are internal to this file hence the leading underscore.
 
 // internal function to compare two "any" values for equivalence
@@ -287,24 +312,6 @@ func _formatIntWithUnderscores(i int) string {
 	}
 	output = append([]string{s}, output...)
 	return strings.Join(output, "_")
-}
-
-// simplistic YAML formatting of a value
-func _yamlFormat(a any) string {
-	switch v := a.(type) {
-	case string:
-		pat := regexp.MustCompile("^[a-zA-z][a-zA-z0-9]*$")
-		if pat.MatchString(v) {
-			return v
-		}
-		return fmt.Sprintf(`"%s"`, v)
-	case int:
-		return _formatIntWithUnderscores(v)
-	case time.Duration:
-		return v.String()
-	default:
-		return fmt.Sprintf("%v", a)
-	}
 }
 
 func _isZeroValue(value any) bool {

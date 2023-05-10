@@ -37,12 +37,15 @@ type ConfigData struct {
 	Groups []Group `json:"groups"`
 }
 
-// This is a weird little hack; we're using test code to generate the template
-// used by the convert tool. Every time we run tests, the template will be
-// regenerated.  This is a bit of a hack, but it's better than maintaining two
-// different executables, one of which is only used to generate the data for the
-// other. Plus we get to use the test framework to save on error handling, and
-// we get to reuse the file loading functions for the template generator.
+// This file contains a few instances of a weird little hack; we're using test
+// code to generate the template used by the convert tool and other useful data.
+// Every time we run tests, the template will be regenerated.  This is a bit of
+// a hack, but it's better than maintaining multiple executables, one of which
+// is only used to generate the data for the other. Plus we get to use the test
+// framework to save on error handling, and we get to reuse the file loading
+// functions for the template generator.
+
+// This generates the template used by the convert tool.
 func TestGenerateTemplate(t *testing.T) {
 	input := "configData.yaml"
 	rdr, err := os.Open(input)
@@ -72,7 +75,7 @@ func TestGenerateTemplate(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// This generates a nested list of the groups and names in configData.yaml.
+// This generates a nested list of the groups and names into configData.yaml.
 func TestPrintNames(t *testing.T) {
 	input := "configData.yaml"
 	rdr, err := os.Open(input)
@@ -111,6 +114,67 @@ func TestPrintNames(t *testing.T) {
 	assert.NoError(t, err)
 
 	f, err := os.Create("configDataNames.txt")
+	assert.NoError(t, err)
+	defer f.Close()
+
+	err = tmpl.ExecuteTemplate(f, "file", config)
+	assert.NoError(t, err)
+}
+
+// This generates a minimal sample config file of all of the groups and names
+// with default or example values into minimal_config.yaml. The file it
+// produces is valid YAML for config, and could be the basis of a test file.
+func TestGenerateMinimalSample(t *testing.T) {
+	input := "configData.yaml"
+	rdr, err := os.Open(input)
+	assert.NoError(t, err)
+	defer rdr.Close()
+
+	var config ConfigData
+	decoder := yaml.NewDecoder(rdr)
+	err = decoder.Decode(&config)
+	assert.NoError(t, err)
+
+	templ := `
+	{{- define "file" -}}
+	{{- $file := . -}}
+	{{ range $file.Groups -}}
+		{{- $group := . }}
+		{{- println -}}
+		{{- $group.Name | indent 0 }}:
+		{{- range $group.Fields -}}
+			{{- $field := . }}
+			{{- println -}}
+			{{ print $field.Name ": " | indent 2 -}}
+			{{- $value := $field.Default -}}
+			{{- if $field.Example -}}
+				{{- $value = $field.Example -}}
+			{{- end -}}
+			{{- if eq $field.ValueType "stringarray" -}}
+				{{- println -}}
+				{{- range (split $value ",") -}}
+					{{- print "- " (yamlf .) | indent 4 | println -}}
+				{{- end -}}
+			{{- else if eq $field.ValueType "map" -}}
+				{{- println -}}
+				{{- range (split $value ",") -}}
+					{{- $kv := split . ":" -}}
+					{{- print (yamlf (index $kv 0)) ": " (yamlf (index $kv 1)) | indent 4 | println -}}
+				{{- end -}}
+			{{- else -}}
+				{{- print (yamlf $value) -}}
+			{{- end -}}
+		{{ end }}
+	{{- end -}}
+	{{- end -}}
+	`
+
+	tmpl := template.New("group")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.Parse(templ)
+	assert.NoError(t, err)
+
+	f, err := os.Create("minimal_config.yaml")
 	assert.NoError(t, err)
 	defer f.Close()
 

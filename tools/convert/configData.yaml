@@ -358,6 +358,8 @@ groups:
         v1name: LoggerAPIKey
         type: string
         valuetype: nonemptystring
+        default: ""
+        example: "set-this-to-your-api-key"
         reload: false
         envvar: REFINERY_LOGS_API_KEY
         summary: is the API key to use when sending logs to Honeycomb.
@@ -370,6 +372,7 @@ groups:
         v1name: LoggerDataset
         type: string
         valuetype: nonemptystring
+        default: "Refinery Logs"
         reload: false
         envvar: REFINERY_LOGS_DATASET
         summary: is the dataset to which logs will be sent.
