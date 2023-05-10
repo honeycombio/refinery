@@ -11,7 +11,7 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Options struct {

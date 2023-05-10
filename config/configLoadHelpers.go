@@ -15,7 +15,7 @@ import (
 	"github.com/creasty/defaults"
 	"github.com/go-playground/validator"
 	"github.com/pelletier/go-toml/v2"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type Format string
