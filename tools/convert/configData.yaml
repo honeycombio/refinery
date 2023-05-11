@@ -594,6 +594,7 @@ groups:
         v1group: PeerManagement
         v1name: RedisUsername
         type: string
+        default: ""
         valuetype: nonemptystring
         reload: false
         envvar: REFINERY_REDIS_USERNAME
@@ -605,6 +606,7 @@ groups:
         v1group: PeerManagement
         v1name: Password
         type: string
+        default: ""
         valuetype: nonemptystring
         reload: false
         envvar: REFINERY_REDIS_PASSWORD
