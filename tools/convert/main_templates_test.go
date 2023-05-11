@@ -69,6 +69,8 @@ var fieldTemplate = `
 {{ printf "renderMap .Data \"%s\" \"%s\" \"%s\"" $field.Name $oldname $field.Example | meta | indent 4 }}
 {{- else if eq $field.ValueType "stringarray" }}
 {{ printf "renderStringarray .Data \"%s\" \"%s\" \"%s\"" $field.Name $oldname $field.Example | meta | indent 4 }}
+{{- else if eq $field.ValueType "conditional" }}
+{{ printf "conditional .Data \"%s\" \"%s\"" $field.Name $field.Extra | meta | indent 4 }}
 {{- else }}
 {{ printf "******** ERROR %#v has bad ValueType %v" $field.Name $field.ValueType }}
 {{ end -}}

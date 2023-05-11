@@ -120,7 +120,7 @@ groups:
       - name: AcceptOnlyListedKeys
         type: bool
         valuetype: conditional
-        extra: APIKeys does-not-contain "*" and APIKeys is-not-empty
+        extra: nostar APIKeys
         default: false
         reload: true
         summary: -- if true, only traffic using the keys listed in APIKeys is accepted.
@@ -153,6 +153,7 @@ groups:
           the number of child spans on the trace at the time the sampling decision was made.
           This value is available to the rules-based sampler, making it possible to write rules that
           are dependent upon the number of spans in the trace.
+          If true, Refinery will add meta.span_count to the root span.
 
       - name: AddHostMetadataToTrace
         type: bool
@@ -165,20 +166,6 @@ groups:
           If true, Refinery will add the following tags to all traces:
           - meta.refinery.local_hostname: the hostname of the Refinery node
           (we should consider adding more metadata here, like IP address, etc)
-
-      - name: AddSpanCountToRoot
-        type: bool
-        valuetype: nondefault
-        default: false
-        reload: true
-        summary: specifies whether to add the span count to the root span.
-        description: >
-          AddSpanCountToRoot specifies whether to add the span count to the root
-          span to indicate the number of child spans on the trace at the time
-          the sampling decision was made. This value is available to the
-          rules-based sampler, making it possible to write rules that are
-          dependent upon the number of spans in the trace.
-          If true, Refinery will add meta.span_count to the root span.
 
   - name: Traces
     title: "Traces"

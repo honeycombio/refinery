@@ -19,6 +19,7 @@ func helpers() template.FuncMap {
 		"box":               box,
 		"choice":            choice,
 		"comment":           comment,
+		"conditional":       conditional,
 		"envvar":            envvar,
 		"formatExample":     formatExample,
 		"genSlice":          genSlice,
@@ -67,6 +68,39 @@ func choice(data map[string]any, key, oldkey string, choices []string, def strin
 
 func comment(s string) string {
 	return "## " + strings.Replace(s, "\n", "\n## ", -1)
+}
+
+func conditional(data map[string]any, key string, extra string) string {
+	extras := strings.Split(extra, " ")
+	switch extras[0] {
+	case "eq":
+		k := extras[1]
+		v := extras[2]
+		if value, ok := _fetch(data, k); ok {
+			if _equivalent(value, v) {
+				return fmt.Sprintf("%s: true", key)
+			}
+		}
+	case "nostar":
+		// if the slice named exists, has no "*" values, and has at least one value, return true
+		k := extras[1]
+		if value, ok := _fetch(data, k); ok {
+			list := value.([]string)
+			hasStar := false
+			for _, v := range list {
+				if v == "*" {
+					hasStar = true
+				}
+			}
+
+			if len(list) > 0 && !hasStar {
+				return fmt.Sprintf("%s: true", key)
+			}
+		}
+	default:
+		panic("Unknown conditional: " + extra)
+	}
+	return fmt.Sprintf("# %s: false", key)
 }
 
 // Describes an environment variable

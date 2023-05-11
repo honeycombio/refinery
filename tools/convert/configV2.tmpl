@@ -56,6 +56,14 @@ Network:
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "PeerListenAddr" "PeerListenAddr" "0.0.0.0:8081" }}
 
+    ## HoneycombAPI is the URL for the upstream Honeycomb API; this is the
+    ## destination to which refinery sends all events that it decides to
+    ## keep.
+    ##  
+    ## 
+    ## Eligible for live reload.
+    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombAPI" "https://api.honeycomb.io" }}
+
 ##############################
 ## Access Key Configuration ##
 ##############################
@@ -79,49 +87,12 @@ AccessKeys:
     ##  
     ## 
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AcceptOnlyListedKeys" "AcceptOnlyListedKeys" false }}
+    {{ conditional .Data "AcceptOnlyListedKeys" "nostar APIKeys" }}
 
-    ## If set, this API key may be used when sending data to Honeycomb,
-    ## depending on the state of ForwardListedKeys.
-    ##  
-    ## 
-    ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SendKey" "SendKey" "" }}
-
-    ## If false, traffic using a key listed in APIKeys preserves that key
-    ## when forwarded to Honeycomb. If true, traffic using a key listed in
-    ## APIKeys is forwarded to Honeycomb using the SendKey.
-    ##  
-    ## 
-    ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "ReplaceListedKeys" "ReplaceListedKeys" false }}
-
-    ## If false, traffic without an API key is rejected with an HTTP 401
-    ## error. If true, traffic without an API key is forwarded to Honeycomb
-    ## using the SendKey.
-    ##  
-    ## 
-    ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AllowMissingKeys" "AllowMissingKeys" false }}
-
-##################
-## Destinations ##
-##################
-Destinations:
-  ## Configuration for destinations to which data will be sent. 
-  ####
-    ## HoneycombAPI is the URL for the upstream Honeycomb API; this is the
-    ## destination to which refinery sends all events that it decides to
-    ## keep.
-    ##  
-    ## 
-    ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombAPI" "https://api.honeycomb.io" }}
-
-###############
-## Telemetry ##
-###############
-Telemetry:
+########################
+## Refinery Telemetry ##
+########################
+RefineryTelemetry:
   ## Configuration info for the telemetry that Refinery uses to record its
   ## own operation. 
   ####
@@ -138,11 +109,21 @@ Telemetry:
     ## root spans to indicate the number of child spans on the trace at the
     ## time the sampling decision was made. This value is available to the
     ## rules-based sampler, making it possible to write rules that are
-    ## dependent upon the number of spans in the trace.
+    ## dependent upon the number of spans in the trace. If true, Refinery
+    ## will add meta.span_count to the root span.
     ##  
     ## 
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "AddSpanCountToRoot" "AddSpanCountToRoot" true }}
+
+    ## AddHostMetadataToTrace specifies whether to add host metadata to
+    ## traces. If true, Refinery will add the following tags to all traces: -
+    ## meta.refinery.local_hostname: the hostname of the Refinery node (we
+    ## should consider adding more metadata here, like IP address, etc)
+    ##  
+    ## 
+    ## Eligible for live reload.
+    {{ nonDefaultOnly .Data "AddHostMetadataToTrace" "AddHostMetadataToTrace" true }}
 
 ############
 ## Traces ##
@@ -244,16 +225,16 @@ Debugging:
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "AddRuleReasonToTrace" "AddRuleReasonToTrace" false }}
 
-######################
-## Refinery Logging ##
-######################
-Logging:
+#####################
+## Refinery Logger ##
+#####################
+Logger:
   ## Configuration for logging. 
   ####
     ## Type is the type of logging to use. "none" means that logs are
     ## discarded. "honeycomb" means that logs will be forwarded to honeycomb
-    ## according to the settings below. "stdout" means that logs will be
-    ## written to stdout.
+    ## as events according to the settings below. "stdout" means that logs
+    ## will be written to stdout as structured JSON.
     ##  
     ## 
     ## Not eligible for live reload.
@@ -269,103 +250,131 @@ Logging:
     ## Options: debug info warn error panic
     {{ choice .Data "LoggingLevel" "LoggingLevel" (makeSlice "debug" "info" "warn" "error" "panic") "warn" }}
 
+######################
+## Honeycomb Logger ##
+######################
+HoneycombLogger:
+  ## Configuration for logging to Honeycomb. Only used if Logger.Type is
+  ## "honeycomb". 
+  ####
     ## HoneycombAPI is the URL for the upstream Honeycomb API for logs; this
-    ## is the destination to which refinery sends its own logs. Only used if
-    ## the logging type is "honeycomb". TODO: Is it ok to duplicate the names
-    ## across groups?
+    ## is the destination to which refinery sends its own logs.
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombLogger.LoggerHoneycombAPI" "https://api.honeycomb.io" }}
+    {{ nonDefaultOnly .Data "APIHost" "HoneycombLogger.LoggerHoneycombAPI" "https://api.honeycomb.io" }}
 
-    ## APIKey is the API key to use when sending logs to Honeycomb. Only used
-    ## if the logging type is "honeycomb".
+    ## APIKey is the API key to use when sending logs to Honeycomb.
     ##  
     ## 
     ## Not eligible for live reload.
     {{ nonEmptyString .Data "APIKey" "HoneycombLogger.LoggerAPIKey" "set-this-to-your-api-key" }}
 
-    ## Dataset is the dataset to which logs will be sent. Only used if the
-    ## logging type is "honeycomb".
+    ## Dataset is the dataset to which logs will be sent.
     ##  
     ## 
     ## Not eligible for live reload.
     {{ nonEmptyString .Data "Dataset" "HoneycombLogger.LoggerDataset" "" }}
 
-    ## SamplerEnabled controls whether to sample logs. Only used if the
-    ## logging type is "honeycomb".
+    ## SamplerEnabled controls whether to sample logs.
     ##  
     ## 
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "SamplerEnabled" "HoneycombLogger.LoggerSamplerEnabled" true }}
 
-    ## SamplerThroughput is the sampling rate for logs. Only used if the
-    ## logging type is "honeycomb". TODO: should use a different default
-    ## sampler and it's hard to convert the value.
+    ## SamplerThroughput is the sampling throughput for logs measured in
+    ## events per second. TODO: FOR THE CLUSTER
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "SamplerThroughput" "HoneycombLogger.LoggerSamplerThroughput" 1 }}
+    SamplerThroughput: 10
 
-######################
-## Refinery Metrics ##
-######################
-Metrics:
-  ## Configuration for metrics. 
+###################
+## Stdout Logger ##
+###################
+StdoutLogger:
+  ## Configuration for logging to stdout. Only used if Logger.Type is
+  ## "stdout". 
   ####
-    ## Destinations is the list of destinations to which metrics will be
-    ## sent. If "prometheus" is specified, then metrics will be exposed on
-    ## the /metrics endpoint at the PrometheusListenAddr address. If
-    ## "honeycomb" is specified, then metrics will be sent to Honeycomb
-    ## according to the settings below. If "otel" is specified, then metrics
-    ## will be sent to an OpenTelemetry endpoint according to the settings
-    ## below. TODO: there should just be separate groups for each metrics
-    ## destination.
+    ## Structured specifies whether the stdout logger sends structured logs
+    ## (JSON) or not (plain text).
     ##  
     ## 
     ## Not eligible for live reload.
-    ## Options: honeycomb prometheus otel
-    {{ choice .Data "Destinations" "Destinations" (makeSlice "honeycomb" "prometheus" "otel") "" }}
+    {{ nonDefaultOnly .Data "Structured" "Structured" false }}
+
+########################
+## Prometheus Metrics ##
+########################
+PrometheusMetrics:
+  ## Configuration for Refinery's internally-generated metrics as made
+  ## available through Prometheus. 
+  ####
+    ## Enabled controls whether to expose refinery metrics over
+    ## PromethusListenAddr.
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ conditional .Data "Enabled" "eq Metrics prometheus" }}
 
     ## PrometheusListenAddr determines the interface and port on which
     ## Prometheus will listen for requests for /metrics. Must be different
-    ## from the main Refinery listener. Only used if "prometheus" is
-    ## specified in Destinations.
+    ## from the main Refinery listener. Only used if "Enabled" is true in
+    ## PrometheusMetrics.
     ##  
     ## Should be an ip:port like "localhost:2112".
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "PrometheusListenAddr" "MetricsListenAddr" "localhost:2112" }}
+    {{ nonDefaultOnly .Data "PrometheusListenAddr" "PrometheusMetrics.MetricsListenAddr" "localhost:2112" }}
 
-    ## HoneycombAPI is the URL for the upstream Honeycomb API for metrics;
-    ## this is the destination to which refinery sends its own metrics. Only
-    ## used if "honeycomb" is specified in Destinations.
+####################
+## Legacy Metrics ##
+####################
+LegacyMetrics:
+  ## Configuration for Refinery's legacy metrics. Version 1.x of Refinery
+  ## used this configuration for sending Metrics to Honeycomb. The metrics
+  ## generated that way are nonstandard and will be deprecated in a future
+  ## release. New installations should prefer OTelMetrics. 
+  ####
+    ## Enabled controls whether to send metrics to Honeycomb.
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombMetrics.MetricsHoneycombAPI" "https://api.honeycomb.io" }}
+    {{ conditional .Data "Enabled" "eq Metrics honeycomb" }}
 
-    ## Dataset is the dataset to which refinery sends its own metrics. Only
-    ## used if "honeycomb" is specified in Destinations.
+    ## HoneycombAPI is the URL for the upstream Honeycomb API for metrics;
+    ## this is the destination to which refinery sends its own metrics.
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "APIHost" "HoneycombMetrics.MetricsHoneycombAPI" "https://api.honeycomb.io" }}
+
+    ## Dataset is the dataset to which refinery sends its own metrics.
     ##  
     ## 
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "APIKey" "HoneycombMetrics.MetricsAPIKey" "" }}
 
-    ## Dataset is the dataset to which refinery sends its own metrics. Only
-    ## used if "honeycomb" is specified in Destinations.
+    ## Dataset is the dataset to which refinery sends its own metrics.
     ##  
     ## 
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "Dataset" "HoneycombMetrics.MetricsDataset" "Refinery Metrics" }}
 
     ## ReportingInterval is the interval between sending metrics to
-    ## Honeycomb. Between 1 and 60 seconds is typical. Only used if
-    ## "honeycomb" is specified in Destinations.
+    ## Honeycomb. Between 1 and 60 seconds is typical.
     ##  
     ## Accepts a duration string with units, like "30s".
     ## Not eligible for live reload.
     {{ secondsToDuration .Data "ReportingInterval" "HoneycombMetrics.MetricsReportingInterval" "" }}
 
+###########################
+## OpenTelemetry Metrics ##
+###########################
+OTelMetrics:
+  ## Configuration for Refinery's OpenTelemetry metrics. This is the
+  ## preferred way to send metrics to Honeycomb. New installations should
+  ## prefer OTelMetrics. 
+  ####
 #####################
 ## Peer Management ##
 #####################
@@ -382,6 +391,37 @@ PeerManagement:
     ## Options: redis file
     {{ choice .Data "Type" "PeerManagement.Type" (makeSlice "redis" "file") "redis" }}
 
+    ## IdentifierInterfaceName is optional. By default, when using a peer
+    ## registry, Refinery will use the local hostname to identify itself to
+    ## other peers. If your environment requires that you use IPs as
+    ## identifiers (for example, if peers can't resolve eachother by name),
+    ## you can specify the network interface that Refinery is listening on
+    ## here. Refinery will use the first unicast address that it finds on the
+    ## specified network interface as its identifier.
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonEmptyString .Data "IdentifierInterfaceName" "PeerManagement.IdentifierInterfaceName" "eth0" }}
+
+    ## If using IdentifierInterfaceName, Refinery will default to the first
+    ## IPv4 unicast address it finds for the specified interface. If
+    ## UseIPV6Identifier is used, Refinery will use the first IPV6 unicast
+    ## address found.
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "UseIPV6Identifier" "PeerManagement.UseIPV6Identifier" false }}
+
+    ## By default, when using a peer registry, Refinery will use the local
+    ## hostname to identify itself to other peers. If your environment
+    ## requires something else, (for example, if peers can't resolve each
+    ## other by name), you can specify the exact identifier (IP address, etc)
+    ## to use here. Overrides IdentifierInterfaceName, if both are set.
+    ##  
+    ## 
+    ## Not eligible for live reload.
+    {{ nonEmptyString .Data "RedisIdentifier" "PeerManagement.RedisIdentifier" "192.168.1.1" }}
+
     ## Peers is the list of peers to use when Type is "file", excluding self.
     ## This list is ignored when Type is "redis". The format is a list of
     ## strings of the form "host:port".
@@ -390,46 +430,52 @@ PeerManagement:
     ## Not eligible for live reload.
     {{ renderStringarray .Data "Peers" "PeerManagement.Peers" "192.168.1.11:8081,192.168.1.12:8081" }}
 
-    ## RedisHost is the host and port of the redis instance to use when Type
-    ## is "redis". This value is ignored when Type is "file".
+###########################
+## Redis Peer Management ##
+###########################
+RedisPeerManagement:
+  ## Controls how the Refinery cluster communicates between peers when
+  ## using Redis. Only applies when PeerManagement.Type is "redis"
+  ##  
+  ####
+    ## Host is the host and port of the redis instance to use for peer
+    ## cluster membership management.
     ##  
     ## Should be an ip:port like "localhost:6379".
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisHost" "PeerManagement.RedisHost" "localhost:6379" }}
+    {{ nonEmptyString .Data "Host" "PeerManagement.RedisHost" "localhost:6379" }}
 
-    ## RedisUsername is the username used to connect to redis for peer
-    ## cluster membership management. This value is ignored when Type is
-    ## "file".
+    ## Username is the username used to connect to redis for peer cluster
+    ## membership management.
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisUsername" "PeerManagement.RedisUsername" "" }}
+    {{ nonEmptyString .Data "Username" "PeerManagement.RedisUsername" "" }}
 
-    ## RedisPassword is the password used to connect to redis for peer
-    ## cluster membership management. This value is ignored when Type is
-    ## "file".
+    ## Password is the password used to connect to redis for peer cluster
+    ## membership management.
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisPassword" "PeerManagement.RedisPassword" "" }}
+    {{ nonEmptyString .Data "Password" "PeerManagement.Password" "" }}
 
-    ## RedisPrefix is a string used as a prefix for the keys in redis while
+    ## Prefix is a string used as a prefix for the keys in redis while
     ## storing the peer membership. It might be useful to set this in any
     ## situation where multiple refinery clusters or multiple applications
     ## want to share a single Redis instance. It may not be blank.
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "RedisPrefix" "PeerManagement.RedisPrefix" "refinery" }}
+    {{ nonDefaultOnly .Data "Prefix" "PeerManagement.Prefix" "refinery" }}
 
-    ## RedisDatabase is an integer from 0-15 indicating the database number
-    ## to use for the Redis instance storing the peer membership. It might be
-    ## useful to set this in any situation where multiple refinery clusters
-    ## or multiple applications want to share a single Redis instance.
+    ## Database is an integer from 0-15 indicating the database number to use
+    ## for the Redis instance storing the peer membership. It might be useful
+    ## to set this in any situation where multiple refinery clusters or
+    ## multiple applications want to share a single Redis instance.
     ##  
     ## 
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "RedisDatabase" "PeerManagement.RedisDatabase" 0 }}
+    {{ nonDefaultOnly .Data "Database" "PeerManagement.Database" 0 }}
 
     ## UseTLS enables TLS when connecting to redis for peer cluster
     ## membership management, and sets the MinVersion in the TLS
@@ -446,39 +492,8 @@ PeerManagement:
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "UseTLSInsecure" "PeerManagement.UseTLSInsecure" false }}
 
-    ## IdentifierInterfaceName is optional. By default, when using RedisHost,
-    ## Refinery will use the local hostname to identify itself to other peers
-    ## in Redis. If your environment requires that you use IPs as identifiers
-    ## (for example, if peers can't resolve eachother by name), you can
-    ## specify the network interface that Refinery is listening on here.
-    ## Refinery will use the first unicast address that it finds on the
-    ## specified network interface as its identifier.
-    ##  
-    ## 
-    ## Not eligible for live reload.
-    {{ nonEmptyString .Data "IdentifierInterfaceName" "PeerManagement.IdentifierInterfaceName" "eth0" }}
-
-    ## If using IdentifierInterfaceName, Refinery will default to the first
-    ## IPv4 unicast address it finds for the specified interface. If
-    ## UseIPV6Identifier is used, Refinery will use the first IPV6 unicast
-    ## address found.
-    ##  
-    ## 
-    ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseIPV6Identifier" "PeerManagement.UseIPV6Identifier" false }}
-
-    ## By default, when using RedisHost, Refinery will use the local hostname
-    ## to identify itself to other peers in Redis. If your environment
-    ## requires something else, (for example, if peers can't resolve each
-    ## other by name), you can specify the exact identifier (IP address, etc)
-    ## to use here. Overrides IdentifierInterfaceName, if both are set.
-    ##  
-    ## 
-    ## Not eligible for live reload.
-    {{ nonEmptyString .Data "RedisIdentifier" "PeerManagement.RedisIdentifier" "192.168.1.1" }}
-
-    ## Timeout is optional. By default, when using RedisHost, Refinery will
-    ## timeout after 5s when communicating with Redis.
+    ## Timeout is optional. Refinery will timeout after this duration when
+    ## communicating with Redis.
     ##  
     ## Accepts a duration string with units, like "5s".
     ## Not eligible for live reload.
@@ -503,13 +518,22 @@ Collection:
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "CacheCapacity" "InMemCollector.CacheCapacity" 10000 }}
 
-    ## If set, it must be an integer >= 0. 64-bit values are supported. If
-    ## set to a non-zero value, once per tick (see SendTicker) the collector
-    ## will compare total allocated bytes to this value. If allocation is too
-    ## high, traces will be ejected from the cache early to reduce memory.
-    ## Useful values for this setting are generally in the range of 70%-90%
-    ## of available system memory. TODO: can we read the available memory
-    ## size from a container and set this automatically?
+    ## If set, it must be an integer value between 0 and 100, representing
+    ## the target maximum percentage of memory that should be allocated by
+    ## the collector. If set to a non-zero value, once per tick (see
+    ## SendTicker) the collector will compare total allocated bytes to this
+    ## calculated value. If allocation is too high, traces will be ejected
+    ## from the cache early to reduce memory. Useful values for this setting
+    ## are generally in the range of 70-90. Depending on deployment details,
+    ## system memory information may not be available; if it is not, a
+    ## warning will be logged and the value of MaxAlloc will be used.
+    ##  
+    ## 
+    ## Eligible for live reload.
+    MaxMemory: 75
+
+    ## If set, it must be an integer >= 0. 64-bit values are supported. See
+    ## MaxMemory for more details.
     ##  
     ## 
     ## Eligible for live reload.
@@ -541,33 +565,6 @@ BufferSizes:
     ## 
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "PeerBufferSize" "PeerBufferSize" 100000 }}
-
-#############
-## I dunno ##
-#############
-Undecided:
-  ## These settings are not yet categorized.
-  ##  
-  ####
-    ## AddHostMetadataToTrace specifies whether to add host metadata to
-    ## traces. If true, Refinery will add the following tags to all traces: -
-    ## meta.refinery.local_hostname: the hostname of the Refinery node (we
-    ## should consider adding more metadata here, like IP address, etc)
-    ##  
-    ## 
-    ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AddHostMetadataToTrace" "AddHostMetadataToTrace" true }}
-
-    ## AddSpanCountToRoot specifies whether to add the span count to the root
-    ## span to indicate the number of child spans on the trace at the time
-    ## the sampling decision was made. This value is available to the
-    ## rules-based sampler, making it possible to write rules that are
-    ## dependent upon the number of spans in the trace. If true, Refinery
-    ## will add meta.span_count to the root span.
-    ##  
-    ## 
-    ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AddSpanCountToRoot" "AddSpanCountToRoot" false }}
 
 ###############################
 ## Specialized Configuration ##

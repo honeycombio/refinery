@@ -17,6 +17,7 @@ type Field struct {
 	LastVersion  string   `json:"lastversion"`
 	Type         string   `json:"type"`
 	ValueType    string   `json:"valuetype"`
+	Extra        string   `json:"extra"`
 	Default      any      `json:"default,omitempty"`
 	Choices      []string `json:"choices,omitempty"`
 	Example      string   `json:"example,omitempty"`
