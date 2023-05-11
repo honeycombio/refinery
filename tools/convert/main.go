@@ -17,7 +17,7 @@ import (
 type Options struct {
 	Input    string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
 	Output   string `short:"o" long:"output" description:"the Refinery v2 config file to write" default:"-"`
-	Type     string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON" choice:"Y" choice:"T" choice:"J"`
+	Type     string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
 	Print    bool   `short:"p" description:"prints what it loaded in Go format and quits"`
 	Template string `long:"template" description:"template for output file" default:"configV2.tmpl"`
 }
@@ -71,6 +71,21 @@ func main() {
 	args := Options{}
 
 	parser := flags.NewParser(&args, flags.Default)
+	parser.Usage = `[OPTIONS]
+
+	This tool converts a Refinery v1 config file (usually in TOML, but JSON and YAML are also
+	supported) to a Refinery v2 config file in YAML. It reads the v1 config file, and then writes
+	the v2 config file, copying non-default values from their v1 location to their v2 location
+	(if they still apply). The new v2 config file is commented in detail to help explain what
+	each value does in the new configuration.
+
+	For example, if the v1 file specified "MetricsAPIKey" in the "HoneycombMetrics" section, the v2
+	file will list that key under the "LegacyMetrics" section under the "APIKey" name.
+
+	By default, it reads config.toml and writes to stdout. It will try to determine the
+	filetype of the input file based on the extension, but you can override that with
+	the --type flag.
+`
 
 	if _, err := parser.Parse(); err != nil {
 		switch flagsErr := err.(type) {
