@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +14,11 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
+
+// Embed the entire templates directory into the binary so that it stands alone.
+//
+//go:embed templates/*.tmpl
+var templates embed.FS
 
 type Options struct {
 	Input  string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
@@ -145,7 +151,7 @@ func main() {
 
 	tmpl := template.New("configV2.tmpl")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFiles("templates/configV2.tmpl")
+	tmpl, err = tmpl.ParseFS(templates, "templates/configV2.tmpl")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "template error %v\n", err)
 		os.Exit(1)
@@ -213,7 +219,7 @@ func GenerateTemplate(w io.Writer) {
 
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFiles("templates/genfile.tmpl", "templates/gengroup.tmpl", "templates/genremoved.tmpl", "templates/genfield.tmpl")
+	tmpl, err = tmpl.ParseFS(templates, "templates/genfile.tmpl", "templates/gengroup.tmpl", "templates/genremoved.tmpl", "templates/genfield.tmpl")
 	if err != nil {
 		panic(err)
 	}
@@ -243,7 +249,7 @@ func PrintNames(w io.Writer) {
 
 	tmpl := template.New("group")
 	// tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFiles("templates/names.tmpl")
+	tmpl, err = tmpl.ParseFS(templates, "templates/names.tmpl")
 	if err != nil {
 		panic(err)
 	}
@@ -274,7 +280,7 @@ func GenerateMinimalSample(w io.Writer) {
 
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFiles("templates/sample.tmpl")
+	tmpl, err = tmpl.ParseFS(templates, "templates/sample.tmpl")
 	if err != nil {
 		panic(err)
 	}
