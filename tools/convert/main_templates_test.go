@@ -16,6 +16,12 @@ var fileTemplate = `
 {{ range $file.Groups -}}
 {{ template "group" . }}
 {{- end -}}
+{{- println -}}
+{{ box "Config values removed by the config converter" }}
+{{ println "The following configuration options are obsolete and are not included in the new configuration:" | wci 2 }}
+{{ range $file.Groups -}}
+{{ template "removed" . }}
+{{- end -}}
 {{- end -}}
 `
 
@@ -31,6 +37,28 @@ var groupTemplate = `
   {{- continue -}}
 {{- end -}}
 {{ template "field" . }}
+{{- end -}}
+
+{{- end }}
+`
+
+var removedTemplate = `
+{{- define "removed" -}}
+{{- $group := . }}
+{{- range $group.Fields -}}
+{{- $field := . -}}
+{{- $oldname := $field.Name -}}
+{{- if $field.V1Name -}}
+  {{- if $field.V1Group -}}
+    {{- $oldname = (print $field.V1Group "." $field.V1Name) -}}
+  {{- else -}}
+    {{- $oldname = $field.V1Name -}}
+  {{- end -}}
+{{- end -}}
+{{- if $field.LastVersion -}}
+  {{- printf "- %s" $oldname | comment | indent 4  -}}
+  {{- println -}}
+{{- end -}}
 {{- end -}}
 
 {{- end }}

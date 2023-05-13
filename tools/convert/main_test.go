@@ -64,6 +64,8 @@ func TestGenerateTemplate(t *testing.T) {
 	assert.NoError(t, err)
 	tmpl, err = tmpl.Parse(groupTemplate)
 	assert.NoError(t, err)
+	tmpl, err = tmpl.Parse(removedTemplate)
+	assert.NoError(t, err)
 	tmpl, err = tmpl.Parse(fieldTemplate)
 	assert.NoError(t, err)
 

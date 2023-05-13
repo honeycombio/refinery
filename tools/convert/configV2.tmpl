@@ -22,7 +22,7 @@ General:
     ##  
     ## 
     ## Not eligible for live reload.
-    ConfigurationVersion: 3
+    ConfigurationVersion: 2
 
     ## MinRefineryVersion specifies the lowest Refinery version capable of
     ## loading all of the features used in this file. Refinery will refuse to
@@ -72,8 +72,8 @@ AccessKeys:
   ## and other flags that control how the proxy handles API keys.
   ##  
   ####
-    ## Should be a list of Honeycomb API keys that the proxy will treat
-    ## specially when they are attached to incoming traffic.
+    ## ReceiveKeys should be a list of Honeycomb API keys that the proxy will
+    ## treat specially when they are attached to incoming traffic.
     ## This list only applies to span traffic - other Honeycomb API actions
     ## will be proxied through to the upstream API directly without modifying
     ## keys.
@@ -82,8 +82,9 @@ AccessKeys:
     ## Not eligible for live reload.
     {{ renderStringarray .Data "ReceiveKeys" "ReceiveKeys" "your-key-goes-here" }}
 
-    ## Setting this flag causes events arriving with API keys not in the
-    ## ReceiveKeys list to be rejected with an HTTP 401 error.
+    ## AcceptOnlyListedKeys is a flag that causes events arriving with API
+    ## keys not in the ReceiveKeys list to be rejected with an HTTP 401
+    ## error.
     ##  
     ## 
     ## Eligible for live reload.
@@ -832,3 +833,14 @@ StressRelief:
     ## Accepts a duration string with units, like "3s".
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "MinimumStartupDuration" "StressRelief.MinimumStartupDuration" "3s" }}
+
+###################################################
+## Config values removed by the config converter ##
+###################################################
+  ## The following configuration options are obsolete and are not included
+  ## in the new configuration:
+  ##  
+    ## - PeerManagement.Strategy
+    ## - Collector
+    ## - CacheOverrunStrategy
+    ## - SampleCacheConfig.Type
