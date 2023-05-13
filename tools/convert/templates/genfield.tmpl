@@ -1,71 +1,3 @@
-package main
-
-// This file contains the templates used for the test that reads configData.yaml
-// and generates the configV2.tmpl file (see main_test.go)
-
-var fileTemplate = `
-{{- define "file" -}}
-{{- $file := . -}}
-{{ "Honeycomb Refinery Configuration" | box }}
-#
-# created on {{ ".Now" | meta }} from {{ ".Input" | meta }}
-
-# This file contains the configuration for the Honeycomb Refinery.
-# More stuff will go here later.
-
-{{ range $file.Groups -}}
-{{ template "group" . }}
-{{- end -}}
-{{- println -}}
-{{ box "Config values removed by the config converter" }}
-{{ println "The following configuration options are obsolete and are not included in the new configuration:" | wci 2 }}
-{{ range $file.Groups -}}
-{{ template "removed" . }}
-{{- end -}}
-{{- end -}}
-`
-
-var groupTemplate = `
-{{- define "group" -}}
-{{- $group := . }}
-{{ box $group.Title }}
-{{ $group.Name }}:
-{{ $group.Description | wordwrap | comment | indent 2 }}
-  ####
-{{- range $group.Fields -}}
-{{- if .LastVersion -}}
-  {{- continue -}}
-{{- end -}}
-{{ template "field" . }}
-{{- end -}}
-
-{{- end }}
-`
-
-var removedTemplate = `
-{{- define "removed" -}}
-{{- $group := . }}
-{{- range $group.Fields -}}
-{{- $field := . -}}
-{{- $oldname := $field.Name -}}
-{{- if $field.V1Name -}}
-  {{- if $field.V1Group -}}
-    {{- $oldname = (print $field.V1Group "." $field.V1Name) -}}
-  {{- else -}}
-    {{- $oldname = $field.V1Name -}}
-  {{- end -}}
-{{- end -}}
-{{- if $field.LastVersion -}}
-  {{- printf "- %s" $oldname | comment | indent 4  -}}
-  {{- println -}}
-{{- end -}}
-{{- end -}}
-
-{{- end }}
-`
-
-var fieldTemplate = `
-{{- define "field" -}}
 {{- $field := . -}}
 {{- $oldname := $field.Name -}}
 {{- if $field.V1Name -}}
@@ -102,6 +34,5 @@ var fieldTemplate = `
 {{- else }}
 {{ printf "******** ERROR %#v has bad ValueType %v" $field.Name $field.ValueType }}
 {{ end -}}
-{{ end }}
-{{ end -}}
-`
+{{- end -}}
+{{- println -}}

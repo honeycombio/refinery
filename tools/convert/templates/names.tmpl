@@ -1,0 +1,20 @@
+# Names of groups and fields in the new config file format.
+	{{- $file := . -}}
+	{{ range $file.Groups -}}
+		{{- $group := . }}
+		{{ $group.Name }}:
+		{{- range $group.Fields -}}
+			{{- $field := . }}
+			{{ print "  - " $field.Name -}}
+			{{- if $field.V1Name -}}
+				{{- print " (originally " -}}
+				{{- if $field.V1Group -}}
+					{{- print $field.V1Group "." -}}
+				{{- end -}}
+				{{- print $field.V1Name ")" -}}
+			{{- end -}}
+			{{ if eq $field.LastVersion "v1.21" -}}
+				{{- print " (**removed in v2**)" -}}
+			{{- end -}}
+		{{ end }}
+	{{- end -}}

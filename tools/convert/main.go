@@ -15,11 +15,11 @@ import (
 )
 
 type Options struct {
-	Input    string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
-	Output   string `short:"o" long:"output" description:"the Refinery v2 config file to write" default:"-"`
-	Type     string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
-	Print    bool   `short:"p" description:"prints what it loaded in Go format and quits"`
-	Template string `long:"template" description:"template for output file" default:"configV2.tmpl"`
+	Input  string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
+	Output string `short:"o" long:"output" description:"the Refinery v2 config file to write" default:"-"`
+	Type   string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
+	// Print    bool   `short:"p" description:"prints what it loaded in Go format and quits"`
+	// Template string `long:"template" description:"template describing the output file" default:"templates/configV2.tmpl"`
 }
 
 func load(r io.Reader, typ string) (map[string]any, error) {
@@ -55,22 +55,10 @@ func getType(filename string) string {
 	}
 }
 
-func parseTemplate(filename string) (*template.Template, error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil, err
-	}
-	return template.New(filename).Funcs(helpers()).Parse(string(data))
-}
-
 func main() {
-	args := Options{}
+	opts := Options{}
 
-	parser := flags.NewParser(&args, flags.Default)
+	parser := flags.NewParser(&opts, flags.Default)
 	parser.Usage = `[OPTIONS]
 
 	This tool converts a Refinery v1 config file (usually in TOML, but JSON and YAML are also
@@ -86,8 +74,8 @@ func main() {
 	filetype of the input file based on the extension, but you can override that with
 	the --type flag.
 `
-
-	if _, err := parser.Parse(); err != nil {
+	args, err := parser.Parse()
+	if err != nil {
 		switch flagsErr := err.(type) {
 		case *flags.Error:
 			if flagsErr.Type == flags.ErrHelp {
@@ -99,41 +87,50 @@ func main() {
 		}
 	}
 
-	rdr, err := os.Open(args.Input)
+	output := os.Stdout
+	if opts.Output != "-" {
+		output, err = os.Create(opts.Output)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "'%v' opening %s for writing\n", err, opts.Output)
+			os.Exit(1)
+		}
+		defer output.Close()
+	}
+
+	if len(args) > 0 {
+		switch args[0] {
+		case "template":
+			GenerateTemplate(output)
+		case "names":
+			PrintNames(output)
+		case "sample":
+			GenerateMinimalSample(output)
+		default:
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
+		}
+		os.Exit(0)
+	}
+
+	rdr, err := os.Open(opts.Input)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "'%v' opening %s\n", err, args.Input)
+		fmt.Fprintf(os.Stderr, "'%v' opening %s\n", err, opts.Input)
 		os.Exit(1)
 	}
 	defer rdr.Close()
 
-	typ := args.Type
+	typ := opts.Type
 	if typ == "" {
-		typ = getType(args.Input)
+		typ = getType(opts.Input)
 		if typ == "" {
-			fmt.Fprintf(os.Stderr, "'%v' determining filetype for %s, use --type\n", err, args.Input)
+			fmt.Fprintf(os.Stderr, "'%v' determining filetype for %s, use --type\n", err, opts.Input)
 			os.Exit(1)
 		}
 	}
 
 	data, err := load(rdr, typ)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "'%v' loading config from %s with filetype %s\n", err, args.Input, args.Type)
+		fmt.Fprintf(os.Stderr, "'%v' loading config from %s with filetype %s\n", err, opts.Input, opts.Type)
 		os.Exit(1)
-	}
-
-	if args.Print {
-		fmt.Printf("%#v\n", data)
-		os.Exit(0)
-	}
-
-	output := os.Stdout
-	if args.Output != "-" {
-		output, err = os.Create(args.Output)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "'%v' opening %s for writing\n", err, args.Output)
-			os.Exit(1)
-		}
-		defer output.Close()
 	}
 
 	tmplData := struct {
@@ -142,13 +139,15 @@ func main() {
 		Data  map[string]any
 	}{
 		Now:   time.Now().Format(time.RFC3339),
-		Input: args.Input,
+		Input: opts.Input,
 		Data:  data,
 	}
 
-	tmpl, err := parseTemplate(args.Template)
+	tmpl := template.New("configV2.tmpl")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFiles("templates/configV2.tmpl")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "'%v' reading template from %s\n", err, args.Template)
+		fmt.Fprintf(os.Stderr, "template error %v\n", err)
 		os.Exit(1)
 	}
 
@@ -156,5 +155,132 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "template error %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// All of the code below is used when building and debugging this tool.
+// There are three commands that can be run:
+//   - `go run . template` will generate a template file from the current schema
+//   - `go run . names` will print out all of the names of the fields in the schema
+//   - `go run . sample` will generate a minimal sample config file
+// These commands are not listed in the documentation.
+
+// These are the data structures used by these commands and their templates
+type Field struct {
+	Name         string   `json:"name"`
+	V1Group      string   `json:"v1group"`
+	V1Name       string   `json:"v1name"`
+	FirstVersion string   `json:"firstversion"`
+	LastVersion  string   `json:"lastversion"`
+	Type         string   `json:"type"`
+	ValueType    string   `json:"valuetype"`
+	Extra        string   `json:"extra"`
+	Default      any      `json:"default,omitempty"`
+	Choices      []string `json:"choices,omitempty"`
+	Example      string   `json:"example,omitempty"`
+	Validation   string   `json:"validation,omitempty"`
+	Reload       bool     `json:"reload"`
+	Summary      string   `json:"summary"`
+	Description  string   `json:"description"`
+}
+
+type Group struct {
+	Name        string  `json:"name"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Fields      []Field `json:"fields,omitempty"`
+}
+
+type ConfigData struct {
+	Groups []Group `json:"groups"`
+}
+
+// This generates the template used by the convert tool.
+func GenerateTemplate(w io.Writer) {
+	input := "configData.yaml"
+	rdr, err := os.Open(input)
+	if err != nil {
+		panic(err)
+	}
+	defer rdr.Close()
+
+	var config ConfigData
+	decoder := yaml.NewDecoder(rdr)
+	err = decoder.Decode(&config)
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl := template.New("template generator")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFiles("templates/genfile.tmpl", "templates/gengroup.tmpl", "templates/genremoved.tmpl", "templates/genfield.tmpl")
+	if err != nil {
+		panic(err)
+	}
+
+	// fmt.Printf("%#v\n", config)
+	err = tmpl.ExecuteTemplate(w, "genfile.tmpl", config)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// This generates a nested list of the groups and names into configData.yaml.
+func PrintNames(w io.Writer) {
+	input := "configData.yaml"
+	rdr, err := os.Open(input)
+	if err != nil {
+		panic(err)
+	}
+	defer rdr.Close()
+
+	var config ConfigData
+	decoder := yaml.NewDecoder(rdr)
+	err = decoder.Decode(&config)
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl := template.New("group")
+	// tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFiles("templates/names.tmpl")
+	if err != nil {
+		panic(err)
+	}
+
+	err = tmpl.ExecuteTemplate(w, "names.tmpl", config)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// This generates a minimal sample config file of all of the groups and names
+// with default or example values into minimal_config.yaml. The file it
+// produces is valid YAML for config, and could be the basis of a test file.
+func GenerateMinimalSample(w io.Writer) {
+	input := "configData.yaml"
+	rdr, err := os.Open(input)
+	if err != nil {
+		panic(err)
+	}
+	defer rdr.Close()
+
+	var config ConfigData
+	decoder := yaml.NewDecoder(rdr)
+	err = decoder.Decode(&config)
+	if err != nil {
+		panic(err)
+	}
+
+	tmpl := template.New("sample")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFiles("templates/sample.tmpl")
+	if err != nil {
+		panic(err)
+	}
+
+	err = tmpl.ExecuteTemplate(w, "sample.tmpl", config)
+	if err != nil {
+		panic(err)
 	}
 }

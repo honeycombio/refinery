@@ -1,0 +1,12 @@
+{{- $group := . }}
+{{ box $group.Title }}
+{{ $group.Name }}:
+{{ $group.Description | wordwrap | comment | indent 2 }}
+  ####
+{{- range $group.Fields -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
+{{ template "genfield.tmpl" . }}
+{{- end -}}
+

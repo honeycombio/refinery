@@ -1,0 +1,30 @@
+# sample uncommented config file containing all possible fields
+{{- $file := . -}}
+{{ range $file.Groups -}}
+    {{- $group := . }}
+    {{- println -}}
+    {{- $group.Name | indent 0 }}:
+    {{- range $group.Fields -}}
+        {{- $field := . }}
+        {{- println -}}
+        {{ print $field.Name ": " | indent 2 -}}
+        {{- $value := $field.Default -}}
+        {{- if $field.Example -}}
+            {{- $value = $field.Example -}}
+        {{- end -}}
+        {{- if eq $field.ValueType "stringarray" -}}
+            {{- println -}}
+            {{- range (split $value ",") -}}
+                {{- print "- " (yamlf .) | indent 4 | println -}}
+            {{- end -}}
+        {{- else if eq $field.ValueType "map" -}}
+            {{- println -}}
+            {{- range (split $value ",") -}}
+                {{- $kv := split . ":" -}}
+                {{- print (yamlf (index $kv 0)) ": " (yamlf (index $kv 1)) | indent 4 | println -}}
+            {{- end -}}
+        {{- else -}}
+            {{- print (yamlf $value) -}}
+        {{- end -}}
+    {{ end }}
+{{- end -}}
