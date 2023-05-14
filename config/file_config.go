@@ -188,7 +188,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	}
 
 	// Run a basic validation on the sampler config; we can do better after a reorganization of this.
-	if _, _, err := cfg.GetSamplerConfigForDataset("**invalid dataset name**"); err != nil {
+	if _, _, err := cfg.GetSamplerConfigForDestName("**invalid dataset name**"); err != nil {
 		return nil, err
 	}
 
@@ -458,22 +458,23 @@ func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (
 	return def, false
 }
 
-// GetSamplerConfigForDataset returns the sampler config for the given dataset,
-// as well as the name of the sampler. If the dataset-specific sampler config
-// is not found, it returns the default sampler config.
-func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, error) {
+// GetSamplerConfigForDestName returns the sampler config for the given
+// destination (environment, or dataset in classic mode), as well as the name of
+// the sampler. If the specific sampler config is not found, it returns the
+// default sampler config.
+func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	config := f.rulesConfig
-	// If we have a dataset-specific sampler, we extract the sampler config
-	// corresponding to the [dataset]["sampler"] key. Otherwise we try to use
+	// If we have a specific sampler, we extract the sampler config
+	// corresponding to the [destname]["sampler"] key. Otherwise we try to use
 	// the default sampler config corresponding to the "sampler" key. Only if
 	// both fail will we return not found.
 
 	const notfound = "not found"
-	if v, ok := getValueForCaseInsensitiveKey(config, dataset, map[string]any{}); ok {
-		// we have a dataset-specific sampler, so we extract that sampler's config
+	if v, ok := getValueForCaseInsensitiveKey(config, destname, map[string]any{}); ok {
+		// we have a specific sampler, so we extract that sampler's config
 		config = v
 	}
 
@@ -497,7 +498,7 @@ func (f *fileConfig) GetSamplerConfigForDataset(dataset string) (any, string, er
 	}
 
 	// now we need to unmarshal the config into the sampler config struct
-	err := reloadInto(config, i, f.opts)
+	err := ReloadInto(config, i, f.opts)
 	return i, samplerName, err
 }
 
