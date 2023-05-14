@@ -15,17 +15,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Embed the entire templates directory into the binary so that it stands alone.
+// Embed the entire filesystem directory into the binary so that it stands alone,
+// as well as the configData.yaml file.
 //
-//go:embed templates/*.tmpl
-var templates embed.FS
+//go:embed templates/*.tmpl configData.yaml
+var filesystem embed.FS
 
 type Options struct {
 	Input  string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
 	Output string `short:"o" long:"output" description:"the Refinery v2 config file to write" default:"-"`
 	Type   string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
-	// Print    bool   `short:"p" description:"prints what it loaded in Go format and quits"`
-	// Template string `long:"template" description:"template describing the output file" default:"templates/configV2.tmpl"`
 }
 
 func load(r io.Reader, typ string) (map[string]any, error) {
@@ -151,7 +150,7 @@ func main() {
 
 	tmpl := template.New("configV2.tmpl")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(templates, "templates/configV2.tmpl")
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "template error %v\n", err)
 		os.Exit(1)
@@ -204,7 +203,7 @@ type ConfigData struct {
 // This generates the template used by the convert tool.
 func GenerateTemplate(w io.Writer) {
 	input := "configData.yaml"
-	rdr, err := os.Open(input)
+	rdr, err := filesystem.Open(input)
 	if err != nil {
 		panic(err)
 	}
@@ -219,22 +218,21 @@ func GenerateTemplate(w io.Writer) {
 
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(templates, "templates/genfile.tmpl", "templates/gengroup.tmpl", "templates/genremoved.tmpl", "templates/genfield.tmpl")
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/genfile.tmpl", "templates/gengroup.tmpl", "templates/genremoved.tmpl", "templates/genfield.tmpl")
 	if err != nil {
 		panic(err)
 	}
 
-	// fmt.Printf("%#v\n", config)
 	err = tmpl.ExecuteTemplate(w, "genfile.tmpl", config)
 	if err != nil {
 		panic(err)
 	}
 }
 
-// This generates a nested list of the groups and names into configData.yaml.
+// This generates a nested list of the groups and names.
 func PrintNames(w io.Writer) {
 	input := "configData.yaml"
-	rdr, err := os.Open(input)
+	rdr, err := filesystem.Open(input)
 	if err != nil {
 		panic(err)
 	}
@@ -248,8 +246,8 @@ func PrintNames(w io.Writer) {
 	}
 
 	tmpl := template.New("group")
-	// tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(templates, "templates/names.tmpl")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/names.tmpl")
 	if err != nil {
 		panic(err)
 	}
@@ -265,7 +263,7 @@ func PrintNames(w io.Writer) {
 // produces is valid YAML for config, and could be the basis of a test file.
 func GenerateMinimalSample(w io.Writer) {
 	input := "configData.yaml"
-	rdr, err := os.Open(input)
+	rdr, err := filesystem.Open(input)
 	if err != nil {
 		panic(err)
 	}
@@ -280,7 +278,7 @@ func GenerateMinimalSample(w io.Writer) {
 
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(templates, "templates/sample.tmpl")
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/sample.tmpl")
 	if err != nil {
 		panic(err)
 	}
