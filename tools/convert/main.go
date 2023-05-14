@@ -200,8 +200,7 @@ type ConfigData struct {
 	Groups []Group `json:"groups"`
 }
 
-// This generates the template used by the convert tool.
-func GenerateTemplate(w io.Writer) {
+func readConfigData() ConfigData {
 	input := "configData.yaml"
 	rdr, err := filesystem.Open(input)
 	if err != nil {
@@ -215,7 +214,13 @@ func GenerateTemplate(w io.Writer) {
 	if err != nil {
 		panic(err)
 	}
+	return config
+}
 
+// This generates the template used by the convert tool.
+func GenerateTemplate(w io.Writer) {
+	config := readConfigData()
+	var err error
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
 	tmpl, err = tmpl.ParseFS(filesystem, "templates/genfile.tmpl", "templates/gengroup.tmpl", "templates/genremoved.tmpl", "templates/genfield.tmpl")
@@ -231,20 +236,8 @@ func GenerateTemplate(w io.Writer) {
 
 // This generates a nested list of the groups and names.
 func PrintNames(w io.Writer) {
-	input := "configData.yaml"
-	rdr, err := filesystem.Open(input)
-	if err != nil {
-		panic(err)
-	}
-	defer rdr.Close()
-
-	var config ConfigData
-	decoder := yaml.NewDecoder(rdr)
-	err = decoder.Decode(&config)
-	if err != nil {
-		panic(err)
-	}
-
+	config := readConfigData()
+	var err error
 	tmpl := template.New("group")
 	tmpl.Funcs(helpers())
 	tmpl, err = tmpl.ParseFS(filesystem, "templates/names.tmpl")
@@ -262,20 +255,8 @@ func PrintNames(w io.Writer) {
 // with default or example values into minimal_config.yaml. The file it
 // produces is valid YAML for config, and could be the basis of a test file.
 func GenerateMinimalSample(w io.Writer) {
-	input := "configData.yaml"
-	rdr, err := filesystem.Open(input)
-	if err != nil {
-		panic(err)
-	}
-	defer rdr.Close()
-
-	var config ConfigData
-	decoder := yaml.NewDecoder(rdr)
-	err = decoder.Decode(&config)
-	if err != nil {
-		panic(err)
-	}
-
+	config := readConfigData()
+	var err error
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
 	tmpl, err = tmpl.ParseFS(filesystem, "templates/sample.tmpl")
