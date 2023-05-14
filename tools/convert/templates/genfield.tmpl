@@ -7,7 +7,8 @@
     {{- $oldname = $field.V1Name -}}
   {{- end -}}
 {{- end -}}
-{{/* {{ print $field.Name " " $field.Summary | wordwrap | comment | indent 4 }} */}}
+{{ println }}
+{{- println $field.Name $field.Summary | wci 4 -}}
 {{- if $field.Description }}
 {{ $field.Description | wci 4 }}
 {{ formatExample $field.Type $field.Default $field.Example | comment | indent 4 }}
