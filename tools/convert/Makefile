@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample
+all: template names sample doc
 
 .PHONY: template
 #: generate the config template
@@ -25,3 +25,11 @@ sample:
 	@echo "+++ generating sample config"
 	@echo
 	go run . sample --output=minimal_config.yaml
+
+.PHONY: doc
+#: generate the documentation
+doc:
+	@echo
+	@echo "+++ generating documentation"
+	@echo
+	go run . doc --output=config.md

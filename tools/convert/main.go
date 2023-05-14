@@ -110,6 +110,8 @@ func main() {
 			PrintNames(output)
 		case "sample":
 			GenerateMinimalSample(output)
+		case "doc":
+			GenerateMarkdown(output)
 		default:
 			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
 		}
@@ -265,6 +267,22 @@ func GenerateMinimalSample(w io.Writer) {
 	}
 
 	err = tmpl.ExecuteTemplate(w, "sample.tmpl", config)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func GenerateMarkdown(w io.Writer) {
+	config := readConfigData()
+	var err error
+	tmpl := template.New("markdown generator")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/docfile.tmpl", "templates/docgroup.tmpl", "templates/docfield.tmpl")
+	if err != nil {
+		panic(err)
+	}
+
+	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", config)
 	if err != nil {
 		panic(err)
 	}
