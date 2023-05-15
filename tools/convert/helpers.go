@@ -388,3 +388,15 @@ func _fetch(data map[string]any, key string) (any, bool) {
 	}
 	return nil, false
 }
+
+func _keysToLowercase(m map[string]any) map[string]any {
+	newmap := make(map[string]any)
+	for k, v := range m {
+		switch v.(type) {
+		case map[string]any:
+			v = _keysToLowercase(v.(map[string]any))
+		}
+		newmap[strings.ToLower(k)] = v
+	}
+	return newmap
+}

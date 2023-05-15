@@ -6,76 +6,80 @@ import (
 	"strings"
 )
 
+// The json tags in this file are used for conversion from the old format (see tools/convert for details).
+// They are deliberately all lowercase.
+// The yaml tags are used for the new format and are PascalCase.
+
 type V2SamplerChoice struct {
-	Name                   string                        `yaml:"name,omitempty"`
-	DeterministicSampler   *DeterministicSamplerConfig   `yaml:"deterministicSampler,omitempty"`
-	RulesBasedSampler      *RulesBasedSamplerConfig      `yaml:"rulesBasedSampler,omitempty"`
-	DynamicSampler         *DynamicSamplerConfig         `yaml:"dynamicSampler,omitempty"`
-	EMADynamicSampler      *EMADynamicSamplerConfig      `yaml:"emaDynamicSampler,omitempty"`
-	TotalThroughputSampler *TotalThroughputSamplerConfig `yaml:"totalThroughputSampler,omitempty"`
+	Name                   string                        `json:"name" yaml:"Name,omitempty"`
+	DeterministicSampler   *DeterministicSamplerConfig   `json:"deterministicsampler" yaml:"DeterministicSampler,omitempty"`
+	RulesBasedSampler      *RulesBasedSamplerConfig      `json:"rulesbasedsampler" yaml:"RulesBasedSampler,omitempty"`
+	DynamicSampler         *DynamicSamplerConfig         `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
+	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EmaDynamicSampler,omitempty"`
+	TotalThroughputSampler *TotalThroughputSamplerConfig `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
 }
 
 type V2SamplerConfig struct {
-	ConfigVersion int `yaml:"configVersion" validate:"required,ge=2"`
-	Samplers      map[string]*V2SamplerChoice
+	ConfigVersion int                         `json:"configversion" yaml:"ConfigVersion" validate:"required,ge=2"`
+	Samplers      map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
 }
 
 type DeterministicSamplerConfig struct {
-	SampleRate int `default:"1" validate:"required,gte=1"`
+	SampleRate int `json:"samplerate" yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
 }
 
 type DynamicSamplerConfig struct {
-	SampleRate                   int64    `yaml:",omitempty" validate:"required,gte=1"`
-	ClearFrequencySec            int64    `yaml:",omitempty"`
-	FieldList                    []string `yaml:",omitempty" validate:"required"`
-	UseTraceLength               bool     `yaml:",omitempty"`
-	AddSampleRateKeyToTrace      bool     `yaml:",omitempty"`
-	AddSampleRateKeyToTraceField string   `yaml:",omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
+	SampleRate                   int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
+	ClearFrequencySec            int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
+	FieldList                    []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength               bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
+	AddSampleRateKeyToTrace      bool     `json:"addsampleratekeytotrace" yaml:"AddSampleRateKeyToTrace,omitempty"`
+	AddSampleRateKeyToTraceField string   `json:"addsampleratekeytotracefield" yaml:"AddSampleRateKeyToTraceField,omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type EMADynamicSamplerConfig struct {
-	GoalSampleRate               int      `yaml:",omitempty" validate:"gte=1"`
-	AdjustmentInterval           int      `yaml:",omitempty"`
-	Weight                       float64  `yaml:",omitempty" validate:"gt=0,lt=1"`
-	AgeOutValue                  float64  `yaml:",omitempty"`
-	BurstMultiple                float64  `yaml:",omitempty"`
-	BurstDetectionDelay          uint     `yaml:",omitempty"`
-	MaxKeys                      int      `yaml:",omitempty"`
-	FieldList                    []string `yaml:",omitempty" validate:"required"`
-	UseTraceLength               bool     `yaml:",omitempty"`
-	AddSampleRateKeyToTrace      bool     `yaml:",omitempty"`
-	AddSampleRateKeyToTraceField string   `yaml:",omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
+	GoalSampleRate               int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
+	AdjustmentInterval           int      `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
+	Weight                       float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
+	AgeOutValue                  float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
+	BurstMultiple                float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
+	BurstDetectionDelay          uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
+	MaxKeys                      int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	FieldList                    []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength               bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
+	AddSampleRateKeyToTrace      bool     `json:"addsampleratekeytotrace" yaml:"AddSampleRateKeyToTrace,omitempty"`
+	AddSampleRateKeyToTraceField string   `json:"addsampleratekeytotracefield" yaml:"AddSampleRateKeyToTraceField,omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type TotalThroughputSamplerConfig struct {
-	GoalThroughputPerSec         int64    `yaml:",omitempty" validate:"gte=1"`
-	ClearFrequencySec            int64    `yaml:",omitempty"`
-	FieldList                    []string `yaml:",omitempty" validate:"required"`
-	UseTraceLength               bool     `yaml:",omitempty"`
-	AddSampleRateKeyToTrace      bool     `yaml:",omitempty"`
-	AddSampleRateKeyToTraceField string   `yaml:",omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
+	GoalThroughputPerSec         int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
+	ClearFrequencySec            int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
+	FieldList                    []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength               bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
+	AddSampleRateKeyToTrace      bool     `json:"addsampleratekeytotrace" yaml:"AddSampleRateKeyToTrace,omitempty"`
+	AddSampleRateKeyToTraceField string   `json:"addsampleratekeytotracefield" yaml:"AddSampleRateKeyToTraceField,omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
 }
 
 type RulesBasedSamplerConfig struct {
 	// Rules has deliberately different names for json and yaml for conversion from old to new format
-	Rules             []*RulesBasedSamplerRule `json:"rule" yaml:"rules,omitempty"`
-	CheckNestedFields bool                     `yaml:"checkNestedFields,omitempty"`
+	Rules             []*RulesBasedSamplerRule `json:"rule" yaml:"Rules,omitempty"`
+	CheckNestedFields bool                     `json:"checknestedfields" yaml:"CheckNestedFields,omitempty"`
 }
 
 type RulesBasedDownstreamSampler struct {
-	DynamicSampler         *DynamicSamplerConfig         `yaml:"dynamicSampler,omitempty"`
-	EMADynamicSampler      *EMADynamicSamplerConfig      `yaml:"emaDynamicSampler,omitempty"`
-	TotalThroughputSampler *TotalThroughputSamplerConfig `yaml:"totalThroughputSampler,omitempty"`
+	DynamicSampler         *DynamicSamplerConfig         `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
+	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EmaDynamicSampler,omitempty"`
+	TotalThroughputSampler *TotalThroughputSamplerConfig `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
 }
 
 type RulesBasedSamplerRule struct {
 	// Conditions has deliberately different names for json and yaml for conversion from old to new format
-	Name       string                        `yaml:"name,omitempty"`
-	SampleRate int                           `yaml:"samplerate,omitempty"`
-	Drop       bool                          `yaml:"drop,omitempty"`
-	Scope      string                        `yaml:"scope,omitempty" validate:"oneof=span trace"`
-	Conditions []*RulesBasedSamplerCondition `json:"condition" yaml:"conditions,omitempty"`
-	Sampler    *RulesBasedDownstreamSampler  `yaml:"sampler,omitempty"`
+	Name       string                        `json:"name" yaml:"Name,omitempty"`
+	SampleRate int                           `json:"samplerate" yaml:"SampleRate,omitempty"`
+	Drop       bool                          `json:"drop" yaml:"Drop,omitempty"`
+	Scope      string                        `json:"scope" yaml:"Scope,omitempty" validate:"oneof=span trace"`
+	Conditions []*RulesBasedSamplerCondition `json:"condition" yaml:"Conditions,omitempty"`
+	Sampler    *RulesBasedDownstreamSampler  `json:"sampler" yaml:"Sampler,omitempty"`
 }
 
 func (r *RulesBasedSamplerRule) String() string {
@@ -83,10 +87,10 @@ func (r *RulesBasedSamplerRule) String() string {
 }
 
 type RulesBasedSamplerCondition struct {
-	Field    string                            `validate:"required"`
-	Operator string                            `validate:"required"`
-	Value    interface{}                       ``
-	Datatype string                            `yaml:"datatype,omitempty"`
+	Field    string                            `json:"field" yaml:"Field" validate:"required"`
+	Operator string                            `json:"operator" yaml:"Operator" validate:"required"`
+	Value    interface{}                       `json:"value" yaml:"Value" `
+	Datatype string                            `json:"datatype" yaml:"Datatype,omitempty"`
 	Matches  func(value any, exists bool) bool `json:"-" yaml:"-"`
 }
 

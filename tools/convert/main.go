@@ -323,18 +323,23 @@ func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*con
 		return nil, "not found", errors.New("no sampler found")
 	}
 
-	// we use a little trick here -- we read the rules into a generic map, then
-	// marshal them into a bytestream using JSON, then finally unmarshal them
-	// into their final form. This lets us use the JSON tags to do the mapping
-	// of old field names onto new names, while we use the YAML tags to render
-	// the new names in the final output. So it's real important to have both
-	// tags on any field that gets renamed!
+	// We use a little trick here -- we have read the rules into a generic map.
+	// First we convert the generic map into all lowercase keys, then marshal
+	// them into a bytestream using JSON, then finally unmarshal them into their
+	// final form. This lets us use the JSON tags to do the mapping of old field
+	// names onto new names, while we use the YAML tags to render the new names
+	// in the final output. So it's real important to have both tags on any
+	// field that gets renamed!
+
+	// convert all the keys to lowercase
+	lowermap := _keysToLowercase(rulesmap)
 
 	// marshal the rules into a bytestream
-	b, err := json.Marshal(rulesmap)
+	b, err := json.Marshal(lowermap)
 	if err != nil {
 		return nil, "", fmt.Errorf("getV1RulesForSampler unable to marshal config: %w", err)
 	}
+
 	// and unmarshal them back into the sampler
 	err = json.Unmarshal(b, sampler)
 	if err != nil {
@@ -379,7 +384,7 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 		panic(err)
 	}
 
-	newConfig.Samplers["__default__"] = sampler
+	newConfig.Samplers["__Default__"] = sampler
 
 	for k, v := range rules {
 		// if it's not a map, skip it
