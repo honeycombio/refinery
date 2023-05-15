@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/creasty/defaults"
+	"github.com/honeycombio/refinery/config"
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
@@ -106,16 +109,22 @@ func main() {
 		switch args[0] {
 		case "template":
 			GenerateTemplate(output)
+			os.Exit(0)
 		case "names":
 			PrintNames(output)
+			os.Exit(0)
 		case "sample":
 			GenerateMinimalSample(output)
+			os.Exit(0)
 		case "doc":
 			GenerateMarkdown(output)
+			os.Exit(0)
+		case "config", "rules":
+			// do nothing yet because we need to parse the input file
 		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules\n", args[0])
+			os.Exit(1)
 		}
-		os.Exit(0)
 	}
 
 	rdr, err := os.Open(opts.Input)
@@ -150,19 +159,27 @@ func main() {
 		Data:  data,
 	}
 
-	tmpl := template.New("configV2.tmpl")
-	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "template error %v\n", err)
-		os.Exit(1)
+	switch args[0] {
+	case "config":
+		tmpl := template.New("configV2.tmpl")
+		tmpl.Funcs(helpers())
+		tmpl, err = tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "template error %v\n", err)
+			os.Exit(1)
+		}
+
+		err = tmpl.Execute(output, tmplData)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "template error %v\n", err)
+			os.Exit(1)
+		}
+	case "rules":
+		ConvertRules(data, output)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
 	}
 
-	err = tmpl.Execute(output, tmplData)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "template error %v\n", err)
-		os.Exit(1)
-	}
 }
 
 // All of the code below is used when building and debugging this tool.
@@ -286,4 +303,109 @@ func GenerateMarkdown(w io.Writer) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*config.V2SamplerChoice, string, error) {
+	// construct a sampler of the appropriate type that we can treat as "any" for unmarshalling
+	var sampler any
+	switch samplerType {
+	case "DeterministicSampler":
+		sampler = &config.DeterministicSamplerConfig{}
+	case "DynamicSampler":
+		sampler = &config.DynamicSamplerConfig{}
+	case "EMADynamicSampler":
+		sampler = &config.EMADynamicSamplerConfig{}
+	case "RulesBasedSampler":
+		sampler = &config.RulesBasedSamplerConfig{}
+	case "TotalThroughputSampler":
+		sampler = &config.TotalThroughputSamplerConfig{}
+	default:
+		return nil, "not found", errors.New("no sampler found")
+	}
+
+	// we use a little trick here -- we read the rules into a generic map, then
+	// marshal them into a bytestream using JSON, then finally unmarshal them
+	// into their final form. This lets us use the JSON tags to do the mapping
+	// of old field names onto new names, while we use the YAML tags to render
+	// the new names in the final output. So it's real important to have both
+	// tags on any field that gets renamed!
+
+	// marshal the rules into a bytestream
+	b, err := json.Marshal(rulesmap)
+	if err != nil {
+		return nil, "", fmt.Errorf("getV1RulesForSampler unable to marshal config: %w", err)
+	}
+	// and unmarshal them back into the sampler
+	err = json.Unmarshal(b, sampler)
+	if err != nil {
+		return nil, "", fmt.Errorf("getV1RulesForSampler unable to unmarshal config: %w", err)
+	}
+	// now we've got the config, apply defaults to zero values
+	if err := defaults.Set(sampler); err != nil {
+		return nil, "", fmt.Errorf("getV1RulesForSampler unable to apply defaults: %w", err)
+	}
+
+	// and now put it into the V2 sampler config
+	newSampler := &config.V2SamplerChoice{}
+	switch samplerType {
+	case "DeterministicSampler":
+		newSampler.DeterministicSampler = sampler.(*config.DeterministicSamplerConfig)
+	case "DynamicSampler":
+		newSampler.DynamicSampler = sampler.(*config.DynamicSamplerConfig)
+	case "EMADynamicSampler":
+		newSampler.EMADynamicSampler = sampler.(*config.EMADynamicSamplerConfig)
+	case "RulesBasedSampler":
+		newSampler.RulesBasedSampler = sampler.(*config.RulesBasedSamplerConfig)
+	case "TotalThroughputSampler":
+		newSampler.TotalThroughputSampler = sampler.(*config.TotalThroughputSamplerConfig)
+	}
+
+	return newSampler, samplerType, nil
+}
+
+func ConvertRules(rules map[string]any, w io.Writer) {
+	// this writes the rules to w as a YAML file for debugging
+	// yaml.NewEncoder(w).Encode(rules)
+
+	// get the sampler type for the default rule
+	defaultSamplerType, _ := config.GetValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
+
+	newConfig := &config.V2SamplerConfig{
+		ConfigVersion: 2,
+		Samplers:      make(map[string]*config.V2SamplerChoice),
+	}
+	sampler, _, err := readV1RulesIntoV2Sampler(defaultSamplerType, rules)
+	if err != nil {
+		panic(err)
+	}
+
+	newConfig.Samplers["__default__"] = sampler
+
+	for k, v := range rules {
+		// if it's not a map, skip it
+		if _, ok := v.(map[string]any); !ok {
+			continue
+		}
+		sub := v.(map[string]any)
+
+		// make sure it's a sampler destination key by checking for the presence
+		// of a "sampler" key or a "samplerate" key; having either one is good
+		// enough
+		if _, ok := config.GetValueForCaseInsensitiveKey(sub, "sampler", ""); !ok {
+			if _, ok := config.GetValueForCaseInsensitiveKey(sub, "samplerate", ""); !ok {
+				continue
+			}
+		}
+
+		// get the sampler type for the rule
+		samplerType, _ := config.GetValueForCaseInsensitiveKey(sub, "sampler", "DeterministicSampler")
+		sampler, _, err := readV1RulesIntoV2Sampler(samplerType, sub)
+		if err != nil {
+			panic(err)
+		}
+
+		newConfig.Samplers[k] = sampler
+	}
+
+	yaml.NewEncoder(w).Encode(newConfig)
 }
