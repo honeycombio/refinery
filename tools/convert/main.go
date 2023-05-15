@@ -384,7 +384,7 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 		panic(err)
 	}
 
-	newConfig.Samplers["__Default__"] = sampler
+	newConfig.Samplers["__default__"] = sampler
 
 	for k, v := range rules {
 		// if it's not a map, skip it
