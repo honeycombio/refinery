@@ -30,10 +30,8 @@ Usage:
 
 Application Options:
   -i, --input=       the Refinery v1 config file to read (default: config.toml)
-  -o, --output=      the Refinery v2 config file to write (default: -)
+  -o, --output=      the Refinery v2 config file to write (goes to stdout by default)
   -t, --type=[Y|T|J] loads input file as YAML, TOML, or JSON (in case file extension doesn't work)
-  -p                 prints what it loaded in Go format and quits
-      --template=    template for output file (default: configV2.tmpl)
 
 Help Options:
   -h, --help         Show this help message
