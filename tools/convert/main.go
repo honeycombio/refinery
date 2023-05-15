@@ -23,7 +23,7 @@ var filesystem embed.FS
 
 type Options struct {
 	Input  string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
-	Output string `short:"o" long:"output" description:"the Refinery v2 config file to write" default:"-"`
+	Output string `short:"o" long:"output" description:"the Refinery v2 config file to write (goes to stdout by default)"`
 	Type   string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
 }
 
@@ -93,7 +93,7 @@ func main() {
 	}
 
 	output := os.Stdout
-	if opts.Output != "-" {
+	if opts.Output != "" {
 		output, err = os.Create(opts.Output)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "'%v' opening %s for writing\n", err, opts.Output)
