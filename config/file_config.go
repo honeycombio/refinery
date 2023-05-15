@@ -498,7 +498,7 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, 
 	}
 
 	// now we need to unmarshal the config into the sampler config struct
-	err := ReloadInto(config, i, f.opts)
+	err := reloadInto(config, i, f.opts)
 	return i, samplerName, err
 }
 

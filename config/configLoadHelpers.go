@@ -149,9 +149,9 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	return hash, nil
 }
 
-// ReloadInto accepts a map[string]any and a struct, and loads the map into the struct
+// reloadInto accepts a map[string]any and a struct, and loads the map into the struct
 // by re-marshalling the map into JSON and then unmarshalling the JSON into the struct.
-func ReloadInto(m map[string]any, dest interface{}, opts *CmdEnv) error {
+func reloadInto(m map[string]any, dest interface{}, opts *CmdEnv) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("reloadInto unable to marshal config: %w", err)
