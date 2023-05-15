@@ -221,8 +221,15 @@ func renderMap(data map[string]any, key, oldkey string, example string) string {
 func renderStringarray(data map[string]any, key, oldkey string, example string) string {
 	var sa []string
 	comment := ""
-	if value, ok := data[key]; ok {
-		sa = value.([]string)
+	if v, ok := data[key]; ok {
+		switch value := v.(type) {
+		case []interface{}:
+			for _, s := range value {
+				sa = append(sa, s.(string))
+			}
+		case []string:
+			sa = value
+		}
 	}
 
 	if len(sa) == 0 {
@@ -239,8 +246,15 @@ func renderStringarray(data map[string]any, key, oldkey string, example string) 
 
 // secondsToDuration takes a number of seconds (if the previous value had it) and returns a string duration
 func secondsToDuration(data map[string]any, key, oldkey string, example string) string {
+	i64 := int64(0)
 	if value, ok := _fetch(data, oldkey); ok && value != "" {
-		dur := time.Duration(value.(int64)) * time.Second
+		switch i := value.(type) {
+		case int64:
+			i64 = i
+		case int:
+			i64 = int64(i)
+		}
+		dur := time.Duration(i64) * time.Second
 		return fmt.Sprintf("%s: %v", key, yamlf(dur))
 	}
 	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
@@ -252,8 +266,13 @@ func split(s, sep string) []string {
 
 // Prints a nicely-formatted string array; if the incoming string array doesn't exist, or
 // exactly matches the default, then it's commented out.
-func stringArray(data map[string]any, key, oldkey string, indent int, examples ...string) string {
-	var keys []string = examples
+func stringArray(data map[string]any, key, oldkey string, indent int, examples ...any) string {
+	var keys []string
+	for _, e := range examples {
+		if s, ok := e.(string); ok {
+			keys = append(keys, s)
+		}
+	}
 	var userdata []string
 
 	comment := "# "
