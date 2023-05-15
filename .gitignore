@@ -20,3 +20,5 @@ dockerize*
 
 # IDE configs
 .idea/
+
+.DS_Store

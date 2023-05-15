@@ -1,0 +1,28 @@
+{{- $field := . -}}
+
+### {{ $field.Name }}
+
+{{ printf "%s %s" $field.Name $field.Summary | wordwrap }}
+
+{{ if $field.Description -}}
+{{ $field.Description | wordwrap }}
+
+{{- end }}
+
+{{ if $field.Reload }}E{{else}}Not e{{end}}ligible for live reload.
+
+Type: `{{ $field.Type }}`
+
+{{ if $field.Default -}}
+Default: `{{ $field.Default }}`
+
+{{- end }}
+{{ if $field.Example -}}
+Example: `{{ $field.Example }}`
+
+{{- end }}
+{{ if eq $field.ValueType "choice" -}}
+{{ printf "Options: %s" (join $field.Choices " ") }}
+
+{{- end }}
+{{- println -}}

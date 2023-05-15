@@ -1,0 +1,17 @@
+{{- $group := . }}
+{{- range $group.Fields -}}
+{{- $field := . -}}
+{{- $oldname := $field.Name -}}
+{{- if $field.V1Name -}}
+  {{- if $field.V1Group -}}
+    {{- $oldname = (print $field.V1Group "." $field.V1Name) -}}
+  {{- else -}}
+    {{- $oldname = $field.V1Name -}}
+  {{- end -}}
+{{- end -}}
+{{- if $field.LastVersion -}}
+  {{- printf "- %s" $oldname | comment | indent 4  -}}
+  {{- println -}}
+{{- end -}}
+{{- end -}}
+
