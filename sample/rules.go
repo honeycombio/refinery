@@ -30,8 +30,8 @@ func (s *RulesBasedSampler) Start() error {
 	s.samplers = make(map[string]Sampler)
 
 	// Check if any rule has a downstream sampler and create it
-	for _, rule := range s.Config.Rule {
-		for _, cond := range rule.Condition {
+	for _, rule := range s.Config.Rules {
+		for _, cond := range rule.Conditions {
 			if err := cond.Init(); err != nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
@@ -73,7 +73,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		"trace_id": trace.TraceID,
 	})
 
-	for _, rule := range s.Config.Rule {
+	for _, rule := range s.Config.Rules {
 		var matched bool
 		var reason string
 
@@ -135,13 +135,13 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
-	if rule.Condition == nil {
+	if rule.Conditions == nil {
 		return true
 	}
 
 	var matched int
 
-	for _, condition := range rule.Condition {
+	for _, condition := range rule.Conditions {
 	span:
 		for _, span := range t.GetSpans() {
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
@@ -158,18 +158,18 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 		}
 	}
-	return matched == len(rule.Condition)
+	return matched == len(rule.Conditions)
 }
 
 func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
-	if rule.Condition == nil {
+	if rule.Conditions == nil {
 		return true
 	}
 
 	for _, span := range trace.GetSpans() {
 		ruleMatched := true
-		for _, condition := range rule.Condition {
+		for _, condition := range rule.Conditions {
 			// whether this condition is matched by this span.
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
 			if condition.Matches == nil {
