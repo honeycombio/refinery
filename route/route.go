@@ -281,7 +281,7 @@ func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
 	dataset := mux.Vars(req)["dataset"]
-	cfg, name, err := r.Config.GetSamplerConfigForDataset(dataset)
+	cfg, name, err := r.Config.GetSamplerConfigForDestName(dataset)
 	if err != nil {
 		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch config for dataset %s\n", err, dataset)))
 		w.WriteHeader(http.StatusBadRequest)

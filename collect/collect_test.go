@@ -328,7 +328,7 @@ func TestDryRunMode(t *testing.T) {
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
 			SampleRate: 10,
 		},
-		SendTickerVal:      2 * time.Millisecond,
+		SendTickerVal:      20 * time.Millisecond,
 		DryRun:             true,
 		DryRunFieldName:    field,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
