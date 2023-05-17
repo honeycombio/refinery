@@ -172,10 +172,10 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 
 	// TODO: this is temporary while we still conform to the old config format;
 	// once we're fully migrated, we can remove this stuff.
-	if dryRun, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrun", false); ok {
+	if dryRun, ok := GetValueForCaseInsensitiveKey(rulesconf, "dryrun", false); ok {
 		mainconf.DryRun = dryRun
 	}
-	if dryRunFieldName, ok := getValueForCaseInsensitiveKey(rulesconf, "dryrunfieldname", ""); ok && dryRunFieldName != "" {
+	if dryRunFieldName, ok := GetValueForCaseInsensitiveKey(rulesconf, "dryrunfieldname", ""); ok && dryRunFieldName != "" {
 		mainconf.DryRunFieldName = dryRunFieldName
 	}
 
@@ -443,11 +443,11 @@ func (f *fileConfig) GetAllSamplerRules() (map[string]any, error) {
 	return f.rulesConfig, nil
 }
 
-// getValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]any
+// GetValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]any
 // for the given key, ignoring case of the key. It returns ok=true only if the key was found
 // and could be converted to the required type. Otherwise it returns the default value
 // and ok=false.
-func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
+func GetValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
 	for k, v := range m {
 		if strings.EqualFold(k, key) {
 			if t, ok := v.(T); ok {
@@ -473,13 +473,13 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, 
 	// both fail will we return not found.
 
 	const notfound = "not found"
-	if v, ok := getValueForCaseInsensitiveKey(config, destname, map[string]any{}); ok {
+	if v, ok := GetValueForCaseInsensitiveKey(config, destname, map[string]any{}); ok {
 		// we have a specific sampler, so we extract that sampler's config
 		config = v
 	}
 
 	// now we need the name of the sampler
-	samplerName, _ := getValueForCaseInsensitiveKey(config, "sampler", "DeterministicSampler")
+	samplerName, _ := GetValueForCaseInsensitiveKey(config, "sampler", "DeterministicSampler")
 
 	var i any
 	switch samplerName {

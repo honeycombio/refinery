@@ -106,16 +106,22 @@ func main() {
 		switch args[0] {
 		case "template":
 			GenerateTemplate(output)
+			os.Exit(0)
 		case "names":
 			PrintNames(output)
+			os.Exit(0)
 		case "sample":
 			GenerateMinimalSample(output)
+			os.Exit(0)
 		case "doc":
 			GenerateMarkdown(output)
+			os.Exit(0)
+		case "config", "rules":
+			// do nothing yet because we need to parse the input file
 		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules\n", args[0])
+			os.Exit(1)
 		}
-		os.Exit(0)
 	}
 
 	rdr, err := os.Open(opts.Input)
@@ -150,19 +156,27 @@ func main() {
 		Data:  data,
 	}
 
-	tmpl := template.New("configV2.tmpl")
-	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "template error %v\n", err)
-		os.Exit(1)
+	switch args[0] {
+	case "config":
+		tmpl := template.New("configV2.tmpl")
+		tmpl.Funcs(helpers())
+		tmpl, err = tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "template error %v\n", err)
+			os.Exit(1)
+		}
+
+		err = tmpl.Execute(output, tmplData)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "template error %v\n", err)
+			os.Exit(1)
+		}
+	case "rules":
+		ConvertRules(data, output)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
 	}
 
-	err = tmpl.Execute(output, tmplData)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "template error %v\n", err)
-		os.Exit(1)
-	}
 }
 
 // All of the code below is used when building and debugging this tool.

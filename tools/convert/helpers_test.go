@@ -1,6 +1,8 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func Test_conditional(t *testing.T) {
 	tests := []struct {
