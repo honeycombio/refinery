@@ -1,24 +1,4 @@
 # this contains a list of all of the config items supported by refinery
-# if v1name is missing, it's the same as name
-# if firstversion is missing, it's v1.x (meaning it's part of the legacy config)
-# if lastversion is present, it was valid in that version but not after
-
-# fields
-    # - v1name -- the name of this field in v1 (if empty, same as name)
-    # - v1group -- the group of this field in v1 (if empty, no group)
-    # - name -- the name of this field in v2 (required)
-    # - group -- the group of this field in v2 (if empty, no group)
-    # - firstversion -- the version where the property was introduced (if empty, it's v1)
-    # - lastversion -- the version where this property was obsoleted (allows for deleted properties to stay in config files without error)
-    # - type -- bool, string, int, float, duration, ipport, url
-    # - default -- default value (if empty, the zero value of the type)
-    # - validation -- validation flags
-    # - reload -- (bool) can be reloaded at runtime
-    # - summary -- brief description for tools
-    # - details -- could be extended description for documentation
-    # - envvar -- if present, environment variable name. If specified, overrides config files
-    # - commandLine -- if present, overrides envvar
-
 groups:
   - name: "General"
     title: "General Configuration"
@@ -26,7 +6,7 @@ groups:
     fields:
       - name: ConfigurationVersion
         type: int
-        valuetype: new
+        valuetype: assigndefault
         default: 2
         validation: required
         reload: false
@@ -40,7 +20,7 @@ groups:
 
       - name: MinRefineryVersion
         type: string
-        valuetype: new
+        valuetype: assigndefault
         default: "v2.0"
         validation: required
         reload: false
@@ -138,8 +118,11 @@ groups:
         reload: true
         summary: controls whether to decorate traces with refinery rule evaluation results.
         description: >
-          AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
-          This field contains text indicating which rule was evaluated that caused the trace to be included.
+          AddRuleReasonToTrace causes traces that are sent to Honeycomb to
+          include the field `meta.refinery.reason`, indicating which sampler
+          made the decision to keep the trace. For samplers that use a key to
+          make their decision, the key is also included in the field
+          `meta.refinery.sampler_key`.
 
       - name: AddSpanCountToRoot
         type: bool
@@ -293,6 +276,22 @@ groups:
           useful for debugging and understanding the behavior of your refinery
           installation.
 
+      - name: DryRun
+        type: bool
+        valuetype: showexample
+        default: false
+        example: true
+        reload: true
+        summary: controls whether sampling is applied to incoming traces.
+        description: >
+          If enabled, marks the traces that would be dropped given the current
+          sampling rules, and sends all traces regardless of the sampling
+          decision. This is useful for evaluating sampling rules. In DryRun
+          mode, traces will be decorated with meta.refinery.dryrun.enabled set
+          to true. In addition, SampleRate will be set to the incoming rate for
+          all traces, and the field meta.refinery.dryrun.sample_rate will be set
+          to the sample rate that would have been used.
+
   - name: Logger
     title: "Refinery Logger"
     description: Configuration for logging.
@@ -379,9 +378,10 @@ groups:
           sample rate is controlled by the SamplerThroughput setting.
 
       - name: SamplerThroughput
-        valuetype: new
+        valuetype: showexample
         type: float
         default: 10
+        example: 10
         reload: false
         summary: is the sampling throughput for logs in events per second.
         description: >
@@ -741,8 +741,9 @@ groups:
 
       - name: MaxMemory
         type: percentage
-        valuetype: new
+        valuetype: showexample
         default: 75
+        example: 75
         reload: true
         summary: is the maximum percentage of memory that should be allocated by the collector.
         description: >
@@ -1013,7 +1014,9 @@ groups:
       status after the sampling decision has been made.
     fields:
       - name: Type
-        v1group: SampleCacheConfig
+        # we had a bug in the v1 config where this was implemented as SampleCache but documented as SampleCacheConfig;
+        # we need to allow both names to be safe
+        v1group: SampleCacheConfig/SampleCache
         v1name: Type
         type: string
         valuetype: nondefault
@@ -1033,7 +1036,7 @@ groups:
           later.
 
       - name: KeptSize
-        v1group: SampleCacheConfig
+        v1group: SampleCacheConfig/SampleCache
         v1name: KeptSize
         type: int
         valuetype: nondefault
@@ -1047,10 +1050,10 @@ groups:
           most useful in cases where the trace was sent before sending the root
           span, so that the root span can be decorated with accurate metadata.
           Default is 10_000 traces (each trace in this cache consumes roughly
-          200 bytes). Does not apply to the "legacy" type of cache.
+          200 bytes).
 
       - name: DroppedSize
-        v1group: SampleCacheConfig
+        v1group: SampleCacheConfig/SampleCache
         v1name: DroppedSize
         type: int
         valuetype: nondefault
@@ -1061,10 +1064,9 @@ groups:
           Controls the size of the cuckoo dropped traces cache.
           This cache consumes 4-6 bytes per trace at a scale of millions of traces.
           Changing its size with live reload sets a future limit, but does not have an immediate effect.
-          Does not apply to the "legacy" type of cache.
 
       - name: SizeCheckInterval
-        v1group: SampleCacheConfig
+        v1group: SampleCacheConfig/SampleCache
         v1name: SizeCheckInterval
         type: duration
         valuetype: nondefault
@@ -1078,7 +1080,6 @@ groups:
           This cache is quite resilient so it doesn't need to happen very often,
           but the operation is also inexpensive.
           Default is 10 seconds.
-          Does not apply to the "legacy" type of cache.
 
   - name: StressRelief
     title: "Stress Relief"

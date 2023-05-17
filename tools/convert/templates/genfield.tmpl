@@ -9,9 +9,18 @@
 {{- end -}}
 {{ println }}
 {{- println $field.Name $field.Summary | wci 4 -}}
-{{- if $field.Description }}
+{{- println -}}
 {{ $field.Description | wci 4 }}
-{{ formatExample $field.Type $field.Default $field.Example | comment | indent 4 }}
+{{- println -}}
+{{- $specialExample := formatExample $field.Type $field.Default $field.Example -}}
+{{- if $specialExample -}}
+  {{- $specialExample | comment | indent 4 -}}
+  {{- println -}}
+{{- end -}}
+{{- if $field.Default -}}
+  {{- printf "default: %v" $field.Default | comment | indent 4 -}}
+  {{- println -}}
+{{- end -}}
 {{ reload $field.Reload | indent 4 }}
 {{- if eq $field.ValueType "nondefault" }}
 {{ printf "nonDefaultOnly .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Default | meta | indent 4 }}
@@ -24,7 +33,9 @@
 {{- else if eq $field.ValueType "choice" }}
 {{ printf "Options: %s" (join $field.Choices " ") | comment | indent 4 }}
 {{ printf "choice .Data \"%s\" \"%s\" %s \"%s\"" $field.Name $oldname (genSlice $field.Choices) $field.Default | meta | indent 4 }}
-{{- else if eq $field.ValueType "new" }}
+{{- else if eq $field.ValueType "showexample" }}
+{{ print "# " $field.Name ": " $field.Example | indent 4 }}
+{{- else if eq $field.ValueType "assigndefault" }}
 {{ print $field.Name ": " $field.Default | indent 4 }}
 {{- else if eq $field.ValueType "map" }}
 {{ printf "renderMap .Data \"%s\" \"%s\" \"%s\"" $field.Name $oldname $field.Example | meta | indent 4 }}
@@ -35,5 +46,4 @@
 {{- else }}
 {{ printf "******** ERROR %#v has bad ValueType %v" $field.Name $field.ValueType }}
 {{ end -}}
-{{- end -}}
 {{- println -}}

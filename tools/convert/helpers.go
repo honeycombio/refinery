@@ -399,9 +399,12 @@ func _fetch(data map[string]any, key string) (any, bool) {
 	}
 	if strings.Contains(key, ".") {
 		parts := strings.SplitN(key, ".", 2)
-		if value, ok := data[parts[0]]; ok {
-			if submap, ok := value.(map[string]any); ok {
-				return _fetch(submap, parts[1])
+		groups := strings.Split(parts[0], "/")
+		for _, g := range groups {
+			if value, ok := data[g]; ok {
+				if submap, ok := value.(map[string]any); ok {
+					return _fetch(submap, parts[1])
+				}
 			}
 		}
 	}
