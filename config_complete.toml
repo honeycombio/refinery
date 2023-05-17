@@ -470,7 +470,7 @@ MetricsReportingInterval = 30
 # Sample Cache Configuration controls the sample cache used to retain information about trace
 # status after the sampling decision has been made.
 
-[SampleCacheConfig]
+[SampleCache]
 
 # Type controls the type of sample cache used.
 # "legacy" is a strategy where both keep and drop decisions are stored in a circular buffer that is

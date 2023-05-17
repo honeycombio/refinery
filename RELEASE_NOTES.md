@@ -95,7 +95,7 @@ Example:
 
 Refinery keeps a record of its trace decisions -- whether it kept or dropped a given trace. Past versions of refinery had a trace decision cache that was fixed to 5x the size of the trace cache. In v1.20, Refinery has a new cache strategy (called "cuckoo") that separates drop decisions (where all it needs to remember is that the trace was dropped) from kept decisions (where it also tracks some metadata about the trace, such as the number of spans in the trace). It can now cache millions of drop decisions, and many thousands of kept decisions, which should help ensure trace integrity for users with long-lived traces.
 
-It is controlled by the [SampleCacheConfig](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L466) section of the config file.
+It is controlled by the [SampleCache](https://github.com/honeycombio/refinery/blob/main/config_complete.toml#L466) section of the config file.
 
 To turn it on, set `Type = "cuckoo"`. For compatibility, it is disabled by default.
 
