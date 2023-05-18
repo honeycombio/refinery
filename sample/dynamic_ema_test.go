@@ -19,9 +19,7 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 
 	sampler := &EMADynamicSampler{
 		Config: &config.EMADynamicSamplerConfig{
-			FieldList:                    []string{"http.status_code", "request.path", "app.team.id", "important_field"},
-			AddSampleRateKeyToTrace:      true,
-			AddSampleRateKeyToTraceField: "meta.key",
+			FieldList: []string{"http.status_code", "request.path", "app.team.id", "important_field"},
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
@@ -41,18 +39,13 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	sampler.GetSampleRate(trace)
+	rate, _, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")
-	for _, span := range spans {
-		assert.Equal(t, span.Event.Data, map[string]interface{}{
-			"http.status_code": 200,
-			"app.team.id":      float64(4),
-			"important_field":  true,
-			"request.path":     "/{slug}/fun",
-			"meta.key":         "4•,200•,true•,/{slug}/fun•,",
-		}, "should add the sampling key to all spans in the trace")
-	}
+	assert.Equal(t, uint(10), rate, "sample rate should be 10")
+	assert.Equal(t, "emadynamic", reason)
+	assert.Equal(t, "4•,200•,true•,/{slug}/fun•,", key)
+
 }

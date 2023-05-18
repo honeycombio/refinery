@@ -19,9 +19,7 @@ func TestTotalThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	sampler := &TotalThroughputSampler{
 		Config: &config.TotalThroughputSamplerConfig{
-			FieldList:                    []string{"http.status_code"},
-			AddSampleRateKeyToTrace:      true,
-			AddSampleRateKeyToTraceField: "meta.key",
+			FieldList: []string{"http.status_code"},
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
@@ -42,10 +40,4 @@ func TestTotalThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	spans := trace.GetSpans()
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")
-	for _, span := range spans {
-		assert.Equal(t, span.Event.Data, map[string]interface{}{
-			"http.status_code": "200",
-			"meta.key":         "200•,",
-		}, "should add the sampling key to all spans in the trace")
-	}
 }

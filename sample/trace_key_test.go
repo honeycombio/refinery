@@ -9,11 +9,9 @@ import (
 
 func TestKeyGeneration(t *testing.T) {
 	fields := []string{"http.status_code", "request.path", "app.team.id", "important_field"}
-	addKey := true
-	key := "meta.key"
 	useTraceLength := true
 
-	generator := newTraceKey(fields, useTraceLength, addKey, key)
+	generator := newTraceKey(fields, useTraceLength)
 
 	trace := &types.Trace{}
 
@@ -33,11 +31,9 @@ func TestKeyGeneration(t *testing.T) {
 	assert.Equal(t, expected, generator.build(trace))
 
 	fields = []string{"http.status_code", "request.path", "app.team.id", "important_field"}
-	addKey = true
-	key = "meta.key"
 	useTraceLength = true
 
-	generator = newTraceKey(fields, useTraceLength, addKey, key)
+	generator = newTraceKey(fields, useTraceLength)
 
 	trace = &types.Trace{}
 
@@ -79,11 +75,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	// now test that multiple values across spans are condensed correctly
 	fields = []string{"http.status_code"}
-	addKey = true
-	key = "meta.key"
 	useTraceLength = true
 
-	generator = newTraceKey(fields, useTraceLength, addKey, key)
+	generator = newTraceKey(fields, useTraceLength)
 
 	trace = &types.Trace{}
 
@@ -125,11 +119,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	// now test that multiple values across spans in a different order are condensed the same
 	fields = []string{"http.status_code"}
-	addKey = true
-	key = "meta.key"
 	useTraceLength = true
 
-	generator = newTraceKey(fields, useTraceLength, addKey, key)
+	generator = newTraceKey(fields, useTraceLength)
 
 	trace = &types.Trace{}
 
