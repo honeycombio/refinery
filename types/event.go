@@ -134,15 +134,17 @@ type Span struct {
 func (sp *Span) GetDataSize() int {
 	total := 0
 	// the data types we should be getting from JSON are:
-	// float64, int64, bool, string
+	// float64, int64, bool, string, []byte
 	for _, v := range sp.Data {
-		switch v.(type) {
+		switch value := v.(type) {
 		case bool:
 			total += 1
 		case float64, int64, int:
 			total += 8
-		case string, []byte:
-			total += len(v.(string))
+		case string:
+			total += len(value)
+		case []byte: // also catch []uint8
+			total += len(value)
 		default:
 			total += 8 // catchall
 		}
