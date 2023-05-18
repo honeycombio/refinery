@@ -327,5 +327,5 @@ func (s *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reas
 		return 1, true, "stress_relief/always"
 	}
 	hash := wyhash.Hash([]byte(traceID), hashSeed)
-	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic"
+	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic/" + s.reason
 }
