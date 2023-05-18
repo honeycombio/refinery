@@ -536,14 +536,13 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 		r.Collector.ProcessSpanImmediately(span, keep, rate, reason)
 
-		// If the span was kept, we want to generate a probe that we'll forward
-		// to a peer IFF this span would have been forwarded.
-		if keep {
-			ev.Data["meta.refinery.probe"] = true
-			isProbe = true
-		} else {
+		if !keep {
 			return nil
 		}
+		// If the span was kept, we want to generate a probe that we'll forward
+		// to a peer IFF this span would have been forwarded.
+		ev.Data["meta.refinery.probe"] = true
+		isProbe = true
 	}
 
 	// Figure out if we should handle this span locally or pass on to a peer
