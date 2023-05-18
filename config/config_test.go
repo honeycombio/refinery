@@ -370,35 +370,6 @@ func TestPeerManagementType(t *testing.T) {
 	}
 }
 
-func TestAbsentTraceKeyField(t *testing.T) {
-	config, rules := createTempConfigs(t, `
-	[InMemCollector]
-		CacheCapacity=1000
-
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-	`, `
-	[dataset1]
-		Sampler = "EMADynamicSampler"
-		GoalSampleRate = 10
-		UseTraceLength = true
-		AddSampleRateKeyToTrace = true
-		FieldList = [ "request.method" ]
-		Weight = 0.4
-	`)
-	defer os.Remove(rules)
-	defer os.Remove(config)
-	cfg, err := getConfig([]string{"--config", config, "--rules_config", rules})
-	assert.NoError(t, err)
-	_, samplerName, err := cfg.GetSamplerConfigForDestName("dataset1")
-	assert.Error(t, err)
-	assert.Equal(t, "EMADynamicSampler", samplerName)
-	assert.Contains(t, err.Error(), "Error:Field validation for 'AddSampleRateKeyToTraceField'")
-}
-
 func TestDebugServiceAddr(t *testing.T) {
 	config, rules := createTempConfigs(t, `
 	DebugServiceAddr = "localhost:8085"

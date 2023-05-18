@@ -606,7 +606,7 @@ func TestRules(t *testing.T) {
 			trace.AddSpan(span)
 		}
 
-		rate, keep, reason := sampler.GetSampleRate(trace)
+		rate, keep, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -614,6 +614,7 @@ func TestRules(t *testing.T) {
 			name = d.Rules.Rules[0].Name
 		}
 		assert.Contains(t, reason, name)
+		assert.Equal(t, "", key)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -760,7 +761,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			trace.AddSpan(span)
 		}
 
-		rate, keep, reason := sampler.GetSampleRate(trace)
+		rate, keep, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -768,6 +769,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			name = d.Rules.Rules[0].Name
 		}
 		assert.Contains(t, reason, name)
+		assert.Equal(t, "", key)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -792,10 +794,8 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 						},
 						Sampler: &config.RulesBasedDownstreamSampler{
 							DynamicSampler: &config.DynamicSamplerConfig{
-								SampleRate:                   10,
-								FieldList:                    []string{"http.status_code"},
-								AddSampleRateKeyToTrace:      true,
-								AddSampleRateKeyToTraceField: "meta.key",
+								SampleRate: 10,
+								FieldList:  []string{"http.status_code"},
 							},
 						},
 					},
@@ -838,7 +838,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason := sampler.GetSampleRate(trace)
+		rate, keep, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -846,6 +846,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 			name = d.Rules.Rules[0].Name
 		}
 		assert.Contains(t, reason, name)
+		assert.Equal(t, "200•,", key)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -854,13 +855,6 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 
 		spans := trace.GetSpans()
 		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
-		for _, span := range spans {
-			assert.Equal(t, span.Event.Data, map[string]interface{}{
-				"rule_test":        int64(1),
-				"http.status_code": "200",
-				"meta.key":         "200•,",
-			}, "should add the sampling key to all spans in the trace")
-		}
 	}
 }
 
@@ -880,10 +874,8 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 						},
 						Sampler: &config.RulesBasedDownstreamSampler{
 							EMADynamicSampler: &config.EMADynamicSamplerConfig{
-								GoalSampleRate:               10,
-								FieldList:                    []string{"http.status_code"},
-								AddSampleRateKeyToTrace:      true,
-								AddSampleRateKeyToTraceField: "meta.key",
+								GoalSampleRate: 10,
+								FieldList:      []string{"http.status_code"},
 							},
 						},
 					},
@@ -926,7 +918,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason := sampler.GetSampleRate(trace)
+		rate, keep, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -934,6 +926,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 			name = d.Rules.Rules[0].Name
 		}
 		assert.Contains(t, reason, name)
+		assert.Equal(t, "200•,", key)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -942,13 +935,6 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 
 		spans := trace.GetSpans()
 		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
-		for _, span := range spans {
-			assert.Equal(t, span.Event.Data, map[string]interface{}{
-				"rule_test":        int64(1),
-				"http.status_code": "200",
-				"meta.key":         "200•,",
-			}, "should add the sampling key to all spans in the trace")
-		}
 	}
 }
 
@@ -1048,7 +1034,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 				}
 
 				sampler.Start()
-				rate, keep, _ := sampler.GetSampleRate(trace)
+				rate, keep, _, _ := sampler.GetSampleRate(trace)
 
 				assert.Equal(t, uint(1), rate, rate)
 				if scope == "span" {
@@ -1574,7 +1560,7 @@ func TestRulesDatatypes(t *testing.T) {
 				trace.AddSpan(span)
 			}
 
-			rate, keep, _ := sampler.GetSampleRate(trace)
+			rate, keep, _, _ := sampler.GetSampleRate(trace)
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 			// because keep depends on sampling rate, we can only test expectedKeep when it should be false
 			if !d.ExpectedKeep {

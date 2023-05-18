@@ -23,7 +23,6 @@ type EMADynamicSampler struct {
 	burstMultiple       float64
 	burstDetectionDelay uint
 	maxKeys             int
-	configName          string
 
 	key *traceKey
 
@@ -40,7 +39,7 @@ func (d *EMADynamicSampler) Start() error {
 	d.burstMultiple = d.Config.BurstMultiple
 	d.burstDetectionDelay = d.Config.BurstDetectionDelay
 	d.maxKeys = d.Config.MaxKeys
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength, d.Config.AddSampleRateKeyToTrace, d.Config.AddSampleRateKeyToTraceField)
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{
@@ -62,9 +61,9 @@ func (d *EMADynamicSampler) Start() error {
 	return nil
 }
 
-func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, string) {
-	key := d.key.buildAndAdd(trace)
-	rate := d.dynsampler.GetSampleRate(key)
+func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+	key = d.key.build(trace)
+	rate = uint(d.dynsampler.GetSampleRate(key))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
@@ -81,5 +80,5 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, strin
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep, "emadynamic/" + key
+	return rate, shouldKeep, "emadynamic", key
 }

@@ -9,35 +9,17 @@ import (
 )
 
 type traceKey struct {
-	fields            []string
-	useTraceLength    bool
-	addDynsampleKey   bool
-	addDynsampleField string
+	fields         []string
+	useTraceLength bool
 }
 
-func newTraceKey(fields []string, useTraceLength, addDynsampleKey bool, addDynsampleField string) *traceKey {
+func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 	// always put the field list in sorted order for easier comparison
 	sort.Strings(fields)
 	return &traceKey{
-		fields:            fields,
-		useTraceLength:    useTraceLength,
-		addDynsampleKey:   addDynsampleKey,
-		addDynsampleField: addDynsampleField,
+		fields:         fields,
+		useTraceLength: useTraceLength,
 	}
-}
-
-// buildAndAdd, builds the trace key and adds it to the trace if configured to
-// do so
-func (d *traceKey) buildAndAdd(trace *types.Trace) string {
-	key := d.build(trace)
-
-	if d.addDynsampleKey {
-		for _, span := range trace.GetSpans() {
-			span.Data[d.addDynsampleField] = key
-		}
-	}
-
-	return key
 }
 
 // build, builds the trace key based on the configuration of the traceKeyGenerator

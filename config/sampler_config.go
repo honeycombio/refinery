@@ -29,35 +29,29 @@ type DeterministicSamplerConfig struct {
 }
 
 type DynamicSamplerConfig struct {
-	SampleRate                   int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
-	ClearFrequencySec            int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
-	FieldList                    []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	UseTraceLength               bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
-	AddSampleRateKeyToTrace      bool     `json:"addsampleratekeytotrace" yaml:"AddSampleRateKeyToTrace,omitempty"`
-	AddSampleRateKeyToTraceField string   `json:"addsampleratekeytotracefield" yaml:"AddSampleRateKeyToTraceField,omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
+	SampleRate        int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
+	ClearFrequencySec int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
+	FieldList         []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength    bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
 type EMADynamicSamplerConfig struct {
-	GoalSampleRate               int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
-	AdjustmentInterval           int      `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
-	Weight                       float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
-	AgeOutValue                  float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
-	BurstMultiple                float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
-	BurstDetectionDelay          uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
-	MaxKeys                      int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
-	FieldList                    []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	UseTraceLength               bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
-	AddSampleRateKeyToTrace      bool     `json:"addsampleratekeytotrace" yaml:"AddSampleRateKeyToTrace,omitempty"`
-	AddSampleRateKeyToTraceField string   `json:"addsampleratekeytotracefield" yaml:"AddSampleRateKeyToTraceField,omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
+	GoalSampleRate      int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
+	AdjustmentInterval  int      `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
+	Weight              float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
+	AgeOutValue         float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
+	BurstMultiple       float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
+	BurstDetectionDelay uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
+	MaxKeys             int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	FieldList           []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength      bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
 type TotalThroughputSamplerConfig struct {
-	GoalThroughputPerSec         int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
-	ClearFrequencySec            int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
-	FieldList                    []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	UseTraceLength               bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
-	AddSampleRateKeyToTrace      bool     `json:"addsampleratekeytotrace" yaml:"AddSampleRateKeyToTrace,omitempty"`
-	AddSampleRateKeyToTraceField string   `json:"addsampleratekeytotracefield" yaml:"AddSampleRateKeyToTraceField,omitempty" validate:"required_with=AddSampleRateKeyToTrace"`
+	GoalThroughputPerSec int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
+	ClearFrequencySec    int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
+	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
 type RulesBasedSamplerConfig struct {

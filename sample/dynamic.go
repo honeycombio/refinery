@@ -18,7 +18,6 @@ type DynamicSampler struct {
 
 	sampleRate        int64
 	clearFrequencySec int64
-	configName        string
 
 	key *traceKey
 
@@ -33,7 +32,7 @@ func (d *DynamicSampler) Start() error {
 		d.Config.ClearFrequencySec = 30
 	}
 	d.clearFrequencySec = d.Config.ClearFrequencySec
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength, d.Config.AddSampleRateKeyToTrace, d.Config.AddSampleRateKeyToTraceField)
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
@@ -50,9 +49,9 @@ func (d *DynamicSampler) Start() error {
 	return nil
 }
 
-func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, string) {
-	key := d.key.buildAndAdd(trace)
-	rate := d.dynsampler.GetSampleRate(key)
+func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+	key = d.key.build(trace)
+	rate = uint(d.dynsampler.GetSampleRate(key))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
@@ -69,5 +68,5 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (uint, bool, string) 
 		d.Metrics.Increment("dynsampler_num_dropped")
 	}
 	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
-	return uint(rate), shouldKeep, "dynamic/" + key
+	return rate, shouldKeep, "dynamic", key
 }

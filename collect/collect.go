@@ -688,10 +688,13 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	}
 
 	// make sampling decision and update the trace
-	rate, shouldSend, reason := sampler.GetSampleRate(trace)
+	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
 	trace.SampleRate = rate
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
+	if key != "" {
+		logFields["sample_key"] = key
+	}
 
 	i.sampleTraceCache.Record(trace, shouldSend)
 
@@ -711,6 +714,9 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	for _, sp := range trace.GetSpans() {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
+			if key != "" {
+				sp.Data["meta.refinery.sample_key"] = key
+			}
 		}
 
 		// update the root span (if we have one, which we might not if the trace timed out)
