@@ -6,20 +6,34 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/creasty/defaults"
 	"github.com/honeycombio/refinery/config"
 	"gopkg.in/yaml.v3"
 )
 
-func _keysToLowercase(m map[string]any) map[string]any {
+func transformSamplerMap(m map[string]any) map[string]any {
 	newmap := make(map[string]any)
 	for k, v := range m {
 		switch val := v.(type) {
 		case map[string]any:
-			v = _keysToLowercase(val)
+			v = transformSamplerMap(val)
 		}
-		newmap[strings.ToLower(k)] = v
+
+		k = strings.ToLower(k)
+
+		// there are some fields that are named differently in v2 than in v1
+		// and some data types that are different
+		// this fixes those up
+		switch k {
+		case "clearfrequencysec":
+			k = "clearfrequency"
+			v = time.Duration(v.(int64)) * time.Second
+		case "adjustmentinterval":
+			v = time.Duration(v.(int64)) * time.Second
+		}
+		newmap[k] = v
 	}
 	return newmap
 }
@@ -43,17 +57,17 @@ func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*con
 	}
 
 	// We use a little trick here -- we have read the rules into a generic map.
-	// First we convert the generic map into all lowercase keys, then marshal
-	// them into a bytestream using JSON, then finally unmarshal them into their
-	// final form. This lets us use the JSON tags to do the mapping of old field
-	// names onto new names, while we use the YAML tags to render the new names
-	// in the final output. So it's real important to have both tags on any
-	// field that gets renamed!
+	// First we convert the generic map into all lowercase keys (and do some
+	// data cleanup on the way by), then marshal them into a bytestream using
+	// JSON, then finally unmarshal them into their final form. This lets us use
+	// the JSON tags to do the mapping of old field names onto new names, while
+	// we use the YAML tags to render the new names in the final output. So it's
+	// real important to have both tags on any field that gets renamed!
 
 	// convert all the keys to lowercase
-	lowermap := _keysToLowercase(rulesmap)
+	lowermap := transformSamplerMap(rulesmap)
 
-	// marshal the rules into a bytestream
+	// marshal the rules into a JSON bytestream that has the right shape to unmarshal into the sampler
 	b, err := json.Marshal(lowermap)
 	if err != nil {
 		return nil, "", fmt.Errorf("getV1RulesForSampler unable to marshal config: %w", err)

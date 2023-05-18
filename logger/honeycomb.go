@@ -72,7 +72,7 @@ func (h *HoneycombLogger) Start() error {
 
 	if loggerConfig.LoggerSamplerEnabled {
 		h.sampler = &dynsampler.PerKeyThroughput{
-			ClearFrequencySec:      10,
+			ClearFrequencyDuration: 10 * time.Second,
 			PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
 			MaxKeys:                1000,
 		}
