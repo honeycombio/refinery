@@ -6,7 +6,9 @@ This is the documentation for the configuration file for Honeycomb's Refinery.
 ## General: General Configuration
 
 Contains general configuration options that apply to the entire 
-refinery process. ### ConfigurationVersion
+refinery process. 
+
+### ConfigurationVersion
 
 ConfigurationVersion is the file format of this particular 
 configuration file. 
@@ -43,7 +45,9 @@ Default: `v2.0`
 ---
 ## Network: Network Configuration
 
-Contains network configuration options. ### ListenAddr
+Contains network configuration options. 
+
+### ListenAddr
 
 ListenAddr is the address refinery listens to for incoming requests. 
 
@@ -99,7 +103,9 @@ Default: `https://api.honeycomb.io`
 
 Contains access keys -- API keys that the proxy will treat specially, 
 and other flags that control how the proxy handles API keys. 
- ### ReceiveKeys
+ 
+
+### ReceiveKeys
 
 ReceiveKeys is a set of Honeycomb API keys that the proxy will treat 
 specially. 
@@ -137,15 +143,18 @@ Type: `bool`
 ## RefineryTelemetry: Refinery Telemetry
 
 Configuration info for the telemetry that Refinery uses to record its 
-own operation. ### AddRuleReasonToTrace
+own operation. 
+
+### AddRuleReasonToTrace
 
 AddRuleReasonToTrace controls whether to decorate traces with refinery 
 rule evaluation results. 
 
 AddRuleReasonToTrace causes traces that are sent to Honeycomb to 
-include the field `meta.refinery.reason`. This field contains text 
-indicating which rule was evaluated that caused the trace to be 
-included. 
+include the field `meta.refinery.reason`, indicating which sampler 
+made the decision to keep the trace. For samplers that use a key to 
+make their decision, the key is also included in the field 
+`meta.refinery.sampler_key`. 
  
 
 Eligible for live reload.
@@ -196,7 +205,9 @@ Default: `true`
 ---
 ## Traces: Traces
 
-Configuration for how traces are managed. ### SendDelay
+Configuration for how traces are managed. 
+
+### SendDelay
 
 SendDelay is the duration to wait before sending a trace. 
 
@@ -289,7 +300,9 @@ Default: `100ms`
 ---
 ## Debugging: Debugging
 
-Configuration values used when setting up and debugging Refinery. ### DebugServiceAddr
+Configuration values used when setting up and debugging Refinery. 
+
+### DebugServiceAddr
 
 DebugServiceAddr is the IP and port the debug service will run on. 
 
@@ -366,10 +379,32 @@ Type: `bool`
 
 Example: `true`
 
+### DryRun
+
+DryRun controls whether sampling is applied to incoming traces. 
+
+If enabled, marks the traces that would be dropped given the current 
+sampling rules, and sends all traces regardless of the sampling 
+decision. This is useful for evaluating sampling rules. In DryRun 
+mode, traces will be decorated with meta.refinery.dryrun.enabled set 
+to true. In addition, SampleRate will be set to the incoming rate for 
+all traces, and the field meta.refinery.dryrun.sample_rate will be set 
+to the sample rate that would have been used. 
+ 
+
+Eligible for live reload.
+
+Type: `bool`
+
+
+Example: `true`
+
 ---
 ## Logger: Refinery Logger
 
-Configuration for logging. ### Type
+Configuration for logging. 
+
+### Type
 
 Type is the type of logger to use. 
 
@@ -407,7 +442,9 @@ Options: debug info warn error panic
 ## HoneycombLogger: Honeycomb Logger
 
 Configuration for logging to Honeycomb. Only used if Logger.Type is 
-"honeycomb". ### APIHost
+"honeycomb". 
+
+### APIHost
 
 APIHost is the URL of the Honeycomb API to which logs will be sent. 
 
@@ -485,13 +522,15 @@ Not eligible for live reload.
 Type: `float`
 
 Default: `10`
-
+Example: `10`
 
 ---
 ## StdoutLogger: Stdout Logger
 
 Configuration for logging to stdout. Only used if Logger.Type is 
-"stdout". ### Structured
+"stdout". 
+
+### Structured
 
 Structured controls whether to used structured logging. 
 
@@ -510,7 +549,9 @@ Type: `bool`
 ## PrometheusMetrics: Prometheus Metrics
 
 Configuration for Refinery's internally-generated metrics as made 
-available through Prometheus. ### Enabled
+available through Prometheus. 
+
+### Enabled
 
 Enabled controls whether to expose refinery metrics over 
 PromethusListenAddr 
@@ -549,7 +590,9 @@ Default: `localhost:2112`
 Configuration for Refinery's legacy metrics. Version 1.x of Refinery 
 used this configuration for sending Metrics to Honeycomb. The metrics 
 generated that way are nonstandard and will be deprecated in a future 
-release. New installations should prefer OTelMetrics. ### Enabled
+release. New installations should prefer OTelMetrics. 
+
+### Enabled
 
 Enabled controls whether to send metrics to Honeycomb. 
 
@@ -631,10 +674,14 @@ Default: `30s`
 Configuration for Refinery's OpenTelemetry metrics. This is the 
 preferred way to send metrics to Honeycomb. New installations should 
 prefer OTelMetrics. 
- ---
+ 
+
+---
 ## PeerManagement: Peer Management
 
-Controls how the Refinery cluster communicates between peers. ### Type
+Controls how the Refinery cluster communicates between peers. 
+
+### Type
 
 Type is the type of peer management to use. 
 
@@ -731,7 +778,9 @@ Example: `192.168.1.11:8081,192.168.1.12:8081`
 
 Controls how the Refinery cluster communicates between peers when 
 using Redis. Only applies when PeerManagement.Type is "redis" 
- ### Host
+ 
+
+### Host
 
 Host is the host and port of the redis instance to use. 
 
@@ -862,7 +911,9 @@ Default: `5s`
 
 Brings together the settings that are relevant to collecting spans 
 together to make traces. 
- ### CacheCapacity
+ 
+
+### CacheCapacity
 
 CacheCapacity is the number of traces to keep in the cache's circular 
 buffer. 
@@ -903,7 +954,7 @@ Eligible for live reload.
 Type: `percentage`
 
 Default: `75`
-
+Example: `75`
 
 ### MaxAlloc
 
@@ -926,7 +977,9 @@ Type: `int`
 
 Brings together the settings that are relevant to the sizes of 
 communications buffers. 
- ### UpstreamBufferSize
+ 
+
+### UpstreamBufferSize
 
 UpstreamBufferSize is the size of the queue used to buffer spans to 
 send to the upstream API. 
@@ -965,7 +1018,9 @@ Default: `100000`
 ---
 ## Specialized: Specialized Configuration
 
-Special-purpose configuration options that are not typically needed. ### EnvironmentCacheTTL
+Special-purpose configuration options that are not typically needed. 
+
+### EnvironmentCacheTTL
 
 EnvironmentCacheTTL is the duration for which environment information 
 is cached. 
@@ -1026,7 +1081,9 @@ Example: `ClusterName:MyCluster,environment:production`
 
 Controls the field names to use for the event ID fields. These fields 
 are used to identify events that are part of the same trace. 
- ### TraceIDFieldNames
+ 
+
+### TraceIDFieldNames
 
 TraceIDFieldNames is the list of field names to use for the trace ID. 
 
@@ -1065,7 +1122,9 @@ Example: `trace.parent_id,parentId`
 
 Controls the parameters of the gRPC server used to receive Open 
 Telemetry data in gRPC format. 
- ### Enabled
+ 
+
+### Enabled
 
 Enabled specifies whether the gRPC server is enabled. 
 
@@ -1191,7 +1250,9 @@ Default: `20s`
 
 Controls the sample cache used to retain information about trace 
 status after the sampling decision has been made. 
- ### KeptSize
+ 
+
+### KeptSize
 
 KeptSize is the number of traces preserved in the cuckoo kept traces 
 cache. 
@@ -1202,7 +1263,7 @@ Honeycomb, along with some statistical information. This is most
 useful in cases where the trace was sent before sending the root span, 
 so that the root span can be decorated with accurate metadata. Default 
 is 10_000 traces (each trace in this cache consumes roughly 200 
-bytes). Does not apply to the "legacy" type of cache. 
+bytes). 
  
 
 Eligible for live reload.
@@ -1219,8 +1280,7 @@ DroppedSize is the size of the cuckoo dropped traces cache.
 Controls the size of the cuckoo dropped traces cache. This cache 
 consumes 4-6 bytes per trace at a scale of millions of traces. 
 Changing its size with live reload sets a future limit, but does not 
-have an immediate effect. Does not apply to the "legacy" type of 
-cache. 
+have an immediate effect. 
  
 
 Eligible for live reload.
@@ -1239,7 +1299,7 @@ Controls the duration the cuckoo cache uses to determine how often it
 re-evaluates the remaining capacity of its dropped traces cache and 
 possibly cycles it. This cache is quite resilient so it doesn't need 
 to happen very often, but the operation is also inexpensive. Default 
-is 10 seconds. Does not apply to the "legacy" type of cache. 
+is 10 seconds. 
  
 
 Eligible for live reload.
@@ -1280,7 +1340,9 @@ Activation parameters.
 Stress Relief is not a substitute for proper configuration and 
 scaling, but it can be used as a safety valve to prevent Refinery from 
 becoming unstable under heavy load. 
- ### Mode
+ 
+
+### Mode
 
 Mode is a string indicating how to use Stress Relief. 
 

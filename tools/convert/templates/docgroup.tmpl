@@ -3,6 +3,8 @@
 ## {{ $group.Name }}: {{ $group.Title }}
 
 {{ $group.Description | wordwrap }}
+{{- println -}}
+{{- println -}}
 
 {{- range $group.Fields -}}
 {{- if .LastVersion -}}
