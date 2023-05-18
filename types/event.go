@@ -136,13 +136,15 @@ func (sp *Span) GetDataSize() int {
 	// the data types we should be getting from JSON are:
 	// float64, int64, bool, string
 	for _, v := range sp.Data {
-		switch v.(type) {
+		switch value := v.(type) { // make value the type of v
 		case bool:
 			total += 1
 		case float64, int64, int:
 			total += 8
-		case string, []byte:
-			total += len(v.(string))
+		case string:
+			total += len(value)
+		case []byte: // should cover []uint8 as well
+			total += len(value)
 		default:
 			total += 8 // catchall
 		}
