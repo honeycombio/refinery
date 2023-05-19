@@ -540,7 +540,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 			return nil
 		}
 		// If the span was kept, we want to generate a probe that we'll forward
-		// to a peer IFF this span would have been forwarded.
+		// to a peer IF this span would have been forwarded.
 		ev.Data["meta.refinery.probe"] = true
 		isProbe = true
 	}
