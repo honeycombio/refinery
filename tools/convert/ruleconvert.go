@@ -29,9 +29,9 @@ func transformSamplerMap(m map[string]any) map[string]any {
 		switch k {
 		case "clearfrequencysec":
 			k = "clearfrequency"
-			v = time.Duration(v.(int64)) * time.Second
+			v = config.Duration(v.(int64)) * config.Duration(time.Second)
 		case "adjustmentinterval":
-			v = time.Duration(v.(int64)) * time.Second
+			v = config.Duration(v.(int64)) * config.Duration(time.Second)
 		}
 		newmap[k] = v
 	}
@@ -70,17 +70,17 @@ func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*con
 	// marshal the rules into a JSON bytestream that has the right shape to unmarshal into the sampler
 	b, err := json.Marshal(lowermap)
 	if err != nil {
-		return nil, "", fmt.Errorf("getV1RulesForSampler unable to marshal config: %w", err)
+		return nil, "", fmt.Errorf("readV1RulesIntoV2Sampler unable to marshal config: %w", err)
 	}
 
 	// and unmarshal them back into the sampler
 	err = json.Unmarshal(b, sampler)
 	if err != nil {
-		return nil, "", fmt.Errorf("getV1RulesForSampler unable to unmarshal config: %w", err)
+		return nil, "", fmt.Errorf("readV1RulesIntoV2Sampler unable to unmarshal config: %w", err)
 	}
 	// now we've got the config, apply defaults to zero values
 	if err := defaults.Set(sampler); err != nil {
-		return nil, "", fmt.Errorf("getV1RulesForSampler unable to apply defaults: %w", err)
+		return nil, "", fmt.Errorf("readV1RulesIntoV2Sampler unable to apply defaults: %w", err)
 	}
 
 	// and now put it into the V2 sampler config
@@ -101,12 +101,27 @@ func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*con
 	return newSampler, samplerType, nil
 }
 
+// getValueForCaseInsensitiveKey is a generic helper function that returns the
+// value from a map[string]any for the given key, ignoring case of the key. It
+// returns ok=true only if the key was found and could be converted to the
+// required type. Otherwise it returns the default value and ok=false.
+func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			if t, ok := v.(T); ok {
+				return t, true
+			}
+		}
+	}
+	return def, false
+}
+
 func ConvertRules(rules map[string]any, w io.Writer) {
 	// this writes the rules to w as a YAML file for debugging
 	// yaml.NewEncoder(w).Encode(rules)
 
 	// get the sampler type for the default rule
-	defaultSamplerType, _ := config.GetValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
+	defaultSamplerType, _ := getValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
 
 	newConfig := &config.V2SamplerConfig{
 		ConfigVersion: 2,
@@ -129,14 +144,14 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 		// make sure it's a sampler destination key by checking for the presence
 		// of a "sampler" key or a "samplerate" key; having either one is good
 		// enough
-		if _, ok := config.GetValueForCaseInsensitiveKey(sub, "sampler", ""); !ok {
-			if _, ok := config.GetValueForCaseInsensitiveKey(sub, "samplerate", ""); !ok {
+		if _, ok := getValueForCaseInsensitiveKey(sub, "sampler", ""); !ok {
+			if _, ok := getValueForCaseInsensitiveKey(sub, "samplerate", ""); !ok {
 				continue
 			}
 		}
 
 		// get the sampler type for the rule
-		samplerType, _ := config.GetValueForCaseInsensitiveKey(sub, "sampler", "DeterministicSampler")
+		samplerType, _ := getValueForCaseInsensitiveKey(sub, "sampler", "DeterministicSampler")
 		sampler, _, err := readV1RulesIntoV2Sampler(samplerType, sub)
 		if err != nil {
 			panic(err)

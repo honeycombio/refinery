@@ -18,7 +18,7 @@ type DynamicSampler struct {
 	Metrics metrics.Metrics
 
 	sampleRate     int64
-	clearFrequency time.Duration
+	clearFrequency config.Duration
 
 	key *traceKey
 
@@ -30,7 +30,7 @@ func (d *DynamicSampler) Start() error {
 	defer func() { d.Logger.Debug().Logf("Finished starting DynamicSampler") }()
 	d.sampleRate = d.Config.SampleRate
 	if d.Config.ClearFrequency == 0 {
-		d.Config.ClearFrequency = 30 * time.Second
+		d.Config.ClearFrequency = config.Duration(30 * time.Second)
 	}
 	d.clearFrequency = d.Config.ClearFrequency
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
@@ -38,7 +38,7 @@ func (d *DynamicSampler) Start() error {
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
 		GoalSampleRate:         int(d.sampleRate),
-		ClearFrequencyDuration: d.clearFrequency,
+		ClearFrequencyDuration: time.Duration(d.clearFrequency),
 	}
 	d.dynsampler.Start()
 

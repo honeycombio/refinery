@@ -291,4 +291,4 @@ SampleRate = 1
 
     Sampler = "TotalThroughputSampler"
     GoalThroughputPerSec = 100
-    FieldList = "[request.method]"
+    FieldList = ["request.method"]

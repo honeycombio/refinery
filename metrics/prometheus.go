@@ -39,7 +39,7 @@ func (p *PromMetrics) Start() error {
 	muxxer := mux.NewRouter()
 
 	muxxer.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(pc.MetricsListenAddr, muxxer)
+	go http.ListenAndServe(pc.ListenAddr, muxxer)
 	return nil
 }
 

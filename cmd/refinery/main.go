@@ -100,11 +100,7 @@ func main() {
 	samplerFactory := &sample.SamplerFactory{}
 
 	// set log level
-	logLevel, err := c.GetLoggingLevel()
-	if err != nil {
-		fmt.Printf("unable to get logging level from config: %v\n", err)
-		os.Exit(1)
-	}
+	logLevel := c.GetLoggerLevel().String()
 	if err := lgr.SetLevel(logLevel); err != nil {
 		fmt.Printf("unable to set logging level: %v\n", err)
 		os.Exit(1)

@@ -18,7 +18,7 @@ type EMADynamicSampler struct {
 	Metrics metrics.Metrics
 
 	goalSampleRate      int
-	adjustmentInterval  time.Duration
+	adjustmentInterval  config.Duration
 	weight              float64
 	ageOutValue         float64
 	burstMultiple       float64
@@ -45,7 +45,7 @@ func (d *EMADynamicSampler) Start() error {
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{
 		GoalSampleRate:             d.goalSampleRate,
-		AdjustmentIntervalDuration: d.adjustmentInterval,
+		AdjustmentIntervalDuration: time.Duration(d.adjustmentInterval),
 		Weight:                     d.weight,
 		AgeOutValue:                d.ageOutValue,
 		BurstDetectionDelay:        d.burstDetectionDelay,

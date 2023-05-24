@@ -123,22 +123,12 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
-	switch sampleCacheConfig.Type {
-	case "legacy", "":
-		i.sampleTraceCache, err = cache.NewLegacySentCache(imcConfig.CacheCapacity * 5) // (keep 5x ring buffer size)
-		if err != nil {
-			return err
-		}
-	case "cuckoo":
-		i.Metrics.Register(cache.CurrentCapacity, "gauge")
-		i.Metrics.Register(cache.FutureLoadFactor, "gauge")
-		i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
-		i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("validation failure - sampleTraceCache had invalid config type '%s'", sampleCacheConfig.Type)
+	i.Metrics.Register(cache.CurrentCapacity, "gauge")
+	i.Metrics.Register(cache.FutureLoadFactor, "gauge")
+	i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
+	i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
+	if err != nil {
+		return err
 	}
 
 	i.incoming = make(chan *types.Span, imcConfig.CacheCapacity*3)

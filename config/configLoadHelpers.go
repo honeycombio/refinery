@@ -11,9 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"time"
 
 	"github.com/creasty/defaults"
-	"github.com/go-playground/validator"
+	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -107,6 +108,20 @@ func load(r io.Reader, format Format, into any) error {
 	}
 }
 
+// dminValidator is a validator for the validator library that checks if a
+// value is at least a minimum value, specified as a Duration string.
+func dminValidator(fl validator.FieldLevel) bool {
+	min, err := time.ParseDuration(fl.Param())
+	if err != nil {
+		return false
+	}
+	field, ok := fl.Field().Interface().(Duration)
+	if !ok {
+		return false
+	}
+	return field >= Duration(min)
+}
+
 // readConfigInto reads the config from the given location and applies it to the given struct.
 func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	r, format, err := getReaderFor(location)
@@ -142,40 +157,10 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 
 	// validate the config
 	v := validator.New()
+	v.RegisterValidation("dmin", dminValidator)
 	if err := v.Struct(dest); err != nil {
 		return hash, fmt.Errorf("readConfigInto config validation failed: %w", err)
 	}
 
 	return hash, nil
-}
-
-// reloadInto accepts a map[string]any and a struct, and loads the map into the struct
-// by re-marshalling the map into JSON and then unmarshalling the JSON into the struct.
-func reloadInto(m map[string]any, dest interface{}, opts *CmdEnv) error {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("reloadInto unable to marshal config: %w", err)
-	}
-	err = json.Unmarshal(b, dest)
-	if err != nil {
-		return fmt.Errorf("reloadInto unable to unmarshal config: %w", err)
-	}
-
-	// now we've got the config, apply defaults to zero values
-	if err := defaults.Set(dest); err != nil {
-		return fmt.Errorf("reloadInto unable to apply defaults: %w", err)
-	}
-
-	// apply command line options
-	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
-		return fmt.Errorf("reloadInto unable to apply command line options: %w", err)
-	}
-
-	// validate the config
-	v := validator.New()
-	err = v.Struct(dest)
-	if err != nil {
-		return fmt.Errorf("reloadInto unable to validate config: %w", err)
-	}
-	return nil
 }

@@ -2,6 +2,7 @@ package sample
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/facebookgo/inject"
@@ -9,9 +10,10 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/stretchr/testify/assert"
+	"gopkg.in/yaml.v3"
 )
 
-// These two helper functions are copied from config/config_test.go
+// These helper functions are copied from config/config_test.go
 func getConfig(args []string) (config.Config, error) {
 	opts, err := config.NewCmdEnvOptions(args)
 	if err != nil {
@@ -20,30 +22,51 @@ func getConfig(args []string) (config.Config, error) {
 	return config.NewConfig(opts, func(err error) {})
 }
 
-// creates two temporary toml files from the strings passed in and returns their filenames
-func createTempConfigs(t *testing.T, configBody string, rulesBody string) (string, string) {
+// creates two temporary yaml files from the strings passed in and returns their filenames
+func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, string) {
 	tmpDir, err := os.MkdirTemp("", "")
 	assert.NoError(t, err)
 
-	configFile, err := os.CreateTemp(tmpDir, "cfg_*.toml")
+	configFile, err := os.CreateTemp(tmpDir, "cfg_*.yaml")
 	assert.NoError(t, err)
 
-	if configBody != "" {
-		_, err = configFile.WriteString(configBody)
-		assert.NoError(t, err)
-	}
+	_, err = configFile.WriteString(configBody)
+	assert.NoError(t, err)
 	configFile.Close()
 
-	rulesFile, err := os.CreateTemp(tmpDir, "rules_*.toml")
+	rulesFile, err := os.CreateTemp(tmpDir, "rules_*.yaml")
 	assert.NoError(t, err)
 
-	if rulesBody != "" {
-		_, err = rulesFile.WriteString(rulesBody)
-		assert.NoError(t, err)
-	}
+	_, err = rulesFile.WriteString(rulesBody)
+	assert.NoError(t, err)
 	rulesFile.Close()
 
 	return configFile.Name(), rulesFile.Name()
+}
+
+// This sets up a map by breaking the key at / (note that the one in config uses .)
+func setMap(m map[string]any, key string, value any) {
+	if strings.Contains(key, "/") {
+		parts := strings.Split(key, "/")
+		if _, ok := m[parts[0]]; !ok {
+			m[parts[0]] = make(map[string]any)
+		}
+		setMap(m[parts[0]].(map[string]any), strings.Join(parts[1:], "/"), value)
+		return
+	}
+	m[key] = value
+}
+
+func makeYAML(args ...interface{}) string {
+	m := make(map[string]any)
+	for i := 0; i < len(args); i += 2 {
+		setMap(m, args[i].(string), args[i+1])
+	}
+	b, err := yaml.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 func TestDependencyInjection(t *testing.T) {
@@ -64,34 +87,17 @@ func TestDependencyInjection(t *testing.T) {
 }
 
 func TestDatasetPrefix(t *testing.T) {
-	cfg, rules := createTempConfigs(t, `
-	DatasetPrefix = "dataset"
-
-	[InMemCollector]
-		CacheCapacity=1000
-
-	[HoneycombMetrics]
-		MetricsHoneycombAPI="http://honeycomb.io"
-		MetricsAPIKey="1234"
-		MetricsDataset="testDatasetName"
-		MetricsReportingInterval=3
-
-	[HoneycombLogger]
-		LoggerHoneycombAPI="http://honeycomb.io"
-		LoggerAPIKey="1234"
-		LoggerDataset="loggerDataset"
-	`, `
-	Sampler = "DeterministicSampler"
-	SampleRate = 1
-
-	[production]
-		Sampler = "DeterministicSampler"
-		SampleRate = 10
-
-	["dataset.production"]
-		Sampler = "DeterministicSampler"
-		SampleRate = 20
-	`)
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+		"General/DatasetPrefix", "dataset",
+	)
+	rm := makeYAML(
+		"ConfigVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/DeterministicSampler/SampleRate", 10,
+		"Samplers/dataset.production/DeterministicSampler/SampleRate", 20,
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(cfg)
 	c, err := getConfig([]string{"--config", cfg, "--rules_config", rules})

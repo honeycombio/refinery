@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/honeycombio/dynsampler-go"
@@ -15,12 +14,12 @@ import (
 )
 
 // HoneycombLogger is a Logger implementation that sends all logs to a Honeycomb
-// dataset. It requires a HoneycombLogger section of the config to exist with
-// three keys, LoggerHoneycombAPI, LoggerAPIKey, and LoggerDataset.
+// dataset.
 type HoneycombLogger struct {
 	Config            config.Config   `inject:""`
 	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
 	Version           string          `inject:"version"`
+	level             config.Level
 	loggerConfig      config.HoneycombLoggerConfig
 	libhClient        *libhoney.Client
 	builder           *libhoney.Builder
@@ -35,29 +34,19 @@ type HoneycombEntry struct {
 	sampler      dynsampler.Sampler
 }
 
-const (
-	UnknownLevel config.HoneycombLevel = iota
-	DebugLevel
-	InfoLevel
-	WarnLevel
-	ErrorLevel
-	PanicLevel
-)
-
 func (h *HoneycombLogger) Start() error {
 	// logLevel is defined outside the HoneycombLogger section
 	// and is set independently, before Start() is called, so we need to
 	// preserve it.
 	// TODO: make LogLevel part of the HoneycombLogger/LogrusLogger sections?
-	logLevel := h.loggerConfig.Level
+	h.level = h.Config.GetLoggerLevel()
 	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
 	if err != nil {
 		return err
 	}
-	loggerConfig.Level = logLevel
 	h.loggerConfig = loggerConfig
 	var loggerTx transmission.Sender
-	if h.loggerConfig.LoggerAPIKey == "" {
+	if h.loggerConfig.APIKey == "" {
 		loggerTx = &transmission.DiscardSender{}
 	} else {
 		loggerTx = &transmission.Honeycomb{
@@ -70,10 +59,10 @@ func (h *HoneycombLogger) Start() error {
 		}
 	}
 
-	if loggerConfig.LoggerSamplerEnabled {
+	if loggerConfig.SamplerEnabled {
 		h.sampler = &dynsampler.PerKeyThroughput{
 			ClearFrequencyDuration: 10 * time.Second,
-			PerKeyThroughputPerSec: loggerConfig.LoggerSamplerThroughput,
+			PerKeyThroughputPerSec: loggerConfig.SamplerThroughput,
 			MaxKeys:                1000,
 		}
 		err := h.sampler.Start()
@@ -83,9 +72,9 @@ func (h *HoneycombLogger) Start() error {
 	}
 
 	libhClientConfig := libhoney.ClientConfig{
-		APIHost:      h.loggerConfig.LoggerHoneycombAPI,
-		APIKey:       h.loggerConfig.LoggerAPIKey,
-		Dataset:      h.loggerConfig.LoggerDataset,
+		APIHost:      h.loggerConfig.APIHost,
+		APIKey:       h.loggerConfig.APIKey,
+		Dataset:      h.loggerConfig.Dataset,
 		Transmission: loggerTx,
 	}
 	libhClient, err := libhoney.NewClient(libhClientConfig)
@@ -111,7 +100,7 @@ func (h *HoneycombLogger) Start() error {
 	// listen for config reloads
 	h.Config.RegisterReloadCallback(h.reloadBuilder)
 
-	fmt.Printf("Starting Honeycomb Logger - see Honeycomb %s dataset for service logs\n", h.loggerConfig.LoggerDataset)
+	fmt.Printf("Starting Honeycomb Logger - see Honeycomb %s dataset for service logs\n", h.loggerConfig.Dataset)
 
 	return nil
 }
@@ -135,7 +124,7 @@ func (h *HoneycombLogger) readResponses() {
 func (h *HoneycombLogger) reloadBuilder() {
 	h.Debug().Logf("reloading config for Honeycomb logger")
 	// preserve log level
-	logLevel := h.loggerConfig.Level
+	h.level = h.Config.GetLoggerLevel()
 	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
 	if err != nil {
 		// complain about this both to STDOUT and to the previously configured
@@ -144,11 +133,10 @@ func (h *HoneycombLogger) reloadBuilder() {
 		h.Error().Logf("failed to reload configs for Honeycomb logger: %+v", err)
 		return
 	}
-	loggerConfig.Level = logLevel
 	h.loggerConfig = loggerConfig
-	h.builder.APIHost = h.loggerConfig.LoggerHoneycombAPI
-	h.builder.WriteKey = h.loggerConfig.LoggerAPIKey
-	h.builder.Dataset = h.loggerConfig.LoggerDataset
+	h.builder.APIHost = h.loggerConfig.APIHost
+	h.builder.WriteKey = h.loggerConfig.APIKey
+	h.builder.Dataset = h.loggerConfig.Dataset
 }
 
 func (h *HoneycombLogger) Stop() error {
@@ -158,7 +146,7 @@ func (h *HoneycombLogger) Stop() error {
 }
 
 func (h *HoneycombLogger) Debug() Entry {
-	if h.loggerConfig.Level > DebugLevel {
+	if h.level > config.DebugLevel {
 		return nullEntry
 	}
 
@@ -173,7 +161,7 @@ func (h *HoneycombLogger) Debug() Entry {
 }
 
 func (h *HoneycombLogger) Info() Entry {
-	if h.loggerConfig.Level > InfoLevel {
+	if h.level > config.InfoLevel {
 		return nullEntry
 	}
 
@@ -188,7 +176,7 @@ func (h *HoneycombLogger) Info() Entry {
 }
 
 func (h *HoneycombLogger) Warn() Entry {
-	if h.loggerConfig.Level > WarnLevel {
+	if h.level > config.WarnLevel {
 		return nullEntry
 	}
 
@@ -203,7 +191,7 @@ func (h *HoneycombLogger) Warn() Entry {
 }
 
 func (h *HoneycombLogger) Error() Entry {
-	if h.loggerConfig.Level > ErrorLevel {
+	if h.level > config.ErrorLevel {
 		return nullEntry
 	}
 
@@ -217,24 +205,8 @@ func (h *HoneycombLogger) Error() Entry {
 	return ev
 }
 
-func (h *HoneycombLogger) SetLevel(level string) error {
-	sanitizedLevel := strings.TrimSpace(strings.ToLower(level))
-	var lvl config.HoneycombLevel
-	switch sanitizedLevel {
-	case "debug":
-		lvl = DebugLevel
-	case "info":
-		lvl = InfoLevel
-	case "warn", "warning":
-		lvl = WarnLevel
-	case "error":
-		lvl = ErrorLevel
-	case "panic":
-		lvl = PanicLevel
-	default:
-		return fmt.Errorf("unrecognized logging level: %s", level)
-	}
-	h.loggerConfig.Level = lvl
+func (h *HoneycombLogger) SetLevel(lvl string) error {
+	h.level = config.ParseLevel(lvl)
 	return nil
 }
 

@@ -23,6 +23,16 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
+func newCache() (cache.TraceSentCache, error) {
+	cfg := config.SampleCacheConfig{
+		KeptSize:          100,
+		DroppedSize:       100,
+		SizeCheckInterval: config.Duration(1 * time.Second),
+	}
+
+	return cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
+}
+
 // TestAddRootSpan tests that adding a root span winds up with a trace object in
 // the cache and that that trace gets sent
 func TestAddRootSpan(t *testing.T) {
@@ -49,7 +59,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -129,7 +139,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -210,7 +220,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -273,7 +283,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -348,7 +358,7 @@ func TestDryRunMode(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -459,7 +469,7 @@ func TestCacheSizeReload(t *testing.T) {
 		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
-		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{
+		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{
 			CacheCapacity: 1,
 		},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -538,7 +548,7 @@ func TestSampleConfigReload(t *testing.T) {
 		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:                        2 * time.Millisecond,
 		ParentIdFieldNames:                   []string{"trace.parent_id", "parentId"},
-		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
+		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{CacheCapacity: 10},
 	}
 
 	coll := &InMemCollector{
@@ -629,7 +639,7 @@ func TestOldMaxAlloc(t *testing.T) {
 	}
 	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -735,7 +745,7 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -825,7 +835,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	}
 	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -900,7 +910,7 @@ func TestAddSpanCount(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -972,7 +982,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -1045,7 +1055,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -1112,7 +1122,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -1167,10 +1177,10 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		StressRelief: config.StressReliefConfig{
-			Mode:               "monitor",
-			ActivationLevel:    75,
-			DeactivationLevel:  25,
-			StressSamplingRate: 100,
+			Mode:              "monitor",
+			ActivationLevel:   75,
+			DeactivationLevel: 25,
+			SamplingRate:      100,
 		},
 	}
 	coll := &InMemCollector{
@@ -1187,7 +1197,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 

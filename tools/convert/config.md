@@ -42,6 +42,46 @@ Type: `string`
 Default: `v2.0`
 
 
+### DatasetPrefix
+
+DatasetPrefix is a prefix that can be used to distinguish a dataset 
+from an environment in the rules. 
+
+If telemetry is being sent to both a classic dataset and a new 
+environment called the same thing (eg `production`), this parameter 
+can be used to distinguish these cases. When Refinery receives 
+telemetry using an API key associated with a classic dataset, it will 
+then use the prefix in the form `{prefix}.{dataset}` when trying to 
+resolve the rules definition. 
+ 
+
+Not eligible for live reload.
+
+Type: `string`
+
+
+
+
+### ConfigReloadInterval
+
+ConfigReloadInterval is the average interval between attempts at 
+reloading the configuration file. 
+
+A single instance of Refinery will attempt to read its configuration 
+and check for changes at approximately this interval. This time is 
+varied by a random amount to avoid all instances refreshing together. 
+Within a cluster, Refinery will gossip information about new 
+configuration so that all instances can reload at close to the same 
+time. 
+ 
+
+Not eligible for live reload.
+
+Type: `duration`
+
+Default: `5m`
+
+
 ---
 ## Network: Network Configuration
 
@@ -150,11 +190,12 @@ own operation.
 AddRuleReasonToTrace controls whether to decorate traces with refinery 
 rule evaluation results. 
 
-AddRuleReasonToTrace causes traces that are sent to Honeycomb to 
-include the field `meta.refinery.reason`, indicating which sampler 
-made the decision to keep the trace. For samplers that use a key to 
-make their decision, the key is also included in the field 
-`meta.refinery.sampler_key`. 
+This causes traces that are sent to Honeycomb to include the field 
+`meta.refinery.reason`. This field contains text indicating which rule 
+was evaluated that caused the trace to be included. We recommend 
+enabling this field whenever a rules-based sampler is in use, as it is 
+useful for debugging and understanding the behavior of your refinery 
+installation. 
  
 
 Eligible for live reload.
@@ -162,7 +203,7 @@ Eligible for live reload.
 Type: `bool`
 
 
-
+Example: `true`
 
 ### AddSpanCountToRoot
 
@@ -359,26 +400,6 @@ Type: `stringarray`
 
 Example: `trace.span_id`
 
-### AddRuleReasonToTrace
-
-AddRuleReasonToTrace controls whether to decorate traces with refinery 
-rule evaluation results. 
-
-This causes traces that are sent to Honeycomb to include the field 
-`meta.refinery.reason`. This field contains text indicating which rule 
-was evaluated that caused the trace to be included. We recommend 
-enabling this field whenever a rules-based sampler is in use, as it is 
-useful for debugging and understanding the behavior of your refinery 
-installation. 
- 
-
-Eligible for live reload.
-
-Type: `bool`
-
-
-Example: `true`
-
 ### DryRun
 
 DryRun controls whether sampling is applied to incoming traces. 
@@ -386,10 +407,11 @@ DryRun controls whether sampling is applied to incoming traces.
 If enabled, marks the traces that would be dropped given the current 
 sampling rules, and sends all traces regardless of the sampling 
 decision. This is useful for evaluating sampling rules. In DryRun 
-mode, traces will be decorated with meta.refinery.dryrun.enabled set 
-to true. In addition, SampleRate will be set to the incoming rate for 
-all traces, and the field meta.refinery.dryrun.sample_rate will be set 
-to the sample rate that would have been used. 
+mode, traces will be decorated with meta.refinery.dryrun.kept set to 
+true or false based on whether the trace would be kept or dropped. In 
+addition, SampleRate will be set to the incoming rate for all traces, 
+and the field meta.refinery.dryrun.sample_rate will be set to the 
+sample rate that would have been used. 
  
 
 Eligible for live reload.
@@ -421,12 +443,11 @@ Type: `string`
 Default: `stdout`
 
 Options: stdout honeycomb none
-### LoggingLevel
+### Level
 
-LoggingLevel is the message level above which refinery should send a 
-log. 
+Level is the logging level above which refinery should send a log. 
 
-Sets the message level above which refinery should send logs to the 
+Sets the logging level above which refinery should send logs to the 
 logger. Debug is very verbose, and should not be used in production 
 environments. Warn is the recommended level for production. 
  
@@ -542,7 +563,7 @@ Not eligible for live reload.
 
 Type: `bool`
 
-
+Default: `true`
 
 
 ---
@@ -567,10 +588,10 @@ Type: `bool`
 
 
 
-### PrometheusListenAddr
+### ListenAddr
 
-PrometheusListenAddr is the IP and port the prometheus metrics server 
-will run on. 
+ListenAddr is the IP and port the prometheus metrics server will run 
+on. 
 
 Determines the interface and port on which Prometheus will listen for 
 requests for /metrics. Must be different from the main Refinery 
@@ -699,6 +720,25 @@ Type: `string`
 Default: `redis`
 
 Options: redis file
+### Identifier
+
+Identifier specifies the identifier to use when registering itself 
+with peers. 
+
+By default, when using a peer registry, Refinery will use the local 
+hostname to identify itself to other peers. If your environment 
+requires something else, (for example, if peers can't resolve each 
+other by name), you can specify the exact identifier (IP address, etc) 
+to use here. Overrides IdentifierInterfaceName, if both are set. 
+ 
+
+Not eligible for live reload.
+
+Type: `string`
+
+
+Example: `192.168.1.1`
+
 ### IdentifierInterfaceName
 
 IdentifierInterfaceName specifies a network interface to use when 
@@ -737,25 +777,6 @@ Type: `bool`
 
 
 
-
-### RedisIdentifier
-
-RedisIdentifier specifies the identifier to use when registering 
-itself with peers. 
-
-By default, when using a peer registry, Refinery will use the local 
-hostname to identify itself to other peers. If your environment 
-requires something else, (for example, if peers can't resolve each 
-other by name), you can specify the exact identifier (IP address, etc) 
-to use here. Overrides IdentifierInterfaceName, if both are set. 
- 
-
-Not eligible for live reload.
-
-Type: `string`
-
-
-Example: `192.168.1.1`
 
 ### Peers
 
@@ -938,15 +959,16 @@ Default: `10000`
 MaxMemory is the maximum percentage of memory that should be allocated 
 by the collector. 
 
-If set, it must be an integer value between 0 and 100, representing 
-the target maximum percentage of memory that should be allocated by 
-the collector. If set to a non-zero value, once per tick (see 
-SendTicker) the collector will compare total allocated bytes to this 
-calculated value. If allocation is too high, traces will be ejected 
-from the cache early to reduce memory. Useful values for this setting 
-are generally in the range of 70-90. Depending on deployment details, 
-system memory information may not be available; if it is not, a 
-warning will be logged and the value of MaxAlloc will be used. 
+If nonzero, it must be an integer value between 1 and 100, 
+representing the target maximum percentage of memory that should be 
+allocated by the collector. If set to a non-zero value, once per tick 
+(see SendTicker) the collector will compare total allocated bytes to 
+this calculated value. If allocation is too high, traces will be 
+ejected from the cache early to reduce memory. Useful values for this 
+setting are generally in the range of 70-90. Depending on deployment 
+details, system memory information may not be available. If it is not, 
+a warning will be logged and the value of MaxAlloc will be used. If 
+this value is 0, MaxAlloc will be used. 
  
 
 Eligible for live reload.
@@ -1083,9 +1105,9 @@ Controls the field names to use for the event ID fields. These fields
 are used to identify events that are part of the same trace. 
  
 
-### TraceIDFieldNames
+### Trace
 
-TraceIDFieldNames is the list of field names to use for the trace ID. 
+Trace is the list of field names to use for the trace ID. 
 
 The list of field names to use for the trace ID. The first field in 
 the list that is present in an incoming span will be used as the trace 
@@ -1100,14 +1122,12 @@ Type: `stringarray`
 
 Example: `trace.trace_id,traceId`
 
-### ParentIDFieldNames
+### Parent
 
-ParentIDFieldNames is the list of field names to use for the parent 
-ID. 
+Parent is the list of field names to use for the parent ID. 
 
-ParentIDFieldNames is the list of field names to use for the parent 
-ID. The first field in the list that is present in an event will be 
-used as the parent ID. 
+The list of field names to use for the parent ID. The first field in 
+the list that is present in an event will be used as the parent ID. 
  
 
 Eligible for live reload.

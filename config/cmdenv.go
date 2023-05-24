@@ -26,23 +26,23 @@ import (
 // that this system uses reflection to establish the relationship between the
 // config struct and the command line options.
 type CmdEnv struct {
-	ConfigLocation         string `short:"c" long:"config" env:"REFINERY_CONFIG" default:"/etc/refinery/refinery.yaml" description:"config file or URL to load"`
-	RulesLocation          string `short:"r" long:"rules_config" env:"REFINERY_RULES_CONFIG" default:"/etc/refinery/rules.yaml" description:"config file or URL to load"`
-	HTTPListenAddr         string `long:"http-listen-addr" env:"REFINERY_HTTP_LISTEN_ADDR" description:"HTTP listen address for incoming traffic"`
-	PeerListenAddr         string `long:"peer-listen-addr" env:"REFINERY_PEER_LISTEN_ADDR" description:"Peer listen address"`
-	GRPCListenAddr         string `long:"grpc-listen-addr" env:"REFINERY_GRPC_LISTEN_ADDR" description:"gRPC listen address for OTLP traffic"`
-	RedisHost              string `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
-	RedisUsername          string `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username"`
-	RedisPassword          string `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password"`
-	HoneycombAPI           string `long:"honeycomb-api" env:"REFINERY_HONEYCOMB_API" description:"Honeycomb API URL"`
-	HoneycombAPIKey        string `long:"honeycomb-api-key" env:"REFINERY_HONEYCOMB_API_KEY" description:"Honeycomb API key (for logger and metrics)"`
-	HoneycombLoggerAPIKey  string `long:"logger-api-key" env:"REFINERY_HONEYCOMB_LOGGER_API_KEY" description:"Honeycomb logger API key"`
-	HoneycombMetricsAPIKey string `long:"metrics-api-key" env:"REFINERY_HONEYCOMB_METRICS_API_KEY" description:"Honeycomb metrics API key"`
-	QueryAuthToken         string `long:"query-auth-token" env:"REFINERY_QUERY_AUTH_TOKEN" description:"Token for debug/management queries"`
-	Debug                  bool   `short:"d" long:"debug" description:"Runs debug service (on the first open port between localhost:6060 and :6069 by default)"`
-	Version                bool   `short:"v" long:"version" description:"Print version number and exit"`
-	InterfaceNames         bool   `long:"interface-names" description:"Print system's network interface names and exit."`
-	Validate               bool   `short:"V" long:"validate" description:"Validate the configuration files and exit"`
+	ConfigLocation        string `short:"c" long:"config" env:"REFINERY_CONFIG" default:"/etc/refinery/refinery.yaml" description:"config file or URL to load"`
+	RulesLocation         string `short:"r" long:"rules_config" env:"REFINERY_RULES_CONFIG" default:"/etc/refinery/rules.yaml" description:"config file or URL to load"`
+	HTTPListenAddr        string `long:"http-listen-addr" env:"REFINERY_HTTP_LISTEN_ADDR" description:"HTTP listen address for incoming traffic"`
+	PeerListenAddr        string `long:"peer-listen-addr" env:"REFINERY_PEER_LISTEN_ADDR" description:"Peer listen address"`
+	GRPCListenAddr        string `long:"grpc-listen-addr" env:"REFINERY_GRPC_LISTEN_ADDR" description:"gRPC listen address for OTLP traffic"`
+	RedisHost             string `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
+	RedisUsername         string `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username"`
+	RedisPassword         string `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password"`
+	HoneycombAPI          string `long:"honeycomb-api" env:"REFINERY_HONEYCOMB_API" description:"Honeycomb API URL"`
+	HoneycombAPIKey       string `long:"honeycomb-api-key" env:"REFINERY_HONEYCOMB_API_KEY" description:"Honeycomb API key (for logger and metrics)"`
+	HoneycombLoggerAPIKey string `long:"logger-api-key" env:"REFINERY_HONEYCOMB_LOGGER_API_KEY" description:"Honeycomb logger API key"`
+	LegacyMetricsAPIKey   string `long:"legacy-metrics-api-key" env:"REFINERY_LEGACY_METRICS_API_KEY" description:"API key for legacy Honeycomb metrics"`
+	QueryAuthToken        string `long:"query-auth-token" env:"REFINERY_QUERY_AUTH_TOKEN" description:"Token for debug/management queries"`
+	Debug                 bool   `short:"d" long:"debug" description:"Runs debug service (on the first open port between localhost:6060 and :6069 by default)"`
+	Version               bool   `short:"v" long:"version" description:"Print version number and exit"`
+	InterfaceNames        bool   `long:"interface-names" description:"Print system's network interface names and exit."`
+	Validate              bool   `short:"V" long:"validate" description:"Validate the configuration files and exit"`
 }
 
 func NewCmdEnvOptions(args []string) (*CmdEnv, error) {
