@@ -71,8 +71,8 @@ func (h *HoneycombMetrics) Start() error {
 	if err != nil {
 		return err
 	}
-	if mc.ReportingInterval < 1 {
-		mc.ReportingInterval = 1
+	if mc.ReportingInterval < config.Duration(1*time.Second) {
+		mc.ReportingInterval = config.Duration(1 * time.Second)
 	}
 	h.reportingFreq = time.Duration(mc.ReportingInterval)
 
