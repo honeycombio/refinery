@@ -22,7 +22,7 @@ func ParseLevel(s string) Level {
 		return DebugLevel
 	case "info":
 		return InfoLevel
-	case "warn", "warning":
+	case "warn":
 		return WarnLevel
 	case "error":
 		return ErrorLevel
