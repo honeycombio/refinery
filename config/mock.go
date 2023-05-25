@@ -49,8 +49,8 @@ type MockConfig struct {
 	GetSamplerTypeVal                    interface{}
 	GetMetricsTypeErr                    error
 	GetMetricsTypeVal                    string
-	GetHoneycombMetricsConfigErr         error
-	GetHoneycombMetricsConfigVal         LegacyMetricsConfig
+	GetLegacyMetricsConfigErr            error
+	GetLegacyMetricsConfigVal            LegacyMetricsConfig
 	GetPrometheusMetricsConfigErr        error
 	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
 	GetSendDelayErr                      error
@@ -248,11 +248,11 @@ func (m *MockConfig) GetMetricsType() (string, error) {
 	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
 
-func (m *MockConfig) GetHoneycombMetricsConfig() (LegacyMetricsConfig, error) {
+func (m *MockConfig) GetLegacyMetricsConfig() (LegacyMetricsConfig, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetHoneycombMetricsConfigVal, m.GetHoneycombMetricsConfigErr
+	return m.GetLegacyMetricsConfigVal, m.GetLegacyMetricsConfigErr
 }
 
 func (m *MockConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {

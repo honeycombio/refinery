@@ -511,7 +511,7 @@ func (f *fileConfig) GetMetricsType() (string, error) {
 	return "", nil
 }
 
-func (f *fileConfig) GetHoneycombMetricsConfig() (LegacyMetricsConfig, error) {
+func (f *fileConfig) GetLegacyMetricsConfig() (LegacyMetricsConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 

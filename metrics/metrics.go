@@ -2,14 +2,14 @@ package metrics
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/honeycombio/refinery/config"
 )
 
 // The Metrics object supports "constants", which are just float values that can be attached to the
 // metrics system. They do not need to be (and should not) be registered in advance; they are just
-// a bucket of key-float pairs that can be used in combination with other metrics.
+// a bucket of key-float pairs that can be used in combination with other metrics. This is mainly
+// to support StressRelief.
 type Metrics interface {
 	// Register declares a metric; metricType should be one of counter, gauge, histogram, updown
 	Register(name string, metricType string)
@@ -24,22 +24,7 @@ type Metrics interface {
 }
 
 func GetMetricsImplementation(c config.Config) Metrics {
-	var metricsr Metrics
-	metricsType, err := c.GetMetricsType()
-	if err != nil {
-		fmt.Printf("unable to get metrics type from config: %v\n", err)
-		os.Exit(1)
-	}
-	switch metricsType {
-	case "honeycomb":
-		metricsr = &HoneycombMetrics{}
-	case "prometheus":
-		metricsr = &PromMetrics{}
-	default:
-		fmt.Printf("unknown metrics type %s. Exiting.\n", metricsType)
-		os.Exit(1)
-	}
-	return metricsr
+	return NewMultiMetrics(c)
 }
 
 func ConvertNumeric(val interface{}) float64 {

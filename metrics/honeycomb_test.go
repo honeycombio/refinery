@@ -128,7 +128,7 @@ func Test_getOrAdd_updown(t *testing.T) {
 
 func TestMetricsUpdown(t *testing.T) {
 	conf := &config.MockConfig{}
-	m := HoneycombMetrics{
+	m := LegacyMetrics{
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}

@@ -116,8 +116,8 @@ type Config interface {
 	// metrics package
 	GetMetricsType() (string, error)
 
-	// GetHoneycombMetricsConfig returns the config specific to HoneycombMetrics
-	GetHoneycombMetricsConfig() (LegacyMetricsConfig, error)
+	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
+	GetLegacyMetricsConfig() (LegacyMetricsConfig, error)
 
 	// GetPrometheusMetricsConfig returns the config specific to PrometheusMetrics
 	GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error)
