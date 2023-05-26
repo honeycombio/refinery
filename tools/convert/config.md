@@ -1099,15 +1099,15 @@ Type: `map`
 Example: `ClusterName:MyCluster,environment:production`
 
 ---
-## IDFieldNames: ID Field Names
+## IDFields: ID Fields
 
 Controls the field names to use for the event ID fields. These fields 
 are used to identify events that are part of the same trace. 
  
 
-### Trace
+### TraceNames
 
-Trace is the list of field names to use for the trace ID. 
+TraceNames is the list of field names to use for the trace ID. 
 
 The list of field names to use for the trace ID. The first field in 
 the list that is present in an incoming span will be used as the trace 
@@ -1122,12 +1122,13 @@ Type: `stringarray`
 
 Example: `trace.trace_id,traceId`
 
-### Parent
+### ParentNames
 
-Parent is the list of field names to use for the parent ID. 
+ParentNames is the list of field names to use for the parent ID. 
 
 The list of field names to use for the parent ID. The first field in 
-the list that is present in an event will be used as the parent ID. 
+the list that is present in an event will be used as the parent ID. A 
+trace without a parent_id is assumed to be a root span. 
  
 
 Eligible for live reload.

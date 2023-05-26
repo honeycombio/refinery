@@ -891,13 +891,13 @@ groups:
           every span. For example, it could be used for naming a refinery
           cluster. Both keys and values must be strings.
 
-  - name: IDFieldNames
-    title: "ID Field Names"
+  - name: IDFields
+    title: "ID Fields"
     description: >
       Controls the field names to use for the event ID fields. These fields are
       used to identify events that are part of the same trace.
     fields:
-      - name: Trace
+      - name: TraceNames
         type: stringarray
         valuetype: stringarray
         example: "trace.trace_id,traceId"
@@ -909,7 +909,7 @@ groups:
           ID. If none of the fields are present, refinery treats the span as not
           being part of a trace and forwards it immediately to Honeycomb.
 
-      - name: Parent
+      - name: ParentNames
         type: stringarray
         valuetype: stringarray
         example: "trace.parent_id,parentId"
@@ -917,7 +917,8 @@ groups:
         summary: is the list of field names to use for the parent ID.
         description: >
           The list of field names to use for the parent ID. The first field in
-          the list that is present in an event will be used as the parent ID.
+          the list that is present in an event will be used as the parent ID. A
+          trace without a parent_id is assumed to be a root span.
 
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"

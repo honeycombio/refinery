@@ -770,15 +770,15 @@ Specialized:
     ## Eligible for live reload.
     {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "ClusterName:MyCluster,environment:production" }}
 
-####################
-## ID Field Names ##
-####################
-IDFieldNames:
+###############
+## ID Fields ##
+###############
+IDFields:
   ## Controls the field names to use for the event ID fields. These fields
   ## are used to identify events that are part of the same trace.
   ##  
   ####
-    ## Trace is the list of field names to use for the trace ID.
+    ## TraceNames is the list of field names to use for the trace ID.
     ##  
     ## The list of field names to use for the trace ID. The first field in
     ## the list that is present in an incoming span will be used as the trace
@@ -786,15 +786,16 @@ IDFieldNames:
     ## being part of a trace and forwards it immediately to Honeycomb.
     ##  
     ## Eligible for live reload.
-    {{ renderStringarray .Data "Trace" "Trace" "trace.trace_id,traceId" }}
+    {{ renderStringarray .Data "TraceNames" "TraceNames" "trace.trace_id,traceId" }}
 
-    ## Parent is the list of field names to use for the parent ID.
+    ## ParentNames is the list of field names to use for the parent ID.
     ##  
     ## The list of field names to use for the parent ID. The first field in
-    ## the list that is present in an event will be used as the parent ID.
+    ## the list that is present in an event will be used as the parent ID. A
+    ## trace without a parent_id is assumed to be a root span.
     ##  
     ## Eligible for live reload.
-    {{ renderStringarray .Data "Parent" "Parent" "trace.parent_id,parentId" }}
+    {{ renderStringarray .Data "ParentNames" "ParentNames" "trace.parent_id,parentId" }}
 
 ############################
 ## gRPC Server Parameters ##

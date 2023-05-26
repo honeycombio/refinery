@@ -55,7 +55,7 @@ type configContents struct {
 	Collection           CollectionConfig          `yaml:"Collection"`
 	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
-	IDFieldNames         IDFieldNamesConfig        `yaml:"IDFieldNames"`
+	IDFieldNames         IDFieldsConfig            `yaml:"IDFieldNames"`
 	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
 	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
 	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
@@ -167,9 +167,9 @@ type SpecializedConfig struct {
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
-type IDFieldNamesConfig struct {
-	Trace  []string `yaml:"Trace" default:"[\"trace.trace_id\",\"traceId\"]"`
-	Parent []string `yaml:"Parent" default:"[\"trace.parent_id\",\"parentId\"]"`
+type IDFieldsConfig struct {
+	TraceNames  []string `yaml:"TraceNames" default:"[\"trace.trace_id\",\"traceId\"]"`
+	ParentNames []string `yaml:"ParentNames" default:"[\"trace.parent_id\",\"parentId\"]"`
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
@@ -717,14 +717,14 @@ func (f *fileConfig) GetTraceIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.IDFieldNames.Trace
+	return f.mainConfig.IDFieldNames.TraceNames
 }
 
 func (f *fileConfig) GetParentIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.IDFieldNames.Parent
+	return f.mainConfig.IDFieldNames.ParentNames
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
