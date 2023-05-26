@@ -117,10 +117,13 @@ type Config interface {
 	GetMetricsType() (string, error)
 
 	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
-	GetLegacyMetricsConfig() (LegacyMetricsConfig, error)
+	GetLegacyMetricsConfig() LegacyMetricsConfig
 
 	// GetPrometheusMetricsConfig returns the config specific to PrometheusMetrics
-	GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error)
+	GetPrometheusMetricsConfig() PrometheusMetricsConfig
+
+	// GetOTelMetricsConfig returns the config specific to OTelMetrics
+	GetOTelMetricsConfig() OTelMetricsConfig
 
 	// GetUpstreamBufferSize returns the size of the libhoney buffer to use for the upstream
 	// libhoney client

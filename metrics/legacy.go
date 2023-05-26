@@ -67,16 +67,13 @@ type updown struct {
 func (h *LegacyMetrics) Start() error {
 	h.Logger.Debug().Logf("Starting LegacyMetrics")
 	defer func() { h.Logger.Debug().Logf("Finished starting LegacyMetrics") }()
-	mc, err := h.Config.GetLegacyMetricsConfig()
-	if err != nil {
-		return err
-	}
+	mc := h.Config.GetLegacyMetricsConfig()
 	if mc.ReportingInterval < config.Duration(1*time.Second) {
 		mc.ReportingInterval = config.Duration(1 * time.Second)
 	}
 	h.reportingFreq = time.Duration(mc.ReportingInterval)
 
-	if err = h.initLibhoney(mc); err != nil {
+	if err := h.initLibhoney(mc); err != nil {
 		return err
 	}
 
@@ -94,13 +91,7 @@ func (h *LegacyMetrics) Start() error {
 
 func (h *LegacyMetrics) reloadBuilder() {
 	h.Logger.Debug().Logf("reloading config for honeycomb metrics reporter")
-	mc, err := h.Config.GetLegacyMetricsConfig()
-	if err != nil {
-		// complain about this both to STDOUT and to the previously configured
-		// honeycomb logger
-		h.Logger.Error().Logf("failed to reload configs for Honeycomb metrics: %+v\n", err)
-		return
-	}
+	mc := h.Config.GetLegacyMetricsConfig()
 	h.libhClient.Close()
 	// cancel the two reporting goroutines and restart them
 	h.reportingCancelFunc()

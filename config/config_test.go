@@ -149,7 +149,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 				t.Error(err)
 			}
 
-			if d, _ := c.GetLegacyMetricsConfig(); d.APIKey != tc.key {
+			if d := c.GetLegacyMetricsConfig(); d.APIKey != tc.key {
 				t.Error("received", d, "expected", tc.key)
 			}
 		})
@@ -170,7 +170,7 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetLegacyMetricsConfig(); d.APIKey != specificKey {
+	if d := c.GetLegacyMetricsConfig(); d.APIKey != specificKey {
 		t.Error("received", d, "expected", specificKey)
 	}
 }
@@ -184,7 +184,7 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetLegacyMetricsConfig(); d.APIKey != key {
+	if d := c.GetLegacyMetricsConfig(); d.APIKey != key {
 		t.Error("received", d, "expected", key)
 	}
 }

@@ -28,10 +28,7 @@ type PromMetrics struct {
 func (p *PromMetrics) Start() error {
 	p.Logger.Debug().Logf("Starting PromMetrics")
 	defer func() { p.Logger.Debug().Logf("Finished starting PromMetrics") }()
-	pc, err := p.Config.GetPrometheusMetricsConfig()
-	if err != nil {
-		return err
-	}
+	pc := p.Config.GetPrometheusMetricsConfig()
 
 	p.metrics = make(map[string]interface{})
 	p.values = make(map[string]float64)
