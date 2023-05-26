@@ -1,0 +1,6 @@
+{{- $field := . }}
+      {{- printf "%s:" $field.Name | indent 6 | println -}}
+        {{- printf "type: %s" (schemaType $field.Type) | indent 8 | println -}}
+        {{- printf "title: The %s schema" $field.Name | indent 8 | println -}}
+        {{- if $field.Default -}}{{- printf "default: %v" $field.Default | indent 8 | println -}}{{- end -}}
+        {{- $pat := pattern $field.Type $field.Pattern -}}{{- if $pat -}}{{- printf "pattern: %v" $pat | indent 8 | println -}}{{- end -}}
