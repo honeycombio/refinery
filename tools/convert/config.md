@@ -31,8 +31,8 @@ MinRefineryVersion is the minimum version of Refinery that can load
 this configuration file. 
 
 This specifies the lowest Refinery version capable of loading all of 
-the features used in this file. Refinery will refuse to start if its 
-version is less than this. 
+the features used in this file. If this value is present, Refinery 
+will refuse to start if its version is less than this. 
  
 
 Not eligible for live reload.
@@ -494,7 +494,7 @@ Not eligible for live reload.
 Type: `string`
 
 
-Example: `set-this-to-your-api-key`
+Example: `SetThisToAHoneycombKey`
 
 ### Dataset
 
@@ -657,7 +657,7 @@ Not eligible for live reload.
 Type: `string`
 
 
-Example: `set-this-to-your-api-key`
+Example: `SetThisToAHoneycombKey`
 
 ### Dataset
 
@@ -696,6 +696,84 @@ Configuration for Refinery's OpenTelemetry metrics. This is the
 preferred way to send metrics to Honeycomb. New installations should 
 prefer OTelMetrics. 
  
+
+### Enabled
+
+Enabled controls whether to send metrics via OTel. 
+
+Enabled controls whether to send OpenTelemetry metrics to Honeycomb. 
+ 
+
+Not eligible for live reload.
+
+Type: `bool`
+
+
+
+
+### APIHost
+
+APIHost is the URL of the Honeycomb API to which metrics will be sent. 
+
+Specifies the URL for the upstream Honeycomb API for metrics; this is 
+the destination to which refinery sends its own metrics. 
+ 
+
+Not eligible for live reload.
+
+Type: `url`
+
+Default: `https://api.honeycomb.io`
+
+
+### APIKey
+
+APIKey is the API key used to send Honeycomb metrics. 
+
+Specifies the API key used when refinery sends its own metrics. It is 
+recommended that you create a separate team and key for Refinery 
+metrics. If this is blank, Refinery will not set the 
+Honeycomb-specific headers for OTel, and your APIHost must be set to a 
+valid OTel endpoint. 
+ 
+
+Not eligible for live reload.
+
+Type: `string`
+
+
+Example: `SetThisToAHoneycombKey`
+
+### Dataset
+
+Dataset is the Honeycomb dataset to which metrics will be sent. 
+
+Specifies the dataset to which refinery sends its own OTel metrics. 
+Only used if a APIKey is specified. 
+ 
+
+Not eligible for live reload.
+
+Type: `string`
+
+Default: `Refinery Metrics`
+
+
+### ReportingInterval
+
+ReportingInterval is the interval between sending OTel metrics to 
+Honeycomb. 
+
+The interval between sending metrics to Honeycomb. Between 1 and 60 
+seconds is typical. 
+ 
+
+Not eligible for live reload.
+
+Type: `duration`
+
+Default: `30s`
+
 
 ---
 ## PeerManagement: Peer Management

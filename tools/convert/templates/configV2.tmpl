@@ -30,8 +30,8 @@ General:
     ## this configuration file.
     ##  
     ## This specifies the lowest Refinery version capable of loading all of
-    ## the features used in this file. Refinery will refuse to start if its
-    ## version is less than this.
+    ## the features used in this file. If this value is present, Refinery
+    ## will refuse to start if its version is less than this.
     ##  
     ## default: v2.0
     ## Not eligible for live reload.
@@ -358,7 +358,7 @@ HoneycombLogger:
     ## for Refinery logs.
     ##  
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "APIKey" "HoneycombLogger.LoggerAPIKey" "set-this-to-your-api-key" }}
+    {{ nonEmptyString .Data "APIKey" "HoneycombLogger.LoggerAPIKey" "SetThisToAHoneycombKey" }}
 
     ## Dataset is the dataset to which logs will be sent.
     ##  
@@ -498,6 +498,53 @@ OTelMetrics:
   ## prefer OTelMetrics.
   ##  
   ####
+    ## Enabled controls whether to send metrics via OTel.
+    ##  
+    ## Enabled controls whether to send OpenTelemetry metrics to Honeycomb.
+    ##  
+    ## Not eligible for live reload.
+    {{ conditional .Data "Enabled" "" }}
+
+    ## APIHost is the URL of the Honeycomb API to which metrics will be sent.
+    ##  
+    ## Specifies the URL for the upstream Honeycomb API for metrics; this is
+    ## the destination to which refinery sends its own metrics.
+    ##  
+    ## default: https://api.honeycomb.io
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "APIHost" "APIHost" "https://api.honeycomb.io" }}
+
+    ## APIKey is the API key used to send Honeycomb metrics.
+    ##  
+    ## Specifies the API key used when refinery sends its own metrics. It is
+    ## recommended that you create a separate team and key for Refinery
+    ## metrics. If this is blank, Refinery will not set the
+    ## Honeycomb-specific headers for OTel, and your APIHost must be set to a
+    ## valid OTel endpoint.
+    ##  
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "APIKey" "APIKey" "" }}
+
+    ## Dataset is the Honeycomb dataset to which metrics will be sent.
+    ##  
+    ## Specifies the dataset to which refinery sends its own OTel metrics.
+    ## Only used if a APIKey is specified.
+    ##  
+    ## default: Refinery Metrics
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "Dataset" "Dataset" "Refinery Metrics" }}
+
+    ## ReportingInterval is the interval between sending OTel metrics to
+    ## Honeycomb.
+    ##  
+    ## The interval between sending metrics to Honeycomb. Between 1 and 60
+    ## seconds is typical.
+    ##  
+    ## Accepts a duration string with units, like "30s".
+    ## default: 30s
+    ## Not eligible for live reload.
+    {{ secondsToDuration .Data "ReportingInterval" "ReportingInterval" "" }}
+
 #####################
 ## Peer Management ##
 #####################

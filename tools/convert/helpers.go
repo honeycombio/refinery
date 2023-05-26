@@ -31,9 +31,11 @@ func helpers() template.FuncMap {
 		"nonDefaultOnly":    nonDefaultOnly,
 		"nonEmptyString":    nonEmptyString,
 		"nonZero":           nonZero,
+		"pattern":           pattern,
 		"reload":            reload,
 		"renderMap":         renderMap,
 		"renderStringarray": renderStringarray,
+		"schemaType":        schemaType,
 		"secondsToDuration": secondsToDuration,
 		"stringArray":       stringArray,
 		"split":             split,
@@ -189,6 +191,26 @@ func nonZero(data map[string]any, key, oldkey string, example string) string {
 	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }
 
+func pattern(typ, pattyp string) string {
+	s := typ
+	if s == "string" && pattyp != "" {
+		s = pattyp
+	}
+
+	switch s {
+	case "ipport":
+		return ""
+	case "apikey":
+		// classic keys are 32 hex digits
+		// new keys are 20-23 base64 digits
+		return `^(\*|[A-Fa-f0-9]{32}|[A-Za-z0-9]{20,23})$`
+	case "duration":
+		return `^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$`
+	default:
+		return ""
+	}
+}
+
 // Returns the reload eligibility string
 func reload(b bool) string {
 	if b {
@@ -242,6 +264,29 @@ func renderStringarray(data map[string]any, key, oldkey string, example string) 
 		output = append(output, fmt.Sprintf("%s- %s", comment, s))
 	}
 	return "# " + key + ":\n      " + strings.Join(output, "\n      ")
+}
+
+func schemaType(typ string) string {
+	switch typ {
+	case "int", "percentage":
+		return "integer"
+	case "float":
+		return "number"
+	case "string":
+		return "string"
+	case "bool":
+		return "boolean"
+	case "duration":
+		return "string"
+	case "ipport", "url":
+		return "string"
+	case "stringarray":
+		return "array"
+	case "map":
+		return "object"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // secondsToDuration takes a number of seconds (if the previous value had it) and returns a string duration
@@ -330,13 +375,15 @@ func wordwrap(s string) string {
 func yamlf(a any) string {
 	switch v := a.(type) {
 	case string:
-		pat := regexp.MustCompile("^[a-zA-z][a-zA-z0-9]*$")
+		pat := regexp.MustCompile("^[a-zA-z0-9]+$")
 		if pat.MatchString(v) {
 			return v
 		}
 		return fmt.Sprintf(`"%s"`, v)
 	case int:
 		return _formatIntWithUnderscores(v)
+	case float64:
+		return fmt.Sprintf("%f", v)
 	case time.Duration:
 		return v.String()
 	default:

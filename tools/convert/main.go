@@ -12,13 +12,14 @@ import (
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/santhosh-tekuri/jsonschema/v5"
 	"gopkg.in/yaml.v3"
 )
 
 // Embed the entire filesystem directory into the binary so that it stands alone,
 // as well as the configData.yaml file.
 //
-//go:embed templates/*.tmpl configData.yaml
+//go:embed templates/*.tmpl configData.yaml config.yamlschema
 var filesystem embed.FS
 
 type Options struct {
@@ -116,10 +117,13 @@ func main() {
 		case "doc":
 			GenerateMarkdown(output)
 			os.Exit(0)
-		case "config", "rules":
+		case "schema":
+			GenerateSchema(output)
+			os.Exit(0)
+		case "config", "rules", "validate":
 			// do nothing yet because we need to parse the input file
 		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules\n", args[0])
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules, schema, validate\n", args[0])
 			os.Exit(1)
 		}
 	}
@@ -173,8 +177,10 @@ func main() {
 		}
 	case "rules":
 		ConvertRules(data, output)
+	case "validate":
+		ValidateSchema(data, output)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
+		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, rules, and validate\n", args[0])
 	}
 
 }
@@ -203,6 +209,7 @@ type Field struct {
 	Reload       bool     `json:"reload"`
 	Summary      string   `json:"summary"`
 	Description  string   `json:"description"`
+	Pattern      string   `json:"pattern,omitempty"`
 }
 
 type Group struct {
@@ -299,5 +306,49 @@ func GenerateMarkdown(w io.Writer) {
 	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", config)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func GenerateSchema(w io.Writer) {
+	config := readConfigData()
+	var err error
+	tmpl := template.New("schema generator")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/schfile.tmpl", "templates/schgroup.tmpl", "templates/schfield.tmpl")
+	if err != nil {
+		panic(err)
+	}
+
+	err = tmpl.ExecuteTemplate(w, "schfile.tmpl", config)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func ValidateSchema(data map[string]any, w io.Writer) {
+	// transform the yaml schema into a json schema
+	input := "config.yamlschema"
+	rdr, err := filesystem.Open(input)
+	if err != nil {
+		panic(err)
+	}
+	yschema, err := load(rdr, "Y")
+	if err != nil {
+		panic(err)
+	}
+	jschema, err := json.MarshalIndent(yschema, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	schemaData, err := jsonschema.CompileString("refinerySchema", string(jschema))
+	if err != nil {
+		panic(err)
+	}
+
+	err = schemaData.Validate(data)
+	if err != nil {
+		fmt.Fprintf(w, "'%v' validating config\n", err)
+		os.Exit(1)
 	}
 }

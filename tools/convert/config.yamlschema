@@ -1,0 +1,464 @@
+$schema: https://json-schema.org/draft/2019-09/schema
+$id: https://github.com/honeycombio/refinery/tools/convert/config.yamlschema
+type: object
+default: {}
+title: Refinery Configuration Schema
+required:
+  - General
+properties:
+  General:
+    type: object
+    default: {}
+    title: General Configuration
+    required: []
+    properties:
+      ConfigurationVersion:
+        type: integer
+        title: The ConfigurationVersion schema
+        default: 2
+      MinRefineryVersion:
+        type: string
+        title: The MinRefineryVersion schema
+        default: v2.0
+      DatasetPrefix:
+        type: string
+        title: The DatasetPrefix schema
+      ConfigReloadInterval:
+        type: string
+        title: The ConfigReloadInterval schema
+        default: 5m
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  Network:
+    type: object
+    default: {}
+    title: Network Configuration
+    required: []
+    properties:
+      ListenAddr:
+        type: string
+        title: The ListenAddr schema
+        default: 0.0.0.0:8080
+      PeerListenAddr:
+        type: string
+        title: The PeerListenAddr schema
+        default: 0.0.0.0:8081
+      HoneycombAPI:
+        type: string
+        title: The HoneycombAPI schema
+        default: https://api.honeycomb.io
+
+  AccessKeys:
+    type: object
+    default: {}
+    title: Access Key Configuration
+    required: []
+    properties:
+      ReceiveKeys:
+        type: array
+        title: The ReceiveKeys schema
+      AcceptOnlyListedKeys:
+        type: boolean
+        title: The AcceptOnlyListedKeys schema
+
+  RefineryTelemetry:
+    type: object
+    default: {}
+    title: Refinery Telemetry
+    required: []
+    properties:
+      AddRuleReasonToTrace:
+        type: boolean
+        title: The AddRuleReasonToTrace schema
+      AddSpanCountToRoot:
+        type: boolean
+        title: The AddSpanCountToRoot schema
+        default: true
+      AddHostMetadataToTrace:
+        type: boolean
+        title: The AddHostMetadataToTrace schema
+        default: true
+
+  Traces:
+    type: object
+    default: {}
+    title: Traces
+    required: []
+    properties:
+      SendDelay:
+        type: string
+        title: The SendDelay schema
+        default: 2s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      BatchTimeout:
+        type: string
+        title: The BatchTimeout schema
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      TraceTimeout:
+        type: string
+        title: The TraceTimeout schema
+        default: 60s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      MaxBatchSize:
+        type: integer
+        title: The MaxBatchSize schema
+        default: 500
+      SendTicker:
+        type: string
+        title: The SendTicker schema
+        default: 100ms
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  Debugging:
+    type: object
+    default: {}
+    title: Debugging
+    required: []
+    properties:
+      DebugServiceAddr:
+        type: string
+        title: The DebugServiceAddr schema
+      QueryAuthToken:
+        type: string
+        title: The QueryAuthToken schema
+      AdditionalErrorFields:
+        type: array
+        title: The AdditionalErrorFields schema
+      DryRun:
+        type: boolean
+        title: The DryRun schema
+
+  Logger:
+    type: object
+    default: {}
+    title: Refinery Logger
+    required: []
+    properties:
+      Type:
+        type: string
+        title: The Type schema
+        default: stdout
+      Level:
+        type: string
+        title: The Level schema
+        default: warn
+
+  HoneycombLogger:
+    type: object
+    default: {}
+    title: Honeycomb Logger
+    required: []
+    properties:
+      APIHost:
+        type: string
+        title: The APIHost schema
+        default: https://api.honeycomb.io
+      APIKey:
+        type: string
+        title: The APIKey schema
+        pattern: ^(\*|[A-Fa-f0-9]{32}|[A-Za-z0-9]{20,23})$
+      Dataset:
+        type: string
+        title: The Dataset schema
+        default: Refinery Logs
+      SamplerEnabled:
+        type: boolean
+        title: The SamplerEnabled schema
+        default: true
+      SamplerThroughput:
+        type: number
+        title: The SamplerThroughput schema
+        default: 10
+
+  StdoutLogger:
+    type: object
+    default: {}
+    title: Stdout Logger
+    required: []
+    properties:
+      Structured:
+        type: boolean
+        title: The Structured schema
+        default: true
+
+  PrometheusMetrics:
+    type: object
+    default: {}
+    title: Prometheus Metrics
+    required: []
+    properties:
+      Enabled:
+        type: boolean
+        title: The Enabled schema
+      ListenAddr:
+        type: string
+        title: The ListenAddr schema
+        default: localhost:2112
+
+  LegacyMetrics:
+    type: object
+    default: {}
+    title: Legacy Metrics
+    required: []
+    properties:
+      Enabled:
+        type: boolean
+        title: The Enabled schema
+      APIHost:
+        type: string
+        title: The APIHost schema
+        default: https://api.honeycomb.io
+      APIKey:
+        type: string
+        title: The APIKey schema
+        pattern: ^(\*|[A-Fa-f0-9]{32}|[A-Za-z0-9]{20,23})$
+      Dataset:
+        type: string
+        title: The Dataset schema
+        default: Refinery Metrics
+      ReportingInterval:
+        type: string
+        title: The ReportingInterval schema
+        default: 30s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  OTelMetrics:
+    type: object
+    default: {}
+    title: OpenTelemetry Metrics
+    required: []
+    properties:
+      Enabled:
+        type: boolean
+        title: The Enabled schema
+      APIHost:
+        type: string
+        title: The APIHost schema
+        default: https://api.honeycomb.io
+      APIKey:
+        type: string
+        title: The APIKey schema
+        pattern: ^(\*|[A-Fa-f0-9]{32}|[A-Za-z0-9]{20,23})$
+      Dataset:
+        type: string
+        title: The Dataset schema
+        default: Refinery Metrics
+      ReportingInterval:
+        type: string
+        title: The ReportingInterval schema
+        default: 30s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  PeerManagement:
+    type: object
+    default: {}
+    title: Peer Management
+    required: []
+    properties:
+      Type:
+        type: string
+        title: The Type schema
+        default: redis
+      Identifier:
+        type: string
+        title: The Identifier schema
+      IdentifierInterfaceName:
+        type: string
+        title: The IdentifierInterfaceName schema
+      UseIPV6Identifier:
+        type: boolean
+        title: The UseIPV6Identifier schema
+      Peers:
+        type: array
+        title: The Peers schema
+
+  RedisPeerManagement:
+    type: object
+    default: {}
+    title: Redis Peer Management
+    required: []
+    properties:
+      Host:
+        type: string
+        title: The Host schema
+      Username:
+        type: string
+        title: The Username schema
+      Password:
+        type: string
+        title: The Password schema
+      Prefix:
+        type: string
+        title: The Prefix schema
+        default: refinery
+      Database:
+        type: integer
+        title: The Database schema
+      UseTLS:
+        type: boolean
+        title: The UseTLS schema
+      UseTLSInsecure:
+        type: boolean
+        title: The UseTLSInsecure schema
+      Timeout:
+        type: string
+        title: The Timeout schema
+        default: 5s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  Collection:
+    type: object
+    default: {}
+    title: Collection Settings
+    required: []
+    properties:
+      CacheCapacity:
+        type: integer
+        title: The CacheCapacity schema
+        default: 10000
+      MaxMemory:
+        type: integer
+        title: The MaxMemory schema
+        default: 75
+      MaxAlloc:
+        type: integer
+        title: The MaxAlloc schema
+
+  BufferSizes:
+    type: object
+    default: {}
+    title: Buffer Sizes
+    required: []
+    properties:
+      UpstreamBufferSize:
+        type: integer
+        title: The UpstreamBufferSize schema
+        default: 10000
+      PeerBufferSize:
+        type: integer
+        title: The PeerBufferSize schema
+        default: 100000
+
+  Specialized:
+    type: object
+    default: {}
+    title: Specialized Configuration
+    required: []
+    properties:
+      EnvironmentCacheTTL:
+        type: string
+        title: The EnvironmentCacheTTL schema
+        default: 1h
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      CompressPeerCommunication:
+        type: boolean
+        title: The CompressPeerCommunication schema
+        default: true
+      AdditionalAttributes:
+        type: object
+        title: The AdditionalAttributes schema
+
+  IDFields:
+    type: object
+    default: {}
+    title: ID Fields
+    required: []
+    properties:
+      TraceNames:
+        type: array
+        title: The TraceNames schema
+      ParentNames:
+        type: array
+        title: The ParentNames schema
+
+  GRPCServerParameters:
+    type: object
+    default: {}
+    title: gRPC Server Parameters
+    required: []
+    properties:
+      Enabled:
+        type: boolean
+        title: The Enabled schema
+      ListenAddr:
+        type: string
+        title: The ListenAddr schema
+      MaxConnectionIdle:
+        type: string
+        title: The MaxConnectionIdle schema
+        default: 0s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      MaxConnectionAge:
+        type: string
+        title: The MaxConnectionAge schema
+        default: 3m
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      MaxConnectionAgeGrace:
+        type: string
+        title: The MaxConnectionAgeGrace schema
+        default: 60s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      KeepAlive:
+        type: string
+        title: The KeepAlive schema
+        default: 1m
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      KeepAliveTimeout:
+        type: string
+        title: The KeepAliveTimeout schema
+        default: 20s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  SampleCache:
+    type: object
+    default: {}
+    title: Sample Cache
+    required: []
+    properties:
+      KeptSize:
+        type: integer
+        title: The KeptSize schema
+        default: 10000
+      DroppedSize:
+        type: integer
+        title: The DroppedSize schema
+        default: 1000000
+      SizeCheckInterval:
+        type: string
+        title: The SizeCheckInterval schema
+        default: 10s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+
+  StressRelief:
+    type: object
+    default: {}
+    title: Stress Relief
+    required: []
+    properties:
+      Mode:
+        type: string
+        title: The Mode schema
+        default: never
+      ActivationLevel:
+        type: integer
+        title: The ActivationLevel schema
+        default: 90
+      DeactivationLevel:
+        type: integer
+        title: The DeactivationLevel schema
+        default: 70
+      SamplingRate:
+        type: integer
+        title: The SamplingRate schema
+        default: 100
+      MinimumActivationDuration:
+        type: string
+        title: The MinimumActivationDuration schema
+        default: 10s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+      MinimumStartupDuration:
+        type: string
+        title: The MinimumStartupDuration schema
+        default: 3s
+        pattern: ^([0-9]*(\.[0-9]*)?(ns|us|µs|ms|s|m|h))+$
+

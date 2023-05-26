@@ -1,0 +1,14 @@
+{{- $group := . -}}
+{{- println -}}
+  {{- printf "%s:" $group.Name | indent 2 |  println -}}
+    {{- printf "%s" "type: object" | indent 4 | println -}}
+    {{- printf "%s" "default: {}" | indent 4 | println -}}
+    {{- printf "title: %s" $group.Title | indent 4 | println -}}
+    {{- printf "%s" "required: []" | indent 4 | println -}}
+    {{- printf "%s" "properties:" | indent 4 | println -}}
+{{- range $group.Fields -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
+{{- template "schfield.tmpl" . -}}
+{{- end -}}
