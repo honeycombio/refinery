@@ -36,7 +36,7 @@ type HoneycombMetrics struct {
 	latestMemStats     runtime.MemStats
 
 	//reportingFreq is the interval with which to report statistics
-	reportingFreq       int64
+	reportingFreq       time.Duration
 	reportingCancelFunc func()
 }
 
@@ -71,10 +71,10 @@ func (h *HoneycombMetrics) Start() error {
 	if err != nil {
 		return err
 	}
-	if mc.MetricsReportingInterval < 1 {
-		mc.MetricsReportingInterval = 1
+	if mc.ReportingInterval < config.Duration(1*time.Second) {
+		mc.ReportingInterval = config.Duration(1 * time.Second)
 	}
-	h.reportingFreq = mc.MetricsReportingInterval
+	h.reportingFreq = time.Duration(mc.ReportingInterval)
 
 	if err = h.initLibhoney(mc); err != nil {
 		return err
@@ -107,7 +107,7 @@ func (h *HoneycombMetrics) reloadBuilder() {
 	h.initLibhoney(mc)
 }
 
-func (h *HoneycombMetrics) initLibhoney(mc config.HoneycombMetricsConfig) error {
+func (h *HoneycombMetrics) initLibhoney(mc config.LegacyMetricsConfig) error {
 	metricsTx := &transmission.Honeycomb{
 		// metrics are always sent as a single event, so don't wait for the timeout
 		MaxBatchSize:      1,
@@ -116,9 +116,9 @@ func (h *HoneycombMetrics) initLibhoney(mc config.HoneycombMetricsConfig) error 
 		Transport:         h.UpstreamTransport,
 	}
 	libhClientConfig := libhoney.ClientConfig{
-		APIHost:      mc.MetricsHoneycombAPI,
-		APIKey:       mc.MetricsAPIKey,
-		Dataset:      mc.MetricsDataset,
+		APIHost:      mc.APIHost,
+		APIKey:       mc.APIKey,
+		Dataset:      mc.Dataset,
 		Transmission: metricsTx,
 	}
 	libhClient, err := libhoney.NewClient(libhClientConfig)
@@ -158,8 +158,7 @@ func (h *HoneycombMetrics) refreshMemStats(ctx context.Context) {
 	// get memory metrics 5 times more frequently than we send metrics to make sure
 	// we have relatively up to date mem statistics but not go wild and get them
 	// all the time.
-	// for _ = range  {
-	ticker := time.NewTicker(time.Duration(h.reportingFreq*1000/5) * time.Millisecond)
+	ticker := time.NewTicker(h.reportingFreq / 5)
 	for {
 		select {
 		case <-ticker.C:
@@ -222,7 +221,7 @@ func (h *HoneycombMetrics) readMemStats(mem *runtime.MemStats) {
 }
 
 func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
-	tick := time.NewTicker(time.Duration(h.reportingFreq) * time.Second)
+	tick := time.NewTicker(h.reportingFreq)
 	for {
 		select {
 		case <-ctx.Done():

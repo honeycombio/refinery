@@ -115,10 +115,11 @@ func newStartedApp(
 		GetPeerListenAddrVal:                 "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetAPIKeysVal:                        []string{legacyAPIKey, nonLegacyAPIKey},
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
-		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10000},
+		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{CacheCapacity: 10000},
 		AddHostMetadataToTrace:               enableHostMetadata,
 		TraceIdFieldNames:                    []string{"trace.trace_id"},
 		ParentIdFieldNames:                   []string{"trace.parent_id"},
+		SampleCache:                          config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 	}
 
 	var err error
@@ -364,7 +365,9 @@ func TestPeerRouting(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	blob := `[` + string(spans[0]) + `]`
+	// this span index was chosen because it hashes to the appropriate shard for this
+	// test. You can't change it and expect the test to pass.
+	blob := `[` + string(spans[10]) + `]`
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
@@ -378,8 +381,8 @@ func TestPeerRouting(t *testing.T) {
 		APIHost:    "http://api.honeycomb.io",
 		Timestamp:  now,
 		Data: map[string]interface{}{
-			"trace.trace_id":                     "1",
-			"trace.span_id":                      "0",
+			"trace.trace_id":                     "2",
+			"trace.span_id":                      "10",
 			"trace.parent_id":                    "0000000000",
 			"key":                                "value",
 			"field0":                             float64(0),
@@ -608,9 +611,13 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
+	// this traceID was chosen because it hashes to the appropriate shard for this
+	// test. You can't change it or the number of peers and still expect the test to pass.
+	traceID := "4"
+	traceData := []byte(fmt.Sprintf(`{"foo":"bar","trace.trace_id":"%s"}`, traceID))
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
 	zEnc, _ := zstd.NewWriter(nil)
-	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
+	blob := zEnc.EncodeAll(traceData, nil)
 	req, err := http.NewRequest(
 		"POST",
 		"http://localhost:15002/1/events/dataset",
@@ -637,7 +644,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
 			Data: map[string]interface{}{
-				"trace.trace_id":                     "1",
+				"trace.trace_id":                     traceID,
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
 			},
@@ -657,7 +664,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	blob = blob[:0]
 	buf := bytes.NewBuffer(blob)
 	gz := gzip.NewWriter(buf)
-	gz.Write([]byte(`{"foo":"bar","trace.trace_id":"1"}`))
+	gz.Write(traceData)
 	gz.Close()
 
 	req, err = http.NewRequest(
@@ -686,7 +693,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 			APIHost:    "http://api.honeycomb.io",
 			Timestamp:  now,
 			Data: map[string]interface{}{
-				"trace.trace_id":                     "1",
+				"trace.trace_id":                     traceID,
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
 			},

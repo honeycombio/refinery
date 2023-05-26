@@ -1,6 +1,8 @@
 package config
 
-import "time"
+import (
+	"time"
+)
 
 // Config defines the interface the rest of the code uses to get items from the
 // config. There are different implementations of the config using different
@@ -41,10 +43,6 @@ type Config interface {
 
 	GetPeerManagementType() (string, error)
 
-	// GetPeerManagementStrategy returns the strategy specified for
-	// Peer management.
-	GetPeerManagementStrategy() (string, error)
-
 	// GetRedisHost returns the address of a Redis instance to use for peer
 	// management.
 	GetRedisHost() (string, error)
@@ -75,9 +73,6 @@ type Config interface {
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() (string, error)
 
-	// GetLoggingLevel returns the verbosity with which we should log
-	GetLoggingLevel() (string, error)
-
 	// GetSendDelay returns the number of seconds to pause after a trace is
 	// complete before sending it, to allow stragglers to arrive
 	GetSendDelay() (time.Duration, error)
@@ -97,6 +92,9 @@ type Config interface {
 	// the logger package
 	GetLoggerType() (string, error)
 
+	// GetLoggerLevel returns the level of the logger to use.
+	GetLoggerLevel() Level
+
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
 
@@ -105,21 +103,21 @@ type Config interface {
 	GetCollectorType() (string, error)
 
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
-	GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error)
+	GetInMemCollectorCacheCapacity() (CollectionConfig, error)
 
 	// GetSamplerConfigForDestName returns the sampler type and name to use for
 	// the given destination (environment, or dataset in classic)
 	GetSamplerConfigForDestName(string) (interface{}, string, error)
 
 	// GetAllSamplerRules returns all rules in a single map, including the default rules
-	GetAllSamplerRules() (map[string]interface{}, error)
+	GetAllSamplerRules() (*V2SamplerConfig, error)
 
 	// GetMetricsType returns the type of metrics to use. Valid types are in the
 	// metrics package
 	GetMetricsType() (string, error)
 
 	// GetHoneycombMetricsConfig returns the config specific to HoneycombMetrics
-	GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error)
+	GetHoneycombMetricsConfig() (LegacyMetricsConfig, error)
 
 	// GetPrometheusMetricsConfig returns the config specific to PrometheusMetrics
 	GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error)
@@ -165,9 +163,9 @@ type Config interface {
 
 	GetGRPCMaxConnectionAgeGrace() time.Duration
 
-	GetGRPCTime() time.Duration
+	GetGRPCKeepAlive() time.Duration
 
-	GetGRPCTimeout() time.Duration
+	GetGRPCKeepAliveTimeout() time.Duration
 
 	GetPeerTimeout() time.Duration
 

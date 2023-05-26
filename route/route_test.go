@@ -328,15 +328,15 @@ func TestDebugAllRules(t *testing.T) {
 	}{
 		{
 			format: "json",
-			expect: `{"dataset1":"FakeSamplerType"}`,
+			expect: `{"configversion":0,"samplers":{"dataset1":{"deterministicsampler":{"samplerate":0},"rulesbasedsampler":null,"dynamicsampler":null,"emadynamicsampler":null,"totalthroughputsampler":null}}}`,
 		},
 		{
 			format: "toml",
-			expect: "dataset1 = 'FakeSamplerType'\n",
+			expect: "ConfigVersion = 0\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\n",
 		},
 		{
 			format: "yaml",
-			expect: "dataset1: FakeSamplerType\n",
+			expect: "ConfigVersion: 0\nSamplers:\n    dataset1:\n        DeterministicSampler: {}\n",
 		},
 		{
 			format: "bogus",
@@ -353,7 +353,7 @@ func TestDebugAllRules(t *testing.T) {
 			rr := httptest.NewRecorder()
 			router := &Router{
 				Config: &config.MockConfig{
-					GetSamplerTypeVal: "FakeSamplerType",
+					GetSamplerTypeVal: &config.DeterministicSamplerConfig{},
 				},
 			}
 

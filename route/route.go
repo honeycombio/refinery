@@ -222,8 +222,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 				MaxConnectionIdle:     r.Config.GetGRPCMaxConnectionIdle(),
 				MaxConnectionAge:      r.Config.GetGRPCMaxConnectionAge(),
 				MaxConnectionAgeGrace: r.Config.GetGRPCMaxConnectionAgeGrace(),
-				Time:                  r.Config.GetGRPCTime(),
-				Timeout:               r.Config.GetGRPCTimeout(),
+				Time:                  r.Config.GetGRPCKeepAlive(),
+				Timeout:               r.Config.GetGRPCKeepAliveTimeout(),
 			}),
 		}
 		traceServer := NewTraceServer(r)

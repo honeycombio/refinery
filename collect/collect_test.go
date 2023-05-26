@@ -23,6 +23,16 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
+func newCache() (cache.TraceSentCache, error) {
+	cfg := config.SampleCacheConfig{
+		KeptSize:          100,
+		DroppedSize:       100,
+		SizeCheckInterval: config.Duration(1 * time.Second),
+	}
+
+	return cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
+}
+
 // TestAddRootSpan tests that adding a root span winds up with a trace object in
 // the cache and that that trace gets sent
 func TestAddRootSpan(t *testing.T) {
@@ -49,7 +59,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -129,7 +139,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -210,7 +220,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -273,7 +283,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -348,7 +358,7 @@ func TestDryRunMode(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -459,10 +469,15 @@ func TestCacheSizeReload(t *testing.T) {
 		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
-		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{
+		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{
 			CacheCapacity: 1,
 		},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	coll := &InMemCollector{
@@ -489,8 +504,10 @@ func TestCacheSizeReload(t *testing.T) {
 		APIKey: legacyAPIKey,
 	}
 
-	coll.AddSpan(&types.Span{TraceID: "1", Event: event})
-	coll.AddSpan(&types.Span{TraceID: "2", Event: event})
+	err = coll.AddSpan(&types.Span{TraceID: "1", Event: event})
+	assert.NoError(t, err)
+	err = coll.AddSpan(&types.Span{TraceID: "2", Event: event})
+	assert.NoError(t, err)
 
 	expectedEvents := 1
 	wait := 1 * time.Second
@@ -514,7 +531,8 @@ func TestCacheSizeReload(t *testing.T) {
 		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
 	}, 60*wait, wait, "cache size to change")
 
-	coll.AddSpan(&types.Span{TraceID: "3", Event: event})
+	err = coll.AddSpan(&types.Span{TraceID: "3", Event: event})
+	assert.NoError(t, err)
 	time.Sleep(5 * conf.SendTickerVal)
 	assert.True(t, check(), "expected no more traces evicted and sent")
 
@@ -538,7 +556,12 @@ func TestSampleConfigReload(t *testing.T) {
 		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:                        2 * time.Millisecond,
 		ParentIdFieldNames:                   []string{"trace.parent_id", "parentId"},
-		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{CacheCapacity: 10},
+		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{CacheCapacity: 10},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	coll := &InMemCollector{
@@ -606,101 +629,6 @@ func TestSampleConfigReload(t *testing.T) {
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 }
 
-func TestOldMaxAlloc(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 10 * time.Minute,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
-	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 1000)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	go coll.collect()
-	defer coll.Stop()
-
-	for i := 0; i < 500; i++ {
-		span := &types.Span{
-			TraceID: strconv.Itoa(i),
-			Event: types.Event{
-				Dataset: "aoeu",
-				Data: map[string]interface{}{
-					"trace.parent_id": "unused",
-					"id":              i,
-				},
-				APIKey: legacyAPIKey,
-			},
-		}
-		coll.AddSpan(span)
-	}
-
-	for len(coll.incoming) > 0 {
-		time.Sleep(conf.SendTickerVal)
-	}
-
-	// Now there should be 500 traces in the cache.
-	// Set MaxAlloc, which should cause cache evictions.
-	coll.mutex.Lock()
-	assert.Equal(t, 500, len(coll.cache.GetAll()))
-
-	// We only want to induce a single downsize, so set MaxAlloc just below
-	// our current post-GC alloc.
-	runtime.GC()
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = mem.Alloc - 1
-
-	coll.mutex.Unlock()
-
-	var traces []*types.Trace
-	for {
-		coll.mutex.Lock()
-		traces = coll.cache.GetAll()
-		if len(traces) < 500 {
-			break
-		}
-		coll.mutex.Unlock()
-
-		time.Sleep(conf.SendTickerVal)
-	}
-
-	assert.Equal(t, 450, len(traces), "should have shrunk cache to 90%% of previous size")
-	for i, trace := range traces {
-		assert.False(t, trace.Sent)
-		assert.Equal(t, strconv.Itoa(i+50), trace.TraceID)
-	}
-	coll.mutex.Unlock()
-
-	// We discarded the first 50 spans, and sent them.
-	transmission.Mux.Lock()
-	assert.Equal(t, 50, len(transmission.Events), "should have sent 10%% of traces")
-	for i, ev := range transmission.Events {
-		assert.Equal(t, i, ev.Data["id"])
-	}
-
-	transmission.Mux.Unlock()
-}
-
 func TestStableMaxAlloc(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -735,7 +663,7 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -825,7 +753,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	}
 	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -900,7 +828,7 @@ func TestAddSpanCount(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -972,7 +900,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -1045,7 +973,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -1112,7 +1040,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
@@ -1167,10 +1095,10 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		StressRelief: config.StressReliefConfig{
-			Mode:               "monitor",
-			ActivationLevel:    75,
-			DeactivationLevel:  25,
-			StressSamplingRate: 100,
+			Mode:              "monitor",
+			ActivationLevel:   75,
+			DeactivationLevel: 25,
+			SamplingRate:      100,
 		},
 	}
 	coll := &InMemCollector{
@@ -1187,7 +1115,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := cache.NewLegacySentCache(15)
+	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 

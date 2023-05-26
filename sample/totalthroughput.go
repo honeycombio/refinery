@@ -2,6 +2,7 @@ package sample
 
 import (
 	"math/rand"
+	"time"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
@@ -17,7 +18,7 @@ type TotalThroughputSampler struct {
 	Metrics metrics.Metrics
 
 	goalThroughputPerSec int64
-	clearFrequencySec    int64
+	clearFrequency       config.Duration
 
 	key *traceKey
 
@@ -32,16 +33,16 @@ func (d *TotalThroughputSampler) Start() error {
 		d.Config.GoalThroughputPerSec = 100
 	}
 	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
-	if d.Config.ClearFrequencySec == 0 {
-		d.Config.ClearFrequencySec = 30
+	if d.Config.ClearFrequency == 0 {
+		d.Config.ClearFrequency = config.Duration(30 * time.Second)
 	}
-	d.clearFrequencySec = d.Config.ClearFrequencySec
+	d.clearFrequency = d.Config.ClearFrequency
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.TotalThroughput{
-		GoalThroughputPerSec: int(d.goalThroughputPerSec),
-		ClearFrequencySec:    int(d.clearFrequencySec),
+		GoalThroughputPerSec:   int(d.goalThroughputPerSec),
+		ClearFrequencyDuration: time.Duration(d.clearFrequency),
 	}
 	d.dynsampler.Start()
 

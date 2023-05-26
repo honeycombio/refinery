@@ -119,10 +119,9 @@ func BenchmarkShardBulk(b *testing.B) {
 		peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
 	}
 	config := &config.MockConfig{
-		GetPeerListenAddrVal:   selfAddr,
-		GetPeersVal:            peers,
-		PeerManagementType:     "file",
-		PeerManagementStrategy: "legacy",
+		GetPeerListenAddrVal: selfAddr,
+		GetPeersVal:          peers,
+		PeerManagementType:   "file",
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -154,65 +153,62 @@ func TestShardBulk(t *testing.T) {
 		traceID  = "test"
 	)
 
-	// this test should work for all strategies and a wide range of peer counts
-	for _, strategy := range []string{"legacy", "hash"} {
-		for i := 0; i < 5; i++ {
-			npeers := i*10 + 5
-			t.Run(fmt.Sprintf("bulk npeers=%d", npeers), func(t *testing.T) {
-				peers := []string{
-					"http://" + selfAddr,
-				}
-				for i := 1; i < npeers; i++ {
-					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
-				}
+	// this test should work for a wide range of peer counts
+	for i := 0; i < 5; i++ {
+		npeers := i*10 + 5
+		t.Run(fmt.Sprintf("bulk npeers=%d", npeers), func(t *testing.T) {
+			peers := []string{
+				"http://" + selfAddr,
+			}
+			for i := 1; i < npeers; i++ {
+				peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
+			}
 
-				config := &config.MockConfig{
-					GetPeerListenAddrVal:   selfAddr,
-					GetPeersVal:            peers,
-					PeerManagementType:     "file",
-					PeerManagementStrategy: strategy,
-				}
-				done := make(chan struct{})
-				defer close(done)
-				filePeers, err := peer.NewPeers(context.Background(), config, done)
-				assert.Equal(t, nil, err)
-				sharder := DeterministicSharder{
-					Config: config,
-					Logger: &logger.NullLogger{},
-					Peers:  filePeers,
-				}
+			config := &config.MockConfig{
+				GetPeerListenAddrVal: selfAddr,
+				GetPeersVal:          peers,
+				PeerManagementType:   "file",
+			}
+			done := make(chan struct{})
+			defer close(done)
+			filePeers, err := peer.NewPeers(context.Background(), config, done)
+			assert.Equal(t, nil, err)
+			sharder := DeterministicSharder{
+				Config: config,
+				Logger: &logger.NullLogger{},
+				Peers:  filePeers,
+			}
 
-				assert.NoError(t, sharder.Start(), "starting sharder should not error")
+			assert.NoError(t, sharder.Start(), "starting sharder should not error")
 
-				const ntraces = 1000
-				ids := make([]string, ntraces)
-				for i := 0; i < ntraces; i++ {
-					ids[i] = GenID(32)
-				}
+			const ntraces = 1000
+			ids := make([]string, ntraces)
+			for i := 0; i < ntraces; i++ {
+				ids[i] = GenID(32)
+			}
 
-				results := make(map[string]int)
-				for i := 0; i < ntraces; i++ {
-					s := sharder.WhichShardHashed(ids[i])
-					results[s.GetAddress()]++
+			results := make(map[string]int)
+			for i := 0; i < ntraces; i++ {
+				s := sharder.WhichShard(ids[i])
+				results[s.GetAddress()]++
+			}
+			min := ntraces
+			max := 0
+			for _, r := range results {
+				if r < min {
+					min = r
 				}
-				min := ntraces
-				max := 0
-				for _, r := range results {
-					if r < min {
-						min = r
-					}
-					if r > max {
-						max = r
-					}
+				if r > max {
+					max = r
 				}
+			}
 
-				// This is probabilistic, so could fail, but shouldn't be flaky as long as
-				// expectedResult is at least 20 or so.
-				expectedResult := ntraces / npeers
-				assert.Greater(t, expectedResult*2, max, "expected smaller max, got %d: %v", max, results)
-				assert.NotEqual(t, 0, min, "expected larger min, got %d: %v", min, results)
-			})
-		}
+			// This is probabilistic, so could fail, but shouldn't be flaky as long as
+			// expectedResult is at least 20 or so.
+			expectedResult := ntraces / npeers
+			assert.Greater(t, expectedResult*2, max, "expected smaller max, got %d: %v", max, results)
+			assert.NotEqual(t, 0, min, "expected larger min, got %d: %v", min, results)
+		})
 	}
 }
 
@@ -233,10 +229,9 @@ func TestShardDrop(t *testing.T) {
 			}
 
 			config := &config.MockConfig{
-				GetPeerListenAddrVal:   selfAddr,
-				GetPeersVal:            peers,
-				PeerManagementType:     "file",
-				PeerManagementStrategy: "hash",
+				GetPeerListenAddrVal: selfAddr,
+				GetPeersVal:          peers,
+				PeerManagementType:   "file",
 			}
 			done := make(chan struct{})
 			defer close(done)
@@ -275,7 +270,7 @@ func TestShardDrop(t *testing.T) {
 			results = make(map[string]int)
 			nDiff := 0
 			for i := 0; i < ntraces; i++ {
-				s := sharder.WhichShardHashed(placements[i].id)
+				s := sharder.WhichShard(placements[i].id)
 				results[s.GetAddress()]++
 				if s.GetAddress() != placements[i].shard {
 					nDiff++
@@ -306,10 +301,9 @@ func TestShardAddHash(t *testing.T) {
 			}
 
 			config := &config.MockConfig{
-				GetPeerListenAddrVal:   selfAddr,
-				GetPeersVal:            peers,
-				PeerManagementType:     "file",
-				PeerManagementStrategy: "hash",
+				GetPeerListenAddrVal: selfAddr,
+				GetPeersVal:          peers,
+				PeerManagementType:   "file",
 			}
 			done := make(chan struct{})
 			defer close(done)
@@ -336,7 +330,7 @@ func TestShardAddHash(t *testing.T) {
 
 			results := make(map[string]int)
 			for i := 0; i < ntraces; i++ {
-				s := sharder.WhichShardHashed(placements[i].id)
+				s := sharder.WhichShard(placements[i].id)
 				results[s.GetAddress()]++
 				placements[i].shard = s.GetAddress()
 			}
@@ -366,40 +360,37 @@ func BenchmarkDeterministicShard(b *testing.B) {
 		selfAddr = "127.0.0.1:8081"
 		traceID  = "test"
 	)
-	for _, strat := range []string{"legacy", "hash"} {
-		for i := 0; i < 5; i++ {
-			npeers := i*10 + 4
-			b.Run(fmt.Sprintf("benchmark_deterministic_%s_%d", strat, npeers), func(b *testing.B) {
-				peers := []string{
-					"http://" + selfAddr,
-				}
-				for i := 1; i < npeers; i++ {
-					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
-				}
-				config := &config.MockConfig{
-					GetPeerListenAddrVal:   selfAddr,
-					GetPeersVal:            peers,
-					PeerManagementType:     "file",
-					PeerManagementStrategy: strat,
-				}
-				done := make(chan struct{})
-				defer close(done)
-				filePeers, err := peer.NewPeers(context.Background(), config, done)
-				assert.Equal(b, nil, err)
-				sharder := DeterministicSharder{
-					Config: config,
-					Logger: &logger.NullLogger{},
-					Peers:  filePeers,
-				}
+	for i := 0; i < 5; i++ {
+		npeers := i*10 + 4
+		b.Run(fmt.Sprintf("benchmark_deterministic_%d", npeers), func(b *testing.B) {
+			peers := []string{
+				"http://" + selfAddr,
+			}
+			for i := 1; i < npeers; i++ {
+				peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
+			}
+			config := &config.MockConfig{
+				GetPeerListenAddrVal: selfAddr,
+				GetPeersVal:          peers,
+				PeerManagementType:   "file",
+			}
+			done := make(chan struct{})
+			defer close(done)
+			filePeers, err := peer.NewPeers(context.Background(), config, done)
+			assert.Equal(b, nil, err)
+			sharder := DeterministicSharder{
+				Config: config,
+				Logger: &logger.NullLogger{},
+				Peers:  filePeers,
+			}
 
-				assert.NoError(b, sharder.Start(),
-					"starting deterministic sharder should not error")
+			assert.NoError(b, sharder.Start(),
+				"starting deterministic sharder should not error")
 
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					sharder.WhichShard(traceID)
-				}
-			})
-		}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				sharder.WhichShard(traceID)
+			}
+		})
 	}
 }

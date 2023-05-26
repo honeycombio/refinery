@@ -11,12 +11,28 @@ import (
 // The yaml tags are used for the new format and are PascalCase.
 
 type V2SamplerChoice struct {
-	Name                   string                        `json:"name" yaml:"Name,omitempty"`
 	DeterministicSampler   *DeterministicSamplerConfig   `json:"deterministicsampler" yaml:"DeterministicSampler,omitempty"`
 	RulesBasedSampler      *RulesBasedSamplerConfig      `json:"rulesbasedsampler" yaml:"RulesBasedSampler,omitempty"`
 	DynamicSampler         *DynamicSamplerConfig         `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
-	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EmaDynamicSampler,omitempty"`
+	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EMADynamicSampler,omitempty"`
 	TotalThroughputSampler *TotalThroughputSamplerConfig `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
+}
+
+func (v *V2SamplerChoice) Sampler() (any, string) {
+	switch {
+	case v.DeterministicSampler != nil:
+		return v.DeterministicSampler, "DeterministicSampler"
+	case v.RulesBasedSampler != nil:
+		return v.RulesBasedSampler, "RulesBasedSampler"
+	case v.DynamicSampler != nil:
+		return v.DynamicSampler, "DynamicSampler"
+	case v.EMADynamicSampler != nil:
+		return v.EMADynamicSampler, "EMADynamicSampler"
+	case v.TotalThroughputSampler != nil:
+		return v.TotalThroughputSampler, "TotalThroughputSampler"
+	default:
+		return nil, ""
+	}
 }
 
 type V2SamplerConfig struct {
@@ -29,15 +45,15 @@ type DeterministicSamplerConfig struct {
 }
 
 type DynamicSamplerConfig struct {
-	SampleRate        int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
-	ClearFrequencySec int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
-	FieldList         []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	UseTraceLength    bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
+	SampleRate     int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
+	ClearFrequency Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
+	FieldList      []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	UseTraceLength bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
 type EMADynamicSamplerConfig struct {
 	GoalSampleRate      int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
-	AdjustmentInterval  int      `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
+	AdjustmentInterval  Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
 	Weight              float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
 	AgeOutValue         float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
 	BurstMultiple       float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
@@ -49,7 +65,7 @@ type EMADynamicSamplerConfig struct {
 
 type TotalThroughputSamplerConfig struct {
 	GoalThroughputPerSec int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
-	ClearFrequencySec    int64    `json:"clearfrequencysec" yaml:"ClearFrequencySec,omitempty"`
+	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }

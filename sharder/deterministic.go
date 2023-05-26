@@ -1,10 +1,7 @@
 package sharder
 
 import (
-	"crypto/sha1"
-	"encoding/binary"
 	"fmt"
-	"math"
 	"net"
 	"net/url"
 	"sort"
@@ -106,10 +103,9 @@ type DeterministicSharder struct {
 	Logger logger.Logger `inject:""`
 	Peers  peer.Peers    `inject:""`
 
-	myShard   *DetShard
-	peers     []*DetShard
-	hashes    []hashShard
-	shardFunc func(traceID string) Shard
+	myShard *DetShard
+	peers   []*DetShard
+	hashes  []hashShard
 
 	peerLock sync.RWMutex
 }
@@ -125,21 +121,6 @@ func (d *DeterministicSharder) Start() error {
 			d.Logger.Error().Logf("failed to reload peer list: %+v", err)
 		}
 	})
-
-	// this isn't runtime-reloadable because it would
-	// reassign nearly every trace to a new shard.
-	strat, err := d.Config.GetPeerManagementStrategy()
-	if err != nil {
-		return errors.Wrap(err, "failed to get peer management strategy")
-	}
-	switch strat {
-	case "legacy", "":
-		d.shardFunc = d.WhichShardLegacy
-	case "hash":
-		d.shardFunc = d.WhichShardHashed
-	default:
-		return fmt.Errorf("unknown PeerManagementStrategy '%s'", strat)
-	}
 
 	// Try up to 5 times to find myself in the peer list before giving up
 	var found bool
@@ -317,46 +298,14 @@ func (d *DeterministicSharder) MyShard() Shard {
 	return d.myShard
 }
 
-func (d *DeterministicSharder) WhichShard(traceID string) Shard {
-	return d.shardFunc(traceID)
-}
-
-// WhichShardLegacy is the original sharding decider. It uses sha1, which is
-// slow and not well-distributed, and also simply partitions the sharding
-// space into N evenly-divided buckets, which means that on every change in
-// shard count, half of the traces get reassigned (which leads to broken traces).
-// We leave it here to avoid disrupting things and provide a fallback if needed,
-// but the intent is eventually to delete this.
-func (d *DeterministicSharder) WhichShardLegacy(traceID string) Shard {
-	d.peerLock.RLock()
-	defer d.peerLock.RUnlock()
-
-	// add in the sharding salt to ensure the sh1sum is spread differently from
-	// others that use the same algorithm
-	sum := sha1.Sum([]byte(traceID + shardingSalt))
-	v := binary.BigEndian.Uint32(sum[:4])
-
-	portion := math.MaxUint32 / len(d.peers)
-	index := v / uint32(portion)
-
-	// #454 -- index can get out of range if v is close to 0xFFFFFFFF and portion would be non-integral.
-	// Consider revisiting this with a different sharding mechanism if we rework our scaling behavior.
-	if index >= uint32(len(d.peers)) {
-		index = 0
-	}
-
-	return d.peers[index]
-}
-
-// WhichShardHashed calculates which shard we want by keeping a list of partitions. Each
+// WhichShard calculates which shard we want by keeping a list of partitions. Each
 // partition has a different hash value and a map from partition to a given shard.
 // We take the traceID and calculate a hash for each partition, using the partition
 // hash as the seed for the trace hash. Whichever one has the highest value is the
 // partition we use, which determines the shard we use.
 // This is O(N) where N is the number of partitions, but because we use an efficient hash,
-// (as opposed to SHA1) it executes in 1 uSec for 50 partitions, so it works out to about
-// the same cost as the legacy sharder.
-func (d *DeterministicSharder) WhichShardHashed(traceID string) Shard {
+// (as opposed to SHA1) it executes in 1 uSec for 50 partitions.
+func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
 

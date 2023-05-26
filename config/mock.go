@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -14,7 +15,7 @@ type MockConfig struct {
 	GetCollectorTypeErr                  error
 	GetCollectorTypeVal                  string
 	GetInMemoryCollectorCacheCapacityErr error
-	GetInMemoryCollectorCacheCapacityVal InMemoryCollectorCacheCapacity
+	GetInMemoryCollectorCacheCapacityVal CollectionConfig
 	GetHoneycombAPIErr                   error
 	GetHoneycombAPIVal                   string
 	GetListenAddrErr                     error
@@ -28,8 +29,7 @@ type MockConfig struct {
 	GetLoggerTypeVal                     string
 	GetHoneycombLoggerConfigErr          error
 	GetHoneycombLoggerConfigVal          HoneycombLoggerConfig
-	GetLoggingLevelErr                   error
-	GetLoggingLevelVal                   string
+	GetLoggerLevelVal                    Level
 	GetPeersErr                          error
 	GetPeersVal                          []string
 	GetRedisHostErr                      error
@@ -50,7 +50,7 @@ type MockConfig struct {
 	GetMetricsTypeErr                    error
 	GetMetricsTypeVal                    string
 	GetHoneycombMetricsConfigErr         error
-	GetHoneycombMetricsConfigVal         HoneycombMetricsConfig
+	GetHoneycombMetricsConfigVal         LegacyMetricsConfig
 	GetPrometheusMetricsConfigErr        error
 	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
 	GetSendDelayErr                      error
@@ -66,7 +66,6 @@ type MockConfig struct {
 	UseIPV6Identifier                    bool
 	RedisIdentifier                      string
 	PeerManagementType                   string
-	PeerManagementStrategy               string
 	DebugServiceAddr                     string
 	DryRun                               bool
 	DryRunFieldName                      string
@@ -123,7 +122,7 @@ func (m *MockConfig) GetCollectorType() (string, error) {
 	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
 }
 
-func (m *MockConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
+func (m *MockConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
@@ -179,11 +178,11 @@ func (m *MockConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	return m.GetHoneycombLoggerConfigVal, m.GetHoneycombLoggerConfigErr
 }
 
-func (m *MockConfig) GetLoggingLevel() (string, error) {
+func (m *MockConfig) GetLoggerLevel() Level {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetLoggingLevelVal, m.GetLoggingLevelErr
+	return m.GetLoggerLevelVal
 }
 
 func (m *MockConfig) GetPeers() ([]string, error) {
@@ -249,7 +248,7 @@ func (m *MockConfig) GetMetricsType() (string, error) {
 	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
 
-func (m *MockConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
+func (m *MockConfig) GetHoneycombMetricsConfig() (LegacyMetricsConfig, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
@@ -299,12 +298,32 @@ func (m *MockConfig) GetSamplerConfigForDestName(dataset string) (interface{}, s
 	return m.GetSamplerTypeVal, m.GetSamplerTypeName, m.GetSamplerTypeErr
 }
 
-// GetAllSamplerRules returns all dataset rules, including the default
-func (m *MockConfig) GetAllSamplerRules() (map[string]interface{}, error) {
+// GetAllSamplerRules normally returns all dataset rules, including the default
+// In this mock, it returns only the rules for "dataset1" according to the type of the value field
+func (m *MockConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	v := map[string]interface{}{"dataset1": m.GetSamplerTypeVal}
+	choice := &V2SamplerChoice{}
+	switch sampler := m.GetSamplerTypeVal.(type) {
+	case *DeterministicSamplerConfig:
+		choice.DeterministicSampler = sampler
+	case *DynamicSamplerConfig:
+		choice.DynamicSampler = sampler
+	case *EMADynamicSamplerConfig:
+		choice.EMADynamicSampler = sampler
+	case *RulesBasedSamplerConfig:
+		choice.RulesBasedSampler = sampler
+	case *TotalThroughputSamplerConfig:
+		choice.TotalThroughputSampler = sampler
+	default:
+		return nil, fmt.Errorf("unable to determine data format")
+	}
+
+	v := &V2SamplerConfig{
+		Samplers: map[string]*V2SamplerChoice{"dataset1": choice},
+	}
+
 	return v, m.GetSamplerTypeErr
 }
 
@@ -355,13 +374,6 @@ func (m *MockConfig) GetPeerManagementType() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.PeerManagementType, nil
-}
-
-func (m *MockConfig) GetPeerManagementStrategy() (string, error) {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.PeerManagementStrategy, nil
 }
 
 func (m *MockConfig) GetDebugServiceAddr() (string, error) {
@@ -441,14 +453,14 @@ func (f *MockConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
 	return f.GRPCMaxConnectionAgeGrace
 }
 
-func (f *MockConfig) GetGRPCTime() time.Duration {
+func (f *MockConfig) GetGRPCKeepAlive() time.Duration {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
 	return f.GRPCTime
 }
 
-func (f *MockConfig) GetGRPCTimeout() time.Duration {
+func (f *MockConfig) GetGRPCKeepAliveTimeout() time.Duration {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 

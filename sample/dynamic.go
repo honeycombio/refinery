@@ -2,6 +2,7 @@ package sample
 
 import (
 	"math/rand"
+	"time"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
@@ -16,8 +17,8 @@ type DynamicSampler struct {
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
-	sampleRate        int64
-	clearFrequencySec int64
+	sampleRate     int64
+	clearFrequency config.Duration
 
 	key *traceKey
 
@@ -28,16 +29,16 @@ func (d *DynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DynamicSampler") }()
 	d.sampleRate = d.Config.SampleRate
-	if d.Config.ClearFrequencySec == 0 {
-		d.Config.ClearFrequencySec = 30
+	if d.Config.ClearFrequency == 0 {
+		d.Config.ClearFrequency = config.Duration(30 * time.Second)
 	}
-	d.clearFrequencySec = d.Config.ClearFrequencySec
+	d.clearFrequency = d.Config.ClearFrequency
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
-		GoalSampleRate:    int(d.sampleRate),
-		ClearFrequencySec: int(d.clearFrequencySec),
+		GoalSampleRate:         int(d.sampleRate),
+		ClearFrequencyDuration: time.Duration(d.clearFrequency),
 	}
 	d.dynsampler.Start()
 

@@ -1,0 +1,87 @@
+ConfigVersion: 2
+Samplers:
+    __default__:
+        DeterministicSampler:
+            SampleRate: 1
+    dataset1:
+        DynamicSampler:
+            SampleRate: 2
+            ClearFrequency: 1m0s
+            FieldList:
+                - request.method
+                - http.target
+                - response.status_code
+            UseTraceLength: true
+    dataset2:
+        EmaDynamicSampler:
+            GoalSampleRate: 2
+            AdjustmentInterval: 15s
+            Weight: 0.5
+            AgeOutValue: 0.5
+            BurstMultiple: 2
+            BurstDetectionDelay: 3
+            FieldList:
+                - request.method
+                - http.target
+                - response.status_code
+            UseTraceLength: true
+    dataset3:
+        DeterministicSampler:
+            SampleRate: 10
+    dataset4:
+        RulesBasedSampler:
+            Rules:
+                - Name: drop healthchecks
+                  Drop: true
+                  Conditions:
+                    - Field: http.route
+                      Operator: =
+                      Value: /health-check
+                - Name: keep slow 500 errors
+                  SampleRate: 1
+                  Conditions:
+                    - Field: status_code
+                      Operator: =
+                      Value: 500
+                    - Field: duration_ms
+                      Operator: '>='
+                      Value: 1000.789
+                - Name: dynamically sample 200 responses
+                  Conditions:
+                    - Field: status_code
+                      Operator: =
+                      Value: 200
+                  Sampler:
+                    EmaDynamicSampler:
+                        GoalSampleRate: 15
+                        FieldList:
+                            - request.method
+                            - request.route
+                - Name: dynamically sample 200 string responses
+                  Conditions:
+                    - Field: status_code
+                      Operator: =
+                      Value: "200"
+                      Datatype: int
+                  Sampler:
+                    EmaDynamicSampler:
+                        GoalSampleRate: 15
+                        FieldList:
+                            - request.method
+                            - request.route
+                - Name: sample traces originating from a service
+                  SampleRate: 5
+                  Scope: span
+                  Conditions:
+                    - Field: service name
+                      Operator: =
+                      Value: users
+                    - Field: trace.parent_id
+                      Operator: =
+                      Value: root
+                - SampleRate: 10
+    dataset5:
+        TotalThroughputSampler:
+            GoalThroughputPerSec: 100
+            FieldList:
+                - request.method

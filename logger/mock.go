@@ -14,14 +14,14 @@ var _ = Logger((*MockLogger)(nil))
 
 type MockLoggerEvent struct {
 	l      *MockLogger
-	level  config.HoneycombLevel
+	level  config.Level
 	Fields map[string]interface{}
 }
 
 func (l *MockLogger) Debug() Entry {
 	return &MockLoggerEvent{
 		l:      l,
-		level:  DebugLevel,
+		level:  config.DebugLevel,
 		Fields: make(map[string]interface{}),
 	}
 }
@@ -29,7 +29,7 @@ func (l *MockLogger) Debug() Entry {
 func (l *MockLogger) Info() Entry {
 	return &MockLoggerEvent{
 		l:      l,
-		level:  InfoLevel,
+		level:  config.InfoLevel,
 		Fields: make(map[string]interface{}),
 	}
 }
@@ -37,7 +37,7 @@ func (l *MockLogger) Info() Entry {
 func (l *MockLogger) Warn() Entry {
 	return &MockLoggerEvent{
 		l:      l,
-		level:  WarnLevel,
+		level:  config.WarnLevel,
 		Fields: make(map[string]interface{}),
 	}
 }
@@ -45,7 +45,7 @@ func (l *MockLogger) Warn() Entry {
 func (l *MockLogger) Error() Entry {
 	return &MockLoggerEvent{
 		l:      l,
-		level:  ErrorLevel,
+		level:  config.ErrorLevel,
 		Fields: make(map[string]interface{}),
 	}
 }
@@ -75,11 +75,13 @@ func (e *MockLoggerEvent) WithFields(fields map[string]interface{}) Entry {
 func (e *MockLoggerEvent) Logf(f string, args ...interface{}) {
 	msg := fmt.Sprintf(f, args...)
 	switch e.level {
-	case DebugLevel:
+	case config.DebugLevel:
 		e.WithField("debug", msg)
-	case InfoLevel:
+	case config.InfoLevel:
 		e.WithField("info", msg)
-	case ErrorLevel:
+	case config.WarnLevel:
+		e.WithField("warn", msg)
+	case config.ErrorLevel:
 		e.WithField("error", msg)
 	default:
 		panic("unexpected log level")

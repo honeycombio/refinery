@@ -59,7 +59,7 @@ func TestOTLPHandler(t *testing.T) {
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
-		GetInMemoryCollectorCacheCapacityVal: config.InMemoryCollectorCacheCapacity{
+		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{
 			CacheCapacity: 100,
 			MaxAlloc:      100,
 		},

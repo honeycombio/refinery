@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"net"
-	"strings"
 	"sync"
 	"time"
 )
@@ -28,7 +27,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 type fileConfig struct {
 	mainConfig    *configContents
 	mainHash      string
-	rulesConfig   map[string]any
+	rulesConfig   *V2SamplerConfig
 	rulesHash     string
 	opts          *CmdEnv
 	callbacks     []func()
@@ -40,118 +39,165 @@ type fileConfig struct {
 }
 
 type configContents struct {
-	ListenAddr                string                         `default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr" validate:"required"`
-	PeerListenAddr            string                         `default:"0.0.0.0:8081" cmdenv:"PeerListenAddr" validate:"required"`
-	CompressPeerCommunication bool                           `default:"true"`
-	GRPCListenAddr            string                         `cmdenv:"GRPCListenAddr"`
-	APIKeys                   []string                       `default:"[\"*\"]" validate:"required"`
-	HoneycombAPI              string                         `default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI" validate:"required,url"`
-	Logger                    string                         `default:"logrus" validate:"required,oneof= logrus honeycomb"`
-	LoggingLevel              string                         `default:"info" validate:"required,oneof= debug info warn error"`
-	Collector                 string                         `default:"InMemCollector" validate:"required,oneof= InMemCollector"`
-	Metrics                   string                         `default:"honeycomb" validate:"required,oneof= prometheus honeycomb"`
-	SendDelay                 Duration                       `default:"2s" validate:"required"`
-	BatchTimeout              Duration                       `default:"100ms"`
-	TraceTimeout              Duration                       `default:"60s" validate:"required"`
-	MaxBatchSize              uint                           `default:"500" validate:"required"`
-	SendTicker                Duration                       `default:"100ms" validate:"required"`
-	UpstreamBufferSize        int                            `default:"10_000" validate:"required"`
-	PeerBufferSize            int                            `default:"10_000" validate:"required"`
-	DebugServiceAddr          string                         ``
-	PeerManagement            PeerManagementConfig           `validate:"required"`
-	InMemCollector            InMemoryCollectorCacheCapacity `validate:"required"`
-	AddHostMetadataToTrace    bool                           ``
-	AddRuleReasonToTrace      bool                           ``
-	EnvironmentCacheTTL       Duration                       `default:"1h"`
-	DatasetPrefix             string                         ``
-	QueryAuthToken            string                         `cmdenv:"QueryAuthToken"`
-	AdditionalErrorFields     []string                       `default:"[\"trace.span_id\"]"`
-	AddSpanCountToRoot        bool                           ``
-	CacheOverrunStrategy      string                         `default:"impact"`
-	SampleCache               SampleCacheConfig              `validate:"required"`
-	StressRelief              StressReliefConfig             `validate:"required"`
-	AdditionalAttributes      map[string]string              `default:"{}"`
-	TraceIdFieldNames         []string                       `default:"[\"trace.trace_id\",\"traceId\"]"`
-	ParentIdFieldNames        []string                       `default:"[\"trace.parent_id\",\"parentId\"]"`
-	ConfigReloadInterval      Duration                       `default:"30s"`
-	DryRun                    bool                           ``
-	DryRunFieldName           string                         `default:"refinery_kept"`
-	GRPCServerParameters      *GRPCServerParameters
-	HoneycombLogger           *HoneycombLoggerConfig
-	HoneycombMetrics          *HoneycombMetricsConfig
-	PrometheusMetrics         *PrometheusMetricsConfig
+	General              GeneralConfig             `yaml:"General" validate:"required"`
+	Network              NetworkConfig             `yaml:"Network"`
+	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
+	Telemetry            RefineryTelemetryConfig   `yaml:"Telemetry"`
+	Traces               TracesConfig              `yaml:"Traces"`
+	Debugging            DebuggingConfig           `yaml:"Debugging"`
+	Logger               LoggerConfig              `yaml:"Logger"`
+	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
+	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
+	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
+	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
+	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
+	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
+	Collection           CollectionConfig          `yaml:"Collection"`
+	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
+	Specialized          SpecializedConfig         `yaml:"Specialized"`
+	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
+	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
+	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
+	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
 }
 
-type InMemoryCollectorCacheCapacity struct {
-	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity int    `default:"10_000" validate:"required,lt=2147483647"`
-	MaxAlloc      uint64 ``
+type GeneralConfig struct {
+	ConfigurationVersion int      `yaml:"ConfigurationVersion" validate:"required,gte=2"`
+	MinRefineryVersion   string   `yaml:"MinRefineryVersion"`
+	DatasetPrefix        string   `yaml:"DatasetPrefix" `
+	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"5m" validate:"dmin=1s"`
 }
 
-type HoneycombLevel int
+type NetworkConfig struct {
+	ListenAddr     string `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr" validate:"hostname_port"`
+	PeerListenAddr string `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr" validate:"hostname_port"`
+	HoneycombAPI   string `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI" validate:"url"`
+}
+
+type AccessKeyConfig struct {
+	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
+	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
+}
+
+type RefineryTelemetryConfig struct {
+	AddRuleReasonToTrace   bool `yaml:"AddRuleReasonToTrace"`
+	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot"`
+	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace"`
+}
+
+type TracesConfig struct {
+	SendDelay    Duration `yaml:"SendDelay" default:"2s"`
+	BatchTimeout Duration `yaml:"BatchTimeout" default:"100ms" validate:""`
+	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s" validate:"dmin=1s"`
+	MaxBatchSize uint     `yaml:"MaxBatchSize" default:"500"`
+	SendTicker   Duration `yaml:"SendTicker" default:"100ms" validate:"dmin=10ms"`
+}
+
+type DebuggingConfig struct {
+	DebugServiceAddr      string   `yaml:"DebugServiceAddr" validate:"hostname_port|eq="`
+	QueryAuthToken        string   `yaml:"QueryAuthToken" cmdenv:"QueryAuthToken"`
+	AdditionalErrorFields []string `yaml:"AdditionalErrorFields" default:"[\"trace.span_id\"]"`
+	DryRun                bool     `yaml:"DryRun" `
+}
+
+type LoggerConfig struct {
+	Type  string `yaml:"Type" default:"stdout" validate:"required,oneof=stdout honeycomb none"`
+	Level Level  `yaml:"Level" default:"Warn"`
+}
 
 type HoneycombLoggerConfig struct {
-	LoggerHoneycombAPI      string         `validate:"required,url"`
-	LoggerAPIKey            string         `cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey" validate:"required"`
-	LoggerDataset           string         `default:"Refinery Logs" validate:"required"`
-	LoggerSamplerEnabled    bool           ``
-	LoggerSamplerThroughput int            `default:"5"`
-	Level                   HoneycombLevel `default:"Warn"`
+	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
+	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
+	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
+	SamplerEnabled    bool   `yaml:"SamplerEnabled" `
+	SamplerThroughput int    `yaml:"SamplerThroughput" default:"5"`
+}
+
+type StdoutLoggerConfig struct {
+	Structured bool `yaml:"Structured" default:"true"`
 }
 
 type PrometheusMetricsConfig struct {
-	MetricsListenAddr string `validate:"required"`
+	Enabled    bool   `yaml:"Enabled" default:"false"`
+	ListenAddr string `yaml:"ListenAddr" validate:"hostname_port|eq="`
 }
 
-type HoneycombMetricsConfig struct {
-	MetricsHoneycombAPI      string `validate:"required,url"`
-	MetricsAPIKey            string `cmdenv:"HoneycombMetricsAPIKey,HoneycombAPIKey" validate:"required"`
-	MetricsDataset           string `validate:"required"`
-	MetricsReportingInterval int64  `default:"3s" validate:"required"`
+type LegacyMetricsConfig struct {
+	Enabled           bool     `yaml:"Enabled" default:"false"`
+	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
+	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
+	Dataset           string   `yaml:"Dataset"`
+	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s" validate:"dmin=1s"`
 }
 
 type PeerManagementConfig struct {
-	Type                    string   `default:"file" validate:"required,oneof= file redis"`
-	Peers                   []string `default:"[\"http://127.0.0.1:8081\"]" validate:"dive,url"`
-	RedisHost               string   `cmdenv:"RedisHost"`
-	RedisUsername           string   `cmdenv:"RedisUsername"`
-	RedisPassword           string   `cmdenv:"RedisPassword"`
-	RedisPrefix             string   `default:"refinery" validate:"required"`
-	RedisDatabase           int      `validate:"gte=0,lte=15"`
-	RedisIdentifier         string   ``
-	UseTLS                  bool     ``
-	UseTLSInsecure          bool     ``
-	IdentifierInterfaceName string   ``
-	UseIPV6Identifier       bool     ``
-	Timeout                 Duration `default:"5s" validate:"gte=1_000_000_000"`
-	Strategy                string   `default:"legacy" validate:"required,oneof= legacy hash"`
+	Type                    string   `yaml:"Type" default:"file" validate:"required,oneof=file redis"`
+	Identifier              string   `yaml:"Identifier"`
+	IdentifierInterfaceName string   `yaml:"IdentifierInterfaceName"`
+	UseIPV6Identifier       bool     `yaml:"UseIPV6Identifier"`
+	Peers                   []string `yaml:"Peers" default:"[\"http://127.0.0.1:8081\"]" validate:"dive,url"`
 }
 
-type SampleCacheConfig struct {
-	Type              string   `default:"legacy" validate:"required,oneof= legacy cuckoo"`
-	KeptSize          uint     `default:"10_000" validate:"gte=500"`
-	DroppedSize       uint     `default:"1_000_000" validate:"gte=100_000"`
-	SizeCheckInterval Duration `default:"10s" validate:"gte=1_000_000_000"` // 1 second minimum
+type RedisPeerManagementConfig struct {
+	Host           string   `yaml:"Host" cmdenv:"RedisHost"`
+	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
+	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
+	Prefix         string   `yaml:"Prefix" default:"refinery"`
+	Database       int      `yaml:"Database" validate:"gte=0,lte=15"`
+	UseTLS         bool     `yaml:"UseTLS" `
+	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
+	Timeout        Duration `yaml:"Timeout" default:"5s" validate:"dmin=1s"`
+}
+
+type CollectionConfig struct {
+	// CacheCapacity must be less than math.MaxInt32
+	CacheCapacity int    `yaml:"CacheCapacity" default:"10_000" validate:"required,lt=2147483647"`
+	MaxMemory     int    `yaml:"MaxMemory" default:"75" validate:"gte=0,lte=100"`
+	MaxAlloc      uint64 `yaml:"MaxAlloc"`
+}
+
+type BufferSizeConfig struct {
+	UpstreamBufferSize int `yaml:"UpstreamBufferSize" default:"10_000"`
+	PeerBufferSize     int `yaml:"PeerBufferSize" default:"10_000"`
+}
+
+type SpecializedConfig struct {
+	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h" validate:"dmin=1m"`
+	CompressPeerCommunication bool              `yaml:"CompressPeerCommunication" default:"true"`
+	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
+}
+
+type IDFieldsConfig struct {
+	TraceNames  []string `yaml:"TraceNames" default:"[\"trace.trace_id\",\"traceId\"]"`
+	ParentNames []string `yaml:"ParentNames" default:"[\"trace.parent_id\",\"parentId\"]"`
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	MaxConnectionIdle     Duration `default:"1s"`
-	MaxConnectionAge      Duration `default:"5s"`
-	MaxConnectionAgeGrace Duration `default:"3s"`
-	Time                  Duration `default:"10s"`
-	Timeout               Duration `default:"2s"`
+	Enabled               bool     `yaml:"Enabled"`
+	ListenAddr            string   `yaml:"ListenAddr" cmdenv:"GRPCListenAddr" validate:"hostname_port|eq="`
+	MaxConnectionIdle     Duration `yaml:"MaxConnectionIdle" default:"1m" validate:"dmin=1s|eq=0"`
+	MaxConnectionAge      Duration `yaml:"MaxConnectionAge" default:"3m" validate:"dmin=10s|eq=0"`
+	MaxConnectionAgeGrace Duration `yaml:"MaxConnectionAgeGrace" default:"1m" validate:"dmin=1s|eq=0"`
+	KeepAlive             Duration `yaml:"KeepAlive" default:"1m" validate:"dmin=10s"`
+	KeepAliveTimeout      Duration `yaml:"KeepAliveTimeout" default:"20s" validate:"dmin=1s"`
+}
+
+type SampleCacheConfig struct {
+	KeptSize          uint     `yaml:"KeptSize" default:"10_000" validate:"gte=500"`
+	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000" validate:"gte=100_000"`
+	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s" validate:"dmin=1s"`
 }
 
 type StressReliefConfig struct {
-	Mode                      string   `default:"never" validate:"required,oneof= always never monitor"`
-	ActivationLevel           uint     `default:"90" validate:"gte=0,lte=100"`
-	DeactivationLevel         uint     `default:"75" validate:"gte=0,lte=100"`
-	StressSamplingRate        uint64   `default:"1000" validate:"gte=1"`
-	MinimumActivationDuration Duration `default:"10s"`
-	StartStressedDuration     Duration `default:"3s"`
+	Mode                      string   `yaml:"Mode" default:"never" validate:"required,oneof=always never monitor"`
+	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90" validate:"gte=0,lte=100"`
+	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75" validate:"gte=0,lte=100"`
+	SamplingRate              uint64   `yaml:"SamplingRate" default:"1000" validate:"gte=1"`
+	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
+	StartStressedDuration     Duration `yaml:"StartStressedDuration" default:"3s"`
 }
 
 // newFileConfig does the work of creating and loading the start of a config object
@@ -164,19 +210,10 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		return nil, err
 	}
 
-	var rulesconf map[string]any
+	var rulesconf *V2SamplerConfig
 	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocation, nil)
 	if err != nil {
 		return nil, err
-	}
-
-	// TODO: this is temporary while we still conform to the old config format;
-	// once we're fully migrated, we can remove this stuff.
-	if dryRun, ok := GetValueForCaseInsensitiveKey(rulesconf, "dryrun", false); ok {
-		mainconf.DryRun = dryRun
-	}
-	if dryRunFieldName, ok := GetValueForCaseInsensitiveKey(rulesconf, "dryrunfieldname", ""); ok && dryRunFieldName != "" {
-		mainconf.DryRunFieldName = dryRunFieldName
 	}
 
 	cfg := &fileConfig{
@@ -187,10 +224,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		opts:        opts,
 	}
 
-	// Run a basic validation on the sampler config; we can do better after a reorganization of this.
-	if _, _, err := cfg.GetSamplerConfigForDestName("**invalid dataset name**"); err != nil {
-		return nil, err
-	}
+	// TODO: Validations go here
 
 	return cfg, nil
 }
@@ -213,7 +247,7 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 
 func (f *fileConfig) monitor() {
 	f.done = make(chan struct{})
-	f.ticker = time.NewTicker(time.Duration(f.mainConfig.ConfigReloadInterval))
+	f.ticker = time.NewTicker(time.Duration(f.mainConfig.General.ConfigReloadInterval))
 	for {
 		select {
 		case <-f.done:
@@ -263,29 +297,29 @@ func (f *fileConfig) GetListenAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	_, _, err := net.SplitHostPort(f.mainConfig.ListenAddr)
+	_, _, err := net.SplitHostPort(f.mainConfig.Network.ListenAddr)
 	if err != nil {
 		return "", err
 	}
-	return f.mainConfig.ListenAddr, nil
+	return f.mainConfig.Network.ListenAddr, nil
 }
 
 func (f *fileConfig) GetPeerListenAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	_, _, err := net.SplitHostPort(f.mainConfig.PeerListenAddr)
+	_, _, err := net.SplitHostPort(f.mainConfig.Network.PeerListenAddr)
 	if err != nil {
 		return "", err
 	}
-	return f.mainConfig.PeerListenAddr, nil
+	return f.mainConfig.Network.PeerListenAddr, nil
 }
 
 func (f *fileConfig) GetCompressPeerCommunication() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.CompressPeerCommunication
+	return f.mainConfig.Specialized.CompressPeerCommunication
 }
 
 func (f *fileConfig) GetGRPCListenAddr() (string, error) {
@@ -293,20 +327,20 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 	defer f.mux.RUnlock()
 
 	// GRPC listen addr is optional, only check value is valid if not empty
-	if f.mainConfig.GRPCListenAddr != "" {
-		_, _, err := net.SplitHostPort(f.mainConfig.GRPCListenAddr)
+	if f.mainConfig.GRPCServerParameters.ListenAddr != "" {
+		_, _, err := net.SplitHostPort(f.mainConfig.GRPCServerParameters.ListenAddr)
 		if err != nil {
 			return "", err
 		}
 	}
-	return f.mainConfig.GRPCListenAddr, nil
+	return f.mainConfig.GRPCServerParameters.ListenAddr, nil
 }
 
 func (f *fileConfig) GetAPIKeys() ([]string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.APIKeys, nil
+	return f.mainConfig.AccessKeys.ReceiveKeys, nil
 }
 
 func (f *fileConfig) GetPeerManagementType() (string, error) {
@@ -314,13 +348,6 @@ func (f *fileConfig) GetPeerManagementType() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.PeerManagement.Type, nil
-}
-
-func (f *fileConfig) GetPeerManagementStrategy() (string, error) {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.PeerManagement.Strategy, nil
 }
 
 func (f *fileConfig) GetPeers() ([]string, error) {
@@ -334,49 +361,49 @@ func (f *fileConfig) GetRedisHost() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.RedisHost, nil
+	return f.mainConfig.RedisPeerManagement.Host, nil
 }
 
 func (f *fileConfig) GetRedisUsername() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.RedisUsername, nil
+	return f.mainConfig.RedisPeerManagement.Username, nil
 }
 
 func (f *fileConfig) GetRedisPrefix() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.RedisPrefix
+	return f.mainConfig.RedisPeerManagement.Prefix
 }
 
 func (f *fileConfig) GetRedisPassword() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.RedisPassword, nil
+	return f.mainConfig.RedisPeerManagement.Password, nil
 }
 
 func (f *fileConfig) GetRedisDatabase() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.RedisDatabase
+	return f.mainConfig.RedisPeerManagement.Database
 }
 
 func (f *fileConfig) GetUseTLS() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.UseTLS, nil
+	return f.mainConfig.RedisPeerManagement.UseTLS, nil
 }
 
 func (f *fileConfig) GetUseTLSInsecure() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.UseTLSInsecure, nil
+	return f.mainConfig.RedisPeerManagement.UseTLSInsecure, nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
@@ -397,45 +424,46 @@ func (f *fileConfig) GetRedisIdentifier() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.RedisIdentifier, nil
+	return f.mainConfig.PeerManagement.Identifier, nil
 }
 
 func (f *fileConfig) GetHoneycombAPI() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.HoneycombAPI, nil
+	return f.mainConfig.Network.HoneycombAPI, nil
 }
 
-func (f *fileConfig) GetLoggingLevel() (string, error) {
+func (f *fileConfig) GetLoggerLevel() Level {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.LoggingLevel, nil
+	return f.mainConfig.Logger.Level
 }
 
 func (f *fileConfig) GetLoggerType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Logger, nil
+	return f.mainConfig.Logger.Type, nil
 }
 
 func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return *f.mainConfig.HoneycombLogger, nil
+	return f.mainConfig.HoneycombLogger, nil
 }
 
+// TODO: DEPRECATED
 func (f *fileConfig) GetCollectorType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Collector, nil
+	return "InMemCollector", nil
 }
 
-func (f *fileConfig) GetAllSamplerRules() (map[string]any, error) {
+func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
@@ -443,200 +471,168 @@ func (f *fileConfig) GetAllSamplerRules() (map[string]any, error) {
 	return f.rulesConfig, nil
 }
 
-// GetValueForCaseInsensitiveKey is a generic function that returns the value from a map[string]any
-// for the given key, ignoring case of the key. It returns ok=true only if the key was found
-// and could be converted to the required type. Otherwise it returns the default value
-// and ok=false.
-func GetValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
-	for k, v := range m {
-		if strings.EqualFold(k, key) {
-			if t, ok := v.(T); ok {
-				return t, true
-			}
-		}
-	}
-	return def, false
-}
-
 // GetSamplerConfigForDestName returns the sampler config for the given
 // destination (environment, or dataset in classic mode), as well as the name of
-// the sampler. If the specific sampler config is not found, it returns the
+// the sampler type. If the specific destination is not found, it returns the
 // default sampler config.
 func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	config := f.rulesConfig
-	// If we have a specific sampler, we extract the sampler config
-	// corresponding to the [destname]["sampler"] key. Otherwise we try to use
-	// the default sampler config corresponding to the "sampler" key. Only if
-	// both fail will we return not found.
-
-	const notfound = "not found"
-	if v, ok := GetValueForCaseInsensitiveKey(config, destname, map[string]any{}); ok {
-		// we have a specific sampler, so we extract that sampler's config
-		config = v
+	nameToUse := "__default__"
+	if _, ok := f.rulesConfig.Samplers[destname]; ok {
+		nameToUse = destname
 	}
 
-	// now we need the name of the sampler
-	samplerName, _ := GetValueForCaseInsensitiveKey(config, "sampler", "DeterministicSampler")
-
-	var i any
-	switch samplerName {
-	case "DeterministicSampler":
-		i = &DeterministicSamplerConfig{}
-	case "DynamicSampler":
-		i = &DynamicSamplerConfig{}
-	case "EMADynamicSampler":
-		i = &EMADynamicSamplerConfig{}
-	case "RulesBasedSampler":
-		i = &RulesBasedSamplerConfig{}
-	case "TotalThroughputSampler":
-		i = &TotalThroughputSamplerConfig{}
-	default:
-		return nil, notfound, errors.New("no sampler found")
+	err := errors.New("no sampler found and no default configured")
+	name := "not found"
+	var cfg any
+	if sampler, ok := f.rulesConfig.Samplers[nameToUse]; ok {
+		cfg, name = sampler.Sampler()
+		if cfg != nil {
+			err = nil
+		}
 	}
-
-	// now we need to unmarshal the config into the sampler config struct
-	err := reloadInto(config, i, f.opts)
-	return i, samplerName, err
+	return cfg, name, err
 }
 
-func (f *fileConfig) GetInMemCollectorCacheCapacity() (InMemoryCollectorCacheCapacity, error) {
+func (f *fileConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.InMemCollector, nil
+	return f.mainConfig.Collection, nil
 }
 
+// TODO: REMOVE THIS
 func (f *fileConfig) GetMetricsType() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Metrics, nil
+	return "", nil
 }
 
-func (f *fileConfig) GetHoneycombMetricsConfig() (HoneycombMetricsConfig, error) {
+func (f *fileConfig) GetHoneycombMetricsConfig() (LegacyMetricsConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return *f.mainConfig.HoneycombMetrics, nil
+	return f.mainConfig.LegacyMetrics, nil
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return *f.mainConfig.PrometheusMetrics, nil
+	return f.mainConfig.PrometheusMetrics, nil
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.SendDelay), nil
+	return time.Duration(f.mainConfig.Traces.SendDelay), nil
 }
 
 func (f *fileConfig) GetBatchTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.BatchTimeout)
+	return time.Duration(f.mainConfig.Traces.BatchTimeout)
 }
 
 func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.TraceTimeout), nil
+	return time.Duration(f.mainConfig.Traces.TraceTimeout), nil
 }
 
 func (f *fileConfig) GetMaxBatchSize() uint {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.MaxBatchSize
+	return f.mainConfig.Traces.MaxBatchSize
 }
 
 func (f *fileConfig) GetUpstreamBufferSize() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.UpstreamBufferSize
+	return f.mainConfig.BufferSizes.UpstreamBufferSize
 }
 
 func (f *fileConfig) GetPeerBufferSize() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerBufferSize
+	return f.mainConfig.BufferSizes.PeerBufferSize
 }
 
 func (f *fileConfig) GetSendTickerValue() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.SendTicker)
+	return time.Duration(f.mainConfig.Traces.SendTicker)
 }
 
 func (f *fileConfig) GetDebugServiceAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	_, _, err := net.SplitHostPort(f.mainConfig.DebugServiceAddr)
+	_, _, err := net.SplitHostPort(f.mainConfig.Debugging.DebugServiceAddr)
 	if err != nil {
 		return "", err
 	}
-	return f.mainConfig.DebugServiceAddr, nil
+	return f.mainConfig.Debugging.DebugServiceAddr, nil
 }
 
 func (f *fileConfig) GetIsDryRun() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.DryRun
+	return f.mainConfig.Debugging.DryRun
 }
 
+// TODO: DEPRECATED
 func (f *fileConfig) GetDryRunFieldName() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.DryRunFieldName
+	return "meta.refinery.dryrun.kept"
 }
 
 func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.AddHostMetadataToTrace
+	return f.mainConfig.Telemetry.AddHostMetadataToTrace
 }
 
 func (f *fileConfig) GetAddRuleReasonToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.AddRuleReasonToTrace
+	return f.mainConfig.Telemetry.AddRuleReasonToTrace
 }
 
 func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.EnvironmentCacheTTL)
+	return time.Duration(f.mainConfig.Specialized.EnvironmentCacheTTL)
 }
 
 func (f *fileConfig) GetDatasetPrefix() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.DatasetPrefix
+	return f.mainConfig.General.DatasetPrefix
 }
 
 func (f *fileConfig) GetQueryAuthToken() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.QueryAuthToken
+	return f.mainConfig.Debugging.QueryAuthToken
 }
 
 func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
@@ -660,46 +656,47 @@ func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
 	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAgeGrace)
 }
 
-func (f *fileConfig) GetGRPCTime() time.Duration {
+func (f *fileConfig) GetGRPCKeepAlive() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.GRPCServerParameters.Time)
+	return time.Duration(f.mainConfig.GRPCServerParameters.KeepAlive)
 }
 
-func (f *fileConfig) GetGRPCTimeout() time.Duration {
+func (f *fileConfig) GetGRPCKeepAliveTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.GRPCServerParameters.Timeout)
+	return time.Duration(f.mainConfig.GRPCServerParameters.KeepAliveTimeout)
 }
 
 func (f *fileConfig) GetPeerTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.PeerManagement.Timeout)
+	return time.Duration(f.mainConfig.RedisPeerManagement.Timeout)
 }
 
 func (f *fileConfig) GetAdditionalErrorFields() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.AdditionalErrorFields
+	return f.mainConfig.Debugging.AdditionalErrorFields
 }
 
 func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.AddSpanCountToRoot
+	return f.mainConfig.Telemetry.AddSpanCountToRoot
 }
 
+// TODO: DEPRECATE
 func (f *fileConfig) GetCacheOverrunStrategy() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.CacheOverrunStrategy
+	return "impact"
 }
 
 func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {
@@ -720,14 +717,14 @@ func (f *fileConfig) GetTraceIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.TraceIdFieldNames
+	return f.mainConfig.IDFieldNames.TraceNames
 }
 
 func (f *fileConfig) GetParentIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.ParentIdFieldNames
+	return f.mainConfig.IDFieldNames.ParentNames
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
@@ -751,5 +748,5 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.AdditionalAttributes
+	return f.mainConfig.Specialized.AdditionalAttributes
 }

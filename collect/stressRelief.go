@@ -135,7 +135,7 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 
 	s.activateLevel = cfg.ActivationLevel
 	s.deactivateLevel = cfg.DeactivationLevel
-	s.sampleRate = cfg.StressSamplingRate
+	s.sampleRate = cfg.SamplingRate
 	if s.sampleRate == 0 {
 		s.sampleRate = 1
 	}

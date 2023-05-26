@@ -9,14 +9,18 @@ import (
 )
 
 func TestHoneycombLoggerRespectsLogLevelAfterStart(t *testing.T) {
-	cfg := &config.MockConfig{GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{}}
+	cfg := &config.MockConfig{
+		GetLoggerLevelVal:           config.WarnLevel,
+		GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{},
+	}
 	hcLogger := &HoneycombLogger{
 		Config:       cfg,
-		loggerConfig: config.HoneycombLoggerConfig{Level: WarnLevel},
+		level:        config.WarnLevel,
+		loggerConfig: config.HoneycombLoggerConfig{},
 	}
 
-	assert.Equal(t, WarnLevel, hcLogger.loggerConfig.Level)
+	assert.Equal(t, config.WarnLevel, hcLogger.level)
 	err := hcLogger.Start()
 	assert.Nil(t, err)
-	assert.Equal(t, WarnLevel, hcLogger.loggerConfig.Level)
+	assert.Equal(t, config.WarnLevel, hcLogger.level)
 }

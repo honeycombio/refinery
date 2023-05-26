@@ -6,20 +6,34 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/creasty/defaults"
 	"github.com/honeycombio/refinery/config"
 	"gopkg.in/yaml.v3"
 )
 
-func _keysToLowercase(m map[string]any) map[string]any {
+func transformSamplerMap(m map[string]any) map[string]any {
 	newmap := make(map[string]any)
 	for k, v := range m {
 		switch val := v.(type) {
 		case map[string]any:
-			v = _keysToLowercase(val)
+			v = transformSamplerMap(val)
 		}
-		newmap[strings.ToLower(k)] = v
+
+		k = strings.ToLower(k)
+
+		// there are some fields that are named differently in v2 than in v1
+		// and some data types that are different
+		// this fixes those up
+		switch k {
+		case "clearfrequencysec":
+			k = "clearfrequency"
+			v = config.Duration(v.(int64)) * config.Duration(time.Second)
+		case "adjustmentinterval":
+			v = config.Duration(v.(int64)) * config.Duration(time.Second)
+		}
+		newmap[k] = v
 	}
 	return newmap
 }
@@ -43,30 +57,30 @@ func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*con
 	}
 
 	// We use a little trick here -- we have read the rules into a generic map.
-	// First we convert the generic map into all lowercase keys, then marshal
-	// them into a bytestream using JSON, then finally unmarshal them into their
-	// final form. This lets us use the JSON tags to do the mapping of old field
-	// names onto new names, while we use the YAML tags to render the new names
-	// in the final output. So it's real important to have both tags on any
-	// field that gets renamed!
+	// First we convert the generic map into all lowercase keys (and do some
+	// data cleanup on the way by), then marshal them into a bytestream using
+	// JSON, then finally unmarshal them into their final form. This lets us use
+	// the JSON tags to do the mapping of old field names onto new names, while
+	// we use the YAML tags to render the new names in the final output. So it's
+	// real important to have both tags on any field that gets renamed!
 
 	// convert all the keys to lowercase
-	lowermap := _keysToLowercase(rulesmap)
+	lowermap := transformSamplerMap(rulesmap)
 
-	// marshal the rules into a bytestream
+	// marshal the rules into a JSON bytestream that has the right shape to unmarshal into the sampler
 	b, err := json.Marshal(lowermap)
 	if err != nil {
-		return nil, "", fmt.Errorf("getV1RulesForSampler unable to marshal config: %w", err)
+		return nil, "", fmt.Errorf("readV1RulesIntoV2Sampler unable to marshal config: %w", err)
 	}
 
 	// and unmarshal them back into the sampler
 	err = json.Unmarshal(b, sampler)
 	if err != nil {
-		return nil, "", fmt.Errorf("getV1RulesForSampler unable to unmarshal config: %w", err)
+		return nil, "", fmt.Errorf("readV1RulesIntoV2Sampler unable to unmarshal config: %w", err)
 	}
 	// now we've got the config, apply defaults to zero values
 	if err := defaults.Set(sampler); err != nil {
-		return nil, "", fmt.Errorf("getV1RulesForSampler unable to apply defaults: %w", err)
+		return nil, "", fmt.Errorf("readV1RulesIntoV2Sampler unable to apply defaults: %w", err)
 	}
 
 	// and now put it into the V2 sampler config
@@ -87,12 +101,27 @@ func readV1RulesIntoV2Sampler(samplerType string, rulesmap map[string]any) (*con
 	return newSampler, samplerType, nil
 }
 
+// getValueForCaseInsensitiveKey is a generic helper function that returns the
+// value from a map[string]any for the given key, ignoring case of the key. It
+// returns ok=true only if the key was found and could be converted to the
+// required type. Otherwise it returns the default value and ok=false.
+func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (T, bool) {
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			if t, ok := v.(T); ok {
+				return t, true
+			}
+		}
+	}
+	return def, false
+}
+
 func ConvertRules(rules map[string]any, w io.Writer) {
 	// this writes the rules to w as a YAML file for debugging
 	// yaml.NewEncoder(w).Encode(rules)
 
 	// get the sampler type for the default rule
-	defaultSamplerType, _ := config.GetValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
+	defaultSamplerType, _ := getValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
 
 	newConfig := &config.V2SamplerConfig{
 		ConfigVersion: 2,
@@ -115,14 +144,14 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 		// make sure it's a sampler destination key by checking for the presence
 		// of a "sampler" key or a "samplerate" key; having either one is good
 		// enough
-		if _, ok := config.GetValueForCaseInsensitiveKey(sub, "sampler", ""); !ok {
-			if _, ok := config.GetValueForCaseInsensitiveKey(sub, "samplerate", ""); !ok {
+		if _, ok := getValueForCaseInsensitiveKey(sub, "sampler", ""); !ok {
+			if _, ok := getValueForCaseInsensitiveKey(sub, "samplerate", ""); !ok {
 				continue
 			}
 		}
 
 		// get the sampler type for the rule
-		samplerType, _ := config.GetValueForCaseInsensitiveKey(sub, "sampler", "DeterministicSampler")
+		samplerType, _ := getValueForCaseInsensitiveKey(sub, "sampler", "DeterministicSampler")
 		sampler, _, err := readV1RulesIntoV2Sampler(samplerType, sub)
 		if err != nil {
 			panic(err)

@@ -2,6 +2,7 @@ package sample
 
 import (
 	"math/rand"
+	"time"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
@@ -17,7 +18,7 @@ type EMADynamicSampler struct {
 	Metrics metrics.Metrics
 
 	goalSampleRate      int
-	adjustmentInterval  int
+	adjustmentInterval  config.Duration
 	weight              float64
 	ageOutValue         float64
 	burstMultiple       float64
@@ -43,13 +44,13 @@ func (d *EMADynamicSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{
-		GoalSampleRate:      d.goalSampleRate,
-		AdjustmentInterval:  d.adjustmentInterval,
-		Weight:              d.weight,
-		AgeOutValue:         d.ageOutValue,
-		BurstDetectionDelay: d.burstDetectionDelay,
-		BurstMultiple:       d.burstMultiple,
-		MaxKeys:             d.maxKeys,
+		GoalSampleRate:             d.goalSampleRate,
+		AdjustmentIntervalDuration: time.Duration(d.adjustmentInterval),
+		Weight:                     d.weight,
+		AgeOutValue:                d.ageOutValue,
+		BurstDetectionDelay:        d.burstDetectionDelay,
+		BurstMultiple:              d.burstMultiple,
+		MaxKeys:                    d.maxKeys,
 	}
 	d.dynsampler.Start()
 

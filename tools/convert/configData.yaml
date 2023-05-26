@@ -31,6 +31,34 @@ groups:
           the features used in this file. Refinery will refuse to start if its
           version is less than this.
 
+      - name: DatasetPrefix
+        type: string
+        valuetype: nondefault
+        default: ""
+        reload: false
+        summary: is a prefix that can be used to distinguish a dataset from an environment in the rules.
+        description: >
+          If telemetry is being sent to both a classic dataset and a new
+          environment called the same thing (eg `production`), this parameter
+          can be used to distinguish these cases. When Refinery receives
+          telemetry using an API key associated with a classic dataset, it will
+          then use the prefix in the form `{prefix}.{dataset}` when trying to
+          resolve the rules definition.
+
+      - name: ConfigReloadInterval
+        type: duration
+        valuetype: nondefault
+        default: 5m
+        reload: false
+        summary: is the average interval between attempts at reloading the configuration file.
+        description: >
+          A single instance of Refinery will attempt to read its configuration
+          and check for changes at approximately this interval. This time is
+          varied by a random amount to avoid all instances refreshing together.
+          Within a cluster, Refinery will gossip information about new
+          configuration so that all instances can reload at close to the same
+          time.
+
   - name: Network
     title: "Network Configuration"
     description: Contains network configuration options.
@@ -115,14 +143,16 @@ groups:
         type: bool
         valuetype: nondefault
         default: false
+        example: true
         reload: true
         summary: controls whether to decorate traces with refinery rule evaluation results.
         description: >
-          AddRuleReasonToTrace causes traces that are sent to Honeycomb to
-          include the field `meta.refinery.reason`, indicating which sampler
-          made the decision to keep the trace. For samplers that use a key to
-          make their decision, the key is also included in the field
-          `meta.refinery.sampler_key`.
+          This causes traces that are sent to Honeycomb to include the field
+          `meta.refinery.reason`. This field contains text indicating which rule
+          was evaluated that caused the trace to be included. We recommend
+          enabling this field whenever a rules-based sampler is in use, as it is
+          useful for debugging and understanding the behavior of your refinery
+          installation.
 
       - name: AddSpanCountToRoot
         type: bool
@@ -261,21 +291,6 @@ groups:
           `environment` are always included. If a field is not present in the
           span, it will not be present in the error log.
 
-      - name: AddRuleReasonToTrace
-        type: bool
-        valuetype: nondefault
-        default: false
-        example: true
-        reload: true
-        summary: controls whether to decorate traces with refinery rule evaluation results.
-        description: >
-          This causes traces that are sent to Honeycomb to include the field
-          `meta.refinery.reason`. This field contains text indicating which rule
-          was evaluated that caused the trace to be included. We recommend
-          enabling this field whenever a rules-based sampler is in use, as it is
-          useful for debugging and understanding the behavior of your refinery
-          installation.
-
       - name: DryRun
         type: bool
         valuetype: showexample
@@ -287,10 +302,11 @@ groups:
           If enabled, marks the traces that would be dropped given the current
           sampling rules, and sends all traces regardless of the sampling
           decision. This is useful for evaluating sampling rules. In DryRun
-          mode, traces will be decorated with meta.refinery.dryrun.enabled set
-          to true. In addition, SampleRate will be set to the incoming rate for
-          all traces, and the field meta.refinery.dryrun.sample_rate will be set
-          to the sample rate that would have been used.
+          mode, traces will be decorated with meta.refinery.dryrun.kept set to
+          true or false based on whether the trace would be kept or dropped. In
+          addition, SampleRate will be set to the incoming rate for all traces,
+          and the field meta.refinery.dryrun.sample_rate will be set to the
+          sample rate that would have been used.
 
   - name: Logger
     title: "Refinery Logger"
@@ -309,15 +325,15 @@ groups:
           honeycomb as events according to the settings below. "stdout" means
           that logs will be written to stdout.
 
-      - name: LoggingLevel
+      - name: Level
         type: string
         valuetype: choice
         choices: ["debug", "info", "warn", "error", "panic"]
         default: "warn"
         reload: false
-        summary: is the message level above which refinery should send a log.
+        summary: is the logging level above which refinery should send a log.
         description: >
-          Sets the message level above which refinery should send logs to the
+          Sets the logging level above which refinery should send logs to the
           logger. Debug is very verbose, and should not be used in production
           environments. Warn is the recommended level for production.
 
@@ -399,7 +415,7 @@ groups:
       - name: Structured
         type: bool
         valuetype: nondefault
-        default: false
+        default: true
         reload: false
         summary: controls whether to used structured logging.
         description: >
@@ -421,7 +437,7 @@ groups:
           The flag specifies whether Refinery should expose its own metrics
           over the PrometheusListenAddr port.
 
-      - name: PrometheusListenAddr
+      - name: ListenAddr
         v1group: PrometheusMetrics
         v1name: MetricsListenAddr
         type: ipport
@@ -528,6 +544,21 @@ groups:
           self-registers with a redis instance and gets its peer list from
           there.
 
+      - name: Identifier
+        v1group: PeerManagement
+        v1name: RedisIdentifier
+        type: string
+        valuetype: nonemptystring
+        example: "192.168.1.1"
+        reload: false
+        summary: specifies the identifier to use when registering itself with peers.
+        description: >
+          By default, when using a peer registry, Refinery will use the local
+          hostname to identify itself to other peers. If your environment
+          requires something else, (for example, if peers can't resolve each
+          other by name), you can specify the exact identifier (IP address, etc)
+          to use here. Overrides IdentifierInterfaceName, if both are set.
+
       - name: IdentifierInterfaceName
         v1group: PeerManagement
         v1name: IdentifierInterfaceName
@@ -558,21 +589,6 @@ groups:
           IPv4 unicast address it finds for the specified interface. If this
           value is specified, Refinery will use the first IPV6 unicast address
           found.
-
-      - name: RedisIdentifier
-        v1group: PeerManagement
-        v1name: RedisIdentifier
-        type: string
-        valuetype: nonemptystring
-        example: "192.168.1.1"
-        reload: false
-        summary: specifies the identifier to use when registering itself with peers.
-        description: >
-          By default, when using a peer registry, Refinery will use the local
-          hostname to identify itself to other peers. If your environment
-          requires something else, (for example, if peers can't resolve each
-          other by name), you can specify the exact identifier (IP address, etc)
-          to use here. Overrides IdentifierInterfaceName, if both are set.
 
       - name: Peers
         v1group: PeerManagement
@@ -747,15 +763,16 @@ groups:
         reload: true
         summary: is the maximum percentage of memory that should be allocated by the collector.
         description: >
-          If set, it must be an integer value between 0 and 100, representing
+          If nonzero, it must be an integer value between 1 and 100, representing
           the target maximum percentage of memory that should be allocated by
           the collector. If set to a non-zero value, once per tick (see
           SendTicker) the collector will compare total allocated bytes to this
           calculated value. If allocation is too high, traces will be ejected
           from the cache early to reduce memory. Useful values for this setting
           are generally in the range of 70-90. Depending on deployment details,
-          system memory information may not be available; if it is not, a
+          system memory information may not be available. If it is not, a
           warning will be logged and the value of MaxAlloc will be used.
+          If this value is 0, MaxAlloc will be used.
 
       - name: MaxAlloc
         v1group: InMemCollector
@@ -874,13 +891,13 @@ groups:
           every span. For example, it could be used for naming a refinery
           cluster. Both keys and values must be strings.
 
-  - name: IDFieldNames
-    title: "ID Field Names"
+  - name: IDFields
+    title: "ID Fields"
     description: >
       Controls the field names to use for the event ID fields. These fields are
       used to identify events that are part of the same trace.
     fields:
-      - name: TraceIDFieldNames
+      - name: TraceNames
         type: stringarray
         valuetype: stringarray
         example: "trace.trace_id,traceId"
@@ -892,16 +909,16 @@ groups:
           ID. If none of the fields are present, refinery treats the span as not
           being part of a trace and forwards it immediately to Honeycomb.
 
-      - name: ParentIDFieldNames
+      - name: ParentNames
         type: stringarray
         valuetype: stringarray
         example: "trace.parent_id,parentId"
         reload: true
         summary: is the list of field names to use for the parent ID.
         description: >
-          ParentIDFieldNames is the list of field names to use for the parent
-          ID. The first field in the list that is present in an event will be
-          used as the parent ID.
+          The list of field names to use for the parent ID. The first field in
+          the list that is present in an event will be used as the parent ID. A
+          trace without a parent_id is assumed to be a root span.
 
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
