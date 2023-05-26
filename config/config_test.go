@@ -679,8 +679,8 @@ func TestAdditionalAttributes(t *testing.T) {
 func TestHoneycombIdFieldsConfig(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
-		"IDFieldNames.Trace", []string{"first", "second"},
-		"IDFieldNames.Parent", []string{"zero", "one"},
+		"IDFields.TraceNames", []string{"first", "second"},
+		"IDFields.ParentNames", []string{"zero", "one"},
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)

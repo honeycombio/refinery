@@ -55,7 +55,7 @@ type configContents struct {
 	Collection           CollectionConfig          `yaml:"Collection"`
 	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
-	IDFieldNames         IDFieldsConfig            `yaml:"IDFieldNames"`
+	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
 	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
 	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
 	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
