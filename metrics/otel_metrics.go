@@ -17,13 +17,13 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-// OTelMetrics sends metrics to Honeycomb using the OpenTelemetry protocol.
-// One particular thing to note is that OTel metrics treats histograms very
+// OTelMetrics sends metrics to Honeycomb using the OpenTelemetry protocol. One
+// particular thing to note is that OTel metrics treats histograms very
 // differently than Honeycomb's Legacy metrics. In particular, Legacy metrics
 // pre-aggregates histograms and sends columns corresponding to the histogram
-// aggregates (e.g. avg, p50, p95, etc.). OTel, OTOH, sends the raw histogram
-// values and lets Honeycomb do the aggregation on ingest. The columns in the
-// resulting datasets will not be the same.
+// aggregates (e.g. avg, p50, p95, etc.). OTel, on the other hand, sends the raw
+// histogram values and lets Honeycomb do the aggregation on ingest. The columns
+// in the resulting datasets will not be the same.
 type OTelMetrics struct {
 	Config  config.Config `inject:""`
 	Logger  logger.Logger `inject:""`
@@ -69,6 +69,7 @@ func (o *OTelMetrics) Start() {
 		// Counters are a bit of a tossup, but we'll reset them because Legacy metrics did.
 		otlpmetrichttp.WithTemporalitySelector(func(ik sdkmetric.InstrumentKind) metricdata.Temporality {
 			switch ik {
+			// These are the ones we care about today. If we add more, we'll need to add them here.
 			case sdkmetric.InstrumentKindCounter, sdkmetric.InstrumentKindHistogram:
 				return metricdata.DeltaTemporality
 			default:

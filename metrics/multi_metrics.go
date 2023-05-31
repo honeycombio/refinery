@@ -68,9 +68,11 @@ func (m *MultiMetrics) Down(name string) { // for updown
 }
 
 func (m *MultiMetrics) Get(name string) (float64, bool) { // for reading back a value
+	// Assumes that the first child exists and is the StoreMetrics
 	return m.children[0].Get(name) // this is the StoreMetrics
 }
 
 func (m *MultiMetrics) Store(name string, val float64) { // for storing a rarely-changing value not sent as a metric
+	// Assumes that the first child exists and is the StoreMetrics
 	m.children[0].Store(name, val) // this is the StoreMetrics
 }
