@@ -81,6 +81,7 @@ func (s *StressRelief) Start() error {
 		"sigmoid": s.sigmoid, // don't worry about small stuff, but if we cross the midline, start worrying quickly
 	}
 
+	// All of the numerator metrics are gauges. The denominator metrics are constants.
 	s.calcs = []StressReliefCalculation{
 		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (peer)"},
 		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (incoming)"},

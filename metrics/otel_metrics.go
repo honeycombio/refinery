@@ -13,10 +13,17 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-// OTelMetrics discards all metrics
+// OTelMetrics sends metrics to Honeycomb using the OpenTelemetry protocol.
+// One particular thing to note is that OTel metrics treats histograms very
+// differently than Honeycomb's Legacy metrics. In particular, Legacy metrics
+// pre-aggregates histograms and sends columns corresponding to the histogram
+// aggregates (e.g. avg, p50, p95, etc.). OTel, OTOH, sends the raw histogram
+// values and lets Honeycomb do the aggregation on ingest. The columns in the
+// resulting datasets will not be the same.
 type OTelMetrics struct {
 	Config  config.Config `inject:""`
 	Logger  logger.Logger `inject:""`
@@ -55,11 +62,25 @@ func (o *OTelMetrics) Start() {
 
 	options := []otlpmetrichttp.Option{
 		otlpmetrichttp.WithEndpoint(host.Host),
-		otlpmetrichttp.WithHeaders(map[string]string{
+		otlpmetrichttp.WithCompression(compression),
+		// this is how we tell otel to reset metrics every time they're sent -- for some kinds of metrics.
+		// Updown counters should not be reset, nor should gauges.
+		// Histograms should definitely be reset.
+		// Counters are a bit of a tossup, but we'll reset them because Legacy metrics did.
+		otlpmetrichttp.WithTemporalitySelector(func(ik sdkmetric.InstrumentKind) metricdata.Temporality {
+			switch ik {
+			case sdkmetric.InstrumentKindCounter, sdkmetric.InstrumentKindHistogram:
+				return metricdata.DeltaTemporality
+			default:
+				return metricdata.CumulativeTemporality
+			}
+		}),
+	}
+	if cfg.APIKey != "" {
+		options = append(options, otlpmetrichttp.WithHeaders(map[string]string{
 			"x-honeycomb-team":    cfg.APIKey,
 			"x-honeycomb-dataset": cfg.Dataset,
-		}),
-		otlpmetrichttp.WithCompression(compression),
+		}))
 	}
 	if host.Scheme == "http" {
 		options = append(options, otlpmetrichttp.WithInsecure())
@@ -150,7 +171,7 @@ func (o *OTelMetrics) Gauge(name string, val interface{}) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	o.values[name] = val.(float64)
+	o.values[name] = ConvertNumeric(val)
 }
 
 func (o *OTelMetrics) Count(name string, val interface{}) {
@@ -158,18 +179,20 @@ func (o *OTelMetrics) Count(name string, val interface{}) {
 	defer o.lock.Unlock()
 
 	if ctr, ok := o.counters[name]; ok {
-		ctr.Add(context.Background(), val.(int64))
-		o.values[name] += float64(val.(int64))
+		f := ConvertNumeric(val)
+		ctr.Add(context.Background(), int64(f))
+		o.values[name] += f
 	}
 }
 
-func (o *OTelMetrics) Histogram(name string, obs interface{}) {
+func (o *OTelMetrics) Histogram(name string, val interface{}) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
 	if h, ok := o.histograms[name]; ok {
-		h.Record(context.Background(), obs.(int64))
-		o.values[name] += float64(obs.(int64))
+		f := ConvertNumeric(val)
+		h.Record(context.Background(), int64(f))
+		o.values[name] += f
 	}
 }
 

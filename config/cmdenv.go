@@ -38,6 +38,7 @@ type CmdEnv struct {
 	HoneycombAPIKey       string `long:"honeycomb-api-key" env:"REFINERY_HONEYCOMB_API_KEY" description:"Honeycomb API key (for logger and metrics)"`
 	HoneycombLoggerAPIKey string `long:"logger-api-key" env:"REFINERY_HONEYCOMB_LOGGER_API_KEY" description:"Honeycomb logger API key"`
 	LegacyMetricsAPIKey   string `long:"legacy-metrics-api-key" env:"REFINERY_LEGACY_METRICS_API_KEY" description:"API key for legacy Honeycomb metrics"`
+	OTelMetricsAPIKey     string `long:"otel-metrics-api-key" env:"REFINERY_OTEL_METRICS_API_KEY" description:"API key for OTel metrics if being sent to Honeycomb"`
 	QueryAuthToken        string `long:"query-auth-token" env:"REFINERY_QUERY_AUTH_TOKEN" description:"Token for debug/management queries"`
 	Debug                 bool   `short:"d" long:"debug" description:"Runs debug service (on the first open port between localhost:6060 and :6069 by default)"`
 	Version               bool   `short:"v" long:"version" description:"Print version number and exit"`
