@@ -497,6 +497,12 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		WithString("dataset", ev.Dataset).
 		WithString("environment", ev.Environment)
 
+	// check if this is a probe from another refinery; if so, we should drop it
+	if ev.Data["meta.refinery.probe"] != nil {
+		debugLog.Logf("dropping probe")
+		return nil
+	}
+
 	// extract trace ID
 	var traceID string
 	for _, traceIdFieldName := range r.Config.GetTraceIdFieldNames() {
@@ -524,25 +530,41 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
 	// if we are, then we want to make an immediate, deterministic trace decision
 	// and either drop or send the trace without even trying to cache or forward it.
+	isProbe := false
 	if r.Collector.Stressed() {
 		rate, keep, reason := r.Collector.GetStressedSampleRate(traceID)
 
 		r.Collector.ProcessSpanImmediately(span, keep, rate, reason)
-		return nil
+
+		if !keep {
+			return nil
+		}
+		// If the span was kept, we want to generate a probe that we'll forward
+		// to a peer IF this span would have been forwarded.
+		ev.Data["meta.refinery.probe"] = true
+		isProbe = true
 	}
 
 	// Figure out if we should handle this span locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
 	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
 		r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
-		debugLog.WithString("peer", targetShard.GetAddress()).
-			Logf("Sending span from batch to my peer")
+		debugLog.
+			WithString("peer", targetShard.GetAddress()).
+			WithField("isprobe", isProbe).
+			Logf("Sending span from batch to peer")
 		ev.APIHost = targetShard.GetAddress()
 
 		// Unfortunately this doesn't tell us if the event was actually
 		// enqueued; we need to watch the response channel to find out, at
 		// which point it's too late to tell the client.
 		r.PeerTransmission.EnqueueEvent(ev)
+		return nil
+	}
+
+	if isProbe {
+		// If we got here it's because the span we were using for a probe was
+		// intended for us, so just skip it.
 		return nil
 	}
 
