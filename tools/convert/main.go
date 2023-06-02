@@ -7,19 +7,19 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
-	"github.com/santhosh-tekuri/jsonschema/v5"
 	"gopkg.in/yaml.v3"
 )
 
 // Embed the entire filesystem directory into the binary so that it stands alone,
 // as well as the configData.yaml file.
 //
-//go:embed templates/*.tmpl configData.yaml config.yamlschema
+//go:embed templates/*.tmpl configData.yaml
 var filesystem embed.FS
 
 type Options struct {
@@ -117,9 +117,6 @@ func main() {
 		case "doc":
 			GenerateMarkdown(output)
 			os.Exit(0)
-		case "schema":
-			GenerateSchema(output)
-			os.Exit(0)
 		case "config", "rules", "validate":
 			// do nothing yet because we need to parse the input file
 		default:
@@ -144,7 +141,7 @@ func main() {
 		}
 	}
 
-	data, err := load(rdr, typ)
+	userConfig, err := load(rdr, typ)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "'%v' loading config from %s with filetype %s\n", err, opts.Input, opts.Type)
 		os.Exit(1)
@@ -157,7 +154,7 @@ func main() {
 	}{
 		Now:   time.Now().Format(time.RFC3339),
 		Input: opts.Input,
-		Data:  data,
+		Data:  userConfig,
 	}
 
 	switch args[0] {
@@ -176,13 +173,18 @@ func main() {
 			os.Exit(1)
 		}
 	case "rules":
-		ConvertRules(data, output)
+		ConvertRules(userConfig, output)
 	case "validate":
-		ValidateSchema(data, output)
+		ValidateFromConfig(userConfig, output)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, rules, and validate\n", args[0])
 	}
 
+}
+
+type Validation struct {
+	Type string `json:"type"`
+	Arg  any    `json:"arg"`
 }
 
 // All of the code below is used when building and debugging this tool.
@@ -194,22 +196,22 @@ func main() {
 
 // These are the data structures used by these commands and their templates
 type Field struct {
-	Name         string   `json:"name"`
-	V1Group      string   `json:"v1group"`
-	V1Name       string   `json:"v1name"`
-	FirstVersion string   `json:"firstversion"`
-	LastVersion  string   `json:"lastversion"`
-	Type         string   `json:"type"`
-	ValueType    string   `json:"valuetype"`
-	Extra        string   `json:"extra"`
-	Default      any      `json:"default,omitempty"`
-	Choices      []string `json:"choices,omitempty"`
-	Example      string   `json:"example,omitempty"`
-	Validation   string   `json:"validation,omitempty"`
-	Reload       bool     `json:"reload"`
-	Summary      string   `json:"summary"`
-	Description  string   `json:"description"`
-	Pattern      string   `json:"pattern,omitempty"`
+	Name         string       `json:"name"`
+	V1Group      string       `json:"v1group"`
+	V1Name       string       `json:"v1name"`
+	FirstVersion string       `json:"firstversion"`
+	LastVersion  string       `json:"lastversion"`
+	Type         string       `json:"type"`
+	ValueType    string       `json:"valuetype"`
+	Extra        string       `json:"extra"`
+	Default      any          `json:"default,omitempty"`
+	Choices      []string     `json:"choices,omitempty"`
+	Example      string       `json:"example,omitempty"`
+	Validations  []Validation `json:"validations,omitempty"`
+	Reload       bool         `json:"reload"`
+	Summary      string       `json:"summary"`
+	Description  string       `json:"description"`
+	Pattern      string       `json:"pattern,omitempty"`
 }
 
 type Group struct {
@@ -221,6 +223,32 @@ type Group struct {
 
 type ConfigData struct {
 	Groups []Group `json:"groups"`
+}
+
+func (c *ConfigData) GetField(name string) *Field {
+	parts := strings.Split(name, ".")
+	if len(parts) != 2 {
+		return nil
+	}
+	for _, g := range c.Groups {
+		if g.Name == parts[0] {
+			for _, f := range g.Fields {
+				if f.Name == parts[1] {
+					return &f
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (c *ConfigData) GetGroup(name string) *Group {
+	for _, g := range c.Groups {
+		if g.Name == name {
+			return &g
+		}
+	}
+	return nil
 }
 
 func readConfigData() ConfigData {
@@ -309,46 +337,14 @@ func GenerateMarkdown(w io.Writer) {
 	}
 }
 
-func GenerateSchema(w io.Writer) {
+func ValidateFromConfig(userData map[string]any, w io.Writer) bool {
 	config := readConfigData()
-	var err error
-	tmpl := template.New("schema generator")
-	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(filesystem, "templates/schfile.tmpl", "templates/schgroup.tmpl", "templates/schfield.tmpl")
-	if err != nil {
-		panic(err)
-	}
 
-	err = tmpl.ExecuteTemplate(w, "schfile.tmpl", config)
-	if err != nil {
-		panic(err)
+	errors := validate(userData, config)
+	if len(errors) > 0 {
+		for _, e := range errors {
+			fmt.Fprintf(w, "validation errors: %s\n", e)
+		}
 	}
-}
-
-func ValidateSchema(data map[string]any, w io.Writer) {
-	// transform the yaml schema into a json schema
-	input := "config.yamlschema"
-	rdr, err := filesystem.Open(input)
-	if err != nil {
-		panic(err)
-	}
-	yschema, err := load(rdr, "Y")
-	if err != nil {
-		panic(err)
-	}
-	jschema, err := json.MarshalIndent(yschema, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-
-	schemaData, err := jsonschema.CompileString("refinerySchema", string(jschema))
-	if err != nil {
-		panic(err)
-	}
-
-	err = schemaData.Validate(data)
-	if err != nil {
-		fmt.Fprintf(w, "'%v' validating config\n", err)
-		os.Exit(1)
-	}
+	return len(errors) == 0
 }

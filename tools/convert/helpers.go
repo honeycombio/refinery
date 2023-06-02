@@ -116,7 +116,7 @@ func formatExample(typ string, def, example any) string {
 		example = def
 	}
 	switch typ {
-	case "ipport":
+	case "hostport":
 		return fmt.Sprintf(`Should be an ip:port like "%v".`, example)
 	case "duration":
 		return fmt.Sprintf(`Accepts a duration string with units, like "%s".`, example)
@@ -198,7 +198,7 @@ func pattern(typ, pattyp string) string {
 	}
 
 	switch s {
-	case "ipport":
+	case "hostport":
 		return ""
 	case "apikey":
 		// classic keys are 32 hex digits
@@ -278,7 +278,7 @@ func schemaType(typ string) string {
 		return "boolean"
 	case "duration":
 		return "string"
-	case "ipport", "url":
+	case "hostport", "url":
 		return "string"
 	case "stringarray":
 		return "array"

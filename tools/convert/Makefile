@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample doc schema
+all: template names sample doc validate
 
 .PHONY: template
 #: generate the config template
@@ -34,17 +34,9 @@ doc:
 	@echo
 	go run . doc --output=config.md
 
-.PHONY: schema
-#: generate the schema
-schema:
-	@echo
-	@echo "+++ generating schema"
-	@echo
-	go run . schema --output=config.yamlschema
-
 .PHONY: validate
 #: validate the sample config
-validate: schema
+validate:
 	@echo
 	@echo "+++ validating sample config"
 	@echo

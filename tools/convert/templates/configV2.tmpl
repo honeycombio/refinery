@@ -129,7 +129,8 @@ AccessKeys:
     ##  
     ## If true, only traffic using the keys listed in APIKeys is accepted.
     ## Events arriving with API keys not in the ReceiveKeys list will be
-    ## rejected with an HTTP 401 error.
+    ## rejected with an HTTP 401 error. If false, all traffic is accepted and
+    ## ReceiveKeys is ignored. Must be specified if APIKeys is specified.
     ##  
     ## Eligible for live reload.
     {{ conditional .Data "AcceptOnlyListedKeys" "nostar APIKeys" }}
@@ -214,12 +215,12 @@ Traces:
     ##  
     ## A long timer; it represents the outside boundary of how long to wait
     ## before making the trace decision about an incomplete trace. Normally
-    ## traces are sent or dropped when the root span arrives. Sometimes the
-    ## root span never arrives (due to crashes or whatever), and this timer
-    ## will send a trace even without having received the root span. If you
-    ## have particularly long-lived traces you should increase this timer.
-    ## Note that this will also increase the memory requirements for
-    ## refinery.
+    ## trace decisions (send or drop) are made when the root span arrives.
+    ## Sometimes the root span never arrives (due to crashes or whatever),
+    ## and this timer will send a trace even without having received the root
+    ## span. If you have particularly long-lived traces you should increase
+    ## this timer. Note that this will also increase the memory requirements
+    ## for refinery.
     ##  
     ## Accepts a duration string with units, like "60s".
     ## default: 60s
@@ -229,9 +230,10 @@ Traces:
     ## MaxBatchSize is the maximum number of events to be included in each
     ## batch for sending.
     ##  
-    ## This value is used to set the BatchSize field in libhoney. If you have
-    ## particularly large traces you should increase this value. Note that
-    ## this will also increase the memory requirements for refinery.
+    ## This value is used to set the BatchSize field in the libhoney library
+    ## used to send data to Honeycomb. If you have particularly large traces
+    ## you should increase this value. Note that this will also increase the
+    ## memory requirements for refinery.
     ##  
     ## default: 500
     ## Eligible for live reload.
@@ -241,7 +243,7 @@ Traces:
     ##  
     ## A short timer that determines the duration between trace cache review
     ## runs to send. Increasing this will spend more time processing incoming
-    ## events to reduce incoming- or peer_router_dropped spikes. Decreasing
+    ## events to reduce incoming_ or peer_router_dropped spikes. Decreasing
     ## this will check the trace cache for timeouts more frequently.
     ##  
     ## Accepts a duration string with units, like "100ms".
@@ -362,7 +364,7 @@ HoneycombLogger:
 
     ## Dataset is the dataset to which logs will be sent.
     ##  
-    ## Specifies the dataset to which logs will be sent.
+    ## Specifies the Honeycomb dataset to which logs will be sent.
     ##  
     ## default: Refinery Logs
     ## Not eligible for live reload.
@@ -384,8 +386,7 @@ HoneycombLogger:
     ## events per second. The sampling algorithm attempts to make sure that
     ## the average throughput approximates this value, while also ensuring
     ## that all unique logs arrive at Honeycomb at least once per sampling
-    ## period. The default value is 10 events per second. TODO: THROUGHPUT
-    ## FOR THE CLUSTER
+    ## period. TODO: THROUGHPUT FOR THE CLUSTER
     ##  
     ## default: 10
     ## Not eligible for live reload.
@@ -440,22 +441,21 @@ PrometheusMetrics:
 ####################
 LegacyMetrics:
   ## Configuration for Refinery's legacy metrics. Version 1.x of Refinery
-  ## used this configuration for sending Metrics to Honeycomb. The metrics
+  ## used this format for sending Metrics to Honeycomb. The metrics
   ## generated that way are nonstandard and will be deprecated in a future
-  ## release. New installations should prefer OTelMetrics. 
+  ## release. New installations should prefer OTelMetrics.
+  ##  
   ####
     ## Enabled controls whether to send metrics to Honeycomb.
     ##  
-    ## Enabled controls whether to send legacy-formatted metrics to
-    ## Honeycomb.
+    ## This controls whether to send legacy-formatted metrics to Honeycomb.
     ##  
     ## Not eligible for live reload.
     {{ conditional .Data "Enabled" "eq Metrics honeycomb" }}
 
     ## APIHost is the URL of the Honeycomb API to which metrics will be sent.
     ##  
-    ## Specifies the URL for the upstream Honeycomb API for metrics; this is
-    ## the destination to which refinery sends its own metrics.
+    ## Specifies the URL for the upstream Honeycomb API for legacy metrics.
     ##  
     ## default: https://api.honeycomb.io
     ## Not eligible for live reload.
@@ -505,16 +505,16 @@ OTelMetrics:
     ## Not eligible for live reload.
     {{ conditional .Data "Enabled" "" }}
 
-    ## APIHost is the URL of the Honeycomb API to which metrics will be sent.
+    ## APIHost is the URL of the OTel API to which metrics will be sent.
     ##  
-    ## Specifies the URL for the upstream Honeycomb API for metrics; this is
-    ## the destination to which refinery sends its own metrics.
+    ## Specifies a URL for the upstream API to receive refinery's own OTel
+    ## metrics.
     ##  
     ## default: https://api.honeycomb.io
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "APIHost" "APIHost" "https://api.honeycomb.io" }}
 
-    ## APIKey is the API key used to send Honeycomb metrics.
+    ## APIKey is the API key used to send Honeycomb metrics via OTel.
     ##  
     ## Specifies the API key used when refinery sends its own metrics. It is
     ## recommended that you create a separate team and key for Refinery
@@ -525,10 +525,10 @@ OTelMetrics:
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "APIKey" "APIKey" "" }}
 
-    ## Dataset is the Honeycomb dataset to which metrics will be sent.
+    ## Dataset is the Honeycomb dataset to which OTel metrics will be sent.
     ##  
     ## Specifies the dataset to which refinery sends its own OTel metrics.
-    ## Only used if a APIKey is specified.
+    ## Only used (but required) if APIKey is specified.
     ##  
     ## default: Refinery Metrics
     ## Not eligible for live reload.
@@ -615,7 +615,7 @@ PeerManagement:
 ###########################
 RedisPeerManagement:
   ## Controls how the Refinery cluster communicates between peers when
-  ## using Redis. Only applies when PeerManagement.Type is "redis"
+  ## using Redis. Only applies when PeerManagement.Type is "redis".
   ##  
   ####
     ## Host is the host and port of the redis instance to use.
@@ -715,18 +715,19 @@ Collection:
     {{ nonDefaultOnly .Data "CacheCapacity" "InMemCollector.CacheCapacity" 10000 }}
 
     ## MaxMemory is the maximum percentage of memory that should be allocated
-    ## by the collector.
+    ## by the span collector.
     ##  
     ## If nonzero, it must be an integer value between 1 and 100,
     ## representing the target maximum percentage of memory that should be
-    ## allocated by the collector. If set to a non-zero value, once per tick
-    ## (see SendTicker) the collector will compare total allocated bytes to
-    ## this calculated value. If allocation is too high, traces will be
+    ## allocated by the span collector. If set to a non-zero value, once per
+    ## tick (see SendTicker) the collector will compare total allocated bytes
+    ## to this calculated value. If allocation is too high, traces will be
     ## ejected from the cache early to reduce memory. Useful values for this
     ## setting are generally in the range of 70-90. Depending on deployment
     ## details, system memory information may not be available. If it is not,
     ## a warning will be logged and the value of MaxAlloc will be used. If
-    ## this value is 0, MaxAlloc will be used.
+    ## this value is 0, MaxAlloc will be used. Requires MaxAlloc to be
+    ## nonzero. TODO: NOT YET IMPLEMENTED
     ##  
     ## default: 75
     ## Eligible for live reload.
@@ -767,7 +768,7 @@ BufferSizes:
     ## Sets the size of the buffer (measured in spans) used to send spans to
     ## peer nodes. If the buffer fills up, performance will degrade because
     ## Refinery will block while waiting for space to become available. If
-    ## this happens, you should increase the buffer size.
+    ## this happens, you should increase this buffer size.
     ##  
     ## default: 100000
     ## Eligible for live reload.
@@ -786,8 +787,7 @@ Specialized:
     ## information, which it looks up from Honeycomb for each different
     ## APIKey. This information is used when making sampling decisions. If
     ## you have a very large number of environments, you may want to increase
-    ## this value. If you have a very small number of environments, you may
-    ## want to decrease this value.
+    ## this value.
     ##  
     ## Accepts a duration string with units, like "1h".
     ## default: 1h
@@ -914,8 +914,7 @@ GRPCServerParameters:
     ##  
     ## Sets a duration for the amount of time after which if the client
     ## doesn't see any activity it pings the server to see if the transport
-    ## is still alive. If set below 1s, a minimum value of 1s will be used
-    ## instead. 0s sets duration to 2 hours.
+    ## is still alive. 0s sets duration to 2 hours.
     ##  
     ## Accepts a duration string with units, like "1m".
     ## default: 1m
@@ -927,8 +926,7 @@ GRPCServerParameters:
     ##  
     ## This is the amount of time after which if the server doesn't see any
     ## activity, it pings the client to see if the transport is still alive.
-    ## If set below 1s, a minimum value of 1s will be used instead. 0s sets
-    ## duration to 20 seconds.
+    ## 0s sets duration to 20 seconds.
     ##  
     ## Accepts a duration string with units, like "20s".
     ## default: 20s
@@ -1056,10 +1054,10 @@ StressRelief:
     ## Controls the sampling rate to use when Stress Relief is activated. All
     ## new traces will be deterministically sampled at this rate based only
     ## on the traceID. It should be chosen to be a rate that sends fewer
-    ## samples than the average sampling rate Refinery is configured to use.
-    ## For example, if Refinery is configured to normally sample at a rate of
-    ## 1 in 10, then Stress Relief should be configured to sample at a rate
-    ## of at least 1 in 30.
+    ## samples than the average sampling rate Refinery is expected to
+    ## generate. For example, if Refinery is configured to normally sample at
+    ## a rate of 1 in 10, then Stress Relief should be configured to sample
+    ## at a rate of at least 1 in 30.
     ##  
     ## default: 100
     ## Eligible for live reload.
@@ -1068,7 +1066,7 @@ StressRelief:
     ## MinimumActivationDuration is the minimum time that stress relief will
     ## stay enabled.
     ##  
-    ## Setss the minimum time that stress relief will stay enabled, once
+    ## Sets the minimum time that stress relief will stay enabled, once
     ## activated. This helps to prevent oscillations.
     ##  
     ## Accepts a duration string with units, like "10s".
@@ -1101,5 +1099,5 @@ StressRelief:
   ##  
     ## - PeerManagement.Strategy
     ## - Collector
-    ## - CacheOverrunStrategy
+    ## - InMemCollector.CacheOverrunStrategy
     ## - SampleCacheConfig/SampleCache.Type
