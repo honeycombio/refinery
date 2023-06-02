@@ -77,12 +77,18 @@ func (o *OTelMetrics) Start() {
 			}
 		}),
 	}
+	// if we ever need to add user-specified headers, that would go here
+	hdrs := map[string]string{}
 	if cfg.APIKey != "" {
-		options = append(options, otlpmetrichttp.WithHeaders(map[string]string{
-			"x-honeycomb-team":    cfg.APIKey,
-			"x-honeycomb-dataset": cfg.Dataset,
-		}))
+		hdrs["x-honeycomb-team"] = cfg.APIKey
 	}
+	if cfg.Dataset != "" {
+		hdrs["x-honeycomb-dataset"] = cfg.Dataset
+	}
+	if len(hdrs) > 0 {
+		options = append(options, otlpmetrichttp.WithHeaders(hdrs))
+	}
+
 	if host.Scheme == "http" {
 		options = append(options, otlpmetrichttp.WithInsecure())
 	}

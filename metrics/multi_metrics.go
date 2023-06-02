@@ -1,17 +1,24 @@
 package metrics
 
+import "sync"
+
 // MultiMetrics is a metrics provider that sends metrics to at least one
 // underlying metrics provider (StoreMetrics). It can be configured to send
 // metrics to multiple providers at once.
-// It always starts with a StoreMetrics as the first provider, so that
-// Get and Store can depend on it.
+//
+// It also stores the values saved with Store(), gauges, and updown counters,
+// which can then be retrieved with Get(). This is for use with StressRelief. It
+// does not track histograms or counters, which are reset after each scrape.
 type MultiMetrics struct {
 	children []Metrics
+	values   map[string]float64
+	lock     sync.RWMutex
 }
 
 func NewMultiMetrics() *MultiMetrics {
 	return &MultiMetrics{
-		children: []Metrics{&StoreMetrics{}},
+		children: []Metrics{},
+		values:   make(map[string]float64),
 	}
 }
 
@@ -29,6 +36,9 @@ func (m *MultiMetrics) Register(name string, metricType string) {
 	for _, ch := range m.children {
 		ch.Register(name, metricType)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name] = 0
 }
 
 func (m *MultiMetrics) Increment(name string) { // for counters
@@ -41,6 +51,9 @@ func (m *MultiMetrics) Gauge(name string, val interface{}) { // for gauges
 	for _, ch := range m.children {
 		ch.Gauge(name, val)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name] = ConvertNumeric(val)
 }
 
 func (m *MultiMetrics) Count(name string, n interface{}) { // for counters
@@ -59,20 +72,29 @@ func (m *MultiMetrics) Up(name string) { // for updown
 	for _, ch := range m.children {
 		ch.Up(name)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name]++
 }
 
 func (m *MultiMetrics) Down(name string) { // for updown
 	for _, ch := range m.children {
 		ch.Down(name)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name]--
 }
 
 func (m *MultiMetrics) Get(name string) (float64, bool) { // for reading back a value
-	// Assumes that the first child exists and is the StoreMetrics
-	return m.children[0].Get(name) // this is the StoreMetrics
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	val, ok := m.values[name]
+	return val, ok
 }
 
 func (m *MultiMetrics) Store(name string, val float64) { // for storing a rarely-changing value not sent as a metric
-	// Assumes that the first child exists and is the StoreMetrics
-	m.children[0].Store(name, val) // this is the StoreMetrics
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name] = val
 }
