@@ -17,7 +17,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 )
 
-type HoneycombMetrics struct {
+type LegacyMetrics struct {
 	Config            config.Config   `inject:""`
 	Logger            logger.Logger   `inject:""`
 	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
@@ -64,19 +64,16 @@ type updown struct {
 	val  int
 }
 
-func (h *HoneycombMetrics) Start() error {
-	h.Logger.Debug().Logf("Starting HoneycombMetrics")
-	defer func() { h.Logger.Debug().Logf("Finished starting HoneycombMetrics") }()
-	mc, err := h.Config.GetHoneycombMetricsConfig()
-	if err != nil {
-		return err
-	}
+func (h *LegacyMetrics) Start() error {
+	h.Logger.Debug().Logf("Starting LegacyMetrics")
+	defer func() { h.Logger.Debug().Logf("Finished starting LegacyMetrics") }()
+	mc := h.Config.GetLegacyMetricsConfig()
 	if mc.ReportingInterval < config.Duration(1*time.Second) {
 		mc.ReportingInterval = config.Duration(1 * time.Second)
 	}
 	h.reportingFreq = time.Duration(mc.ReportingInterval)
 
-	if err = h.initLibhoney(mc); err != nil {
+	if err := h.initLibhoney(mc); err != nil {
 		return err
 	}
 
@@ -92,22 +89,16 @@ func (h *HoneycombMetrics) Start() error {
 	return nil
 }
 
-func (h *HoneycombMetrics) reloadBuilder() {
+func (h *LegacyMetrics) reloadBuilder() {
 	h.Logger.Debug().Logf("reloading config for honeycomb metrics reporter")
-	mc, err := h.Config.GetHoneycombMetricsConfig()
-	if err != nil {
-		// complain about this both to STDOUT and to the previously configured
-		// honeycomb logger
-		h.Logger.Error().Logf("failed to reload configs for Honeycomb metrics: %+v\n", err)
-		return
-	}
+	mc := h.Config.GetLegacyMetricsConfig()
 	h.libhClient.Close()
 	// cancel the two reporting goroutines and restart them
 	h.reportingCancelFunc()
 	h.initLibhoney(mc)
 }
 
-func (h *HoneycombMetrics) initLibhoney(mc config.LegacyMetricsConfig) error {
+func (h *LegacyMetrics) initLibhoney(mc config.LegacyMetricsConfig) error {
 	metricsTx := &transmission.Honeycomb{
 		// metrics are always sent as a single event, so don't wait for the timeout
 		MaxBatchSize:      1,
@@ -154,7 +145,7 @@ func (h *HoneycombMetrics) initLibhoney(mc config.LegacyMetricsConfig) error {
 
 // refreshMemStats caches memory statistics to avoid blocking sending honeycomb
 // metrics on gc pauses
-func (h *HoneycombMetrics) refreshMemStats(ctx context.Context) {
+func (h *LegacyMetrics) refreshMemStats(ctx context.Context) {
 	// get memory metrics 5 times more frequently than we send metrics to make sure
 	// we have relatively up to date mem statistics but not go wild and get them
 	// all the time.
@@ -179,7 +170,7 @@ func (h *HoneycombMetrics) refreshMemStats(ctx context.Context) {
 
 // readResponses reads the responses from the libhoney responses queue and logs
 // any errors that come down it
-func (h *HoneycombMetrics) readResponses(ctx context.Context) {
+func (h *LegacyMetrics) readResponses(ctx context.Context) {
 	resps := h.libhClient.TxResponses()
 	for {
 		select {
@@ -213,14 +204,14 @@ func (h *HoneycombMetrics) readResponses(ctx context.Context) {
 
 // readMemStats is a drop-in replacement for runtime.ReadMemStats which won't
 // block waiting for a GC to finish.
-func (h *HoneycombMetrics) readMemStats(mem *runtime.MemStats) {
+func (h *LegacyMetrics) readMemStats(mem *runtime.MemStats) {
 	h.latestMemStatsLock.RLock()
 	defer h.latestMemStatsLock.RUnlock()
 
 	*mem = h.latestMemStats
 }
 
-func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
+func (h *LegacyMetrics) reportToHoneycomb(ctx context.Context) {
 	tick := time.NewTicker(h.reportingFreq)
 	for {
 		select {
@@ -283,7 +274,7 @@ func (h *HoneycombMetrics) reportToHoneycomb(ctx context.Context) {
 
 // Retrieves the current value of a gauge, constant, counter, or updown as a float64
 // (even if it's an integer value). Returns 0 if the name isn't found.
-func (h *HoneycombMetrics) Get(name string) (float64, bool) {
+func (h *LegacyMetrics) Get(name string) (float64, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
 	if m, ok := h.counters[name]; ok {
@@ -309,7 +300,7 @@ func average(vals []float64) float64 {
 	return total / float64(len(vals))
 }
 
-func (h *HoneycombMetrics) Register(name string, metricType string) {
+func (h *LegacyMetrics) Register(name string, metricType string) {
 	h.Logger.Debug().Logf("metrics registering %s with name %s", metricType, name)
 	switch metricType {
 	case "counter":
@@ -377,7 +368,7 @@ func createUpdown(name string) *updown {
 	}
 }
 
-func (h *HoneycombMetrics) Count(name string, n interface{}) {
+func (h *LegacyMetrics) Count(name string, n interface{}) {
 	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
 
 	// update value, using counter's lock
@@ -386,11 +377,11 @@ func (h *HoneycombMetrics) Count(name string, n interface{}) {
 	counter.lock.Unlock()
 }
 
-func (h *HoneycombMetrics) Increment(name string) {
+func (h *LegacyMetrics) Increment(name string) {
 	h.Count(name, 1)
 }
 
-func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
+func (h *LegacyMetrics) Gauge(name string, val interface{}) {
 	gauge := getOrAdd(&h.lock, name, h.gauges, createGauge)
 
 	// update value, using gauge's lock
@@ -399,7 +390,7 @@ func (h *HoneycombMetrics) Gauge(name string, val interface{}) {
 	gauge.lock.Unlock()
 }
 
-func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
+func (h *LegacyMetrics) Histogram(name string, obs interface{}) {
 	histogram := getOrAdd(&h.lock, name, h.histograms, createHistogram)
 
 	// update value, using histogram's lock
@@ -408,7 +399,7 @@ func (h *HoneycombMetrics) Histogram(name string, obs interface{}) {
 	histogram.lock.Unlock()
 }
 
-func (h *HoneycombMetrics) Up(name string) {
+func (h *LegacyMetrics) Up(name string) {
 	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
 	// update value, using counter's lock
@@ -417,7 +408,7 @@ func (h *HoneycombMetrics) Up(name string) {
 	counter.lock.Unlock()
 }
 
-func (h *HoneycombMetrics) Down(name string) {
+func (h *LegacyMetrics) Down(name string) {
 	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
 	// update value, using counter's lock
@@ -426,7 +417,7 @@ func (h *HoneycombMetrics) Down(name string) {
 	counter.lock.Unlock()
 }
 
-func (h *HoneycombMetrics) Store(name string, val float64) {
+func (h *LegacyMetrics) Store(name string, val float64) {
 	constant := getOrAdd(&h.lock, name, h.constants, createGauge)
 
 	// update value, using constant's lock

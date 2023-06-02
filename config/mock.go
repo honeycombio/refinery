@@ -49,10 +49,9 @@ type MockConfig struct {
 	GetSamplerTypeVal                    interface{}
 	GetMetricsTypeErr                    error
 	GetMetricsTypeVal                    string
-	GetHoneycombMetricsConfigErr         error
-	GetHoneycombMetricsConfigVal         LegacyMetricsConfig
-	GetPrometheusMetricsConfigErr        error
+	GetLegacyMetricsConfigVal            LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
+	GetOTelMetricsConfigVal              OTelMetricsConfig
 	GetSendDelayErr                      error
 	GetSendDelayVal                      time.Duration
 	GetBatchTimeoutVal                   time.Duration
@@ -248,18 +247,25 @@ func (m *MockConfig) GetMetricsType() (string, error) {
 	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
 
-func (m *MockConfig) GetHoneycombMetricsConfig() (LegacyMetricsConfig, error) {
+func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetHoneycombMetricsConfigVal, m.GetHoneycombMetricsConfigErr
+	return m.GetLegacyMetricsConfigVal
 }
 
-func (m *MockConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
+func (m *MockConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetPrometheusMetricsConfigVal, m.GetPrometheusMetricsConfigErr
+	return m.GetPrometheusMetricsConfigVal
+}
+
+func (m *MockConfig) GetOTelMetricsConfig() OTelMetricsConfig {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetOTelMetricsConfigVal
 }
 
 func (m *MockConfig) GetSendDelay() (time.Duration, error) {

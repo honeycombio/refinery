@@ -50,6 +50,7 @@ type configContents struct {
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
+	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
 	Collection           CollectionConfig          `yaml:"Collection"`
@@ -127,6 +128,15 @@ type LegacyMetricsConfig struct {
 	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
 	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
 	Dataset           string   `yaml:"Dataset"`
+	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s" validate:"dmin=1s"`
+}
+
+type OTelMetricsConfig struct {
+	Enabled           bool     `yaml:"Enabled" default:"false"`
+	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
+	APIKey            string   `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
+	Dataset           string   `yaml:"Dataset"`
+	Compression       string   `yaml:"Compression" default:"gzip" validate:"oneof=gzip none"`
 	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s" validate:"dmin=1s"`
 }
 
@@ -511,18 +521,25 @@ func (f *fileConfig) GetMetricsType() (string, error) {
 	return "", nil
 }
 
-func (f *fileConfig) GetHoneycombMetricsConfig() (LegacyMetricsConfig, error) {
+func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.LegacyMetrics, nil
+	return f.mainConfig.LegacyMetrics
 }
 
-func (f *fileConfig) GetPrometheusMetricsConfig() (PrometheusMetricsConfig, error) {
+func (f *fileConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PrometheusMetrics, nil
+	return f.mainConfig.PrometheusMetrics
+}
+
+func (f *fileConfig) GetOTelMetricsConfig() OTelMetricsConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.OTelMetrics
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {

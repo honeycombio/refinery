@@ -88,10 +88,10 @@ Refinery supports the following environment variables.  Environment variables ta
 | `REFINERY_REDIS_USERNAME`                                         | `PeerManagement.RedisUsername`   |
 | `REFINERY_REDIS_PASSWORD`                                         | `PeerManagement.RedisPassword`   |
 | `REFINERY_HONEYCOMB_API_KEY`                                      | `HoneycombLogger.LoggerAPIKey`   |
-| `REFINERY_HONEYCOMB_METRICS_API_KEY` `REFINERY_HONEYCOMB_API_KEY` | `HoneycombMetrics.MetricsAPIKey` |
+| `REFINERY_LEGACY_METRICS_API_KEY` `REFINERY_HONEYCOMB_API_KEY`    | `LegacyMetrics.APIKey`           |
 | `REFINERY_QUERY_AUTH_TOKEN`                                       | `QueryAuthToken`                 |
 
-Note, `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `HoneycombMetrics.MetricsAPIKey` configuration.
+Note, `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
 
 ### Mixing Classic and Environment & Services Rule Definitions
 

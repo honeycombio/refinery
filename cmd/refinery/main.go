@@ -181,25 +181,30 @@ func main() {
 	if opts.Debug {
 		g.Logger = graphLogger{}
 	}
-	err = g.Provide(
-		&inject.Object{Value: c},
-		&inject.Object{Value: peers},
-		&inject.Object{Value: lgr},
-		&inject.Object{Value: upstreamTransport, Name: "upstreamTransport"},
-		&inject.Object{Value: peerTransport, Name: "peerTransport"},
-		&inject.Object{Value: transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream"), Name: "upstreamTransmission"},
-		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer"), Name: "peerTransmission"},
-		&inject.Object{Value: shrdr},
-		&inject.Object{Value: collector},
-		&inject.Object{Value: metricsSingleton, Name: "metrics"},
-		&inject.Object{Value: genericMetricsRecorder, Name: "genericMetrics"},
-		&inject.Object{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
-		&inject.Object{Value: peerMetricsRecorder, Name: "peerMetrics"},
-		&inject.Object{Value: version, Name: "version"},
-		&inject.Object{Value: samplerFactory},
-		&inject.Object{Value: stressRelief, Name: "stressRelief"},
-		&inject.Object{Value: &a},
-	)
+	objects := []*inject.Object{
+		{Value: c},
+		{Value: peers},
+		{Value: lgr},
+		{Value: upstreamTransport, Name: "upstreamTransport"},
+		{Value: peerTransport, Name: "peerTransport"},
+		{Value: transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream"), Name: "upstreamTransmission"},
+		{Value: transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer"), Name: "peerTransmission"},
+		{Value: shrdr},
+		{Value: collector},
+		{Value: metricsSingleton, Name: "metrics"},
+		{Value: genericMetricsRecorder, Name: "genericMetrics"},
+		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
+		{Value: peerMetricsRecorder, Name: "peerMetrics"},
+		{Value: version, Name: "version"},
+		{Value: samplerFactory},
+		{Value: stressRelief, Name: "stressRelief"},
+		{Value: &a},
+	}
+	// we need to add the multimetrics children to the graph as well
+	for _, obj := range metricsSingleton.Children() {
+		objects = append(objects, &inject.Object{Value: obj})
+	}
+	err = g.Provide(objects...)
 	if err != nil {
 		fmt.Printf("failed to provide injection graph. error: %+v\n", err)
 		os.Exit(1)
