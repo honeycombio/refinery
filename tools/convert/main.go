@@ -7,10 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"text/template"
 	"time"
 
+	"github.com/honeycombio/refinery/validation"
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
@@ -182,76 +182,7 @@ func main() {
 
 }
 
-type Validation struct {
-	Type string `json:"type"`
-	Arg  any    `json:"arg"`
-}
-
-// All of the code below is used when building and debugging this tool.
-// There are three commands that can be run:
-//   - `go run . template` will generate a template file from the current schema
-//   - `go run . names` will print out all of the names of the fields in the schema
-//   - `go run . sample` will generate a minimal sample config file
-// These commands are not listed in the documentation.
-
-// These are the data structures used by these commands and their templates
-type Field struct {
-	Name         string       `json:"name"`
-	V1Group      string       `json:"v1group"`
-	V1Name       string       `json:"v1name"`
-	FirstVersion string       `json:"firstversion"`
-	LastVersion  string       `json:"lastversion"`
-	Type         string       `json:"type"`
-	ValueType    string       `json:"valuetype"`
-	Extra        string       `json:"extra"`
-	Default      any          `json:"default,omitempty"`
-	Choices      []string     `json:"choices,omitempty"`
-	Example      string       `json:"example,omitempty"`
-	Validations  []Validation `json:"validations,omitempty"`
-	Reload       bool         `json:"reload"`
-	Summary      string       `json:"summary"`
-	Description  string       `json:"description"`
-	Pattern      string       `json:"pattern,omitempty"`
-}
-
-type Group struct {
-	Name        string  `json:"name"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Fields      []Field `json:"fields,omitempty"`
-}
-
-type ConfigData struct {
-	Groups []Group `json:"groups"`
-}
-
-func (c *ConfigData) GetField(name string) *Field {
-	parts := strings.Split(name, ".")
-	if len(parts) != 2 {
-		return nil
-	}
-	for _, g := range c.Groups {
-		if g.Name == parts[0] {
-			for _, f := range g.Fields {
-				if f.Name == parts[1] {
-					return &f
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func (c *ConfigData) GetGroup(name string) *Group {
-	for _, g := range c.Groups {
-		if g.Name == name {
-			return &g
-		}
-	}
-	return nil
-}
-
-func readConfigData() ConfigData {
+func readConfigData() validation.ConfigData {
 	input := "configData.yaml"
 	rdr, err := filesystem.Open(input)
 	if err != nil {
@@ -259,7 +190,7 @@ func readConfigData() ConfigData {
 	}
 	defer rdr.Close()
 
-	var config ConfigData
+	var config validation.ConfigData
 	decoder := yaml.NewDecoder(rdr)
 	err = decoder.Decode(&config)
 	if err != nil {
@@ -340,7 +271,7 @@ func GenerateMarkdown(w io.Writer) {
 func ValidateFromConfig(userData map[string]any, w io.Writer) bool {
 	config := readConfigData()
 
-	errors := validate(userData, config)
+	errors := validation.Validate(userData, config)
 	if len(errors) > 0 {
 		for _, e := range errors {
 			fmt.Fprintf(w, "validation errors: %s\n", e)
