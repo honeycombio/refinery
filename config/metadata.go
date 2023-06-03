@@ -1,4 +1,4 @@
-package validation
+package config
 
 import "strings"
 
@@ -7,7 +7,6 @@ type Validation struct {
 	Arg  any    `json:"arg"`
 }
 
-// These are the data structures used by these commands and their templates
 type Field struct {
 	Name         string       `json:"name"`
 	V1Group      string       `json:"v1group"`
@@ -34,11 +33,11 @@ type Group struct {
 	Fields      []Field `json:"fields,omitempty"`
 }
 
-type ConfigData struct {
+type Metadata struct {
 	Groups []Group `json:"groups"`
 }
 
-func (c *ConfigData) GetField(name string) *Field {
+func (c *Metadata) GetField(name string) *Field {
 	parts := strings.Split(name, ".")
 	if len(parts) != 2 {
 		return nil
@@ -55,7 +54,7 @@ func (c *ConfigData) GetField(name string) *Field {
 	return nil
 }
 
-func (c *ConfigData) GetGroup(name string) *Group {
+func (c *Metadata) GetGroup(name string) *Group {
 	for _, g := range c.Groups {
 		if g.Name == name {
 			return &g
@@ -63,3 +62,20 @@ func (c *ConfigData) GetGroup(name string) *Group {
 	}
 	return nil
 }
+
+// func readMetadata() validation.Metadata {
+// 	input := "configData.yaml"
+// 	rdr, err := filesystem.Open(input)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	defer rdr.Close()
+
+// 	var metadata validation.Metadata
+// 	decoder := yaml.NewDecoder(rdr)
+// 	err = decoder.Decode(&metadata)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	return metadata
+// }

@@ -1,4 +1,4 @@
-package validation
+package config
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/honeycombio/refinery/config"
 	"golang.org/x/exp/slices"
 )
 
@@ -48,7 +47,7 @@ func asFloat(v any) (float64, string) {
 		return float64(val), ""
 	case float64:
 		return float64(val), ""
-	case config.Duration:
+	case Duration:
 		return float64(val), ""
 	case string:
 		// can we interpret it as a duration?
@@ -154,7 +153,7 @@ func validateDatatype(k string, v any, typ string) string {
 	return ""
 }
 
-func Validate(data map[string]any, config ConfigData) []string {
+func Validate(data map[string]any, config Metadata) []string {
 	errors := make([]string, 0)
 	// validate that there are no unknown groups in the userdata
 	for k := range data {

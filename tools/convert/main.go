@@ -10,7 +10,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/honeycombio/refinery/validation"
+	"github.com/honeycombio/refinery/config"
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
@@ -182,7 +182,7 @@ func main() {
 
 }
 
-func readConfigData() validation.ConfigData {
+func readMetadata() config.Metadata {
 	input := "configData.yaml"
 	rdr, err := filesystem.Open(input)
 	if err != nil {
@@ -190,18 +190,18 @@ func readConfigData() validation.ConfigData {
 	}
 	defer rdr.Close()
 
-	var config validation.ConfigData
+	var metadata config.Metadata
 	decoder := yaml.NewDecoder(rdr)
-	err = decoder.Decode(&config)
+	err = decoder.Decode(&metadata)
 	if err != nil {
 		panic(err)
 	}
-	return config
+	return metadata
 }
 
 // This generates the template used by the convert tool.
 func GenerateTemplate(w io.Writer) {
-	config := readConfigData()
+	config := readMetadata()
 	var err error
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
@@ -218,7 +218,7 @@ func GenerateTemplate(w io.Writer) {
 
 // This generates a nested list of the groups and names.
 func PrintNames(w io.Writer) {
-	config := readConfigData()
+	config := readMetadata()
 	var err error
 	tmpl := template.New("group")
 	tmpl.Funcs(helpers())
@@ -237,7 +237,7 @@ func PrintNames(w io.Writer) {
 // with default or example values into minimal_config.yaml. The file it
 // produces is valid YAML for config, and could be the basis of a test file.
 func GenerateMinimalSample(w io.Writer) {
-	config := readConfigData()
+	config := readMetadata()
 	var err error
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
@@ -253,7 +253,7 @@ func GenerateMinimalSample(w io.Writer) {
 }
 
 func GenerateMarkdown(w io.Writer) {
-	config := readConfigData()
+	config := readMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
@@ -269,9 +269,9 @@ func GenerateMarkdown(w io.Writer) {
 }
 
 func ValidateFromConfig(userData map[string]any, w io.Writer) bool {
-	config := readConfigData()
+	metadata := readMetadata()
 
-	errors := validation.Validate(userData, config)
+	errors := config.Validate(userData, metadata)
 	if len(errors) > 0 {
 		for _, e := range errors {
 			fmt.Fprintf(w, "validation errors: %s\n", e)

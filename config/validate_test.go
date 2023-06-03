@@ -1,10 +1,9 @@
-package validation
+package config
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/honeycombio/refinery/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,7 +17,7 @@ func Test_asFloat(t *testing.T) {
 		{"int", 1, 1, ""},
 		{"int64", int64(1), 1, ""},
 		{"float64", float64(1), 1, ""},
-		{"Duration1", config.Duration(1), 1, ""},
+		{"Duration1", Duration(1), 1, ""},
 		{"Duration2", "1s", 1000, ""},
 		{"Duration3", "1m", 60000, ""},
 		{"Duration4", "1h", 3600000, ""},
@@ -212,7 +211,7 @@ func mm(values ...any) map[string]any {
 
 func Test_validate(t *testing.T) {
 	rdr := strings.NewReader(configDataYaml)
-	var config ConfigData
+	var config Metadata
 	decoder := yaml.NewDecoder(rdr)
 	err := decoder.Decode(&config)
 	if err != nil {
