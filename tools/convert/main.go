@@ -191,8 +191,7 @@ func readMetadata() config.Metadata {
 	defer rdr.Close()
 
 	var metadata config.Metadata
-	decoder := yaml.NewDecoder(rdr)
-	err = decoder.Decode(&metadata)
+	err = metadata.LoadFrom(rdr)
 	if err != nil {
 		panic(err)
 	}
@@ -201,7 +200,7 @@ func readMetadata() config.Metadata {
 
 // This generates the template used by the convert tool.
 func GenerateTemplate(w io.Writer) {
-	config := readMetadata()
+	metadata := readMetadata()
 	var err error
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
@@ -210,7 +209,7 @@ func GenerateTemplate(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "genfile.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "genfile.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
@@ -218,7 +217,7 @@ func GenerateTemplate(w io.Writer) {
 
 // This generates a nested list of the groups and names.
 func PrintNames(w io.Writer) {
-	config := readMetadata()
+	metadata := readMetadata()
 	var err error
 	tmpl := template.New("group")
 	tmpl.Funcs(helpers())
@@ -227,7 +226,7 @@ func PrintNames(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "names.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "names.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
@@ -237,7 +236,7 @@ func PrintNames(w io.Writer) {
 // with default or example values into minimal_config.yaml. The file it
 // produces is valid YAML for config, and could be the basis of a test file.
 func GenerateMinimalSample(w io.Writer) {
-	config := readMetadata()
+	metadata := readMetadata()
 	var err error
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
@@ -246,14 +245,14 @@ func GenerateMinimalSample(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "sample.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "sample.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func GenerateMarkdown(w io.Writer) {
-	config := readMetadata()
+	metadata := readMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
@@ -262,7 +261,7 @@ func GenerateMarkdown(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}

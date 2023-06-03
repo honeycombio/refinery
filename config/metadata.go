@@ -1,6 +1,11 @@
 package config
 
-import "strings"
+import (
+	"io"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
 
 type Validation struct {
 	Type string `json:"type"`
@@ -63,19 +68,11 @@ func (c *Metadata) GetGroup(name string) *Group {
 	return nil
 }
 
-// func readMetadata() validation.Metadata {
-// 	input := "configData.yaml"
-// 	rdr, err := filesystem.Open(input)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	defer rdr.Close()
-
-// 	var metadata validation.Metadata
-// 	decoder := yaml.NewDecoder(rdr)
-// 	err = decoder.Decode(&metadata)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return metadata
-// }
+func (c *Metadata) LoadFrom(rdr io.Reader) error {
+	decoder := yaml.NewDecoder(rdr)
+	err := decoder.Decode(c)
+	if err != nil {
+		return err
+	}
+	return nil
+}

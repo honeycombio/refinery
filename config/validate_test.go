@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_asFloat(t *testing.T) {
@@ -211,12 +211,9 @@ func mm(values ...any) map[string]any {
 
 func Test_validate(t *testing.T) {
 	rdr := strings.NewReader(configDataYaml)
-	var config Metadata
-	decoder := yaml.NewDecoder(rdr)
-	err := decoder.Decode(&config)
-	if err != nil {
-		panic(err)
-	}
+	metadata := Metadata{}
+	err := metadata.LoadFrom(rdr)
+	assert.NoError(t, err)
 	// want is one string that can be:
 	// - empty
 	// - a single error
@@ -285,7 +282,7 @@ func Test_validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Validate(tt.data, config)
+			got := Validate(tt.data, metadata)
 			if tt.want == "" && len(got) != 0 {
 				t.Errorf("validate() = %v, want empty", got)
 			}
