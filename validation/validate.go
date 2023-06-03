@@ -1,4 +1,4 @@
-package main
+package validation
 
 import (
 	"fmt"
@@ -154,7 +154,7 @@ func validateDatatype(k string, v any, typ string) string {
 	return ""
 }
 
-func validate(data map[string]any, config ConfigData) []string {
+func Validate(data map[string]any, config ConfigData) []string {
 	errors := make([]string, 0)
 	// validate that there are no unknown groups in the userdata
 	for k := range data {

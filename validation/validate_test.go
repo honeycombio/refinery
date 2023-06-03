@@ -1,4 +1,4 @@
-package main
+package validation
 
 import (
 	"strings"
@@ -286,7 +286,7 @@ func Test_validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := validate(tt.data, config)
+			got := Validate(tt.data, config)
 			if tt.want == "" && len(got) != 0 {
 				t.Errorf("validate() = %v, want empty", got)
 			}
