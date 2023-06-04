@@ -69,21 +69,13 @@ func Test_validateType(t *testing.T) {
 		{"duration4", "k", "1", "duration", `field k (1) must be a valid duration like '3m30s' or '100ms'`},
 		{"duration5", "k", 1, "duration", `field k (1) must be a valid duration like '3m30s' or '100ms'`},
 		{"hostport", "k", "host:port", "hostport", ""},
-		{"hostport bad", "k", "host:port:port", "hostport", `field k must be a hostport: address host:port:port: too many colons in address`},
-		{"hostport blank", "k", "", "hostport", `field k must be a hostport: missing port in address`},
-		{"hostportOrBlank1", "k", "host:port", "hostportOrBlank", ""},
-		{"hostportOrBlank2", "k", "", "hostportOrBlank", ""},
-		{"hostportOrBlank3", "k", "host:port:port", "hostportOrBlank", `field k must be a hostport: address host:port:port: too many colons in address`},
+		{"hostport bad", "k", "host:port:port", "hostport", `field k (host:port:port) must be a hostport: address host:port:port: too many colons in address`},
+		{"hostport blank", "k", "", "hostport", ""},
 		{"url", "k", "http://example.com", "url", ""},
 		{"url bad", "k", "not a url", "url", `field k (not a url) must be a valid URL with a host`},
 		{"url blank", "k", "", "url", `field k may not be blank`},
 		{"url noscheme", "k", "example.com", "url", `field k (example.com) must be a valid URL with a host`},
 		{"url badscheme", "k", "ftp://example.com", "url", `field k (ftp://example.com) must use an http or https scheme`},
-		{"urlOrBlank", "k", "http://example.com", "urlOrBlank", ""},
-		{"urlOrBlank bad", "k", "not a url", "urlOrBlank", `field k (not a url) must be a valid URL with a host`},
-		{"urlOrBlank blank", "k", "", "urlOrBlank", ``},
-		{"urlOrBlank noscheme", "k", "example.com", "urlOrBlank", `field k (example.com) must be a valid URL with a host`},
-		{"urlOrBlank badscheme", "k", "ftp://example.com", "urlOrBlank", `field k (ftp://example.com) must use an http or https scheme`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
