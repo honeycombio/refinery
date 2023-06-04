@@ -76,3 +76,15 @@ func (c *Metadata) LoadFrom(rdr io.Reader) error {
 	}
 	return nil
 }
+
+func LoadConfigMetadata() (*Metadata, error) {
+	metadata := Metadata{}
+	input := "metadata/configMeta.yaml"
+	rdr, err := metadataFS.Open(input)
+	if err != nil {
+		return nil, err
+	}
+	defer rdr.Close()
+	metadata.LoadFrom(rdr)
+	return &metadata, nil
+}

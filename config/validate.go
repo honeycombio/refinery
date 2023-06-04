@@ -153,11 +153,11 @@ func validateDatatype(k string, v any, typ string) string {
 	return ""
 }
 
-func Validate(data map[string]any, config Metadata) []string {
+func (m *Metadata) Validate(data map[string]any) []string {
 	errors := make([]string, 0)
 	// validate that there are no unknown groups in the userdata
 	for k := range data {
-		if config.GetGroup(k) == nil {
+		if m.GetGroup(k) == nil {
 			errors = append(errors, fmt.Sprintf("unknown group %s", k))
 		}
 	}
@@ -165,7 +165,7 @@ func Validate(data map[string]any, config Metadata) []string {
 	flatdata := flatten(data, true)
 	// validate all the user fields and make sure there are no extras we don't understand
 	for k, v := range flatdata {
-		field := config.GetField(k)
+		field := m.GetField(k)
 		if field == nil {
 			errors = append(errors, fmt.Sprintf("unknown field %s", k))
 			continue
@@ -262,7 +262,7 @@ func Validate(data map[string]any, config Metadata) []string {
 	}
 
 	// validate all the required fields and make sure they're present
-	for _, group := range config.Groups {
+	for _, group := range m.Groups {
 		for _, field := range group.Fields {
 			for _, validation := range field.Validations {
 				switch validation.Type {

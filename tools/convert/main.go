@@ -19,7 +19,7 @@ import (
 // Embed the entire filesystem directory into the binary so that it stands alone,
 // as well as the configData.yaml file.
 //
-//go:embed templates/*.tmpl configData.yaml
+//go:embed templates/*.tmpl
 var filesystem embed.FS
 
 type Options struct {
@@ -175,32 +175,24 @@ func main() {
 	case "rules":
 		ConvertRules(userConfig, output)
 	case "validate":
-		ValidateFromConfig(userConfig, output)
+		ValidateFromMetadata(userConfig, output)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, rules, and validate\n", args[0])
 	}
 
 }
 
-func readMetadata() config.Metadata {
-	input := "configData.yaml"
-	rdr, err := filesystem.Open(input)
+func loadConfigMetadata() *config.Metadata {
+	m, err := config.LoadConfigMetadata()
 	if err != nil {
 		panic(err)
 	}
-	defer rdr.Close()
-
-	var metadata config.Metadata
-	err = metadata.LoadFrom(rdr)
-	if err != nil {
-		panic(err)
-	}
-	return metadata
+	return m
 }
 
 // This generates the template used by the convert tool.
 func GenerateTemplate(w io.Writer) {
-	metadata := readMetadata()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
@@ -217,7 +209,7 @@ func GenerateTemplate(w io.Writer) {
 
 // This generates a nested list of the groups and names.
 func PrintNames(w io.Writer) {
-	metadata := readMetadata()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("group")
 	tmpl.Funcs(helpers())
@@ -236,7 +228,7 @@ func PrintNames(w io.Writer) {
 // with default or example values into minimal_config.yaml. The file it
 // produces is valid YAML for config, and could be the basis of a test file.
 func GenerateMinimalSample(w io.Writer) {
-	metadata := readMetadata()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
@@ -252,7 +244,7 @@ func GenerateMinimalSample(w io.Writer) {
 }
 
 func GenerateMarkdown(w io.Writer) {
-	metadata := readMetadata()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
@@ -267,10 +259,10 @@ func GenerateMarkdown(w io.Writer) {
 	}
 }
 
-func ValidateFromConfig(userData map[string]any, w io.Writer) bool {
-	metadata := readMetadata()
+func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
+	metadata := loadConfigMetadata()
 
-	errors := config.Validate(userData, metadata)
+	errors := metadata.Validate(userData)
 	if len(errors) > 0 {
 		for _, e := range errors {
 			fmt.Fprintf(w, "validation errors: %s\n", e)
