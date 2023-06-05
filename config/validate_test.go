@@ -293,3 +293,26 @@ func Test_validate(t *testing.T) {
 		})
 	}
 }
+
+func Test_flatten(t *testing.T) {
+	input := map[string]any{
+		"A": 2,
+		"B": map[string]any{
+			"C": map[string]any{
+				"D": map[string]any{
+					"E": 1,
+				},
+			},
+		},
+	}
+	output := flatten(input, true)
+	expected := map[string]any{
+		"A": 2,
+		"B.C": map[string]any{
+			"D": map[string]any{
+				"E": 1,
+			},
+		},
+	}
+	assert.Equal(t, expected, output)
+}

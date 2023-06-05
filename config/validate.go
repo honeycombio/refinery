@@ -5,11 +5,13 @@ import (
 	"net"
 	"net/url"
 	"regexp"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/slices"
 )
 
+// Takes a map and flattens the top level of it into a new map with a dotted key.
 func flatten(data map[string]any, recur bool) map[string]any {
 	result := make(map[string]any)
 	for k, v := range data {
@@ -73,6 +75,24 @@ func validateDatatype(k string, v any, typ string) string {
 		return fmt.Sprintf("field %s must not be nil", k)
 	}
 	switch typ {
+	case "object":
+		// special case that this means we should recurse -- but not here
+		// just make sure that the value is a map
+		if _, ok := v.(map[string]any); !ok {
+			return fmt.Sprintf("field %s must be an object", k)
+		}
+	case "objectarray":
+		// special case that this means we should recurse -- but not here
+		// just make sure that the value is an array
+		if _, ok := v.([]any); !ok {
+			return fmt.Sprintf("field %s must be an array of objects", k)
+		}
+	case "anyscalar":
+		switch v.(type) {
+		case string, int, int64, float64, bool:
+		default:
+			return fmt.Sprintf("field %s must be a string, int, float, or bool", k)
+		}
 	case "string":
 		if !isString(v) {
 			return fmt.Sprintf("field %s must be a string but %v is %T", k, v, v)
@@ -153,12 +173,21 @@ func validateDatatype(k string, v any, typ string) string {
 	return ""
 }
 
+// Validate checks that the given data is valid according to the metadata.
+// It returns a list of errors, or an empty list if there are no errors.
+// The errors are strings that are suitable for showing to the user.
+// The data is a map of group names to maps of field names to values.
+// If a field name is of type "object" then this function is called
+// recursively to validate the sub-object.
+// Note that the flatten function returns only 2 levels.
 func (m *Metadata) Validate(data map[string]any) []string {
 	errors := make([]string, 0)
-	// validate that there are no unknown groups in the userdata
+	// check for unknown groups in the userdata
 	for k := range data {
 		if m.GetGroup(k) == nil {
-			errors = append(errors, fmt.Sprintf("unknown group %s", k))
+			possibilities := m.ClosestNamesTo(k)
+			guesses := strings.Join(possibilities, " or ")
+			errors = append(errors, fmt.Sprintf("unknown group %s; did you mean %s?", k, guesses))
 		}
 	}
 
@@ -167,14 +196,38 @@ func (m *Metadata) Validate(data map[string]any) []string {
 	for k, v := range flatdata {
 		field := m.GetField(k)
 		if field == nil {
-			errors = append(errors, fmt.Sprintf("unknown field %s", k))
+			possibilities := m.ClosestNamesTo(k)
+			guesses := strings.Join(possibilities, " or ")
+			errors = append(errors, fmt.Sprintf("unknown field %s; did you mean %s?", k, guesses))
 			continue
 		}
 		if e := validateDatatype(k, v, field.Type); e != "" {
 			errors = append(errors, e)
 			continue // if type is wrong we can't validate further
 		}
-
+		switch field.Type {
+		case "object":
+			// if it's an object, we need to recurse
+			if _, ok := v.(map[string]any); ok {
+				suberrors := m.Validate(v.(map[string]any))
+				for _, e := range suberrors {
+					errors = append(errors, fmt.Sprintf("Within field %s: %s", k, e))
+				}
+			}
+		case "objectarray":
+			// if it's an object array, we need to iterate the array and recurse
+			// and we need to specify the group as rules, so we make a new map
+			if arr, ok := v.([]any); ok {
+				for i, a := range arr {
+					subname := strings.Split(k, ".")[1]
+					rulesmap := map[string]any{subname: a}
+					suberrors := m.Validate(rulesmap)
+					for _, e := range suberrors {
+						errors = append(errors, fmt.Sprintf("Within field %s[%d]: %s", k, i, e))
+					}
+				}
+			}
+		}
 		for _, validation := range field.Validations {
 			switch validation.Type {
 			case "choice":
@@ -253,6 +306,14 @@ func (m *Metadata) Validate(data map[string]any) []string {
 				default:
 					errors = append(errors, fmt.Sprintf("field %s must be a map or array", k))
 				}
+			case "validChildren":
+				if _, ok := v.(map[string]any); ok {
+					for kk := range v.(map[string]any) {
+						if !slices.Contains(validation.GetArgAsStringSlice(), kk) {
+							errors = append(errors, fmt.Sprintf("field %s contains unknown key %s", k, kk))
+						}
+					}
+				}
 			case "required", "requiredInGroup", "requiredWith":
 				// these are handled below
 			default:
@@ -287,6 +348,74 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					}
 				}
 			}
+		}
+	}
+
+	return errors
+}
+
+// ValidateRules checks that the given data (which is expected to be a
+// rules file) is valid according to the metadata.
+// It returns a list of errors, or an empty list if there are no errors.
+// The errors are strings that are suitable for showing to the user.
+// This function isn't the same as a normal Validate because the rules
+// file is a map of user-supplied names as keys, and we can't validate
+// those as groups because they're not groups.
+func (m *Metadata) ValidateRules(data map[string]any) []string {
+	errors := make([]string, 0)
+
+	hasVersion := false
+	hasSamplers := false
+	// validate the top-level keys in the data
+	for k, v := range data {
+		switch k {
+		case "RulesVersion":
+			if i, ok := v.(int); !ok {
+				errors = append(errors, fmt.Sprintf("RulesVersion must be an int, but %v is %T", v, v))
+			} else if i != 2 {
+				errors = append(errors, fmt.Sprintf("RulesVersion must be 2, but it is %d", i))
+			}
+			hasVersion = true
+		case "Samplers":
+			if samplers, ok := v.(map[string]any); !ok {
+				errors = append(errors, fmt.Sprintf("Samplers must be a collection of samplers, but %v is %T", v, v))
+			} else {
+				foundDefault := false
+				for k, v := range samplers {
+					if _, ok := v.(map[string]any); !ok {
+						errors = append(errors, fmt.Sprintf("Sampler %s must be a map, but %v is %T", k, v, v))
+					}
+					if k == "__default__" {
+						foundDefault = true
+					}
+				}
+				if !foundDefault {
+					errors = append(errors, "Samplers must include a __default__ sampler")
+				}
+			}
+			hasSamplers = true
+		default:
+			errors = append(errors, fmt.Sprintf("unknown top-level key %s", k))
+		}
+	}
+	if !hasVersion {
+		errors = append(errors, "RulesVersion is required")
+	}
+	if !hasSamplers {
+		errors = append(errors, "Samplers is required")
+	}
+
+	// bail if there are any errors at this level -- we don't know what we're working with
+	if len(errors) > 0 {
+		return errors
+	}
+
+	// now validate the individual samplers
+	samplers := data["Samplers"].(map[string]any)
+	for k, v := range samplers {
+		suberrors := m.Validate(v.(map[string]any))
+		for _, e := range suberrors {
+			errors = append(errors, fmt.Sprintf("Within sampler %s: %s", k, e))
 		}
 	}
 

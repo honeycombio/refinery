@@ -3,6 +3,7 @@ module github.com/honeycombio/refinery
 go 1.19
 
 require (
+	github.com/agnivade/levenshtein v1.1.1
 	github.com/creasty/defaults v1.7.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371

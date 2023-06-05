@@ -124,8 +124,8 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 	defaultSamplerType, _ := getValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
 
 	newConfig := &config.V2SamplerConfig{
-		ConfigVersion: 2,
-		Samplers:      make(map[string]*config.V2SamplerChoice),
+		RulesVersion: 2,
+		Samplers:     make(map[string]*config.V2SamplerChoice),
 	}
 	sampler, _, err := readV1RulesIntoV2Sampler(defaultSamplerType, rules)
 	if err != nil {

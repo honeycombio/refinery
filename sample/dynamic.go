@@ -39,6 +39,7 @@ func (d *DynamicSampler) Start() error {
 	d.dynsampler = &dynsampler.AvgSampleRate{
 		GoalSampleRate:         int(d.sampleRate),
 		ClearFrequencyDuration: time.Duration(d.clearFrequency),
+		MaxKeys:                d.Config.MaxKeys,
 	}
 	d.dynsampler.Start()
 
