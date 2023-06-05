@@ -287,8 +287,9 @@ func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
 
 	errors := metadata.Validate(userData)
 	if len(errors) > 0 {
+		fmt.Fprintln(w, "Validation Errors in config file:")
 		for _, e := range errors {
-			fmt.Fprintf(w, "validation errors: %s\n", e)
+			fmt.Fprintf(w, "  %s\n", e)
 		}
 	}
 	return len(errors) == 0
