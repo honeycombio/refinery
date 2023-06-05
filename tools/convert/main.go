@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/jessevdk/go-flags"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
@@ -18,7 +19,7 @@ import (
 // Embed the entire filesystem directory into the binary so that it stands alone,
 // as well as the configData.yaml file.
 //
-//go:embed templates/*.tmpl configData.yaml
+//go:embed templates/*.tmpl
 var filesystem embed.FS
 
 type Options struct {
@@ -116,10 +117,10 @@ func main() {
 		case "doc":
 			GenerateMarkdown(output)
 			os.Exit(0)
-		case "config", "rules":
+		case "config", "rules", "validate":
 			// do nothing yet because we need to parse the input file
 		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules\n", args[0])
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules, schema, validate\n", args[0])
 			os.Exit(1)
 		}
 	}
@@ -140,7 +141,7 @@ func main() {
 		}
 	}
 
-	data, err := load(rdr, typ)
+	userConfig, err := load(rdr, typ)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "'%v' loading config from %s with filetype %s\n", err, opts.Input, opts.Type)
 		os.Exit(1)
@@ -153,7 +154,7 @@ func main() {
 	}{
 		Now:   time.Now().Format(time.RFC3339),
 		Input: opts.Input,
-		Data:  data,
+		Data:  userConfig,
 	}
 
 	switch args[0] {
@@ -172,70 +173,26 @@ func main() {
 			os.Exit(1)
 		}
 	case "rules":
-		ConvertRules(data, output)
+		ConvertRules(userConfig, output)
+	case "validate":
+		ValidateFromMetadata(userConfig, output)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, and sample\n", args[0])
+		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, rules, and validate\n", args[0])
 	}
 
 }
 
-// All of the code below is used when building and debugging this tool.
-// There are three commands that can be run:
-//   - `go run . template` will generate a template file from the current schema
-//   - `go run . names` will print out all of the names of the fields in the schema
-//   - `go run . sample` will generate a minimal sample config file
-// These commands are not listed in the documentation.
-
-// These are the data structures used by these commands and their templates
-type Field struct {
-	Name         string   `json:"name"`
-	V1Group      string   `json:"v1group"`
-	V1Name       string   `json:"v1name"`
-	FirstVersion string   `json:"firstversion"`
-	LastVersion  string   `json:"lastversion"`
-	Type         string   `json:"type"`
-	ValueType    string   `json:"valuetype"`
-	Extra        string   `json:"extra"`
-	Default      any      `json:"default,omitempty"`
-	Choices      []string `json:"choices,omitempty"`
-	Example      string   `json:"example,omitempty"`
-	Validation   string   `json:"validation,omitempty"`
-	Reload       bool     `json:"reload"`
-	Summary      string   `json:"summary"`
-	Description  string   `json:"description"`
-}
-
-type Group struct {
-	Name        string  `json:"name"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	Fields      []Field `json:"fields,omitempty"`
-}
-
-type ConfigData struct {
-	Groups []Group `json:"groups"`
-}
-
-func readConfigData() ConfigData {
-	input := "configData.yaml"
-	rdr, err := filesystem.Open(input)
+func loadConfigMetadata() *config.Metadata {
+	m, err := config.LoadConfigMetadata()
 	if err != nil {
 		panic(err)
 	}
-	defer rdr.Close()
-
-	var config ConfigData
-	decoder := yaml.NewDecoder(rdr)
-	err = decoder.Decode(&config)
-	if err != nil {
-		panic(err)
-	}
-	return config
+	return m
 }
 
 // This generates the template used by the convert tool.
 func GenerateTemplate(w io.Writer) {
-	config := readConfigData()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("template generator")
 	tmpl.Funcs(helpers())
@@ -244,7 +201,7 @@ func GenerateTemplate(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "genfile.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "genfile.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
@@ -252,7 +209,7 @@ func GenerateTemplate(w io.Writer) {
 
 // This generates a nested list of the groups and names.
 func PrintNames(w io.Writer) {
-	config := readConfigData()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("group")
 	tmpl.Funcs(helpers())
@@ -261,7 +218,7 @@ func PrintNames(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "names.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "names.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
@@ -271,7 +228,7 @@ func PrintNames(w io.Writer) {
 // with default or example values into minimal_config.yaml. The file it
 // produces is valid YAML for config, and could be the basis of a test file.
 func GenerateMinimalSample(w io.Writer) {
-	config := readConfigData()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("sample")
 	tmpl.Funcs(helpers())
@@ -280,14 +237,14 @@ func GenerateMinimalSample(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "sample.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "sample.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func GenerateMarkdown(w io.Writer) {
-	config := readConfigData()
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
@@ -296,8 +253,20 @@ func GenerateMarkdown(w io.Writer) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", config)
+	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
+	metadata := loadConfigMetadata()
+
+	errors := metadata.Validate(userData)
+	if len(errors) > 0 {
+		for _, e := range errors {
+			fmt.Fprintf(w, "validation errors: %s\n", e)
+		}
+	}
+	return len(errors) == 0
 }

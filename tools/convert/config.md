@@ -31,8 +31,8 @@ MinRefineryVersion is the minimum version of Refinery that can load
 this configuration file. 
 
 This specifies the lowest Refinery version capable of loading all of 
-the features used in this file. Refinery will refuse to start if its 
-version is less than this. 
+the features used in this file. If this value is present, Refinery 
+will refuse to start if its version is less than this. 
  
 
 Not eligible for live reload.
@@ -100,7 +100,7 @@ requirement, put something like nginx in front to do the decryption.
 
 Not eligible for live reload.
 
-Type: `ipport`
+Type: `hostport`
 
 Default: `0.0.0.0:8080`
 
@@ -116,7 +116,7 @@ like nginx or a load balancer to do the decryption.
 
 Not eligible for live reload.
 
-Type: `ipport`
+Type: `hostport`
 
 Default: `0.0.0.0:8081`
 
@@ -169,7 +169,8 @@ with API keys not in the ReceiveKeys list to be rejected.
 
 If true, only traffic using the keys listed in APIKeys is accepted. 
 Events arriving with API keys not in the ReceiveKeys list will be 
-rejected with an HTTP 401 error. 
+rejected with an HTTP 401 error. If false, all traffic is accepted and 
+ReceiveKeys is ignored. Must be specified if APIKeys is specified. 
  
 
 Eligible for live reload.
@@ -289,12 +290,12 @@ on an incomplete trace.
 
 A long timer; it represents the outside boundary of how long to wait 
 before making the trace decision about an incomplete trace. Normally 
-traces are sent or dropped when the root span arrives. Sometimes the 
-root span never arrives (due to crashes or whatever), and this timer 
-will send a trace even without having received the root span. If you 
-have particularly long-lived traces you should increase this timer. 
-Note that this will also increase the memory requirements for 
-refinery. 
+trace decisions (send or drop) are made when the root span arrives. 
+Sometimes the root span never arrives (due to crashes or whatever), 
+and this timer will send a trace even without having received the root 
+span. If you have particularly long-lived traces you should increase 
+this timer. Note that this will also increase the memory requirements 
+for refinery. 
  
 
 Eligible for live reload.
@@ -309,9 +310,10 @@ Default: `60s`
 MaxBatchSize is the maximum number of events to be included in each 
 batch for sending. 
 
-This value is used to set the BatchSize field in libhoney. If you have 
-particularly large traces you should increase this value. Note that 
-this will also increase the memory requirements for refinery. 
+This value is used to set the BatchSize field in the libhoney library 
+used to send data to Honeycomb. If you have particularly large traces 
+you should increase this value. Note that this will also increase the 
+memory requirements for refinery. 
  
 
 Eligible for live reload.
@@ -327,7 +329,7 @@ SendTicker is the interval between checks for traces to send.
 
 A short timer that determines the duration between trace cache review 
 runs to send. Increasing this will spend more time processing incoming 
-events to reduce incoming- or peer_router_dropped spikes. Decreasing 
+events to reduce incoming_ or peer_router_dropped spikes. Decreasing 
 this will check the trace cache for timeouts more frequently. 
  
 
@@ -356,7 +358,7 @@ localhost:6060 and :6069.
 
 Not eligible for live reload.
 
-Type: `ipport`
+Type: `hostport`
 
 
 Example: `localhost:6060`
@@ -494,13 +496,13 @@ Not eligible for live reload.
 Type: `string`
 
 
-Example: `set-this-to-your-api-key`
+Example: `SetThisToAHoneycombKey`
 
 ### Dataset
 
 Dataset is the dataset to which logs will be sent. 
 
-Specifies the dataset to which logs will be sent. 
+Specifies the Honeycomb dataset to which logs will be sent. 
  
 
 Not eligible for live reload.
@@ -534,8 +536,7 @@ SamplerThroughput is the sampling throughput for logs measured in
 events per second. The sampling algorithm attempts to make sure that 
 the average throughput approximates this value, while also ensuring 
 that all unique logs arrive at Honeycomb at least once per sampling 
-period. The default value is 10 events per second. TODO: THROUGHPUT 
-FOR THE CLUSTER 
+period. TODO: THROUGHPUT FOR THE CLUSTER 
  
 
 Not eligible for live reload.
@@ -600,7 +601,7 @@ listener. Only used if "Enabled" is true in PrometheusMetrics.
 
 Not eligible for live reload.
 
-Type: `ipport`
+Type: `hostport`
 
 Default: `localhost:2112`
 
@@ -609,16 +610,16 @@ Default: `localhost:2112`
 ## LegacyMetrics: Legacy Metrics
 
 Configuration for Refinery's legacy metrics. Version 1.x of Refinery 
-used this configuration for sending Metrics to Honeycomb. The metrics 
+used this format for sending Metrics to Honeycomb. The metrics 
 generated that way are nonstandard and will be deprecated in a future 
 release. New installations should prefer OTelMetrics. 
+ 
 
 ### Enabled
 
 Enabled controls whether to send metrics to Honeycomb. 
 
-Enabled controls whether to send legacy-formatted metrics to 
-Honeycomb. 
+This controls whether to send legacy-formatted metrics to Honeycomb. 
  
 
 Not eligible for live reload.
@@ -632,8 +633,7 @@ Type: `bool`
 
 APIHost is the URL of the Honeycomb API to which metrics will be sent. 
 
-Specifies the URL for the upstream Honeycomb API for metrics; this is 
-the destination to which refinery sends its own metrics. 
+Specifies the URL for the upstream Honeycomb API for legacy metrics. 
  
 
 Not eligible for live reload.
@@ -657,7 +657,7 @@ Not eligible for live reload.
 Type: `string`
 
 
-Example: `set-this-to-your-api-key`
+Example: `SetThisToAHoneycombKey`
 
 ### Dataset
 
@@ -696,6 +696,84 @@ Configuration for Refinery's OpenTelemetry metrics. This is the
 preferred way to send metrics to Honeycomb. New installations should 
 prefer OTelMetrics. 
  
+
+### Enabled
+
+Enabled controls whether to send metrics via OTel. 
+
+Enabled controls whether to send OpenTelemetry metrics to Honeycomb. 
+ 
+
+Not eligible for live reload.
+
+Type: `bool`
+
+
+
+
+### APIHost
+
+APIHost is the URL of the OTel API to which metrics will be sent. 
+
+Specifies a URL for the upstream API to receive refinery's own OTel 
+metrics. 
+ 
+
+Not eligible for live reload.
+
+Type: `url`
+
+Default: `https://api.honeycomb.io`
+
+
+### APIKey
+
+APIKey is the API key used to send Honeycomb metrics via OTel. 
+
+Specifies the API key used when refinery sends its own metrics. It is 
+recommended that you create a separate team and key for Refinery 
+metrics. If this is blank, Refinery will not set the 
+Honeycomb-specific headers for OTel, and your APIHost must be set to a 
+valid OTel endpoint. 
+ 
+
+Not eligible for live reload.
+
+Type: `string`
+
+
+Example: `SetThisToAHoneycombKey`
+
+### Dataset
+
+Dataset is the Honeycomb dataset to which OTel metrics will be sent. 
+
+Specifies the dataset to which refinery sends its own OTel metrics. 
+Only used (but required) if APIKey is specified. 
+ 
+
+Not eligible for live reload.
+
+Type: `string`
+
+Default: `Refinery Metrics`
+
+
+### ReportingInterval
+
+ReportingInterval is the interval between sending OTel metrics to 
+Honeycomb. 
+
+The interval between sending metrics to Honeycomb. Between 1 and 60 
+seconds is typical. 
+ 
+
+Not eligible for live reload.
+
+Type: `duration`
+
+Default: `30s`
+
 
 ---
 ## PeerManagement: Peer Management
@@ -798,7 +876,7 @@ Example: `192.168.1.11:8081,192.168.1.12:8081`
 ## RedisPeerManagement: Redis Peer Management
 
 Controls how the Refinery cluster communicates between peers when 
-using Redis. Only applies when PeerManagement.Type is "redis" 
+using Redis. Only applies when PeerManagement.Type is "redis". 
  
 
 ### Host
@@ -811,7 +889,7 @@ membership management.
 
 Not eligible for live reload.
 
-Type: `ipport`
+Type: `hostport`
 
 
 Example: `localhost:6379`
@@ -957,18 +1035,19 @@ Default: `10000`
 ### MaxMemory
 
 MaxMemory is the maximum percentage of memory that should be allocated 
-by the collector. 
+by the span collector. 
 
 If nonzero, it must be an integer value between 1 and 100, 
 representing the target maximum percentage of memory that should be 
-allocated by the collector. If set to a non-zero value, once per tick 
-(see SendTicker) the collector will compare total allocated bytes to 
-this calculated value. If allocation is too high, traces will be 
+allocated by the span collector. If set to a non-zero value, once per 
+tick (see SendTicker) the collector will compare total allocated bytes 
+to this calculated value. If allocation is too high, traces will be 
 ejected from the cache early to reduce memory. Useful values for this 
 setting are generally in the range of 70-90. Depending on deployment 
 details, system memory information may not be available. If it is not, 
 a warning will be logged and the value of MaxAlloc will be used. If 
-this value is 0, MaxAlloc will be used. 
+this value is 0, MaxAlloc will be used. Requires MaxAlloc to be 
+nonzero. TODO: NOT YET IMPLEMENTED 
  
 
 Eligible for live reload.
@@ -1027,7 +1106,7 @@ to peer nodes.
 Sets the size of the buffer (measured in spans) used to send spans to 
 peer nodes. If the buffer fills up, performance will degrade because 
 Refinery will block while waiting for space to become available. If 
-this happens, you should increase the buffer size. 
+this happens, you should increase this buffer size. 
  
 
 Eligible for live reload.
@@ -1051,8 +1130,7 @@ This is the amount of time for which refinery caches environment
 information, which it looks up from Honeycomb for each different 
 APIKey. This information is used when making sampling decisions. If 
 you have a very large number of environments, you may want to increase 
-this value. If you have a very small number of environments, you may 
-want to decrease this value. 
+this value. 
  
 
 Eligible for live reload.
@@ -1172,7 +1250,7 @@ something like nginx in front to do the decryption.
 
 Not eligible for live reload.
 
-Type: `ipport`
+Type: `hostport`
 
 
 
@@ -1237,8 +1315,7 @@ KeepAlive is the duration between keep-alive pings.
 
 Sets a duration for the amount of time after which if the client 
 doesn't see any activity it pings the server to see if the transport 
-is still alive. If set below 1s, a minimum value of 1s will be used 
-instead. 0s sets duration to 2 hours. 
+is still alive. 0s sets duration to 2 hours. 
  
 
 Not eligible for live reload.
@@ -1255,8 +1332,7 @@ connection.
 
 This is the amount of time after which if the server doesn't see any 
 activity, it pings the client to see if the transport is still alive. 
-If set below 1s, a minimum value of 1s will be used instead. 0s sets 
-duration to 20 seconds. 
+0s sets duration to 20 seconds. 
  
 
 Not eligible for live reload.
@@ -1422,10 +1498,10 @@ activated.
 Controls the sampling rate to use when Stress Relief is activated. All 
 new traces will be deterministically sampled at this rate based only 
 on the traceID. It should be chosen to be a rate that sends fewer 
-samples than the average sampling rate Refinery is configured to use. 
-For example, if Refinery is configured to normally sample at a rate of 
-1 in 10, then Stress Relief should be configured to sample at a rate 
-of at least 1 in 30. 
+samples than the average sampling rate Refinery is expected to 
+generate. For example, if Refinery is configured to normally sample at 
+a rate of 1 in 10, then Stress Relief should be configured to sample 
+at a rate of at least 1 in 30. 
  
 
 Eligible for live reload.
@@ -1440,7 +1516,7 @@ Default: `100`
 MinimumActivationDuration is the minimum time that stress relief will 
 stay enabled. 
 
-Setss the minimum time that stress relief will stay enabled, once 
+Sets the minimum time that stress relief will stay enabled, once 
 activated. This helps to prevent oscillations. 
  
 

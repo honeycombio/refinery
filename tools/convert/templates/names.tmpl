@@ -8,8 +8,6 @@
     {{- println -}}
     {{- range $group.Fields -}}
         {{- $field := . -}}
-        {{- printf "%s %s" $field.Name $field.Summary | wci 2 -}}
-        {{- println -}}
         {{- print "  - " $field.Name -}}
         {{- if $field.V1Name -}}
             {{- print " (originally " -}}
