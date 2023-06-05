@@ -1,4 +1,4 @@
-# Honeycomb Refinery Configuration Documentation"
+# Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
 
