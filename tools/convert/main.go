@@ -115,12 +115,16 @@ func main() {
 			GenerateMinimalSample(output)
 			os.Exit(0)
 		case "doc":
-			GenerateMarkdown(output)
+			metadata := loadConfigMetadata()
+			if len(args) > 1 && args[1] == "rules" {
+				metadata = loadRulesMetadata()
+			}
+			GenerateMarkdown(metadata, output)
 			os.Exit(0)
 		case "config", "rules", "validate":
 			// do nothing yet because we need to parse the input file
 		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, config, rules, schema, validate\n", args[0])
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, doc rules, config, rules, schema, validate config, validate rules\n", args[0])
 			os.Exit(1)
 		}
 	}
@@ -175,15 +179,35 @@ func main() {
 	case "rules":
 		ConvertRules(userConfig, output)
 	case "validate":
-		ValidateFromMetadata(userConfig, output)
+		if args[1] == "config" {
+			if !ValidateFromMetadata(userConfig, output) {
+				os.Exit(1)
+			}
+		} else if args[1] == "rules" {
+			if !ValidateRules(userConfig, output) {
+				os.Exit(1)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config and rules\n", args[0])
+			os.Exit(1)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, rules, and validate\n", args[0])
+		os.Exit(1)
 	}
 
 }
 
 func loadConfigMetadata() *config.Metadata {
 	m, err := config.LoadConfigMetadata()
+	if err != nil {
+		panic(err)
+	}
+	return m
+}
+
+func loadRulesMetadata() *config.Metadata {
+	m, err := config.LoadRulesMetadata()
 	if err != nil {
 		panic(err)
 	}
@@ -243,8 +267,7 @@ func GenerateMinimalSample(w io.Writer) {
 	}
 }
 
-func GenerateMarkdown(w io.Writer) {
-	metadata := loadConfigMetadata()
+func GenerateMarkdown(metadata *config.Metadata, w io.Writer) {
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
@@ -264,8 +287,21 @@ func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
 
 	errors := metadata.Validate(userData)
 	if len(errors) > 0 {
+		fmt.Fprintln(w, "Validation Errors in config file:")
 		for _, e := range errors {
-			fmt.Fprintf(w, "validation errors: %s\n", e)
+			fmt.Fprintf(w, "  %s\n", e)
+		}
+	}
+	return len(errors) == 0
+}
+
+func ValidateRules(userData map[string]any, w io.Writer) bool {
+	metadata := loadRulesMetadata()
+	errors := metadata.ValidateRules(userData)
+	if len(errors) > 0 {
+		fmt.Fprintln(w, "Validation Errors in rules file:")
+		for _, e := range errors {
+			fmt.Fprintf(w, "  %s\n", e)
 		}
 	}
 	return len(errors) == 0

@@ -69,7 +69,7 @@ func choice(data map[string]any, key, oldkey string, choices []string, def strin
 }
 
 func comment(s string) string {
-	return "## " + strings.Replace(s, "\n", "\n## ", -1)
+	return strings.TrimRight("## "+strings.Replace(s, "\n", "\n## ", -1), " ")
 }
 
 func conditional(data map[string]any, key string, extra string) string {
@@ -360,12 +360,12 @@ func wordwrap(s string) string {
 		var words []string = strings.Split(l, " ")
 		for _, w := range words {
 			if len(line)+len(w) > width {
-				result += line + "\n"
+				result += strings.TrimSpace(line) + "\n"
 				line = ""
 			}
 			line += w + " "
 		}
-		result += line
+		result += strings.TrimSpace(line)
 		output = append(output, result)
 	}
 	return strings.Join(output, "\n")

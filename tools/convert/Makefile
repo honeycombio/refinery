@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample doc validate
+all: template names sample doc validateConfig validateRules
 
 .PHONY: template
 #: generate the config template
@@ -36,8 +36,14 @@ doc:
 
 .PHONY: validate
 #: validate the sample config
-validate:
+validateConfig:
 	@echo
 	@echo "+++ validating sample config"
 	@echo
-	go run . validate --input=minimal_config.yaml
+	go run . validate config --input=minimal_config.yaml
+
+validateRules:
+	@echo
+	@echo "+++ validating sample rules"
+	@echo
+	go run . validate rules --input=rules_complete.yaml

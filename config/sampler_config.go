@@ -36,8 +36,8 @@ func (v *V2SamplerChoice) Sampler() (any, string) {
 }
 
 type V2SamplerConfig struct {
-	ConfigVersion int                         `json:"configversion" yaml:"ConfigVersion" validate:"required,ge=2"`
-	Samplers      map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
+	RulesVersion int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
+	Samplers     map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
 }
 
 type DeterministicSamplerConfig struct {
@@ -48,6 +48,7 @@ type DynamicSamplerConfig struct {
 	SampleRate     int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
 	ClearFrequency Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
 	FieldList      []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	MaxKeys        int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
 	UseTraceLength bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
@@ -58,8 +59,8 @@ type EMADynamicSamplerConfig struct {
 	AgeOutValue         float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
 	BurstMultiple       float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
 	BurstDetectionDelay uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
-	MaxKeys             int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
 	FieldList           []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	MaxKeys             int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
 	UseTraceLength      bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
@@ -67,6 +68,7 @@ type TotalThroughputSamplerConfig struct {
 	GoalThroughputPerSec int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
 	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
+	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
