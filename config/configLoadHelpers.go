@@ -1,7 +1,6 @@
 package config
 
 import (
-	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -105,21 +104,6 @@ func load(r io.Reader, format Format, into any) error {
 	default:
 		return fmt.Errorf("unable to determine data format")
 	}
-}
-
-// renderToMap renders the given data to a map[string]any by writing it to a
-// buffer as YAML and then reading it back. This is so that we can
-// validate the config against the metadata *after* applying any defaults.
-func renderToMap(data any) map[string]any {
-	var buf bytes.Buffer
-	encoder := yaml.NewEncoder(&buf)
-	encoder.SetIndent(2)
-	encoder.Encode(data)
-	decoder := yaml.NewDecoder(&buf)
-	decoder.KnownFields(true)
-	var m map[string]any
-	decoder.Decode(&m)
-	return m
 }
 
 func validateConfig(location string) ([]string, error) {
