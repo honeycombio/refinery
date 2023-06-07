@@ -103,7 +103,8 @@ Samplers:
                       Value: root
                 # This is the default rule (with no conditions) and therefore
                 # sets the sample rate used if no other rule matches.
-                - SampleRate: 10
+                - Name: default rule
+                  SampleRate: 10
     env5:
         TotalThroughputSampler:
             GoalThroughputPerSec: 100
