@@ -56,7 +56,7 @@ func TestErrorReloading(t *testing.T) {
 
 	// This is valid YAML, but invalid config
 	rm2 := makeYAML(
-		"ConfigVersion", 2,
+		"RulesVersion", 2,
 		"Samplers.__default__.InvalidSampler.SampleRate", 50,
 	)
 	err = os.WriteFile(rules, []byte(rm2), 0644)

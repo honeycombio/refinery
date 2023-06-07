@@ -2,9 +2,8 @@ package config
 
 import (
 	"errors"
-	"fmt"
 	"net"
-	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -212,10 +211,67 @@ type StressReliefConfig struct {
 	MinimumStartupDuration    Duration `yaml:"MinimumStartupDuration" default:"3s"`
 }
 
+type FileConfigError struct {
+	ConfigLocation string
+	ConfigFailures []string
+	RulesLocation  string
+	RulesFailures  []string
+}
+
+func (e *FileConfigError) Error() string {
+	var msg strings.Builder
+	if len(e.ConfigFailures) > 0 {
+		msg.WriteString("Validation failed for config file ")
+		msg.WriteString(e.ConfigLocation)
+		msg.WriteString(":\n")
+		for _, fail := range e.ConfigFailures {
+			msg.WriteString("  ")
+			msg.WriteString(fail)
+			msg.WriteString("\n")
+		}
+	}
+	if len(e.RulesFailures) > 0 {
+		msg.WriteString("Validation failed for rules file ")
+		msg.WriteString(e.RulesLocation)
+		msg.WriteString(":\n")
+		for _, fail := range e.RulesFailures {
+			msg.WriteString("  ")
+			msg.WriteString(fail)
+			msg.WriteString("\n")
+		}
+	}
+	return msg.String()
+}
+
 // newFileConfig does the work of creating and loading the start of a config object
 // from the given arguments.
 // It's used by both the main init as well as the reload code.
+// In order to do proper validation, we actually read the file twice -- once into
+// a map, and once into the actual config object.
 func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
+	// If we're not validating, skip this part
+	if !opts.NoValidate {
+		cfgFails, err := validateConfig(opts.ConfigLocation)
+		if err != nil {
+			return nil, err
+		}
+
+		ruleFails, err := validateRules(opts.RulesLocation)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(cfgFails) > 0 || len(ruleFails) > 0 {
+			return nil, &FileConfigError{
+				ConfigLocation: opts.ConfigLocation,
+				ConfigFailures: cfgFails,
+				RulesLocation:  opts.RulesLocation,
+				RulesFailures:  ruleFails,
+			}
+		}
+	}
+
+	// Now load the files
 	mainconf := &configContents{}
 	mainhash, err := readConfigInto(mainconf, opts.ConfigLocation, opts)
 	if err != nil {
@@ -234,23 +290,6 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		rulesConfig: rulesconf,
 		rulesHash:   ruleshash,
 		opts:        opts,
-	}
-
-	// If we're not validating, we are done.
-	if opts.NoValidate {
-		return cfg, nil
-	}
-
-	configMap := renderToMap(mainconf)
-	configErr := validateConfig(configMap, os.Stdout)
-	rulesMap := renderToMap(rulesconf)
-	rulesErr := validateRules(rulesMap, os.Stdout)
-	if configErr != nil && rulesErr != nil {
-		return nil, fmt.Errorf("config validation failed: %w\nrules validation failed: %w", configErr, rulesErr)
-	} else if configErr != nil {
-		return nil, configErr
-	} else if rulesErr != nil {
-		return nil, rulesErr
 	}
 
 	return cfg, nil

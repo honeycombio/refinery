@@ -122,38 +122,46 @@ func renderToMap(data any) map[string]any {
 	return m
 }
 
-func validateConfig(userData map[string]any, w io.Writer) error {
+func validateConfig(location string) ([]string, error) {
+	r, format, err := getReaderFor(location)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	var userData map[string]any
+	if err := load(r, format, &userData); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
+	}
+
 	metadata, err := LoadConfigMetadata()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	errors := metadata.Validate(userData)
-	if len(errors) > 0 {
-		fmt.Fprintln(w, "Validation Errors in config file:")
-		for _, e := range errors {
-			fmt.Fprintf(w, "  %s\n", e)
-		}
-		return fmt.Errorf("%d validation errors in config file", len(errors))
-	}
-	return nil
+	failures := metadata.Validate(userData)
+	return failures, nil
 }
 
-func validateRules(userData map[string]any, w io.Writer) error {
-	metadata, err := LoadRulesMetadata()
+func validateRules(location string) ([]string, error) {
+	r, format, err := getReaderFor(location)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	defer r.Close()
+
+	var userData map[string]any
+	if err := load(r, format, &userData); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
 	}
 
-	errors := metadata.ValidateRules(userData)
-	if len(errors) > 0 {
-		fmt.Fprintln(w, "Validation Errors in rules file:")
-		for _, e := range errors {
-			fmt.Fprintf(w, "  %s\n", e)
-		}
-		return fmt.Errorf("%d validation errors in rules file", len(errors))
+	metadata, err := LoadRulesMetadata()
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	failures := metadata.ValidateRules(userData)
+	return failures, nil
 }
 
 // readConfigInto reads the config from the given location and applies it to the given struct.
