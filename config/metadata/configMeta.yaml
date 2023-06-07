@@ -572,7 +572,7 @@ groups:
     fields:
       - name: Enabled
         type: bool
-        valuetype: conditional
+        valuetype: nondefault
         default: false
         reload: false
         firstversion: v2.0
@@ -614,14 +614,13 @@ groups:
         default: "Refinery Metrics"
         reload: false
         validations:
-          - type: requiredWith
-            arg: APIKey
+          - type: notempty
         envvar: REFINERY_METRICS_DATASET
         firstversion: v2.0
         summary: is the Honeycomb dataset to which OTel metrics will be sent.
         description: >
           Specifies the dataset to which refinery sends its own OTel metrics.
-          Only used (but required) if APIKey is specified.
+          Only used if APIKey is specified.
 
       - name: ReportingInterval
         type: duration
@@ -633,6 +632,18 @@ groups:
         description: >
           The interval between sending metrics to Honeycomb. Between 1 and 60
           seconds is typical.
+
+      - name: Compression
+        type: string
+        valuetype: choice
+        choices: ["none", "gzip"]
+        default: "gzip"
+        reload: false
+        firstversion: v2.0
+        summary: is the compression algorithm to use when sending OTel metrics.
+        description: >
+          The compression algorithm to use when sending metrics to Honeycomb.
+          "gzip" is the default and recommended value.
 
   - name: PeerManagement
     title: "Peer Management"

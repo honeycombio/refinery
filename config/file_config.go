@@ -2,7 +2,9 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -39,10 +41,10 @@ type fileConfig struct {
 }
 
 type configContents struct {
-	General              GeneralConfig             `yaml:"General" validate:"required"`
+	General              GeneralConfig             `yaml:"General"`
 	Network              NetworkConfig             `yaml:"Network"`
 	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
-	Telemetry            RefineryTelemetryConfig   `yaml:"Telemetry"`
+	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
 	Traces               TracesConfig              `yaml:"Traces"`
 	Debugging            DebuggingConfig           `yaml:"Debugging"`
 	Logger               LoggerConfig              `yaml:"Logger"`
@@ -63,16 +65,16 @@ type configContents struct {
 }
 
 type GeneralConfig struct {
-	ConfigurationVersion int      `yaml:"ConfigurationVersion" validate:"required,gte=2"`
-	MinRefineryVersion   string   `yaml:"MinRefineryVersion"`
+	ConfigurationVersion int      `yaml:"ConfigurationVersion"`
+	MinRefineryVersion   string   `yaml:"MinRefineryVersion" default:"v2.0"`
 	DatasetPrefix        string   `yaml:"DatasetPrefix" `
-	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"5m" validate:"dmin=1s"`
+	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"5m"`
 }
 
 type NetworkConfig struct {
-	ListenAddr     string `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr" validate:"hostname_port"`
-	PeerListenAddr string `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr" validate:"hostname_port"`
-	HoneycombAPI   string `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI" validate:"url"`
+	ListenAddr     string `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr string `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI   string `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
 }
 
 type AccessKeyConfig struct {
@@ -88,26 +90,26 @@ type RefineryTelemetryConfig struct {
 
 type TracesConfig struct {
 	SendDelay    Duration `yaml:"SendDelay" default:"2s"`
-	BatchTimeout Duration `yaml:"BatchTimeout" default:"100ms" validate:""`
-	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s" validate:"dmin=1s"`
+	BatchTimeout Duration `yaml:"BatchTimeout" default:"100ms"`
+	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s"`
 	MaxBatchSize uint     `yaml:"MaxBatchSize" default:"500"`
-	SendTicker   Duration `yaml:"SendTicker" default:"100ms" validate:"dmin=10ms"`
+	SendTicker   Duration `yaml:"SendTicker" default:"100ms"`
 }
 
 type DebuggingConfig struct {
-	DebugServiceAddr      string   `yaml:"DebugServiceAddr" validate:"hostname_port|eq="`
+	DebugServiceAddr      string   `yaml:"DebugServiceAddr"`
 	QueryAuthToken        string   `yaml:"QueryAuthToken" cmdenv:"QueryAuthToken"`
 	AdditionalErrorFields []string `yaml:"AdditionalErrorFields" default:"[\"trace.span_id\"]"`
 	DryRun                bool     `yaml:"DryRun" `
 }
 
 type LoggerConfig struct {
-	Type  string `yaml:"Type" default:"stdout" validate:"required,oneof=stdout honeycomb none"`
+	Type  string `yaml:"Type" default:"stdout"`
 	Level Level  `yaml:"Level" default:"Warn"`
 }
 
 type HoneycombLoggerConfig struct {
-	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
+	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
 	SamplerEnabled    bool   `yaml:"SamplerEnabled" `
@@ -120,32 +122,32 @@ type StdoutLoggerConfig struct {
 
 type PrometheusMetricsConfig struct {
 	Enabled    bool   `yaml:"Enabled" default:"false"`
-	ListenAddr string `yaml:"ListenAddr" validate:"hostname_port|eq="`
+	ListenAddr string `yaml:"ListenAddr"`
 }
 
 type LegacyMetricsConfig struct {
 	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
+	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s" validate:"dmin=1s"`
+	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
+	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
 }
 
 type OTelMetricsConfig struct {
 	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" validate:"url"`
+	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string   `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset"`
-	Compression       string   `yaml:"Compression" default:"gzip" validate:"oneof=gzip none"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s" validate:"dmin=1s"`
+	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
+	Compression       string   `yaml:"Compression" default:"gzip"`
+	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
 }
 
 type PeerManagementConfig struct {
-	Type                    string   `yaml:"Type" default:"file" validate:"required,oneof=file redis"`
+	Type                    string   `yaml:"Type" default:"file"`
 	Identifier              string   `yaml:"Identifier"`
 	IdentifierInterfaceName string   `yaml:"IdentifierInterfaceName"`
 	UseIPV6Identifier       bool     `yaml:"UseIPV6Identifier"`
-	Peers                   []string `yaml:"Peers" default:"[\"http://127.0.0.1:8081\"]" validate:"dive,url"`
+	Peers                   []string `yaml:"Peers"`
 }
 
 type RedisPeerManagementConfig struct {
@@ -153,16 +155,16 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	Database       int      `yaml:"Database" validate:"gte=0,lte=15"`
+	Database       int      `yaml:"Database"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
-	Timeout        Duration `yaml:"Timeout" default:"5s" validate:"dmin=1s"`
+	Timeout        Duration `yaml:"Timeout" default:"5s"`
 }
 
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity int    `yaml:"CacheCapacity" default:"10_000" validate:"required,lt=2147483647"`
-	MaxMemory     int    `yaml:"MaxMemory" default:"75" validate:"gte=0,lte=100"`
+	CacheCapacity int    `yaml:"CacheCapacity" default:"10_000"`
+	MaxMemory     int    `yaml:"MaxMemory" default:"75"`
 	MaxAlloc      uint64 `yaml:"MaxAlloc"`
 }
 
@@ -172,7 +174,7 @@ type BufferSizeConfig struct {
 }
 
 type SpecializedConfig struct {
-	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h" validate:"dmin=1m"`
+	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
 	CompressPeerCommunication bool              `yaml:"CompressPeerCommunication" default:"true"`
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
@@ -187,27 +189,27 @@ type IDFieldsConfig struct {
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
 	Enabled               bool     `yaml:"Enabled"`
-	ListenAddr            string   `yaml:"ListenAddr" cmdenv:"GRPCListenAddr" validate:"hostname_port|eq="`
-	MaxConnectionIdle     Duration `yaml:"MaxConnectionIdle" default:"1m" validate:"dmin=1s|eq=0"`
-	MaxConnectionAge      Duration `yaml:"MaxConnectionAge" default:"3m" validate:"dmin=10s|eq=0"`
-	MaxConnectionAgeGrace Duration `yaml:"MaxConnectionAgeGrace" default:"1m" validate:"dmin=1s|eq=0"`
-	KeepAlive             Duration `yaml:"KeepAlive" default:"1m" validate:"dmin=10s"`
-	KeepAliveTimeout      Duration `yaml:"KeepAliveTimeout" default:"20s" validate:"dmin=1s"`
+	ListenAddr            string   `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
+	MaxConnectionIdle     Duration `yaml:"MaxConnectionIdle" default:"1m"`
+	MaxConnectionAge      Duration `yaml:"MaxConnectionAge" default:"3m"`
+	MaxConnectionAgeGrace Duration `yaml:"MaxConnectionAgeGrace" default:"1m"`
+	KeepAlive             Duration `yaml:"KeepAlive" default:"1m"`
+	KeepAliveTimeout      Duration `yaml:"KeepAliveTimeout" default:"20s"`
 }
 
 type SampleCacheConfig struct {
-	KeptSize          uint     `yaml:"KeptSize" default:"10_000" validate:"gte=500"`
-	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000" validate:"gte=100_000"`
-	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s" validate:"dmin=1s"`
+	KeptSize          uint     `yaml:"KeptSize" default:"10_000"`
+	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000"`
+	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s"`
 }
 
 type StressReliefConfig struct {
-	Mode                      string   `yaml:"Mode" default:"never" validate:"required,oneof=always never monitor"`
-	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90" validate:"gte=0,lte=100"`
-	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75" validate:"gte=0,lte=100"`
-	SamplingRate              uint64   `yaml:"SamplingRate" default:"1000" validate:"gte=1"`
+	Mode                      string   `yaml:"Mode" default:"never"`
+	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90"`
+	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
+	SamplingRate              uint64   `yaml:"SamplingRate" default:"1000"`
 	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
-	StartStressedDuration     Duration `yaml:"StartStressedDuration" default:"3s"`
+	MinimumStartupDuration    Duration `yaml:"MinimumStartupDuration" default:"3s"`
 }
 
 // newFileConfig does the work of creating and loading the start of a config object
@@ -234,16 +236,34 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		opts:        opts,
 	}
 
-	// TODO: Validations go here
+	// If we're not validating, we are done.
+	if opts.NoValidate {
+		return cfg, nil
+	}
+
+	configMap := renderToMap(mainconf)
+	configErr := validateConfig(configMap, os.Stdout)
+	rulesMap := renderToMap(rulesconf)
+	rulesErr := validateRules(rulesMap, os.Stdout)
+	if configErr != nil && rulesErr != nil {
+		return nil, fmt.Errorf("config validation failed: %w\nrules validation failed: %w", configErr, rulesErr)
+	} else if configErr != nil {
+		return nil, configErr
+	} else if rulesErr != nil {
+		return nil, rulesErr
+	}
 
 	return cfg, nil
 }
 
 // NewConfig creates a new Config object from the given arguments; if args is
-// nil, it uses the command line arguments
+// nil, it uses the command line arguments. Because errors may be caused by
+// validation problems, it returns the config even in the case of errors.
 func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	cfg, err := newFileConfig(opts)
-	if err != nil {
+	// only exit if we have no config at all; if it fails validation, we'll
+	// do the rest and return it anyway
+	if err != nil && cfg == nil {
 		return nil, err
 	}
 
@@ -252,7 +272,7 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 
 	go cfg.monitor()
 
-	return cfg, nil
+	return cfg, err
 }
 
 func (f *fileConfig) monitor() {

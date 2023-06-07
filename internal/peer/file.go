@@ -14,7 +14,14 @@ func newFilePeers(c config.Config) Peers {
 }
 
 func (p *filePeers) GetPeers() ([]string, error) {
-	return p.c.GetPeers()
+	// we never want to return an empty list of peers, so if the config
+	// returns an empty list, return a single peer. This keeps the sharding
+	// logic happy.
+	peers, err := p.c.GetPeers()
+	if len(peers) == 0 {
+		peers = []string{"127.0.0.1:8081"}
+	}
+	return peers, err
 }
 
 func (p *filePeers) RegisterUpdatedPeersCallback(callback func()) {

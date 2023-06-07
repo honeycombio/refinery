@@ -65,21 +65,42 @@ func main() {
 	opts := Options{}
 
 	parser := flags.NewParser(&opts, flags.Default)
-	parser.Usage = `[OPTIONS]
+	parser.Usage = `[OPTIONS] COMMAND
 
-	This tool converts a Refinery v1 config file (usually in TOML, but JSON and YAML are also
-	supported) to a Refinery v2 config file in YAML. It reads the v1 config file, and then writes
-	the v2 config file, copying non-default values from their v1 location to their v2 location
-	(if they still apply). The new v2 config file is commented in detail to help explain what
-	each value does in the new configuration.
+	The main usage of this tool is to converts a Refinery v1 config file (usually in TOML, but
+	JSON and YAML are also supported) to a Refinery v2 config file in YAML. It reads the v1
+	config file, and then writes the v2 config file, copying non-default values from their v1
+	location to their v2 location (if they still apply).
+
+	For config files, the new v2 config file is commented in detail to help explain what each
+	value does in the new configuration.
 
 	For example, if the v1 file specified "MetricsAPIKey" in the "HoneycombMetrics" section, the v2
 	file will list that key under the "LegacyMetrics" section under the "APIKey" name.
 
+	The tool can also convert rules files to the new rules file format.
+
 	By default, it reads config.toml and writes to stdout. It will try to determine the
 	filetype of the input file based on the extension, but you can override that with
 	the --type flag.
+
+	It has other commands to help with the conversion process. Valid commands are:
+	    config:          convert a config file
+	    rules:           convert a rules file
+	    validate config: validate a config file against the 2.0 format
+	    validate rules:  validate a rules file against the 2.0 format
+	    doc config:      generate markdown documentation for the config file
+	    doc rules:       generate markdown documentation for the rules file
+
+	Examples:
+	    convert config --input config.toml --output config.yaml
+		convert rules --input refinery_rules.yaml --output v2rules.yaml
+		convert validate config --input config.yaml
+		convert validate rules --input v2rules.yaml
 `
+	// Note that there are other commands not listed here, but they are not intended for use
+	// by end users.
+
 	args, err := parser.Parse()
 	if err != nil {
 		switch flagsErr := err.(type) {
@@ -103,30 +124,33 @@ func main() {
 		defer output.Close()
 	}
 
-	if len(args) > 0 {
-		switch args[0] {
-		case "template":
-			GenerateTemplate(output)
-			os.Exit(0)
-		case "names":
-			PrintNames(output)
-			os.Exit(0)
-		case "sample":
-			GenerateMinimalSample(output)
-			os.Exit(0)
-		case "doc":
-			metadata := loadConfigMetadata()
-			if len(args) > 1 && args[1] == "rules" {
-				metadata = loadRulesMetadata()
-			}
-			GenerateMarkdown(metadata, output)
-			os.Exit(0)
-		case "config", "rules", "validate":
-			// do nothing yet because we need to parse the input file
-		default:
-			fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are template, names, sample, doc, doc rules, config, rules, schema, validate config, validate rules\n", args[0])
-			os.Exit(1)
+	if len(args) == 0 {
+		fmt.Println("Usage: convert [OPTIONS] COMMAND")
+		fmt.Println("Try 'convert --help' for more information.")
+		os.Exit(1)
+	}
+	switch args[0] {
+	case "template":
+		GenerateTemplate(output)
+		os.Exit(0)
+	case "names":
+		PrintNames(output)
+		os.Exit(0)
+	case "sample":
+		GenerateMinimalSample(output)
+		os.Exit(0)
+	case "doc":
+		metadata := loadConfigMetadata()
+		if len(args) > 1 && args[1] == "rules" {
+			metadata = loadRulesMetadata()
 		}
+		GenerateMarkdown(metadata, output)
+		os.Exit(0)
+	case "config", "rules", "validate":
+		// do nothing yet because we need to parse the input file
+	default:
+		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, doc config, validate config, rules, doc rules, validate rules\n", args[0])
+		os.Exit(1)
 	}
 
 	rdr, err := os.Open(opts.Input)

@@ -121,9 +121,9 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 		// before we start processing it in earnest. This is to help address the
 		// problem of trying to bring a new node into an already-overloaded
 		// cluster. If the time is 0 we won't do this at all.
-		if s.mode != Monitor && cfg.StartStressedDuration != 0 {
+		if s.mode != Monitor && cfg.MinimumStartupDuration != 0 {
 			s.stressed = true
-			s.stayOnUntil = time.Now().Add(time.Duration(cfg.StartStressedDuration))
+			s.stayOnUntil = time.Now().Add(time.Duration(cfg.MinimumStartupDuration))
 		}
 		s.mode = Monitor
 	case "always":

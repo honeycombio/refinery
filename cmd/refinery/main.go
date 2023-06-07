@@ -88,8 +88,12 @@ func main() {
 		}
 	})
 	if err != nil {
-		fmt.Printf("unable to load config: %+v\n", err)
+		fmt.Printf("%+v\n", err)
 		os.Exit(1)
+	}
+	if opts.Validate {
+		fmt.Println("Config and Rules validated successfully.")
+		os.Exit(0)
 	}
 
 	// get desired implementation for each dependency to inject

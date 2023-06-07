@@ -1,9 +1,34 @@
-ConfigVersion: 2
+# This is a demonstration of Refinery's sampler configuration file with
+# all possible fields.  It is not intended to be a valid configuration file.
+# For more detail on the individual fields, see the documentation in
+# rules.md.
+
+# Specify this version of the configuration file format, which is 2.
+# This is required.
+RulesVersion: 2
+
+# Samplers are configured in the Samplers section. The Samplers section
+# contains a mapping of environment names (e.g. "production", "staging", etc.)
+# to sampler configurations. The environment name is used to select the
+# sampler configuration to use for a given trace.  The environment name is
+# determined by the API key used to send the trace to Refinery.  If the
+# apppropriate environment is not found in the Samplers section, the default sampler
+# configuration is used.
+# Note that for "classic" environments, the environment names are the dataset
+# names instead. See Honeycomb's documentation for more information.
 Samplers:
+    # The default sampler is used when no other sampler matches.
+    # It is required to have a default sampler.
+    # The name consists of two underscores on either side of the word "default".
     __default__:
         DeterministicSampler:
             SampleRate: 1
-    dataset1:
+    # The following are examples of sampler configurations for different
+    # samplers.
+    env1:
+        # Each sampler type has a configuration named after the sampler type.
+        # For details on the possible sampler configuration values and their meaning,
+        # please see the documentation.
         DynamicSampler:
             SampleRate: 2
             ClearFrequency: 1m0s
@@ -12,8 +37,8 @@ Samplers:
                 - http.target
                 - response.status_code
             UseTraceLength: true
-    dataset2:
-        EmaDynamicSampler:
+    env2:
+        EMADynamicSampler:
             GoalSampleRate: 2
             AdjustmentInterval: 15s
             Weight: 0.5
@@ -25,11 +50,15 @@ Samplers:
                 - http.target
                 - response.status_code
             UseTraceLength: true
-    dataset3:
+    env3:
         DeterministicSampler:
             SampleRate: 10
-    dataset4:
+    env4:
         RulesBasedSampler:
+            # for fields like status_code where different systems may use
+            # different datatypes, you can use Datatype to specify the datatype
+            # to use for comparison. If not specified, Refinery requires exact
+            # equality of field and value, including the datatypes.
             Rules:
                 - Name: drop healthchecks
                   Drop: true
@@ -43,44 +72,39 @@ Samplers:
                     - Field: status_code
                       Operator: =
                       Value: 500
+                      Datatype: int
                     - Field: duration_ms
                       Operator: '>='
-                      Value: 1000.789
+                      Value: 1000
+                      Datatype: float
                 - Name: dynamically sample 200 responses
                   Conditions:
                     - Field: status_code
                       Operator: =
                       Value: 200
-                  Sampler:
-                    EmaDynamicSampler:
-                        GoalSampleRate: 15
-                        FieldList:
-                            - request.method
-                            - request.route
-                - Name: dynamically sample 200 string responses
-                  Conditions:
-                    - Field: status_code
-                      Operator: =
-                      Value: "200"
                       Datatype: int
                   Sampler:
-                    EmaDynamicSampler:
+                    # This specifies configuration for a sampler to use when
+                    # this rule matches.
+                    EMADynamicSampler:
                         GoalSampleRate: 15
                         FieldList:
                             - request.method
                             - request.route
-                - Name: sample traces originating from a service
+                - Name: sample traces originating from the users service
                   SampleRate: 5
                   Scope: span
                   Conditions:
-                    - Field: service name
+                    - Field: service.name
                       Operator: =
                       Value: users
                     - Field: trace.parent_id
                       Operator: =
                       Value: root
+                # This is the default rule (with no conditions) and therefore
+                # sets the sample rate used if no other rule matches.
                 - SampleRate: 10
-    dataset5:
+    env5:
         TotalThroughputSampler:
             GoalThroughputPerSec: 100
             FieldList:

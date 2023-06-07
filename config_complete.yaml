@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on {{ .Now }} from {{ .Input }}
+# created on 2023-06-06T14:44:30-04:00 from config_complete.toml
 
 # This file contains the configuration for the Honeycomb Refinery.
 # More stuff will go here later.
@@ -48,7 +48,7 @@ General:
     ## resolve the rules definition.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "DatasetPrefix" "DatasetPrefix" "" }}
+    # DatasetPrefix: ""
 
     ## ConfigReloadInterval is the average interval between attempts at
     ## reloading the configuration file.
@@ -63,7 +63,7 @@ General:
     ## Accepts a duration string with units, like "5m".
     ## default: 5m
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "ConfigReloadInterval" "ConfigReloadInterval" "5m" }}
+    # ConfigReloadInterval: 5m
 
 ###########################
 ## Network Configuration ##
@@ -82,7 +82,7 @@ Network:
     ## Should be an ip:port like "0.0.0.0:8080".
     ## default: 0.0.0.0:8080
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "ListenAddr" "ListenAddr" "0.0.0.0:8080" }}
+    # ListenAddr: "0.0.0.0:8080"
 
     ## PeerListenAddr is the IP and port on which to listen for traffic being
     ## rerouted from a peer.
@@ -93,7 +93,7 @@ Network:
     ## Should be an ip:port like "0.0.0.0:8081".
     ## default: 0.0.0.0:8081
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "PeerListenAddr" "PeerListenAddr" "0.0.0.0:8081" }}
+    # PeerListenAddr: "0.0.0.0:8081"
 
     ## HoneycombAPI is the URL of the Honeycomb API to which data will be
     ## sent.
@@ -104,7 +104,7 @@ Network:
     ##
     ## default: https://api.honeycomb.io
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombAPI" "https://api.honeycomb.io" }}
+    # HoneycombAPI: "https://api.honeycomb.io"
 
 ##############################
 ## Access Key Configuration ##
@@ -122,7 +122,8 @@ AccessKeys:
     ## keys.
     ##
     ## Not eligible for live reload.
-    {{ renderStringarray .Data "ReceiveKeys" "ReceiveKeys" "your-key-goes-here" }}
+    # ReceiveKeys:
+      # - your-key-goes-here
 
     ## AcceptOnlyListedKeys is a boolean flag that causes events arriving
     ## with API keys not in the ReceiveKeys list to be rejected.
@@ -133,7 +134,7 @@ AccessKeys:
     ## ReceiveKeys is ignored. Must be specified if APIKeys is specified.
     ##
     ## Eligible for live reload.
-    {{ conditional .Data "AcceptOnlyListedKeys" "nostar APIKeys" }}
+    # AcceptOnlyListedKeys: false
 
 ########################
 ## Refinery Telemetry ##
@@ -153,7 +154,7 @@ RefineryTelemetry:
     ## installation.
     ##
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AddRuleReasonToTrace" "AddRuleReasonToTrace" false }}
+    # AddRuleReasonToTrace: false
 
     ## AddSpanCountToRoot controls whether to add a metadata field to root
     ## spans indicating the number of child spans.
@@ -167,7 +168,7 @@ RefineryTelemetry:
     ##
     ## default: true
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AddSpanCountToRoot" "AddSpanCountToRoot" true }}
+    # AddSpanCountToRoot: true
 
     ## AddHostMetadataToTrace specifies whether to add host metadata to
     ## traces.
@@ -179,7 +180,7 @@ RefineryTelemetry:
     ##
     ## default: true
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "AddHostMetadataToTrace" "AddHostMetadataToTrace" true }}
+    AddHostMetadataToTrace: false
 
 ############
 ## Traces ##
@@ -198,7 +199,7 @@ Traces:
     ## Accepts a duration string with units, like "2s".
     ## default: 2s
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SendDelay" "SendDelay" "2s" }}
+    # SendDelay: 2s
 
     ## BatchTimeout is how frequently Refinery sends unfulfilled batches.
     ##
@@ -208,7 +209,7 @@ Traces:
     ##
     ## Accepts a duration string with units, like "500ms".
     ## Eligible for live reload.
-    {{ nonZero .Data "BatchTimeout" "BatchTimeout" "500ms" }}
+    BatchTimeout: 1s
 
     ## TraceTimeout is the duration to wait before making the trace decision
     ## on an incomplete trace.
@@ -225,7 +226,7 @@ Traces:
     ## Accepts a duration string with units, like "60s".
     ## default: 60s
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "TraceTimeout" "TraceTimeout" "60s" }}
+    # TraceTimeout: 60s
 
     ## MaxBatchSize is the maximum number of events to be included in each
     ## batch for sending.
@@ -237,7 +238,7 @@ Traces:
     ##
     ## default: 500
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "MaxBatchSize" "MaxBatchSize" 500 }}
+    # MaxBatchSize: 500
 
     ## SendTicker is the interval between checks for traces to send.
     ##
@@ -249,7 +250,7 @@ Traces:
     ## Accepts a duration string with units, like "100ms".
     ## default: 100ms
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SendTicker" "SendTicker" "100ms" }}
+    # SendTicker: 100ms
 
 ###############
 ## Debugging ##
@@ -267,7 +268,7 @@ Debugging:
     ##
     ## Should be an ip:port like "localhost:6060".
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "DebugServiceAddr" "DebugServiceAddr" "localhost:6060" }}
+    # DebugServiceAddr: "localhost:6060"
 
     ## QueryAuthToken is the token that must be specified to access the
     ## /query endpoint.
@@ -279,7 +280,7 @@ Debugging:
     ## the /query endpoints are inaccessible.
     ##
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "QueryAuthToken" "QueryAuthToken" "some-private-value" }}
+    # QueryAuthToken: "some-private-value"
 
     ## AdditionalErrorFields is a list of span fields to include when logging
     ## errors.
@@ -292,7 +293,8 @@ Debugging:
     ## span, it will not be present in the error log.
     ##
     ## Eligible for live reload.
-    {{ renderStringarray .Data "AdditionalErrorFields" "AdditionalErrorFields" "trace.span_id" }}
+    AdditionalErrorFields:
+      - trace.span_id
 
     ## DryRun controls whether sampling is applied to incoming traces.
     ##
@@ -324,7 +326,7 @@ Logger:
     ## default: stdout
     ## Not eligible for live reload.
     ## Options: stdout honeycomb none
-    {{ choice .Data "Type" "Type" (makeSlice "stdout" "honeycomb" "none") "stdout" }}
+    # Type: stdout
 
     ## Level is the logging level above which refinery should send a log.
     ##
@@ -335,7 +337,7 @@ Logger:
     ## default: warn
     ## Not eligible for live reload.
     ## Options: debug info warn error panic
-    {{ choice .Data "Level" "Level" (makeSlice "debug" "info" "warn" "error" "panic") "warn" }}
+    # Level: warn
 
 ######################
 ## Honeycomb Logger ##
@@ -351,7 +353,7 @@ HoneycombLogger:
     ##
     ## default: https://api.honeycomb.io
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "APIHost" "HoneycombLogger.LoggerHoneycombAPI" "https://api.honeycomb.io" }}
+    # APIHost: "https://api.honeycomb.io"
 
     ## APIKey is the API key to use when sending logs to Honeycomb.
     ##
@@ -360,7 +362,7 @@ HoneycombLogger:
     ## for Refinery logs.
     ##
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "APIKey" "HoneycombLogger.LoggerAPIKey" "SetThisToAHoneycombKey" }}
+    APIKey: SetThisToAHoneycombKey
 
     ## Dataset is the dataset to which logs will be sent.
     ##
@@ -368,7 +370,7 @@ HoneycombLogger:
     ##
     ## default: Refinery Logs
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "Dataset" "HoneycombLogger.LoggerDataset" "" }}
+    Dataset: "Refinery Logs"
 
     ## SamplerEnabled controls whether to sample logs.
     ##
@@ -377,7 +379,7 @@ HoneycombLogger:
     ##
     ## default: true
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "SamplerEnabled" "HoneycombLogger.LoggerSamplerEnabled" true }}
+    # SamplerEnabled: true
 
     ## SamplerThroughput is the sampling throughput for logs in events per
     ## second.
@@ -406,7 +408,7 @@ StdoutLogger:
     ##
     ## default: true
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Structured" "Structured" true }}
+    # Structured: true
 
 ########################
 ## Prometheus Metrics ##
@@ -422,7 +424,7 @@ PrometheusMetrics:
     ## the PrometheusListenAddr port.
     ##
     ## Not eligible for live reload.
-    {{ conditional .Data "Enabled" "eq Metrics prometheus" }}
+    # Enabled: false
 
     ## ListenAddr is the IP and port the prometheus metrics server will run
     ## on.
@@ -434,7 +436,7 @@ PrometheusMetrics:
     ## Should be an ip:port like "localhost:2112".
     ## default: localhost:2112
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "ListenAddr" "PrometheusMetrics.MetricsListenAddr" "localhost:2112" }}
+    # ListenAddr: "localhost:2112"
 
 ####################
 ## Legacy Metrics ##
@@ -451,7 +453,7 @@ LegacyMetrics:
     ## This controls whether to send legacy-formatted metrics to Honeycomb.
     ##
     ## Not eligible for live reload.
-    {{ conditional .Data "Enabled" "eq Metrics honeycomb" }}
+    Enabled: true
 
     ## APIHost is the URL of the Honeycomb API to which metrics will be sent.
     ##
@@ -459,7 +461,7 @@ LegacyMetrics:
     ##
     ## default: https://api.honeycomb.io
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "APIHost" "HoneycombMetrics.MetricsHoneycombAPI" "https://api.honeycomb.io" }}
+    # APIHost: "https://api.honeycomb.io"
 
     ## APIKey is the API key used to send Honeycomb metrics.
     ##
@@ -468,7 +470,7 @@ LegacyMetrics:
     ## metrics.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "APIKey" "HoneycombMetrics.MetricsAPIKey" "" }}
+    APIKey: abcd1234
 
     ## Dataset is the Honeycomb dataset to which metrics will be sent.
     ##
@@ -476,7 +478,7 @@ LegacyMetrics:
     ##
     ## default: Refinery Metrics
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Dataset" "HoneycombMetrics.MetricsDataset" "Refinery Metrics" }}
+    # Dataset: "Refinery Metrics"
 
     ## ReportingInterval is the interval between sending legacy metrics to
     ## Honeycomb.
@@ -487,7 +489,7 @@ LegacyMetrics:
     ## Accepts a duration string with units, like "30s".
     ## default: 30s
     ## Not eligible for live reload.
-    {{ secondsToDuration .Data "ReportingInterval" "HoneycombMetrics.MetricsReportingInterval" "" }}
+    ReportingInterval: 30s
 
 ###########################
 ## OpenTelemetry Metrics ##
@@ -503,7 +505,7 @@ OTelMetrics:
     ## Enabled controls whether to send OpenTelemetry metrics to Honeycomb.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Enabled" "Enabled" false }}
+    # Enabled: false
 
     ## APIHost is the URL of the OTel API to which metrics will be sent.
     ##
@@ -512,7 +514,7 @@ OTelMetrics:
     ##
     ## default: https://api.honeycomb.io
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "APIHost" "APIHost" "https://api.honeycomb.io" }}
+    # APIHost: "https://api.honeycomb.io"
 
     ## APIKey is the API key used to send Honeycomb metrics via OTel.
     ##
@@ -523,16 +525,16 @@ OTelMetrics:
     ## valid OTel endpoint.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "APIKey" "APIKey" "" }}
+    # APIKey: ""
 
     ## Dataset is the Honeycomb dataset to which OTel metrics will be sent.
     ##
     ## Specifies the dataset to which refinery sends its own OTel metrics.
-    ## Only used if APIKey is specified.
+    ## Only used (but required) if APIKey is specified.
     ##
     ## default: Refinery Metrics
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Dataset" "Dataset" "Refinery Metrics" }}
+    # Dataset: "Refinery Metrics"
 
     ## ReportingInterval is the interval between sending OTel metrics to
     ## Honeycomb.
@@ -543,18 +545,7 @@ OTelMetrics:
     ## Accepts a duration string with units, like "30s".
     ## default: 30s
     ## Not eligible for live reload.
-    {{ secondsToDuration .Data "ReportingInterval" "ReportingInterval" "" }}
-
-    ## Compression is the compression algorithm to use when sending OTel
-    ## metrics.
-    ##
-    ## The compression algorithm to use when sending metrics to Honeycomb.
-    ## "gzip" is the default and recommended value.
-    ##
-    ## default: gzip
-    ## Not eligible for live reload.
-    ## Options: none gzip
-    {{ choice .Data "Compression" "Compression" (makeSlice "none" "gzip") "gzip" }}
+    # ReportingInterval: ""
 
 #####################
 ## Peer Management ##
@@ -573,7 +564,7 @@ PeerManagement:
     ## default: redis
     ## Not eligible for live reload.
     ## Options: redis file
-    {{ choice .Data "Type" "PeerManagement.Type" (makeSlice "redis" "file") "redis" }}
+    # Type: redis
 
     ## Identifier specifies the identifier to use when registering itself
     ## with peers.
@@ -585,7 +576,7 @@ PeerManagement:
     ## to use here. Overrides IdentifierInterfaceName, if both are set.
     ##
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "Identifier" "PeerManagement.RedisIdentifier" "192.168.1.1" }}
+    # Identifier: "192.168.1.1"
 
     ## IdentifierInterfaceName specifies a network interface to use when
     ## finding a local hostname.
@@ -599,7 +590,7 @@ PeerManagement:
     ## identifier.
     ##
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "IdentifierInterfaceName" "PeerManagement.IdentifierInterfaceName" "eth0" }}
+    # IdentifierInterfaceName: eth0
 
     ## UseIPV6Identifier specifies that Refinery should use an IPV6 address
     ## as its identifier.
@@ -610,7 +601,7 @@ PeerManagement:
     ## found.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseIPV6Identifier" "PeerManagement.UseIPV6Identifier" false }}
+    # UseIPV6Identifier: false
 
     ## Peers is the list of peers to use when Type is "file".
     ##
@@ -619,7 +610,9 @@ PeerManagement:
     ## strings of the form "host:port".
     ##
     ## Not eligible for live reload.
-    {{ renderStringarray .Data "Peers" "PeerManagement.Peers" "192.168.1.11:8081,192.168.1.12:8081" }}
+    # Peers:
+      # - 192.168.1.11:8081
+      # - 192.168.1.12:8081
 
 ###########################
 ## Redis Peer Management ##
@@ -636,7 +629,7 @@ RedisPeerManagement:
     ##
     ## Should be an ip:port like "localhost:6379".
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "Host" "PeerManagement.RedisHost" "localhost:6379" }}
+    # Host: "localhost:6379"
 
     ## Username is the username used to connect to redis.
     ##
@@ -644,7 +637,7 @@ RedisPeerManagement:
     ## management.
     ##
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "Username" "PeerManagement.RedisUsername" "" }}
+    # Username: ""
 
     ## Password is the password used to connect to redis.
     ##
@@ -652,7 +645,7 @@ RedisPeerManagement:
     ## management.
     ##
     ## Not eligible for live reload.
-    {{ nonEmptyString .Data "Password" "PeerManagement.Password" "" }}
+    # Password: ""
 
     ## Prefix is a string used as a prefix for the keys in redis.
     ##
@@ -664,7 +657,7 @@ RedisPeerManagement:
     ##
     ## default: refinery
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Prefix" "PeerManagement.Prefix" "refinery" }}
+    # Prefix: refinery
 
     ## Database is the database number to use for the Redis instance storing
     ## the peer membership.
@@ -675,7 +668,7 @@ RedisPeerManagement:
     ## applications want to share a single Redis instance.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Database" "PeerManagement.Database" 0 }}
+    # Database: 0
 
     ## UseTLS enables TLS when connecting to redis.
     ##
@@ -683,7 +676,7 @@ RedisPeerManagement:
     ## management, and sets the MinVersion in the TLS configuration to 1.2.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseTLS" "PeerManagement.UseTLS" false }}
+    # UseTLS: false
 
     ## UseTLSInsecure disables certificate checks when connecting to redis.
     ##
@@ -691,7 +684,7 @@ RedisPeerManagement:
     ## membership management.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "UseTLSInsecure" "PeerManagement.UseTLSInsecure" false }}
+    # UseTLSInsecure: false
 
     ## Timeout is the timeout to use when communicating with Redis.
     ##
@@ -701,7 +694,7 @@ RedisPeerManagement:
     ## Accepts a duration string with units, like "5s".
     ## default: 5s
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Timeout" "PeerManagement.Timeout" "5s" }}
+    # Timeout: 5s
 
 #########################
 ## Collection Settings ##
@@ -723,7 +716,7 @@ Collection:
     ##
     ## default: 10000
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "CacheCapacity" "InMemCollector.CacheCapacity" 10000 }}
+    CacheCapacity: 1000
 
     ## MaxMemory is the maximum percentage of memory that should be allocated
     ## by the span collector.
@@ -751,7 +744,7 @@ Collection:
     ## MaxMemory for more details.
     ##
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "MaxAlloc" "InMemCollector.MaxAlloc" 0 }}
+    # MaxAlloc: 0
 
 ##################
 ## Buffer Sizes ##
@@ -771,7 +764,7 @@ BufferSizes:
     ##
     ## default: 10000
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "UpstreamBufferSize" "UpstreamBufferSize" 10000 }}
+    # UpstreamBufferSize: 10_000
 
     ## PeerBufferSize is the size of the queue used to buffer spans to send
     ## to peer nodes.
@@ -783,7 +776,7 @@ BufferSizes:
     ##
     ## default: 100000
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "PeerBufferSize" "PeerBufferSize" 100000 }}
+    PeerBufferSize: 10000
 
 ###############################
 ## Specialized Configuration ##
@@ -803,7 +796,7 @@ Specialized:
     ## Accepts a duration string with units, like "1h".
     ## default: 1h
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "EnvironmentCacheTTL" "EnvironmentCacheTTL" "1h" }}
+    # EnvironmentCacheTTL: 1h
 
     ## CompressPeerCommunication determines whether refinery will compress
     ## span data it forwards to peers.
@@ -816,7 +809,7 @@ Specialized:
     ##
     ## default: true
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "CompressPeerCommunication" "CompressPeerCommunication" true }}
+    # CompressPeerCommunication: true
 
     ## AdditionalAttributes is a map that can be used for injecting
     ## user-defined attributes.
@@ -826,7 +819,9 @@ Specialized:
     ## cluster. Both keys and values must be strings.
     ##
     ## Eligible for live reload.
-    {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "ClusterName:MyCluster,environment:production" }}
+    # AdditionalAttributes:
+      #  ClusterName: MyCluster
+      #  environment: production
 
 ###############
 ## ID Fields ##
@@ -844,7 +839,9 @@ IDFields:
     ## being part of a trace and forwards it immediately to Honeycomb.
     ##
     ## Eligible for live reload.
-    {{ renderStringarray .Data "TraceNames" "TraceNames" "trace.trace_id,traceId" }}
+    # TraceNames:
+      # - trace.trace_id
+      # - traceId
 
     ## ParentNames is the list of field names to use for the parent ID.
     ##
@@ -853,7 +850,9 @@ IDFields:
     ## trace without a parent_id is assumed to be a root span.
     ##
     ## Eligible for live reload.
-    {{ renderStringarray .Data "ParentNames" "ParentNames" "trace.parent_id,parentId" }}
+    # ParentNames:
+      # - trace.parent_id
+      # - parentId
 
 ############################
 ## gRPC Server Parameters ##
@@ -870,7 +869,7 @@ GRPCServerParameters:
     ## TO DEFAULT THIS TO TRUE IF PREVIOUS CONFIG HAS A LISTEN ADDRESS
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Enabled" "Enabled" false }}
+    # Enabled: false
 
     ## ListenAddr is the address refinery listens to for incoming GRPC Open
     ## Telemetry events.
@@ -880,7 +879,7 @@ GRPCServerParameters:
     ##
     ## Should be an ip:port like "".
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "ListenAddr" "GRPCListenAddr" "" }}
+    ListenAddr: "0.0.0.0:9090"
 
     ## MaxConnectionIdle is the amount of time to permit an idle connection.
     ##
@@ -893,7 +892,7 @@ GRPCServerParameters:
     ## Accepts a duration string with units, like "0s".
     ## default: 0s
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "MaxConnectionIdle" "GRPCServerParameters.MaxConnectionIdle" "0s" }}
+    # MaxConnectionIdle: 0s
 
     ## MaxConnectionAge is the maximum amount of time a gRPC connection may
     ## exist.
@@ -907,7 +906,7 @@ GRPCServerParameters:
     ## Accepts a duration string with units, like "3m".
     ## default: 3m
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "MaxConnectionAge" "GRPCServerParameters.MaxConnectionAge" "3m" }}
+    # MaxConnectionAge: 3m
 
     ## MaxConnectionAgeGrace is the duration beyond MaxConnectionAge after
     ## which the connection will be forcibly closed.
@@ -919,7 +918,7 @@ GRPCServerParameters:
     ## Accepts a duration string with units, like "60s".
     ## default: 60s
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "MaxConnectionAgeGrace" "GRPCServerParameters.MaxConnectionAgeGrace" "60s" }}
+    # MaxConnectionAgeGrace: 60s
 
     ## KeepAlive is the duration between keep-alive pings.
     ##
@@ -930,7 +929,7 @@ GRPCServerParameters:
     ## Accepts a duration string with units, like "1m".
     ## default: 1m
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "KeepAlive" "GRPCServerParameters.Time" "1m" }}
+    # KeepAlive: 1m
 
     ## KeepAliveTimeout is the duration the server waits for activity on the
     ## connection.
@@ -942,7 +941,7 @@ GRPCServerParameters:
     ## Accepts a duration string with units, like "20s".
     ## default: 20s
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "KeepAliveTimeout" "GRPCServerParameters.Timeout" "20s" }}
+    # KeepAliveTimeout: 20s
 
 ##################
 ## Sample Cache ##
@@ -965,7 +964,7 @@ SampleCache:
     ##
     ## default: 10000
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "KeptSize" "SampleCacheConfig/SampleCache.KeptSize" 10000 }}
+    # KeptSize: 10_000
 
     ## DroppedSize is the size of the cuckoo dropped traces cache.
     ##
@@ -976,7 +975,7 @@ SampleCache:
     ##
     ## default: 1000000
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "DroppedSize" "SampleCacheConfig/SampleCache.DroppedSize" 1000000 }}
+    # DroppedSize: 1_000_000
 
     ## SizeCheckInterval controls how often the cuckoo cache re-evaluates its
     ## capacity.
@@ -990,7 +989,7 @@ SampleCache:
     ## Accepts a duration string with units, like "10s".
     ## default: 10s
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SizeCheckInterval" "SampleCacheConfig/SampleCache.SizeCheckInterval" "10s" }}
+    # SizeCheckInterval: 10s
 
 ###################
 ## Stress Relief ##
@@ -1036,7 +1035,7 @@ StressRelief:
     ##
     ## default: never
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "Mode" "StressRelief.Mode" "never" }}
+    # Mode: never
 
     ## ActivationLevel is the stress_level (from 0-100) at which Stress
     ## Relief is triggered.
@@ -1046,7 +1045,7 @@ StressRelief:
     ##
     ## default: 90
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "ActivationLevel" "StressRelief.ActivationLevel" 90 }}
+    # ActivationLevel: 90
 
     ## DeactivationLevel is the stress_level (from 0-100) at which Stress
     ## Relief is turned off.
@@ -1057,7 +1056,7 @@ StressRelief:
     ##
     ## default: 70
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "DeactivationLevel" "StressRelief.DeactivationLevel" 70 }}
+    # DeactivationLevel: 70
 
     ## SamplingRate is the sampling rate to use when Stress Relief is
     ## activated.
@@ -1072,7 +1071,7 @@ StressRelief:
     ##
     ## default: 100
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "SamplingRate" "StressRelief.StressSamplingRate" 100 }}
+    # SamplingRate: 100
 
     ## MinimumActivationDuration is the minimum time that stress relief will
     ## stay enabled.
@@ -1083,7 +1082,7 @@ StressRelief:
     ## Accepts a duration string with units, like "10s".
     ## default: 10s
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "MinimumActivationDuration" "StressRelief.MinimumActivationDuration" "10s" }}
+    # MinimumActivationDuration: 10s
 
     ## MinimumStartupDuration is the minimum time that stress relief will
     ## stay enabled.
@@ -1100,7 +1099,7 @@ StressRelief:
     ## Accepts a duration string with units, like "3s".
     ## default: 3s
     ## Eligible for live reload.
-    {{ nonDefaultOnly .Data "MinimumStartupDuration" "StressRelief.MinimumStartupDuration" "3s" }}
+    # MinimumStartupDuration: 3s
 
 ###################################################
 ## Config values removed by the config converter ##

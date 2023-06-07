@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -11,10 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"time"
 
 	"github.com/creasty/defaults"
-	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -108,18 +107,53 @@ func load(r io.Reader, format Format, into any) error {
 	}
 }
 
-// dminValidator is a validator for the validator library that checks if a
-// value is at least a minimum value, specified as a Duration string.
-func dminValidator(fl validator.FieldLevel) bool {
-	min, err := time.ParseDuration(fl.Param())
+// renderToMap renders the given data to a map[string]any by writing it to a
+// buffer as YAML and then reading it back. This is so that we can
+// validate the config against the metadata *after* applying any defaults.
+func renderToMap(data any) map[string]any {
+	var buf bytes.Buffer
+	encoder := yaml.NewEncoder(&buf)
+	encoder.SetIndent(2)
+	encoder.Encode(data)
+	decoder := yaml.NewDecoder(&buf)
+	decoder.KnownFields(true)
+	var m map[string]any
+	decoder.Decode(&m)
+	return m
+}
+
+func validateConfig(userData map[string]any, w io.Writer) error {
+	metadata, err := LoadConfigMetadata()
 	if err != nil {
-		return false
+		return err
 	}
-	field, ok := fl.Field().Interface().(Duration)
-	if !ok {
-		return false
+
+	errors := metadata.Validate(userData)
+	if len(errors) > 0 {
+		fmt.Fprintln(w, "Validation Errors in config file:")
+		for _, e := range errors {
+			fmt.Fprintf(w, "  %s\n", e)
+		}
+		return fmt.Errorf("%d validation errors in config file", len(errors))
 	}
-	return field >= Duration(min)
+	return nil
+}
+
+func validateRules(userData map[string]any, w io.Writer) error {
+	metadata, err := LoadRulesMetadata()
+	if err != nil {
+		return err
+	}
+
+	errors := metadata.ValidateRules(userData)
+	if len(errors) > 0 {
+		fmt.Fprintln(w, "Validation Errors in rules file:")
+		for _, e := range errors {
+			fmt.Fprintf(w, "  %s\n", e)
+		}
+		return fmt.Errorf("%d validation errors in rules file", len(errors))
+	}
+	return nil
 }
 
 // readConfigInto reads the config from the given location and applies it to the given struct.
@@ -153,13 +187,6 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
 		return hash, fmt.Errorf("readConfigInto unable to apply command line options: %w", err)
-	}
-
-	// validate the config
-	v := validator.New()
-	v.RegisterValidation("dmin", dminValidator)
-	if err := v.Struct(dest); err != nil {
-		return hash, fmt.Errorf("readConfigInto config validation failed: %w", err)
 	}
 
 	return hash, nil

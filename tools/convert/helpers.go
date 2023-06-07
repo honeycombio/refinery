@@ -87,7 +87,7 @@ func conditional(data map[string]any, key string, extra string) string {
 		// if the slice named exists, has no "*" values, and has at least one value, return true
 		k := extras[1]
 		if value, ok := _fetch(data, k); ok {
-			list := value.([]string)
+			list := _getStringsFrom(value)
 			hasStar := false
 			for _, v := range list {
 				if v == "*" {
@@ -263,7 +263,7 @@ func renderStringarray(data map[string]any, key, oldkey string, example string) 
 	for _, s := range sa {
 		output = append(output, fmt.Sprintf("%s- %s", comment, s))
 	}
-	return "# " + key + ":\n      " + strings.Join(output, "\n      ")
+	return comment + key + ":\n      " + strings.Join(output, "\n      ")
 }
 
 func schemaType(typ string) string {
@@ -318,23 +318,15 @@ func stringArray(data map[string]any, key, oldkey string, indent int, examples .
 			keys = append(keys, s)
 		}
 	}
-	var userdata []string
 
 	comment := "# "
-
 	// if the user has keys we want them, unless it's bad or just ["*"]
 	if value, ok := _fetch(data, oldkey); ok {
-		if userkeys, ok := value.([]any); ok {
-			for _, u := range userkeys {
-				if uv, ok := u.(string); ok {
-					userdata = append(userdata, uv)
-				}
-			}
-		}
+		userkeys := _getStringsFrom(value)
 
-		if !_equivalent(keys, userdata) {
+		if !_equivalent(keys, userkeys) {
 			comment = ""
-			keys = userdata
+			keys = userkeys
 		}
 	}
 
@@ -456,4 +448,23 @@ func _fetch(data map[string]any, key string) (any, bool) {
 		}
 	}
 	return nil, false
+}
+
+// Takes a value that is a slice of strings or any and returns a slice of
+// strings.
+func _getStringsFrom(value any) []string {
+	result := make([]string, 0)
+
+	if ary, ok := value.([]string); ok {
+		return ary
+	}
+
+	if ary, ok := value.([]any); ok {
+		for _, elt := range ary {
+			if v, ok := elt.(string); ok {
+				result = append(result, v)
+			}
+		}
+	}
+	return result
 }

@@ -49,3 +49,7 @@ func (l Level) String() string {
 		return "unknown"
 	}
 }
+
+func (l Level) MarshalText() ([]byte, error) {
+	return []byte(l.String()), nil
+}

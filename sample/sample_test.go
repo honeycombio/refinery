@@ -92,7 +92,7 @@ func TestDatasetPrefix(t *testing.T) {
 		"General/DatasetPrefix", "dataset",
 	)
 	rm := makeYAML(
-		"ConfigVersion", 2,
+		"RulesVersion", 2,
 		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
 		"Samplers/production/DeterministicSampler/SampleRate", 10,
 		"Samplers/dataset.production/DeterministicSampler/SampleRate", 20,
@@ -100,7 +100,7 @@ func TestDatasetPrefix(t *testing.T) {
 	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(cfg)
-	c, err := getConfig([]string{"--config", cfg, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())

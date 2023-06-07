@@ -21,7 +21,7 @@ func TestErrorReloading(t *testing.T) {
 	defer os.Remove(rules)
 	defer os.Remove(config)
 
-	opts, err := NewCmdEnvOptions([]string{"--config", config, "--rules_config", rules})
+	opts, err := NewCmdEnvOptions([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	ch := make(chan interface{}, 1)
