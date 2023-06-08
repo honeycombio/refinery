@@ -1126,7 +1126,7 @@ Type: `string`
 
 
 ---
-## Samplers: 
+## Samplers:
 
 Samplers is a mapping of targets to samplers. Each target is a
 Honeycomb environment (or, for classic keys, a dataset). The value is
