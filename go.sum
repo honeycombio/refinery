@@ -75,6 +75,8 @@ github.com/hashicorp/golang-lru v0.5.4 h1:YDjusn29QI/Das2iO9M0BHnIbxPeyuCHsjMW+l
 github.com/hashicorp/golang-lru v0.5.4/go.mod h1:iADmTwqILo4mZ8BN3D2Q6+9jd8WM5uGBxy+E8yxSoD4=
 github.com/honeycombio/dynsampler-go v0.4.0 h1:80Hj9M9r23deTUXV7A22pY07agtCxKBjXn/SeC4w5zc=
 github.com/honeycombio/dynsampler-go v0.4.0/go.mod h1:8AoR25Xt1YR6LcCoPIm2rkozXXjSPCb/xFp5g8BSsXo=
+github.com/honeycombio/dynsampler-go v0.5.0 h1:wBeUz0PPdp6FayDuO8X5VJLCNJqTE4KA4gCbNNkWi1Y=
+github.com/honeycombio/dynsampler-go v0.5.0/go.mod h1:pJqWFeoMN3syX74PEvlusieyGBbtIBjmTVjLc3thmK4=
 github.com/honeycombio/husky v0.22.4 h1:2ZEenP3y1KD8xrP2nGvjeB4K/6F3Zfhgu6an2e7cSsI=
 github.com/honeycombio/husky v0.22.4/go.mod h1:oIb9sbjnC3SdlmLd84JHF7MCaitRsvTnrNyO+yxWO0M=
 github.com/honeycombio/libhoney-go v1.18.0 h1:OYHOP381r3Ea76BhUYeza8PUTMDp8MByoOxDn3qtEq8=

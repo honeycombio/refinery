@@ -106,7 +106,9 @@ Samplers:
                 - Name: default rule
                   SampleRate: 10
     env5:
-        TotalThroughputSampler:
+        # This shows using the EMAThroughput sampler to set a goal throughput,
+        # using mostly default values.
+        EMAThroughputSampler:
             GoalThroughputPerSec: 100
             FieldList:
                 - request.method

@@ -15,6 +15,7 @@ type V2SamplerChoice struct {
 	RulesBasedSampler      *RulesBasedSamplerConfig      `json:"rulesbasedsampler" yaml:"RulesBasedSampler,omitempty"`
 	DynamicSampler         *DynamicSamplerConfig         `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
 	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EMADynamicSampler,omitempty"`
+	EMAThroughputSampler   *EMAThroughputSamplerConfig   `json:"emathroughputsampler" yaml:"EMAThroughputSampler,omitempty"`
 	TotalThroughputSampler *TotalThroughputSamplerConfig `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
 }
 
@@ -28,6 +29,8 @@ func (v *V2SamplerChoice) Sampler() (any, string) {
 		return v.DynamicSampler, "DynamicSampler"
 	case v.EMADynamicSampler != nil:
 		return v.EMADynamicSampler, "EMADynamicSampler"
+	case v.EMAThroughputSampler != nil:
+		return v.EMAThroughputSampler, "EMAThroughputSampler"
 	case v.TotalThroughputSampler != nil:
 		return v.TotalThroughputSampler, "TotalThroughputSampler"
 	default:
@@ -64,6 +67,19 @@ type EMADynamicSamplerConfig struct {
 	UseTraceLength      bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
+type EMAThroughputSamplerConfig struct {
+	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	InitialSampleRate    int      `json:"initialsamplerate" yaml:"InitialSampleRate,omitempty"`
+	AdjustmentInterval   Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
+	Weight               float64  `json:"weight" yaml:"Weight,omitempty"`
+	AgeOutValue          float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
+	BurstMultiple        float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
+	BurstDetectionDelay  uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
+	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty"`
+	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
+}
+
 type TotalThroughputSamplerConfig struct {
 	GoalThroughputPerSec int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
 	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
@@ -81,6 +97,7 @@ type RulesBasedSamplerConfig struct {
 type RulesBasedDownstreamSampler struct {
 	DynamicSampler         *DynamicSamplerConfig         `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
 	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EMADynamicSampler,omitempty"`
+	EMAThroughputSampler   *EMAThroughputSamplerConfig   `json:"emathroughputsampler" yaml:"EMAThroughputSampler,omitempty"`
 	TotalThroughputSampler *TotalThroughputSamplerConfig `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
 }
 
