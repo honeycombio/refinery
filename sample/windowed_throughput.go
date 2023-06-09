@@ -33,8 +33,11 @@ func (d *WindowedThroughputSampler) Start() error {
 	d.goalthroughputpersec = d.Config.GoalThroughputPerSec
 	d.updatefrequency = d.Config.UpdateFrequency
 	d.lookbackfrequency = d.Config.LookbackFrequency
-	d.maxKeys = d.Config.MaxKeys
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.maxKeys = d.Config.MaxKeys
+	if d.maxKeys == 0 {
+		d.maxKeys = 500
+	}
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.WindowedThroughput{
