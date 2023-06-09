@@ -73,7 +73,8 @@ func (d *EMADynamicSampler) Start() error {
 
 func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
-	rate = uint(d.dynsampler.GetSampleRate(key))
+	count := int(trace.DescendantCount())
+	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
@@ -83,6 +84,7 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		"sample_rate": rate,
 		"sample_keep": shouldKeep,
 		"trace_id":    trace.TraceID,
+		"span_count":  count,
 	}).Logf("got sample rate and decision")
 	if shouldKeep {
 		d.Metrics.Increment(d.prefix + "num_kept")
