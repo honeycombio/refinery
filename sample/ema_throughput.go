@@ -41,8 +41,11 @@ func (d *EMAThroughputSampler) Start() error {
 	d.ageOutValue = d.Config.AgeOutValue
 	d.burstMultiple = d.Config.BurstMultiple
 	d.burstDetectionDelay = d.Config.BurstDetectionDelay
-	d.maxKeys = d.Config.MaxKeys
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.maxKeys = d.Config.MaxKeys
+	if d.maxKeys == 0 {
+		d.maxKeys = 500
+	}
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMAThroughput{

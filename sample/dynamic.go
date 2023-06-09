@@ -19,6 +19,7 @@ type DynamicSampler struct {
 
 	sampleRate     int64
 	clearFrequency config.Duration
+	maxKeys        int
 
 	key *traceKey
 
@@ -34,12 +35,16 @@ func (d *DynamicSampler) Start() error {
 	}
 	d.clearFrequency = d.Config.ClearFrequency
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.maxKeys = d.Config.MaxKeys
+	if d.maxKeys == 0 {
+		d.maxKeys = 500
+	}
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
 		GoalSampleRate:         int(d.sampleRate),
 		ClearFrequencyDuration: time.Duration(d.clearFrequency),
-		MaxKeys:                d.Config.MaxKeys,
+		MaxKeys:                d.maxKeys,
 	}
 	d.dynsampler.Start()
 
