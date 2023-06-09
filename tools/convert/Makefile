@@ -1,6 +1,14 @@
 .PHONY: all
 #: build all the things
-all: template names sample doc validateConfig validateRules
+all: template names sample doc validateConfig validateRules build
+
+.PHONY: build
+#: build the binary
+build: template
+	@echo
+	@echo "+++ building binary"
+	@echo
+	go install
 
 .PHONY: template
 #: generate the config template

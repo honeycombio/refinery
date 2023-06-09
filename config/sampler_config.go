@@ -80,7 +80,7 @@ type RulesBasedSamplerConfig struct {
 
 type RulesBasedDownstreamSampler struct {
 	DynamicSampler         *DynamicSamplerConfig         `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
-	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EmaDynamicSampler,omitempty"`
+	EMADynamicSampler      *EMADynamicSamplerConfig      `json:"emadynamicsampler" yaml:"EMADynamicSampler,omitempty"`
 	TotalThroughputSampler *TotalThroughputSamplerConfig `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
 }
 

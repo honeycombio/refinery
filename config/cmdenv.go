@@ -43,7 +43,8 @@ type CmdEnv struct {
 	Debug                 bool   `short:"d" long:"debug" description:"Runs debug service (on the first open port between localhost:6060 and :6069 by default)"`
 	Version               bool   `short:"v" long:"version" description:"Print version number and exit"`
 	InterfaceNames        bool   `long:"interface-names" description:"Print system's network interface names and exit."`
-	Validate              bool   `short:"V" long:"validate" description:"Validate the configuration files and exit"`
+	Validate              bool   `short:"V" long:"validate" description:"Validate the configuration files, writing results to stdout, and exit with 0 if valid, 1 if invalid."`
+	NoValidate            bool   `long:"no-validate" description:"Do not attempt to validate the configuration files. Makes --validate meaningless."`
 }
 
 func NewCmdEnvOptions(args []string) (*CmdEnv, error) {

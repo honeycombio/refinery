@@ -196,6 +196,9 @@ func (m *Metadata) Validate(data map[string]any) []string {
 	for k, v := range flatdata {
 		field := m.GetField(k)
 		if field == nil {
+			if m.GetGroup(k) != nil {
+				continue // it's an empty group with no fields
+			}
 			possibilities := m.ClosestNamesTo(k)
 			guesses := strings.Join(possibilities, " or ")
 			errors = append(errors, fmt.Sprintf("unknown field %s; did you mean %s?", k, guesses))

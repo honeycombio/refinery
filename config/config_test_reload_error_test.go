@@ -12,9 +12,14 @@ import (
 )
 
 func TestErrorReloading(t *testing.T) {
-	cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"General.ConfigReloadInterval", Duration(1*time.Second),
+		"Network.ListenAddr", "0.0.0.0:8080",
+		"HoneycombLogger.APIKey", "SetThisToAHoneycombKey",
+	)
 	rm := makeYAML(
-		"ConfigVersion", 2,
+		"RulesVersion", 2,
 		"Samplers.__default__.DeterministicSampler.SampleRate", 5,
 	)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -49,17 +54,13 @@ func TestErrorReloading(t *testing.T) {
 		}
 	}()
 
-	// this test currently writes invalid YAML which errors on load.
-	// TODO: When we get proper validation, we can
-	// write valid YAML that is still invalid config, like so:
-	//
-	// rm2 := makeYAML(
-	// 	"ConfigVersion", 2,
-	// 	"Samplers.__default__.InvalidSampler.SampleRate", 50,
-	// )
-	// err = os.WriteFile(rules, []byte(rm2), 0644)
+	// This is valid YAML, but invalid config
+	rm2 := makeYAML(
+		"RulesVersion", 2,
+		"Samplers.__default__.InvalidSampler.SampleRate", 50,
+	)
+	err = os.WriteFile(rules, []byte(rm2), 0644)
 
-	err = os.WriteFile(rules, []byte(`Sampler="InvalidSampler"`), 0644)
 	assert.NoError(t, err)
 
 	wg.Wait()

@@ -71,7 +71,7 @@ func TestGRPCListenAddrEnvVar(t *testing.T) {
 	os.Setenv(envVarName, address)
 	defer os.Unsetenv(envVarName)
 
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if a, _ := c.GetGRPCListenAddr(); a != address {
@@ -85,7 +85,7 @@ func TestRedisHostEnvVar(t *testing.T) {
 	os.Setenv(envVarName, host)
 	defer os.Unsetenv(envVarName)
 
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetRedisHost(); d != host {
@@ -99,7 +99,7 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	os.Setenv(envVarName, username)
 	defer os.Unsetenv(envVarName)
 
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetRedisUsername(); d != username {
@@ -113,7 +113,7 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	os.Setenv(envVarName, password)
 	defer os.Unsetenv(envVarName)
 
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetRedisPassword(); d != password {
@@ -144,7 +144,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 			os.Setenv(tc.envVar, tc.key)
 			defer os.Unsetenv(tc.envVar)
 
-			c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+			c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 			if err != nil {
 				t.Error(err)
 			}
@@ -167,7 +167,7 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	os.Setenv(fallbackEnvVarName, fallbackKey)
 	defer os.Unsetenv(fallbackEnvVarName)
 
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if d := c.GetLegacyMetricsConfig(); d.APIKey != specificKey {
@@ -181,7 +181,7 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	os.Setenv(envVarName, key)
 	defer os.Unsetenv(envVarName)
 
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if d := c.GetLegacyMetricsConfig(); d.APIKey != key {
@@ -195,7 +195,7 @@ func TestReload(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
@@ -251,7 +251,7 @@ func TestReload(t *testing.T) {
 }
 
 func TestReadDefaults(t *testing.T) {
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetSendDelay(); d != 2*time.Second {
@@ -264,10 +264,6 @@ func TestReadDefaults(t *testing.T) {
 
 	if d := c.GetSendTickerValue(); d != 100*time.Millisecond {
 		t.Error("received", d, "expected", 100*time.Millisecond)
-	}
-
-	if d, _ := c.GetPeers(); !(len(d) == 1 && d[0] == "http://127.0.0.1:8081") {
-		t.Error("received", d, "expected", "[http://127.0.0.1:8081]")
 	}
 
 	if d, _ := c.GetPeerManagementType(); d != "file" {
@@ -301,25 +297,24 @@ func TestReadDefaults(t *testing.T) {
 }
 
 func TestReadRulesConfig(t *testing.T) {
-	// TODO: convert these to YAML
-	c, err := getConfig([]string{"--config", "../config.yaml", "--rules_config", "../rules_complete.yaml"})
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules_complete.yaml"})
 	assert.NoError(t, err)
 
-	d, name, err := c.GetSamplerConfigForDestName("dataset-doesnt-exist")
+	d, name, err := c.GetSamplerConfigForDestName("doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)
 
-	d, name, err = c.GetSamplerConfigForDestName("dataset1")
+	d, name, err = c.GetSamplerConfigForDestName("env1")
 	assert.NoError(t, err)
 	assert.IsType(t, &DynamicSamplerConfig{}, d)
 	assert.Equal(t, "DynamicSampler", name)
 
-	d, name, err = c.GetSamplerConfigForDestName("dataset4")
+	d, name, err = c.GetSamplerConfigForDestName("env4")
 	assert.NoError(t, err)
 	switch r := d.(type) {
 	case *RulesBasedSamplerConfig:
-		assert.Len(t, r.Rules, 6)
+		assert.Len(t, r.Rules, 5)
 
 		var rule *RulesBasedSamplerRule
 
@@ -333,18 +328,18 @@ func TestReadRulesConfig(t *testing.T) {
 		assert.Equal(t, "keep slow 500 errors", rule.Name)
 		assert.Len(t, rule.Conditions, 2)
 
-		rule = r.Rules[4]
+		rule = r.Rules[3]
 		assert.Equal(t, 5, rule.SampleRate)
 		assert.Equal(t, "span", rule.Scope)
 
-		rule = r.Rules[5]
+		rule = r.Rules[4]
 		assert.Equal(t, 10, rule.SampleRate)
 		assert.Equal(t, "", rule.Scope)
 
 		assert.Equal(t, "RulesBasedSampler", name)
 
 	default:
-		assert.Fail(t, "dataset4 should have a rules based sampler", d)
+		assert.Fail(t, "env4 should have a rules based sampler", d)
 	}
 }
 
@@ -352,7 +347,7 @@ func TestPeerManagementType(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
 		"PeerManagement.Type", "redis",
-		"PeerManagement.Peers", []string{"http://refinery-1231:8080"},
+		"PeerManagement.Peers", []string{"refinery-1231:8080"},
 		"RedisPeerManagement.Prefix", "testPrefix",
 		"RedisPeerManagement.Database", 9,
 	)
@@ -360,7 +355,7 @@ func TestPeerManagementType(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetPeerManagementType(); d != "redis" {
@@ -382,7 +377,7 @@ func TestDebugServiceAddr(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, _ := c.GetDebugServiceAddr(); d != "localhost:8085" {
@@ -396,7 +391,7 @@ func TestDryRun(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d := c.GetIsDryRun(); d != true {
@@ -410,7 +405,7 @@ func TestMaxAlloc(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	expected := uint64(16 * 1024 * 1024 * 1024)
@@ -443,7 +438,7 @@ func TestGetSamplerTypes(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, name, err := c.GetSamplerConfigForDestName("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
@@ -479,7 +474,7 @@ func TestDefaultSampler(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 
 	assert.NoError(t, err)
 
@@ -505,7 +500,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
@@ -531,7 +526,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
@@ -551,7 +546,7 @@ func TestDatasetPrefix(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())
@@ -566,7 +561,7 @@ func TestQueryAuthToken(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, "MySeekretToken", c.GetQueryAuthToken())
@@ -585,7 +580,7 @@ func TestGRPCServerParameters(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, 1*time.Minute, c.GetGRPCMaxConnectionIdle())
@@ -604,7 +599,7 @@ func TestHoneycombAdditionalErrorConfig(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"first", "second"}, c.GetAdditionalErrorFields())
@@ -616,7 +611,7 @@ func TestHoneycombAdditionalErrorDefaults(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"trace.span_id"}, c.GetAdditionalErrorFields())
@@ -628,7 +623,7 @@ func TestSampleCacheParameters(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	s := c.GetSampleCacheConfig()
@@ -648,7 +643,7 @@ func TestSampleCacheParametersCuckoo(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	s := c.GetSampleCacheConfig()
@@ -670,7 +665,7 @@ func TestAdditionalAttributes(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, c.GetAdditionalAttributes())
@@ -686,7 +681,7 @@ func TestHoneycombIdFieldsConfig(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"first", "second"}, c.GetTraceIdFieldNames())
@@ -699,7 +694,7 @@ func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, []string{"trace.trace_id", "traceId"}, c.GetTraceIdFieldNames())

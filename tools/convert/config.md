@@ -749,7 +749,7 @@ Example: `SetThisToAHoneycombKey`
 Dataset is the Honeycomb dataset to which OTel metrics will be sent.
 
 Specifies the dataset to which refinery sends its own OTel metrics.
-Only used (but required) if APIKey is specified.
+Only used if APIKey is specified.
 
 
 Not eligible for live reload.
@@ -775,6 +775,22 @@ Type: `duration`
 Default: `30s`
 
 
+### Compression
+
+Compression is the compression algorithm to use when sending OTel
+metrics.
+
+The compression algorithm to use when sending metrics to Honeycomb.
+"gzip" is the default and recommended value.
+
+
+Not eligible for live reload.
+
+Type: `string`
+
+Default: `gzip`
+
+Options: none gzip
 ---
 ## PeerManagement: Peer Management
 

@@ -11,10 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"time"
 
 	"github.com/creasty/defaults"
-	"github.com/go-playground/validator/v10"
 	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -108,18 +106,46 @@ func load(r io.Reader, format Format, into any) error {
 	}
 }
 
-// dminValidator is a validator for the validator library that checks if a
-// value is at least a minimum value, specified as a Duration string.
-func dminValidator(fl validator.FieldLevel) bool {
-	min, err := time.ParseDuration(fl.Param())
+func validateConfig(location string) ([]string, error) {
+	r, format, err := getReaderFor(location)
 	if err != nil {
-		return false
+		return nil, err
 	}
-	field, ok := fl.Field().Interface().(Duration)
-	if !ok {
-		return false
+	defer r.Close()
+
+	var userData map[string]any
+	if err := load(r, format, &userData); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
 	}
-	return field >= Duration(min)
+
+	metadata, err := LoadConfigMetadata()
+	if err != nil {
+		return nil, err
+	}
+
+	failures := metadata.Validate(userData)
+	return failures, nil
+}
+
+func validateRules(location string) ([]string, error) {
+	r, format, err := getReaderFor(location)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	var userData map[string]any
+	if err := load(r, format, &userData); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
+	}
+
+	metadata, err := LoadRulesMetadata()
+	if err != nil {
+		return nil, err
+	}
+
+	failures := metadata.ValidateRules(userData)
+	return failures, nil
 }
 
 // readConfigInto reads the config from the given location and applies it to the given struct.
@@ -153,13 +179,6 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
 		return hash, fmt.Errorf("readConfigInto unable to apply command line options: %w", err)
-	}
-
-	// validate the config
-	v := validator.New()
-	v.RegisterValidation("dmin", dminValidator)
-	if err := v.Struct(dest); err != nil {
-		return hash, fmt.Errorf("readConfigInto config validation failed: %w", err)
 	}
 
 	return hash, nil
