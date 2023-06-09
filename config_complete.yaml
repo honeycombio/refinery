@@ -470,7 +470,7 @@ LegacyMetrics:
     ## metrics.
     ##
     ## Not eligible for live reload.
-    APIKey: abcd1234
+    APIKey: SetThisToAHoneycombKey
 
     ## Dataset is the Honeycomb dataset to which metrics will be sent.
     ##

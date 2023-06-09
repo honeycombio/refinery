@@ -2,10 +2,14 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // In order to be able to unmarshal "15s" etc. into time.Duration, we need to
@@ -295,15 +299,44 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	return cfg, nil
 }
 
+// writeYAMLToFile renders the given data item to a YAML file
+func writeYAMLToFile(data any, filename string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	encoder := yaml.NewEncoder(f)
+	encoder.SetIndent(2)
+	return encoder.Encode(data)
+}
+
 // NewConfig creates a new Config object from the given arguments; if args is
-// nil, it uses the command line arguments. Because errors may be caused by
-// validation problems, it returns the config even in the case of errors.
+// nil, it uses the command line arguments.
+// It also dumps the config and rules to the given files, if specified, which
+// will cause the program to exit.
 func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	cfg, err := newFileConfig(opts)
 	// only exit if we have no config at all; if it fails validation, we'll
 	// do the rest and return it anyway
 	if err != nil && cfg == nil {
 		return nil, err
+	}
+
+	if opts.WriteConfig != "" {
+		if err := writeYAMLToFile(cfg.mainConfig, opts.WriteConfig); err != nil {
+			fmt.Printf("Error writing config: %s\n", err)
+			os.Exit(1)
+		}
+	}
+	if opts.WriteRules != "" {
+		if err := writeYAMLToFile(cfg.rulesConfig, opts.WriteRules); err != nil {
+			fmt.Printf("Error writing rules: %s\n", err)
+			os.Exit(1)
+		}
+	}
+	if opts.WriteConfig != "" || opts.WriteRules != "" {
+		os.Exit(0)
 	}
 
 	cfg.callbacks = make([]func(), 0)
