@@ -1,6 +1,23 @@
 groups:
+  - name: Samplers
+    type: samplerList
+    sortorder: 0
+    summary: is the list of samplers to use.
+    description: >
+      Samplers is a mapping of targets to samplers. Each target is a Honeycomb
+      environment (or, for classic keys, a dataset). The value is the sampler to
+      use for that target. The target called `__default__` will be used for any
+      target that is not explicitly listed. A `__default__` target is required.
+
+      The targets are determined by examining the API key used to send the
+      trace. If the API key is a 'classic' key (which is a 32-character
+      hexadecimal value), the specified dataset name is used as the target. If
+      the API key is a new-style key (20-23 alphanumeric characters), the
+      key's environment name is used as the target.
+
   - name: DeterministicSampler
     title: Deterministic Sampler
+    sortorder: 10
     description: >
       The deterministic sampler uses a fixed sample rate to sample traces
       based on their trace ID. This is the simplest sampling algorithm
@@ -24,12 +41,14 @@ groups:
 
   - name: DynamicSampler
     title: Dynamic Sampler
+    sortorder: 20
     description: >
-      DynamicSampler is the most basic Dynamic Sampler implementation. This
-      sampler collects the values of a number of fields from a trace and uses
-      them to form a key. This key is handed to the standard dynamic sampler
-      algorithm which generates a sample rate based on the frequency with which
-      that key has appeared during the previous ClearFrequency. See
+      DynamicSampler is the basic Dynamic Sampler implementation. Most
+      installations will find the EMA Dynamic Sampler to be a better choice.
+      This sampler collects the values of a number of fields from a trace and
+      uses them to form a key. This key is handed to the standard dynamic
+      sampler algorithm which generates a sample rate based on the frequency
+      with which that key has appeared during the previous ClearFrequency. See
       https://github.com/honeycombio/dynsampler-go for more detail on the
       mechanics of the dynamic sampler.  This sampler uses the AvgSampleRate
       algorithm from that package.
@@ -39,14 +58,7 @@ groups:
         validations:
           - type: requiredInGroup
         summary: is the sample rate to use.
-        description: >
-          The sample rate to use. It indicates a ratio, where one sample trace
-          is kept for every N traces seen. For example, a SampleRate of 30 will
-          keep 1 out of every 30 traces. The choice on whether to keep any
-          specific trace is random, so the rate is approximate.
-
-          The sample rate is calculated from the trace ID, so all spans with the
-          same trace ID will be sampled or not sampled together.
+        description: $DeterministicSampler.SampleRate
       - name: ClearFrequency
         type: duration
         summary: is the duration over which the sampler will calculate the sample rate.
@@ -60,7 +72,7 @@ groups:
           - type: notempty
         summary: is the list of fields to use to create the key for the dynamic sampler.
         description: >
-          FieldList is a list of all the field names to use to form the key that
+          A list of all the field names to use to form the key that
           will be handed to the dynamic sampler. The combination of values from
           all of these fields should reflect how interesting the trace is
           compared to another. A good field selection has consistent values for
@@ -88,7 +100,7 @@ groups:
         type: int
         summary: is the maximum number of keys to track.
         description: >
-          MaxKeys limits the number of distinct keys tracked by the sampler.
+          Limits the number of distinct keys tracked by the sampler.
           Once MaxKeys is reached, new keys will not be included in the sample
           rate map, but existing keys will continue to be be counted. You can
           use this to keep the sample rate map size under control. Defaults to
@@ -107,6 +119,7 @@ groups:
 
   - name: EMADynamicSampler
     title: EMA Dynamic Sampler
+    sortorder: 30
     description: >
       The Exponential Moving Average (EMA) Dynamic Sampler attempts to average a
       given sample rate, weighting rare traffic and frequent traffic differently
@@ -135,14 +148,7 @@ groups:
         validations:
           - type: requiredInGroup
         summary: is the sample rate to use.
-        description: >
-          The sample rate to use. It indicates a ratio, where one sample trace
-          is kept for every N traces seen. For example, a SampleRate of 30 will
-          keep 1 out of every 30 traces. The choice on whether to keep any
-          specific trace is random, so the rate is approximate.
-
-          The sample rate is calculated from the trace ID, so all spans with the
-          same trace ID will be sampled or not sampled together.
+        description: $DeterministicSampler.SampleRate
       - name: AdjustmentInterval
         type: duration
         summary: is how often the sampler will recalculate the sample rate.
@@ -174,7 +180,7 @@ groups:
             arg: 1
         summary: is the value to use when aging out keys.
         description: >
-          AgeOutValue indicates the threshold for removing keys from the EMA.
+          Indicates the threshold for removing keys from the EMA.
           The EMA of any key will approach 0 if it is not repeatedly observed,
           but will never truly reach it, so we have to decide what constitutes
           "zero". Keys with averages below this threshold will be removed from
@@ -186,7 +192,7 @@ groups:
         type: float
         summary: is the multiple of the sample rate to use when detecting bursts.
         description: >
-          BurstMultiple, if set, is multiplied by the sum of the running average
+          If set, this value is multiplied by the sum of the running average
           of counts to define the burst detection threshold. If total counts
           observed for a given interval exceed this threshold, EMA is updated
           immediately, rather than waiting on the AdjustmentInterval. Defaults
@@ -204,54 +210,19 @@ groups:
           - type: requiredInGroup
           - type: notempty
         summary: is the list of fields to use to create the key for the dynamic sampler.
-        description: >
-          FieldList is a list of all the field names to use to form the key that
-          will be handed to the dynamic sampler. The combination of values from
-          all of these fields should reflect how interesting the trace is
-          compared to another. A good field selection has consistent values for
-          high-frequency, boring traffic, and unique values for outliers and
-          interesting traffic. Including an error field (or something like HTTP
-          status code) is an excellent choice. Using fields with very high
-          cardinality (like `k8s.pod.id`), is a bad choice. If the combination
-          of fields essentially makes them unique, the dynamic sampler will
-          sample everything. If the combination of fields is not unique enough,
-          you will not be guaranteed samples of the most interesting traces. As
-          an example, consider a combination of HTTP endpoint (high-frequency
-          and boring), HTTP method, and status code (normally boring but can
-          become interesting when indicating an error) as a good set of fields
-          since it will allowing proper sampling of all endpoints under normal
-          traffic and call out when there is failing traffic to any endpoint.
-          For example, in contrast, consider a combination of HTTP endpoint,
-          status code, and pod id as a bad set of fields, since it would result
-          in keys that are all unique, and therefore results in sampling 100% of
-          traces. Using only the HTTP endpoint field would be a **bad** choice,
-          as it is not unique enough and therefore interesting traces, like
-          traces that experienced a `500`, might not be sampled. Field names may
-          come from any span in the trace; if they occur on multiple spans, all
-          unique values will be included in the key.
+        description: $DynamicSampler.FieldList
       - name: MaxKeys
         type: int
         summary: is the maximum number of keys to track.
-        description: >
-          MaxKeys limits the number of distinct keys tracked by the sampler.
-          Once MaxKeys is reached, new keys will not be included in the sample
-          rate map, but existing keys will continue to be be counted. You can
-          use this to keep the sample rate map size under control. Defaults to
-          500; dynamic samplers will rarely achieve their goals with more keys
-          than this.
+        description: $DynamicSampler.MaxKeys
       - name: UseTraceLength
         type: bool
         summary: indicates whether to include the trace length as part of the key.
-        description: >
-          Indicates whether to include the trace length (number of spans in the
-          trace) as part of the key. The number of spans is exact, so if there
-          are normally small variations in trace length you may want to leave
-          this off. If traces are consistent lengths and changes in trace length
-          is a useful indicator of traces you'd like to see in Honeycomb, set
-          this to true.
+        description: $DynamicSampler.UseTraceLength
 
   - name: EMAThroughputSampler
     title: EMA Throughput Sampler
+    sortorder: 40
     description: >
       The Exponential Moving Average (EMA) Throughput Sampler attempts to
       achieve a given throughput -- number of spans per second -- weighting rare
@@ -298,10 +269,7 @@ groups:
       - name: AdjustmentInterval
         type: duration
         summary: is how often the sampler will recalculate the sample rate.
-        description: >
-          The duration after which the EMAThroughput sampler should recalculate
-          its internal counters. It should be specified as a duration string,
-          e.g. "30s" or "1m".
+        description: $EMADynamicSampler.AdjustmentInterval
       - name: Weight
         type: float
         validations:
@@ -310,13 +278,7 @@ groups:
           - type: maximum
             arg: 1
         summary: is the weight to use when calculating the EMA.
-        description: >
-          The weight to use when calculating the EMA. It should be a number
-          between 0 and 1. Larger values weight the average more toward recent
-          observations. A larger weight will cause sample rates more quickly
-          adapt to traffic patterns, while a smaller weight will result in
-          sample rates that are less sensitive to bursts or drops in traffic and
-          thus more consistent over time.
+        description: $EMADynamicSampler.Weight
       - name: AgeOutValue
         type: float
         validations:
@@ -325,85 +287,34 @@ groups:
           - type: maximum
             arg: 1
         summary: is the value to use when aging out keys.
-        description: >
-          AgeOutValue indicates the threshold for removing keys from the EMA.
-          The EMA of any key will approach 0 if it is not repeatedly observed,
-          but will never truly reach it, so we have to decide what constitutes
-          "zero". Keys with averages below this threshold will be removed from
-          the EMA. Default is the same as Weight, as this prevents a key with
-          the smallest integer value (1) from being aged out immediately. This
-          value should generally be <= Weight, unless you have very specific
-          reasons to set it higher.
+        description: $EMADynamicSampler.AgeOutValue
       - name: BurstMultiple
         type: float
         summary: is the multiple of the sample rate to use when detecting bursts.
-        description: >
-          BurstMultiple, if set, is multiplied by the sum of the running average
-          of counts to define the burst detection threshold. If total counts
-          observed for a given interval exceed this threshold, EMA is updated
-          immediately, rather than waiting on the AdjustmentInterval. Defaults
-          to 2; a negative value disables. With the default of 2, if your traffic
-          suddenly doubles, burst detection will kick in.
+        description: $EMADynamicSampler.BurstMultiple
       - name: BurstDetectionDelay
         type: int
         summary: the number of AdjustmentIntervals to wait before detecting bursts.
-        description: >
-          Indicates the number of intervals to run before burst detection kicks
-          in. Defaults to 3.
+        description: $EMADynamicSampler.BurstDetectionDelay
       - name: FieldList
         type: stringarray
         validations:
           - type: requiredInGroup
           - type: notempty
         summary: is the list of fields to use to create the key for the dynamic sampler.
-        description: >
-          FieldList is a list of all the field names to use to form the key that
-          will be handed to the dynamic sampler. The combination of values from
-          all of these fields should reflect how interesting the trace is
-          compared to another. A good field selection has consistent values for
-          high-frequency, boring traffic, and unique values for outliers and
-          interesting traffic. Including an error field (or something like HTTP
-          status code) is an excellent choice. Using fields with very high
-          cardinality (like `k8s.pod.id`), is a bad choice. If the combination
-          of fields essentially makes them unique, the dynamic sampler will
-          sample everything. If the combination of fields is not unique enough,
-          you will not be guaranteed samples of the most interesting traces. As
-          an example, consider a combination of HTTP endpoint (high-frequency
-          and boring), HTTP method, and status code (normally boring but can
-          become interesting when indicating an error) as a good set of fields
-          since it will allowing proper sampling of all endpoints under normal
-          traffic and call out when there is failing traffic to any endpoint.
-          For example, in contrast, consider a combination of HTTP endpoint,
-          status code, and pod id as a bad set of fields, since it would result
-          in keys that are all unique, and therefore results in sampling 100% of
-          traces. Using only the HTTP endpoint field would be a **bad** choice,
-          as it is not unique enough and therefore interesting traces, like
-          traces that experienced a `500`, might not be sampled. Field names may
-          come from any span in the trace; if they occur on multiple spans, all
-          unique values will be included in the key.
+        description: $DynamicSampler.FieldList
       - name: MaxKeys
         type: int
         summary: is the maximum number of keys to track.
-        description: >
-          MaxKeys limits the number of distinct keys tracked by the sampler.
-          Once MaxKeys is reached, new keys will not be included in the sample
-          rate map, but existing keys will continue to be be counted. You can
-          use this to keep the sample rate map size under control. Defaults to
-          500; dynamic samplers will rarely achieve their goals with more keys
-          than this.
+        description: $DynamicSampler.MaxKeys
       - name: UseTraceLength
         type: bool
         summary: indicates whether to include the trace length as part of the key.
-        description: >
-          Indicates whether to include the trace length (number of spans in the
-          trace) as part of the key. The number of spans is exact, so if there
-          are normally small variations in trace length you may want to leave
-          this off. If traces are consistent lengths and changes in trace length
-          is a useful indicator of traces you'd like to see in Honeycomb, set
-          this to true.
+        description: $DynamicSampler.UseTraceLength
 
   - name: WindowedThroughputSampler
     title: Windowed Throughput Sampler
+    sortorder: 50
     description: >
       Windowed Throughput sampling is an enhanced version of total throughput
       sampling. Just like the TotalThroughput sampler, it attempts to meet the
@@ -461,64 +372,31 @@ groups:
           - type: requiredInGroup
           - type: notempty
         summary: is the list of fields to use to create the key for the dynamic sampler.
-        description: >
-          FieldList is a list of all the field names to use to form the key that
-          will be handed to the dynamic sampler. The combination of values from
-          all of these fields should reflect how interesting the trace is
-          compared to another. A good field selection has consistent values for
-          high-frequency, boring traffic, and unique values for outliers and
-          interesting traffic. Including an error field (or something like HTTP
-          status code) is an excellent choice. Using fields with very high
-          cardinality (like `k8s.pod.id`), is a bad choice. If the combination
-          of fields essentially makes them unique, the dynamic sampler will
-          sample everything. If the combination of fields is not unique enough,
-          you will not be guaranteed samples of the most interesting traces. As
-          an example, consider a combination of HTTP endpoint (high-frequency
-          and boring), HTTP method, and status code (normally boring but can
-          become interesting when indicating an error) as a good set of fields
-          since it will allowing proper sampling of all endpoints under normal
-          traffic and call out when there is failing traffic to any endpoint.
-          For example, in contrast, consider a combination of HTTP endpoint,
-          status code, and pod id as a bad set of fields, since it would result
-          in keys that are all unique, and therefore results in sampling 100% of
-          traces. Using only the HTTP endpoint field would be a **bad** choice,
-          as it is not unique enough and therefore interesting traces, like
-          traces that experienced a `500`, might not be sampled. Field names may
-          come from any span in the trace; if they occur on multiple spans, all
-          unique values will be included in the key.
+        description: $DynamicSampler.FieldList
       - name: MaxKeys
         type: int
         summary: is the maximum number of keys to track.
-        description: >
-          MaxKeys limits the number of distinct keys tracked by the sampler.
-          Once MaxKeys is reached, new keys will not be included in the sample
-          rate map, but existing keys will continue to be be counted. You can
-          use this to keep the sample rate map size under control. Defaults to
-          500; dynamic samplers will rarely achieve their goals with more keys
-          than this.
+        description: $DynamicSampler.MaxKeys
       - name: UseTraceLength
         type: bool
         summary: indicates whether to include the trace length as part of the key.
-        description: >
-          Indicates whether to include the trace length (number of spans in the
-          trace) as part of the key. The number of spans is exact, so if there
-          are normally small variations in trace length you may want to leave
-          this off. If traces are consistent lengths and changes in trace length
-          is a useful indicator of traces you'd like to see in Honeycomb, set
-          this to true.
+        description: $DynamicSampler.UseTraceLength
 
   - name: TotalThroughputSampler
     title: Total Throughput Sampler
+    sortorder: 80
     description: >
       TotalThroughput attempts to meet a goal of a fixed number of events per
-      second sent to Honeycomb.
+      second sent to Honeycomb. This sampler is deprecated and present mainly
+      for compatibility. Most installations will want to use either
+      EMAThroughput or WindowedThroughput instead.
 
       If your key space is sharded across different servers, this is a good
       method for making sure each server sends roughly the same volume of
       content to Honeycomb. It performs poorly when the active keyspace is very
       large.
 
-      GoalThroughputPerSec * ClearFrequencyDuration (in seconds) defines the upper
+      GoalThroughputPerSec * ClearFrequency defines the upper
       limit of the number of keys that can be reported and stay under the goal,
       but with that many keys, you'll only get one event per key per
       ClearFrequencySec, which is very coarse. You should aim for at least 1
@@ -538,63 +416,26 @@ groups:
       - name: ClearFrequency
         type: duration
         summary: is the duration over which the sampler will calculate the throughput.
-        description: >
-          The duration after which the dynamic sampler should reset its internal
-          counters. It should be specified as a duration string, e.g. "30s" or "1m".
+        description: $DynamicSampler.ClearFrequency
       - name: FieldList
         type: stringarray
         validations:
           - type: requiredInGroup
           - type: notempty
         summary: is the list of fields to use to create the key for the dynamic sampler.
-        description: >
-          FieldList is a list of all the field names to use to form the key that
-          will be handed to the dynamic sampler. The combination of values from
-          all of these fields should reflect how interesting the trace is
-          compared to another. A good field selection has consistent values for
-          high-frequency, boring traffic, and unique values for outliers and
-          interesting traffic. Including an error field (or something like HTTP
-          status code) is an excellent choice. Using fields with very high
-          cardinality (like `k8s.pod.id`), is a bad choice. If the combination
-          of fields essentially makes them unique, the dynamic sampler will
-          sample everything. If the combination of fields is not unique enough,
-          you will not be guaranteed samples of the most interesting traces. As
-          an example, consider a combination of HTTP endpoint (high-frequency
-          and boring), HTTP method, and status code (normally boring but can
-          become interesting when indicating an error) as a good set of fields
-          since it will allowing proper sampling of all endpoints under normal
-          traffic and call out when there is failing traffic to any endpoint.
-          For example, in contrast, consider a combination of HTTP endpoint,
-          status code, and pod id as a bad set of fields, since it would result
-          in keys that are all unique, and therefore results in sampling 100% of
-          traces. Using only the HTTP endpoint field would be a **bad** choice,
-          as it is not unique enough and therefore interesting traces, like
-          traces that experienced a `500`, might not be sampled. Field names may
-          come from any span in the trace; if they occur on multiple spans, all
-          unique values will be included in the key.
+        description: $DynamicSampler.FieldList
       - name: MaxKeys
         type: int
         summary: is the maximum number of keys to track.
-        description: >
-          MaxKeys limits the number of distinct keys tracked by the sampler.
-          Once MaxKeys is reached, new keys will not be included in the sample
-          rate map, but existing keys will continue to be be counted. You can
-          use this to keep the sample rate map size under control. Defaults to
-          500; dynamic samplers will rarely achieve their goals with more keys
-          than this.
+        description: $DynamicSampler.MaxKeys
       - name: UseTraceLength
         type: bool
         summary: indicates whether to include the trace length as part of the key.
-        description: >
-          Indicates whether to include the trace length (number of spans in the
-          trace) as part of the key. The number of spans is exact, so if there
-          are normally small variations in trace length you may want to leave
-          this off. If traces are consistent lengths and changes in trace length
-          is a useful indicator of traces you'd like to see in Honeycomb, set
-          this to true.
+        description: $DynamicSampler.UseTraceLength
 
   - name: RulesBasedSampler
     title: Rules-based Sampler
+    sortorder: 70
     description: >
       The Rules-based sampler allows you to specify a set of rules that will
       determine whether a trace should be sampled or not. Rules are evaluated in
@@ -627,6 +468,7 @@ groups:
 
   - name: Rules
     title: Rules for Rules-based Samplers
+    sortorder: 75
     description: >
       Rules are evaluated in order, and the first rule that matches will be used
       to determine the sample rate. If no rules match, the SampleRate will be 1
@@ -650,11 +492,13 @@ groups:
             arg:
               - DynamicSampler
               - EMADynamicSampler
+              - EMAThroughputSampler
+              - WindowedThroughputSampler
               - TotalThroughputSampler
         summary: is the dynamic sampler to use if the rule matches.
         description: >
           The sampler to use if the rule matches. If this is set, the sample
-          rate will be determined by the downstream sampler. If this is not set,
+          rate will be determined by this downstream sampler. If this is not set,
           the sample rate will be determined by the Drop flag or the SampleRate
           field.
       - name: Drop
@@ -694,6 +538,7 @@ groups:
 
   - name: Conditions
     title: Conditions for the Rules in Rules-based Samplers
+    sortorder: 78
     description: >
       Conditions are evaluated in order, and the first condition that does not
       match will cause the rule to not match. If all conditions match, the rule
@@ -750,11 +595,3 @@ groups:
           useful when a field like http status code may be rendered as strings
           by some environments and as numbers or booleans by others.
 
-  - name: Samplers
-    type: samplerList
-    summary: is the list of samplers to use.
-    description: >
-      Samplers is a mapping of targets to samplers. Each target is a Honeycomb
-      environment (or, for classic keys, a dataset). The value is the sampler to
-      use for that target. The target called __default__ will be used for any
-      target that is not explicitly listed. A __default__ target is required.

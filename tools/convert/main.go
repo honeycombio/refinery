@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"text/template"
 	"time"
 
@@ -140,11 +141,14 @@ func main() {
 		GenerateMinimalSample(output)
 		os.Exit(0)
 	case "doc":
-		metadata := loadConfigMetadata()
 		if len(args) > 1 && args[1] == "rules" {
-			metadata = loadRulesMetadata()
+			GenerateRulesMarkdown(output)
+		} else if len(args) > 1 && args[1] == "config" {
+			GenerateConfigMarkdown(output)
+		} else {
+			fmt.Fprintf(os.Stderr, `doc subcommand requires "rules" or "config" as an argument\n`)
+			os.Exit(1)
 		}
-		GenerateMarkdown(metadata, output)
 		os.Exit(0)
 	case "config", "rules", "validate":
 		// do nothing yet because we need to parse the input file
@@ -235,6 +239,11 @@ func loadRulesMetadata() *config.Metadata {
 	if err != nil {
 		panic(err)
 	}
+	// Sort the groups by sort order.
+	sort.Slice(m.Groups, func(i, j int) bool {
+		return m.Groups[i].SortOrder < m.Groups[j].SortOrder
+	})
+
 	return m
 }
 
@@ -291,16 +300,33 @@ func GenerateMinimalSample(w io.Writer) {
 	}
 }
 
-func GenerateMarkdown(metadata *config.Metadata, w io.Writer) {
+func GenerateConfigMarkdown(w io.Writer) {
+	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(filesystem, "templates/docfile.tmpl", "templates/docgroup.tmpl", "templates/docfield.tmpl")
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/cfg_docfile.tmpl", "templates/cfg_docgroup.tmpl", "templates/cfg_docfield.tmpl")
 	if err != nil {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "docfile.tmpl", metadata)
+	err = tmpl.ExecuteTemplate(w, "cfg_docfile.tmpl", metadata)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func GenerateRulesMarkdown(w io.Writer) {
+	metadata := loadRulesMetadata()
+	var err error
+	tmpl := template.New("markdown generator")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/rules_docfile.tmpl", "templates/rules_docgroup.tmpl", "templates/rules_docfield.tmpl")
+	if err != nil {
+		panic(err)
+	}
+
+	err = tmpl.ExecuteTemplate(w, "rules_docfile.tmpl", metadata)
 	if err != nil {
 		panic(err)
 	}

@@ -1,0 +1,21 @@
+{{- $group := . -}}
+---
+## {{ $group.Title }}
+
+### Name: `{{ $group.Name }}`
+
+{{ $group.Description | wordwrap }}
+{{- println -}}
+{{- println -}}
+
+{{- if $group.Fields -}}
+{{- println -}}
+{{- end -}}
+
+{{- range $group.Fields -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
+{{ template "rules_docfield.tmpl" . }}
+{{- end -}}
+

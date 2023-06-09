@@ -16,6 +16,7 @@ import (
 // The functions are listed below in alphabetical order; please keep them that way.
 func helpers() template.FuncMap {
 	return map[string]any{
+		"anchorize":         anchorize,
 		"box":               box,
 		"choice":            choice,
 		"comment":           comment,
@@ -43,6 +44,10 @@ func helpers() template.FuncMap {
 		"wordwrap":          wordwrap,
 		"yamlf":             yamlf,
 	}
+}
+
+func anchorize(s string) string {
+	return strings.ToLower(strings.Replace(s, " ", "-", -1))
 }
 
 func box(s string) string {
