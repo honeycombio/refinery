@@ -402,6 +402,111 @@ groups:
           is a useful indicator of traces you'd like to see in Honeycomb, set
           this to true.
 
+  - name: WindowedThroughputSampler
+    title: Windowed Throughput Sampler
+    description: >
+      Windowed Throughput sampling is an enhanced version of total throughput
+      sampling. Just like the TotalThroughput sampler, it attempts to meet the
+      goal of fixed number of events per second sent to Honeycomb.
+
+      The original throughput sampler updates the sampling rate every
+      "ClearFrequency" seconds. While this parameter is configurable, it suffers
+      from the following tradeoff:
+        - Decreasing it is more responsive to load spikes, but with the
+        cost of making the sampling decision on less data.
+        - Increasing it is less responsive to load spikes, but sample rates will be more
+          stable because they are made with more data.
+
+      The windowed throughput sampler resolves this by introducing two
+      different, tunable parameters:
+        - UpdateFrequency: how often the sampling rate is recomputed
+        - LookbackFrequency: how much total time is considered when recomputing sampling rate.
+
+      A standard configuration would be to set UpdateFrequency to 1s and
+      LookbackFrequency to 30s. In this configuration, every second, we lookback
+      at the last 30s of data in order to compute the new sampling rate. The
+      actual sampling rate computation is nearly identical to the original
+      throughput sampler, but this variant has better support for floating point
+      numbers.
+
+    fields:
+      - name: GoalThroughputPerSec
+        type: int
+        validations:
+          - type: requiredInGroup
+        summary: is the desired throughput per second of events sent to Honeycomb.
+        description: >
+          The desired throughput **per second**. This is the number of events per
+          second you want to send to Honeycomb. The sampler will adjust sample
+          rates to try to achieve this desired throughput. This value is
+          calculated for the individual instance, not for the cluster; if your
+          cluster has multiple instances, you will need to divide your total
+          desired sample rate by the number of instances to get this value.
+      - name: UpdateFrequency
+        type: duration
+        summary: is how often the sampling rate is recomputed.
+        description: >
+          The duration between sampling rate computations. It should be
+          specified as a duration string, e.g. "30s" or "1m".
+      - name: LookbackFrequency
+        type: duration
+        summary: how far back in time to look when computing the sampling rate.
+        description: >
+          This controls how far back in time to lookback to dynamically adjust the sampling
+          rate. Default is 30 * UpdateFrequencyDuration.
+          This is forced to be an _integer multiple_ of UpdateFrequencyDuration.
+      - name: FieldList
+        type: stringarray
+        validations:
+          - type: requiredInGroup
+          - type: notempty
+        summary: is the list of fields to use to create the key for the dynamic sampler.
+        description: >
+          FieldList is a list of all the field names to use to form the key that
+          will be handed to the dynamic sampler. The combination of values from
+          all of these fields should reflect how interesting the trace is
+          compared to another. A good field selection has consistent values for
+          high-frequency, boring traffic, and unique values for outliers and
+          interesting traffic. Including an error field (or something like HTTP
+          status code) is an excellent choice. Using fields with very high
+          cardinality (like `k8s.pod.id`), is a bad choice. If the combination
+          of fields essentially makes them unique, the dynamic sampler will
+          sample everything. If the combination of fields is not unique enough,
+          you will not be guaranteed samples of the most interesting traces. As
+          an example, consider a combination of HTTP endpoint (high-frequency
+          and boring), HTTP method, and status code (normally boring but can
+          become interesting when indicating an error) as a good set of fields
+          since it will allowing proper sampling of all endpoints under normal
+          traffic and call out when there is failing traffic to any endpoint.
+          For example, in contrast, consider a combination of HTTP endpoint,
+          status code, and pod id as a bad set of fields, since it would result
+          in keys that are all unique, and therefore results in sampling 100% of
+          traces. Using only the HTTP endpoint field would be a **bad** choice,
+          as it is not unique enough and therefore interesting traces, like
+          traces that experienced a `500`, might not be sampled. Field names may
+          come from any span in the trace; if they occur on multiple spans, all
+          unique values will be included in the key.
+      - name: MaxKeys
+        type: int
+        summary: is the maximum number of keys to track.
+        description: >
+          MaxKeys limits the number of distinct keys tracked by the sampler.
+          Once MaxKeys is reached, new keys will not be included in the sample
+          rate map, but existing keys will continue to be be counted. You can
+          use this to keep the sample rate map size under control. Defaults to
+          500; dynamic samplers will rarely achieve their goals with more keys
+          than this.
+      - name: UseTraceLength
+        type: bool
+        summary: indicates whether to include the trace length as part of the key.
+        description: >
+          Indicates whether to include the trace length (number of spans in the
+          trace) as part of the key. The number of spans is exact, so if there
+          are normally small variations in trace length you may want to leave
+          this off. If traces are consistent lengths and changes in trace length
+          is a useful indicator of traces you'd like to see in Honeycomb, set
+          this to true.
+
   - name: TotalThroughputSampler
     title: Total Throughput Sampler
     description: >
