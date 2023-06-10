@@ -40,7 +40,7 @@ docconfig:
 	@echo
 	@echo "+++ generating documentation"
 	@echo
-	go run . doc config --output=config.md
+	go run . doc config --output=../../config.md
 
 .PHONY: docrules
 #: generate the documentation
@@ -48,7 +48,7 @@ docrules:
 	@echo
 	@echo "+++ generating documentation"
 	@echo
-	go run . doc rules --output=rules.md
+	go run . doc rules --output=../../rules.md
 
 .PHONY: validate
 #: validate the sample config
