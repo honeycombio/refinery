@@ -47,7 +47,8 @@ func helpers() template.FuncMap {
 }
 
 func anchorize(s string) string {
-	return strings.ToLower(strings.Replace(s, " ", "-", -1))
+	pat := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	return strings.ToLower(pat.ReplaceAllLiteralString(s, "-"))
 }
 
 func box(s string) string {

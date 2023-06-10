@@ -44,6 +44,7 @@ key's environment name is used as the target.
 The remainder of this document describes the samplers that can be used within
 the `Samplers` section and the fields that control their behavior.
 
+## Table of Contents
 - [Deterministic Sampler](#deterministic-sampler)
 - [Dynamic Sampler](#dynamic-sampler)
 - [EMA Dynamic Sampler](#ema-dynamic-sampler)

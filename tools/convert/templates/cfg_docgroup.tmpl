@@ -1,6 +1,8 @@
 {{- $group := . -}}
 ---
-## {{ $group.Name }}: {{ $group.Title }}
+## {{ $group.Title }}
+
+### Section Name: `{{ $group.Name }}`
 
 {{ $group.Description | wordwrap }}
 {{- println -}}

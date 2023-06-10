@@ -351,9 +351,9 @@ groups:
           - type: choice
         summary: is the type of logger to use.
         description: >
-          Specifies where (and if) refinery sends logs. "none" means that logs
-          are discarded. "honeycomb" means that logs will be forwarded to
-          honeycomb as events according to the settings below. "stdout" means
+          Specifies where (and if) refinery sends logs. `none` means that logs
+          are discarded. `honeycomb` means that logs will be forwarded to
+          honeycomb as events according to the settings below. `stdout` means
           that logs will be written to stdout.
 
       - name: Level
@@ -367,8 +367,8 @@ groups:
         summary: is the logging level above which refinery should send a log.
         description: >
           Sets the logging level above which refinery should send logs to the
-          logger. Debug is very verbose, and should not be used in production
-          environments. Warn is the recommended level for production.
+          logger. `debug` is very verbose, and should not be used in production
+          environments. `warn` is the recommended level for production.
 
   - name: HoneycombLogger
     title: "Honeycomb Logger"
@@ -643,7 +643,9 @@ groups:
         summary: is the compression algorithm to use when sending OTel metrics.
         description: >
           The compression algorithm to use when sending metrics to Honeycomb.
-          "gzip" is the default and recommended value.
+          `gzip` is the default and recommended value. In rare circumstances,
+          compression costs may outweigh the benefits, in which case `none`
+          may be used.
 
   - name: PeerManagement
     title: "Peer Management"
@@ -662,8 +664,8 @@ groups:
         summary: is the type of peer management to use.
         description: >
           Sets the type of peer management (the mechanism by which Refinery
-          locates its peers). "file" means that Refinery gets its peer list from
-          the Peers list in this config file. "redis" means that refinery
+          locates its peers). `file` means that Refinery gets its peer list from
+          the Peers list in this config file. `redis` means that refinery
           self-registers with a redis instance and gets its peer list from
           there.
 
@@ -860,11 +862,11 @@ groups:
         reload: false
         summary: controls the way that traces are assigned to refinery nodes.
         description: >
-          The "legacy" strategy uses a simple algorithm that unfortunately causes
+          The `legacy` strategy uses a simple algorithm that unfortunately causes
           1/2 of the in-flight traces to be assigned to a different node whenever the
           number of nodes changes.
           The legacy strategy is deprecated and is intended to be removed in a future release.
-          The "hash" strategy is strongly recommended, as only 1/N traces (where N is the
+          The `hash` strategy is strongly recommended, as only 1/N traces (where N is the
           number of nodes) are disrupted when the node count changes.
           In v2.0, the legacy strategy will be removed along with this setting.
 
@@ -1014,7 +1016,7 @@ groups:
         reload: false
         summary: is the collector to use for collecting traces.
         description: >
-          Currently the only supported value is "InMemCollector". This setting
+          Currently the only supported value is `InMemCollector`. This setting
           will be removed in v2.0.
 
       - name: CacheOverrunStrategy
@@ -1028,15 +1030,15 @@ groups:
         lastversion: v1.21
         summary: controls how the cache is managed when memory pressure is high.
         description: >
-          Controls the cache management behavior under memory pressure. "resize"
+          Controls the cache management behavior under memory pressure. `resize`
           means that when a cache overrun occurs, the cache is shrunk and never
           grows again, which is generally not helpful unless it occurs because
-          of a permanent change in traffic patterns. In the "impact" strategy,
+          of a permanent change in traffic patterns. In the `impact` strategy,
           the items having the most impact on the cache size are ejected from
           the cache earlier than normal but the cache is not resized. In all
-          cases, it only applies if MaxAlloc is nonzero. Default is "resize" for
-          compatibility but "impact" is recommended for most installations. In
-          v2.0, the only available strategy is "impact", and this setting will
+          cases, it only applies if MaxAlloc is nonzero. Default is `resize` for
+          compatibility but `impact` is recommended for most installations. In
+          v2.0, the only available strategy is `impact`, and this setting will
           be removed.
 
       - name: AdditionalAttributes
