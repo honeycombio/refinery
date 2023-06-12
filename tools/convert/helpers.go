@@ -200,7 +200,7 @@ func nonZero(data map[string]any, key, oldkey string, example string) string {
 
 func now() string {
 	t := time.Now().UTC()
-	return fmt.Sprintf("on %s at %s UTC", t.Format(time.DateOnly), t.Format(time.TimeOnly))
+	return fmt.Sprintf("on %s at %s UTC", t.Format("2006-01-02"), t.Format("15:04:05"))
 }
 
 func pattern(typ, pattyp string) string {
