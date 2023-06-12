@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample doc validateConfig validateRules build
+all: template names sample docrules docconfig validateConfig validateRules build
 
 .PHONY: build
 #: build the binary
@@ -34,13 +34,21 @@ sample:
 	@echo
 	go run . sample --output=minimal_config.yaml
 
-.PHONY: doc
+.PHONY: docconfig
 #: generate the documentation
-doc:
+docconfig:
 	@echo
 	@echo "+++ generating documentation"
 	@echo
-	go run . doc --output=config.md
+	go run . doc config --output=../../config.md
+
+.PHONY: docrules
+#: generate the documentation
+docrules:
+	@echo
+	@echo "+++ generating documentation"
+	@echo
+	go run . doc rules --output=../../rules.md
 
 .PHONY: validate
 #: validate the sample config

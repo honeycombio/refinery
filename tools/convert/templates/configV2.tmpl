@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on {{ .Now }} from {{ .Input }}
+# created {{ now }} from {{ .Input }} using a template generated on 2023-06-12 at 15:58:04 UTC
 
 # This file contains the configuration for the Honeycomb Refinery.
 # More stuff will go here later.
@@ -316,9 +316,9 @@ Logger:
   ####
     ## Type is the type of logger to use.
     ##
-    ## Specifies where (and if) refinery sends logs. "none" means that logs
-    ## are discarded. "honeycomb" means that logs will be forwarded to
-    ## honeycomb as events according to the settings below. "stdout" means
+    ## Specifies where (and if) refinery sends logs. `none` means that logs
+    ## are discarded. `honeycomb` means that logs will be forwarded to
+    ## honeycomb as events according to the settings below. `stdout` means
     ## that logs will be written to stdout.
     ##
     ## default: stdout
@@ -329,8 +329,8 @@ Logger:
     ## Level is the logging level above which refinery should send a log.
     ##
     ## Sets the logging level above which refinery should send logs to the
-    ## logger. Debug is very verbose, and should not be used in production
-    ## environments. Warn is the recommended level for production.
+    ## logger. `debug` is very verbose, and should not be used in production
+    ## environments. `warn` is the recommended level for production.
     ##
     ## default: warn
     ## Not eligible for live reload.
@@ -549,7 +549,9 @@ OTelMetrics:
     ## metrics.
     ##
     ## The compression algorithm to use when sending metrics to Honeycomb.
-    ## "gzip" is the default and recommended value.
+    ## `gzip` is the default and recommended value. In rare circumstances,
+    ## compression costs may outweigh the benefits, in which case `none` may
+    ## be used.
     ##
     ## default: gzip
     ## Not eligible for live reload.
@@ -565,8 +567,8 @@ PeerManagement:
     ## Type is the type of peer management to use.
     ##
     ## Sets the type of peer management (the mechanism by which Refinery
-    ## locates its peers). "file" means that Refinery gets its peer list from
-    ## the Peers list in this config file. "redis" means that refinery
+    ## locates its peers). `file` means that Refinery gets its peer list from
+    ## the Peers list in this config file. `redis` means that refinery
     ## self-registers with a redis instance and gets its peer list from
     ## there.
     ##

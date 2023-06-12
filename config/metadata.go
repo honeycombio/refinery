@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"io"
 	"sort"
 	"strings"
@@ -49,6 +50,7 @@ type Group struct {
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
 	Fields      []Field `json:"fields,omitempty"`
+	SortOrder   int     `json:"sortorder"`
 }
 
 type Metadata struct {
@@ -127,6 +129,19 @@ func (c *Metadata) LoadFrom(rdr io.Reader) error {
 	err := decoder.Decode(c)
 	if err != nil {
 		return err
+	}
+	// fill in the descriptions of fields that are references to other fields
+	for g := range c.Groups {
+		for f := range c.Groups[g].Fields {
+			if strings.HasPrefix(c.Groups[g].Fields[f].Description, "$") {
+				name := c.Groups[g].Fields[f].Description[1:]
+				field := c.GetField(name)
+				if field == nil {
+					return fmt.Errorf("%s: unknown field", c.Groups[g].Fields[f].Description)
+				}
+				c.Groups[g].Fields[f].Description = c.GetField(name).Description
+			}
+		}
 	}
 	return nil
 }

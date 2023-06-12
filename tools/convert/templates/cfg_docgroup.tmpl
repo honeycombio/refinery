@@ -1,0 +1,17 @@
+{{- $group := . -}}
+---
+## {{ $group.Title }}
+
+### Section Name: `{{ $group.Name }}`
+
+{{ $group.Description | wordwrap }}
+{{- println -}}
+{{- println -}}
+
+{{- range $group.Fields -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
+{{ template "cfg_docfield.tmpl" . }}
+{{- end -}}
+

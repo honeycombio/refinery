@@ -2,14 +2,13 @@
 
 ### {{ $field.Name }}
 
-{{ printf "%s %s" $field.Name $field.Summary | wordwrap }}
-
 {{ if $field.Description -}}
 {{ $field.Description | wordwrap }}
 
-{{- end }}
+{{- else -}}
+{{ printf "%s %s" $field.Name $field.Summary | wordwrap }}
 
-{{ if $field.Reload }}E{{else}}Not e{{end}}ligible for live reload.
+{{- end }}
 
 Type: `{{ $field.Type }}`
 

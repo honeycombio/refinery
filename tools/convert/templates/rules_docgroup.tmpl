@@ -1,15 +1,21 @@
 {{- $group := . -}}
 ---
-## {{ $group.Name }}: {{ $group.Title }}
+## {{ $group.Title }}
+
+### Name: `{{ $group.Name }}`
 
 {{ $group.Description | wordwrap }}
 {{- println -}}
 {{- println -}}
 
+{{- if $group.Fields -}}
+{{- println -}}
+{{- end -}}
+
 {{- range $group.Fields -}}
 {{- if .LastVersion -}}
   {{- continue -}}
 {{- end -}}
-{{ template "docfield.tmpl" . }}
+{{ template "rules_docfield.tmpl" . }}
 {{- end -}}
 
