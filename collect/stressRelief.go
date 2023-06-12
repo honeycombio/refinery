@@ -124,6 +124,7 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 		if s.mode != Monitor && cfg.MinimumStartupDuration != 0 {
 			s.stressed = true
 			s.stayOnUntil = time.Now().Add(time.Duration(cfg.MinimumStartupDuration))
+			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", "MinimumStartupDuration").Logf("StressRelief has been activated")
 		}
 		s.mode = Monitor
 	case "always":
