@@ -3,6 +3,7 @@ package sample
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -40,7 +41,7 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 
 	switch c := c.(type) {
 	case *config.DeterministicSamplerConfig:
-		sampler = &DeterministicSampler{Config: c, Logger: s.Logger}
+		sampler = &DeterministicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.DynamicSamplerConfig:
 		sampler = &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.EMADynamicSamplerConfig:
@@ -63,4 +64,11 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 	s.Logger.Debug().WithField("dataset", samplerKey).Logf("created implementation for sampler type %T", c)
 
 	return sampler
+}
+
+func getMetricType(name string) string {
+	if strings.HasSuffix(name, "_count") {
+		return "counter"
+	}
+	return "gauge"
 }

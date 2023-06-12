@@ -21,6 +21,8 @@ type WindowedThroughputSampler struct {
 	lookbackfrequency    config.Duration
 	goalthroughputpersec int
 	maxKeys              int
+	prefix               string
+	lastMetrics          map[string]int64
 
 	key *traceKey
 
@@ -38,6 +40,7 @@ func (d *WindowedThroughputSampler) Start() error {
 	if d.maxKeys == 0 {
 		d.maxKeys = 500
 	}
+	d.prefix = "windowedthroughput_"
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.WindowedThroughput{
@@ -49,9 +52,13 @@ func (d *WindowedThroughputSampler) Start() error {
 	d.dynsampler.Start()
 
 	// Register statistics this package will produce
-	d.Metrics.Register("dynsampler_num_dropped", "counter")
-	d.Metrics.Register("dynsampler_num_kept", "counter")
-	d.Metrics.Register("dynsampler_sample_rate", "histogram")
+	d.lastMetrics = d.dynsampler.GetMetrics(d.prefix)
+	for name := range d.lastMetrics {
+		d.Metrics.Register(name, getMetricType(name))
+	}
+	d.Metrics.Register(d.prefix+"num_dropped", "counter")
+	d.Metrics.Register(d.prefix+"num_kept", "counter")
+	d.Metrics.Register(d.prefix+"sample_rate", "histogram")
 
 	return nil
 }
@@ -63,17 +70,20 @@ func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
-	d.Logger.Debug().WithFields(map[string]interface{}{
-		"sample_key":  key,
-		"sample_rate": rate,
-		"sample_keep": shouldKeep,
-		"trace_id":    trace.TraceID,
-	}).Logf("got sample rate and decision")
 	if shouldKeep {
-		d.Metrics.Increment("dynsampler_num_kept")
+		d.Metrics.Increment(d.prefix + "num_kept")
 	} else {
-		d.Metrics.Increment("dynsampler_num_dropped")
+		d.Metrics.Increment(d.prefix + "num_dropped")
 	}
-	d.Metrics.Histogram("dynsampler_sample_rate", float64(rate))
+	d.Metrics.Histogram(d.prefix+"sample_rate", float64(rate))
+	for name, val := range d.dynsampler.GetMetrics(d.prefix) {
+		switch getMetricType(name) {
+		case "counter":
+			delta := val - d.lastMetrics[name]
+			d.Metrics.Count(name, delta)
+		case "gauge":
+			d.Metrics.Gauge(name, val)
+		}
+	}
 	return rate, shouldKeep, "Windowedthroughput", key
 }
