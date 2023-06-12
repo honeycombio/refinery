@@ -1,11 +1,12 @@
 {{- $field := . -}}
 
+{{- println -}}
 ### `{{ $field.Name }}`
 
-{{ printf "%s %s" $field.Name $field.Summary | wordwrap }}
+{{ printf "%s %s" $field.Name $field.Summary }}
 
 {{ if $field.Description -}}
-{{ $field.Description | wordwrap }}
+{{ $field.Description | wrapForDocs }}
 
 {{- end -}}
 {{- println -}}
