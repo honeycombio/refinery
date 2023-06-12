@@ -7,6 +7,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -15,17 +16,23 @@ import (
 const shardingSalt = "5VQ8l2jE5aJLPVqk"
 
 type DeterministicSampler struct {
-	Config *config.DeterministicSamplerConfig
-	Logger logger.Logger
+	Config  *config.DeterministicSamplerConfig
+	Logger  logger.Logger
+	Metrics metrics.Metrics
 
 	sampleRate int
 	upperBound uint32
+	prefix     string
 }
 
 func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
 	d.sampleRate = d.Config.SampleRate
+	d.prefix = "deterministic_"
+	if d.Metrics == nil {
+		d.Metrics = &metrics.NullMetrics{}
+	}
 
 	// Get the actual upper bound - the largest possible value divided by
 	// the sample rate. In the case where the sample rate is 1, this should
@@ -41,5 +48,12 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	}
 	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
 	v := binary.BigEndian.Uint32(sum[:4])
-	return uint(d.sampleRate), v <= d.upperBound, "deterministic/chance", ""
+	shouldKeep := v <= d.upperBound
+	if shouldKeep {
+		d.Metrics.Increment(d.prefix + "num_kept")
+	} else {
+		d.Metrics.Increment(d.prefix + "num_dropped")
+	}
+
+	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""
 }

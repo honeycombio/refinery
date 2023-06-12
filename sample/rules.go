@@ -17,15 +17,17 @@ type RulesBasedSampler struct {
 	Logger   logger.Logger
 	Metrics  metrics.Metrics
 	samplers map[string]Sampler
+	prefix   string
 }
 
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
+	s.prefix = "rulesbased_"
 
-	s.Metrics.Register("rulessampler_num_dropped", "counter")
-	s.Metrics.Register("rulessampler_num_kept", "counter")
-	s.Metrics.Register("rulessampler_sample_rate", "histogram")
+	s.Metrics.Register(s.prefix+"num_dropped", "counter")
+	s.Metrics.Register(s.prefix+"num_kept", "counter")
+	s.Metrics.Register(s.prefix+"sample_rate", "histogram")
 
 	s.samplers = make(map[string]Sampler)
 
@@ -48,6 +50,10 @@ func (s *RulesBasedSampler) Start() error {
 				sampler = &EMADynamicSampler{Config: rule.Sampler.EMADynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else if rule.Sampler.TotalThroughputSampler != nil {
 				sampler = &TotalThroughputSampler{Config: rule.Sampler.TotalThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
+			} else if rule.Sampler.EMAThroughputSampler != nil {
+				sampler = &EMAThroughputSampler{Config: rule.Sampler.EMAThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
+			} else if rule.Sampler.WindowedThroughputSampler != nil {
+				sampler = &WindowedThroughputSampler{Config: rule.Sampler.WindowedThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
@@ -116,11 +122,11 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				reason += rule.Name
 			}
 
-			s.Metrics.Histogram("rulessampler_sample_rate", float64(rule.SampleRate))
+			s.Metrics.Histogram(s.prefix+"sample_rate", float64(rule.SampleRate))
 			if keep {
-				s.Metrics.Increment("rulessampler_num_kept")
+				s.Metrics.Increment(s.prefix + "num_kept")
 			} else {
-				s.Metrics.Increment("rulessampler_num_dropped")
+				s.Metrics.Increment(s.prefix + "num_dropped")
 			}
 			logger.WithFields(map[string]interface{}{
 				"rate":      rate,
