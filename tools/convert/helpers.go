@@ -32,6 +32,7 @@ func helpers() template.FuncMap {
 		"nonDefaultOnly":    nonDefaultOnly,
 		"nonEmptyString":    nonEmptyString,
 		"nonZero":           nonZero,
+		"now":               now,
 		"pattern":           pattern,
 		"reload":            reload,
 		"renderMap":         renderMap,
@@ -195,6 +196,11 @@ func nonZero(data map[string]any, key, oldkey string, example string) string {
 		return fmt.Sprintf(`%s%s: %v`, comment, key, yamlf(value))
 	}
 	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
+}
+
+func now() string {
+	t := time.Now()
+	return fmt.Sprintf("on %s at %s", t.Format("2006-01-02"), t.Format("15:04:05 MST"))
 }
 
 func pattern(typ, pattyp string) string {

@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"sort"
 	"text/template"
-	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/jessevdk/go-flags"
@@ -180,11 +179,9 @@ func main() {
 	}
 
 	tmplData := struct {
-		Now   string
 		Input string
 		Data  map[string]any
 	}{
-		Now:   time.Now().Format(time.RFC3339),
 		Input: opts.Input,
 		Data:  userConfig,
 	}

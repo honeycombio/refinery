@@ -117,9 +117,6 @@ func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (
 }
 
 func ConvertRules(rules map[string]any, w io.Writer) {
-	// this writes the rules to w as a YAML file for debugging
-	// yaml.NewEncoder(w).Encode(rules)
-
 	// get the sampler type for the default rule
 	defaultSamplerType, _ := getValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
 
@@ -160,5 +157,6 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 		newConfig.Samplers[k] = sampler
 	}
 
+	w.Write([]byte(fmt.Sprintf("# Automatically generated on %s\n", time.Now().Format(time.RFC3339))))
 	yaml.NewEncoder(w).Encode(newConfig)
 }
