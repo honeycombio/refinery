@@ -43,6 +43,7 @@ func helpers() template.FuncMap {
 		"split":             split,
 		"wci":               wci,
 		"wordwrap":          wordwrap,
+		"wrapForDocs":       wrapForDocs,
 		"yamlf":             yamlf,
 	}
 }
@@ -373,6 +374,14 @@ func wordwrap(s string) string {
 		output = append(output, result)
 	}
 	return strings.Join(output, "\n")
+}
+
+func wrapForDocs(s string) string {
+	paragraphBreak := regexp.MustCompile(`\n\s*\n`)
+	s = paragraphBreak.ReplaceAllString(s, "__PARAGRAPH_BREAK__")
+	sentenceEnd := regexp.MustCompile(`([.?!])\s+|__PARAGRAPH_BREAK__`)
+	s = sentenceEnd.ReplaceAllString(s, "$1\n")
+	return s
 }
 
 // simplistic YAML formatting of a value
