@@ -83,6 +83,7 @@ type NetworkConfig struct {
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
+	keymap               map[string]struct{}
 }
 
 type RefineryTelemetryConfig struct {
@@ -438,11 +439,24 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 	return f.mainConfig.GRPCServerParameters.ListenAddr, nil
 }
 
-func (f *fileConfig) GetAPIKeys() ([]string, error) {
+func (f *fileConfig) IsAPIKeyValid(key string) bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.AccessKeys.ReceiveKeys, nil
+	if !f.mainConfig.AccessKeys.AcceptOnlyListedKeys {
+		return true
+	}
+
+	// if we haven't built the keymap yet, do it now
+	if f.mainConfig.AccessKeys.keymap == nil {
+		f.mainConfig.AccessKeys.keymap = make(map[string]struct{})
+		for _, key := range f.mainConfig.AccessKeys.ReceiveKeys {
+			f.mainConfig.AccessKeys.keymap[key] = struct{}{}
+		}
+	}
+
+	_, ok := f.mainConfig.AccessKeys.keymap[key]
+	return ok
 }
 
 func (f *fileConfig) GetPeerManagementType() (string, error) {

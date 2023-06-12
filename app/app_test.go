@@ -113,7 +113,7 @@ func newStartedApp(
 		GetPeerBufferSizeVal:                 10000,
 		GetListenAddrVal:                     "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:                 "127.0.0.1:" + strconv.Itoa(basePort+1),
-		GetAPIKeysVal:                        []string{legacyAPIKey, nonLegacyAPIKey},
+		IsAPIKeyValidFunc:                    func(k string) bool { return k == legacyAPIKey || k == nonLegacyAPIKey },
 		GetHoneycombAPIVal:                   "http://api.honeycomb.io",
 		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{CacheCapacity: 10000},
 		AddHostMetadataToTrace:               enableHostMetadata,
@@ -326,7 +326,7 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	data, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	assert.NoError(t, err)
-	assert.Contains(t, string(data), "not found in list of authed keys")
+	assert.Contains(t, string(data), "not found in list of authorized keys")
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)

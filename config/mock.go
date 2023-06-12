@@ -10,8 +10,7 @@ import (
 // initialization
 type MockConfig struct {
 	Callbacks                            []func()
-	GetAPIKeysErr                        error
-	GetAPIKeysVal                        []string
+	IsAPIKeyValidFunc                    func(string) bool
 	GetCollectorTypeErr                  error
 	GetCollectorTypeVal                  string
 	GetInMemoryCollectorCacheCapacityErr error
@@ -107,11 +106,16 @@ func (m *MockConfig) RegisterReloadCallback(callback func()) {
 	m.Mux.Unlock()
 }
 
-func (m *MockConfig) GetAPIKeys() ([]string, error) {
+func (m *MockConfig) IsAPIKeyValid(key string) bool {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetAPIKeysVal, m.GetAPIKeysErr
+	// if no function is set, assume the key is valid
+	if m.IsAPIKeyValidFunc == nil {
+		return true
+	}
+
+	return m.IsAPIKeyValidFunc(key)
 }
 
 func (m *MockConfig) GetCollectorType() (string, error) {

@@ -35,8 +35,8 @@ type Config interface {
 	// incoming events over gRPC
 	GetGRPCListenAddr() (string, error)
 
-	// GetAPIKeys returns a list of Honeycomb API keys
-	GetAPIKeys() ([]string, error)
+	// IsAPIKeyValid checks if the given API key is valid according to the rules
+	IsAPIKeyValid(key string) bool
 
 	// GetPeers returns a list of other servers participating in this proxy cluster
 	GetPeers() ([]string, error)

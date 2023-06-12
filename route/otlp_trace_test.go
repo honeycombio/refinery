@@ -388,7 +388,7 @@ func TestOTLPHandler(t *testing.T) {
 	})
 
 	t.Run("rejects bad API keys", func(t *testing.T) {
-		router.Config.(*config.MockConfig).GetAPIKeysVal = []string{"bad-key"}
+		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				ScopeSpans: []*trace.ScopeSpans{{
