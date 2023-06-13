@@ -69,6 +69,20 @@ type Trace struct {
 	totalImpact int
 }
 
+// implement fibheap Value interface with Tag and Key methods
+// returns a unique tag for a given trace
+func (t *Trace) Tag() any {
+	return t.TraceID
+}
+
+// returns a value to sort traces by -- we use the send by time converted to a
+// float value -- we take the time in seconds and convert it to a float.
+func (t *Trace) Key() float64 {
+	v := float64(t.SendBy.Unix())
+	v += float64(t.SendBy.UnixNano()%1e9) / 1e9
+	return v
+}
+
 // AddSpan adds a span to this trace
 func (t *Trace) AddSpan(sp *Span) {
 	// We've done all the work to know this is a trace we are putting in our cache, so
