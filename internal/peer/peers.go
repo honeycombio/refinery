@@ -26,6 +26,8 @@ func NewPeers(ctx context.Context, c config.Config, done chan struct{}) (Peers, 
 		return newFilePeers(c), nil
 	case "redis":
 		return newRedisPeers(ctx, c, done)
+	case "fly-dns":
+		return newDnsPeers(c, done)
 	default:
 		return nil, errors.New("invalid config option 'PeerManagement.Type'")
 	}
