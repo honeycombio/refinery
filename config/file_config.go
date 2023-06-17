@@ -814,14 +814,6 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	return f.mainConfig.Telemetry.AddSpanCountToRoot
 }
 
-// TODO: DEPRECATE
-func (f *fileConfig) GetCacheOverrunStrategy() string {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "impact"
-}
-
 func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

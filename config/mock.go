@@ -80,7 +80,6 @@ type MockConfig struct {
 	PeerTimeout                          time.Duration
 	AdditionalErrorFields                []string
 	AddSpanCountToRoot                   bool
-	CacheOverrunStrategy                 string
 	SampleCache                          SampleCacheConfig
 	StressRelief                         StressReliefConfig
 	AdditionalAttributes                 map[string]string
@@ -496,13 +495,6 @@ func (f *MockConfig) GetAddSpanCountToRoot() bool {
 	defer f.Mux.RUnlock()
 
 	return f.AddSpanCountToRoot
-}
-
-func (f *MockConfig) GetCacheOverrunStrategy() string {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.CacheOverrunStrategy
 }
 
 func (f *MockConfig) GetSampleCacheConfig() SampleCacheConfig {

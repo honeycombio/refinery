@@ -176,8 +176,6 @@ type Config interface {
 
 	GetAddSpanCountToRoot() bool
 
-	GetCacheOverrunStrategy() string
-
 	GetConfigMetadata() []ConfigMetadata
 
 	GetSampleCacheConfig() SampleCacheConfig
