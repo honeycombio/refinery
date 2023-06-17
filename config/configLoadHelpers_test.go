@@ -69,7 +69,7 @@ func Test_formatFromResponse(t *testing.T) {
 }
 
 // Verifies that we can load a time.Duration from a string.
-func Test_load(t *testing.T) {
+func Test_loadDuration(t *testing.T) {
 	type dur struct {
 		D Duration
 	}
@@ -85,6 +85,36 @@ func Test_load(t *testing.T) {
 		{"json", FormatJSON, `{"d": "15s"}`, &dur{}, &dur{Duration(15 * time.Second)}, false},
 		{"yaml", FormatYAML, `d: 15s`, &dur{}, &dur{Duration(15 * time.Second)}, false},
 		{"toml", FormatTOML, `d="15s"`, &dur{}, &dur{Duration(15 * time.Second)}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := load(strings.NewReader(tt.text), tt.format, tt.into); (err != nil) != tt.wantErr {
+				t.Errorf("load() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(tt.into, tt.want) {
+				t.Errorf("load() = %#v, want %#v", tt.into, tt.want)
+			}
+		})
+	}
+}
+
+// Verifies that we can load a memory size from a string.
+func Test_loadMemsize(t *testing.T) {
+	type mem struct {
+		M MemorySize `yaml:"M" json:"M" toml:"M"`
+	}
+
+	tests := []struct {
+		name    string
+		format  Format
+		text    string
+		into    any
+		want    any
+		wantErr bool
+	}{
+		{"yaml", FormatYAML, `M: 1Gb`, &mem{}, &mem{MemorySize(0x4000_0000)}, false},
+		{"json", FormatJSON, `{"M": "1Gb"}`, &mem{}, &mem{MemorySize(0x4000_0000)}, false},
+		{"toml", FormatTOML, `M="1Gb"`, &mem{}, &mem{MemorySize(0x4000_0000)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

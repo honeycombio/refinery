@@ -205,7 +205,7 @@ func (i *InMemCollector) checkAlloc() {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
-	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < inMemConfig.MaxAlloc {
+	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < uint64(inMemConfig.MaxAlloc) {
 		return
 	}
 
@@ -213,7 +213,7 @@ func (i *InMemCollector) checkAlloc() {
 	// enough to get us below the max capacity, but not TOO much below.
 	// Because our impact numbers are only the data size, reducing by enough to reach
 	// max alloc will actually do more than that.
-	totalToRemove := mem.Alloc - inMemConfig.MaxAlloc
+	totalToRemove := mem.Alloc - uint64(inMemConfig.MaxAlloc)
 
 	// The size of the cache exceeds the user's intended allocation, so we're going to
 	// remove the traces from the cache that have had the most impact on allocation.

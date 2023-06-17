@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/docker/go-units"
 )
 
 // This file contains template helper functions, which must be listed in this
@@ -28,6 +30,7 @@ func helpers() template.FuncMap {
 		"indentRest":        indentRest,
 		"join":              join,
 		"makeSlice":         makeSlice,
+		"memorysize":        memorysize,
 		"meta":              meta,
 		"nonDefaultOnly":    nonDefaultOnly,
 		"nonEmptyString":    nonEmptyString,
@@ -156,6 +159,22 @@ func join(a []string, sep string) string {
 
 func makeSlice(a ...string) []string {
 	return a
+}
+
+// memorysize takes a memory size (if the previous value had it) and returns a string representation
+// of memory size in human-readable form.
+func memorysize(data map[string]any, key, oldkey string, example string) string {
+	i64 := int64(0)
+	if value, ok := _fetch(data, oldkey); ok && value != "" {
+		switch i := value.(type) {
+		case int64:
+			i64 = i
+		case int:
+			i64 = int64(i)
+		}
+		return units.HumanSize(float64(i64))
+	}
+	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }
 
 func meta(s string) string {

@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-12 at 18:45:41 UTC.
+It was automatically generated on 2023-06-17 at 16:49:04 UTC.
 
 ## The Config file
 
@@ -815,12 +815,13 @@ TODO: NOT YET IMPLEMENTED
 
 MaxAlloc is the maximum number of bytes that should be allocated by the collector.
 
-If set, it must be an integer >= 0.
+If set, this must be a memory size.
 64-bit values are supported.
+Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
 See MaxMemory for more details.
 
 - Eligible for live reload.
-- Type: `int`
+- Type: `memorysize`
 ---
 ## Buffer Sizes
 

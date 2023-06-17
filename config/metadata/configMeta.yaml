@@ -924,8 +924,8 @@ groups:
       - name: MaxAlloc
         v1group: InMemCollector
         v1name: MaxAlloc
-        type: int
-        valuetype: nondefault
+        type: memorysize
+        valuetype: memorysize
         default: 0
         reload: true
         validations:
@@ -933,8 +933,8 @@ groups:
             arg: MaxMemory
         summary: is the maximum number of bytes that should be allocated by the collector.
         description: >
-          If set, it must be an integer >= 0. 64-bit values are
-          supported.
+          If set, this must be a memory size. 64-bit values are supported. Sizes with
+          standard unit suffixes like "MB" and "GiB" are also supported.
           See MaxMemory for more details.
 
   - name: BufferSizes
