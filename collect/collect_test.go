@@ -340,7 +340,6 @@ func TestDryRunMode(t *testing.T) {
 		},
 		SendTickerVal:      20 * time.Millisecond,
 		DryRun:             true,
-		DryRunFieldName:    field,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	samplerFactory := &sample.SamplerFactory{

@@ -491,9 +491,8 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	if isDryRun {
-		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
-		sp.Data[field] = keep
+		sp.Data[config.DryRunFieldName] = keep
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
 			i.addAdditionalAttributes(sp)
@@ -639,8 +638,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 		isDryRun := i.Config.GetIsDryRun()
 		if isDryRun {
-			field := i.Config.GetDryRunFieldName()
-			sp.Data[field] = shouldSend
+			sp.Data[config.DryRunFieldName] = shouldSend
 		}
 		if i.hostname != "" {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname

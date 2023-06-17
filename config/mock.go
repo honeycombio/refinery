@@ -64,7 +64,6 @@ type MockConfig struct {
 	PeerManagementType                   string
 	DebugServiceAddr                     string
 	DryRun                               bool
-	DryRunFieldName                      string
 	AddHostMetadataToTrace               bool
 	AddRuleReasonToTrace                 bool
 	EnvironmentCacheTTL                  time.Duration
@@ -388,13 +387,6 @@ func (m *MockConfig) GetIsDryRun() bool {
 	defer m.Mux.RUnlock()
 
 	return m.DryRun
-}
-
-func (m *MockConfig) GetDryRunFieldName() string {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.DryRunFieldName
 }
 
 func (m *MockConfig) GetAddHostMetadataToTrace() bool {

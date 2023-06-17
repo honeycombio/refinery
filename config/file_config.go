@@ -707,14 +707,6 @@ func (f *fileConfig) GetIsDryRun() bool {
 	return f.mainConfig.Debugging.DryRun
 }
 
-// TODO: DEPRECATED
-func (f *fileConfig) GetDryRunFieldName() string {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "meta.refinery.dryrun.kept"
-}
-
 func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

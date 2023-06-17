@@ -4,6 +4,10 @@ import (
 	"time"
 )
 
+const (
+	DryRunFieldName = "meta.refinery.dryrun.kept"
+)
+
 // Config defines the interface the rest of the code uses to get items from the
 // config. There are different implementations of the config using different
 // backends to store the config. FileConfig is the default and uses a
@@ -142,8 +146,6 @@ type Config interface {
 	GetDebugServiceAddr() (string, error)
 
 	GetIsDryRun() bool
-
-	GetDryRunFieldName() string
 
 	GetAddHostMetadataToTrace() bool
 
