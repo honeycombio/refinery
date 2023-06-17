@@ -467,7 +467,7 @@ func TestCacheSizeReload(t *testing.T) {
 		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
-		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{
+		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity: 1,
 		},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -518,7 +518,7 @@ func TestCacheSizeReload(t *testing.T) {
 	assert.Eventually(t, check, 60*wait, wait, "expected one trace evicted and sent")
 
 	conf.Mux.Lock()
-	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 2
+	conf.GetCollectionConfigVal.CacheCapacity = 2
 	conf.Mux.Unlock()
 	conf.ReloadConfig()
 
@@ -535,7 +535,7 @@ func TestCacheSizeReload(t *testing.T) {
 	assert.True(t, check(), "expected no more traces evicted and sent")
 
 	conf.Mux.Lock()
-	conf.GetInMemoryCollectorCacheCapacityVal.CacheCapacity = 1
+	conf.GetCollectionConfigVal.CacheCapacity = 1
 	conf.Mux.Unlock()
 	conf.ReloadConfig()
 
@@ -549,12 +549,12 @@ func TestSampleConfigReload(t *testing.T) {
 	transmission.Start()
 
 	conf := &config.MockConfig{
-		GetSendDelayVal:                      0,
-		GetTraceTimeoutVal:                   60 * time.Second,
-		GetSamplerTypeVal:                    &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:                        2 * time.Millisecond,
-		ParentIdFieldNames:                   []string{"trace.parent_id", "parentId"},
-		GetInMemoryCollectorCacheCapacityVal: config.CollectionConfig{CacheCapacity: 10},
+		GetSendDelayVal:        0,
+		GetTraceTimeoutVal:     60 * time.Second,
+		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:          2 * time.Millisecond,
+		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -696,7 +696,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
 
 	coll.mutex.Unlock()
 

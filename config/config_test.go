@@ -405,7 +405,7 @@ func TestMaxAlloc(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := MemorySize(16 * 1024 * 1024 * 1024)
-	inMemConfig, err := c.GetInMemCollectorCacheCapacity()
+	inMemConfig, err := c.GetCollectionConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
 }

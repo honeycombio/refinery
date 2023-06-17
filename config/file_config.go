@@ -184,9 +184,17 @@ type RedisPeerManagementConfig struct {
 
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity int        `yaml:"CacheCapacity" default:"10_000"`
-	MaxMemory     int        `yaml:"MaxMemory" default:"75"`
-	MaxAlloc      MemorySize `yaml:"MaxAlloc"`
+	CacheCapacity   int        `yaml:"CacheCapacity" default:"10_000"`
+	AvailableMemory MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
+	MaxMemory       int        `yaml:"MaxMemory" default:"75"`
+	MaxAlloc        MemorySize `yaml:"MaxAlloc"`
+}
+
+func (c CollectionConfig) GetMaxAlloc() MemorySize {
+	if c.AvailableMemory == 0 || c.MaxMemory == 0 {
+		return c.MaxAlloc
+	}
+	return c.AvailableMemory * MemorySize(c.MaxMemory) / 100
 }
 
 type BufferSizeConfig struct {
@@ -621,7 +629,7 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, 
 	return cfg, name, err
 }
 
-func (f *fileConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) {
+func (f *fileConfig) GetCollectionConfig() (CollectionConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 

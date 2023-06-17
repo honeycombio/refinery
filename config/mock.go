@@ -9,78 +9,84 @@ import (
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	Callbacks                            []func()
-	IsAPIKeyValidFunc                    func(string) bool
-	GetInMemoryCollectorCacheCapacityErr error
-	GetInMemoryCollectorCacheCapacityVal CollectionConfig
-	GetHoneycombAPIErr                   error
-	GetHoneycombAPIVal                   string
-	GetListenAddrErr                     error
-	GetListenAddrVal                     string
-	GetPeerListenAddrErr                 error
-	GetPeerListenAddrVal                 string
-	GetCompressPeerCommunicationsVal     bool
-	GetGRPCListenAddrErr                 error
-	GetGRPCListenAddrVal                 string
-	GetLoggerTypeErr                     error
-	GetLoggerTypeVal                     string
-	GetHoneycombLoggerConfigErr          error
-	GetHoneycombLoggerConfigVal          HoneycombLoggerConfig
-	GetLoggerLevelVal                    Level
-	GetPeersErr                          error
-	GetPeersVal                          []string
-	GetRedisHostErr                      error
-	GetRedisHostVal                      string
-	GetRedisUsernameErr                  error
-	GetRedisUsernameVal                  string
-	GetRedisPasswordErr                  error
-	GetRedisPasswordVal                  string
-	GetRedisDatabaseVal                  int
-	GetRedisPrefixVal                    string
-	GetUseTLSErr                         error
-	GetUseTLSVal                         bool
-	GetUseTLSInsecureErr                 error
-	GetUseTLSInsecureVal                 bool
-	GetSamplerTypeErr                    error
-	GetSamplerTypeName                   string
-	GetSamplerTypeVal                    interface{}
-	GetLegacyMetricsConfigVal            LegacyMetricsConfig
-	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
-	GetOTelMetricsConfigVal              OTelMetricsConfig
-	GetSendDelayErr                      error
-	GetSendDelayVal                      time.Duration
-	GetBatchTimeoutVal                   time.Duration
-	GetTraceTimeoutErr                   error
-	GetTraceTimeoutVal                   time.Duration
-	GetMaxBatchSizeVal                   uint
-	GetUpstreamBufferSizeVal             int
-	GetPeerBufferSizeVal                 int
-	SendTickerVal                        time.Duration
-	IdentifierInterfaceName              string
-	UseIPV6Identifier                    bool
-	RedisIdentifier                      string
-	PeerManagementType                   string
-	DebugServiceAddr                     string
-	DryRun                               bool
-	AddHostMetadataToTrace               bool
-	AddRuleReasonToTrace                 bool
-	EnvironmentCacheTTL                  time.Duration
-	DatasetPrefix                        string
-	QueryAuthToken                       string
-	GRPCMaxConnectionIdle                time.Duration
-	GRPCMaxConnectionAge                 time.Duration
-	GRPCMaxConnectionAgeGrace            time.Duration
-	GRPCTime                             time.Duration
-	GRPCTimeout                          time.Duration
-	PeerTimeout                          time.Duration
-	AdditionalErrorFields                []string
-	AddSpanCountToRoot                   bool
-	SampleCache                          SampleCacheConfig
-	StressRelief                         StressReliefConfig
-	AdditionalAttributes                 map[string]string
-	TraceIdFieldNames                    []string
-	ParentIdFieldNames                   []string
-	CfgMetadata                          []ConfigMetadata
+	Callbacks                        []func()
+	IsAPIKeyValidFunc                func(string) bool
+	GetCollectorTypeErr              error
+	GetCollectorTypeVal              string
+	GetCollectionConfigErr           error
+	GetCollectionConfigVal           CollectionConfig
+	GetHoneycombAPIErr               error
+	GetHoneycombAPIVal               string
+	GetListenAddrErr                 error
+	GetListenAddrVal                 string
+	GetPeerListenAddrErr             error
+	GetPeerListenAddrVal             string
+	GetCompressPeerCommunicationsVal bool
+	GetGRPCListenAddrErr             error
+	GetGRPCListenAddrVal             string
+	GetLoggerTypeErr                 error
+	GetLoggerTypeVal                 string
+	GetHoneycombLoggerConfigErr      error
+	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
+	GetLoggerLevelVal                Level
+	GetPeersErr                      error
+	GetPeersVal                      []string
+	GetRedisHostErr                  error
+	GetRedisHostVal                  string
+	GetRedisUsernameErr              error
+	GetRedisUsernameVal              string
+	GetRedisPasswordErr              error
+	GetRedisPasswordVal              string
+	GetRedisDatabaseVal              int
+	GetRedisPrefixVal                string
+	GetUseTLSErr                     error
+	GetUseTLSVal                     bool
+	GetUseTLSInsecureErr             error
+	GetUseTLSInsecureVal             bool
+	GetSamplerTypeErr                error
+	GetSamplerTypeName               string
+	GetSamplerTypeVal                interface{}
+	GetMetricsTypeErr                error
+	GetMetricsTypeVal                string
+	GetLegacyMetricsConfigVal        LegacyMetricsConfig
+	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
+	GetOTelMetricsConfigVal          OTelMetricsConfig
+	GetSendDelayErr                  error
+	GetSendDelayVal                  time.Duration
+	GetBatchTimeoutVal               time.Duration
+	GetTraceTimeoutErr               error
+	GetTraceTimeoutVal               time.Duration
+	GetMaxBatchSizeVal               uint
+	GetUpstreamBufferSizeVal         int
+	GetPeerBufferSizeVal             int
+	SendTickerVal                    time.Duration
+	IdentifierInterfaceName          string
+	UseIPV6Identifier                bool
+	RedisIdentifier                  string
+	PeerManagementType               string
+	DebugServiceAddr                 string
+	DryRun                           bool
+	DryRunFieldName                  string
+	AddHostMetadataToTrace           bool
+	AddRuleReasonToTrace             bool
+	EnvironmentCacheTTL              time.Duration
+	DatasetPrefix                    string
+	QueryAuthToken                   string
+	GRPCMaxConnectionIdle            time.Duration
+	GRPCMaxConnectionAge             time.Duration
+	GRPCMaxConnectionAgeGrace        time.Duration
+	GRPCTime                         time.Duration
+	GRPCTimeout                      time.Duration
+	PeerTimeout                      time.Duration
+	AdditionalErrorFields            []string
+	AddSpanCountToRoot               bool
+	CacheOverrunStrategy             string
+	SampleCache                      SampleCacheConfig
+	StressRelief                     StressReliefConfig
+	AdditionalAttributes             map[string]string
+	TraceIdFieldNames                []string
+	ParentIdFieldNames               []string
+	CfgMetadata                      []ConfigMetadata
 
 	Mux sync.RWMutex
 }
@@ -112,11 +118,18 @@ func (m *MockConfig) IsAPIKeyValid(key string) bool {
 	return m.IsAPIKeyValidFunc(key)
 }
 
-func (m *MockConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) {
+func (m *MockConfig) GetCollectorType() (string, error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetInMemoryCollectorCacheCapacityVal, m.GetInMemoryCollectorCacheCapacityErr
+	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
+}
+
+func (m *MockConfig) GetCollectionConfig() (CollectionConfig, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetCollectionConfigVal, m.GetCollectionConfigErr
 }
 
 func (m *MockConfig) GetHoneycombAPI() (string, error) {
