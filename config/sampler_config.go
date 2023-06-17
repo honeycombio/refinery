@@ -41,6 +41,73 @@ func (v *V2SamplerChoice) Sampler() (any, string) {
 	}
 }
 
+// This looks through the list of samplers and finds samplers that have
+// sample rates that are nontrivial. The point of this is to determine which
+// samplers are meaningful to report as ones the user might want to adjust
+// because the way that sample rates are computed has changed. It's used
+// by the rules converter.
+func (v *V2SamplerChoice) NameMeaningfulSamplers() []string {
+	names := make(map[string]struct{})
+	switch {
+	case v.DeterministicSampler != nil:
+		names["DeterministicSampler"] = struct{}{}
+	case v.RulesBasedSampler != nil:
+		for _, rule := range v.RulesBasedSampler.Rules {
+			if rule.Sampler != nil {
+				if rule.SampleRate > 1 {
+					names[fmt.Sprintf("RulesBasedSampler(%s)", rule.Name)] = struct{}{}
+				} else if rule.Sampler.NameMeaningfulRate() != "" {
+					names[fmt.Sprintf("RulesBasedSampler(%s, downstream Sampler %s)", rule.Name, rule.Sampler.NameMeaningfulRate())] = struct{}{}
+				}
+			}
+		}
+	case v.DynamicSampler != nil:
+		names["DynamicSampler"] = struct{}{}
+	case v.EMADynamicSampler != nil:
+		names["EMADynamicSampler"] = struct{}{}
+	case v.EMAThroughputSampler != nil:
+		names["EMAThroughputSampler"] = struct{}{}
+	case v.WindowedThroughputSampler != nil:
+		names["WindowedThroughputSampler"] = struct{}{}
+	case v.TotalThroughputSampler != nil:
+		names["TotalThroughputSampler"] = struct{}{}
+	default:
+		return nil
+	}
+
+	r := make([]string, 0, len(names))
+	for name := range names {
+		r = append(r, name)
+	}
+	return r
+}
+
+func (v *RulesBasedDownstreamSampler) NameMeaningfulRate() string {
+	switch {
+	case v.DynamicSampler != nil:
+		if v.DynamicSampler.SampleRate > 1 {
+			return "DynamicSampler"
+		}
+	case v.EMADynamicSampler != nil:
+		if v.EMADynamicSampler.GoalSampleRate > 1 {
+			return "EMADynamicSampler"
+		}
+	case v.EMAThroughputSampler != nil:
+		if v.EMAThroughputSampler.GoalThroughputPerSec > 1 {
+			return "EMAThroughputSampler"
+		}
+	case v.WindowedThroughputSampler != nil:
+		if v.WindowedThroughputSampler.GoalThroughputPerSec > 0 {
+			return "WindowedThroughputSampler"
+		}
+	case v.TotalThroughputSampler != nil:
+		if v.TotalThroughputSampler.GoalThroughputPerSec > 0 {
+			return "TotalThroughputSampler"
+		}
+	}
+	return ""
+}
+
 type V2SamplerConfig struct {
 	RulesVersion int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
 	Samplers     map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`

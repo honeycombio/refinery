@@ -116,6 +116,17 @@ func getValueForCaseInsensitiveKey[T any](m map[string]any, key string, def T) (
 	return def, false
 }
 
+func CheckConfigForSampleRateChanges(cfg *config.V2SamplerConfig) map[string][]string {
+	warnings := make(map[string][]string)
+	for name, v := range cfg.Samplers {
+		meaningfuls := v.NameMeaningfulSamplers()
+		if len(meaningfuls) > 0 {
+			warnings[name] = meaningfuls
+		}
+	}
+	return warnings
+}
+
 func ConvertRules(rules map[string]any, w io.Writer) {
 	// get the sampler type for the default rule
 	defaultSamplerType, _ := getValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
@@ -159,4 +170,29 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 
 	w.Write([]byte(fmt.Sprintf("# Automatically generated on %s\n", time.Now().Format(time.RFC3339))))
 	yaml.NewEncoder(w).Encode(newConfig)
+
+	warningText := `
+WARNING: Version 2 of Refinery has changed the way that sample rates are calculated for
+the dynamic and throughput samplers. Refinery v1.x was documented as counting the number
+of spans, but in fact it was counting traces. Version 2 samplers correctly count the
+number of spans when doing these calculations.
+
+This means that you may need to adjust the target throughput or sample rates to get the
+same behavior as before.
+
+When using v1, if you have had difficulty reaching your target throughput or sample rates,
+or if different parts of your key space vary widely in their span counts, then there is a
+good chance you should lower the target values in v2.
+
+The following parts of your configuration should be checked:`
+
+	thingsToWarnAbout := CheckConfigForSampleRateChanges(newConfig)
+	if len(thingsToWarnAbout) > 0 {
+		fmt.Println(warningText)
+		for k, v := range thingsToWarnAbout {
+			for _, s := range v {
+				fmt.Printf(" *  %s: %s\n", k, s)
+			}
+		}
+	}
 }
