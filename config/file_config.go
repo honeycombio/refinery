@@ -611,14 +611,6 @@ func (f *fileConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) 
 	return f.mainConfig.Collection, nil
 }
 
-// TODO: REMOVE THIS
-func (f *fileConfig) GetMetricsType() (string, error) {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "", nil
-}
-
 func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

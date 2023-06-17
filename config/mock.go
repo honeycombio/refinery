@@ -44,8 +44,6 @@ type MockConfig struct {
 	GetSamplerTypeErr                    error
 	GetSamplerTypeName                   string
 	GetSamplerTypeVal                    interface{}
-	GetMetricsTypeErr                    error
-	GetMetricsTypeVal                    string
 	GetLegacyMetricsConfigVal            LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
 	GetOTelMetricsConfigVal              OTelMetricsConfig
@@ -231,13 +229,6 @@ func (m *MockConfig) GetUseTLSInsecure() (bool, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetUseTLSInsecureVal, m.GetUseTLSInsecureErr
-}
-
-func (m *MockConfig) GetMetricsType() (string, error) {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
 
 func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
