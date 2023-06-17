@@ -71,8 +71,30 @@ func (d *DefaultInMemCache) GetCacheSize() int {
 	return len(d.insertionOrder)
 }
 
-// Set adds the trace to the ring. If it is kicking out a trace from the ring
-// that has not yet been sent, it will return that trace. Otherwise returns nil.
+// looks for an insertion point by trying the next N slots in the circular buffer
+// returns the index of the first empty slot it finds, or the first slot that
+// has a trace that has already been sent. If it doesn't find anything, it
+// returns the index of the last slot it looked at.
+func (d *DefaultInMemCache) findNextInsertionPoint(maxtries int) int {
+	ip := d.insertPoint
+	for i := 0; i < maxtries; i++ {
+		ip++
+		if ip >= len(d.insertionOrder) {
+			ip = 0
+		}
+		oldTrace := d.insertionOrder[ip]
+		if oldTrace == nil || oldTrace.Sent {
+			break
+		}
+	}
+	// we didn't find anything we can overwrite, so we have to kick one out
+	return ip
+}
+
+// Set adds the trace to the ring. When the ring wraps around and hits a trace
+// that has not been sent, it will try up to 5 times to skip that entry and find
+// a slot that is available. If it is unable to do so, it will kick out the
+// trace it is overwriting and return that trace. Otherwise returns nil.
 func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 
 	// set retTrace to a trace if it is getting kicked out without having been
@@ -84,19 +106,15 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 		return nil
 	}
 
-	// increment the trace pointer when we're done
-	defer func() { d.insertPoint++ }()
-
-	// loop insert point when we get to the end of the ring
-	if d.insertPoint >= len(d.insertionOrder) {
-		d.insertPoint = 0
-	}
-
 	// store the trace
 	d.cache[trace.TraceID] = trace
 
-	// expunge the trace in the current spot in the insertion ring
-	oldTrace := d.insertionOrder[d.insertPoint]
+	// figure out where to put it; try 5 times to find an empty slot
+	ip := d.findNextInsertionPoint(5)
+	// make sure we will record the trace in the right place
+	defer func() { d.insertPoint = ip }()
+	// expunge the trace at this point in the insertion ring, if necessary
+	oldTrace := d.insertionOrder[ip]
 	if oldTrace != nil {
 		delete(d.cache, oldTrace.TraceID)
 		if !oldTrace.Sent {
@@ -108,7 +126,7 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 		}
 	}
 	// record the trace in the insertion ring
-	d.insertionOrder[d.insertPoint] = trace
+	d.insertionOrder[ip] = trace
 	return retTrace
 }
 
