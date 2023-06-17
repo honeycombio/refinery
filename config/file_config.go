@@ -571,14 +571,6 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	return f.mainConfig.HoneycombLogger, nil
 }
 
-// TODO: DEPRECATED
-func (f *fileConfig) GetCollectorType() (string, error) {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "InMemCollector", nil
-}
-
 func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

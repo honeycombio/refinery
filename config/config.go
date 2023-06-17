@@ -98,10 +98,6 @@ type Config interface {
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
 
-	// GetCollectorType returns the type of the collector to use. Valid types
-	// are in the collect package
-	GetCollectorType() (string, error)
-
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
 	GetInMemCollectorCacheCapacity() (CollectionConfig, error)
 

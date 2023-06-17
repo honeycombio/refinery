@@ -11,8 +11,6 @@ import (
 type MockConfig struct {
 	Callbacks                            []func()
 	IsAPIKeyValidFunc                    func(string) bool
-	GetCollectorTypeErr                  error
-	GetCollectorTypeVal                  string
 	GetInMemoryCollectorCacheCapacityErr error
 	GetInMemoryCollectorCacheCapacityVal CollectionConfig
 	GetHoneycombAPIErr                   error
@@ -115,13 +113,6 @@ func (m *MockConfig) IsAPIKeyValid(key string) bool {
 	}
 
 	return m.IsAPIKeyValidFunc(key)
-}
-
-func (m *MockConfig) GetCollectorType() (string, error) {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
 }
 
 func (m *MockConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) {

@@ -2,7 +2,6 @@ package collect
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"runtime"
 	"sort"
@@ -33,20 +32,7 @@ type Collector interface {
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
-	var collector Collector
-	collectorType, err := c.GetCollectorType()
-	if err != nil {
-		fmt.Printf("unable to get collector type from config: %v\n", err)
-		os.Exit(1)
-	}
-	switch collectorType {
-	case "InMemCollector":
-		collector = &InMemCollector{}
-	default:
-		fmt.Printf("unknown collector type %s. Exiting.\n", collectorType)
-		os.Exit(1)
-	}
-	return collector
+	return &InMemCollector{}
 }
 
 // These are the names of the metrics we use to track our send decisions.
