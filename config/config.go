@@ -112,10 +112,6 @@ type Config interface {
 	// GetAllSamplerRules returns all rules in a single map, including the default rules
 	GetAllSamplerRules() (*V2SamplerConfig, error)
 
-	// GetMetricsType returns the type of metrics to use. Valid types are in the
-	// metrics package
-	GetMetricsType() (string, error)
-
 	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
 	GetLegacyMetricsConfig() LegacyMetricsConfig
 
