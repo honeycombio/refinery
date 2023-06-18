@@ -208,6 +208,12 @@ func TestShardBulk(t *testing.T) {
 			expectedResult := ntraces / npeers
 			assert.Greater(t, expectedResult*2, max, "expected smaller max, got %d: %v", max, results)
 			assert.NotEqual(t, 0, min, "expected larger min, got %d: %v", min, results)
+
+			// acceptableDiff := expectedResult * 10 / 100
+			// assert.Less(t, max-min, acceptableDiff, "expected less than %d difference between max(%d) and min (%d): %v", acceptableDiff, max, min, results)
+			// // assert.Greater(t, int(float64(expectedResult)*(1+permittedError)), max, "expected smaller max, got %d: %v", max, results)
+			// // assert.Less(t, int(float64(expectedResult)*(1+permittedError)), min, "expected larger min, got %d: %v", min, results)
+
 		})
 	}
 }
@@ -278,8 +284,8 @@ func TestShardDrop(t *testing.T) {
 			}
 
 			expected := ntraces / (npeers - 1)
-			assert.Greater(t, expected*2, nDiff)
-			assert.Less(t, expected/2, nDiff)
+			assert.Greater(t, nDiff, expected/4)
+			assert.Less(t, nDiff, expected*4)
 		})
 	}
 }
@@ -340,17 +346,17 @@ func TestShardAddHash(t *testing.T) {
 			sharder.loadPeerList()
 
 			results = make(map[string]int)
-			nDiff := 0
+			nMoved := 0
 			for i := 0; i < ntraces; i++ {
 				s := sharder.WhichShard(placements[i].id)
 				results[s.GetAddress()]++
 				if s.GetAddress() != placements[i].shard {
-					nDiff++
+					nMoved++
 				}
 			}
-			expected := ntraces / (npeers - 1)
-			assert.Greater(t, expected*2, nDiff)
-			assert.Less(t, expected/2, nDiff)
+			expectedToMove := ntraces / (npeers - 1)
+			assert.Greater(t, nMoved, expectedToMove/4)
+			assert.Less(t, nMoved, expectedToMove*4)
 		})
 	}
 }

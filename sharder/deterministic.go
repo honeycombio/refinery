@@ -2,6 +2,7 @@ package sharder
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"sort"
@@ -21,6 +22,7 @@ import (
 const (
 	shardingSalt        = "gf4LqTwcJ6PEj2vO"
 	peerSeed     uint64 = 6789531204236
+	shardSeed    uint64 = 2938476120934
 )
 
 // DetShard implements Shard
@@ -248,24 +250,23 @@ func (d *DeterministicSharder) loadPeerList() error {
 	// make sure the list is in a stable, comparable order
 	sort.Sort(SortableShardList(newPeers))
 
-	// In general, the variation in the traffic assigned to a randomly partitioned space is
-	// controlled by the number of partitions. PartitionCount controls the minimum number
-	// of partitions used to control node assignment when we use the "hash" strategy.
-	// When there's a small number of partitions, the two-layer hash strategy can end up giving
-	// one partition a disproportionate fraction of the traffic. So we create a large number of
-	// random partitions and then assign (potentially) multiple partitions to individual nodes.
-	// We're asserting that if we randomly divide the space among at this many partitions, the variation
-	// between them is likely to be acceptable. (As this is random, there might be exceptions.)
-	// The reason not to make this value much larger, say 1000, is that finding the right partition
-	// is linear -- O(number of partitions) and so we want it to be as small as possible
-	// while still being big enough.
-	// PartitionCount, therefore, is the smallest value that we believe will yield reasonable
-	// distribution between nodes. We divide it by the number of nodes using integer division
-	// and add 1 to get partitionsPerPeer. We then actually create (nNodes*partitionsPerPeer)
+	// In general, the variation in the traffic assigned to a randomly
+	// partitioned space is controlled by the number of partitions.
+	// PartitionCount controls the minimum number of partitions used to control
+	// node assignment when we use the "hash" strategy. When there's a small
+	// number of partitions, the two-layer hash strategy can end up giving one
+	// partition a disproportionate fraction of the traffic. So we create a
+	// large number of random partitions and then assign (potentially) multiple
+	// partitions to individual nodes. We're intending that if we randomly
+	// divide the space among at this many partitions, the variation between
+	// them is fairly likely to be acceptable. (As this is random, there might
+	// be exceptions.) PartitionCount, therefore, is the smallest value that we
+	// believe will yield reasonable distribution between nodes. We divide it by
+	// the number of nodes using integer division and add 1 to get
+	// partitionsPerPeer. We then actually create (nNodes*partitionsPerPeer)
 	// partitions, which will always be greater than or equal to partitionCount.
-	// Examples: if we have 6 nodes, then partitionsPerPeer will be 9, and we will create
-	// 54 partitions. If we have 85 nodes, then partitionsPerPeer will be 1, and we will create
-	// 85 partitions.
+	// We also run a balancing step to try to ensure that it's as close to equal
+	// as possible.
 	const partitionCount = 50
 	// now build the hash list;
 	// We make a list of hash value and an index to a peer.
@@ -274,6 +275,8 @@ func (d *DeterministicSharder) loadPeerList() error {
 	for ix := range newPeers {
 		hashes = append(hashes, newPeers[ix].GetHashesFor(ix, partitionsPerPeer, peerSeed)...)
 	}
+	// overwrite one of the hashes with 0 so we can use it as a sentinel
+	hashes[0].uhash = 0
 	// now sort the hash list by hash value so we can search it efficiently
 	sort.Slice(hashes, func(i, j int) bool {
 		return hashes[i].uhash < hashes[j].uhash
@@ -291,6 +294,10 @@ func (d *DeterministicSharder) loadPeerList() error {
 	} else {
 		d.peerLock.RUnlock()
 	}
+	// the random partitioning may have significant imbalances, so we try to
+	// balance them by moving partitions from the most heavily loaded nodes to
+	// the least heavily loaded nodes
+	d.balanceProportions()
 	return nil
 }
 
@@ -298,13 +305,87 @@ func (d *DeterministicSharder) MyShard() Shard {
 	return d.myShard
 }
 
-// WhichShard calculates which shard we want by keeping a list of partitions. Each
-// partition has a different hash value and a map from partition to a given shard.
-// We take the traceID and calculate a hash for each partition, using the partition
-// hash as the seed for the trace hash. Whichever one has the highest value is the
-// partition we use, which determines the shard we use.
-// This is O(N) where N is the number of partitions, but because we use an efficient hash,
-// (as opposed to SHA1) it executes in 1 uSec for 50 partitions.
+// find the min and max nodes in terms of the amount of the space they're responsible for
+// and return the ratio of the max to the min
+func (d *DeterministicSharder) getMinMax() (int, int, float64) {
+	totals := make([]float64, len(d.peers))
+	for i := 1; i < len(d.hashes); i++ {
+		totals[d.hashes[i-1].shardIndex] += float64(d.hashes[i].uhash-d.hashes[i-1].uhash) / float64(math.MaxUint64)
+	}
+	minix, maxix := 0, 0
+	for i := range totals {
+		if totals[i] < totals[minix] {
+			minix = i
+		}
+		if totals[i] > totals[maxix] {
+			maxix = i
+		}
+	}
+	return minix, maxix, totals[maxix] / totals[minix]
+}
+
+// Move the smallest shard from the from node to the to node but never move
+// the last shard for a node.
+func (d *DeterministicSharder) moveShardFromTo(from, to int) bool {
+	d.peerLock.Lock()
+	defer d.peerLock.Unlock()
+	minix := -1
+	count := 0
+	for i := range d.hashes {
+		if d.hashes[i].shardIndex == from {
+			if minix == -1 {
+				minix = i
+			}
+			count++
+			if d.hashes[i].uhash < d.hashes[minix].uhash {
+				minix = i
+			}
+		}
+	}
+	if count > 1 {
+		d.hashes[minix].shardIndex = to
+		return true
+	}
+	return false
+}
+
+// If the ratio between the most heavily loaded node and the least heavily loaded node
+// is greater than 2, move a shard from the most heavily loaded node to the least heavily loaded node
+// and repeat until the ratio is less than 2. Or until we've made a lot of attempts (on average moving two
+// shards per node). Or until we are moving one partition back and forth between two nodes.
+func (d *DeterministicSharder) balanceProportions() {
+	min, max, ratio := d.getMinMax()
+	before := ratio
+	attempts := 0
+	lastmin := min
+	for ; ratio > 2 && lastmin != max && attempts < len(d.peers)*2; min, max, ratio = d.getMinMax() {
+		lastmin = min
+		attempts++
+		if !d.moveShardFromTo(max, min) {
+			break
+		}
+	}
+	d.Logger.Debug().
+		WithField("min", min).
+		WithField("max", max).
+		WithField("ratio", ratio).
+		WithField("npeers", len(d.peers)).
+		WithField("attempts", attempts).
+		WithField("before", before).
+		WithField("after", ratio).
+		Logf("Balanced proportions for peers")
+}
+
+// WhichShard returns the shard that the given traceID belongs to.
+// This is a bit subtle -- it calculates a hash from the traceID and
+// the shard's hash. It uses the one that returns the maximum result.
+// This way, when new hashes are added or taken away from the list,
+// most of them will still map to the same shard. Only the ones that
+// are near the boundary will change. This is what gives us stability.
+// The cost is that we have to do a linear search through the list of
+// hashes to find the one that gives the maximum result. Since this
+// is a very fast hashing algorithm, we're not too worried about that;
+// the algorithm runs in under 1 microsecond even for a list of 50 nodes.
 func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
