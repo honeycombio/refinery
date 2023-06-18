@@ -126,7 +126,7 @@ type DebuggingConfig struct {
 
 type LoggerConfig struct {
 	Type  string `yaml:"Type" default:"stdout"`
-	Level Level  `yaml:"Level" default:"Warn"`
+	Level Level  `yaml:"Level" default:"warn"`
 }
 
 type HoneycombLoggerConfig struct {

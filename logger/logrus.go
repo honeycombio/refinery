@@ -6,29 +6,29 @@ import (
 	"github.com/honeycombio/refinery/config"
 )
 
-// LogrusLogger is a Logger implementation that sends all logs to stdout using
+// StdoutLogger is a Logger implementation that sends all logs to stdout using
 // the Logrus package to get nice formatting
-type LogrusLogger struct {
+type StdoutLogger struct {
 	Config config.Config `inject:""`
 
 	logger *logrus.Logger
 	level  logrus.Level
 }
 
-var _ = Logger((*LogrusLogger)(nil))
+var _ = Logger((*StdoutLogger)(nil))
 
 type LogrusEntry struct {
 	entry *logrus.Entry
 	level logrus.Level
 }
 
-func (l *LogrusLogger) Start() error {
+func (l *StdoutLogger) Start() error {
 	l.logger = logrus.New()
 	l.logger.SetLevel(l.level)
 	return nil
 }
 
-func (l *LogrusLogger) Debug() Entry {
+func (l *StdoutLogger) Debug() Entry {
 	if !l.logger.IsLevelEnabled(logrus.DebugLevel) {
 		return nullEntry
 	}
@@ -39,7 +39,7 @@ func (l *LogrusLogger) Debug() Entry {
 	}
 }
 
-func (l *LogrusLogger) Info() Entry {
+func (l *StdoutLogger) Info() Entry {
 	if !l.logger.IsLevelEnabled(logrus.InfoLevel) {
 		return nullEntry
 	}
@@ -50,7 +50,7 @@ func (l *LogrusLogger) Info() Entry {
 	}
 }
 
-func (l *LogrusLogger) Warn() Entry {
+func (l *StdoutLogger) Warn() Entry {
 	if !l.logger.IsLevelEnabled(logrus.WarnLevel) {
 		return nullEntry
 	}
@@ -61,7 +61,7 @@ func (l *LogrusLogger) Warn() Entry {
 	}
 }
 
-func (l *LogrusLogger) Error() Entry {
+func (l *StdoutLogger) Error() Entry {
 	if !l.logger.IsLevelEnabled(logrus.ErrorLevel) {
 		return nullEntry
 	}
@@ -72,7 +72,7 @@ func (l *LogrusLogger) Error() Entry {
 	}
 }
 
-func (l *LogrusLogger) SetLevel(level string) error {
+func (l *StdoutLogger) SetLevel(level string) error {
 	logrusLevel, err := logrus.ParseLevel(level)
 	if err != nil {
 		return err

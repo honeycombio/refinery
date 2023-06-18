@@ -37,8 +37,8 @@ func GetLoggerImplementation(c config.Config) Logger {
 	switch loggerType {
 	case "honeycomb":
 		logger = &HoneycombLogger{}
-	case "logrus":
-		logger = &LogrusLogger{}
+	case "stdout":
+		logger = &StdoutLogger{}
 	default:
 		fmt.Printf("unknown logger type %s. Exiting.\n", loggerType)
 		os.Exit(1)

@@ -142,21 +142,6 @@ func main() {
 	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
 	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
 
-	// these are the metrics that libhoney will emit; we preregister them so that they always appear
-	libhoneyMetricsName := map[string]string{
-		"queue_length":           "gauge",
-		"queue_overflow":         "counter",
-		"send_errors":            "counter",
-		"send_retries":           "counter",
-		"batches_sent":           "counter",
-		"messages_sent":          "counter",
-		"response_decode_errors": "counter",
-	}
-	for name, typ := range libhoneyMetricsName {
-		upstreamMetricsRecorder.Register(name, typ)
-		peerMetricsRecorder.Register(name, typ)
-	}
-
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
@@ -256,6 +241,21 @@ func main() {
 	}
 
 	// these have to be done after the injection (of metrics)
+	// these are the metrics that libhoney will emit; we preregister them so that they always appear
+	libhoneyMetricsName := map[string]string{
+		"queue_length":           "gauge",
+		"queue_overflow":         "counter",
+		"send_errors":            "counter",
+		"send_retries":           "counter",
+		"batches_sent":           "counter",
+		"messages_sent":          "counter",
+		"response_decode_errors": "counter",
+	}
+	for name, typ := range libhoneyMetricsName {
+		upstreamMetricsRecorder.Register(name, typ)
+		peerMetricsRecorder.Register(name, typ)
+	}
+
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
 	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
