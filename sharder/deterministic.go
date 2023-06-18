@@ -296,8 +296,11 @@ func (d *DeterministicSharder) loadPeerList() error {
 	}
 	// the random partitioning may have significant imbalances, so we try to
 	// balance them by moving partitions from the most heavily loaded nodes to
-	// the least heavily loaded nodes
-	d.balanceProportions()
+	// the least heavily loaded nodes. But it's only possible if the number of
+	// partitions per peer is > 1.
+	if partitionsPerPeer > 1 {
+		d.balanceProportions()
+	}
 	return nil
 }
 
