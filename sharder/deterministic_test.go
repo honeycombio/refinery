@@ -208,12 +208,6 @@ func TestShardBulk(t *testing.T) {
 			expectedResult := ntraces / npeers
 			assert.Greater(t, expectedResult*2, max, "expected smaller max, got %d: %v", max, results)
 			assert.NotEqual(t, 0, min, "expected larger min, got %d: %v", min, results)
-
-			// acceptableDiff := expectedResult * 10 / 100
-			// assert.Less(t, max-min, acceptableDiff, "expected less than %d difference between max(%d) and min (%d): %v", acceptableDiff, max, min, results)
-			// // assert.Greater(t, int(float64(expectedResult)*(1+permittedError)), max, "expected smaller max, got %d: %v", max, results)
-			// // assert.Less(t, int(float64(expectedResult)*(1+permittedError)), min, "expected larger min, got %d: %v", min, results)
-
 		})
 	}
 }
@@ -283,6 +277,8 @@ func TestShardDrop(t *testing.T) {
 				}
 			}
 
+			// we have a fairly large range here because it's truly random
+			// and we've been having some flaky tests
 			expected := ntraces / (npeers - 1)
 			assert.Greater(t, nDiff, expected/4)
 			assert.Less(t, nDiff, expected*4)
@@ -354,6 +350,9 @@ func TestShardAddHash(t *testing.T) {
 					nMoved++
 				}
 			}
+
+			// we have a fairly large range here because it's truly random
+			// and we've been having some flaky tests
 			expectedToMove := ntraces / (npeers - 1)
 			assert.Greater(t, nMoved, expectedToMove/4)
 			assert.Less(t, nMoved, expectedToMove*4)
