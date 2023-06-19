@@ -37,10 +37,6 @@ type DefaultTransmission struct {
 	Version    string          `inject:"version"`
 	LibhClient *libhoney.Client
 
-	// This has to exist to fool the injection system into making sure this shows up later
-	// than metrics on the injection graph. Have I mentioned how much I hate injection systems?
-	FakeMetrics metrics.Metrics `inject:"metrics"`
-
 	// Type is peer or upstream, and used only for naming metrics
 	Name string
 
