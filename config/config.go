@@ -4,6 +4,10 @@ import (
 	"time"
 )
 
+const (
+	DryRunFieldName = "meta.refinery.dryrun.kept"
+)
+
 // Config defines the interface the rest of the code uses to get items from the
 // config. There are different implementations of the config using different
 // backends to store the config. FileConfig is the default and uses a
@@ -98,10 +102,6 @@ type Config interface {
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
 
-	// GetCollectorType returns the type of the collector to use. Valid types
-	// are in the collect package
-	GetCollectorType() (string, error)
-
 	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
 	GetInMemCollectorCacheCapacity() (CollectionConfig, error)
 
@@ -111,10 +111,6 @@ type Config interface {
 
 	// GetAllSamplerRules returns all rules in a single map, including the default rules
 	GetAllSamplerRules() (*V2SamplerConfig, error)
-
-	// GetMetricsType returns the type of metrics to use. Valid types are in the
-	// metrics package
-	GetMetricsType() (string, error)
 
 	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
 	GetLegacyMetricsConfig() LegacyMetricsConfig
@@ -147,8 +143,6 @@ type Config interface {
 
 	GetIsDryRun() bool
 
-	GetDryRunFieldName() string
-
 	GetAddHostMetadataToTrace() bool
 
 	GetAddRuleReasonToTrace() bool
@@ -175,8 +169,6 @@ type Config interface {
 	GetAdditionalErrorFields() []string
 
 	GetAddSpanCountToRoot() bool
-
-	GetCacheOverrunStrategy() string
 
 	GetConfigMetadata() []ConfigMetadata
 

@@ -331,7 +331,6 @@ func TestAddSpan(t *testing.T) {
 func TestDryRunMode(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
-	field := "test_kept"
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -340,7 +339,6 @@ func TestDryRunMode(t *testing.T) {
 		},
 		SendTickerVal:      20 * time.Millisecond,
 		DryRun:             true,
-		DryRunFieldName:    field,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	samplerFactory := &sample.SamplerFactory{
@@ -400,7 +398,7 @@ func TestDryRunMode(t *testing.T) {
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
-	assert.Equal(t, keepTraceID1, transmission.Events[0].Data[field], "field should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID1, transmission.Events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
 
 	// add a non-root span, create the trace in the cache
@@ -431,8 +429,8 @@ func TestDryRunMode(t *testing.T) {
 	transmission.Mux.RLock()
 	assert.Equal(t, 3, len(transmission.Events), "adding another root span should send the span")
 	// both spans should be marked with the sampling decision
-	assert.Equal(t, keepTraceID2, transmission.Events[1].Data[field], "field should match sampling decision for its trace ID")
-	assert.Equal(t, keepTraceID2, transmission.Events[2].Data[field], "field should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID2, transmission.Events[1].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID2, transmission.Events[2].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
 	// check that meta value associated with dry run mode is properly applied
 	assert.Equal(t, uint(10), transmission.Events[1].Data["meta.dryrun.sample_rate"])
 	// check expected sampleRate against span data
@@ -456,7 +454,7 @@ func TestDryRunMode(t *testing.T) {
 	assert.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
-	assert.Equal(t, keepTraceID3, transmission.Events[3].Data[field], "field should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID3, transmission.Events[3].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
 }
 
@@ -633,12 +631,11 @@ func TestStableMaxAlloc(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	conf := &config.MockConfig{
-		GetSendDelayVal:      0,
-		GetTraceTimeoutVal:   10 * time.Minute,
-		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:        2 * time.Millisecond,
-		CacheOverrunStrategy: "impact",
-		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 	coll := &InMemCollector{
 		Config:       conf,

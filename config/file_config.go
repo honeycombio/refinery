@@ -571,14 +571,6 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	return f.mainConfig.HoneycombLogger, nil
 }
 
-// TODO: DEPRECATED
-func (f *fileConfig) GetCollectorType() (string, error) {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "InMemCollector", nil
-}
-
 func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -617,14 +609,6 @@ func (f *fileConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) 
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Collection, nil
-}
-
-// TODO: REMOVE THIS
-func (f *fileConfig) GetMetricsType() (string, error) {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "", nil
 }
 
 func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
@@ -713,14 +697,6 @@ func (f *fileConfig) GetIsDryRun() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Debugging.DryRun
-}
-
-// TODO: DEPRECATED
-func (f *fileConfig) GetDryRunFieldName() string {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "meta.refinery.dryrun.kept"
 }
 
 func (f *fileConfig) GetAddHostMetadataToTrace() bool {
@@ -812,14 +788,6 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Telemetry.AddSpanCountToRoot
-}
-
-// TODO: DEPRECATE
-func (f *fileConfig) GetCacheOverrunStrategy() string {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return "impact"
 }
 
 func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {

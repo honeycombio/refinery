@@ -2,7 +2,6 @@ package collect
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"runtime"
 	"sort"
@@ -33,20 +32,7 @@ type Collector interface {
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
-	var collector Collector
-	collectorType, err := c.GetCollectorType()
-	if err != nil {
-		fmt.Printf("unable to get collector type from config: %v\n", err)
-		os.Exit(1)
-	}
-	switch collectorType {
-	case "InMemCollector":
-		collector = &InMemCollector{}
-	default:
-		fmt.Printf("unknown collector type %s. Exiting.\n", collectorType)
-		os.Exit(1)
-	}
-	return collector
+	return &InMemCollector{}
 }
 
 // These are the names of the metrics we use to track our send decisions.
@@ -505,9 +491,8 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sampleRate uint, spanCount
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	if isDryRun {
-		field := i.Config.GetDryRunFieldName()
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
-		sp.Data[field] = keep
+		sp.Data[config.DryRunFieldName] = keep
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
 			i.addAdditionalAttributes(sp)
@@ -653,8 +638,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 
 		isDryRun := i.Config.GetIsDryRun()
 		if isDryRun {
-			field := i.Config.GetDryRunFieldName()
-			sp.Data[field] = shouldSend
+			sp.Data[config.DryRunFieldName] = shouldSend
 		}
 		if i.hostname != "" {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname
