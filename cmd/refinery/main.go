@@ -84,7 +84,7 @@ func main() {
 
 	c, err := config.NewConfig(opts, func(err error) {
 		if a.Logger != nil {
-			a.Logger.Error().WithField("error", err).Logf("error reloading config")
+			a.Logger.Error().WithField("error", err).Logf("error loading config")
 		}
 	})
 	if err != nil {
@@ -95,6 +95,11 @@ func main() {
 		fmt.Println("Config and Rules validated successfully.")
 		os.Exit(0)
 	}
+	c.RegisterReloadCallback(func() {
+		if a.Logger != nil {
+			a.Logger.Info().Logf("configuration change was detected and the configuration was reloaded")
+		}
+	})
 
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
