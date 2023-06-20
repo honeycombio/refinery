@@ -278,10 +278,6 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
-	if d := c.GetDryRunFieldName(); d != "meta.refinery.dryrun.kept" {
-		t.Error("received", d, "expected", "meta.refinery.dryrun.kept")
-	}
-
 	if d := c.GetAddHostMetadataToTrace(); d != false {
 		t.Error("received", d, "expected", false)
 	}

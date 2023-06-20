@@ -11,8 +11,6 @@ import (
 type MockConfig struct {
 	Callbacks                            []func()
 	IsAPIKeyValidFunc                    func(string) bool
-	GetCollectorTypeErr                  error
-	GetCollectorTypeVal                  string
 	GetInMemoryCollectorCacheCapacityErr error
 	GetInMemoryCollectorCacheCapacityVal CollectionConfig
 	GetHoneycombAPIErr                   error
@@ -46,8 +44,6 @@ type MockConfig struct {
 	GetSamplerTypeErr                    error
 	GetSamplerTypeName                   string
 	GetSamplerTypeVal                    interface{}
-	GetMetricsTypeErr                    error
-	GetMetricsTypeVal                    string
 	GetLegacyMetricsConfigVal            LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
 	GetOTelMetricsConfigVal              OTelMetricsConfig
@@ -66,7 +62,6 @@ type MockConfig struct {
 	PeerManagementType                   string
 	DebugServiceAddr                     string
 	DryRun                               bool
-	DryRunFieldName                      string
 	AddHostMetadataToTrace               bool
 	AddRuleReasonToTrace                 bool
 	EnvironmentCacheTTL                  time.Duration
@@ -80,7 +75,6 @@ type MockConfig struct {
 	PeerTimeout                          time.Duration
 	AdditionalErrorFields                []string
 	AddSpanCountToRoot                   bool
-	CacheOverrunStrategy                 string
 	SampleCache                          SampleCacheConfig
 	StressRelief                         StressReliefConfig
 	AdditionalAttributes                 map[string]string
@@ -116,13 +110,6 @@ func (m *MockConfig) IsAPIKeyValid(key string) bool {
 	}
 
 	return m.IsAPIKeyValidFunc(key)
-}
-
-func (m *MockConfig) GetCollectorType() (string, error) {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
 }
 
 func (m *MockConfig) GetInMemCollectorCacheCapacity() (CollectionConfig, error) {
@@ -242,13 +229,6 @@ func (m *MockConfig) GetUseTLSInsecure() (bool, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetUseTLSInsecureVal, m.GetUseTLSInsecureErr
-}
-
-func (m *MockConfig) GetMetricsType() (string, error) {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetMetricsTypeVal, m.GetMetricsTypeErr
 }
 
 func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
@@ -400,13 +380,6 @@ func (m *MockConfig) GetIsDryRun() bool {
 	return m.DryRun
 }
 
-func (m *MockConfig) GetDryRunFieldName() string {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.DryRunFieldName
-}
-
 func (m *MockConfig) GetAddHostMetadataToTrace() bool {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
@@ -496,13 +469,6 @@ func (f *MockConfig) GetAddSpanCountToRoot() bool {
 	defer f.Mux.RUnlock()
 
 	return f.AddSpanCountToRoot
-}
-
-func (f *MockConfig) GetCacheOverrunStrategy() string {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.CacheOverrunStrategy
 }
 
 func (f *MockConfig) GetSampleCacheConfig() SampleCacheConfig {
