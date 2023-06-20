@@ -30,6 +30,8 @@
 {{ printf "nonEmptyString .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Example| meta | indent 4 }}
 {{- else if eq $field.ValueType "secondstoduration" }}
 {{ printf "secondsToDuration .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Example| meta | indent 4 }}
+{{- else if eq $field.ValueType "memorysize" }}
+{{ printf "memorysize .Data \"%s\" \"%s\" %#v" $field.Name $oldname $field.Example| meta | indent 4 }}
 {{- else if eq $field.ValueType "choice" }}
 {{ printf "Options: %s" (join $field.Choices " ") | comment | indent 4 }}
 {{ printf "choice .Data \"%s\" \"%s\" %s \"%s\"" $field.Name $oldname (genSlice $field.Choices) $field.Default | meta | indent 4 }}

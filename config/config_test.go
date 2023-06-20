@@ -404,7 +404,7 @@ func TestMaxAlloc(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	expected := uint64(16 * 1024 * 1024 * 1024)
+	expected := MemorySize(16 * 1024 * 1024 * 1024)
 	inMemConfig, err := c.GetInMemCollectorCacheCapacity()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)

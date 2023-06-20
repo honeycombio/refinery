@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/go-units"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,6 +27,22 @@ func (d *Duration) UnmarshalText(text []byte) error {
 		return err
 	}
 	*d = Duration(dur)
+	return nil
+}
+
+// We also use a special type for memory sizes
+type MemorySize uint64
+
+func (m MemorySize) MarshalText() ([]byte, error) {
+	return []byte(units.HumanSize(float64(m))), nil
+}
+
+func (m *MemorySize) UnmarshalText(text []byte) error {
+	size, err := units.RAMInBytes(string(text))
+	if err != nil {
+		return err
+	}
+	*m = MemorySize(size)
 	return nil
 }
 
@@ -167,9 +184,9 @@ type RedisPeerManagementConfig struct {
 
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity int    `yaml:"CacheCapacity" default:"10_000"`
-	MaxMemory     int    `yaml:"MaxMemory" default:"75"`
-	MaxAlloc      uint64 `yaml:"MaxAlloc"`
+	CacheCapacity int        `yaml:"CacheCapacity" default:"10_000"`
+	MaxMemory     int        `yaml:"MaxMemory" default:"75"`
+	MaxAlloc      MemorySize `yaml:"MaxAlloc"`
 }
 
 type BufferSizeConfig struct {

@@ -696,7 +696,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = mem.Alloc * 99 / 100
+	conf.GetInMemoryCollectorCacheCapacityVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
 
 	coll.mutex.Unlock()
 
