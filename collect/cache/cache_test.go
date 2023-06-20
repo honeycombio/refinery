@@ -104,3 +104,44 @@ func TestRemoveSentTraces(t *testing.T) {
 	assert.Equal(t, 1, len(all))
 	assert.Equal(t, traces[1], all[0])
 }
+
+func TestSkipOldUnsentTraces(t *testing.T) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(4, s, &logger.NullLogger{})
+
+	now := time.Now()
+	traces := []*types.Trace{
+		{TraceID: "1", SendBy: now.Add(-time.Minute), Sent: true},
+		{TraceID: "2", SendBy: now.Add(time.Minute)},
+		{TraceID: "3", SendBy: now.Add(-time.Minute)},
+		{TraceID: "4", SendBy: now.Add(time.Minute)},
+	}
+	for _, tr := range traces {
+		c.Set(tr)
+	}
+
+	// this should remove traces 1 and 3
+	expired := c.TakeExpiredTraces(now)
+	assert.Equal(t, 2, len(expired))
+	assert.Equal(t, traces[0], expired[0])
+	assert.Equal(t, traces[2], expired[1])
+
+	assert.Equal(t, 2, len(c.cache))
+
+	// fill up those slots now, which requires skipping over the old traces
+	newTraces := []*types.Trace{
+		{TraceID: "5", SendBy: now.Add(time.Minute)},
+		{TraceID: "6", SendBy: now.Add(time.Minute)},
+	}
+
+	for _, tr := range newTraces {
+		prev := c.Set(tr)
+		assert.Nil(t, prev)
+	}
+
+	// now we should have traces 2, 5, 4 and 6, and 4 is next to be examined
+	prev := c.Set(&types.Trace{TraceID: "7", SendBy: now})
+	// make sure we kicked out #4
+	assert.Equal(t, traces[3], prev)
+}
