@@ -280,8 +280,8 @@ func TestShardDrop(t *testing.T) {
 			// we have a fairly large range here because it's truly random
 			// and we've been having some flaky tests
 			expected := ntraces / (npeers - 1)
-			assert.Greater(t, nDiff, expected/4)
-			assert.Less(t, nDiff, expected*4)
+			assert.Greater(t, expected*2, nDiff)
+			assert.Less(t, expected/2, nDiff)
 		})
 	}
 }
@@ -342,20 +342,17 @@ func TestShardAddHash(t *testing.T) {
 			sharder.loadPeerList()
 
 			results = make(map[string]int)
-			nMoved := 0
+			nDiff := 0
 			for i := 0; i < ntraces; i++ {
 				s := sharder.WhichShard(placements[i].id)
 				results[s.GetAddress()]++
 				if s.GetAddress() != placements[i].shard {
-					nMoved++
+					nDiff++
 				}
 			}
-
-			// we have a fairly large range here because it's truly random
-			// and we've been having some flaky tests
-			expectedToMove := ntraces / (npeers - 1)
-			assert.Greater(t, nMoved, expectedToMove/4)
-			assert.Less(t, nMoved, expectedToMove*4)
+			expected := ntraces / (npeers - 1)
+			assert.Greater(t, expected*2, nDiff)
+			assert.Less(t, expected/2, nDiff)
 		})
 	}
 }
