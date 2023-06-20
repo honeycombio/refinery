@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-20 at 16:34:41 UTC.
+It was automatically generated on 2023-06-20 at 18:40:47 UTC.
 
 ## The Config file
 
@@ -778,6 +778,8 @@ Refinery will timeout after this duration when communicating with Redis.
 ### Section Name: `Collection`
 
 Brings together the settings that are relevant to collecting spans together to make traces.
+If none of the memory settings are used, then Refinery will not attempt to limit its memory usage.
+This is not recommended for production use since a burst of traffic could cause Refinery to run out of memory and crash.
 
 
 
@@ -792,18 +794,30 @@ The number of traces in the cache should be many multiples (100x to 1000x) of th
 - Type: `int`
 - Default: `10000`
 
-### `MaxMemory`
+### `AvailableMemory`
 
-MaxMemory is the maximum percentage of memory that should be allocated by the span collector.
+AvailableMemory is the amount of system memory available to the refinery process.
+
+The amount of system memory available to the refinery process.
+This value will typically be set through an environment variable controlled by the container or deploy script.
+If this value is zero or not set, MaxMemory cannot be used to calculate the maximum allocation and MaxAlloc will be used instead.
+If set, this must be a memory size.
+64-bit values are supported.
+Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
+
+- Eligible for live reload.
+- Type: `memorysize`
+- Example: `4Gb`
+
+### `MaxMemoryPercentage`
+
+MaxMemoryPercentage is the maximum percentage of memory that should be allocated by the span collector.
 
 If nonzero, it must be an integer value between 1 and 100, representing the target maximum percentage of memory that should be allocated by the span collector.
 If set to a non-zero value, once per tick (see SendTicker) the collector will compare total allocated bytes to this calculated value.
 If allocation is too high, traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
-Depending on deployment details, system memory information may not be available.
-If it is not, a warning will be logged and the value of MaxAlloc will be used.
 If this value is 0, MaxAlloc will be used.
-Requires MaxAlloc to be nonzero.
 
 - Eligible for live reload.
 - Type: `percentage`

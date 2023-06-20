@@ -74,7 +74,7 @@ type InMemCollector struct {
 func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
-	imcConfig, err := i.Config.GetInMemCollectorCacheCapacity()
+	imcConfig, err := i.Config.GetCollectionConfig()
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (i *InMemCollector) sendReloadSignal() {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig, err := i.Config.GetInMemCollectorCacheCapacity()
+	imcConfig, err := i.Config.GetCollectionConfig()
 	if err != nil {
 		i.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}
@@ -185,13 +185,14 @@ func (i *InMemCollector) reloadConfigs() {
 }
 
 func (i *InMemCollector) checkAlloc() {
-	inMemConfig, err := i.Config.GetInMemCollectorCacheCapacity()
-	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(inMemConfig.MaxAlloc))
+	inMemConfig, err := i.Config.GetCollectionConfig()
+	maxAlloc := inMemConfig.GetMaxAlloc()
+	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
-	if err != nil || inMemConfig.MaxAlloc == 0 || mem.Alloc < uint64(inMemConfig.MaxAlloc) {
+	if err != nil || maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
 
@@ -199,7 +200,7 @@ func (i *InMemCollector) checkAlloc() {
 	// enough to get us below the max capacity, but not TOO much below.
 	// Because our impact numbers are only the data size, reducing by enough to reach
 	// max alloc will actually do more than that.
-	totalToRemove := mem.Alloc - uint64(inMemConfig.MaxAlloc)
+	totalToRemove := mem.Alloc - uint64(maxAlloc)
 
 	// The size of the cache exceeds the user's intended allocation, so we're going to
 	// remove the traces from the cache that have had the most impact on allocation.

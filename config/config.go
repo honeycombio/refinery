@@ -102,8 +102,8 @@ type Config interface {
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
 
-	// GetInMemCollectorCacheCapacity returns the config specific to the InMemCollector
-	GetInMemCollectorCacheCapacity() (CollectionConfig, error)
+	// GetCollectionConfig returns the config specific to the InMemCollector
+	GetCollectionConfig() (CollectionConfig, error)
 
 	// GetSamplerConfigForDestName returns the sampler type and name to use for
 	// the given destination (environment, or dataset in classic)
