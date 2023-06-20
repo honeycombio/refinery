@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-20 at 16:34:41 UTC.
+It was automatically generated on 2023-06-20 at 18:40:47 UTC.
 
 ## The Config file
 
@@ -809,9 +809,9 @@ Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
 - Type: `memorysize`
 - Example: `4Gb`
 
-### `MaxMemory`
+### `MaxMemoryPercentage`
 
-MaxMemory is the maximum percentage of memory that should be allocated by the span collector.
+MaxMemoryPercentage is the maximum percentage of memory that should be allocated by the span collector.
 
 If nonzero, it must be an integer value between 1 and 100, representing the target maximum percentage of memory that should be allocated by the span collector.
 If set to a non-zero value, once per tick (see SendTicker) the collector will compare total allocated bytes to this calculated value.

@@ -915,7 +915,7 @@ groups:
           64-bit values are supported. Sizes with standard unit suffixes like
           "MB" and "GiB" are also supported.
 
-      - name: MaxMemory
+      - name: MaxMemoryPercentage
         type: percentage
         valuetype: showexample
         default: 75
