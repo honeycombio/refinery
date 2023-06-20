@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-17 at 16:49:02 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-06-20 at 16:34:39 UTC
 
 # This file contains the configuration for the Honeycomb Refinery.
 # More stuff will go here later.
@@ -740,7 +740,7 @@ Collection:
     ## details, system memory information may not be available. If it is not,
     ## a warning will be logged and the value of MaxAlloc will be used. If
     ## this value is 0, MaxAlloc will be used. Requires MaxAlloc to be
-    ## nonzero. TODO: NOT YET IMPLEMENTED
+    ## nonzero.
     ##
     ## default: 75
     ## Eligible for live reload.
@@ -751,7 +751,9 @@ Collection:
     ##
     ## If set, this must be a memory size. 64-bit values are supported. Sizes
     ## with standard unit suffixes like "MB" and "GiB" are also supported.
-    ## See MaxMemory for more details.
+    ## The full list of supported values can be found at
+    ## https://pkg.go.dev/github.com/docker/go-units#pkg-constants. See
+    ## MaxMemory for more details.
     ##
     ## Eligible for live reload.
     {{ memorysize .Data "MaxAlloc" "InMemCollector.MaxAlloc" "" }}

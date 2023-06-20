@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-17 at 16:49:04 UTC.
+It was automatically generated on 2023-06-20 at 16:34:41 UTC.
 
 ## The Config file
 
@@ -804,7 +804,6 @@ Depending on deployment details, system memory information may not be available.
 If it is not, a warning will be logged and the value of MaxAlloc will be used.
 If this value is 0, MaxAlloc will be used.
 Requires MaxAlloc to be nonzero.
-TODO: NOT YET IMPLEMENTED
 
 - Eligible for live reload.
 - Type: `percentage`
@@ -818,6 +817,7 @@ MaxAlloc is the maximum number of bytes that should be allocated by the collecto
 If set, this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
+The full list of supported values can be found at https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
 See MaxMemory for more details.
 
 - Eligible for live reload.
