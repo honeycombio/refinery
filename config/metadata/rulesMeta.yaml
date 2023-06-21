@@ -5,7 +5,7 @@ groups:
     summary: is the list of samplers to use.
     description: >
       `Samplers` maps targets to sampler configurations. Each target is a 
-      Honeycomb environment, (or for Honeycomb Classic keys, a dataset).
+      Honeycomb environment, (or a dataset for Honeycomb Classic keys).
       The value is the sampler to use for that target. A `__default__` 
       target is required. The target called `__default__` will be used 
       for any target that is not explicitly listed.
@@ -106,7 +106,7 @@ groups:
           field is a **bad** choice, as it is not unique enough, and therefore 
           interesting traces, like traces that experienced a `500`, might not
           be sampled. Field names may come from any span in the trace; 
-          if they occur on multiple spans, all unique values will be included in the key.
+          if they occur on multiple spans, then all unique values will be included in the key.
       - name: MaxKeys
         type: int
         summary: is the maximum number of keys to track.
@@ -126,7 +126,7 @@ groups:
           are normally small variations in trace length, we recommend setting 
           this field to `false`. If your traces are consistent lengths and
           changes in trace length is a useful indicator to view in Honeycomb,
-          set this field to `true`.
+          then set this field to `true`.
 
   - name: EMADynamicSampler
     title: EMA Dynamic Sampler
@@ -197,21 +197,21 @@ groups:
           "zero". Keys with averages below this threshold will be removed from
           the EMA. Default is the same as `Weight`, as this prevents a key with
           the smallest integer value (1) from being aged out immediately. This
-          value should generally be less than (<=) `Weight`, unless you 
+          value should generally be less than (<=) `Weight`, unless you
           have very specific reasons to set it higher.
       - name: BurstMultiple
         type: float
         summary: is the multiple of the sample rate to use when detecting bursts.
         description: >
-          If set, this value is multiplied by the sum of the running average
+          If set, then this value is multiplied by the sum of the running average
           of counts to define the burst detection threshold. If total counts
-          observed for a given interval exceed this threshold, EMA is updated
+          observed for a given interval exceed this threshold, then EMA is updated
           immediately, rather than waiting on the `AdjustmentInterval`. Defaults
           to `2`; a negative value disables. With the default of `2`, if your traffic
-          suddenly doubles, burst detection will kick in.
+          suddenly doubles, then burst detection will kick in.
       - name: BurstDetectionDelay
         type: int
-        summary: the number of AdjustmentIntervals to wait before detecting bursts.
+        summary: the number of `AdjustmentIntervals` to wait before detecting bursts.
         description: >
           Indicates the number of intervals to run before burst detection kicks
           in. Defaults to `3`.
@@ -267,7 +267,7 @@ groups:
           second you want to send to Honeycomb. The sampler will adjust sample
           rates to try to achieve this desired throughput. This value is
           calculated for the individual instance, not for the cluster; if your
-          cluster has multiple instances, you will need to divide your total
+          cluster has multiple instances, then you will need to divide your total
           desired sample rate by the number of instances to get this value.
       - name: InitialSampleRate
         type: int
@@ -305,7 +305,7 @@ groups:
         description: $EMADynamicSampler.BurstMultiple
       - name: BurstDetectionDelay
         type: int
-        summary: the number of AdjustmentIntervals to wait before detecting bursts.
+        summary: the number of `AdjustmentIntervals` to wait before detecting bursts.
         description: $EMADynamicSampler.BurstDetectionDelay
       - name: FieldList
         type: stringarray
@@ -362,7 +362,7 @@ groups:
           second you want to send to Honeycomb. The sampler will adjust sample
           rates to try to achieve this desired throughput. This value is
           calculated for the individual instance, not for the cluster; if your
-          cluster has multiple instances, you will need to divide your total
+          cluster has multiple instances, then you will need to divide your total
           desired sample rate by the number of instances to get this value.
       - name: UpdateFrequency
         type: duration
@@ -402,7 +402,7 @@ groups:
       for compatibility. Consider using either `EMAThroughput` or
       `WindowedThroughput` instead.
 
-      If your key space is sharded across different servers, this is a good
+      If your key space is sharded across different servers, then this is a good
       method for making sure each server sends roughly the same volume of
       content to Honeycomb. It performs poorly when the active keyspace is very
       large.
@@ -451,7 +451,7 @@ groups:
       The Rules-based sampler allows you to specify a set of rules that will
       determine whether a trace should be sampled or not. Rules are evaluated in
       order, and the first rule that matches will be used to determine the
-      sample rate. If no rules match, the `SampleRate` defaults to `1` and all traces
+      sample rate. If no rules match, then the `SampleRate` defaults to `1` and all traces
       will be kept.
 
       Rules-based samplers will usually be configured to have the last rule be a
@@ -468,11 +468,11 @@ groups:
         summary: indicates whether to expand nested JSON when evaluating rules.
         description: >
           Indicates whether to expand nested JSON when evaluating rules. If
-          false, nested JSON will be treated as a string. If true, nested JSON
+          false, nested JSON will be treated as a string. If `true`, nested JSON
           will be expanded into a `map[string]interface{}` and the value of the
           field will be the value of the nested field. For example, if you have
           a field called `http.request.headers` and you want to check the value
-          of the `User-Agent` header, you would set this to `true` and use
+          of the `User-Agent` header, then you would set this to `true` and use
           `http.request.headers.User-Agent` as the field name in your rule. This
           is a computationally expensive option and may cause performance
           problems if you have a large number of spans with nested JSON.
@@ -482,7 +482,7 @@ groups:
     sortorder: 75
     description: >
       Rules are evaluated in order, and the first rule that matches will be used
-      to determine the sample rate. If no rules match, the `SampleRate` will be
+      to determine the sample rate. If no rules match, then the `SampleRate` will be
       `1` and all traces will be kept.
 
       If a rule matches, one of three things happens, and they are evaluated in
@@ -494,7 +494,7 @@ groups:
         type: string
         summary: is the name of the rule.
         description: >
-          The name of the rule. This is used for debugging and will appear in
+          The name of the rule. This field is used for debugging and will appear in
           the trace metadata if `AddRuleReasonToTrace` is set to `true`.
       - name: Sampler
         type: object
@@ -510,19 +510,19 @@ groups:
         description: >
           The sampler to use if the rule matches. If this is set, the sample
           rate will be determined by this downstream sampler. If this is not set,
-          the sample rate will be determined by the `Drop` flag or the `SampleRate`
-          field.
+          the sample rate will be determined by the `Drop` flag or the 
+          `SampleRate` field.
       - name: Drop
         type: bool
         summary: indicates whether to drop the trace.
         description: >
           Indicates whether to drop the trace if it matches this rule. If `true`,
-          the trace will be dropped. If `false`, the trace will be kept.
+          then the trace will be dropped. If `false`, then the trace will be kept.
       - name: SampleRate
         type: int
         summary: is the sample rate to use.
         description: >
-          If the rule is matched, there is no Sampler specified, and the Drop
+          If the rule is matched, there is no Sampler specified, and the `Drop`
           flag is `false`, then this is the sample rate to use.
       - name: Conditions
         type: objectarray
@@ -542,8 +542,8 @@ groups:
         summary: controls the scope of the rule.
         description: >
           Controls the scope of the rule evaluation. If set to "trace" (the
-          default), each condition can apply to any span in the trace
-          independently. If set to "span", all of the conditions in the rule
+          default), then each condition can apply to any span in the trace
+          independently. If set to "span", then all of the conditions in the rule
           will be evaluated against each span in the trace and the rule only
           succeeds if all of the conditions match on a single span together.
 
@@ -552,15 +552,15 @@ groups:
     sortorder: 78
     description: >
       Conditions are evaluated in order, and the first condition that does not
-      match will cause the rule to not match. If all conditions match, the rule
-      will match. If there are no conditions, the rule will always match.
+      match will cause the rule to not match. If all conditions match, then the rule
+      will match. If there are no conditions, then the rule will always match.
     fields:
       - name: Field
         type: string
         summary: is the field to check.
         description: >
           The field to check. This can be any field in the trace. If the field
-          is not present, the condition will not match. The comparison is
+          is not present, then the condition will not match. The comparison is
           case-sensitive.
       - name: Operator
         type: string
