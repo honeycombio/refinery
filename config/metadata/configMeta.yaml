@@ -58,7 +58,7 @@ groups:
         reload: false
         validations:
           - type: minimum
-            arg: 1s
+            arg: 0s
         summary: is the average interval between attempts at reloading the configuration file.
         description: >
           A single instance of Refinery will attempt to read its configuration
@@ -66,7 +66,7 @@ groups:
           varied by a random amount to avoid all instances refreshing together.
           Within a cluster, Refinery will gossip information about new
           configuration so that all instances can reload at close to the same
-          time.
+          time. This feature can be disabled with a value of 0s.
 
   - name: Network
     title: "Network Configuration"

@@ -62,4 +62,4 @@ validateRules:
 	@echo
 	@echo "+++ validating sample rules"
 	@echo
-	go run . validate rules --input=rules_complete.yaml
+	go run . validate rules --input=../../rules_complete.yaml

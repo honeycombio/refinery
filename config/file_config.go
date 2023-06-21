@@ -368,7 +368,9 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	cfg.callbacks = make([]func(), 0)
 	cfg.errorCallback = errorCallback
 
-	go cfg.monitor()
+	if cfg.mainConfig.General.ConfigReloadInterval > 0 {
+		go cfg.monitor()
+	}
 
 	return cfg, err
 }
@@ -409,9 +411,13 @@ func (f *fileConfig) monitor() {
 
 // Stop halts the monitor goroutine
 func (f *fileConfig) Stop() {
-	f.ticker.Stop()
-	close(f.done)
-	f.done = nil
+	if f.ticker != nil {
+		f.ticker.Stop()
+	}
+	if f.done != nil {
+		close(f.done)
+		f.done = nil
+	}
 }
 
 func (f *fileConfig) RegisterReloadCallback(cb func()) {

@@ -250,6 +250,33 @@ func TestReload(t *testing.T) {
 
 }
 
+func TestReloadDisabled(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(0*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+		t.Error("received", d, "expected", "0.0.0.0:8080")
+	}
+
+	if file, err := os.OpenFile(config, os.O_RDWR, 0644); err == nil {
+		// Since we disabled reload checking this should not change anything
+		cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(0*time.Second), "Network.ListenAddr", "0.0.0.0:9000")
+		file.WriteString(cm)
+		file.Close()
+	}
+
+	time.Sleep(5 * time.Second)
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+		t.Error("received", d, "expected", "0.0.0.0:8080")
+	}
+}
+
 func TestReadDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
