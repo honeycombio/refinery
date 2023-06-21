@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"strings"
 )
 
@@ -52,4 +53,12 @@ func (l Level) String() string {
 
 func (l Level) MarshalText() ([]byte, error) {
 	return []byte(l.String()), nil
+}
+
+func (l *Level) UnmarshalText(text []byte) error {
+	*l = ParseLevel(string(text))
+	if *l == UnknownLevel {
+		return errors.New("unknown logging level '" + string(text) + "'")
+	}
+	return nil
 }

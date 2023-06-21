@@ -1,4 +1,5 @@
-ConfigVersion: 2
+# Automatically generated on 2023-06-18T14:12:45-04:00
+RulesVersion: 2
 Samplers:
     __default__:
         DeterministicSampler:

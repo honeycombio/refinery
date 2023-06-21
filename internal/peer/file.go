@@ -19,7 +19,7 @@ func (p *filePeers) GetPeers() ([]string, error) {
 	// logic happy.
 	peers, err := p.c.GetPeers()
 	if len(peers) == 0 {
-		peers = []string{"127.0.0.1:8081"}
+		peers = []string{"http://127.0.0.1:8081"}
 	}
 	return peers, err
 }

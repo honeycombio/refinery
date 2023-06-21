@@ -85,12 +85,12 @@ func main() {
 	the --type flag.
 
 	It has other commands to help with the conversion process. Valid commands are:
-	    config:          convert a config file
-	    rules:           convert a rules file
-	    validate config: validate a config file against the 2.0 format
-	    validate rules:  validate a rules file against the 2.0 format
-	    doc config:      generate markdown documentation for the config file
-	    doc rules:       generate markdown documentation for the rules file
+	    convert config:          convert a config file
+	    convert rules:           convert a rules file
+	    convert validate config: validate a config file against the 2.0 format
+	    convert validate rules:  validate a rules file against the 2.0 format
+	    convert doc config:      generate markdown documentation for the config file
+	    convert doc rules:       generate markdown documentation for the rules file
 
 	Examples:
 	    convert config --input config.toml --output config.yaml

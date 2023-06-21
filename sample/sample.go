@@ -50,6 +50,10 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.TotalThroughputSamplerConfig:
 		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+	case *config.EMAThroughputSamplerConfig:
+		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+	case *config.WindowedThroughputSamplerConfig:
+		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	default:
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)

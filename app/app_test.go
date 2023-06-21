@@ -130,7 +130,7 @@ func newStartedApp(
 
 	a := App{}
 
-	lgr := &logger.LogrusLogger{
+	lgr := &logger.StdoutLogger{
 		Config: c,
 	}
 	lgr.SetLevel("error")
