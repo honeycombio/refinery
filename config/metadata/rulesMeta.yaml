@@ -205,10 +205,10 @@ groups:
         summary: is the multiple of the sample rate to use when detecting bursts.
         description: >
           If set, then this value is multiplied by the sum of the running 
-          average of counts to define the burst detection threshold. If total 
-          counts observed for a given interval exceed this threshold, then EMA 
-          is updated immediately, rather than waiting on the 
-          `AdjustmentInterval`. Defaults to `2`; a negative value disables. 
+          average of counts to dynamically define the burst detection 
+          threshold. If total counts observed for a given interval exceed this 
+          threshold, then EMA is updated immediately, rather than waiting on 
+          the `AdjustmentInterval`. Defaults to `2`; a negative value disables. 
           With the default of `2`, if your traffic suddenly doubles, then burst 
           detection will kick in.
       - name: BurstDetectionDelay
@@ -538,8 +538,9 @@ groups:
         description: >
           Conditions is a list of conditions to use to determine whether the
           rule matches. All conditions must be met for the rule to match. If
-          there are no conditions, then the rule will always match (this is 
-          typically done for the last rule to provide a default behavior).
+          there are no conditions, then the rule will always match. A 
+          no-condition rule is typically used for the last rule to provide a 
+          default behavior.
       - name: Scope
         type: string
         validations:
