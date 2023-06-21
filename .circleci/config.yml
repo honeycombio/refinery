@@ -26,6 +26,28 @@ commands:
       - run: |
           sha256sum $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
           > $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >>.checksum
+  go-build-convert:
+    parameters:
+      os:
+        description: Target operating system
+        type: enum
+        enum: [ "linux", "darwin" ]
+        default: "linux"
+      arch:
+        description: Target architecture
+        type: enum
+        enum: [ "amd64", "arm64" ]
+        default: "amd64"
+    steps:
+      - run: |
+          GOOS=<< parameters.os >> \
+          GOARCH=<< parameters.arch >> \
+          go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
+          -o $GOPATH/bin/convert-<< parameters.os >>-<< parameters.arch >> \
+          ./tools/convert
+      - run: |
+          sha256sum $GOPATH/bin/convert-<< parameters.os >>-<< parameters.arch >> \
+          > $GOPATH/bin/convert-<< parameters.os >>-<< parameters.arch >>.checksum
   setup_googleko:
     steps:
       - restore_cache:
@@ -78,6 +100,15 @@ jobs:
       - go-build:
           os: darwin
           arch: amd64
+      - go-build-convert:
+          os: linux
+          arch: amd64
+      - go-build-convert:
+          os: linux
+          arch: arm64
+      - go-build-convert:
+          os: darwin
+          arch: amd64
       - run:
           name: apt_get_update
           command: sudo apt-get -qq update
@@ -102,7 +133,7 @@ jobs:
           command: ./build-pkg.sh -m arm64 -v "${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" -t rpm && mv *.rpm ~/artifacts
       - run:
           name: copy_binaries
-          command: cp $GOPATH/bin/refinery-* ~/artifacts
+          command: cp $GOPATH/bin/refinery-* ~/artifacts && cp $GOPATH/bin/convert-* ~/artifacts
       - run: echo "finished builds" && find ~/artifacts -ls
       - persist_to_workspace:
           root: ~/
