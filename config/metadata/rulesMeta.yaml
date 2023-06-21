@@ -20,11 +20,11 @@ groups:
     title: Deterministic Sampler
     sortorder: 10
     description: >
-      The Deterministic Sampler uses a fixed sample rate to sample traces
-      based on their trace ID. This is the simplest sampling algorithm
-      - it is a static sample rate, choosing traces randomly to either keep or
-      send (at the appropriate rate). It is not influenced by the contents of
-      the trace other than the trace ID.
+      The Deterministic Sampler (`DeterministicSampler`) uses a fixed sample 
+      rate to sample traces based on their trace ID. This is the simplest 
+      sampling algorithm - it is a static sample rate, choosing traces randomly 
+      to either keep or send (at the appropriate rate). It is not influenced by 
+      the contents of the trace other than the trace ID.
     fields:
       - name: SampleRate
         type: int
@@ -44,14 +44,15 @@ groups:
     title: Dynamic Sampler
     sortorder: 20
     description: >
-      DynamicSampler is the basic Dynamic Sampler implementation. Most
-      installations will find the EMA Dynamic Sampler to be a better choice.
-      This sampler collects the values of a number of fields from a trace and
-      uses them to form a key. This key is handed to the standard dynamic
-      sampler algorithm, which generates a sample rate based on the frequency
-      with which that key has appeared during the previous `ClearFrequency`. See
-      https://github.com/honeycombio/dynsampler-go for more detail on the
-      mechanics of the Dynamic Sampler. This sampler uses the `AvgSampleRate`
+      The Dynamic Sampler (`DynamicSampler`) is the basic Dynamic Sampler 
+      implementation. Most installations will find the EMA Dynamic Sampler to 
+      be a better choice. This sampler collects the values of a number of 
+      fields from a trace and uses them to form a key. This key is handed to 
+      the standard dynamic sampler algorithm, which generates a sample rate 
+      based on the frequency with which that key has appeared during the 
+      previous `ClearFrequency`. See 
+      https://github.com/honeycombio/dynsampler-go for more detail on the 
+      mechanics of the Dynamic Sampler. This sampler uses the `AvgSampleRate` 
       algorithm from that package.
     fields:
       - name: SampleRate
@@ -133,9 +134,10 @@ groups:
     title: EMA Dynamic Sampler
     sortorder: 30
     description: >
-      The Exponential Moving Average (EMA) Dynamic Sampler attempts to average a
-      given sample rate, weighting rare traffic and frequent traffic differently
-      so as to end up with the correct average.
+      The Exponential Moving Average (EMA) Dynamic Sampler 
+      (`EMADynamicSampler`) attempts to average a given sample rate, weighting 
+      rare traffic and frequent traffic differently so as to end up with the 
+      correct average.
 
       `EMADynamicSampler` is an improvement upon the simple `DynamicSampler` 
       and is recommended for many use cases. Based on the `DynamicSampler`,
@@ -237,12 +239,12 @@ groups:
     title: EMA Throughput Sampler
     sortorder: 40
     description: >
-      The Exponential Moving Average (EMA) Throughput Sampler attempts to
-      achieve a given throughput -- number of spans per second -- weighting rare
-      traffic and frequent traffic differently so as to end up with the correct
-      rate.
+      The Exponential Moving Average (EMA) Throughput Sampler 
+      (`EMAThroughputSampler`) attempts to achieve a given throughput -- number 
+      of spans per second -- weighting rare traffic and frequent traffic 
+      differently so as to end up with the correct rate.
 
-      The `EMAThroughputSampler` is an improvement upon the `TotalThroughput`
+      The `EMAThroughputSampler` is an improvement upon the Total Throughput
       Sampler and is recommended for most throughput-based use cases. Because it
       like the `EMADynamicSampler`, `EMAThroughputSampler` maintains an 
       Exponential Moving Average of counts seen per key, and adjusts this
@@ -330,9 +332,10 @@ groups:
     title: Windowed Throughput Sampler
     sortorder: 50
     description: >
-      Windowed Throughput sampling is an enhanced version of total throughput
-      sampling. Just like the TotalThroughput sampler, it attempts to meet the
-      goal of fixed number of events per second sent to Honeycomb.
+      Windowed Throughput Sampler (`WindowedThroughputSampler`) is an enhanced 
+      version of total throughput sampling. Just like the `TotalThroughput` 
+      Sampler, `WindowedThroughputSampler` attempts to meet the goal of fixed 
+      number of events per second sent to Honeycomb.
 
       The original throughput sampler updates the sampling rate every
       "ClearFrequency" seconds. While this parameter is configurable, it suffers
@@ -342,7 +345,7 @@ groups:
         - Increasing it is less responsive to load spikes, but sample rates 
         will be more stable because they are made with more data.
 
-      The windowed throughput sampler resolves this by introducing two
+      The Windowed Throughput Sampler resolves this by introducing two
       different, tunable parameters:
         - `UpdateFrequency`: how often the sampling rate is recomputed
         - `LookbackFrequency`: how much total time is considered when 
@@ -403,10 +406,10 @@ groups:
     title: Total Throughput Sampler
     sortorder: 80
     description: >
-      `TotalThroughput` attempts to meet a goal of a fixed number of events per
-      second sent to Honeycomb. This sampler is **deprecated** and present 
-      mainly for compatibility. Consider using either `EMAThroughput` or
-      `WindowedThroughput` instead.
+      Total Throughput Sampler (`TotalThroughputSampler`) attempts to meet a 
+      goal of a fixed number of events per second sent to Honeycomb. This 
+      sampler is **deprecated** and present mainly for compatibility. Consider 
+      using either `EMAThroughputSampler` or `WindowedThroughputSampler` instead.
 
       If your key space is sharded across different servers, then this is a good
       method for making sure each server sends roughly the same volume of
@@ -416,8 +419,8 @@ groups:
       `GoalThroughputPerSec` * `ClearFrequency` defines the upper
       limit of the number of keys that can be reported and stay under the goal,
       but with that many keys, you'll only get one event per key per
-      `ClearFrequencySec`, which is very coarse. You should aim for at least 1
-      event per key per sec to 1 event per key per 10sec to get reasonable data.
+      `ClearFrequencySec`, which is very coarse. Aim for at least 1 event per 
+      key per sec to 1 event per key per 10sec to get reasonable data.
       In other words, the number of active keys should be less than
       10 * `GoalThroughputPerSec`.
     fields:
