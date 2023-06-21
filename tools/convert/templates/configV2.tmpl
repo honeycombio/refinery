@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-20 at 18:40:46 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-06-21 at 17:32:10 UTC
 
 # This file contains the configuration for the Honeycomb Refinery.
 # More stuff will go here later.
@@ -58,7 +58,7 @@ General:
     ## varied by a random amount to avoid all instances refreshing together.
     ## Within a cluster, Refinery will gossip information about new
     ## configuration so that all instances can reload at close to the same
-    ## time.
+    ## time. This feature can be disabled with a value of 0s.
     ##
     ## Accepts a duration string with units, like "5m".
     ## default: 5m

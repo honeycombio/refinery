@@ -368,7 +368,9 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	cfg.callbacks = make([]func(), 0)
 	cfg.errorCallback = errorCallback
 
-	go cfg.monitor()
+	if cfg.mainConfig.General.ConfigReloadInterval > 0 {
+		go cfg.monitor()
+	}
 
 	return cfg, err
 }
