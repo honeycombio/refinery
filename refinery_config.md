@@ -113,7 +113,6 @@ HoneycombAPI is the URL for the upstream Honeycomb API; this is the destination 
 
 Contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.
 
-
 Section Name: `AccessKeys`
 
 ### `ReceiveKeys`
@@ -449,7 +448,6 @@ Version 1.x of Refinery used this format for sending Metrics to Honeycomb.
 The metrics generated that way are nonstandard and will be deprecated in a future release.
 New installations should prefer OTelMetrics.
 
-
 Section Name: `LegacyMetrics`
 
 ### `Enabled`
@@ -508,7 +506,6 @@ Between 1 and 60 seconds is typical.
 Configuration for Refinery's OpenTelemetry metrics.
 This is the preferred way to send metrics to Honeycomb.
 New installations should prefer OTelMetrics.
-
 
 Section Name: `OTelMetrics`
 
@@ -648,7 +645,6 @@ The format is a list of strings of the form "host:port".
 Controls how the Refinery cluster communicates between peers when using Redis.
 Only applies when PeerManagement.Type is "redis".
 
-
 Section Name: `RedisPeerManagement`
 
 ### `Host`
@@ -737,7 +733,6 @@ Brings together the settings that are relevant to collecting spans together to m
 If none of the memory settings are used, then Refinery will not attempt to limit its memory usage.
 This is not recommended for production use since a burst of traffic could cause Refinery to run out of memory and crash.
 
-
 Section Name: `Collection`
 
 ### `CacheCapacity`
@@ -797,7 +792,6 @@ See MaxMemory for more details.
 ## Buffer Sizes
 
 Brings together the settings that are relevant to the sizes of communications buffers.
-
 
 Section Name: `BufferSizes`
 
@@ -872,7 +866,6 @@ Both keys and values must be strings.
 Controls the field names to use for the event ID fields.
 These fields are used to identify events that are part of the same trace.
 
-
 Section Name: `IDFields`
 
 ### `TraceNames`
@@ -902,7 +895,6 @@ A trace without a parent_id is assumed to be a root span.
 ## gRPC Server Parameters
 
 Controls the parameters of the gRPC server used to receive Open Telemetry data in gRPC format.
-
 
 Section Name: `GRPCServerParameters`
 
@@ -988,7 +980,6 @@ This is the amount of time after which if the server doesn't see any activity, i
 
 Controls the sample cache used to retain information about trace status after the sampling decision has been made.
 
-
 Section Name: `SampleCache`
 
 ### `KeptSize`
@@ -1042,7 +1033,6 @@ When it deactivates, normal trace decisions are made -- and any additional spans
 The measurement of stress is a lagging indicator and is highly dependent on Refinery configuration and scaling.
 Other configuration values should be well tuned first, before adjusting the Stress Relief Activation parameters.
 Stress Relief is not a substitute for proper configuration and scaling, but it can be used as a safety valve to prevent Refinery from becoming unstable under heavy load.
-
 
 Section Name: `StressRelief`
 
@@ -1115,5 +1105,4 @@ If this duration is 0, Refinery will not start in stressed mode, which will prov
 - Eligible for live reload.
 - Type: `duration`
 - Default: `3s`
-
 

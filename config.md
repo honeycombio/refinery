@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-21 at 18:12:55 UTC.
+It was automatically generated on 2023-06-21 at 19:39:45 UTC.
 
 ## The Config file
 
@@ -1121,5 +1121,4 @@ If this duration is 0, Refinery will not start in stressed mode, which will prov
 - Eligible for live reload.
 - Type: `duration`
 - Default: `3s`
-
 

@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"text/template"
 
@@ -141,7 +143,7 @@ func main() {
 		os.Exit(0)
 	case "doc":
 		if len(args) > 1 && args[1] == "rules" {
-			GenerateRulesMarkdown(output)
+			GenerateRulesMarkdown(output, "rules_docrepo.tmpl")
 		} else if len(args) > 1 && args[1] == "config" {
 			GenerateConfigMarkdown(output, "cfg_docrepo.tmpl")
 		} else {
@@ -151,7 +153,7 @@ func main() {
 		os.Exit(0)
 	case "website":
 		if len(args) > 1 && args[1] == "rules" {
-			GenerateRulesMarkdown(output)
+			GenerateRulesMarkdown(output, "rules_docsite.tmpl")
 		} else if len(args) > 1 && args[1] == "config" {
 			GenerateConfigMarkdown(output, "cfg_docsite.tmpl")
 		} else {
@@ -317,26 +319,32 @@ func GenerateConfigMarkdown(w io.Writer, templateName string) {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, templateName, metadata)
+	buffer := &bytes.Buffer{}
+	err = tmpl.ExecuteTemplate(buffer, templateName, metadata)
 	if err != nil {
 		panic(err)
 	}
+	pat := regexp.MustCompile("\n[\n\t ]*\n")
+	w.Write(pat.ReplaceAll(buffer.Bytes(), []byte("\n\n")))
 }
 
-func GenerateRulesMarkdown(w io.Writer) {
+func GenerateRulesMarkdown(w io.Writer, templateName string) {
 	metadata := loadRulesMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(filesystem, "templates/rules_docfile.tmpl", "templates/rules_docgroup.tmpl", "templates/rules_docfield.tmpl")
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/"+templateName)
 	if err != nil {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "rules_docfile.tmpl", metadata)
+	buffer := &bytes.Buffer{}
+	err = tmpl.ExecuteTemplate(buffer, templateName, metadata)
 	if err != nil {
 		panic(err)
 	}
+	pat := regexp.MustCompile("\n[\n\t ]*\n")
+	w.Write(pat.ReplaceAll(buffer.Bytes(), []byte("\n\n")))
 }
 
 func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
