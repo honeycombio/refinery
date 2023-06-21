@@ -143,7 +143,17 @@ func main() {
 		if len(args) > 1 && args[1] == "rules" {
 			GenerateRulesMarkdown(output)
 		} else if len(args) > 1 && args[1] == "config" {
-			GenerateConfigMarkdown(output)
+			GenerateConfigMarkdown(output, "cfg_docrepo.tmpl")
+		} else {
+			fmt.Fprintf(os.Stderr, `doc subcommand requires "rules" or "config" as an argument\n`)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	case "website":
+		if len(args) > 1 && args[1] == "rules" {
+			GenerateRulesMarkdown(output)
+		} else if len(args) > 1 && args[1] == "config" {
+			GenerateConfigMarkdown(output, "cfg_docsite.tmpl")
 		} else {
 			fmt.Fprintf(os.Stderr, `doc subcommand requires "rules" or "config" as an argument\n`)
 			os.Exit(1)
@@ -297,17 +307,17 @@ func GenerateMinimalSample(w io.Writer) {
 	}
 }
 
-func GenerateConfigMarkdown(w io.Writer) {
+func GenerateConfigMarkdown(w io.Writer, templateName string) {
 	metadata := loadConfigMetadata()
 	var err error
 	tmpl := template.New("markdown generator")
 	tmpl.Funcs(helpers())
-	tmpl, err = tmpl.ParseFS(filesystem, "templates/cfg_docfile.tmpl", "templates/cfg_docgroup.tmpl", "templates/cfg_docfield.tmpl")
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/"+templateName)
 	if err != nil {
 		panic(err)
 	}
 
-	err = tmpl.ExecuteTemplate(w, "cfg_docfile.tmpl", metadata)
+	err = tmpl.ExecuteTemplate(w, templateName, metadata)
 	if err != nil {
 		panic(err)
 	}

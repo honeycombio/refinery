@@ -1,8 +1,3 @@
-# Honeycomb Refinery Configuration Documentation
-
-This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-21 at 18:12:55 UTC.
-
 ## The Config file
 
 The config file is a YAML file.
@@ -24,33 +19,12 @@ OTelMetrics:
 
 The remainder of this document describes the sections within the file and the fields in each.
 
-## Table of Contents
-- [General Configuration](#general-configuration)
-- [Network Configuration](#network-configuration)
-- [Access Key Configuration](#access-key-configuration)
-- [Refinery Telemetry](#refinery-telemetry)
-- [Traces](#traces)
-- [Debugging](#debugging)
-- [Refinery Logger](#refinery-logger)
-- [Honeycomb Logger](#honeycomb-logger)
-- [Stdout Logger](#stdout-logger)
-- [Prometheus Metrics](#prometheus-metrics)
-- [Legacy Metrics](#legacy-metrics)
-- [OpenTelemetry Metrics](#opentelemetry-metrics)
-- [Peer Management](#peer-management)
-- [Redis Peer Management](#redis-peer-management)
-- [Collection Settings](#collection-settings)
-- [Buffer Sizes](#buffer-sizes)
-- [Specialized Configuration](#specialized-configuration)
-- [ID Fields](#id-fields)
-- [gRPC Server Parameters](#grpc-server-parameters)
-- [Sample Cache](#sample-cache)
-- [Stress Relief](#stress-relief)
 ## General Configuration
 
-### Section Name: `General`
-
 Contains general configuration options that apply to the entire refinery process.
+
+Section Name: `General`
+
 ### `ConfigurationVersion`
 
 ConfigurationVersion is the file format of this particular configuration file.
@@ -99,9 +73,10 @@ This feature can be disabled with a value of 0s.
 
 ## Network Configuration
 
-### Section Name: `Network`
-
 Contains network configuration options.
+
+Section Name: `Network`
+
 ### `ListenAddr`
 
 ListenAddr is the address refinery listens to for incoming requests.
@@ -136,9 +111,10 @@ HoneycombAPI is the URL for the upstream Honeycomb API; this is the destination 
 
 ## Access Key Configuration
 
-### Section Name: `AccessKeys`
-
 Contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.
+
+
+Section Name: `AccessKeys`
 
 ### `ReceiveKeys`
 
@@ -164,9 +140,10 @@ Must be specified if APIKeys is specified.
 
 ## Refinery Telemetry
 
-### Section Name: `RefineryTelemetry`
-
 Configuration info for the telemetry that Refinery uses to record its own operation.
+
+Section Name: `RefineryTelemetry`
+
 ### `AddRuleReasonToTrace`
 
 AddRuleReasonToTrace controls whether to decorate traces with refinery rule evaluation results.
@@ -204,9 +181,10 @@ If true, Refinery will add the following tags to all traces: - meta.refinery.loc
 
 ## Traces
 
-### Section Name: `Traces`
-
 Configuration for how traces are managed.
+
+Section Name: `Traces`
+
 ### `SendDelay`
 
 SendDelay is the duration to wait before sending a trace.
@@ -271,9 +249,10 @@ Decreasing this will check the trace cache for timeouts more frequently.
 
 ## Debugging
 
-### Section Name: `Debugging`
-
 Configuration values used when setting up and debugging Refinery.
+
+Section Name: `Debugging`
+
 ### `DebugServiceAddr`
 
 DebugServiceAddr is the IP and port the debug service will run on.
@@ -326,9 +305,10 @@ In addition, SampleRate will be set to the incoming rate for all traces, and the
 
 ## Refinery Logger
 
-### Section Name: `Logger`
-
 Configuration for logging.
+
+Section Name: `Logger`
+
 ### `Type`
 
 Type is the type of logger to use.
@@ -358,10 +338,11 @@ Sets the logging level above which refinery should send logs to the logger.
 
 ## Honeycomb Logger
 
-### Section Name: `HoneycombLogger`
-
 Configuration for logging to Honeycomb.
 Only used if Logger.Type is "honeycomb".
+
+Section Name: `HoneycombLogger`
+
 ### `APIHost`
 
 APIHost is the URL of the Honeycomb API to which logs will be sent.
@@ -419,10 +400,11 @@ TODO: THROUGHPUT FOR THE CLUSTER
 
 ## Stdout Logger
 
-### Section Name: `StdoutLogger`
-
 Configuration for logging to stdout.
 Only used if Logger.Type is "stdout".
+
+Section Name: `StdoutLogger`
+
 ### `Structured`
 
 Structured controls whether to used structured logging.
@@ -435,9 +417,10 @@ Specifies whether the stdout logger generates structured logs (JSON) or not (pla
 
 ## Prometheus Metrics
 
-### Section Name: `PrometheusMetrics`
-
 Configuration for Refinery's internally-generated metrics as made available through Prometheus.
+
+Section Name: `PrometheusMetrics`
+
 ### `Enabled`
 
 Enabled controls whether to expose refinery metrics over PromethusListenAddr
@@ -461,12 +444,13 @@ Only used if "Enabled" is true in PrometheusMetrics.
 
 ## Legacy Metrics
 
-### Section Name: `LegacyMetrics`
-
 Configuration for Refinery's legacy metrics.
 Version 1.x of Refinery used this format for sending Metrics to Honeycomb.
 The metrics generated that way are nonstandard and will be deprecated in a future release.
 New installations should prefer OTelMetrics.
+
+
+Section Name: `LegacyMetrics`
 
 ### `Enabled`
 
@@ -521,11 +505,12 @@ Between 1 and 60 seconds is typical.
 
 ## OpenTelemetry Metrics
 
-### Section Name: `OTelMetrics`
-
 Configuration for Refinery's OpenTelemetry metrics.
 This is the preferred way to send metrics to Honeycomb.
 New installations should prefer OTelMetrics.
+
+
+Section Name: `OTelMetrics`
 
 ### `Enabled`
 
@@ -595,9 +580,10 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 
 ## Peer Management
 
-### Section Name: `PeerManagement`
-
 Controls how the Refinery cluster communicates between peers.
+
+Section Name: `PeerManagement`
+
 ### `Type`
 
 Type is the type of peer management to use.
@@ -659,10 +645,11 @@ The format is a list of strings of the form "host:port".
 
 ## Redis Peer Management
 
-### Section Name: `RedisPeerManagement`
-
 Controls how the Refinery cluster communicates between peers when using Redis.
 Only applies when PeerManagement.Type is "redis".
+
+
+Section Name: `RedisPeerManagement`
 
 ### `Host`
 
@@ -746,11 +733,12 @@ Refinery will timeout after this duration when communicating with Redis.
 
 ## Collection Settings
 
-### Section Name: `Collection`
-
 Brings together the settings that are relevant to collecting spans together to make traces.
 If none of the memory settings are used, then Refinery will not attempt to limit its memory usage.
 This is not recommended for production use since a burst of traffic could cause Refinery to run out of memory and crash.
+
+
+Section Name: `Collection`
 
 ### `CacheCapacity`
 
@@ -808,9 +796,10 @@ See MaxMemory for more details.
 
 ## Buffer Sizes
 
-### Section Name: `BufferSizes`
-
 Brings together the settings that are relevant to the sizes of communications buffers.
+
+
+Section Name: `BufferSizes`
 
 ### `UpstreamBufferSize`
 
@@ -838,9 +827,10 @@ If this happens, you should increase this buffer size.
 
 ## Specialized Configuration
 
-### Section Name: `Specialized`
-
 Special-purpose configuration options that are not typically needed.
+
+Section Name: `Specialized`
+
 ### `EnvironmentCacheTTL`
 
 EnvironmentCacheTTL is the duration for which environment information is cached.
@@ -879,10 +869,11 @@ Both keys and values must be strings.
 
 ## ID Fields
 
-### Section Name: `IDFields`
-
 Controls the field names to use for the event ID fields.
 These fields are used to identify events that are part of the same trace.
+
+
+Section Name: `IDFields`
 
 ### `TraceNames`
 
@@ -910,9 +901,10 @@ A trace without a parent_id is assumed to be a root span.
 
 ## gRPC Server Parameters
 
-### Section Name: `GRPCServerParameters`
-
 Controls the parameters of the gRPC server used to receive Open Telemetry data in gRPC format.
+
+
+Section Name: `GRPCServerParameters`
 
 ### `Enabled`
 
@@ -994,9 +986,10 @@ This is the amount of time after which if the server doesn't see any activity, i
 
 ## Sample Cache
 
-### Section Name: `SampleCache`
-
 Controls the sample cache used to retain information about trace status after the sampling decision has been made.
+
+
+Section Name: `SampleCache`
 
 ### `KeptSize`
 
@@ -1037,8 +1030,6 @@ Default is 10 seconds.
 
 ## Stress Relief
 
-### Section Name: `StressRelief`
-
 Controls the stress relief mechanism, which is used to prevent Refinery from being overwhelmed by a large number of traces.
 There is a metric called stress_level that is emitted as part of refinery metrics.
 It is a measure of refinery's throughput rate relative to its processing rate, combined with the amount of room in its internal queues, and ranges from 0 to 100.
@@ -1051,6 +1042,9 @@ When it deactivates, normal trace decisions are made -- and any additional spans
 The measurement of stress is a lagging indicator and is highly dependent on Refinery configuration and scaling.
 Other configuration values should be well tuned first, before adjusting the Stress Relief Activation parameters.
 Stress Relief is not a substitute for proper configuration and scaling, but it can be used as a safety valve to prevent Refinery from becoming unstable under heavy load.
+
+
+Section Name: `StressRelief`
 
 ### `Mode`
 

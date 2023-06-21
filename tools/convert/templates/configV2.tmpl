@@ -2,17 +2,14 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-21 at 17:32:10 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-06-21 at 18:12:44 UTC
 
 # This file contains the configuration for the Honeycomb Refinery.
 # More stuff will go here later.
 
-
 ###########################
 ## General Configuration ##
-###########################
-General:
-  ## Contains general configuration options that apply to the entire
+###########################General:  ## Contains general configuration options that apply to the entire
   ## refinery process.
   ####
     ## ConfigurationVersion is the file format of this particular
@@ -64,12 +61,9 @@ General:
     ## default: 5m
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "ConfigReloadInterval" "ConfigReloadInterval" "5m" }}
-
 ###########################
 ## Network Configuration ##
-###########################
-Network:
-  ## Contains network configuration options.
+###########################Network:  ## Contains network configuration options.
   ####
     ## ListenAddr is the address refinery listens to for incoming requests.
     ##
@@ -105,12 +99,9 @@ Network:
     ## default: https://api.honeycomb.io
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombAPI" "https://api.honeycomb.io" }}
-
 ##############################
 ## Access Key Configuration ##
-##############################
-AccessKeys:
-  ## Contains access keys -- API keys that the proxy will treat specially,
+##############################AccessKeys:  ## Contains access keys -- API keys that the proxy will treat specially,
   ## and other flags that control how the proxy handles API keys.
   ##
   ####
@@ -134,12 +125,9 @@ AccessKeys:
     ##
     ## Eligible for live reload.
     {{ conditional .Data "AcceptOnlyListedKeys" "nostar APIKeys" }}
-
 ########################
 ## Refinery Telemetry ##
-########################
-RefineryTelemetry:
-  ## Configuration info for the telemetry that Refinery uses to record its
+########################RefineryTelemetry:  ## Configuration info for the telemetry that Refinery uses to record its
   ## own operation.
   ####
     ## AddRuleReasonToTrace controls whether to decorate traces with refinery
@@ -180,12 +168,9 @@ RefineryTelemetry:
     ## default: true
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "AddHostMetadataToTrace" "AddHostMetadataToTrace" true }}
-
 ############
 ## Traces ##
-############
-Traces:
-  ## Configuration for how traces are managed.
+############Traces:  ## Configuration for how traces are managed.
   ####
     ## SendDelay is the duration to wait before sending a trace.
     ##
@@ -250,12 +235,9 @@ Traces:
     ## default: 100ms
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "SendTicker" "SendTicker" "100ms" }}
-
 ###############
 ## Debugging ##
-###############
-Debugging:
-  ## Configuration values used when setting up and debugging Refinery.
+###############Debugging:  ## Configuration values used when setting up and debugging Refinery.
   ####
     ## DebugServiceAddr is the IP and port the debug service will run on.
     ##
@@ -307,12 +289,9 @@ Debugging:
     ##
     ## Eligible for live reload.
     # DryRun: true
-
 #####################
 ## Refinery Logger ##
-#####################
-Logger:
-  ## Configuration for logging.
+#####################Logger:  ## Configuration for logging.
   ####
     ## Type is the type of logger to use.
     ##
@@ -336,12 +315,9 @@ Logger:
     ## Not eligible for live reload.
     ## Options: debug info warn error panic
     {{ choice .Data "Level" "Level" (makeSlice "debug" "info" "warn" "error" "panic") "warn" }}
-
 ######################
 ## Honeycomb Logger ##
-######################
-HoneycombLogger:
-  ## Configuration for logging to Honeycomb. Only used if Logger.Type is
+######################HoneycombLogger:  ## Configuration for logging to Honeycomb. Only used if Logger.Type is
   ## "honeycomb".
   ####
     ## APIHost is the URL of the Honeycomb API to which logs will be sent.
@@ -391,12 +367,9 @@ HoneycombLogger:
     ## default: 10
     ## Not eligible for live reload.
     # SamplerThroughput: 10
-
 ###################
 ## Stdout Logger ##
-###################
-StdoutLogger:
-  ## Configuration for logging to stdout. Only used if Logger.Type is
+###################StdoutLogger:  ## Configuration for logging to stdout. Only used if Logger.Type is
   ## "stdout".
   ####
     ## Structured controls whether to used structured logging.
@@ -407,12 +380,9 @@ StdoutLogger:
     ## default: true
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "Structured" "Structured" true }}
-
 ########################
 ## Prometheus Metrics ##
-########################
-PrometheusMetrics:
-  ## Configuration for Refinery's internally-generated metrics as made
+########################PrometheusMetrics:  ## Configuration for Refinery's internally-generated metrics as made
   ## available through Prometheus.
   ####
     ## Enabled controls whether to expose refinery metrics over
@@ -435,12 +405,9 @@ PrometheusMetrics:
     ## default: localhost:2112
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "ListenAddr" "PrometheusMetrics.MetricsListenAddr" "localhost:2112" }}
-
 ####################
 ## Legacy Metrics ##
-####################
-LegacyMetrics:
-  ## Configuration for Refinery's legacy metrics. Version 1.x of Refinery
+####################LegacyMetrics:  ## Configuration for Refinery's legacy metrics. Version 1.x of Refinery
   ## used this format for sending Metrics to Honeycomb. The metrics
   ## generated that way are nonstandard and will be deprecated in a future
   ## release. New installations should prefer OTelMetrics.
@@ -488,12 +455,9 @@ LegacyMetrics:
     ## default: 30s
     ## Not eligible for live reload.
     {{ secondsToDuration .Data "ReportingInterval" "HoneycombMetrics.MetricsReportingInterval" "" }}
-
 ###########################
 ## OpenTelemetry Metrics ##
-###########################
-OTelMetrics:
-  ## Configuration for Refinery's OpenTelemetry metrics. This is the
+###########################OTelMetrics:  ## Configuration for Refinery's OpenTelemetry metrics. This is the
   ## preferred way to send metrics to Honeycomb. New installations should
   ## prefer OTelMetrics.
   ##
@@ -557,12 +521,9 @@ OTelMetrics:
     ## Not eligible for live reload.
     ## Options: none gzip
     {{ choice .Data "Compression" "Compression" (makeSlice "none" "gzip") "gzip" }}
-
 #####################
 ## Peer Management ##
-#####################
-PeerManagement:
-  ## Controls how the Refinery cluster communicates between peers.
+#####################PeerManagement:  ## Controls how the Refinery cluster communicates between peers.
   ####
     ## Type is the type of peer management to use.
     ##
@@ -622,12 +583,9 @@ PeerManagement:
     ##
     ## Not eligible for live reload.
     {{ renderStringarray .Data "Peers" "PeerManagement.Peers" "192.168.1.11:8081,192.168.1.12:8081" }}
-
 ###########################
 ## Redis Peer Management ##
-###########################
-RedisPeerManagement:
-  ## Controls how the Refinery cluster communicates between peers when
+###########################RedisPeerManagement:  ## Controls how the Refinery cluster communicates between peers when
   ## using Redis. Only applies when PeerManagement.Type is "redis".
   ##
   ####
@@ -704,12 +662,9 @@ RedisPeerManagement:
     ## default: 5s
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "Timeout" "PeerManagement.Timeout" "5s" }}
-
 #########################
 ## Collection Settings ##
-#########################
-Collection:
-  ## Brings together the settings that are relevant to collecting spans
+#########################Collection:  ## Brings together the settings that are relevant to collecting spans
   ## together to make traces. If none of the memory settings are used, then
   ## Refinery will not attempt to limit its memory usage. This is not
   ## recommended for production use since a burst of traffic could cause
@@ -771,12 +726,9 @@ Collection:
     ##
     ## Eligible for live reload.
     {{ memorysize .Data "MaxAlloc" "InMemCollector.MaxAlloc" "" }}
-
 ##################
 ## Buffer Sizes ##
-##################
-BufferSizes:
-  ## Brings together the settings that are relevant to the sizes of
+##################BufferSizes:  ## Brings together the settings that are relevant to the sizes of
   ## communications buffers.
   ##
   ####
@@ -803,12 +755,9 @@ BufferSizes:
     ## default: 100000
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "PeerBufferSize" "PeerBufferSize" 100000 }}
-
 ###############################
 ## Specialized Configuration ##
-###############################
-Specialized:
-  ## Special-purpose configuration options that are not typically needed.
+###############################Specialized:  ## Special-purpose configuration options that are not typically needed.
   ####
     ## EnvironmentCacheTTL is the duration for which environment information
     ## is cached.
@@ -846,12 +795,9 @@ Specialized:
     ##
     ## Eligible for live reload.
     {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "ClusterName:MyCluster,environment:production" }}
-
 ###############
 ## ID Fields ##
-###############
-IDFields:
-  ## Controls the field names to use for the event ID fields. These fields
+###############IDFields:  ## Controls the field names to use for the event ID fields. These fields
   ## are used to identify events that are part of the same trace.
   ##
   ####
@@ -873,12 +819,9 @@ IDFields:
     ##
     ## Eligible for live reload.
     {{ renderStringarray .Data "ParentNames" "ParentNames" "trace.parent_id,parentId" }}
-
 ############################
 ## gRPC Server Parameters ##
-############################
-GRPCServerParameters:
-  ## Controls the parameters of the gRPC server used to receive Open
+############################GRPCServerParameters:  ## Controls the parameters of the gRPC server used to receive Open
   ## Telemetry data in gRPC format.
   ##
   ####
@@ -962,12 +905,9 @@ GRPCServerParameters:
     ## default: 20s
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "KeepAliveTimeout" "GRPCServerParameters.Timeout" "20s" }}
-
 ##################
 ## Sample Cache ##
-##################
-SampleCache:
-  ## Controls the sample cache used to retain information about trace
+##################SampleCache:  ## Controls the sample cache used to retain information about trace
   ## status after the sampling decision has been made.
   ##
   ####
@@ -1010,12 +950,9 @@ SampleCache:
     ## default: 10s
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "SizeCheckInterval" "SampleCacheConfig/SampleCache.SizeCheckInterval" "10s" }}
-
 ###################
 ## Stress Relief ##
-###################
-StressRelief:
-  ## Controls the stress relief mechanism, which is used to prevent
+###################StressRelief:  ## Controls the stress relief mechanism, which is used to prevent
   ## Refinery from being overwhelmed by a large number of traces.
   ## There is a metric called stress_level that is emitted as part of
   ## refinery metrics. It is a measure of refinery's throughput rate
