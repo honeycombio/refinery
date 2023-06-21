@@ -1,0 +1,115 @@
+{{- $file := . -}}
+# Honeycomb Refinery Rules Documentation
+
+This is the documentation for the rules configuration for Honeycomb's Refinery.
+It was automatically generated {{ now }}.
+
+## The Rules file
+
+The rules file is a YAML file.
+Here is a simple example of a rules file:
+
+```yaml
+RulesVersion: 2
+Samplers:
+    __default__:
+        DeterministicSampler:
+            SampleRate: 1
+    production:
+        DynamicSampler:
+            SampleRate: 2
+            ClearFrequency: 30s
+            FieldList:
+                - request.method
+                - http.target
+                - response.status_code
+```
+
+Name: `RulesVersion`
+
+This is a required parameter used to verify the version of the rules file.
+It must be set to 2.
+
+Name: `Samplers`
+
+Samplers is a mapping of targets to samplers.
+Each target is a Honeycomb environment (or, for classic keys, a dataset).
+The value is the sampler to use for that target.
+The target called `__default__` will be used for any target that is not explicitly listed.
+A `__default__` target is required.
+The targets are determined by examining the API key used to send the trace.
+If the API key is a 'classic' key (which is a 32-character hexadecimal value), the specified dataset name is used as the target.
+If the API key is a new-style key (20-23 alphanumeric characters), the key's environment name is used as the target.
+
+The remainder of this document describes the samplers that can be used within the `Samplers` section and the fields that control their behavior.
+
+## Table of Contents
+{{ range $file.Groups -}}
+{{- if gt .SortOrder 0 -}}
+- [{{.Title}}](#{{ anchorize .Title }})
+{{- println -}}
+{{- end -}}
+{{- end -}}
+
+{{- println -}}
+{{- println -}}
+
+{{ range $file.Groups -}}
+{{- if gt .SortOrder 0 -}}
+{{- template "rules_sitegroup" . -}}
+{{- end -}}
+{{- end -}}
+{{- println -}}
+
+{{- define "rules_sitegroup" -}}
+{{- $group := . -}}
+---
+## {{ $group.Title }}
+
+### Name: `{{ $group.Name }}`
+
+{{ $group.Description | wrapForDocs }}
+{{- println -}}
+{{- println -}}
+
+{{- if $group.Fields -}}
+{{- println -}}
+{{- end -}}
+
+{{- range $group.Fields -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
+{{ template "rules_sitefield" . }}
+{{- end -}}
+
+{{- end -}}
+{{- define "rules_sitefield" -}}
+{{- $field := . -}}
+
+### `{{ $field.Name }}`
+
+{{ if $field.Description -}}
+{{ $field.Description | wrapForDocs }}
+
+{{- else -}}
+{{ printf "%s %s" $field.Name $field.Summary }}
+
+{{- end }}
+
+Type: `{{ $field.Type }}`
+
+{{ if $field.Default -}}
+Default: `{{ $field.Default }}`
+
+{{- end }}
+{{ if $field.Example -}}
+Example: `{{ $field.Example }}`
+
+{{- end }}
+{{ if eq $field.ValueType "choice" -}}
+{{ printf "Options: %s" (join $field.Choices " ") }}
+
+{{- end }}
+{{- println -}}
+{{- end -}}

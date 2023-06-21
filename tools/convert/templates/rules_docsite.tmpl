@@ -1,9 +1,4 @@
 {{- $file := . -}}
-# Honeycomb Refinery Rules Documentation
-
-This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated {{ now }}.
-
 ## The Rules file
 
 The rules file is a YAML file.
@@ -43,20 +38,51 @@ If the API key is a new-style key (20-23 alphanumeric characters), the key's env
 
 The remainder of this document describes the samplers that can be used within the `Samplers` section and the fields that control their behavior.
 
-## Table of Contents
 {{ range $file.Groups -}}
 {{- if gt .SortOrder 0 -}}
-- [{{.Title}}](#{{ anchorize .Title }})
-{{- println -}}
+{{- template "rules_sitegroup" . -}}
 {{- end -}}
+{{- end -}}
+{{- println -}}
+{{- define "rules_sitegroup" -}}
+{{- $group := . -}}
+
+## {{ $group.Title }}
+
+### Name: `{{ $group.Name }}`
+
+{{ $group.Description | wrapForDocs }}
+{{- println -}}
+
+{{- range $group.Fields -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
+{{ template "rules_sitefield" . }}
 {{- end -}}
 
-{{- println -}}
-{{- println -}}
+{{- end -}}
+{{- define "rules_sitefield" -}}
+{{- $field := . -}}
+### `{{ $field.Name }}`
 
-{{ range $file.Groups -}}
-{{- if gt .SortOrder 0 -}}
-{{- template "rules_docgroup.tmpl" . -}}
-{{- end -}}
-{{- end -}}
+{{ if $field.Description -}}
+{{ $field.Description | wrapForDocs }}
+{{- else -}}
+{{ printf "%s %s" $field.Name $field.Summary }}
+
+{{- end }}
+- Type: `{{ $field.Type }}`
+{{ if $field.Default -}}
+- Default: `{{ $field.Default }}`
+{{- end }}
+{{- if $field.Example -}}
+- Example: `{{ $field.Example }}`
 {{- println -}}
+{{- end -}}
+{{- if eq $field.ValueType "choice" -}}
+- {{ printf "Options: %s" (join $field.Choices " ") }}
+{{- println -}}
+{{- end }}
+{{- println -}}
+{{- end -}}

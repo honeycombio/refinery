@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample docrules docconfig validateConfig validateRules build
+all: template names sample docs validateConfig validateRules build
 
 .PHONY: build
 #: build the binary
@@ -34,8 +34,11 @@ sample:
 	@echo
 	go run . sample --output=minimal_config.yaml
 
+.PHONY: docs
+docs: docconfig docrules websiteconfig websiterules
+
 .PHONY: docconfig
-#: generate the documentation
+#: generate the config documentation for the repo
 docconfig:
 	@echo
 	@echo "+++ generating documentation"
@@ -43,12 +46,28 @@ docconfig:
 	go run . doc config --output=../../config.md
 
 .PHONY: docrules
-#: generate the documentation
+#: generate the rules documentation for the repo
 docrules:
 	@echo
 	@echo "+++ generating documentation"
 	@echo
 	go run . doc rules --output=../../rules.md
+
+.PHONY: websiteconfig
+#: generate the website config documentation
+websiteconfig:
+	@echo
+	@echo "+++ generating documentation"
+	@echo
+	go run . website config --output=../../refinery_config.md
+
+.PHONY: websiterules
+#: generate the website rules documentation
+websiterules:
+	@echo
+	@echo "+++ generating documentation"
+	@echo
+	go run . website rules --output=../../refinery_rules.md
 
 .PHONY: validate
 #: validate the sample config
