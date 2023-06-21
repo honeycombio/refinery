@@ -530,7 +530,7 @@ groups:
         description: >
           Conditions is a list of conditions to use to determine whether the
           rule matches. All conditions must be met for the rule to match. If
-          there are no conditions, the rule will always match (this is typically
+          there are no conditions, then the rule will always match (this is typically
           done for the last rule to provide a default behavior).
       - name: Scope
         type: string
