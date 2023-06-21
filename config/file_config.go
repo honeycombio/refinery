@@ -411,9 +411,13 @@ func (f *fileConfig) monitor() {
 
 // Stop halts the monitor goroutine
 func (f *fileConfig) Stop() {
-	f.ticker.Stop()
-	close(f.done)
-	f.done = nil
+	if f.ticker != nil {
+		f.ticker.Stop()
+	}
+	if f.done != nil {
+		close(f.done)
+		f.done = nil
+	}
 }
 
 func (f *fileConfig) RegisterReloadCallback(cb func()) {
