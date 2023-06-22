@@ -447,7 +447,7 @@ groups:
         summary: controls whether to sample logs.
         description: >
           Controls whether logs are sampled before sending to Honeycomb. The
-          sample rate is controlled by the SamplerThroughput setting.
+          sample rate is controlled by the `SamplerThroughput` setting.
 
       - name: SamplerThroughput
         valuetype: showexample
@@ -457,7 +457,7 @@ groups:
         reload: false
         summary: is the sampling throughput for logs in events per second.
         description: >
-          SamplerThroughput is the sampling throughput for logs measured in
+          `SamplerThroughput` is the sampling throughput for logs measured in
           events per second. The sampling algorithm attempts to make sure that
           the average throughput approximates this value, while also ensuring
           that all unique logs arrive at Honeycomb at least once per sampling
@@ -503,7 +503,7 @@ groups:
         description: >
           Determines the interface and port on which Prometheus will listen for
           requests for `/metrics`. Must be different from the main Refinery
-          listener. Only used if "Enabled" is `true` in `PrometheusMetrics`.
+          listener. Only used if `Enabled` is `true` in `PrometheusMetrics`.
 
   - name: LegacyMetrics
     title: "Legacy Metrics"
@@ -511,7 +511,7 @@ groups:
       Configuration for Refinery's legacy metrics. Version 1.x of Refinery used
       this format for sending Metrics to Honeycomb. The metrics generated that
       way are nonstandard and will be deprecated in a future release. New
-      installations should prefer OTelMetrics.
+      installations should prefer `OTelMetrics`.
     fields:
       - name: Enabled
         type: bool
@@ -1372,9 +1372,11 @@ groups:
           Sets the Stress Relief mode. 
           
           "never" means that Stress Relief will never activate.
+
           "monitor" is the recommended setting, and means that
           Stress Relief will monitor the status of Refinery and activate
           according to the levels set by fields such as `ActivationLevel`.
+          
           "always" means that Stress Relief is always on, which may be useful 
           in an emergency situation.
 
