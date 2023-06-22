@@ -86,7 +86,7 @@ groups:
           This is the IP and port on which to listen for incoming HTTP
           requests. These requests include traffic formatted as Honeycomb
           events, proxied requests to the Honeycomb API, and OpenTelemetry data
-          using the http protocol. Incoming traffic is expected to be HTTP, so
+          using the `http` protocol. Incoming traffic is expected to be HTTP, so
           if SSL is a requirement, put something like nginx in front to do the
           decryption.
 
@@ -590,7 +590,7 @@ groups:
         default: false
         reload: false
         firstversion: v2.0
-        summary: controls whether to send metrics via OpenTelemetry (OTel).
+        summary: controls whether to send metrics via OpenTelemetry.
         description: >
           `Enabled` controls whether to send OpenTelemetry metrics to Honeycomb.
 
@@ -615,14 +615,14 @@ groups:
         reload: false
         envvar: REFINERY_METRICS_OTEL_API_KEY
         firstversion: v2.0
-        summary: is the API key used to send Honeycomb metrics via OpenTelemetry(OTel).
+        summary: is the API key used to send Honeycomb metrics via OpenTelemetry.
         description: >
           Specifies the API key used when Refinery sends its own metrics.
           It is recommended that you create a separate team and key for 
           Refinery metrics.
           If this is blank, then Refinery will not set the Honeycomb-specific 
-          headers for OpenTelemetry (OTel), and your `APIHost` must be set to a 
-          valid OTel endpoint.
+          headers for OpenTelemetry, and your `APIHost` must be set to a 
+          valid OpenTelemetry endpoint.
 
       - name: Dataset
         type: string
@@ -633,10 +633,10 @@ groups:
           - type: notempty
         envvar: REFINERY_METRICS_DATASET
         firstversion: v2.0
-        summary: is the Honeycomb dataset to which OpenTelemetry (OTel) metrics will be sent.
+        summary: is the Honeycomb dataset to which OpenTelemetry metrics will be sent.
         description: >
           Specifies the dataset to which Refinery sends its own OpenTelemetry 
-          (OTel) metrics. Only used if `APIKey` is specified.
+          metrics. Only used if `APIKey` is specified.
 
       - name: ReportingInterval
         type: duration
@@ -644,10 +644,10 @@ groups:
         default: 30s
         reload: false
         firstversion: v2.0
-        summary: is the interval between sending OTel metrics to Honeycomb.
+        summary: is the interval between sending OpenTelemetry metrics to Honeycomb.
         description: >
-          The interval between sending metrics to Honeycomb. Between `1` and 
-          `60` seconds is typical.
+          The interval between sending OpenTelemetry metrics to Honeycomb. 
+          Between `1` and `60` seconds is typical.
 
       - name: Compression
         type: string
@@ -656,7 +656,7 @@ groups:
         default: "gzip"
         reload: false
         firstversion: v2.0
-        summary: is the compression algorithm to use when sending OpenTelemetry (OTel) metrics.
+        summary: is the compression algorithm to use when sending OpenTelemetry metrics.
         description: >
           The compression algorithm to use when sending metrics to Honeycomb.
           `gzip` is the default and recommended value. In rare circumstances,
@@ -679,11 +679,13 @@ groups:
           - type: choice
         summary: is the type of peer management to use.
         description: >
-          Sets the type of peer management (the mechanism by which Refinery
-          locates its peers). `file` means that Refinery gets its peer list from
-          the Peers list in this config file. `redis` means that Refinery
-          self-registers with a Redis instance and gets its peer list from
-          there.
+          Sets the type of peer management, which is the mechanism by which Refinery locates its peers. 
+          
+          `file` means that Refinery gets its peer list from
+          the Peers list in this config file. 
+          
+          `redis` means that Refinery self-registers with a Redis instance and 
+          gets its peer list from there.
 
       - name: Identifier
         v1group: PeerManagement
