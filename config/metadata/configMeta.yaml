@@ -892,6 +892,8 @@ groups:
           whenever the number of nodes changes. The legacy strategy is 
           **deprecated** and is intended to be removed in a future release.
 
+          In v2.0, the `legacy` strategy will be removed along with this setting.
+
   - name: Collection
     title: "Collection Settings"
     description: >
@@ -1079,6 +1081,9 @@ groups:
           In all cases, it only applies if `MaxAlloc` is nonzero. Default is 
           `resize` for compatibility but `impact` is recommended for most 
           installations.
+
+          In v2.0, the only available strategy is `impact`, and this setting 
+          will be removed.
 
       - name: AdditionalAttributes
         type: map
