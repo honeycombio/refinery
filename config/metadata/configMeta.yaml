@@ -66,11 +66,11 @@ groups:
           varied by a random amount to avoid all instances refreshing together.
           Within a cluster, Refinery will gossip information about new
           configuration so that all instances can reload at close to the same
-          time. This feature can be disabled with a value of `0s`.
+          time. Disable this feature with a value of `0s`.
 
   - name: Network
     title: "Network Configuration"
-    description: Contains network configuration options.
+    description: `Network` contains network configuration options.
     fields:
       - name: ListenAddr
         type: hostport
@@ -85,7 +85,7 @@ groups:
         description: >
           This is the IP and port on which to listen for incoming HTTP
           requests. These requests include traffic formatted as Honeycomb
-          events, proxied requests to the Honeycomb API, and Open Telemetry data
+          events, proxied requests to the Honeycomb API, and OpenTelemetry data
           using the http protocol. Incoming traffic is expected to be HTTP, so
           if SSL is a requirement, put something like nginx in front to do the
           decryption.
@@ -161,7 +161,7 @@ groups:
 
   - name: RefineryTelemetry
     title: "Refinery Telemetry"
-    description: Configuration info for the telemetry that Refinery uses to record its own operation.
+    description: `RefineryTelemetry` contains configuration information for the telemetry that Refinery uses to record its own operation.
     fields:
       - name: AddRuleReasonToTrace
         type: bool
@@ -206,7 +206,7 @@ groups:
 
   - name: Traces
     title: "Traces"
-    description: Configuration for how traces are managed.
+    description: `Traces` contains configuration for how traces are managed.
     fields:
       - name: SendDelay
         type: duration
@@ -283,7 +283,7 @@ groups:
 
   - name: Debugging
     title: "Debugging"
-    description: Configuration values used when setting up and debugging Refinery.
+    description: `Debugging` contains configuration values used when setting up and debugging Refinery.
     fields:
       - name: DebugServiceAddr
         type: hostport
@@ -350,7 +350,7 @@ groups:
 
   - name: Logger
     title: "Refinery Logger"
-    description: Configuration for logging.
+    description: `Logger` contains configuration for logging.
     fields:
       - name: Type
         type: string
@@ -388,7 +388,7 @@ groups:
 
   - name: HoneycombLogger
     title: "Honeycomb Logger"
-    description: Configuration for logging to Honeycomb. Only used if Logger.Type is "honeycomb".
+    description: `HoneycombLogger` contains configuration for logging to Honeycomb. Only used if `Logger.Type` is "honeycomb".
     fields:
       - name: APIHost
         v1group: HoneycombLogger
@@ -465,7 +465,7 @@ groups:
 
   - name: StdoutLogger
     title: "Stdout Logger"
-    description: Configuration for logging to stdout. Only used if Logger.Type is "stdout".
+    description: `StdoutLogger` contains configuration for logging to `stdout`. Only used if `Logger.Type` is "stdout".
     fields:
       - name: Structured
         type: bool
@@ -479,7 +479,7 @@ groups:
 
   - name: PrometheusMetrics
     title: "Prometheus Metrics"
-    description: Configuration for Refinery's internally-generated metrics as made available through Prometheus.
+    description: `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
     fields:
       - name: Enabled
         type: bool
@@ -487,7 +487,7 @@ groups:
         extra: "eq Metrics prometheus"
         default: false
         reload: false
-        summary: controls whether to expose Refinery metrics over `PromethusListenAddr`
+        summary: controls whether to expose Refinery metrics over `PrometheusListenAddr`
         description: >
           The flag specifies whether Refinery should expose its own metrics
           over the `PrometheusListenAddr` port.
@@ -508,10 +508,11 @@ groups:
   - name: LegacyMetrics
     title: "Legacy Metrics"
     description: >
-      Configuration for Refinery's legacy metrics. Version 1.x of Refinery used
-      this format for sending Metrics to Honeycomb. The metrics generated that
-      way are nonstandard and will be deprecated in a future release. New
-      installations should prefer `OTelMetrics`.
+      `LegacyMetrics` contains configuration for Refinery's legacy metrics. 
+      Version 1.x of Refinery used this format for sending Metrics to 
+      Honeycomb. The metrics generated that way are nonstandard and will be 
+      deprecated in a future release. New installations should prefer 
+      `OTelMetrics`.
     fields:
       - name: Enabled
         type: bool
@@ -581,9 +582,7 @@ groups:
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"
     description: >
-      Configuration for Refinery's OpenTelemetry (OTel) metrics. This is the 
-      preferred way to send metrics to Honeycomb. New installations should 
-      prefer `OTelMetrics`.
+      `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) metrics. This is the preferred way to send metrics to Honeycomb. New installations should prefer `OTelMetrics`.
     fields:
       - name: Enabled
         type: bool
@@ -593,7 +592,7 @@ groups:
         firstversion: v2.0
         summary: controls whether to send metrics via OpenTelemetry (OTel).
         description: >
-          Enabled controls whether to send OpenTelemetry metrics to Honeycomb.
+          `Enabled` controls whether to send OpenTelemetry metrics to Honeycomb.
 
       - name: APIHost
         type: url
@@ -666,7 +665,7 @@ groups:
 
   - name: PeerManagement
     title: "Peer Management"
-    description: Controls how the Refinery cluster communicates between peers.
+    description: `PeerManagement` controls how the Refinery cluster communicates between peers.
     fields:
       - name: Type
         v1group: PeerManagement
@@ -750,8 +749,9 @@ groups:
   - name: RedisPeerManagement
     title: "Redis Peer Management"
     description: >
-      Controls how the Refinery cluster communicates between peers when using 
-      Redis. Only applies when `PeerManagement.Type` is "redis".
+      `RedisPeerManagement` controls how the Refinery cluster communicates 
+      between peers when using Redis. Only applies when `PeerManagement.Type` 
+      is "redis".
 
     fields:
       - name: Host
@@ -897,7 +897,7 @@ groups:
   - name: Collection
     title: "Collection Settings"
     description: >
-      Brings together the settings that are relevant to collecting spans
+      `Collection` contains the settings that are relevant to collecting spans
       together to make traces. If none of the memory settings are used, then
       Refinery will not attempt to limit its memory usage. This is not
       recommended for production use since a burst of traffic could cause
@@ -979,7 +979,7 @@ groups:
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >
-      Brings together the settings that are relevant to
+      `BufferSizes` contains the settings that are relevant to
       the sizes of communications buffers.
     fields:
       - name: UpstreamBufferSize
@@ -1014,7 +1014,7 @@ groups:
 
   - name: Specialized
     title: "Specialized Configuration"
-    description: Special-purpose configuration options that are not typically needed.
+    description: `Specialized` contains special-purpose configuration options that are not typically needed.
     fields:
       - name: EnvironmentCacheTTL
         type: duration
@@ -1102,8 +1102,7 @@ groups:
   - name: IDFields
     title: "ID Fields"
     description: >
-      Controls the field names to use for the event ID fields. These fields are
-      used to identify events that are part of the same trace.
+      `IDFields` controls the field names to use for the event ID fields. These fields are used to identify events that are part of the same trace.
     fields:
       - name: TraceNames
         type: stringarray
@@ -1137,8 +1136,7 @@ groups:
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
     description: >
-      Controls the parameters of the gRPC server used to receive Open Telemetry
-      data in gRPC format.
+      `GRPCServerParameters` controls the parameters of the gRPC server used to receive OpenTelemetry data in gRPC format.
     fields:
       - name: Enabled
         type: bool
@@ -1158,10 +1156,9 @@ groups:
         reload: false
         envvar: REFINERY_GRPC_LISTEN_ADDRESS
         commandLine: GRPCListenAddr
-        summary: is the address Refinery listens to for incoming GRPC Open Telemetry events.
+        summary: is the address Refinery listens to for incoming GRPC OpenTelemetry events.
         description: >
-          Incoming traffic is expected to be unencrypted, so if using SSL put
-          something like nginx in front to do the decryption.
+          Incoming traffic is expected to be unencrypted, so if using SSL, then put something like `nginx` in front to do the decryption.
 
       - name: MaxConnectionIdle
         v1group: GRPCServerParameters
@@ -1198,6 +1195,7 @@ groups:
           before it will be closed by sending a `GoAway`. A random jitter of 
           +/-10% will be added to `MaxConnectionAge` to spread out connection 
           storms.
+
           `0s` sets duration to infinity; a value measured in low minutes will 
           help load balancers to distribute load among peers more evenly.
 
@@ -1249,8 +1247,7 @@ groups:
   - name: SampleCache
     title: "Sample Cache"
     description: >
-      Controls the sample cache used to retain information about trace
-      status after the sampling decision has been made.
+      `SampleCache` controls the sample cache used to retain information about trace status after the sampling decision has been made.
     fields:
       - name: Type
         # we had a bug in the v1 config where this was implemented as `SampleCache` but documented as `SampleCacheConfig`;
@@ -1331,8 +1328,7 @@ groups:
   - name: StressRelief
     title: "Stress Relief"
     description: >
-      Controls the Stress Relief mechanism, which is used to prevent
-      Refinery from being overwhelmed by a large number of traces.
+      `StressRelief` controls the Stress Relief mechanism, which is used to prevent Refinery from being overwhelmed by a large number of traces.
 
       There is a metric called `stress_level` that is emitted as part of 
       Refinery metrics. It is a measure of Refinery's throughput rate relative 
