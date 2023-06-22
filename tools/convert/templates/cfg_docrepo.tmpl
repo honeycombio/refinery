@@ -41,9 +41,7 @@ The remainder of this document describes the sections within the file and the fi
 
 ## {{ $group.Title }}
 
-### Section Name: `{{ $group.Name }}`
-
-{{ $group.Description | wrapForDocs }}
+{{ printf "`%s` %s" $group.Name $group.Description | wrapForDocs }}
 {{- println -}}
 {{- range $group.Fields -}}
 {{- if .LastVersion -}}
@@ -76,6 +74,14 @@ The remainder of this document describes the sections within the file and the fi
 {{- end -}}
 {{- if eq $field.ValueType "choice" -}}
 - Options: `{{- printf "%s" (join $field.Choices " ") -}}`
+{{- println -}}
+{{- end -}}
+{{- if $field.Envvar -}}
+- Environment variable: `{{ $field.Envvar }}`
+{{- println -}}
+{{- end -}}
+{{- if $field.CommandLine -}}
+- Command line switch: `--{{ $field.CommandLine }}`
 {{- println -}}
 {{- end -}}
 {{- println -}}
