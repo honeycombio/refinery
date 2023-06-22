@@ -30,7 +30,7 @@ The remainder of this document describes the sections within the file and the fi
 
 ## {{ $group.Title }}
 
-{{ $group.Description | wrapForDocs }}
+{{ printf "`%s` %s" $group.Name $group.Description | wrapForDocs }}
 {{- println -}}
 {{- println -}}
 Section Name: `{{ $group.Name }}`
@@ -50,7 +50,7 @@ Section Name: `{{ $group.Name }}`
 
 ### `{{ $field.Name }}`
 
-{{ printf "%s %s" $field.Name $field.Summary }}
+{{ printf "`%s` %s" $field.Name $field.Summary }}
 
 {{ $field.Description | wrapForDocs -}}
 {{- println -}}
