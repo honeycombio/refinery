@@ -271,6 +271,20 @@ func ConvertConfig(tmplData *configTemplateData, w io.Writer) {
 	}
 }
 
+func removeEmpty(m map[string]any) map[string]any {
+	result := make(map[string]any)
+	for k, v := range m {
+		switch val := v.(type) {
+		case map[string]any:
+			result[k] = removeEmpty(val)
+		case nil:
+		default:
+			result[k] = v
+		}
+	}
+	return result
+}
+
 func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
 	const rulesConfigMapName = "RulesConfigMapName"
 	const liveReload = "LiveReload"
@@ -313,7 +327,7 @@ func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
 			}
 			panic(err)
 		}
-		tmplData.Data["config"] = decodedConfig
+		tmplData.Data["config"] = removeEmpty(decodedConfig)
 	}
 
 	// now try the rules
