@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/honeycombio/refinery/config"
@@ -63,6 +65,11 @@ func getType(filename string) string {
 	}
 }
 
+type configTemplateData struct {
+	Input string
+	Data  map[string]any
+}
+
 func main() {
 	opts := Options{}
 
@@ -86,9 +93,14 @@ func main() {
 	filetype of the input file based on the extension, but you can override that with
 	the --type flag.
 
+	Because many organizations use helm charts to manage their refinery deployments, there
+	is a subcommand that can read a helm chart, extract both the rules and config from it,
+	and write them back out to a helm chart, while preserving the non-refinery portions.
+
 	It has other commands to help with the conversion process. Valid commands are:
 	    convert config:          convert a config file
 	    convert rules:           convert a rules file
+		convert helm: 			 convert a helm values file
 	    convert validate config: validate a config file against the 2.0 format
 	    convert validate rules:  validate a rules file against the 2.0 format
 	    convert doc config:      generate markdown documentation for the config file
@@ -161,7 +173,7 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(0)
-	case "config", "rules", "validate":
+	case "config", "rules", "validate", "helm":
 		// do nothing yet because we need to parse the input file
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand %s; valid commands are config, doc config, validate config, rules, doc rules, validate rules\n", args[0])
@@ -190,31 +202,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	tmplData := struct {
-		Input string
-		Data  map[string]any
-	}{
+	tmplData := &configTemplateData{
 		Input: opts.Input,
 		Data:  userConfig,
 	}
 
 	switch args[0] {
 	case "config":
-		tmpl := template.New("configV2.tmpl")
-		tmpl.Funcs(helpers())
-		tmpl, err = tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "template error %v\n", err)
-			os.Exit(1)
-		}
-
-		err = tmpl.Execute(output, tmplData)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "template error %v\n", err)
-			os.Exit(1)
-		}
+		ConvertConfig(tmplData, output)
 	case "rules":
 		ConvertRules(userConfig, output)
+	case "helm":
+		ConvertHelm(tmplData, output)
 	case "validate":
 		if args[1] == "config" {
 			if !ValidateFromMetadata(userConfig, output) {
@@ -254,6 +253,107 @@ func loadRulesMetadata() *config.Metadata {
 	})
 
 	return m
+}
+
+func ConvertConfig(tmplData *configTemplateData, w io.Writer) {
+	tmpl := template.New("configV2.tmpl")
+	tmpl.Funcs(helpers())
+	tmpl, err := tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "template error %v\n", err)
+		os.Exit(1)
+	}
+
+	err = tmpl.Execute(w, tmplData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "template error %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func removeEmpty(m map[string]any) map[string]any {
+	result := make(map[string]any)
+	for k, v := range m {
+		switch val := v.(type) {
+		case map[string]any:
+			result[k] = removeEmpty(val)
+		case nil:
+		default:
+			result[k] = v
+		}
+	}
+	return result
+}
+
+func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
+	const rulesConfigMapName = "RulesConfigMapName"
+	const liveReload = "LiveReload"
+	// convert config if we have it
+	helmConfigAny, ok := tmplData.Data["config"]
+	if ok {
+		helmConfig, ok := helmConfigAny.(map[string]any)
+		if !ok {
+			panic("config in helm chart is the wrong format!")
+		}
+		// we need to promote this special key for Honeycomb configs
+		if mapname, ok := helmConfig[rulesConfigMapName]; ok {
+			tmplData.Data[rulesConfigMapName] = mapname
+			delete(helmConfig, rulesConfigMapName)
+		}
+
+		convertedConfig := &bytes.Buffer{}
+		// make a copy of this tmplData and overwrite the Data part
+		config := *tmplData
+		config.Data = helmConfig
+		// convert the config into the buffer
+		ConvertConfig(&config, convertedConfig)
+		// read the buffer as YAML
+		decoder := yaml.NewDecoder(convertedConfig)
+		var decodedConfig map[string]any
+		saved := convertedConfig.String()
+		err := decoder.Decode(&decodedConfig)
+		if err != nil {
+			s := err.Error()
+			pat := regexp.MustCompile("yaml: line ([0-9]+):")
+			m := pat.FindStringSubmatch(s)
+			if len(m) > 1 {
+				linenum, _ := strconv.Atoi(m[1])
+				lines := strings.Split(saved, "\n")
+				for i := linenum - 15; i < linenum+5; i++ {
+					if len(lines) > i {
+						fmt.Printf("%d: %s\n", i, lines[i])
+					}
+				}
+			}
+			panic(err)
+		}
+		tmplData.Data["config"] = removeEmpty(decodedConfig)
+	}
+
+	// now try the rules
+	helmRulesAny, ok := tmplData.Data["rules"]
+	if ok {
+		helmRules, ok := helmRulesAny.(map[string]any)
+		if !ok {
+			panic("config in helm chart is the wrong format!")
+		}
+		// we need to promote this special key for Honeycomb configs
+		if mapname, ok := helmRules[liveReload]; ok {
+			tmplData.Data[liveReload] = mapname
+			delete(helmRules, liveReload)
+		}
+
+		rules := convertRulesToNewConfig(helmRules)
+		tmplData.Data["rules"] = rules
+	}
+
+	// now we have our tmplData.Data with converted contents
+	// so we can just write it all back as YAML now
+	encoder := yaml.NewEncoder(w)
+	err := encoder.Encode(tmplData.Data)
+	if err != nil {
+		panic(err)
+	}
 }
 
 // This generates the template used by the convert tool.

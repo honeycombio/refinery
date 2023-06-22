@@ -127,7 +127,7 @@ func CheckConfigForSampleRateChanges(cfg *config.V2SamplerConfig) map[string][]s
 	return warnings
 }
 
-func ConvertRules(rules map[string]any, w io.Writer) {
+func convertRulesToNewConfig(rules map[string]any) *config.V2SamplerConfig {
 	// get the sampler type for the default rule
 	defaultSamplerType, _ := getValueForCaseInsensitiveKey(rules, "sampler", "DeterministicSampler")
 
@@ -167,7 +167,11 @@ func ConvertRules(rules map[string]any, w io.Writer) {
 
 		newConfig.Samplers[k] = sampler
 	}
+	return newConfig
+}
 
+func ConvertRules(rules map[string]any, w io.Writer) {
+	newConfig := convertRulesToNewConfig(rules)
 	w.Write([]byte(fmt.Sprintf("# Automatically generated on %s\n", time.Now().Format(time.RFC3339))))
 	yaml.NewEncoder(w).Encode(newConfig)
 

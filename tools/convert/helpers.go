@@ -172,7 +172,7 @@ func memorysize(data map[string]any, key, oldkey string, example string) string 
 		case int:
 			i64 = int64(i)
 		}
-		return units.HumanSize(float64(i64))
+		return fmt.Sprintf(`# %s: %s`, key, units.HumanSize(float64(i64)))
 	}
 	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }
@@ -411,7 +411,14 @@ func yamlf(a any) string {
 		if pat.MatchString(v) {
 			return v
 		}
-		return fmt.Sprintf(`"%s"`, v)
+		hasSingleQuote := strings.Contains(v, "'")
+		hasDoubleQuote := strings.Contains(v, `"`)
+		switch {
+		case hasDoubleQuote && !hasSingleQuote:
+			return fmt.Sprintf(`'%s'`, v)
+		default:
+			return fmt.Sprintf("%#v", v)
+		}
 	case int:
 		return _formatIntWithUnderscores(v)
 	case float64:
