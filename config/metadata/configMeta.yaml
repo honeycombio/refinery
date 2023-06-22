@@ -200,10 +200,9 @@ groups:
         summary: specifies whether to add host metadata to traces.
         description: >
           `AddHostMetadataToTrace` specifies whether to add host metadata to 
-          traces. If `true`, then Refinery will add the following tags to all 
+          traces. If `true`, then Refinery will add the following tag to all 
           traces:
           - `meta.refinery.local_hostname`: the hostname of the Refinery node
-          (we should consider adding more metadata here, like IP address, etc.)
 
   - name: Traces
     title: "Traces"
@@ -463,7 +462,6 @@ groups:
           the average throughput approximates this value, while also ensuring
           that all unique logs arrive at Honeycomb at least once per sampling
           period.
-          TODO: THROUGHPUT FOR THE CLUSTER
 
   - name: StdoutLogger
     title: "Stdout Logger"
@@ -893,8 +891,6 @@ groups:
           causes 1/2 of the in-flight traces to be assigned to a different node 
           whenever the number of nodes changes. The legacy strategy is 
           **deprecated** and is intended to be removed in a future release.
-          
-          In v2.0, the legacy strategy will be removed along with this setting.
 
   - name: Collection
     title: "Collection Settings"
@@ -1057,8 +1053,7 @@ groups:
         reload: false
         summary: is the collector to use for collecting traces.
         description: >
-          Currently the only supported value is `InMemCollector`. This setting
-          will be removed in v2.0.
+          Currently the only supported value is `InMemCollector`.
 
       - name: CacheOverrunStrategy
         type: string
@@ -1083,10 +1078,7 @@ groups:
           
           In all cases, it only applies if `MaxAlloc` is nonzero. Default is 
           `resize` for compatibility but `impact` is recommended for most 
-          installations. 
-          
-          In v2.0, the only available strategy is `impact`, and this setting 
-          will be removed.
+          installations.
 
       - name: AdditionalAttributes
         type: map
@@ -1152,9 +1144,6 @@ groups:
         description: >
           Specifies whether the gRPC server is enabled. If `false`, then the 
           gRPC server is not started and no gRPC traffic is accepted.
-
-          TODO: WE NEED TO DEFAULT THIS TO TRUE IF PREVIOUS CONFIG HAS A LISTEN 
-          ADDRESS
 
       - name: ListenAddr
         v1name: GRPCListenAddr
