@@ -2,7 +2,7 @@
 groups:
   - name: "General"
     title: "General Configuration"
-    description: `General` contains general configuration options that apply to the entire Refinery process.
+    description: contains general configuration options that apply to the entire Refinery process.
     fields:
       - name: ConfigurationVersion
         type: int
@@ -30,9 +30,9 @@ groups:
             arg: version
         summary: is the minimum version of Refinery that can load this configuration file.
         description: >
-          This setting specifies the lowest Refinery version capable of loading 
-          all of the features used in this file. If this value is present, 
-          then Refinery will refuse to start if its version is less than this 
+          This setting specifies the lowest Refinery version capable of loading
+          all of the features used in this file. If this value is present,
+          then Refinery will refuse to start if its version is less than this
           setting.
 
       - name: DatasetPrefix
@@ -46,9 +46,9 @@ groups:
         summary: is a prefix that can be used to distinguish a dataset from an environment in the rules.
         description: >
           If telemetry is being sent to both a classic dataset and a new
-          environment called the same thing, such as `production`, then this 
-          parameter can be used to distinguish these cases. When Refinery 
-          receives telemetry using an API key associated with a Honeycomb 
+          environment called the same thing, such as `production`, then this
+          parameter can be used to distinguish these cases. When Refinery
+          receives telemetry using an API key associated with a Honeycomb
           Classic dataset, it will then use the prefix in the form `{prefix}.
           {dataset}` when trying to resolve the rules definition.
 
@@ -71,7 +71,7 @@ groups:
 
   - name: Network
     title: "Network Configuration"
-    description: `Network` contains network configuration options.
+    description: contains network configuration options.
     fields:
       - name: ListenAddr
         type: hostport
@@ -84,11 +84,11 @@ groups:
         commandLine: ListenAddr
         summary: is the address where Refinery listens for incoming requests.
         description: >
-          This setting is the IP and port on which Refinery listens for 
-          incoming HTTP requests. These requests include traffic formatted as 
-          Honeycomb events, proxied requests to the Honeycomb API, and 
-          OpenTelemetry data using the `http` protocol. Incoming traffic is 
-          expected to be HTTP, so if SSL is a requirement, put something like 
+          This setting is the IP and port on which Refinery listens for
+          incoming HTTP requests. These requests include traffic formatted as
+          Honeycomb events, proxied requests to the Honeycomb API, and
+          OpenTelemetry data using the `http` protocol. Incoming traffic is
+          expected to be HTTP, so if SSL is a requirement, put something like
           `nginx` in front to do the decryption.
 
       - name: PeerListenAddr
@@ -116,13 +116,13 @@ groups:
         commandLine: HoneycombAPI
         summary: is the URL of the upstream Honeycomb API where the data will be sent.
         description: >
-          This setting is the destination to which Refinery sends all events 
+          This setting is the destination to which Refinery sends all events
           that it decides to keep.
 
   - name: AccessKeys
     title: "Access Key Configuration"
     description: >
-      Contains access keys -- API keys that the proxy will treat specially, and 
+      Contains access keys -- API keys that the proxy will treat specially, and
       other flags that control how the proxy handles API keys.
     fields:
       - name: ReceiveKeys
@@ -152,16 +152,16 @@ groups:
             arg: ReceiveKeys
         summary: is a boolean flag that causes events arriving with API keys not in the `ReceiveKeys` list to be rejected.
         description: >
-          If `true`, then only traffic using the keys listed in `APIKeys` is 
-          accepted. Events arriving with API keys not in the `ReceiveKeys` list 
+          If `true`, then only traffic using the keys listed in `APIKeys` is
+          accepted. Events arriving with API keys not in the `ReceiveKeys` list
           will be rejected with an HTTP `401` error.
-          
-          If `false`, then all traffic is accepted and `ReceiveKeys` is 
+
+          If `false`, then all traffic is accepted and `ReceiveKeys` is
           ignored. Must be specified if `APIKeys` is specified.
 
   - name: RefineryTelemetry
     title: "Refinery Telemetry"
-    description: `RefineryTelemetry` contains configuration information for the telemetry that Refinery uses to record its own operation.
+    description: contains configuration information for the telemetry that Refinery uses to record its own operation.
     fields:
       - name: AddRuleReasonToTrace
         type: bool
@@ -171,11 +171,11 @@ groups:
         reload: true
         summary: controls whether to decorate traces with Refinery rule evaluation results.
         description: >
-          When enabled, this setting causes traces that are sent to Honeycomb 
-          to include the field `meta.refinery.reason`. This field contains text 
-          indicating which rule was evaluated that caused the trace to be 
-          included. We recommend enabling this setting whenever a rules-based 
-          sampler is in use, as it is useful for debugging and understanding 
+          When enabled, this setting causes traces that are sent to Honeycomb
+          to include the field `meta.refinery.reason`. This field contains text
+          indicating which rule was evaluated that caused the trace to be
+          included. We recommend enabling this setting whenever a rules-based
+          sampler is in use, as it is useful for debugging and understanding
           the behavior of your Refinery installation.
 
       - name: AddSpanCountToRoot
@@ -199,13 +199,13 @@ groups:
         reload: true
         summary: specifies whether to add host metadata to traces.
         description: >
-          If `true`, then Refinery will add the following tag to all 
+          If `true`, then Refinery will add the following tag to all
           traces:
           - `meta.refinery.local_hostname`: the hostname of the Refinery node
 
   - name: Traces
     title: "Traces"
-    description: `Traces` contains configuration for how traces are managed.
+    description: contains configuration for how traces are managed.
     fields:
       - name: SendDelay
         type: duration
@@ -214,10 +214,10 @@ groups:
         reload: true
         summary: is the duration to wait before sending a trace.
         description: >
-          This setting is a short timer that is triggered when a trace is 
-          complete. Refinery waits for this duration before sending the trace. 
-          The reason for this setting is to allow for small network delays or 
-          clock jitters to elapse and any final spans to arrive before sending 
+          This setting is a short timer that is triggered when a trace is
+          complete. Refinery waits for this duration before sending the trace.
+          The reason for this setting is to allow for small network delays or
+          clock jitters to elapse and any final spans to arrive before sending
           the trace. Set to "0" for immediate sending.
 
       - name: BatchTimeout
@@ -238,14 +238,14 @@ groups:
         description: >
           A long timer; it represents the outside boundary of how long to wait
           before making the trace decision about an incomplete trace.
-          
-          Normally trace decisions (send or drop) are made when the root span 
-          arrives. Sometimes the root span never arrives (for example, due to 
-          crashes) and this timer ensures sending a trace even without having 
+
+          Normally trace decisions (send or drop) are made when the root span
+          arrives. Sometimes the root span never arrives (for example, due to
+          crashes) and this timer ensures sending a trace even without having
           received the root span.
 
-          If particularly long-lived traces are present in your data, then you 
-          should increase this timer. Note that this increase will also 
+          If particularly long-lived traces are present in your data, then you
+          should increase this timer. Note that this increase will also
           increase the memory requirements for Refinery.
 
       - name: MaxBatchSize
@@ -258,11 +258,11 @@ groups:
             arg: 100
         summary: is the maximum number of events to be included in each batch for sending.
         description: >
-          This value is used to set the `BatchSize` field in the `libhoney` 
-          library used to send data to Honeycomb. 
-          
-          If you have particularly large traces, then you should increase this 
-          value. Note that this will also increase the memory requirements for 
+          This value is used to set the `BatchSize` field in the `libhoney`
+          library used to send data to Honeycomb.
+
+          If you have particularly large traces, then you should increase this
+          value. Note that this will also increase the memory requirements for
           Refinery.
 
       - name: SendTicker
@@ -274,13 +274,13 @@ groups:
         description: >
           A short timer that determines the duration between trace cache review
           runs to send. Increasing this will spend more time processing incoming
-          events to reduce `incoming_` or `peer_router_dropped` spikes. 
-          Decreasing this will check the trace cache for timeouts more 
+          events to reduce `incoming_` or `peer_router_dropped` spikes.
+          Decreasing this will check the trace cache for timeouts more
           frequently.
 
   - name: Debugging
     title: "Debugging"
-    description: `Debugging` contains configuration values used when setting up and debugging Refinery.
+    description: contains configuration values used when setting up and debugging Refinery.
     fields:
       - name: DebugServiceAddr
         type: hostport
@@ -289,10 +289,10 @@ groups:
         reload: false
         summary: is the IP and port where the debug service runs.
         description: >
-          The debug service is generally only used when debugging Refinery 
-          itself, and will only run if the command line option `-d` is 
-          specified. If this value is not specified, then the debug service 
-          runs on the first open port between `localhost:6060` and 
+          The debug service is generally only used when debugging Refinery
+          itself, and will only run if the command line option `-d` is
+          specified. If this value is not specified, then the debug service
+          runs on the first open port between `localhost:6060` and
           `localhost:6069`.
 
       - name: QueryAuthToken
@@ -303,7 +303,7 @@ groups:
         envvar: REFINERY_QUERY_AUTH_TOKEN
         summary: is the token that must be specified to access the `/query` endpoint.
         description: >
-          This token must be specified with the header 
+          This token must be specified with the header
           "X-Honeycomb-Refinery-Query" in order for a `/query` request to
           succeed. These `/query` requests are intended for debugging Refinery
           during setup and are not typically needed in normal operation. If not
@@ -319,10 +319,10 @@ groups:
             arg: string
         summary: is a list of span fields to include when logging errors happen during the ingestion of events.
         description: >
-          For example, the span too large error. This is primarily useful in 
-          trying to track down misbehaving senders in a large installation. The 
-          fields `dataset`, `apihost`, and `environment` are always included. 
-          If a field is not present in the span, then it will not be present in 
+          For example, the span too large error. This is primarily useful in
+          trying to track down misbehaving senders in a large installation. The
+          fields `dataset`, `apihost`, and `environment` are always included.
+          If a field is not present in the span, then it will not be present in
           the error log.
 
       - name: DryRun
@@ -333,20 +333,20 @@ groups:
         reload: true
         summary: controls whether sampling is applied to incoming traces.
         description: >
-          If enabled, then Refinery marks the traces that would be dropped 
-          given the current sampling rules, and sends all traces regardless of 
-          the sampling decision. This is useful for evaluating sampling rules. 
-          
+          If enabled, then Refinery marks the traces that would be dropped
+          given the current sampling rules, and sends all traces regardless of
+          the sampling decision. This is useful for evaluating sampling rules.
+
           When DryRun is enabled, traces is decorated with `meta.refinery.
-          dryrun.kept` that is set to `true` or `false`, based on whether the 
-          trace would be kept or dropped. In addition, `SampleRate` will be set 
-          to the incoming rate for all traces, and the field 
-          `meta.refinery.dryrun.sample_rate` will be set to the sample rate 
+          dryrun.kept` that is set to `true` or `false`, based on whether the
+          trace would be kept or dropped. In addition, `SampleRate` will be set
+          to the incoming rate for all traces, and the field
+          `meta.refinery.dryrun.sample_rate` will be set to the sample rate
           that would have been used.
 
   - name: Logger
     title: "Refinery Logger"
-    description: `Logger` contains configuration for logging.
+    description: contains configuration for logging.
     fields:
       - name: Type
         type: string
@@ -358,11 +358,11 @@ groups:
           - type: choice
         summary: is the type of logger to use.
         description: >
-          The setting specifies where (and if) Refinery sends logs. 
-          
-          `none` means that logs are discarded. 
-        
-          `honeycomb` means that logs will be forwarded to Honeycomb as events 
+          The setting specifies where (and if) Refinery sends logs.
+
+          `none` means that logs are discarded.
+
+          `honeycomb` means that logs will be forwarded to Honeycomb as events
           according to the set Logging settings.
 
           `stdout` means that logs will be written to `stdout`.
@@ -378,13 +378,13 @@ groups:
         summary: is the logging level above which Refinery should send a log to the logger.
         description: >
           `warn` is the recommended level for production.
-          
+
           `debug` is very verbose, and should not be used in production
-          environments. 
+          environments.
 
   - name: HoneycombLogger
     title: "Honeycomb Logger"
-    description: `HoneycombLogger` contains configuration for logging to Honeycomb. Only used if `Logger.Type` is "honeycomb".
+    description: contains configuration for logging to Honeycomb. Only used if `Logger.Type` is "honeycomb".
     fields:
       - name: APIHost
         v1group: HoneycombLogger
@@ -396,7 +396,7 @@ groups:
         envvar: REFINERY_LOGS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API where Refinery sends its logs.
         description: >
-          Refinery's internal logs will be sent to this host using the standard 
+          Refinery's internal logs will be sent to this host using the standard
           Honeycomb Events API.
 
       - name: APIKey
@@ -415,7 +415,7 @@ groups:
             arg: apikey
         summary: is the API key used to send Refinery's logs to Honeycomb.
         description: >
-          It is recommended that you create a separate team and key for 
+          It is recommended that you create a separate team and key for
           Refinery logs.
 
       - name: Dataset
@@ -451,14 +451,14 @@ groups:
         reload: false
         summary: is the sampling throughput for logs in events per second.
         description: >
-          The sampling algorithm attempts to make sure that the average 
-          throughput approximates this value, while also ensuring that all 
+          The sampling algorithm attempts to make sure that the average
+          throughput approximates this value, while also ensuring that all
           unique logs arrive at Honeycomb at least once per sampling
           period.
 
   - name: StdoutLogger
     title: "Stdout Logger"
-    description: `StdoutLogger` contains configuration for logging to `stdout`. Only used if `Logger.Type` is "stdout".
+    description: contains configuration for logging to `stdout`. Only used if `Logger.Type` is "stdout".
     fields:
       - name: Structured
         type: bool
@@ -472,7 +472,7 @@ groups:
 
   - name: PrometheusMetrics
     title: "Prometheus Metrics"
-    description: `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
+    description: contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
     fields:
       - name: Enabled
         type: bool
@@ -482,7 +482,7 @@ groups:
         reload: false
         summary: controls whether to expose Refinery metrics over the `PrometheusListenAddr` port.
         description: >
-          Each of the metrics providers can be enabled or disabled 
+          Each of the metrics providers can be enabled or disabled
           independently. Metrics can be sent to multiple destinations.
 
       - name: ListenAddr
@@ -501,10 +501,10 @@ groups:
   - name: LegacyMetrics
     title: "Legacy Metrics"
     description: >
-      `LegacyMetrics` contains configuration for Refinery's legacy metrics. 
-      Version 1.x of Refinery used this format for sending Metrics to 
-      Honeycomb. The metrics generated that way are nonstandard and will be 
-      deprecated in a future release. New installations should prefer 
+      `LegacyMetrics` contains configuration for Refinery's legacy metrics.
+      Version 1.x of Refinery used this format for sending Metrics to
+      Honeycomb. The metrics generated that way are nonstandard and will be
+      deprecated in a future release. New installations should prefer
       `OTelMetrics`.
     fields:
       - name: Enabled
@@ -515,7 +515,7 @@ groups:
         reload: false
         summary: controls whether to send legacy-formatted metrics to Honeycomb.
         description: >
-          Each of the metrics providers can be enabled or disabled 
+          Each of the metrics providers can be enabled or disabled
           independently. Metrics can be sent to multiple destinations.
 
       - name: APIHost
@@ -528,7 +528,7 @@ groups:
         envvar: REFINERY_METRICS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API where legacy metrics are sent.
         description: >
-          Refinery's internal metrics will be sent to this host using the 
+          Refinery's internal metrics will be sent to this host using the
           standard Honeycomb Events API.
 
       - name: APIKey
@@ -545,7 +545,7 @@ groups:
         envvar: REFINERY_METRICS_API_KEY
         summary: is the API key used by Refinery to send its metrics to Honeycomb.
         description: >
-          It is recommended that you create a separate team and key for 
+          It is recommended that you create a separate team and key for
           Refinery metrics.
 
       - name: Dataset
@@ -576,8 +576,8 @@ groups:
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"
     description: >
-      `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) 
-      metrics. This is the preferred way to send metrics to Honeycomb. New 
+      `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel)
+      metrics. This is the preferred way to send metrics to Honeycomb. New
       installations should prefer `OTelMetrics`.
     fields:
       - name: Enabled
@@ -588,7 +588,7 @@ groups:
         firstversion: v2.0
         summary: controls whether to send metrics via OpenTelemetry.
         description: >
-          Each of the metrics providers can be enabled or disabled 
+          Each of the metrics providers can be enabled or disabled
           independently. Metrics can be sent to multiple destinations.
 
       - name: APIHost
@@ -600,7 +600,7 @@ groups:
         firstversion: v2.0
         summary: is the URL of the OpenTelemetry API to which metrics will be sent.
         description: >
-          Refinery's internal metrics will be sent to the `/v1/metrics` 
+          Refinery's internal metrics will be sent to the `/v1/metrics`
           endpoint on this host.
 
       - name: APIKey
@@ -614,11 +614,11 @@ groups:
         firstversion: v2.0
         summary: is the API key used to send Honeycomb metrics via OpenTelemetry.
         description: >
-          It is recommended that you create a separate team and key for 
+          It is recommended that you create a separate team and key for
           Refinery metrics.
 
-          If this is blank, then Refinery will not set the Honeycomb-specific 
-          headers for OpenTelemetry, and your `APIHost` must be set to a 
+          If this is blank, then Refinery will not set the Honeycomb-specific
+          headers for OpenTelemetry, and your `APIHost` must be set to a
           valid OpenTelemetry endpoint.
 
       - name: Dataset
@@ -641,7 +641,7 @@ groups:
         reload: false
         firstversion: v2.0
         summary: is the interval between sending OpenTelemetry metrics to Honeycomb.
-        description: > 
+        description: >
           Between `1` and `60` seconds is typical.
 
       - name: Compression
@@ -659,7 +659,7 @@ groups:
 
   - name: PeerManagement
     title: "Peer Management"
-    description: `PeerManagement` controls how the Refinery cluster communicates between peers.
+    description: controls how the Refinery cluster communicates between peers.
     fields:
       - name: Type
         v1group: PeerManagement
@@ -673,12 +673,12 @@ groups:
           - type: choice
         summary: is the type of peer management to use.
         description: >
-          Peer management is the mechanism by which Refinery locates its peers. 
-          
+          Peer management is the mechanism by which Refinery locates its peers.
+
           `file` means that Refinery gets its peer list from
-          the Peers list in this config file. 
-          
-          `redis` means that Refinery self-registers with a Redis instance and 
+          the Peers list in this config file.
+
+          `redis` means that Refinery self-registers with a Redis instance and
           gets its peer list from there.
 
       - name: Identifier
@@ -693,8 +693,8 @@ groups:
           By default, when using a peer registry, Refinery will use the local
           hostname to identify itself to other peers. If your environment
           requires something else, (for example, if peers cannot resolve each
-          other by name), then you can specify the exact identifier, such as an 
-          IP address, to use here. Overrides `IdentifierInterfaceName`, if both 
+          other by name), then you can specify the exact identifier, such as an
+          IP address, to use here. Overrides `IdentifierInterfaceName`, if both
           are set.
 
       - name: IdentifierInterfaceName
@@ -708,10 +708,10 @@ groups:
         description: >
           By default, when using a peer registry, Refinery will use the local
           hostname to identify itself to other peers. If your environment
-          requires that you use IPs as identifiers (for example, if peers 
-          cannot resolve each other by name), then you can specify the network 
-          interface that Refinery is listening on here. Refinery will use the 
-          first unicast address that it finds on the specified network 
+          requires that you use IPs as identifiers (for example, if peers
+          cannot resolve each other by name), then you can specify the network
+          interface that Refinery is listening on here. Refinery will use the
+          first unicast address that it finds on the specified network
           interface as its identifier.
 
       - name: UseIPV6Identifier
@@ -725,7 +725,7 @@ groups:
         description: >
           If using `IdentifierInterfaceName`, Refinery will default to the first
           IPv4 unicast address it finds for the specified interface. If this
-          value is specified, then Refinery will use the first IPV6 unicast 
+          value is specified, then Refinery will use the first IPV6 unicast
           address found.
 
       - name: Peers
@@ -746,8 +746,8 @@ groups:
   - name: RedisPeerManagement
     title: "Redis Peer Management"
     description: >
-      `RedisPeerManagement` controls how the Refinery cluster communicates 
-      between peers when using Redis. Only applies when `PeerManagement.Type` 
+      `RedisPeerManagement` controls how the Refinery cluster communicates
+      between peers when using Redis. Only applies when `PeerManagement.Type`
       is "redis".
 
     fields:
@@ -773,7 +773,7 @@ groups:
         envvar: REFINERY_REDIS_USERNAME
         summary: is the username used to connect to Redis for peer cluster membership management.
         description: >
-          Many Redis installations do not use this field. 
+          Many Redis installations do not use this field.
 
       - name: Password
         v1group: PeerManagement
@@ -801,8 +801,8 @@ groups:
         summary: is a string used as a prefix for the keys in Redis while
           storing the peer membership.
         description: >
-          It might be useful to override this in any situation where multiple 
-          Refinery clusters or multiple applications want to share a single 
+          It might be useful to override this in any situation where multiple
+          Refinery clusters or multiple applications want to share a single
           Redis instance. It may not be blank.
 
       - name: Database
@@ -835,7 +835,7 @@ groups:
         reload: false
         summary: enables TLS when connecting to Redis for peer cluster membership management.
         description: >
-          When enabled, this setting sets the `MinVersion` in the TLS 
+          When enabled, this setting sets the `MinVersion` in the TLS
           configuration to `1.2`.
 
       - name: UseTLSInsecure
@@ -847,7 +847,7 @@ groups:
         reload: false
         summary: disables certificate checks when connecting to Redis for peer cluster membership management.
         description: >
-          This setting is intended for use with self-signed certificates and 
+          This setting is intended for use with self-signed certificates and
           sets the `InsecureSkipVerify` flag within Redis.
 
       - name: Timeout
@@ -874,16 +874,16 @@ groups:
         reload: false
         summary: controls the way that traces are assigned to Refinery nodes.
         description: >
-          The `hash` strategy is strongly recommended, as only 1/N traces 
-          (where N is the number of nodes) are disrupted when the node count 
+          The `hash` strategy is strongly recommended, as only 1/N traces
+          (where N is the number of nodes) are disrupted when the node count
           changes.
 
-          The `legacy` strategy uses a simple algorithm that unfortunately 
-          causes 1/2 of the in-flight traces to be assigned to a different node 
-          whenever the number of nodes changes. The legacy strategy is 
+          The `legacy` strategy uses a simple algorithm that unfortunately
+          causes 1/2 of the in-flight traces to be assigned to a different node
+          whenever the number of nodes changes. The legacy strategy is
           **deprecated** and is intended to be removed in a future release.
 
-          In v2.0, the `legacy` strategy will be removed along with this 
+          In v2.0, the `legacy` strategy will be removed along with this
           setting.
 
   - name: Collection
@@ -907,11 +907,11 @@ groups:
             arg: 1000
         summary: is the number of traces to keep in the cache's circular buffer.
         description: >
-          The collection cache is used to collect all spans into a trace as 
-          well as remember the sampling decision for any spans that might come 
-          in after the trace has been marked "complete" (either by timing out 
-          or seeing the root span). The number of traces in the cache should be 
-          many multiples (100x to 1000x) of the total number of concurrently 
+          The collection cache is used to collect all spans into a trace as
+          well as remember the sampling decision for any spans that might come
+          in after the trace has been marked "complete" (either by timing out
+          or seeing the root span). The number of traces in the cache should be
+          many multiples (100x to 1000x) of the total number of concurrently
           active traces (trace throughput * trace duration).
 
       - name: AvailableMemory
@@ -923,11 +923,11 @@ groups:
         commandLine: AvailableMemory
         summary: is the amount of system memory available to the Refinery process.
         description: >
-          This value will typically be set through an environment variable 
-          controlled by the container or deploy script. If this value is zero 
-          or not set, then `MaxMemory` cannot be used to calculate the maximum 
-          allocation and `MaxAlloc` will be used instead. If set, then this 
-          must be a memory size. 64-bit values are supported. Sizes with 
+          This value will typically be set through an environment variable
+          controlled by the container or deploy script. If this value is zero
+          or not set, then `MaxMemory` cannot be used to calculate the maximum
+          allocation and `MaxAlloc` will be used instead. If set, then this
+          must be a memory size. 64-bit values are supported. Sizes with
           standard unit suffixes like "MB" and "GiB" are also supported.
 
       - name: MaxMemoryPercentage
@@ -945,11 +945,11 @@ groups:
         description: >
           If nonzero, then it must be an integer value between 1 and 100,
           representing the target maximum percentage of memory that should be
-          allocated by the span collector. If set to a non-zero value, then 
-          once per tick (see `SendTicker`) the collector will compare total 
-          allocated bytes to this calculated value. If allocation is too high, 
-          then traces will be ejected from the cache early to reduce memory. 
-          Useful values for this setting are generally in the range of 70-90. 
+          allocated by the span collector. If set to a non-zero value, then
+          once per tick (see `SendTicker`) the collector will compare total
+          allocated bytes to this calculated value. If allocation is too high,
+          then traces will be ejected from the cache early to reduce memory.
+          Useful values for this setting are generally in the range of 70-90.
           If this value is `0`, then `MaxAlloc` will be used.
 
       - name: MaxAlloc
@@ -961,8 +961,8 @@ groups:
         reload: true
         summary: is the maximum number of bytes that should be allocated by the Collector.
         description: >
-          If set, then this must be a memory size. 64-bit values are supported. 
-          Sizes with standard unit suffixes like "MB" and "GiB" are also 
+          If set, then this must be a memory size. 64-bit values are supported.
+          Sizes with standard unit suffixes like "MB" and "GiB" are also
           supported. The full list of supported values can be found at
           https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
           See `MaxMemory` for more details.
@@ -983,9 +983,9 @@ groups:
             arg: 1_000
         summary: is the size of the queue used to buffer spans to send to the upstream Collector.
         description: >
-          The size of the buffer is measured in spans. If the buffer fills up, 
-          then performance will degrade because Refinery will block while 
-          waiting for space to become available. If this happens, then you 
+          The size of the buffer is measured in spans. If the buffer fills up,
+          then performance will degrade because Refinery will block while
+          waiting for space to become available. If this happens, then you
           should increase the buffer size.
 
       - name: PeerBufferSize
@@ -998,14 +998,14 @@ groups:
             arg: 10_000
         summary: is the size of the queue used to buffer spans to send to peer nodes.
         description: >
-          The size of the buffer is measured in spans. If the buffer fills up, 
-          then performance will degrade because Refinery will block while 
-          waiting for space to become available. If this happens, then you 
+          The size of the buffer is measured in spans. If the buffer fills up,
+          then performance will degrade because Refinery will block while
+          waiting for space to become available. If this happens, then you
           should increase this buffer size.
 
   - name: Specialized
     title: "Specialized Configuration"
-    description: `Specialized` contains special-purpose configuration options that are not typically needed.
+    description: contains special-purpose configuration options that are not typically needed.
     fields:
       - name: EnvironmentCacheTTL
         type: duration
@@ -1020,7 +1020,7 @@ groups:
           This is the amount of time for which Refinery caches environment
           information, which it looks up from Honeycomb for each different
           `APIKey`. This information is used when making sampling decisions. If
-          you have a very large number of environments, then you may want to 
+          you have a very large number of environments, then you may want to
           increase this value.
 
       - name: CompressPeerCommunication
@@ -1030,7 +1030,7 @@ groups:
         reload: false
         summary: determines whether Refinery will compress span data it forwards to peers.
         description: >
-          If it costs money to transmit data between Refinery instances (for 
+          If it costs money to transmit data between Refinery instances (for
           example, when spread across AWS availability zones), then you almost
           certainly want compression enabled to reduce your bill. The option to
           disable it is provided as an escape hatch for deployments that value
@@ -1058,20 +1058,20 @@ groups:
         reload: true
         lastversion: v1.21
         summary: controls how the cache is managed when memory pressure is high.
-        description: >        
-          `resize` means that when a cache overrun occurs, the cache is shrunk 
-          and never grows again, which is generally not helpful unless it 
+        description: >
+          `resize` means that when a cache overrun occurs, the cache is shrunk
+          and never grows again, which is generally not helpful unless it
           occurs because of a permanent change in traffic patterns.
-          
-          In the `impact` strategy, the items having the most impact on the 
-          cache size are ejected from the cache earlier than normal but the 
-          cache is not resized. 
-          
-          In all cases, it only applies if `MaxAlloc` is nonzero. Default is 
-          `resize` for compatibility but `impact` is recommended for most 
+
+          In the `impact` strategy, the items having the most impact on the
+          cache size are ejected from the cache earlier than normal but the
+          cache is not resized.
+
+          In all cases, it only applies if `MaxAlloc` is nonzero. Default is
+          `resize` for compatibility but `impact` is recommended for most
           installations.
 
-          In v2.0, the only available strategy is `impact`, and this setting 
+          In v2.0, the only available strategy is `impact`, and this setting
           will be removed.
 
       - name: AdditionalAttributes
@@ -1084,13 +1084,13 @@ groups:
             arg: string
         summary: is a map that can be used for injecting user-defined attributes into every span.
         description: >
-          For example, it could be used for naming a Refinery cluster. Both 
+          For example, it could be used for naming a Refinery cluster. Both
           keys and values must be strings.
 
   - name: IDFields
     title: "ID Fields"
     description: >
-      `IDFields` controls the field names to use for the event ID fields. These 
+      `IDFields` controls the field names to use for the event ID fields. These
       fields are used to identify events that are part of the same trace.
     fields:
       - name: TraceNames
@@ -1103,9 +1103,9 @@ groups:
             arg: string
         summary: is the list of field names to use for the trace ID.
         description: >
-          The first field in the list that is present in an incoming span will 
-          be used as the trace ID. If none of the fields are present, then 
-          Refinery treats the span as not being part of a trace and forwards it 
+          The first field in the list that is present in an incoming span will
+          be used as the trace ID. If none of the fields are present, then
+          Refinery treats the span as not being part of a trace and forwards it
           immediately to Honeycomb.
 
       - name: ParentNames
@@ -1118,14 +1118,14 @@ groups:
             arg: string
         summary: is the list of field names to use for the parent ID.
         description: >
-          The first field in the list that is present in an event will be used 
-          as the parent ID. A trace without a `parent_id` is assumed to be a 
+          The first field in the list that is present in an event will be used
+          as the parent ID. A trace without a `parent_id` is assumed to be a
           root span.
 
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
     description: >
-      `GRPCServerParameters` controls the parameters of the gRPC server used to 
+      `GRPCServerParameters` controls the parameters of the gRPC server used to
       receive OpenTelemetry data in gRPC format.
     fields:
       - name: Enabled
@@ -1135,7 +1135,7 @@ groups:
         reload: false
         summary: specifies whether the gRPC server is enabled.
         description: >
-          If `false`, then the gRPC server is not started and no gRPC traffic 
+          If `false`, then the gRPC server is not started and no gRPC traffic
           is accepted.
 
       - name: ListenAddr
@@ -1148,7 +1148,7 @@ groups:
         commandLine: GRPCListenAddr
         summary: is the address Refinery listens to for incoming GRPC OpenTelemetry events.
         description: >
-          Incoming traffic is expected to be unencrypted, so if using SSL, then 
+          Incoming traffic is expected to be unencrypted, so if using SSL, then
           put something like `nginx` in front to do the decryption.
 
       - name: MaxConnectionIdle
@@ -1182,11 +1182,11 @@ groups:
             arg: 10s
         summary: is the maximum amount of time a gRPC connection may exist.
         description: >
-          After this duration, the gRPC connection is closed by sending a 
-          `GoAway`. A random jitter of +/-10% will be added to        
+          After this duration, the gRPC connection is closed by sending a
+          `GoAway`. A random jitter of +/-10% will be added to
           `MaxConnectionAge` to spread out connection storms.
 
-          `0s` sets duration to infinity; a value measured in low minutes will 
+          `0s` sets duration to infinity; a value measured in low minutes will
           help load balancers to distribute load among peers more evenly.
 
       - name: MaxConnectionAgeGrace
@@ -1198,7 +1198,7 @@ groups:
         reload: false
         summary: is the duration beyond `MaxConnectionAge` after which the connection will be forcibly closed.
         description: >
-          This setting is in case the upstream node ignores the `GoAway` 
+          This setting is in case the upstream node ignores the `GoAway`
           request. "0s" sets duration to infinity.
 
       - name: KeepAlive
@@ -1213,8 +1213,8 @@ groups:
             arg: 1s
         summary: is the duration between keep-alive pings.
         description: >
-          After this amount of time, if the client does not see any activity, 
-          then it pings the server to see if the transport is still alive. "0s" 
+          After this amount of time, if the client does not see any activity,
+          then it pings the server to see if the transport is still alive. "0s"
           sets duration to 2 hours.
 
       - name: KeepAliveTimeout
@@ -1230,7 +1230,7 @@ groups:
         summary: is the duration the server waits for activity on the connection.
         description: >
           This is the amount of time after which if the server does not see any
-          activity, then it pings the client to see if the transport is still 
+          activity, then it pings the client to see if the transport is still
           alive. "0s" sets duration to 20 seconds.
 
   - name: SampleCache
@@ -1257,8 +1257,8 @@ groups:
           installations and is the only option available in Refinery 2.0 and
           later.
 
-          "legacy" is a strategy where both keep and drop decisions are stored 
-          in a circular buffer that is 5x the size of the trace cache. This is 
+          "legacy" is a strategy where both keep and drop decisions are stored
+          in a circular buffer that is 5x the size of the trace cache. This is
           Refinery's original sample cache strategy.
 
       - name: KeptSize
@@ -1270,11 +1270,11 @@ groups:
         reload: true
         summary: is the number of traces preserved in the cuckoo kept traces cache.
         description: >
-          Refinery keeps a record of each trace that was kept and sent to 
-          Honeycomb, along with some statistical information. This is most 
+          Refinery keeps a record of each trace that was kept and sent to
+          Honeycomb, along with some statistical information. This is most
           useful in cases where the trace was sent before sending the root
           span, so that the root span can be decorated with accurate metadata.
-          Default is `10_000` traces. Each trace in this cache consumes roughly 
+          Default is `10_000` traces. Each trace in this cache consumes roughly
           200 bytes.
 
       - name: DroppedSize
@@ -1286,9 +1286,9 @@ groups:
         reload: true
         summary: is the size of the cuckoo dropped traces cache.
         description: >
-          This cache consumes 4-6 bytes per trace at a scale of millions of 
+          This cache consumes 4-6 bytes per trace at a scale of millions of
           traces.
-          Changing its size with live reload sets a future limit, but does not 
+          Changing its size with live reload sets a future limit, but does not
           have an immediate effect.
 
       - name: SizeCheckInterval
@@ -1303,44 +1303,44 @@ groups:
             arg: 1s
         summary: controls how often the cuckoo cache re-evaluates its remaining capacity.
         description: >
-          This cache is quite resilient so it does not need to happen very 
+          This cache is quite resilient so it does not need to happen very
           often, but the operation is also inexpensive.
           Default is 10 seconds.
 
   - name: StressRelief
     title: "Stress Relief"
     description: >
-      `StressRelief` controls the Stress Relief mechanism, which is used to 
+      `StressRelief` controls the Stress Relief mechanism, which is used to
       prevent Refinery from being overwhelmed by a large number of traces.
 
-      There is a metric called `stress_level` that is emitted as part of 
-      Refinery metrics. It is a measure of Refinery's throughput rate relative 
-      to its processing rate, combined with the amount of room in its internal 
-      queues, and ranges from `0` to `100`. `stress_level` is generally 
-      expected to be `0` except under heavy load. When stress levels reach 
+      There is a metric called `stress_level` that is emitted as part of
+      Refinery metrics. It is a measure of Refinery's throughput rate relative
+      to its processing rate, combined with the amount of room in its internal
+      queues, and ranges from `0` to `100`. `stress_level` is generally
+      expected to be `0` except under heavy load. When stress levels reach
       `100`, there is an increased chance that Refinery will become unstable.
 
-      To avoid this problem, the Stress Relief system can do deterministic 
-      sampling on new trace traffic based solely on `TraceID`, without having 
-      to store traces in the cache or take the time processing sampling rules. 
-      Existing traces in flight will be processed normally, but when Stress 
-      Relief is active, trace decisions are made deterministically on a 
-      per-span basis; all spans will be sampled according to the `SamplingRate` 
+      To avoid this problem, the Stress Relief system can do deterministic
+      sampling on new trace traffic based solely on `TraceID`, without having
+      to store traces in the cache or take the time processing sampling rules.
+      Existing traces in flight will be processed normally, but when Stress
+      Relief is active, trace decisions are made deterministically on a
+      per-span basis; all spans will be sampled according to the `SamplingRate`
       specified here.
 
-      Once Stress Relief activates (by exceeding the `ActivationLevel`), it 
-      will not deactivate until `stress_level` falls below the 
-      `DeactivationLevel`. When it deactivates, normal trace decisions are made 
-      -- and any additional spans that arrive for traces that were active 
+      Once Stress Relief activates (by exceeding the `ActivationLevel`), it
+      will not deactivate until `stress_level` falls below the
+      `DeactivationLevel`. When it deactivates, normal trace decisions are made
+      -- and any additional spans that arrive for traces that were active
       during Stress Relief will respect the decisions made during that time.
 
-      The measurement of stress is a lagging indicator and is highly dependent 
-      on Refinery configuration and scaling. Other configuration values should 
-      be well tuned first, before adjusting the Stress Relief Activation 
+      The measurement of stress is a lagging indicator and is highly dependent
+      on Refinery configuration and scaling. Other configuration values should
+      be well tuned first, before adjusting the Stress Relief Activation
       parameters.
 
-      Stress Relief is not a substitute for proper configuration and scaling, 
-      but it can be used as a safety valve to prevent Refinery from becoming 
+      Stress Relief is not a substitute for proper configuration and scaling,
+      but it can be used as a safety valve to prevent Refinery from becoming
       unstable under heavy load.
 
     fields:
@@ -1354,14 +1354,14 @@ groups:
         summary: is a string indicating how to use Stress Relief.
         description: >
           This setting sets the Stress Relief mode.
-          
+
           "never" means that Stress Relief will never activate.
 
           "monitor" is the recommended setting, and means that
           Stress Relief will monitor the status of Refinery and activate
           according to the levels set by fields such as `ActivationLevel`.
-          
-          "always" means that Stress Relief is always on, which may be useful 
+
+          "always" means that Stress Relief is always on, which may be useful
           in an emergency situation.
 
       - name: ActivationLevel
@@ -1373,7 +1373,7 @@ groups:
         reload: true
         summary: is the `stress_level` (from 0-100) at which Stress Relief is triggered.
         description: >
-          This value must be greater than `DeactivationLevel` and should be 
+          This value must be greater than `DeactivationLevel` and should be
           high enough that it is not reached in normal operation.
 
       - name: DeactivationLevel
@@ -1385,7 +1385,7 @@ groups:
         reload: true
         summary: is the `stress_level` (from 0-100) at which Stress Relief is turned off.
         description: >
-          This setting is subject to `MinimumActivationDuration`. The value 
+          This setting is subject to `MinimumActivationDuration`. The value
           must be less than `ActivationLevel`.
 
       - name: SamplingRate
@@ -1397,9 +1397,9 @@ groups:
         reload: true
         summary: is the sampling rate to use when Stress Relief is activated.
         description: >
-          All new traces will be deterministically sampled at this rate based 
-          only on the `traceID`. It should be chosen to be a rate that sends 
-          fewer samples than the average sampling rate Refinery is expected to 
+          All new traces will be deterministically sampled at this rate based
+          only on the `traceID`. It should be chosen to be a rate that sends
+          fewer samples than the average sampling rate Refinery is expected to
           generate.
 
           For example, if Refinery is configured to normally sample at a rate of
@@ -1427,13 +1427,13 @@ groups:
         summary: is the minimum time that Stress Relief will stay enabled.
         description: >
           This setting is used when switching into Monitor mode.
-          
-          When Stress Relief is enabled, it will start up in stressed mode 
-          for at least this set duration of time to try to make sure that 
-          Refinery can handle the load before it begins processing it in 
-          earnest. This is to help address the problem of trying to bring a new 
+
+          When Stress Relief is enabled, it will start up in stressed mode
+          for at least this set duration of time to try to make sure that
+          Refinery can handle the load before it begins processing it in
+          earnest. This is to help address the problem of trying to bring a new
           node into an already-overloaded cluster.
-          
-          If this duration is `0`, then Refinery will not start in stressed 
-          mode, which will provide faster startup at the possible cost of 
+
+          If this duration is `0`, then Refinery will not start in stressed
+          mode, which will provide faster startup at the possible cost of
           startup instability.
