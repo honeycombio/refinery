@@ -116,7 +116,8 @@ groups:
         commandLine: HoneycombAPI
         summary: is the URL of the upstream Honeycomb API where the data will be sent.
         description: >
-          This setting is the destination to which Refinery sends all events that it decides to keep.
+          This setting is the destination to which Refinery sends all events 
+          that it decides to keep.
 
   - name: AccessKeys
     title: "Access Key Configuration"
@@ -170,7 +171,12 @@ groups:
         reload: true
         summary: controls whether to decorate traces with Refinery rule evaluation results.
         description: >
-          When enabled, this setting causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`. This field contains text indicating which rule was evaluated that caused the trace to be included. We recommend enabling this setting whenever a rules-based sampler is in use, as it is useful for debugging and understanding the behavior of your Refinery installation.
+          When enabled, this setting causes traces that are sent to Honeycomb 
+          to include the field `meta.refinery.reason`. This field contains text 
+          indicating which rule was evaluated that caused the trace to be 
+          included. We recommend enabling this setting whenever a rules-based 
+          sampler is in use, as it is useful for debugging and understanding 
+          the behavior of your Refinery installation.
 
       - name: AddSpanCountToRoot
         type: bool
@@ -390,7 +396,8 @@ groups:
         envvar: REFINERY_LOGS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API where Refinery sends its logs.
         description: >
-          Refinery's internal logs will be sent to this host using the standard Honeycomb Events API.
+          Refinery's internal logs will be sent to this host using the standard 
+          Honeycomb Events API.
 
       - name: APIKey
         v1group: HoneycombLogger
@@ -485,7 +492,7 @@ groups:
         valuetype: nondefault
         default: "localhost:2112"
         reload: false
-        summary: is the IP and port the prometheus metrics server will run on.
+        summary: is the IP and port the Prometheus Metrics server will run on.
         description: >
           Determines the interface and port on which Prometheus will listen for
           requests for `/metrics`. Must be different from the main Refinery
@@ -521,7 +528,8 @@ groups:
         envvar: REFINERY_METRICS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API where legacy metrics are sent.
         description: >
-          Refinery's internal metrics will be sent to this host using the standard Honeycomb Events API.
+          Refinery's internal metrics will be sent to this host using the 
+          standard Honeycomb Events API.
 
       - name: APIKey
         v1group: HoneycombMetrics
@@ -537,7 +545,8 @@ groups:
         envvar: REFINERY_METRICS_API_KEY
         summary: is the API key used by Refinery to send its metrics to Honeycomb.
         description: >
-          It is recommended that you create a separate team and key for Refinery metrics.
+          It is recommended that you create a separate team and key for 
+          Refinery metrics.
 
       - name: Dataset
         v1group: HoneycombMetrics
@@ -567,7 +576,9 @@ groups:
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"
     description: >
-      `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) metrics. This is the preferred way to send metrics to Honeycomb. New installations should prefer `OTelMetrics`.
+      `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) 
+      metrics. This is the preferred way to send metrics to Honeycomb. New 
+      installations should prefer `OTelMetrics`.
     fields:
       - name: Enabled
         type: bool
@@ -682,7 +693,9 @@ groups:
           By default, when using a peer registry, Refinery will use the local
           hostname to identify itself to other peers. If your environment
           requires something else, (for example, if peers cannot resolve each
-          other by name), then you can specify the exact identifier, such as an IP address, to use here. Overrides `IdentifierInterfaceName`, if both are set.
+          other by name), then you can specify the exact identifier, such as an 
+          IP address, to use here. Overrides `IdentifierInterfaceName`, if both 
+          are set.
 
       - name: IdentifierInterfaceName
         v1group: PeerManagement
@@ -822,7 +835,8 @@ groups:
         reload: false
         summary: enables TLS when connecting to Redis for peer cluster membership management.
         description: >
-          When enabled, this setting sets the `MinVersion` in the TLS configuration to `1.2`.
+          When enabled, this setting sets the `MinVersion` in the TLS 
+          configuration to `1.2`.
 
       - name: UseTLSInsecure
         v1group: PeerManagement
@@ -833,7 +847,8 @@ groups:
         reload: false
         summary: disables certificate checks when connecting to Redis for peer cluster membership management.
         description: >
-          This setting is intended for use with self-signed certificates and sets the `InsecureSkipVerify` flag within Redis.
+          This setting is intended for use with self-signed certificates and 
+          sets the `InsecureSkipVerify` flag within Redis.
 
       - name: Timeout
         v1group: PeerManagement
@@ -868,7 +883,8 @@ groups:
           whenever the number of nodes changes. The legacy strategy is 
           **deprecated** and is intended to be removed in a future release.
 
-          In v2.0, the `legacy` strategy will be removed along with this setting.
+          In v2.0, the `legacy` strategy will be removed along with this 
+          setting.
 
   - name: Collection
     title: "Collection Settings"
@@ -965,12 +981,12 @@ groups:
         validations:
           - type: minimum
             arg: 1_000
-        summary: is the size of the queue used to buffer spans to send to the upstream API.
+        summary: is the size of the queue used to buffer spans to send to the upstream Collector.
         description: >
-          Sets the size of the buffer (measured in spans) used to send spans to
-          the upstream Collector. If the buffer fills up, then performance will
-          degrade because Refinery will block while waiting for space to become
-          available. If this happens, then you should increase the buffer size.
+          The size of the buffer is measured in spans. If the buffer fills up, 
+          then performance will degrade because Refinery will block while 
+          waiting for space to become available. If this happens, then you 
+          should increase the buffer size.
 
       - name: PeerBufferSize
         type: int
@@ -1166,10 +1182,9 @@ groups:
             arg: 10s
         summary: is the maximum amount of time a gRPC connection may exist.
         description: >
-          Sets a duration for the maximum amount of time a connection may exist 
-          before it will be closed by sending a `GoAway`. A random jitter of 
-          +/-10% will be added to `MaxConnectionAge` to spread out connection 
-          storms.
+          After this duration, the gRPC connection is closed by sending a 
+          `GoAway`. A random jitter of +/-10% will be added to        
+          `MaxConnectionAge` to spread out connection storms.
 
           `0s` sets duration to infinity; a value measured in low minutes will 
           help load balancers to distribute load among peers more evenly.
@@ -1181,11 +1196,10 @@ groups:
         valuetype: nondefault
         default: 60s
         reload: false
-        summary: is the duration beyond MaxConnectionAge after which the connection will be forcibly closed.
+        summary: is the duration beyond `MaxConnectionAge` after which the connection will be forcibly closed.
         description: >
-          This is an additive period after `MaxConnectionAge` after which the
-          connection will be forcibly closed (in case the upstream node ignores
-          the `GoAway` request). "0s" sets duration to infinity.
+          This setting is in case the upstream node ignores the `GoAway` 
+          request. "0s" sets duration to infinity.
 
       - name: KeepAlive
         v1group: GRPCServerParameters
@@ -1199,9 +1213,9 @@ groups:
             arg: 1s
         summary: is the duration between keep-alive pings.
         description: >
-          Sets a duration for the amount of time after which if the client
-          does not see any activity, then it pings the server to see if the 
-          transport is still alive. "0s" sets duration to 2 hours.
+          After this amount of time, if the client does not see any activity, 
+          then it pings the server to see if the transport is still alive. "0s" 
+          sets duration to 2 hours.
 
       - name: KeepAliveTimeout
         v1group: GRPCServerParameters
@@ -1234,10 +1248,8 @@ groups:
         default: "cuckoo"
         reload: false
         lastversion: v1.21
-        summary: is the type of sample cache used.
+        summary: is the type of sample cache.
         description: >
-          Controls the sample cache type.
-
           "cuckoo" is a strategy where dropped traces are preserved in a "Cuckoo
           Filter", which can remember a much larger number of dropped traces,
           leaving capacity to retain a much larger number of kept traces. It is
@@ -1274,7 +1286,6 @@ groups:
         reload: true
         summary: is the size of the cuckoo dropped traces cache.
         description: >
-          Controls the size of the cuckoo dropped traces cache.
           This cache consumes 4-6 bytes per trace at a scale of millions of 
           traces.
           Changing its size with live reload sets a future limit, but does not 
@@ -1290,11 +1301,8 @@ groups:
         validations:
           - type: minimum
             arg: 1s
-        summary: controls how often the cuckoo cache re-evaluates its capacity.
+        summary: controls how often the cuckoo cache re-evaluates its remaining capacity.
         description: >
-          This setting controls the duration the cuckoo cache uses to determine 
-          how often it re-evaluates the remaining capacity of its dropped 
-          traces cache and possibly cycles it.
           This cache is quite resilient so it does not need to happen very 
           often, but the operation is also inexpensive.
           Default is 10 seconds.
