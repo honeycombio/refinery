@@ -272,6 +272,8 @@ func ConvertConfig(tmplData *configTemplateData, w io.Writer) {
 }
 
 func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
+	const rulesConfigMapName = "RulesConfigMapName"
+	const liveReload = "LiveReload"
 	// convert config if we have it
 	helmConfigAny, ok := tmplData.Data["config"]
 	if ok {
@@ -279,6 +281,12 @@ func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
 		if !ok {
 			panic("config in helm chart is the wrong format!")
 		}
+		// we need to promote this special key for Honeycomb configs
+		if mapname, ok := helmConfig[rulesConfigMapName]; ok {
+			tmplData.Data[rulesConfigMapName] = mapname
+			delete(helmConfig, rulesConfigMapName)
+		}
+
 		convertedConfig := &bytes.Buffer{}
 		// make a copy of this tmplData and overwrite the Data part
 		config := *tmplData
@@ -315,6 +323,12 @@ func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
 		if !ok {
 			panic("config in helm chart is the wrong format!")
 		}
+		// we need to promote this special key for Honeycomb configs
+		if mapname, ok := helmRules[liveReload]; ok {
+			tmplData.Data[liveReload] = mapname
+			delete(helmRules, liveReload)
+		}
+
 		rules := convertRulesToNewConfig(helmRules)
 		tmplData.Data["rules"] = rules
 	}
