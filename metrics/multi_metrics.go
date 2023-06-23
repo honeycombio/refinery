@@ -22,6 +22,10 @@ func NewMultiMetrics() *MultiMetrics {
 	}
 }
 
+func (m *MultiMetrics) Start() error {
+	return nil
+}
+
 // This is not safe for concurrent use!
 func (m *MultiMetrics) AddChild(met Metrics) {
 	m.children = append(m.children, met)
