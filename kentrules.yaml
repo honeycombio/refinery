@@ -1,0 +1,13 @@
+RulesVersion: 2
+Samplers:
+    __default__:
+        DeterministicSampler:
+            SampleRate: 1
+
+    TheNewWorld:
+        WindowedThroughputSampler:
+            GoalThroughputPerSec: 50
+            UpdateFrequency: 1s
+            LookbackFrequency: 10s
+            FieldList:
+                - title

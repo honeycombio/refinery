@@ -49,6 +49,10 @@ type MetricsList struct {
 	Children []Metrics
 }
 
+func (m *MetricsList) Start() error {
+	return nil
+}
+
 func GetMetricsImplementations(c config.Config) *MetricsList {
 	multi := &MetricsList{Children: make([]Metrics, 0)}
 

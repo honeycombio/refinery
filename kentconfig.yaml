@@ -1,0 +1,28 @@
+General:
+  ConfigurationVersion: 2
+  MinRefineryVersion: v2.0
+  ConfigReloadInterval: 50s
+
+Network:
+  HoneycombAPI: https://api-dogfood.honeycomb.io
+
+Logger:
+  Type: stdout
+  Level: debug
+
+LegacyMetrics:
+  Enabled: true
+  Dataset: refinery_metrics
+  APIKey: HTab42OXw838zcJDH3eJEH
+  APIHost: https://api-dogfood.honeycomb.io
+
+OTelMetrics:
+  Enabled: true
+  Dataset: refinery_metrics_otel
+  APIKey: HTab42OXw838zcJDH3eJEH
+  APIHost: https://api-dogfood.honeycomb.io
+
+RefineryTelemetry:
+  AddRuleReasonToTrace: true
+  AddSpanCountToRoot: true
+  AddHostMetadataToTrace: true
