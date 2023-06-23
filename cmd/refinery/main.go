@@ -213,6 +213,10 @@ func main() {
 		{Value: stressRelief, Name: "stressRelief"},
 		{Value: &a},
 	}
+	// we need to add the multimetrics children to the graph as well
+	for _, obj := range metricsList.Children {
+		objects = append(objects, &inject.Object{Value: obj})
+	}
 	err = g.Provide(objects...)
 	if err != nil {
 		fmt.Printf("failed to provide injection graph. error: %+v\n", err)

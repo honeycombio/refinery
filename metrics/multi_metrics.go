@@ -15,8 +15,9 @@ type MultiMetrics struct {
 	lock   sync.RWMutex
 }
 
-func (m *MultiMetrics) Start() {
+func (m *MultiMetrics) Start() error {
 	m.values = make(map[string]float64)
+	return nil
 }
 
 func (m *MultiMetrics) Register(name string, metricType string) {

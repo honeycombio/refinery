@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"context"
+	"github.com/facebookgo/startstop"
 	"math"
 	"net/http"
 	"os"
@@ -63,6 +64,8 @@ type updown struct {
 	name string
 	val  int
 }
+
+var _ startstop.Starter = &LegacyMetrics{}
 
 func (h *LegacyMetrics) Start() error {
 	h.Logger.Debug().Logf("Starting LegacyMetrics")
