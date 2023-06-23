@@ -12,11 +12,15 @@ For more readable information about recent changes, please see [RELEASE_NOTES.md
 
 ## Purpose
 
-Refinery is a trace-aware sampling proxy. It collects spans emitted by your application, gathers them into traces, and examines them as a whole. This enables Refinery to make an intelligent sampling decision (whether to keep or discard) based on the entire trace. Buffering the spans allows you to use fields that might be present in different spans within the trace to influence the sampling decision. For example, the root span might have HTTP status code, whereas another span might have information on whether the request was served from a cache. Using Refinery, you can choose to keep only traces that had a 500 status code and were also served from a cache.
+Refinery is a trace-aware tail-based sampling proxy. It examines whole traces and intelligently applies sampling decisions (whether to keep or discard) to each trace.
+
+Tail-based sampling allows you to inspect a whole trace and make a decision to sample based on its contents. For example, the root span has the HTTP status code to serve for a request, whereas another span might have information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
+
+Refinery also enabled Dynamic Sampling, which automatically adjusts the sampling rate based on volume of traffic. This allows you to keep a relatively constant number of traces per second, even if your traffic spikes. By configuring a set of fields on a trace that make up a key, the sampler automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, a key made up of `http.status_code` will sample much less traffic for requests that return `200` than for requests that return `404`.
 
 ## Setting up Refinery
 
-Refinery is designed to sit within your infrastructure where all sources of Honeycomb events (aka spans if you're doing tracing) can reach it.
+Refinery is designed to sit within your infrastructure where all traces can reach it.
 A standard deployment will have a cluster of two or more Refinery processes accessible via a separate load balancer.
 Refinery processes must be able to communicate with each other to concentrate traces on single servers.
 
@@ -28,9 +32,22 @@ The Refinery cluster should have at least 2 servers with 2GB RAM and access to 2
 
 Additional RAM and CPU can be used by increasing configuration values to have a larger `CacheCapacity`. The cluster should be monitored for panics caused by running out of memory and scaled up (with either more servers or more RAM per server) when they occur.
 
-### Builds
+### Setting up Refinery in Kubernetes
 
-Refinery is built by [CircleCI](https://circleci.com/gh/honeycombio/refinery). Released versions of Refinery are available via GitHub under the Releases tab.
+Refinery is available as a Helm chart in the Honeycomb Helm repository.
+
+You can install Refinery with the following command:
+
+```bash
+helm repo add honeycomb https://honeycombio.github.io/helm-charts
+helm install refinery honeycomb/refinery
+```
+
+This will use the defaulte values file. You can also supply your own:
+
+```bash
+helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
+```
 
 ## Configuration
 
