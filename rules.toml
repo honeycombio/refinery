@@ -1,0 +1,6 @@
+############################
+## Sampling Rules Config ##
+############################
+
+# Defaults for the rules configuration are set in file_config.go. 
+# For an example file with various sampling methods and their configurations, see rules_complete.toml.
