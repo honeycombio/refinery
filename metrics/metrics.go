@@ -45,19 +45,32 @@ type Metrics interface {
 	Store(name string, val float64)         // for storing a rarely-changing value not sent as a metric
 }
 
-func GetMetricsImplementation(c config.Config) *MultiMetrics {
-	multi := NewMultiMetrics()
+type MetricsList struct {
+	children []Metrics
+}
+
+// we need to implement Start() so that the injection works right
+func (m *MetricsList) Start() error {
+	return nil
+}
+
+func (m *MetricsList) Children() []Metrics {
+	return m.children
+}
+
+func GetMetricsImplementations(c config.Config) *MetricsList {
+	multi := &MetricsList{children: make([]Metrics, 0)}
 
 	if c.GetLegacyMetricsConfig().Enabled {
-		multi.AddChild(&LegacyMetrics{})
+		multi.children = append(multi.children, &LegacyMetrics{})
 	}
 
 	if c.GetPrometheusMetricsConfig().Enabled {
-		multi.AddChild(&PromMetrics{})
+		multi.children = append(multi.children, &PromMetrics{})
 	}
 
 	if c.GetOTelMetricsConfig().Enabled {
-		multi.AddChild(&OTelMetrics{})
+		multi.children = append(multi.children, &OTelMetrics{})
 	}
 
 	return multi

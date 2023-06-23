@@ -23,20 +23,25 @@ func (d dummyLogger) Errorf(format string, v ...interface{}) {
 }
 
 func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
-	mm := NewMultiMetrics()
-	for _, child := range children {
-		mm.AddChild(child)
-	}
+	ml := &MetricsList{children: children}
+	mm := &MultiMetrics{}
 	objects := []*inject.Object{
 		{Value: mm, Name: "metrics"},
+		{Value: ml, Name: "metricslist"},
 	}
 	// we need to add the multimetrics children to the graph as well
-	for i, obj := range mm.Children() {
+	// we don't have to add the names but they help in debugging
+	for i, obj := range ml.Children() {
 		objects = append(objects, &inject.Object{Value: obj, Name: fmt.Sprintf("metricsChild_%d", i)})
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err := g.Provide(objects...)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := g.Populate(); err != nil {
+		fmt.Printf("failed to populate injection graph. error: %+v\n", err)
 		return nil, err
 	}
 

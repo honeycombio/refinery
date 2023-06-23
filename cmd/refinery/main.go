@@ -104,7 +104,8 @@ func main() {
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)
-	metricsSingleton := metrics.GetMetricsImplementation(c)
+	metricsSingleton := &metrics.MultiMetrics{}
+	metricsList := metrics.GetMetricsImplementations(c)
 	shrdr := sharder.GetSharderImplementation(c)
 	samplerFactory := &sample.SamplerFactory{}
 
@@ -202,6 +203,7 @@ func main() {
 		{Value: peerTransmission, Name: "peerTransmission"},
 		{Value: shrdr},
 		{Value: collector},
+		{Value: metricsList, Name: "metricslist"},
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
@@ -212,7 +214,7 @@ func main() {
 		{Value: &a},
 	}
 	// we need to add the multimetrics children to the graph as well
-	for _, obj := range metricsSingleton.Children() {
+	for _, obj := range metricsList.Children() {
 		objects = append(objects, &inject.Object{Value: obj})
 	}
 	err = g.Provide(objects...)
