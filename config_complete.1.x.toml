@@ -1,0 +1,594 @@
+#####################
+## Refinery Config ##
+#####################
+
+# ListenAddr is the IP and port on which to listen for incoming events. Incoming
+# traffic is expected to be HTTP, so if using SSL put something like nginx in
+# front to do the decryption.
+# Should be of the form 0.0.0.0:8080
+# Not eligible for live reload.
+ListenAddr = "0.0.0.0:8080"
+
+# GRPCListenAddr is the IP and port on which to listen for incoming events over
+# gRPC. Incoming traffic is expected to be unencrypted, so if using SSL put
+# something like nginx in front to do the decryption.
+# Should be of the form 0.0.0.0:9090
+# Not eligible for live reload.
+GRPCListenAddr = "0.0.0.0:9090"
+
+# PeerListenAddr is the IP and port on which to listen for traffic being
+# rerouted from a peer. Peer traffic is expected to be HTTP, so if using SSL
+# put something like nginx in front to do the decryption. Must be different from
+# ListenAddr
+# Should be of the form 0.0.0.0:8081
+# Not eligible for live reload.
+PeerListenAddr = "0.0.0.0:8081"
+
+# CompressPeerCommunication determines whether refinery will compress span data
+# it forwards to peers. If it costs money to transmit data between refinery
+# instances (e.g. they're spread across AWS availability zones), then you
+# almost certainly want compression enabled to reduce your bill. The option to
+# disable it is provided as an escape hatch for deployments that value lower CPU
+# utilization over data transfer costs.
+CompressPeerCommunication = true
+
+# APIKeys is a list of Honeycomb API keys that the proxy will accept. This list
+# only applies to events - other Honeycomb API actions will fall through to the
+# upstream API directly.
+# Adding keys here causes events arriving with API keys not in this list to be
+# rejected with an HTTP 401 error If an API key that is a literal '*' is in the
+# list, all API keys are accepted.
+# Eligible for live reload.
+APIKeys = [
+	# "replace-me",
+	# "more-optional-keys",
+	"*",                   # wildcard accept all keys
+	]
+
+# HoneycombAPI is the URL for the upstream Honeycomb API.
+# Eligible for live reload.
+HoneycombAPI = "https://api.honeycomb.io"
+
+# SendDelay is a short timer that will be triggered when a trace is complete.
+# Refinery will wait this duration before actually sending the trace.  The
+# reason for this short delay is to allow for small network delays or clock
+# jitters to elapse and any final spans to arrive before actually sending the
+# trace.  This supports duration strings with supplied units. Set to 0 for
+# immediate sends.
+# Eligible for live reload.
+SendDelay = "2s"
+
+# BatchTimeout dictates how frequently to send unfulfilled batches. By default
+# this will use the DefaultBatchTimeout in libhoney as its value, which is 100ms.
+# Eligible for live reload.
+BatchTimeout = "1s"
+
+# TraceTimeout is a long timer; it represents the outside boundary of how long
+# to wait before sending an incomplete trace. Normally traces are sent when the
+# root span arrives. Sometimes the root span never arrives (due to crashes or
+# whatever), and this timer will send a trace even without having received the
+# root span. If you have particularly long-lived traces you should increase this
+# timer. This supports duration strings with supplied units.
+# Eligible for live reload.
+TraceTimeout = "60s"
+
+# MaxBatchSize is the number of events to be included in the batch for sending
+MaxBatchSize = 500
+
+# SendTicker is a short timer; it determines the duration to use to check for traces to send
+SendTicker = "100ms"
+
+# LoggingLevel is the level above which we should log. Debug is very verbose,
+# and should only be used in pre-production environments. Info is the
+# recommended level. Valid options are "debug", "info", "error", and
+# "panic"
+# Not eligible for live reload.
+LoggingLevel = "debug"
+
+# UpstreamBufferSize and PeerBufferSize control how large of an event queue to use
+# when buffering events that will be forwarded to peers or the upstream API.
+UpstreamBufferSize = 10000
+PeerBufferSize = 10000
+
+# DebugServiceAddr sets the IP and port the debug service will run on
+# The debug service will only run if the command line flag -d is specified
+# The debug service runs on the first open port between localhost:6060 and :6069 by default
+# DebugServiceAddr = "localhost:8085"
+
+# AddHostMetadataToTrace determines whether or not to add information about
+# the host that Refinery is running on to the spans that it processes.
+# If enabled, information about the host will be added to each span with the
+# prefix `meta.refinery.`.
+# Currently the only value added is 'meta.refinery.local_hostname'.
+# Not eligible for live reload
+AddHostMetadataToTrace = false
+
+# EnvironmentCacheTTL is the amount of time a cache entry will live that associates
+# an API key with an environment name.
+# Cache misses lookup the environment name using HoneycombAPI config value.
+# Default is 1 hour ("1h").
+# Not eligible for live reload.
+EnvironmentCacheTTL = "1h"
+
+# QueryAuthToken, if specified, provides a token that must be specified with
+# the header "X-Honeycomb-Refinery-Query" in order for a /query request to succeed.
+# These /query requests are intended for debugging refinery installations and
+# are not typically needed in normal operation.
+# Can be specified in the environment as REFINERY_QUERY_AUTH_TOKEN.
+# If left unspecified, the /query endpoints are inaccessible.
+# Not eligible for live reload.
+# QueryAuthToken = "some-random-value"
+
+# AddRuleReasonToTrace causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
+# This field contains text indicating which rule was evaluated that caused the trace to be included.
+# Eligible for live reload.
+# AddRuleReasonToTrace = true
+
+# AdditionalErrorFields should be a list of span fields that should be included when logging
+# errors that happen during ingestion of events (for example, the span too large error).
+# This is primarily useful in trying to track down misbehaving senders in a large installation.
+# The fields `dataset`, `apihost`, and `environment` are always included.
+# If a field is not present in the span, it will not be present in the error log.
+# Default is ["trace.span_id"].
+# Eligible for live reload.
+AdditionalErrorFields = [
+	"trace.span_id"
+]
+
+# AddSpanCountToRoot adds a new metadata field, `meta.span_count` to root spans to indicate
+# the number of child spans on the trace at the time the sampling decision was made.
+# This value is available to the rules-based sampler, making it possible to write rules that
+# are dependent upon the number of spans in the trace.
+# Default is false.
+# Eligible for live reload.
+# AddSpanCountToRoot = true
+
+# CacheOverrunStrategy controls the cache management behavior under memory pressure.
+# "resize" means that when a cache overrun occurs, the cache is shrunk and never grows again,
+# which is generally not helpful unless it occurs because of a permanent change in traffic patterns.
+# In the "impact" strategy, the items having the most impact on the cache size are
+# ejected from the cache earlier than normal but the cache is not resized.
+# In all cases, it only applies if MaxAlloc is nonzero.
+# Default is "resize" for compatibility but "impact" is recommended for most installations.
+# Eligible for live reload.
+# CacheOverrunStrategy = "impact"
+
+############################
+## Event ID Field Names   ##
+############################
+
+# Set the field names to use for the event ID fields. These fields are used to
+# identify events that are part of the same trace. TraceIdFieldNames are used
+# to determine if an event is a Trace or another event type. ParentIdFieldNames
+# are used to determine if an event is a root span or not.
+
+# TraceIdFieldNames = [
+#   "trace.trace_id",
+#   "traceId"
+# ]
+
+# ParentIdFieldNames = [
+#   "trace.parent_id",
+#   "parentId"
+# ]
+
+############################
+## Implementation Choices ##
+############################
+
+# Each of the config options below chooses an implementation of a Refinery
+# component to use. Depending on the choice there may be more configuration
+# required below in the section for that choice. Changing implementation choices
+# requires a process restart; these changes will not be picked up by a live
+# config reload. (Individual config options for a given implementation may be
+# eligible for live reload).
+
+# Collector describes which collector to use for collecting traces. The only
+# current valid option is "InMemCollector".. More can be added by adding
+# implementations of the Collector interface.
+Collector = "InMemCollector"
+
+# Logger describes which logger to use for Refinery logs. Valid options are
+# "logrus" and "honeycomb". The logrus option will write logs to STDOUT and the
+# honeycomb option will send them to a Honeycomb dataset.
+Logger = "honeycomb"
+
+# Metrics describes which service to use for Refinery metrics. Valid options are
+# "prometheus" and "honeycomb". The prometheus option starts a listener that
+# will reply to a request for /metrics. The honeycomb option will send summary
+# metrics to a Honeycomb dataset.
+Metrics = "honeycomb"
+
+#########################
+## Peer Management     ##
+#########################
+
+# [PeerManagement]
+# Type = "file"
+# Peers is the list of all servers participating in this proxy cluster. Events
+# will be sharded evenly across all peers based on the Trace ID. Values here
+# should be the base URL used to access the peer, and should include scheme,
+# hostname (or ip address) and port. All servers in the cluster should be in
+# this list, including this host.
+# Peers = [
+	# "http://127.0.0.1:8081",
+	# "http://127.0.0.1:8081",
+	# "http://10.1.2.3.4:8080",
+	# "http://refinery-1231:8080",
+	# "http://peer-3.fqdn" // assumes port 80
+# ]
+
+# [PeerManagement]
+# Type = "redis"
+# RedisHost is is used to connect to redis for peer cluster membership management.
+# Further, if the environment variable 'REFINERY_REDIS_HOST' is set it takes
+# precedence and this value is ignored.
+# Not eligible for live reload.
+# RedisHost = "localhost:6379"
+
+# RedisUsername is the username used to connect to redis for peer cluster membership management.
+# If the environment variable 'REFINERY_REDIS_USERNAME' is set it takes
+# precedence and this value is ignored.
+# Not eligible for live reload.
+# RedisUsername = ""
+
+# RedisPassword is the password used to connect to redis for peer cluster membership management.
+# If the environment variable 'REFINERY_REDIS_PASSWORD' is set it takes
+# precedence and this value is ignored.
+# Not eligible for live reload.
+# RedisPassword = ""
+
+# RedisPrefix is a string used as a prefix for the keys in redis while storing
+# the peer membership. It might be useful to set this in any situation where
+# multiple refinery clusters or multiple applications want to share a single
+# Redis instance. It may not be blank.
+# Default = "refinery"
+# RedisPrefix = "customPrefix"
+
+# RedisDatabase is an integer from 0-15 indicating the database number to use
+# for the Redis instance storing the peer membership. It might be useful to set
+# this in any situation where multiple refinery clusters or multiple
+# applications want to share a single Redis instance.
+# Default = 0
+# RedisDatabase = 1
+
+# UseTLS enables TLS when connecting to redis for peer cluster membership management, and sets the MinVersion to 1.2.
+# Not eligible for live reload.
+# UseTLS = false
+
+# UseTLSInsecure disables certificate checks
+# Not eligible for live reload.
+# UseTLSInsecure = false
+
+# IdentifierInterfaceName is optional. By default, when using RedisHost, Refinery will use
+# the local hostname to identify itself to other peers in Redis. If your environment
+# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# by name), you can specify the network interface that Refinery is listening on here.
+# Refinery will use the first unicast address that it finds on the specified network
+# interface as its identifier.
+# Not eligible for live reload.
+# IdentifierInterfaceName = "eth0"
+
+# UseIPV6Identifier is optional. If using IdentifierInterfaceName, Refinery will default to the first
+# IPv4 unicast address it finds for the specified interface. If UseIPV6Identifier is used, will use
+# the first IPV6 unicast address found.
+# UseIPV6Identifier = false
+
+# RedisIdentifier is optional. By default, when using RedisHost, Refinery will use
+# the local hostname to identify itself to other peers in Redis. If your environment
+# requires that you use IPs as identifiers (for example, if peers can't resolve eachother
+# by name), you can specify the exact identifier (IP address, etc) to use here.
+# Not eligible for live reload. Overrides IdentifierInterfaceName, if both are set.
+# RedisIdentifier = "192.168.1.1"
+
+# Timeout is optional. By default, when using RedisHost, Refinery will timeout
+# after 5s when communicating with Redis.
+# Timeout = "5s"
+
+# Strategy controls the way that traces are assigned to refinery nodes.
+# The "legacy" strategy uses a simple algorithm that unfortunately causes
+# 1/2 of the in-flight traces to be assigned to a different node whenever the
+# number of nodes changes.
+# The legacy strategy is deprecated and is intended to be removed in a future release.
+# The "hash" strategy is strongly recommended, as only 1/N traces (where N is the
+# number of nodes) are disrupted when the node count changes.
+# Not eligible for live reload.
+# Strategy = "hash"
+
+#########################
+## In-Memory Collector ##
+#########################
+
+# InMemCollector brings together all the settings that are relevant to
+# collecting spans together to make traces.
+[InMemCollector]
+
+# The collection cache is used to collect all spans into a trace as well as
+# remember the sampling decision for any spans that might come in after the
+# trace has been marked "complete" (either by timing out or seeing the root
+# span). The number of traces in the cache should be many multiples (100x to
+# 1000x) of the total number of concurrently active traces (trace throughput *
+# trace duration).
+# Eligible for live reload. Growing the cache capacity with a live config reload
+# is fine. Avoid shrinking it with a live reload (you can, but it may cause
+# temporary odd sampling decisions).
+CacheCapacity = 1000
+
+# MaxAlloc is optional. If set, it must be an integer >= 0. 64-bit values are
+# supported.
+# If set to a non-zero value, once per tick (see SendTicker) the collector
+# will compare total allocated bytes to this value. If allocation is too
+# high, cache capacity will be adjusted according to the setting for
+# CacheOverrunStrategy.
+# Useful values for this setting are generally in the range of 75%-90% of
+# available system memory.
+MaxAlloc = 0
+
+###################
+## Logrus Logger ##
+###################
+
+# LogrusLogger is a section of the config only used if you are using the
+# LogrusLogger to send all logs to STDOUT using the logrus package. If you are
+# using a different logger (eg honeycomb logger) you can leave all this
+# commented out.
+[LogrusLogger]
+
+# logrus logger currently has no options!
+
+######################
+## Honeycomb Logger ##
+######################
+
+# HoneycombLogger is a section of the config only used if you are using the
+# HoneycombLogger to send all logs to a Honeycomb Dataset. If you are using a
+# different logger (eg file-based logger) you can leave all this commented out.
+
+[HoneycombLogger]
+
+# LoggerHoneycombAPI is the URL for the upstream Honeycomb API.
+# Eligible for live reload.
+LoggerHoneycombAPI = "https://api.honeycomb.io"
+
+# LoggerAPIKey is the API key to use to send log events to the Honeycomb logging
+# dataset. This is separate from the APIKeys used to authenticate regular
+# traffic.
+# Eligible for live reload.
+LoggerAPIKey = "abcd1234"
+
+# LoggerDataset is the name of the dataset to which to send Refinery logs
+# Eligible for live reload.
+LoggerDataset = "Refinery Logs"
+
+# LoggerSamplerEnabled enables a PerKeyThroughput dynamic sampler for log messages.
+# This will sample log messages based on [log level:message] key on a per second throughput basis.
+# Not eligible for live reload.
+LoggerSamplerEnabled = true
+
+# LoggerSamplerThroughput is the per key per second throughput for the log message dynamic sampler.
+# Not eligible for live reload.
+LoggerSamplerThroughput = 10
+
+#######################
+## Honeycomb Metrics ##
+#######################
+
+# HoneycombMetrics is a section of the config only used if you are using the
+# HoneycombMetrics to send all metrics to a Honeycomb Dataset. If you are using a
+# different metrics service (eg prometheus or metricsd) you can leave all this
+# commented out.
+
+[HoneycombMetrics]
+
+# MetricsHoneycombAPI is the URL for the upstream Honeycomb API.
+# Eligible for live reload.
+MetricsHoneycombAPI = "https://api.honeycomb.io"
+
+# MetricsAPIKey is the API key to use to send log events to the Honeycomb logging
+# dataset. This is separate from the APIKeys used to authenticate regular
+# traffic.
+# Eligible for live reload.
+MetricsAPIKey = "abcd1234"
+
+# MetricsDataset is the name of the dataset to which to send Refinery metrics
+# Eligible for live reload.
+MetricsDataset = "Refinery Metrics"
+
+# MetricsReportingInterval is the frequency (in seconds) to send metric events
+# to Honeycomb. Between 1 and 60 is recommended.
+# Not eligible for live reload.
+MetricsReportingInterval = 30
+
+
+#######################
+## Prometheus Metrics ##
+#######################
+
+[PrometheusMetrics]
+
+# MetricsListenAddr determines the interface and port on which Prometheus will
+# listen for requests for /metrics. Must be different from the main Refinery
+# listener.
+# Not eligible for live reload.
+# MetricsListenAddr = "localhost:2112"
+
+###########################
+## gRPC ServerParameters ##
+###########################
+
+# Reflects: https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
+
+[GRPCServerParameters]
+
+# MaxConnectionIdle is a duration for the amount of time after which an
+# idle connection would be closed by sending a GoAway. Idleness duration is
+# defined since the most recent time the number of outstanding RPCs became
+# zero or the connection establishment.
+# 0s sets duration to infinity which is the default:
+# https://github.com/grpc/grpc-go/blob/60a3a7e969c401ca16dbcd0108ad544fb35aa61c/internal/transport/http2_server.go#L217-L219
+# Not eligible for live reload.
+# MaxConnectionIdle = "1m"
+
+# MaxConnectionAge is a duration for the maximum amount of time a
+# connection may exist before it will be closed by sending a GoAway. A
+# random jitter of +/-10% will be added to MaxConnectionAge to spread out
+# connection storms.
+# 0s sets duration to infinity which is the default:
+# https://github.com/grpc/grpc-go/blob/60a3a7e969c401ca16dbcd0108ad544fb35aa61c/internal/transport/http2_server.go#L220-L222
+# Not eligible for live reload.
+# MaxConnectionAge = "0s"
+
+# MaxConnectionAgeGrace is an additive period after MaxConnectionAge after
+# which the connection will be forcibly closed.
+# 0s sets duration to infinity which is the default:
+# https://github.com/grpc/grpc-go/blob/60a3a7e969c401ca16dbcd0108ad544fb35aa61c/internal/transport/http2_server.go#L225-L227
+# Not eligible for live reload.
+# MaxConnectionAgeGrace = "0s"
+
+# After a duration of this time if the server doesn't see any activity it
+# pings the client to see if the transport is still alive.
+# If set below 1s, a minimum value of 1s will be used instead.
+# 0s sets duration to 2 hours which is the default:
+# https://github.com/grpc/grpc-go/blob/60a3a7e969c401ca16dbcd0108ad544fb35aa61c/internal/transport/http2_server.go#L228-L230
+# Not eligible for live reload.
+# Time = "10s"
+
+# After having pinged for keepalive check, the server waits for a duration
+# of Timeout and if no activity is seen even after that the connection is
+# closed.
+# 0s sets duration to 20 seconds which is the default:
+# https://github.com/grpc/grpc-go/blob/60a3a7e969c401ca16dbcd0108ad544fb35aa61c/internal/transport/http2_server.go#L231-L233
+# Not eligible for live reload.
+# Timeout = "2s"
+
+
+
+################################
+## Sample Cache Configuration ##
+################################
+
+# Sample Cache Configuration controls the sample cache used to retain information about trace
+# status after the sampling decision has been made.
+
+[SampleCacheConfig]
+
+# Type controls the type of sample cache used.
+# "legacy" is a strategy where both keep and drop decisions are stored in a circular buffer that is
+# 5x the size of the trace cache. This is Refinery's original sample cache strategy.
+# "cuckoo" is a strategy where dropped traces are preserved in a "Cuckoo Filter", which can remember
+# a much larger number of dropped traces, leaving capacity to retain a much larger number of kept traces.
+# It is also more configurable. The cuckoo filter is recommended for most installations.
+# Default is "legacy".
+# Not eligible for live reload (you cannot change the type of cache with reload).
+# Type = "cuckoo"
+
+# KeptSize controls the number of traces preserved in the cuckoo kept traces cache.
+# Refinery keeps a record of each trace that was kept and sent to Honeycomb, along with some
+# statistical information. This is most useful in cases where the trace was sent before sending
+# the root span, so that the root span can be decorated with accurate metadata.
+# Default is 10_000 traces (each trace in this cache consumes roughly 200 bytes).
+# Does not apply to the "legacy" type of cache.
+# Eligible for live reload.
+# KeptSize = 10_000
+
+# DroppedSize controls the size of the cuckoo dropped traces cache.
+# This cache consumes 4-6 bytes per trace at a scale of millions of traces.
+# Changing its size with live reload sets a future limit, but does not have an immediate effect.
+# Default is 1_000_000 traces.
+# Does not apply to the "legacy" type of cache.
+# Eligible for live reload.
+# DroppedSize = 1_000_000
+
+# SizeCheckInterval controls the duration of how often the cuckoo cache re-evaluates
+# the remaining capacity of its dropped traces cache and possibly cycles it.
+# This cache is quite resilient so it doesn't need to happen very often, but the
+# operation is also inexpensive.
+# Default is 10 seconds.
+# Does not apply to the "legacy" type of cache.
+# Eligible for live reload.
+# SizeCheckInterval = "10s"
+
+
+#################################
+## Stress Relief Configuration ##
+#################################
+
+[StressRelief]
+
+# Controls the parameters of the stress relief system. There is a metric called
+# stress_level that is emitted as part of refinery metrics. It is a measure of
+# refinery's throughput rate relative to its processing rate, combined with the
+# amount of room in its internal queues, and ranges from 0 to 100. It is
+# generally expected to be 0 except under heavy load. When stress levels reach
+# 100, there is an increased chance that refinery will become unstable.
+#
+# To avoid this problem, the Stress Relief system can do deterministic sampling
+# on new trace traffic based solely on TraceID, without having to store traces
+# in the cache or take the time processing sampling rules. Existing traces in
+# flight will be processed normally, but when Stress Relief is active, trace
+# decisions are made deterministically on a per-span basis; all spans will be
+# sampled according to the SamplingRate specified here.
+#
+# Once Stress Relief activates (by exceeding the ActivationLevel), it will not
+# deactivate until stress_level falls below the DeactivationLevel. When it
+# deactivates, normal trace decisions are made -- and any additional spans that
+# arrive for traces that were active during Stress Relief will respect those
+# decisions.
+#
+# The measurement of stress is a lagging indicator and is highly dependent on
+# Refinery configuration and scaling. Other configuration values should be well
+# tuned first, before adjusting the Stress Relief Activation parameters.
+
+# Mode is a string indicating how to use Stress Relief. Options are:
+# - "never" means that Stress Relief will never activate
+# - "monitor" is the recommended setting, and means that Stress Relief will monitor
+#     the status of refinery and activate according to the levels set below.
+# - "always" means that Stress Relief is always on, which may be useful in an
+#     emergency situation.
+# Default is "never".
+# Eligible for live reload.
+# Mode = "monitor"
+
+# ActivationLevel is the stress_level (from 0-100) at which Stress Relief is
+# triggered.
+# Default = 75
+# Eligible for live reload.
+# ActivationLevel = 75
+
+# DeactivationLevel is the stress_level (from 0-100) at which Stress Relief is
+# turned off (subject to MinimumActivationDuration). Under normal circumstances,
+# it should be well below ActivationLevel to avoid oscillations.
+# Default = 25
+# Eligible for live reload.
+# DeactivationLevel = 25
+
+# StressSamplingRate is the sampling rate to use when Stress Relief is
+# activated. All new traces will be deterministically sampled at this rate based
+# only on the traceID.
+# Default = 100
+# Eligible for live reload.
+# StressSamplingRate = 100
+
+# MinimumActivationDuration is the minimum time that stress relief will stay
+# enabled, once activated. This prevents oscillations.
+# Default = 10s
+# Eligible for live reload.
+# MinimumActivationDuration = "10s"
+
+# MinimumStartupDuration is used when switching into Monitor mode.
+# When stress monitoring is enabled, it will start up in stressed mode for a
+# at least this amount of time to try to make sure that Refinery can handle the load
+# before it begins processing it in earnest. This is to help address the
+# problem of trying to bring a new node into an already-overloaded
+# cluster. If this duration is 0, Refinery will not start in stressed mode.
+# This can provide faster startup at the possible cost of startup instability.
+# MinimumStartupDuration = "3s"
+
+
+# AdditionalAttributes is a map that can be used for injecting user-defined
+# attributes. For example, it could be used for naming a refinery cluster.
+# Both keys and values must be strings.
+
+# [[AdditionalAttributes]]
+# 	ClusterName="MyCluster"
+#   environment="production"
