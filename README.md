@@ -16,7 +16,16 @@ Refinery is a trace-aware tail-based sampling proxy. It examines whole traces an
 
 Tail-based sampling allows you to inspect a whole trace and make a decision to sample based on its contents. For example, the root span has the HTTP status code to serve for a request, whereas another span might have information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
 
-Refinery also enabled Dynamic Sampling, which automatically adjusts the sampling rate based on volume of traffic. This allows you to keep a relatively constant number of traces per second, even if your traffic spikes. By configuring a set of fields on a trace that make up a key, the sampler automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, a key made up of `http.status_code` will sample much less traffic for requests that return `200` than for requests that return `404`.
+### Refinery's tail sampling capabilities
+
+Refinery support several kinds of tail sampling:
+
+* **Dynamic sampling** - By configuring a set of fields on a trace that make up a key, the sampler automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, a key made up of `http.status_code` will sample much less traffic for requests that return 200 than for requests that return `404`.
+* **Rules-based sampling** - This enables you to define sampling rates for well-known conditions. For example, you can sample 100% of traces with an error and then fall back to dynamic sampling for all other traffic.
+* **Throughput-based sampling** - This enables you to sample traces based on a fixed upper bound on the number of spans per second. The sampler will sample traces with a goal to keep the throughput below the specified limit.
+* **Deterministic probability sampling** - Although deterministic probability sampling is also used in head sampling, it is still possible to use it in tail sampling.
+
+Refinery lets you combine all of the above techniques to achieve your desired sampling behavior.
 
 ## Setting up Refinery
 
