@@ -85,7 +85,7 @@ Incoming traffic is expected to be HTTP, so if SSL is a requirement, put somethi
 - Not eligible for live reload.
 - Type: `hostport`
 - Default: `0.0.0.0:8080`
-- Environment variable: `REFINERY_HTTP_LISTEN_ADDR`
+- Environment variable: `REFINERY_HTTP_LISTEN_ADDRESS`
 - Command line switch: `--http-listen-addr`
 
 ### `PeerListenAddr`
@@ -97,7 +97,7 @@ Incoming traffic is expected to be HTTP, so if using SSL use something like ngin
 - Not eligible for live reload.
 - Type: `hostport`
 - Default: `0.0.0.0:8081`
-- Environment variable: `REFINERY_PEER_LISTEN_ADDR`
+- Environment variable: `REFINERY_PEER_LISTEN_ADDRESS`
 - Command line switch: `--peer-listen-addr`
 
 ### `HoneycombAPI`
@@ -462,7 +462,7 @@ It is recommended that you create a separate team and key for Refinery metrics.
 - Not eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_LEGACY_METRICS_API_KEY, HONEYCOMB_API_KEY`
+- Environment variable: `REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY`
 
 ### `Dataset`
 
@@ -878,7 +878,7 @@ Incoming traffic is expected to be unencrypted, so if using SSL, then put someth
 
 - Not eligible for live reload.
 - Type: `hostport`
-- Environment variable: `REFINERY_GRPC_LISTEN_ADDR`
+- Environment variable: `REFINERY_GRPC_LISTEN_ADDRESS`
 - Command line switch: `--grpc-listen-addr`
 
 ### `MaxConnectionIdle`

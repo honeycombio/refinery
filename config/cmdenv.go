@@ -28,16 +28,16 @@ import (
 type CmdEnv struct {
 	ConfigLocation        string `short:"c" long:"config" env:"REFINERY_CONFIG" default:"/etc/refinery/refinery.yaml" description:"config file or URL to load"`
 	RulesLocation         string `short:"r" long:"rules_config" env:"REFINERY_RULES_CONFIG" default:"/etc/refinery/rules.yaml" description:"config file or URL to load"`
-	HTTPListenAddr        string `long:"http-listen-addr" env:"REFINERY_HTTP_LISTEN_ADDR" description:"HTTP listen address for incoming traffic"`
-	PeerListenAddr        string `long:"peer-listen-addr" env:"REFINERY_PEER_LISTEN_ADDR" description:"Peer listen address"`
-	GRPCListenAddr        string `long:"grpc-listen-addr" env:"REFINERY_GRPC_LISTEN_ADDR" description:"gRPC listen address for OTLP traffic"`
+	HTTPListenAddr        string `long:"http-listen-address" env:"REFINERY_HTTP_LISTEN_ADDRESS" description:"HTTP listen address for incoming event traffic"`
+	PeerListenAddr        string `long:"peer-listen-address" env:"REFINERY_PEER_LISTEN_ADDRESS" description:"Peer listen address for communication between Refinery instances"`
+	GRPCListenAddr        string `long:"grpc-listen-address" env:"REFINERY_GRPC_LISTEN_ADDRESS" description:"gRPC listen address for OTLP traffic"`
 	RedisHost             string `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
 	RedisUsername         string `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username"`
 	RedisPassword         string `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password"`
 	HoneycombAPI          string `long:"honeycomb-api" env:"REFINERY_HONEYCOMB_API" description:"Honeycomb API URL"`
 	HoneycombAPIKey       string `long:"honeycomb-api-key" env:"REFINERY_HONEYCOMB_API_KEY" description:"Honeycomb API key (for logger and metrics)"`
 	HoneycombLoggerAPIKey string `long:"logger-api-key" env:"REFINERY_HONEYCOMB_LOGGER_API_KEY" description:"Honeycomb logger API key"`
-	LegacyMetricsAPIKey   string `long:"legacy-metrics-api-key" env:"REFINERY_LEGACY_METRICS_API_KEY" description:"API key for legacy Honeycomb metrics"`
+	LegacyMetricsAPIKey   string `long:"legacy-metrics-api-key" env:"REFINERY_HONEYCOMB_METRICS_API_KEY" description:"API key for legacy Honeycomb metrics"`
 	OTelMetricsAPIKey     string `long:"otel-metrics-api-key" env:"REFINERY_OTEL_METRICS_API_KEY" description:"API key for OTel metrics if being sent to Honeycomb"`
 	QueryAuthToken        string `long:"query-auth-token" env:"REFINERY_QUERY_AUTH_TOKEN" description:"Token for debug/management queries"`
 	AvailableMemory       string `long:"available-memory" env:"REFINERY_AVAILABLE_MEMORY" description:"The maximum memory available for Refinery to use."`

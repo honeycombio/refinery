@@ -80,8 +80,8 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_HTTP_LISTEN_ADDR
-        commandLine: http-listen-addr
+        envvar: REFINERY_HTTP_LISTEN_ADDRESS
+        commandLine: http-listen-address
         summary: is the address where Refinery listens for incoming requests.
         description: >
           This setting is the IP and port on which Refinery listens for
@@ -98,8 +98,8 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_PEER_LISTEN_ADDR
-        commandLine: peer-listen-addr
+        envvar: REFINERY_PEER_LISTEN_ADDRESS
+        commandLine: peer-listen-address
         summary: is the IP and port on which to listen for traffic being rerouted from a peer.
         description: >
           Incoming traffic is expected to be HTTP, so if using SSL
@@ -539,7 +539,7 @@ groups:
         reload: false
         validations:
           - type: requiredInGroup
-        envvar: REFINERY_LEGACY_METRICS_API_KEY, HONEYCOMB_API_KEY
+        envvar: REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY
         commandline: legacy-metrics-api-key
         summary: is the API key used by Refinery to send its metrics to Honeycomb.
         description: >
@@ -1141,8 +1141,8 @@ groups:
         valuetype: nondefault
         default: ""
         reload: false
-        envvar: REFINERY_GRPC_LISTEN_ADDR
-        commandLine: grpc-listen-addr
+        envvar: REFINERY_GRPC_LISTEN_ADDRESS
+        commandLine: grpc-listen-address
         summary: is the address Refinery listens to for incoming GRPC OpenTelemetry events.
         description: >
           Incoming traffic is expected to be unencrypted, so if using SSL, then

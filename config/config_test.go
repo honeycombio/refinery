@@ -67,7 +67,7 @@ func makeYAML(args ...interface{}) string {
 
 func TestGRPCListenAddrEnvVar(t *testing.T) {
 	const address = "127.0.0.1:4317"
-	const envVarName = "REFINERY_GRPC_LISTEN_ADDR"
+	const envVarName = "REFINERY_GRPC_LISTEN_ADDRESS"
 	os.Setenv(envVarName, address)
 	defer os.Unsetenv(envVarName)
 
@@ -129,7 +129,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 	}{
 		{
 			name:   "Specific env var",
-			envVar: "REFINERY_LEGACY_METRICS_API_KEY",
+			envVar: "REFINERY_HONEYCOMB_METRICS_API_KEY",
 			key:    "abc123",
 		},
 		{
@@ -158,7 +158,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 
 func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	const specificKey = "abc123"
-	const specificEnvVarName = "REFINERY_LEGACY_METRICS_API_KEY"
+	const specificEnvVarName = "REFINERY_HONEYCOMB_METRICS_API_KEY"
 	const fallbackKey = "this should not be set in the config"
 	const fallbackEnvVarName = "REFINERY_HONEYCOMB_API_KEY"
 
