@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"log"
 	"net/url"
 	"sync"
 	"time"
@@ -43,8 +42,15 @@ type OTelMetrics struct {
 }
 
 // Start initializes all metrics or resets all metrics to zero
-func (o *OTelMetrics) Start() {
+func (o *OTelMetrics) Start() error {
 	cfg := o.Config.GetOTelMetricsConfig()
+
+	o.counters = make(map[string]metric.Int64Counter)
+	o.gauges = make(map[string]metric.Float64ObservableGauge)
+	o.histograms = make(map[string]metric.Int64Histogram)
+	o.updowns = make(map[string]metric.Int64UpDownCounter)
+
+	o.values = make(map[string]float64)
 
 	ctx := context.Background()
 
@@ -52,7 +58,7 @@ func (o *OTelMetrics) Start() {
 	host, err := url.Parse(cfg.APIHost)
 	if err != nil {
 		o.Logger.Error().WithString("msg", "failed to parse metrics apihost").WithString("apihost", cfg.APIHost)
-		return
+		return err
 	}
 
 	compression := otlpmetrichttp.GzipCompression
@@ -96,7 +102,7 @@ func (o *OTelMetrics) Start() {
 	exporter, err := otlpmetrichttp.New(ctx, options...)
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	res, err := resource.New(ctx,
@@ -106,7 +112,7 @@ func (o *OTelMetrics) Start() {
 	)
 
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	provider := sdkmetric.NewMeterProvider(
@@ -118,6 +124,7 @@ func (o *OTelMetrics) Start() {
 		sdkmetric.WithResource(res),
 	)
 	o.meter = provider.Meter("otelmetrics")
+	return nil
 }
 
 func (o *OTelMetrics) Register(name string, metricType string) {

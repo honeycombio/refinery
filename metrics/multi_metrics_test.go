@@ -40,6 +40,11 @@ func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
 		return nil, err
 	}
 
+	if err := g.Populate(); err != nil {
+		fmt.Printf("failed to populate injection graph. error: %+v\n", err)
+		return nil, err
+	}
+
 	fmt.Println("starting injected dependencies")
 	ststLogger := dummyLogger{}
 
