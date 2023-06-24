@@ -27,6 +27,9 @@ Specific configuration changes worth noting:
 - Some legacy operational controls relating to caching and memory management have been removed.
 - Refinery can be run with a validation command-line switch (`-V`), which can be used to validate configuration (typically used for CI/CD).
 - StressRelief activation level defaults have been changed to higher values.
+- Log levels have been cleaned up so that they're more useful. The `info` level is less noisy and `warn` is now a valid option.
+- Config file location can also be a URL instead of a file path. The contents are retrieved with a simple GET request.
+- Config file contents are periodically refetched at the rate specified by `ConfigReloadInterval`. An immediate reload can be forced by sending the `SIGUSR1` signal.
 
 ### Sampler Changes
 - All dynamic samplers now correctly count spans, not traces. Although they were documented as counting the number of spans, in fact they were only counting traces, which often made it difficult to achieve appropriate target rates. *** After running the conversion tool, existing configurations should be adjusted! ***
@@ -43,6 +46,14 @@ Specific configuration changes worth noting:
 - The APIKeys list now applies to OTLP traffic as well as Honeycomb events.
 - StressRelief is now more stable and effective.
 - Cache overruns should occur much less often and are now a reliable indication that the cache is undersized.
+
+### Conversion Tool
+- There is now a `convert` tool included with Refinery -- binary builds are available as part of the release.
+- `convert config` can read v1 config files and convert them to v2 YAML files, adding detailed comments.
+- `convert rules` can read v1 rules files and convert them to v2 YAML files.
+- `convert helm` can read a helm chart with `config` and `rules` sections and write out a revised, updated helm chart.
+- `convert validate config` can validate a v2 config file.
+- `convert validate rules` can validate a v2 rules file.
 
 ## Version 1.21.0
 
