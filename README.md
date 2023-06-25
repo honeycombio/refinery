@@ -52,7 +52,7 @@ helm repo add honeycomb https://honeycombio.github.io/helm-charts
 helm install refinery honeycomb/refinery
 ```
 
-This will use the defaulte values file. You can also supply your own:
+This will use the default values file. You can also supply your own:
 
 ```bash
 helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
