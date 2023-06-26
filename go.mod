@@ -22,6 +22,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.7
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.14.0
+	github.com/pyroscope-io/godeltaprof v0.1.1
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/viper v1.15.0
