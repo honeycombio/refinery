@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/honeycombio/refinery/config"
+	deltaprof "github.com/pyroscope-io/godeltaprof/http/pprof"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/rcrowley/go-metrics/exp"
 	"github.com/sirupsen/logrus"
@@ -32,6 +33,11 @@ type DebugService struct {
 }
 
 func (s *DebugService) Start() error {
+	// Enables 1% mutex profiling, and 1s block profiling
+	// Values from github.com/DataDog/go-profiler-notes/blob/main/block.md#usage
+	runtime.SetBlockProfileRate(1000000)
+	runtime.SetMutexProfileFraction(100)
+
 	s.expVars = make(map[string]interface{})
 
 	s.mux = http.NewServeMux()
@@ -44,6 +50,11 @@ func (s *DebugService) Start() error {
 	s.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	s.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	s.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	s.HandleFunc("/debug/pprof/delta_heap", deltaprof.Heap)
+	s.HandleFunc("/debug/pprof/delta_block", deltaprof.Block)
+	s.HandleFunc("/debug/pprof/delta_mutex", deltaprof.Mutex)
+
 	s.HandleFunc("/debug/vars", s.expvarHandler)
 	s.Handle("/debug/metrics", exp.ExpHandler(metrics.DefaultRegistry))
 	s.Publish("cmdline", os.Args)
