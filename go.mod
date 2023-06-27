@@ -13,7 +13,7 @@ require (
 	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/mux v1.8.0
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/honeycombio/dynsampler-go v0.5.0
+	github.com/honeycombio/dynsampler-go v0.5.1
 	github.com/honeycombio/husky v0.22.4
 	github.com/honeycombio/libhoney-go v1.18.0
 	github.com/jessevdk/go-flags v1.5.0
@@ -23,6 +23,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.8
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.15.1
+	github.com/pyroscope-io/godeltaprof v0.1.1
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/sirupsen/logrus v1.9.2
 	github.com/stretchr/testify v1.8.4
