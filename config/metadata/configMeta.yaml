@@ -150,12 +150,12 @@ groups:
             arg: ReceiveKeys
         summary: is a boolean flag that causes events arriving with API keys not in the `ReceiveKeys` list to be rejected.
         description: >
-          If `true`, then only traffic using the keys listed in `APIKeys` is
+          If `true`, then only traffic using the keys listed in `ReceiveKeys` is
           accepted. Events arriving with API keys not in the `ReceiveKeys` list
           will be rejected with an HTTP `401` error.
 
           If `false`, then all traffic is accepted and `ReceiveKeys` is
-          ignored. Must be specified if `APIKeys` is specified.
+          ignored. Must be specified if `ReceiveKeys` is specified.
 
   - name: RefineryTelemetry
     title: "Refinery Telemetry"
