@@ -30,10 +30,8 @@ The remainder of this document describes the sections within the file and the fi
 
 ## {{ $group.Title }}
 
-{{ $group.Description | wrapForDocs }}
+{{ printf "`%s` %s" $group.Name $group.Description | wrapForDocs }}
 {{- println -}}
-{{- println -}}
-Section Name: `{{ $group.Name }}`
 {{- println -}}
 {{- println -}}
 {{- range $group.Fields -}}
@@ -50,7 +48,7 @@ Section Name: `{{ $group.Name }}`
 
 ### `{{ $field.Name }}`
 
-{{ printf "%s %s" $field.Name $field.Summary }}
+{{ printf "`%s` %s" $field.Name $field.Summary }}
 
 {{ $field.Description | wrapForDocs -}}
 {{- println -}}
@@ -67,6 +65,14 @@ Section Name: `{{ $group.Name }}`
 {{- end -}}
 {{- if eq $field.ValueType "choice" -}}
 - Options: `{{- printf "%s" (join $field.Choices " ") -}}`
+{{- println -}}
+{{- end -}}
+{{- if $field.Envvar -}}
+- Environment variable: `{{ $field.Envvar }}`
+{{- println -}}
+{{- end -}}
+{{- if $field.CommandLine -}}
+- Command line switch: `--{{ $field.CommandLine }}`
 {{- println -}}
 {{- end -}}
 {{- println -}}

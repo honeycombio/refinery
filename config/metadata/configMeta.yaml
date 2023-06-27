@@ -80,8 +80,8 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_LISTEN_ADDRESS
-        commandLine: ListenAddr
+        envvar: REFINERY_HTTP_LISTEN_ADDRESS
+        commandLine: http-listen-address
         summary: is the address where Refinery listens for incoming requests.
         description: >
           This setting is the IP and port on which Refinery listens for
@@ -99,7 +99,7 @@ groups:
         validations:
           - type: notempty
         envvar: REFINERY_PEER_LISTEN_ADDRESS
-        commandLine: PeerListenAddr
+        commandLine: peer-listen-address
         summary: is the IP and port on which to listen for traffic being rerouted from a peer.
         description: >
           Incoming traffic is expected to be HTTP, so if using SSL
@@ -113,7 +113,7 @@ groups:
         validations:
           - type: notempty
         envvar: REFINERY_HONEYCOMB_API
-        commandLine: HoneycombAPI
+        commandLine: honeycomb-api
         summary: is the URL of the upstream Honeycomb API where the data will be sent.
         description: >
           This setting is the destination to which Refinery sends all events
@@ -133,8 +133,6 @@ groups:
         validations:
           - type: elementType
             arg: string
-        envvar: REFINERY_RECEIVE_KEYS
-        commandLine: APIKeys
         summary: is a set of Honeycomb API keys that the proxy will treat specially.
         description: >
           This list only applies to span traffic - other Honeycomb API actions
@@ -301,6 +299,7 @@ groups:
         example: "some-private-value"
         reload: false
         envvar: REFINERY_QUERY_AUTH_TOKEN
+        commandline: query-auth-token
         summary: is the token that must be specified to access the `/query` endpoint.
         description: >
           This token must be specified with the header
@@ -393,7 +392,6 @@ groups:
         valuetype: nondefault
         default: "https://api.honeycomb.io"
         reload: false
-        envvar: REFINERY_LOGS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API where Refinery sends its logs.
         description: >
           Refinery's internal logs will be sent to this host using the standard
@@ -408,7 +406,8 @@ groups:
         default: ""
         example: "SetThisToAHoneycombKey"
         reload: false
-        envvar: REFINERY_LOGS_API_KEY
+        envvar: REFINERY_HONEYCOMB_LOGGER_API_KEY, REFINERY_HONEYCOMB_API_KEY
+        commandline: logger-api-key
         validations:
           - type: requiredInGroup
           - type: format
@@ -427,7 +426,6 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_LOGS_DATASET
         summary: is the dataset to which logs will be sent.
         description: >
           Only used if `APIKey` is specified.
@@ -439,7 +437,7 @@ groups:
         valuetype: nondefault
         default: true
         reload: false
-        summary: controls whether to logs are sampled before sending to Honeycomb.
+        summary: controls whether logs are sampled before sending to Honeycomb.
         description: >
           The sample rate is controlled by the `SamplerThroughput` setting.
 
@@ -465,7 +463,7 @@ groups:
         valuetype: nondefault
         default: true
         reload: false
-        summary: controls whether to used structured logging.
+        summary: controls whether to use structured logging.
         description: >
           `true` generates structured logs (JSON).
           `false` generates plain text logs.
@@ -525,7 +523,6 @@ groups:
         valuetype: nondefault
         default: "https://api.honeycomb.io"
         reload: false
-        envvar: REFINERY_METRICS_HONEYCOMB_API
         summary: is the URL of the Honeycomb API where legacy metrics are sent.
         description: >
           Refinery's internal metrics will be sent to this host using the
@@ -542,7 +539,8 @@ groups:
         reload: false
         validations:
           - type: requiredInGroup
-        envvar: REFINERY_METRICS_API_KEY
+        envvar: REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY
+        commandline: legacy-metrics-api-key
         summary: is the API key used by Refinery to send its metrics to Honeycomb.
         description: >
           It is recommended that you create a separate team and key for
@@ -557,7 +555,6 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_METRICS_DATASET
         summary: is the Honeycomb dataset where Refinery sends its metrics.
         description: >
           Only used if `APIKey` is specified.
@@ -596,7 +593,6 @@ groups:
         valuetype: nondefault
         default: "https://api.honeycomb.io"
         reload: false
-        envvar: REFINERY_METRICS_OTEL_API
         firstversion: v2.0
         summary: is the URL of the OpenTelemetry API to which metrics will be sent.
         description: >
@@ -610,7 +606,8 @@ groups:
         default: ""
         example: "SetThisToAHoneycombKey"
         reload: false
-        envvar: REFINERY_METRICS_OTEL_API_KEY
+        envvar: REFINERY_METRICS_OTEL_API_KEY, HONEYCOMB_API_KEY
+        commandline: otel-metrics-api-key
         firstversion: v2.0
         summary: is the API key used to send Honeycomb metrics via OpenTelemetry.
         description: >
@@ -628,7 +625,6 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_METRICS_DATASET
         firstversion: v2.0
         summary: is the Honeycomb dataset that Refinery sends its OpenTelemetry metrics.
         description: >
@@ -759,6 +755,7 @@ groups:
         example: "localhost:6379"
         reload: false
         envvar: REFINERY_REDIS_HOST
+        commandline: redis-host
         summary: is the host and port of the Redis instance to use for peer cluster membership management.
         description: >
           Must be in the form `host:port`.
@@ -771,6 +768,7 @@ groups:
         valuetype: nonemptystring
         reload: false
         envvar: REFINERY_REDIS_USERNAME
+        commandline: redis-username
         summary: is the username used to connect to Redis for peer cluster membership management.
         description: >
           Many Redis installations do not use this field.
@@ -783,6 +781,7 @@ groups:
         valuetype: nonemptystring
         reload: false
         envvar: REFINERY_REDIS_PASSWORD
+        commandline: redis-password
         summary: is the password used to connect to Redis for peer cluster membership management.
         description: >
           Many Redis installations do not use this field.
@@ -797,7 +796,6 @@ groups:
         reload: false
         validations:
           - type: notempty
-        envvar: REFINERY_REDIS_PREFIX
         summary: is a string used as a prefix for the keys in Redis while
           storing the peer membership.
         description: >
@@ -818,7 +816,6 @@ groups:
             arg: 0
           - type: maximum
             arg: 15
-        envvar: REFINERY_REDIS_DATABASE
         summary: is the database number to use for the Redis instance storing the peer membership.
         description: >
           An integer from 0-15 indicating the database number to use for the
@@ -920,7 +917,7 @@ groups:
         example: "4Gb"
         reload: true
         envvar: REFINERY_AVAILABLE_MEMORY
-        commandLine: AvailableMemory
+        commandLine: available-memory
         summary: is the amount of system memory available to the Refinery process.
         description: >
           This value will typically be set through an environment variable
@@ -1145,7 +1142,7 @@ groups:
         default: ""
         reload: false
         envvar: REFINERY_GRPC_LISTEN_ADDRESS
-        commandLine: GRPCListenAddr
+        commandLine: grpc-listen-address
         summary: is the address Refinery listens to for incoming GRPC OpenTelemetry events.
         description: >
           Incoming traffic is expected to be unencrypted, so if using SSL, then
