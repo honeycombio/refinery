@@ -98,16 +98,16 @@ func main() {
 	and write them back out to a helm chart, while preserving the non-refinery portions.
 
 	It has other commands to help with the conversion process. Valid commands are:
-	    convert config:          convert a config file
-	    convert rules:           convert a rules file
-		convert helm: 			 convert a helm values file
-	    convert validate config: validate a config file against the 2.0 format
-	    convert validate rules:  validate a rules file against the 2.0 format
-	    convert doc config:      generate markdown documentation for the config file
-	    convert doc rules:       generate markdown documentation for the rules file
+		convert config:          convert a config file
+		convert rules:           convert a rules file
+		convert helm:            convert a helm values file
+		convert validate config: validate a config file against the 2.0 format
+		convert validate rules:  validate a rules file against the 2.0 format
+		convert doc config:      generate markdown documentation for the config file
+		convert doc rules:       generate markdown documentation for the rules file
 
 	Examples:
-	    convert config --input config.toml --output config.yaml
+		convert config --input config.toml --output config.yaml
 		convert rules --input refinery_rules.yaml --output v2rules.yaml
 		convert validate config --input config.yaml
 		convert validate rules --input v2rules.yaml
