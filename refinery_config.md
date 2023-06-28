@@ -1,11 +1,13 @@
-## The Config file
+## Refinery Config File
 
-The config file is a YAML file.
+The Refinery `config` file is a YAML file.
 The file is split into sections; each section is a group of related configuration options.
 Each section has a name, and the name is used to refer to the section in other parts of the config file.
 
-## Sample
-This is a sample config file:
+## Example
+
+This is an example `config` file:
+
 ```yaml
 General:
   ConfigurationVersion: 2
@@ -17,7 +19,7 @@ OTelMetrics:
   APIKey: SetThisToAHoneycombKey
 ```
 
-The remainder of this document describes the sections within the file and the fields in each.
+The remainder of this page describes the sections within the file and the fields in each.
 
 ## General Configuration
 
@@ -114,7 +116,7 @@ This setting is the destination to which Refinery sends all events that it decid
 
 ## Access Key Configuration
 
-`AccessKeys` Contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.
+`AccessKeys` contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.
 
 ### `ReceiveKeys`
 
@@ -428,7 +430,7 @@ Only used if `Enabled` is `true` in `PrometheusMetrics`.
 
 ## Legacy Metrics
 
-`LegacyMetrics` `LegacyMetrics` contains configuration for Refinery's legacy metrics.
+`LegacyMetrics` contains configuration for Refinery's legacy metrics.
 Version 1.x of Refinery used this format for sending Metrics to Honeycomb.
 The metrics generated that way are nonstandard and will be deprecated in a future release.
 New installations should prefer `OTelMetrics`.
@@ -486,7 +488,7 @@ Between 1 and 60 seconds is typical.
 
 ## OpenTelemetry Metrics
 
-`OTelMetrics` `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) metrics.
+`OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) metrics.
 This is the preferred way to send metrics to Honeycomb.
 New installations should prefer `OTelMetrics`.
 
@@ -618,7 +620,7 @@ The format is a list of strings of the form "host:port".
 
 ## Redis Peer Management
 
-`RedisPeerManagement` `RedisPeerManagement` controls how the Refinery cluster communicates between peers when using Redis.
+`RedisPeerManagement` controls how the Refinery cluster communicates between peers when using Redis.
 Only applies when `PeerManagement.Type` is "redis".
 
 ### `Host`
@@ -705,7 +707,7 @@ It is rarely necessary to adjust this value.
 
 ## Collection Settings
 
-`Collection` `Collection` contains the settings that are relevant to collecting spans together to make traces.
+`Collection` contains the settings that are relevant to collecting spans together to make traces.
 If none of the memory settings are used, then Refinery will not attempt to limit its memory usage.
 This is not recommended for production use since a burst of traffic could cause Refinery to run out of memory and crash.
 
@@ -766,7 +768,7 @@ See `MaxMemory` for more details.
 
 ## Buffer Sizes
 
-`BufferSizes` `BufferSizes` contains the settings that are relevant to the sizes of communications buffers.
+`BufferSizes` contains the settings that are relevant to the sizes of communications buffers.
 
 ### `UpstreamBufferSize`
 
@@ -832,7 +834,7 @@ Both keys and values must be strings.
 
 ## ID Fields
 
-`IDFields` `IDFields` controls the field names to use for the event ID fields.
+`IDFields` controls the field names to use for the event ID fields.
 These fields are used to identify events that are part of the same trace.
 
 ### `TraceNames`
@@ -859,7 +861,7 @@ A trace without a `parent_id` is assumed to be a root span.
 
 ## gRPC Server Parameters
 
-`GRPCServerParameters` `GRPCServerParameters` controls the parameters of the gRPC server used to receive OpenTelemetry data in gRPC format.
+`GRPCServerParameters` controls the parameters of the gRPC server used to receive OpenTelemetry data in gRPC format.
 
 ### `Enabled`
 
@@ -941,7 +943,7 @@ This is the amount of time after which if the server does not see any activity, 
 
 ## Sample Cache
 
-`SampleCache` `SampleCache` controls the sample cache used to retain information about trace status after the sampling decision has been made.
+`SampleCache` controls the sample cache used to retain information about trace status after the sampling decision has been made.
 
 ### `KeptSize`
 
@@ -980,7 +982,7 @@ Default is 10 seconds.
 
 ## Stress Relief
 
-`StressRelief` `StressRelief` controls the Stress Relief mechanism, which is used to prevent Refinery from being overwhelmed by a large number of traces.
+`StressRelief` controls the Stress Relief mechanism, which is used to prevent Refinery from being overwhelmed by a large number of traces.
 There is a metric called `stress_level` that is emitted as part of Refinery metrics.
 It is a measure of Refinery's throughput rate relative to its processing rate, combined with the amount of room in its internal queues, and ranges from `0` to `100`.
 `stress_level` is generally expected to be `0` except under heavy load.
