@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-28 at 13:29:01 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-06-28 at 21:40:56 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -116,7 +116,7 @@ Network:
 ## Access Key Configuration ##
 ##############################
 AccessKeys:
-  ## AccessKeys Contains access keys -- API keys that the proxy will treat
+  ## AccessKeys contains access keys -- API keys that the proxy will treat
   ## specially, and other flags that control how the proxy handles API
   ## keys.
   ##
@@ -447,11 +447,11 @@ PrometheusMetrics:
 ## Legacy Metrics ##
 ####################
 LegacyMetrics:
-  ## LegacyMetrics `LegacyMetrics` contains configuration for Refinery's
-  ## legacy metrics. Version 1.x of Refinery used this format for sending
-  ## Metrics to Honeycomb. The metrics generated that way are nonstandard
-  ## and will be deprecated in a future release. New installations should
-  ## prefer `OTelMetrics`.
+  ## LegacyMetrics contains configuration for Refinery's legacy metrics.
+  ## Version 1.x of Refinery used this format for sending Metrics to
+  ## Honeycomb. The metrics generated that way are nonstandard and will be
+  ## deprecated in a future release. New installations should prefer
+  ## `OTelMetrics`.
   ##
   ####
     ## Enabled controls whether to send legacy-formatted metrics to
@@ -503,9 +503,9 @@ LegacyMetrics:
 ## OpenTelemetry Metrics ##
 ###########################
 OTelMetrics:
-  ## OTelMetrics `OTelMetrics` contains configuration for Refinery's
-  ## OpenTelemetry (OTel) metrics. This is the preferred way to send
-  ## metrics to Honeycomb. New installations should prefer `OTelMetrics`.
+  ## OTelMetrics contains configuration for Refinery's OpenTelemetry (OTel)
+  ## metrics. This is the preferred way to send metrics to Honeycomb. New
+  ## installations should prefer `OTelMetrics`.
   ##
   ####
     ## Enabled controls whether to send metrics via OpenTelemetry.
@@ -639,8 +639,8 @@ PeerManagement:
 ## Redis Peer Management ##
 ###########################
 RedisPeerManagement:
-  ## RedisPeerManagement `RedisPeerManagement` controls how the Refinery
-  ## cluster communicates between peers when using Redis. Only applies when
+  ## RedisPeerManagement controls how the Refinery cluster communicates
+  ## between peers when using Redis. Only applies when
   ## `PeerManagement.Type` is "redis".
   ##
   ####
@@ -722,11 +722,11 @@ RedisPeerManagement:
 ## Collection Settings ##
 #########################
 Collection:
-  ## Collection `Collection` contains the settings that are relevant to
-  ## collecting spans together to make traces. If none of the memory
-  ## settings are used, then Refinery will not attempt to limit its memory
-  ## usage. This is not recommended for production use since a burst of
-  ## traffic could cause Refinery to run out of memory and crash.
+  ## Collection contains the settings that are relevant to collecting spans
+  ## together to make traces. If none of the memory settings are used, then
+  ## Refinery will not attempt to limit its memory usage. This is not
+  ## recommended for production use since a burst of traffic could cause
+  ## Refinery to run out of memory and crash.
   ##
   ####
     ## CacheCapacity is the number of traces to keep in the cache's circular
@@ -788,8 +788,8 @@ Collection:
 ## Buffer Sizes ##
 ##################
 BufferSizes:
-  ## BufferSizes `BufferSizes` contains the settings that are relevant to
-  ## the sizes of communications buffers.
+  ## BufferSizes contains the settings that are relevant to the sizes of
+  ## communications buffers.
   ##
   ####
     ## UpstreamBufferSize is the size of the queue used to buffer spans to
@@ -863,9 +863,9 @@ Specialized:
 ## ID Fields ##
 ###############
 IDFields:
-  ## IDFields `IDFields` controls the field names to use for the event ID
-  ## fields. These fields are used to identify events that are part of the
-  ## same trace.
+  ## IDFields controls the field names to use for the event ID fields.
+  ## These fields are used to identify events that are part of the same
+  ## trace.
   ##
   ####
     ## TraceNames is the list of field names to use for the trace ID.
@@ -891,8 +891,8 @@ IDFields:
 ## gRPC Server Parameters ##
 ############################
 GRPCServerParameters:
-  ## GRPCServerParameters `GRPCServerParameters` controls the parameters of
-  ## the gRPC server used to receive OpenTelemetry data in gRPC format.
+  ## GRPCServerParameters controls the parameters of the gRPC server used
+  ## to receive OpenTelemetry data in gRPC format.
   ##
   ####
     ## Enabled specifies whether the gRPC server is enabled.
@@ -978,9 +978,8 @@ GRPCServerParameters:
 ## Sample Cache ##
 ##################
 SampleCache:
-  ## SampleCache `SampleCache` controls the sample cache used to retain
-  ## information about trace status after the sampling decision has been
-  ## made.
+  ## SampleCache controls the sample cache used to retain information about
+  ## trace status after the sampling decision has been made.
   ##
   ####
     ## KeptSize is the number of traces preserved in the cuckoo kept traces
@@ -1022,9 +1021,8 @@ SampleCache:
 ## Stress Relief ##
 ###################
 StressRelief:
-  ## StressRelief `StressRelief` controls the Stress Relief mechanism,
-  ## which is used to prevent Refinery from being overwhelmed by a large
-  ## number of traces.
+  ## StressRelief controls the Stress Relief mechanism, which is used to
+  ## prevent Refinery from being overwhelmed by a large number of traces.
   ## There is a metric called `stress_level` that is emitted as part of
   ## Refinery metrics. It is a measure of Refinery's throughput rate
   ## relative to its processing rate, combined with the amount of room in
