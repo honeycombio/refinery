@@ -1,12 +1,14 @@
 {{- $file := . -}}
-## The Config file
+## Refinery Config File
 
-The config file is a YAML file.
+The Refinery `config` file is a YAML file.
 The file is split into sections; each section is a group of related configuration options.
 Each section has a name, and the name is used to refer to the section in other parts of the config file.
 
-## Sample
-This is a sample config file:
+## Example
+
+This is an example `config` file:
+
 ```yaml
 General:
   ConfigurationVersion: 2
@@ -18,7 +20,7 @@ OTelMetrics:
   APIKey: SetThisToAHoneycombKey
 ```
 
-The remainder of this document describes the sections within the file and the fields in each.
+The remainder of this page describes the sections within the file and the fields in each.
 
 {{ range $file.Groups -}}
 {{- template "docsite_group" . -}}

@@ -5,7 +5,7 @@ groups:
     summary: is the list of samplers to use.
     description: >
       `Samplers` maps targets to sampler configurations. Each target is a
-      Honeycomb environment, (or a dataset for Honeycomb Classic keys).
+      Honeycomb environment (or a dataset for Honeycomb Classic keys).
       The value is the sampler to use for that target. A `__default__`
       target is required. The target called `__default__` will be used 
       for any target that is not explicitly listed.
