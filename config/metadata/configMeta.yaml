@@ -122,7 +122,7 @@ groups:
   - name: AccessKeys
     title: "Access Key Configuration"
     description: >
-      Contains access keys -- API keys that the proxy will treat specially, and
+      contains access keys -- API keys that the proxy will treat specially, and
       other flags that control how the proxy handles API keys.
     fields:
       - name: ReceiveKeys
