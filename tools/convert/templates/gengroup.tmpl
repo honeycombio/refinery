@@ -1,7 +1,7 @@
 {{- $group := . }}
 {{ box $group.Title }}
 {{ $group.Name }}:
-{{ $group.Description | wordwrap | comment | indent 2 }}
+{{ printf "%s %s" $group.Name $group.Description | wordwrap | comment | indent 2 }}
   ####
 {{- range $group.Fields -}}
 {{- if .LastVersion -}}
