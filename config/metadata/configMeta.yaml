@@ -499,7 +499,7 @@ groups:
   - name: LegacyMetrics
     title: "Legacy Metrics"
     description: >
-      `LegacyMetrics` contains configuration for Refinery's legacy metrics.
+      contains configuration for Refinery's legacy metrics.
       Version 1.x of Refinery used this format for sending Metrics to
       Honeycomb. The metrics generated that way are nonstandard and will be
       deprecated in a future release. New installations should prefer
@@ -573,7 +573,7 @@ groups:
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"
     description: >
-      `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel)
+      contains configuration for Refinery's OpenTelemetry (OTel)
       metrics. This is the preferred way to send metrics to Honeycomb. New
       installations should prefer `OTelMetrics`.
     fields:
@@ -742,7 +742,7 @@ groups:
   - name: RedisPeerManagement
     title: "Redis Peer Management"
     description: >
-      `RedisPeerManagement` controls how the Refinery cluster communicates
+      controls how the Refinery cluster communicates
       between peers when using Redis. Only applies when `PeerManagement.Type`
       is "redis".
 
@@ -886,7 +886,7 @@ groups:
   - name: Collection
     title: "Collection Settings"
     description: >
-      `Collection` contains the settings that are relevant to collecting spans
+      contains the settings that are relevant to collecting spans
       together to make traces. If none of the memory settings are used, then
       Refinery will not attempt to limit its memory usage. This is not
       recommended for production use since a burst of traffic could cause
@@ -967,7 +967,7 @@ groups:
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >
-      `BufferSizes` contains the settings that are relevant to
+      contains the settings that are relevant to
       the sizes of communications buffers.
     fields:
       - name: UpstreamBufferSize
@@ -1087,7 +1087,7 @@ groups:
   - name: IDFields
     title: "ID Fields"
     description: >
-      `IDFields` controls the field names to use for the event ID fields. These
+      controls the field names to use for the event ID fields. These
       fields are used to identify events that are part of the same trace.
     fields:
       - name: TraceNames
@@ -1122,7 +1122,7 @@ groups:
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
     description: >
-      `GRPCServerParameters` controls the parameters of the gRPC server used to
+      controls the parameters of the gRPC server used to
       receive OpenTelemetry data in gRPC format.
     fields:
       - name: Enabled
@@ -1233,7 +1233,7 @@ groups:
   - name: SampleCache
     title: "Sample Cache"
     description: >
-      `SampleCache` controls the sample cache used to retain information about trace status after the sampling decision has been made.
+      controls the sample cache used to retain information about trace status after the sampling decision has been made.
     fields:
       - name: Type
         # we had a bug in the v1 config where this was implemented as `SampleCache` but documented as `SampleCacheConfig`;
@@ -1307,7 +1307,7 @@ groups:
   - name: StressRelief
     title: "Stress Relief"
     description: >
-      `StressRelief` controls the Stress Relief mechanism, which is used to
+      controls the Stress Relief mechanism, which is used to
       prevent Refinery from being overwhelmed by a large number of traces.
 
       There is a metric called `stress_level` that is emitted as part of
