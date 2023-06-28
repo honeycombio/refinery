@@ -86,7 +86,7 @@ Incoming traffic is expected to be HTTP, so if SSL is a requirement, put somethi
 - Type: `hostport`
 - Default: `0.0.0.0:8080`
 - Environment variable: `REFINERY_HTTP_LISTEN_ADDRESS`
-- Command line switch: `--http-listen-addr`
+- Command line switch: `--http-listen-address`
 
 ### `PeerListenAddr`
 
@@ -98,7 +98,7 @@ Incoming traffic is expected to be HTTP, so if using SSL use something like ngin
 - Type: `hostport`
 - Default: `0.0.0.0:8081`
 - Environment variable: `REFINERY_PEER_LISTEN_ADDRESS`
-- Command line switch: `--peer-listen-addr`
+- Command line switch: `--peer-listen-address`
 
 ### `HoneycombAPI`
 
@@ -130,10 +130,10 @@ This list only applies to span traffic - other Honeycomb API actions will be pro
 
 `AcceptOnlyListedKeys` is a boolean flag that causes events arriving with API keys not in the `ReceiveKeys` list to be rejected.
 
-If `true`, then only traffic using the keys listed in `APIKeys` is accepted.
+If `true`, then only traffic using the keys listed in `ReceiveKeys` is accepted.
 Events arriving with API keys not in the `ReceiveKeys` list will be rejected with an HTTP `401` error.
 If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
-Must be specified if `APIKeys` is specified.
+Must be specified if `ReceiveKeys` is specified.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -879,7 +879,7 @@ Incoming traffic is expected to be unencrypted, so if using SSL, then put someth
 - Not eligible for live reload.
 - Type: `hostport`
 - Environment variable: `REFINERY_GRPC_LISTEN_ADDRESS`
-- Command line switch: `--grpc-listen-addr`
+- Command line switch: `--grpc-listen-address`
 
 ### `MaxConnectionIdle`
 

@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-22 at 23:17:29 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-06-27 at 22:07:30 UTC
 
 # This file contains the configuration for the Honeycomb Refinery.
 # More stuff will go here later.
@@ -129,11 +129,11 @@ AccessKeys:
     ## AcceptOnlyListedKeys is a boolean flag that causes events arriving
     ## with API keys not in the `ReceiveKeys` list to be rejected.
     ##
-    ## If `true`, then only traffic using the keys listed in `APIKeys` is
+    ## If `true`, then only traffic using the keys listed in `ReceiveKeys` is
     ## accepted. Events arriving with API keys not in the `ReceiveKeys` list
     ## will be rejected with an HTTP `401` error.
     ## If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
-    ## Must be specified if `APIKeys` is specified.
+    ## Must be specified if `ReceiveKeys` is specified.
     ##
     ## Eligible for live reload.
     {{ conditional .Data "AcceptOnlyListedKeys" "nostar APIKeys" }}
