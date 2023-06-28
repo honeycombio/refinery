@@ -3,8 +3,12 @@
 #
 # created {{ "now" | meta }} from {{ ".Input" | meta }} using a template generated {{ now }}
 
-# This file contains the configuration for the Honeycomb Refinery.
-# More stuff will go here later.
+# This file contains a configuration for the Honeycomb Refinery. It is in YAML
+# format, organized into named groups, each of which contains a set of
+# configuration values. Text preceded by two comment characters (##) is
+# informational only. Text preceded by a single comment character (#) indicates
+# a value that is commented out and not used; it should be uncommented to enable
+# it.
 
 {{ range $file.Groups -}}
 {{ template "gengroup.tmpl" . }}
