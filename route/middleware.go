@@ -23,6 +23,7 @@ func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
 		if requiredToken == "" {
 			err := fmt.Errorf("/query endpoint is not authorized for use (specify QueryAuthToken in config)")
 			r.handlerReturnWithError(w, ErrAuthNeeded, err)
+			return
 		}
 
 		token := req.Header.Get(types.QueryTokenHeader)
