@@ -10,6 +10,7 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 
 ## Features
 
+- feat: Enable pyroscope deltaprof (#747) | [Liz Fong-Jones](https://github.com/lizthegrey)
 - feat: Rewrite config code without Viper (#654) | [Kent Quirk](https://github.com/kentquirk)
 - feat: Add Warn() to Logger interface (#656) | [Kent Quirk](https://github.com/kentquirk)
 - feat: Config conversion and validation code from one data file (#677) | [Kent Quirk](https://github.com/kentquirk)
@@ -34,6 +35,7 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 
 ## Fixes
 
+- fix: Query auth bug fix; add tests (#753) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Check apikeys for otlp requests too (+tests) (#672) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Various config fixes (#684) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Send a small amount of data to peers during stress relief (#688) | [Kent Quirk](https://github.com/kentquirk)
@@ -47,6 +49,14 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 
 ## Maintenance
 
+- docs: Generated Refinery docs for docs site improvements (#752) | [Mary J](https://github.com/mjingle)
+- docs: Update config_complete.yaml (#751) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Regenerate docs from recent changes (#750) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Update APIKeys reference in config (#748) | [Mary J](https://github.com/mjingle)
+- maint: Update dynsampler-go to latest to fix bug (#746) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Fix up docs, especially envvar and cmdline (#737) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Fix convert help and docs (#744) | [Kent Quirk](https://github.com/kentquirk)
+- maint: README updates -- round 1 (#742) | [Phillip Carter](https://github.com/cartermp)
 - maint(deps): Bump github.com/klauspost/compress from 1.16.4 to 1.16.5 (#675) | [dependabot[bot]](https://github.com/dependabot[bot])
 - maint(deps): Bump github.com/prometheus/client_golang from 1.14.0 to 1.15.1 (#676) | [dependabot[bot]](https://github.com/dependabot[bot])
 - refactor: Rename fields for clarity in an E&S world (#680) | [Kent Quirk](https://github.com/kentquirk)
