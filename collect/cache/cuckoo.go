@@ -34,13 +34,18 @@ type CuckooTraceChecker struct {
 	capacity uint
 	met      metrics.Metrics
 	addch    chan string
+
+	totalQueueLockTime time.Duration
+	maxQueueLockTime   time.Duration
+	lockCount          int
+	totalInserted      int
 }
 
 const (
 	// This is how many items can be in the Add Queue before we start blocking on Add.
 	AddQueueDepth = 10000
 	// This is the max number of items we'll pull from the queue during one lock cycle.
-	AddQueueBatchSize = 5
+	AddQueueBatchSize = 100
 	// This is how long we'll sleep between possible lock cycles.
 	AddQueueSleepTime = 100 * time.Microsecond
 )
@@ -55,38 +60,56 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 	}
 
 	// To avoid blocking on Add, we have a goroutine that pulls from a channel and adds to the filter.
-	traces := make([]string, AddQueueBatchSize)
 	go func() {
+		// ticker := time.NewTicker(AddQueueSleepTime)
 		for {
-			ready := false
-			i := 0
-			select {
-			// drain the channel but stop if we hit the batch size
-			case t := <-c.addch:
-				traces[i] = t
-				i++
-			default:
-				ready = true
+			n := len(c.addch)
+			if n == 0 {
+				// if the channel is empty, wait for a bit
+				time.Sleep(AddQueueSleepTime)
+				continue
 			}
-			if i == AddQueueBatchSize {
-				ready = true
-			}
-			if ready && i > 0 {
-				c.mut.Lock()
-				for _, t := range traces[:i] {
-					c.current.Insert([]byte(t))
-					// don't add anything to future if it doesn't exist yet
-					if c.future != nil {
-						c.future.Insert([]byte(t))
-					}
-				}
-				c.mut.Unlock()
-				time.Sleep(AddQueueSleepTime) // don't hog the CPU
-			}
+			c.drain()
 		}
 	}()
 
 	return c
+}
+
+// This function records all the traces that were in the channel at the
+// start of the call. The idea is to add them all under a single lock. We
+// tested limiting it so as to not hold the lock for too long, but it didn't
+// seem to matter and it made the code more complicated.
+// We track a couple of metrics about lock time, though, so we can watch them.
+func (c *CuckooTraceChecker) drain() {
+	n := len(c.addch)
+	if n == 0 {
+		return
+	}
+	lockStart := time.Now()
+	c.mut.Lock()
+outer:
+	for i := 0; i < n; i++ {
+		select {
+		case t := <-c.addch:
+			c.current.Insert([]byte(t))
+			// don't add anything to future if it doesn't exist yet
+			if c.future != nil {
+				c.future.Insert([]byte(t))
+			}
+			c.totalInserted++
+		default:
+			// if the channel is empty, stop
+			break outer
+		}
+	}
+	c.mut.Unlock()
+	qlt := time.Since(lockStart)
+	if qlt > c.maxQueueLockTime {
+		c.maxQueueLockTime = qlt
+	}
+	c.totalQueueLockTime += qlt
+	c.lockCount++
 }
 
 // Add puts a traceID into the filter.
@@ -112,6 +135,9 @@ func (c *CuckooTraceChecker) Check(traceID string) bool {
 // Maintain should be called periodically; if the current filter is full, it replaces
 // it with the future filter and creates a new future filter.
 func (c *CuckooTraceChecker) Maintain() {
+	// make sure it's drained first
+	c.drain()
+
 	c.mut.RLock()
 	currentLoadFactor := c.current.LoadFactor()
 	c.met.Gauge(CurrentLoadFactor, currentLoadFactor)

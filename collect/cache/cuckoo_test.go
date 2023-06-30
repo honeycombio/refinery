@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/metrics"
@@ -35,6 +36,7 @@ func BenchmarkCuckooTraceChecker_Add(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		c.Add(traceIDs[i])
 	}
+	c.drain()
 }
 
 func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
@@ -60,6 +62,9 @@ func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 	for i := 0; i < numGoroutines; i++ {
 		p.Go(func() {
 			for n := range ch {
+				if i%10000 == 0 {
+					c.Maintain()
+				}
 				c.Add(traceIDs[n])
 			}
 		})
@@ -67,10 +72,15 @@ func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 	b.ResetTimer()
 	for j := 0; j < b.N; j++ {
 		ch <- j
+		if j%1000 == 0 {
+			// just give things a moment to run
+			time.Sleep(1 * time.Microsecond)
+		}
 	}
 	close(ch)
 	close(stop)
 	p.Wait()
+	c.drain()
 }
 
 func BenchmarkCuckooTraceChecker_Check(b *testing.B) {
@@ -92,6 +102,7 @@ func BenchmarkCuckooTraceChecker_Check(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		c.Check(traceIDs[i])
 	}
+	c.drain()
 }
 
 func BenchmarkCuckooTraceChecker_CheckParallel(b *testing.B) {
@@ -143,6 +154,7 @@ func BenchmarkCuckooTraceChecker_CheckParallel(b *testing.B) {
 	close(ch)
 	close(stop)
 	p.Wait()
+	c.drain()
 }
 
 func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
@@ -157,17 +169,8 @@ func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 	const numCheckers = 30
 	const numAdders = 30
 
-	p := pool.New().WithMaxGoroutines(numCheckers + numAdders + 1)
+	p := pool.New().WithMaxGoroutines(numCheckers + numAdders)
 	stop := make(chan struct{})
-	p.Go(func() {
-		select {
-		case <-stop:
-			return
-		default:
-			rand.Intn(100)
-		}
-	})
-
 	addch := make(chan int, numCheckers)
 	checkch := make(chan int, numCheckers)
 	for i := 0; i < numAdders; i++ {
@@ -190,14 +193,26 @@ func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 	b.ResetTimer()
 	for j := 0; j < b.N; j++ {
 		addch <- j
+		checkch <- j
 	}
 	close(addch)
 	close(checkch)
 	close(stop)
 	p.Wait()
+	c.drain()
+	b.StopTimer()
 	count, _ := met.Get(AddQueueFull)
+	qempty, _ := met.Get("queue_empty")
+	maxitems, _ := met.Get("max_items")
 	if b.N >= 100 {
 		fmt.Printf("\n: Depth: %d Batchsize: %d Timing: %v QueueFull: %v \n", AddQueueDepth, AddQueueBatchSize, AddQueueSleepTime, count)
+		fmt.Printf("Q empty: %v Max count %v\n", qempty, maxitems)
+		fmt.Printf("Lock count: %d Total Lock time: %v Avg: %v Max: %v Inserted: %v\n",
+			c.lockCount,
+			c.totalQueueLockTime,
+			c.totalQueueLockTime/time.Duration(c.lockCount),
+			c.maxQueueLockTime,
+			c.totalInserted)
 		fmt.Print("BenchmarkCuckooTraceChecker_CheckParallel-10       	")
 	}
 }
