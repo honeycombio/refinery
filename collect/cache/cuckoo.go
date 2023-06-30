@@ -13,7 +13,8 @@ const (
 	CurrentLoadFactor = "cuckoo_current_load_factor"
 	FutureLoadFactor  = "cuckoo_future_load_factor"
 	CurrentCapacity   = "cuckoo_current_capacity"
-	AddQueueFull      = "cuckoo_add_queue_full"
+	AddQueueFull      = "cuckoo_addqueue_full"
+	AddQueueLockTime  = "cuckoo_addqueue_locktime_uS"
 )
 
 // This wraps a cuckoo filter implementation in a way that lets us keep it running forever
@@ -34,18 +35,11 @@ type CuckooTraceChecker struct {
 	capacity uint
 	met      metrics.Metrics
 	addch    chan string
-
-	totalQueueLockTime time.Duration
-	maxQueueLockTime   time.Duration
-	lockCount          int
-	totalInserted      int
 }
 
 const (
 	// This is how many items can be in the Add Queue before we start blocking on Add.
-	AddQueueDepth = 10000
-	// This is the max number of items we'll pull from the queue during one lock cycle.
-	AddQueueBatchSize = 100
+	AddQueueDepth = 1000
 	// This is how long we'll sleep between possible lock cycles.
 	AddQueueSleepTime = 100 * time.Microsecond
 )
@@ -59,9 +53,9 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 		addch:    make(chan string, AddQueueDepth),
 	}
 
-	// To avoid blocking on Add, we have a goroutine that pulls from a channel and adds to the filter.
+	// To try to avoid blocking on Add, we have a goroutine that pulls from a
+	// channel and adds to the filter.
 	go func() {
-		// ticker := time.NewTicker(AddQueueSleepTime)
 		for {
 			n := len(c.addch)
 			if n == 0 {
@@ -80,7 +74,7 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 // start of the call. The idea is to add them all under a single lock. We
 // tested limiting it so as to not hold the lock for too long, but it didn't
 // seem to matter and it made the code more complicated.
-// We track a couple of metrics about lock time, though, so we can watch them.
+// We track a histogram metric about lock time, though, so we can watch it.
 func (c *CuckooTraceChecker) drain() {
 	n := len(c.addch)
 	if n == 0 {
@@ -97,7 +91,6 @@ outer:
 			if c.future != nil {
 				c.future.Insert([]byte(t))
 			}
-			c.totalInserted++
 		default:
 			// if the channel is empty, stop
 			break outer
@@ -105,22 +98,20 @@ outer:
 	}
 	c.mut.Unlock()
 	qlt := time.Since(lockStart)
-	if qlt > c.maxQueueLockTime {
-		c.maxQueueLockTime = qlt
-	}
-	c.totalQueueLockTime += qlt
-	c.lockCount++
+	c.met.Histogram(AddQueueLockTime, qlt.Microseconds())
 }
 
-// Add puts a traceID into the filter.
+// Add puts a traceID into the filter. We need this to be fast
+// and not block, so we have a channel and a goroutine that
+// drains it. If the channel is full, we drop this traceID.
 func (c *CuckooTraceChecker) Add(traceID string) {
 	select {
 	case c.addch <- traceID:
 	default:
-		// if the channel is full, count this
-		// but wait anyway to add it
+		// if the channel is full, count this in a metric
+		// but drop it on the floor; we're running so hot
+		// that we can't keep up.
 		c.met.Up(AddQueueFull)
-		c.addch <- traceID
 	}
 }
 
@@ -135,7 +126,8 @@ func (c *CuckooTraceChecker) Check(traceID string) bool {
 // Maintain should be called periodically; if the current filter is full, it replaces
 // it with the future filter and creates a new future filter.
 func (c *CuckooTraceChecker) Maintain() {
-	// make sure it's drained first
+	// make sure it's drained first; this just makes sure we record as much as
+	// possible before we start messing with the filters.
 	c.drain()
 
 	c.mut.RLock()

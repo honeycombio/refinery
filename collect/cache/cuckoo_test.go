@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -201,18 +200,4 @@ func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 	p.Wait()
 	c.drain()
 	b.StopTimer()
-	count, _ := met.Get(AddQueueFull)
-	qempty, _ := met.Get("queue_empty")
-	maxitems, _ := met.Get("max_items")
-	if b.N >= 100 {
-		fmt.Printf("\n: Depth: %d Batchsize: %d Timing: %v QueueFull: %v \n", AddQueueDepth, AddQueueBatchSize, AddQueueSleepTime, count)
-		fmt.Printf("Q empty: %v Max count %v\n", qempty, maxitems)
-		fmt.Printf("Lock count: %d Total Lock time: %v Avg: %v Max: %v Inserted: %v\n",
-			c.lockCount,
-			c.totalQueueLockTime,
-			c.totalQueueLockTime/time.Duration(c.lockCount),
-			c.maxQueueLockTime,
-			c.totalInserted)
-		fmt.Print("BenchmarkCuckooTraceChecker_CheckParallel-10       	")
-	}
 }
