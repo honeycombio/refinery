@@ -49,6 +49,7 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 
 ## Maintenance
 
+- perf: preallocate outbound libhoney attribute map (#754) | [Liz Fong-Jones](https://github.com/lizthegrey)
 - docs: Generated Refinery docs for docs site improvements (#752) | [Mary J](https://github.com/mjingle)
 - docs: Update config_complete.yaml (#751) | [Kent Quirk](https://github.com/kentquirk)
 - docs: Regenerate docs from recent changes (#750) | [Kent Quirk](https://github.com/kentquirk)
