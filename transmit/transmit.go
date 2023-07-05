@@ -100,7 +100,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset).
 		Logf("transmit sending event")
-	libhEv := d.builder.NewEvent()
+	libhEv := d.builder.NewEventSized(len(ev.Data))
 	libhEv.APIHost = ev.APIHost
 	libhEv.WriteKey = ev.APIKey
 	libhEv.Dataset = ev.Dataset
