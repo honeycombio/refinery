@@ -24,7 +24,7 @@ Specific configuration changes worth noting:
 - There is now a required configuration version field; this is to permit future configuration format changes without breaking existing configurations again.
 - All duration values like timeouts, tickers, and delays are now specified as durations like `5s`, `1m30s`, or `100ms`.
 - Memory sizes can now have a standard suffix like `MiB` or `GB`.
-- Instead of calculating a maximum memory usage value, it is now possible to specify `AvailableMemory` as the total memory available, plus `MaxMemoryPercentage`.
+- Instead of calculating a maximum memory usage value, it is now possible to specify `AvailableMemory` as the total memory available and `MaxMemoryPercentage` as the max percentage of `AvailableMemory` that Refinery can use.
 - Some legacy operational controls relating to caching and memory management have been removed.
 - Refinery can be run with a validation command-line switch (`-V`), which can be used to validate configuration (typically used for CI/CD).
 - StressRelief activation level defaults have been changed to higher values.
