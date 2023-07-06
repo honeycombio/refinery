@@ -32,22 +32,26 @@ Specific configuration changes worth noting:
 - Config file contents are periodically refetched at the rate specified by `ConfigReloadInterval`. An immediate reload can be forced by sending the `SIGUSR1` signal.
 
 ### Sampler Changes
-- All dynamic samplers now correctly count spans, not traces. Although they were documented as counting the number of spans in previous versions, they were in fact only counting traces, which often made it difficult to achieve appropriate target rates.*** After running the conversion tool, existing configurations should be adjusted! ***
-- New Samplers: The `WindowedThroughputSampler` and `EMAThroughputSampler`  are two new samplers. We highly recommend replacing any use of TotalThroughputSampler in favor of one of these. Both use dynamic sampling techniques to adjust sample rates to achieve a desired throughput. The `WindowedThroughputSampler` does so with a moving window of samples, while the `EMAThroughputSampler` maintains a moving average.
+
+- All dynamic samplers now correctly count spans, not traces. Although they were documented as counting the number of spans in previous versions, they were in fact only counting traces, which often made it difficult to achieve appropriate target rates. **After running the conversion tool, existing configurations should be adjusted!**
+- New Samplers: The `WindowedThroughputSampler` and `EMAThroughputSampler` are two new samplers. We highly recommend replacing any use of `TotalThroughputSampler` in favor of one of these. Both use dynamic sampling techniques to adjust sample rates to achieve a desired throughput. The `WindowedThroughputSampler` does so with a moving window of samples, while the `EMAThroughputSampler` maintains a moving average.
 - Individual samplers now report metrics relating to key size and the number of spans and traces processed.
 - Samplers now always have a bounded `MaxKeys` value, which defaults to `500`. Systems relying on a larger keyspace should set this value explicitly for a sampler.
 
 ### Refinery Metrics Updates
+
 - Sending metrics with OpenTelemetry is now supported, and preferred over now legacy Honeycomb metrics.
 - Refinery's metrics can now be sent to more than one destination (for example, both Prometheus and OpenTelemetry).
 
 ### Notable Bug Fixes
+
 - Dynamic samplers now count spans, not traces (see above).
 - The APIKeys list now applies to OTLP traffic as well as Honeycomb events.
 - StressRelief is now more stable and effective.
 - Cache overruns should occur much less often and are now a reliable indication that the cache is undersized.
 
 ### Conversion Tool
+
 - There is now a `convert` tool included with Refinery -- binary builds are available as part of the release.
 - `convert config` can read v1 config files and convert them to v2 YAML files, adding detailed comments.
 - `convert rules` can read v1 rules files and convert them to v2 YAML files.
