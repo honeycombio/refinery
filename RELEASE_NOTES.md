@@ -8,7 +8,7 @@ This is a major release of Refinery with a new configuration file format, new sa
 
 ### Configuration File Changes
 
-The configuration and sampler file formats hav been completely redesigned. Key changes:
+The configuration and sampler file formats have been completely redesigned. Key changes:
 
 - The preferred file format is now YAML instead of TOML. All examples and documentation now use YAML format (the old *_complete.toml files now have 1.x in their names).
 - The config file is now organized into sections for clarity.
