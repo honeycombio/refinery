@@ -48,7 +48,7 @@ Specific configuration changes worth noting:
 
 - Dynamic samplers now count spans, not traces (see above).
 - The APIKeys list now applies to OTLP traffic as well as Honeycomb events.
-- StressRelief is now more stable and effective.
+- Stress Relief Mode is now more stable and effective.
 - Cache overruns should occur much less often and are now a reliable indication that the cache is undersized.
 
 ### Conversion Tool
