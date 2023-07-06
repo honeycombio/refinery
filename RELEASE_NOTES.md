@@ -65,6 +65,7 @@ This update includes many small changes geared at making Stress Relief Mode work
 - Hostname is now annotated when Stress Relief is active.
 - Stress Relief Mode can now only be activated when CacheOverrunStrategy is set to "impact" since it is not compatible with "legacy".
 - The `Stop()` function was removed from Stress Relief Mode; it wasn't needed and was causing confusing errors.
+- A fix for a very serious performance issue with the drop cache that could cause Refinery to get stuck in Stress Relief indefinitely.
 
 ### General Bug Fixes
 
