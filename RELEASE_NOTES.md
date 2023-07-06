@@ -11,12 +11,13 @@ This is a major release of Refinery with a new configuration file format, new sa
 The configuration and sampler file formats have been completely redesigned. Key changes:
 
 - The preferred file format is now YAML instead of TOML. All examples and documentation now use YAML format (the old *_complete.toml files now have 1.x in their names).
+- A conversion tool has been provided to convert a v1.x configuration file to the new format.
 - The config file is now organized into sections for clarity.
 - Sampler rules now require default target named `__default__` to specify the default sampling behavior.
 - Many default values have changed to be more useful.
 - Configurations are now fully validated - misspellings, type errors, faulty indentions, and extra values are now detected. Refinery will no longer run if your configurations are invalid.
 - Documentation for configuration is now automatically generated so that it will stay in sync with the source.
-- A conversion tool has been provided to convert a v1.x configuration file to the new format.
+
 
 Specific configuration changes worth noting:
 
