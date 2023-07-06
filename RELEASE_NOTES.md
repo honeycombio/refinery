@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.0.0
 
-This is a major release of Refinery with a new configuration file format, new samplers, and updated runtime behavior. It has several breaking changes, and so it also comes with a conversion tool.
+This is a major release of Refinery with a new configuration file format, new samplers, and updated runtime behavior. It has several breaking changes, and so it also comes with [a conversion tool](https://github.com/honeycombio/refinery/tree/main/tools/convert).
 
 ### Configuration File Changes
 
