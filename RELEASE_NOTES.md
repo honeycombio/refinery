@@ -16,7 +16,7 @@ The configuration and sampler file formats have been completely redesigned. Key 
 - Sampler rules now require default target named `__default__` to specify the default sampling behavior.
 - Many default values have changed to be more useful.
 - Configurations are now fully validated - misspellings, type errors, faulty indentions, and extra values are now detected. Refinery will no longer run if your configurations are invalid.
-- Documentation for configuration is now automatically generated so that it will stay in sync with the source.
+- Documentation for configuration is now automatically generated so that the repository's documentation and the Refinery documentation on the Honeycomb docs site stay up-to-date.
 
 
 Specific configuration changes worth noting:
