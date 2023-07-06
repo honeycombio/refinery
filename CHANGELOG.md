@@ -10,7 +10,6 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 
 ## Features
 
-- feat: Enable pyroscope deltaprof (#747) | [Liz Fong-Jones](https://github.com/lizthegrey)
 - feat: Rewrite config code without Viper (#654) | [Kent Quirk](https://github.com/kentquirk)
 - feat: Add Warn() to Logger interface (#656) | [Kent Quirk](https://github.com/kentquirk)
 - feat: Config conversion and validation code from one data file (#677) | [Kent Quirk](https://github.com/kentquirk)
@@ -32,10 +31,10 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 - feat: MaxAlloc improvements (#721) | [Kent Quirk](https://github.com/kentquirk)
 - feat: Allow disabling reload monitoring (#730) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - feat: Add ability to convert a helm chart (#736) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Enable pyroscope deltaprof (#747) | [Liz Fong-Jones](https://github.com/lizthegrey)
 
 ## Fixes
 
-- fix: Query auth bug fix; add tests (#753) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Check apikeys for otlp requests too (+tests) (#672) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Various config fixes (#684) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Send a small amount of data to peers during stress relief (#688) | [Kent Quirk](https://github.com/kentquirk)
@@ -46,6 +45,8 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 - fix: Try a few slots when there's a buffer overrun. (#722) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Make refinery run from minimal config (#724) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Correct dependency injection instability (#741) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Query auth bug fix; add tests (#753) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Improve drop cache performance (#757) | [Kent Quirk](https://github.com/kentquirk)
 
 ## Maintenance
 
