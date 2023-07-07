@@ -1,0 +1,125 @@
+# sample uncommented config file containing all possible fields
+# automatically generated on 2023-07-10 at 16:05:01 UTC
+General:
+  ConfigurationVersion: 2
+  MinRefineryVersion: "v2.0"
+  DatasetPrefix: ""
+  ConfigReloadInterval: 5m
+Network:
+  ListenAddr: "0.0.0.0:8080"
+  PeerListenAddr: "0.0.0.0:8081"
+  HoneycombAPI: "https://api.honeycomb.io"
+AccessKeys:
+  ReceiveKeys: 
+    - "your-key-goes-here"
+
+  AcceptOnlyListedKeys: false
+RefineryTelemetry:
+  AddRuleReasonToTrace: true
+  AddSpanCountToRoot: true
+  AddHostMetadataToTrace: true
+Traces:
+  SendDelay: 2s
+  BatchTimeout: 500ms
+  TraceTimeout: 60s
+  MaxBatchSize: 500
+  SendTicker: 100ms
+Debugging:
+  DebugServiceAddr: "localhost:6060"
+  QueryAuthToken: "some-private-value"
+  AdditionalErrorFields: 
+    - "trace.span_id"
+
+  DryRun: true
+Logger:
+  Type: stdout
+  Level: warn
+HoneycombLogger:
+  APIHost: "https://api.honeycomb.io"
+  APIKey: SetThisToAHoneycombKey
+  Dataset: "Refinery Logs"
+  SamplerEnabled: true
+  SamplerThroughput: 10
+StdoutLogger:
+  Structured: true
+PrometheusMetrics:
+  Enabled: false
+  ListenAddr: "localhost:2112"
+LegacyMetrics:
+  Enabled: false
+  APIHost: "https://api.honeycomb.io"
+  APIKey: SetThisToAHoneycombKey
+  Dataset: "Refinery Metrics"
+  ReportingInterval: 30s
+OTelMetrics:
+  Enabled: false
+  APIHost: "https://api.honeycomb.io"
+  APIKey: SetThisToAHoneycombKey
+  Dataset: "Refinery Metrics"
+  ReportingInterval: 30s
+  Compression: gzip
+PeerManagement:
+  Type: redis
+  Identifier: "192.168.1.1"
+  IdentifierInterfaceName: eth0
+  UseIPV6Identifier: false
+  Peers: 
+    - "192.168.1.11:8081"
+    - "192.168.1.12:8081"
+
+RedisPeerManagement:
+  Host: "localhost:6379"
+  Username: ""
+  Password: ""
+  Prefix: customPrefix
+  Database: 1
+  UseTLS: false
+  UseTLSInsecure: false
+  Timeout: 5s
+  Strategy: hash
+Collection:
+  CacheCapacity: 10_000
+  AvailableMemory: 4Gb
+  MaxMemoryPercentage: 75
+  MaxAlloc: 0
+BufferSizes:
+  UpstreamBufferSize: 10_000
+  PeerBufferSize: 100_000
+Specialized:
+  EnvironmentCacheTTL: 1h
+  CompressPeerCommunication: true
+  Collector: InMemCollector
+  CacheOverrunStrategy: resize
+  AdditionalAttributes: 
+    ClusterName: MyCluster
+    environment: production
+
+IDFields:
+  TraceNames: 
+    - "trace.trace_id"
+    - traceId
+
+  ParentNames: 
+    - "trace.parent_id"
+    - parentId
+
+GRPCServerParameters:
+  Enabled: false
+  ListenAddr: ""
+  MaxConnectionIdle: 1m
+  MaxConnectionAge: 3m
+  MaxConnectionAgeGrace: 60s
+  KeepAlive: 1m
+  KeepAliveTimeout: 20s
+SampleCache:
+  Type: cuckoo
+  KeptSize: 10_000
+  DroppedSize: 1_000_000
+  SizeCheckInterval: 10s
+StressRelief:
+  Mode: never
+  ActivationLevel: 90
+  DeactivationLevel: 70
+  SamplingRate: 100
+  MinimumActivationDuration: 10s
+  MinimumStartupDuration: 3s

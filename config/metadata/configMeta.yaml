@@ -540,6 +540,8 @@ groups:
         reload: false
         validations:
           - type: requiredInGroup
+          - type: format
+            arg: apikey
         envvar: REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY
         commandline: legacy-metrics-api-key
         summary: is the API key used by Refinery to send its metrics to Honeycomb.
