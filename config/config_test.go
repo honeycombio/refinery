@@ -598,6 +598,8 @@ func TestGRPCServerParameters(t *testing.T) {
 		"GRPCServerParameters.MaxConnectionAgeGrace", "3m",
 		"GRPCServerParameters.KeepAlive", "4m",
 		"GRPCServerParameters.KeepAliveTimeout", "5m",
+		"GRPCServerParameters.ListenAddr", "localhost:4317",
+		"GRPCServerParameters.Enabled", true,
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -611,6 +613,10 @@ func TestGRPCServerParameters(t *testing.T) {
 	assert.Equal(t, 3*time.Minute, c.GetGRPCMaxConnectionAgeGrace())
 	assert.Equal(t, 4*time.Minute, c.GetGRPCKeepAlive())
 	assert.Equal(t, 5*time.Minute, c.GetGRPCKeepAliveTimeout())
+	assert.Equal(t, true, c.GetGRPCEnabled())
+	addr, err := c.GetGRPCListenAddr()
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost:4317", addr)
 }
 
 func TestHoneycombAdditionalErrorConfig(t *testing.T) {

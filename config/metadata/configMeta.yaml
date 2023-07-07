@@ -1128,7 +1128,7 @@ groups:
       - name: Enabled
         type: bool
         valuetype: nondefault
-        default: false
+        default: true
         reload: false
         summary: specifies whether the gRPC server is enabled.
         description: >
@@ -1139,7 +1139,7 @@ groups:
         v1name: GRPCListenAddr
         type: hostport
         valuetype: nondefault
-        default: ""
+        default: "0.0.0.0:4317"
         reload: false
         envvar: REFINERY_GRPC_LISTEN_ADDRESS
         commandLine: grpc-listen-address

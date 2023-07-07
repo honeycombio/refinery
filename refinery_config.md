@@ -871,6 +871,7 @@ If `false`, then the gRPC server is not started and no gRPC traffic is accepted.
 
 - Not eligible for live reload.
 - Type: `bool`
+- Default: `true`
 
 ### `ListenAddr`
 
@@ -880,6 +881,7 @@ Incoming traffic is expected to be unencrypted, so if using SSL, then put someth
 
 - Not eligible for live reload.
 - Type: `hostport`
+- Default: `0.0.0.0:4317`
 - Environment variable: `REFINERY_GRPC_LISTEN_ADDRESS`
 - Command line switch: `--grpc-listen-address`
 

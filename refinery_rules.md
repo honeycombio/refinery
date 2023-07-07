@@ -77,7 +77,7 @@ The sample rate is calculated from the trace ID, so all spans with the same trac
 
 The duration after which the Dynamic Sampler should reset its internal counters.
 It should be specified as a duration string.
-For example, "30s" or "1m".
+For example,"30s" or "1m".
 
 - Type: `duration`
 

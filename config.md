@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-28 at 21:40:58 UTC.
+It was automatically generated on 2023-07-07 at 17:45:03 UTC.
 
 ## The Config file
 
@@ -885,6 +885,7 @@ If `false`, then the gRPC server is not started and no gRPC traffic is accepted.
 
 - Not eligible for live reload.
 - Type: `bool`
+- Default: `true`
 
 ### `ListenAddr`
 
@@ -894,6 +895,7 @@ Incoming traffic is expected to be unencrypted, so if using SSL, then put someth
 
 - Not eligible for live reload.
 - Type: `hostport`
+- Default: `0.0.0.0:4317`
 - Environment variable: `REFINERY_GRPC_LISTEN_ADDRESS`
 - Command line switch: `--grpc-listen-address`
 

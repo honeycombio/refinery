@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-28 at 21:40:56 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-07-07 at 17:45:01 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -900,8 +900,9 @@ GRPCServerParameters:
     ## If `false`, then the gRPC server is not started and no gRPC traffic is
     ## accepted.
     ##
+    ## default: true
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Enabled" "Enabled" false }}
+    {{ nonDefaultOnly .Data "Enabled" "Enabled" true }}
 
     ## ListenAddr is the address Refinery listens to for incoming GRPC
     ## OpenTelemetry events.
@@ -909,9 +910,10 @@ GRPCServerParameters:
     ## Incoming traffic is expected to be unencrypted, so if using SSL, then
     ## put something like `nginx` in front to do the decryption.
     ##
-    ## Should be an ip:port like "".
+    ## Should be an ip:port like "0.0.0.0:4317".
+    ## default: 0.0.0.0:4317
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "ListenAddr" "GRPCListenAddr" "" }}
+    {{ nonDefaultOnly .Data "ListenAddr" "GRPCListenAddr" "0.0.0.0:4317" }}
 
     ## MaxConnectionIdle is the amount of time to permit an idle connection.
     ##
