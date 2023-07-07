@@ -2,23 +2,82 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.0.0
+
+This is a major release of Refinery with a new configuration file format, new samplers, and updated runtime behavior. It has several breaking changes, especially for configuration and sampling, so it also comes with [a conversion tool](https://github.com/honeycombio/refinery/tree/main/tools/convert).
+
+### Configuration File Changes
+
+The configuration and sampler file formats have been completely redesigned. Key changes:
+
+- The preferred file format is now YAML instead of TOML. All examples and documentation now use YAML format (the old *_complete.toml files now have 1.x in their names).
+- A conversion tool has been provided to convert a v1.x configuration file to the new format.
+- The config file is now organized into sections for clarity.
+- Sampler rules now require default target named `__default__` to specify the default sampling behavior.
+- Many default values have changed to be more useful.
+- Configurations are now fully validated - misspellings, type errors, faulty indentions, and extra values are now detected. Refinery will no longer run if your configurations are invalid.
+- Documentation for configuration is now automatically generated so that it will stay in sync with the source. This means that the [Honeycomb docs](https://docs.honeycomb.io/manage-data-volume/refinery/) stay in sync and you can now generate local copies using the [conversion tool](https://github.com/honeycombio/refinery/tree/main/tools/convert).
+
+
+Specific configuration changes worth noting:
+
+- There is now a required configuration version field; this is to permit future configuration format changes without breaking existing configurations again.
+- All duration values like timeouts, tickers, and delays are now specified as durations like `5s`, `1m30s`, or `100ms`.
+- Memory sizes can now have a standard suffix like `MiB` or `GB`.
+- Instead of calculating a maximum memory usage value, it is now possible to specify `AvailableMemory` as the total memory available and `MaxMemoryPercentage` as the max percentage of `AvailableMemory` that Refinery can use.
+- Some legacy operational controls relating to caching and memory management have been removed.
+- Refinery can be run with a validation command-line switch (`-V`), which can be used to validate configuration (typically used for CI/CD).
+- StressRelief activation level defaults have been changed to higher values.
+- Log levels have been cleaned up so that they're more useful. The `info` level is less noisy and `warn` is now a valid option.
+- Config file location can also be a URL instead of a file path. The contents are retrieved with a simple GET request.
+- Config file contents are periodically refetched at the rate specified by `ConfigReloadInterval`. An immediate reload can be forced by sending the `SIGUSR1` signal.
+
+### Sampler Changes
+
+- All dynamic samplers now correctly count spans, not traces. Although they were documented as counting the number of spans in previous versions, they were in fact only counting traces, which often made it difficult to achieve appropriate target rates. **After running the conversion tool, existing configurations should be adjusted!**
+- New Samplers: The `WindowedThroughputSampler` and `EMAThroughputSampler` are two new samplers. We highly recommend replacing any use of `TotalThroughputSampler` in favor of one of these. Both use dynamic sampling techniques to adjust sample rates to achieve a desired throughput. The `WindowedThroughputSampler` does so with a moving window of samples, while the `EMAThroughputSampler` maintains a moving average.
+- Individual samplers now report metrics relating to key size and the number of spans and traces processed.
+- Samplers now always have a bounded `MaxKeys` value, which defaults to `500`. Systems relying on a larger keyspace should set this value explicitly for a sampler.
+
+### Refinery Metrics Updates
+
+- Sending metrics with OpenTelemetry is now supported, and preferred over now legacy Honeycomb metrics.
+- Refinery's metrics can now be sent to more than one destination (for example, both Prometheus and OpenTelemetry).
+
+### Notable Bug Fixes
+
+- Dynamic samplers now count spans, not traces (see above).
+- The APIKeys list now applies to OTLP traffic as well as Honeycomb events.
+- Stress Relief Mode is now more stable and effective.
+- Cache overruns should occur much less often and are now a reliable indication that the cache is undersized.
+
+### Conversion Tool
+
+- There is now a `convert` tool included with Refinery -- binary builds are available as part of the release.
+- `convert config` can read v1 config files and convert them to v2 YAML files, adding detailed comments.
+- `convert rules` can read v1 rules files and convert them to v2 YAML files.
+- `convert helm` can read a helm chart with `config` and `rules` sections and write out a revised, updated helm chart.
+- `convert validate config` can validate a v2 config file.
+- `convert validate rules` can validate a v2 rules file.
+
 ## Version 1.21.0
 
-This is a small release with mostly bug fixes and minor changes related to Stress Relief Mode. 
+This is a small release with mostly bug fixes and minor changes related to Stress Relief Mode.
 
-### Fixes for Stress Relief 
+### Fixes for Stress Relief
 
-This update includes many small changes geared at making Stress Relief Mode work better. 
-- Hostname is now annotated when Stress Relief is active. 
+This update includes many small changes geared at making Stress Relief Mode work better.
+- Hostname is now annotated when Stress Relief is active.
 - Stress Relief Mode can now only be activated when CacheOverrunStrategy is set to "impact" since it is not compatible with "legacy".
-- The `Stop()` function was removed from Stress Relief Mode; it wasn't needed and was causing confusing errors. 
+- The `Stop()` function was removed from Stress Relief Mode; it wasn't needed and was causing confusing errors.
+- A fix for a very serious performance issue with the drop cache that could cause Refinery to get stuck in Stress Relief indefinitely.
 
-### General Bug Fixes 
+### General Bug Fixes
 
-There were other small changes to other parts of refinery. 
-- Systemd `Alias=` directive was replaced with `WantedBy=` directive which is more in line with best practices. 
-- Late spans are now only decorated when `AddRuleReasonToTrace` is set. 
-- Some potential fixes for flaky tests were added. 
+There were other small changes to other parts of refinery.
+- Systemd `Alias=` directive was replaced with `WantedBy=` directive which is more in line with best practices.
+- Late spans are now only decorated when `AddRuleReasonToTrace` is set.
+- Some potential fixes for flaky tests were added.
 
 ## Version 1.20.0
 

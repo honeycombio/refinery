@@ -1,11 +1,90 @@
 # Refinery Changelog
 
+## 2.0 2023-06-27
+
+** NEW MAJOR VERSION **
+!! BREAKING CHANGES !!
+Configuration file formats have changed and some functionality has changed.
+Use the new converter tool to convert existing configuration and rules files. Binaries are available as part of the release.
+For more information, see [the release notes](https://github.com/honeycombio/refinery/blob/main/RELEASE_NOTES.md).
+
+## Features
+
+- feat: Rewrite config code without Viper (#654) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add Warn() to Logger interface (#656) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Config conversion and validation code from one data file (#677) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Refactoring of rules configuration and rules converter (#681) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Remove trace key params -> add meta sample_key (#685) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Use the new configuration system (#690) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Metrics cleanup (#692) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Validation integration, part 1 (#700) | [Kent Quirk](https://github.com/kentquirk)
+- feat: More validation add rules metadata and rules validation (#701) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Integrate validation into the executable (#706) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Write out parsed configs (#707) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add EMAThroughput sampler support (#708) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add WindowedThroughput sampler (#709) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Support MaxKeys in configs and add default of 500 (#710) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add sampler metrics (#714) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Preregister libhoney metrics (#716) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Warn about samplers that might need adjustment (#718) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Allow suffixes on memory size in config (#719) | [Kent Quirk](https://github.com/kentquirk)
+- feat: MaxAlloc improvements (#721) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Allow disabling reload monitoring (#730) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- feat: Add ability to convert a helm chart (#736) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Enable pyroscope deltaprof (#747) | [Liz Fong-Jones](https://github.com/lizthegrey)
+
+## Fixes
+
+- fix: Check apikeys for otlp requests too (+tests) (#672) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Various config fixes (#684) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Send a small amount of data to peers during stress relief (#688) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Add stress relief reason; fix JSON unmarshal bug (#698) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Log reason for MinimumStartupDuration (#703) | [Terra Field](https://github.com/RainOfTerra)
+- fix: Rework APIKeys logic (#712) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Update dynamic samplers to count spans instead of traces (#717) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Try a few slots when there's a buffer overrun. (#722) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Make refinery run from minimal config (#724) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Correct dependency injection instability (#741) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Query auth bug fix; add tests (#753) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Improve drop cache performance (#757) | [Kent Quirk](https://github.com/kentquirk)
+
+## Maintenance
+
+- perf: preallocate outbound libhoney attribute map (#754) | [Liz Fong-Jones](https://github.com/lizthegrey)
+- docs: Generated Refinery docs for docs site improvements (#752) | [Mary J](https://github.com/mjingle)
+- docs: Update config_complete.yaml (#751) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Regenerate docs from recent changes (#750) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Update APIKeys reference in config (#748) | [Mary J](https://github.com/mjingle)
+- maint: Update dynsampler-go to latest to fix bug (#746) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Fix up docs, especially envvar and cmdline (#737) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Fix convert help and docs (#744) | [Kent Quirk](https://github.com/kentquirk)
+- maint: README updates -- round 1 (#742) | [Phillip Carter](https://github.com/cartermp)
+- maint(deps): Bump github.com/klauspost/compress from 1.16.4 to 1.16.5 (#675) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): Bump github.com/prometheus/client_golang from 1.14.0 to 1.15.1 (#676) | [dependabot[bot]](https://github.com/dependabot[bot])
+- refactor: Rename fields for clarity in an E&S world (#680) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Update dependencies (#699) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Improve generated documentation (#711) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Generate docs better suited to docs team prefs (#713) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Remove remaining references to obsolete fields (#720) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Refinery Rules copyediting (#731) | [Mary J](https://github.com/mjingle)
+- ci: Update build_binaries to build convert (#732) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- docs: Add generator for website docs (#733) | [Kent Quirk](https://github.com/kentquirk)
+- docs: Refinery Config copyediting (#734) | [Mary J](https://github.com/mjingle)
+- chore: Switch to temp credentials for CI (#735) | [Nathan Lincoln](https://github.com/NLincoln)
+- docs: Fix up docs, especially envvar and cmdline (#737) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Clarify 1.x configs for 1.x folks, remove old stuff (#739) | [Phillip Carter](https://github.com/cartermp)
+
+## Additional contributions by:
+
+- Documentation fix | [Kevan Carstensen](https://github.com/isnotajoke)
+- WindowedThroughput sampler (in dynsamplers-go) | [Yi Zhao](https://github.com/yizzlez)
+
 ## 1.21.0 2023-04-14
 
 ### Summary
-Adds many fixes for existing features such as meta fields for use with stress relief mode. Adds ability to annotate sample rates that 
-were already set upstream before refinery sampling for debugging purposes. 
- 
+Adds many fixes for existing features such as meta fields for use with stress relief mode. Adds ability to annotate sample rates that
+were already set upstream before refinery sampling for debugging purposes.
+
 ### Enhancements
 - feat: annotate incoming sample rate (#658) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 
@@ -20,7 +99,7 @@ were already set upstream before refinery sampling for debugging purposes.
 - fix: tweak timeouts (#647) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - fix: correct syntax error in config_complete.toml (#639) | [Hazel Weakly](https://github.com/HazelWeakly)
 
-### Maintenance 
+### Maintenance
 - chore: Update MetricsReportingInterval in config_complete.toml (#653) | [Davin](https://github.com/Davin)
 - maint: switch dependabot to collection (#660) | [Vera Reynolds](https://github.com/Vera Reynolds)
 - maint(deps): bump google.golang.org/protobuf from 1.28.1 to 1.30.0 (#663) | [dependabot[bot]](https://github.com/dependabot[bot])
