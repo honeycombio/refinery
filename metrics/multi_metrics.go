@@ -1,6 +1,10 @@
 package metrics
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/honeycombio/refinery/config"
+)
 
 // MultiMetrics is a metrics provider that sends metrics to at least one
 // underlying metrics provider (StoreMetrics). It can be configured to send
@@ -10,9 +14,13 @@ import "sync"
 // which can then be retrieved with Get(). This is for use with StressRelief. It
 // does not track histograms or counters, which are reset after each scrape.
 type MultiMetrics struct {
-	children []Metrics
-	values   map[string]float64
-	lock     sync.RWMutex
+	Config        config.Config `inject:""`
+	LegacyMetrics Metrics       `inject:"legacyMetrics"`
+	PromMetrics   Metrics       `inject:"promMetrics"`
+	OTelMetrics   Metrics       `inject:"otelMetrics"`
+	children      []Metrics
+	values        map[string]float64
+	lock          sync.RWMutex
 }
 
 func NewMultiMetrics() *MultiMetrics {
@@ -23,6 +31,22 @@ func NewMultiMetrics() *MultiMetrics {
 }
 
 func (m *MultiMetrics) Start() error {
+	// I really hate having to do it this way, but
+	// the injector can't handle configurable items, so
+	// we need to inject everything and then build the
+	// array of children conditionally.
+	if m.Config.GetLegacyMetricsConfig().Enabled {
+		m.AddChild(m.LegacyMetrics)
+	}
+
+	if m.Config.GetPrometheusMetricsConfig().Enabled {
+		m.AddChild(m.PromMetrics)
+	}
+
+	if m.Config.GetOTelMetricsConfig().Enabled {
+		m.AddChild(m.OTelMetrics)
+	}
+
 	return nil
 }
 
