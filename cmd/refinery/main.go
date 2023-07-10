@@ -188,6 +188,7 @@ func main() {
 	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
 	peerTransmission := transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer")
 
+	// we need to include all the metrics types so we can inject them in case they're needed
 	var g inject.Graph
 	if opts.Debug {
 		g.Logger = graphLogger{}
@@ -202,6 +203,9 @@ func main() {
 		{Value: peerTransmission, Name: "peerTransmission"},
 		{Value: shrdr},
 		{Value: collector},
+		{Value: &metrics.LegacyMetrics{}, Name: "legacyMetrics"},
+		{Value: &metrics.PromMetrics{}, Name: "promMetrics"},
+		{Value: &metrics.OTelMetrics{}, Name: "otelMetrics"},
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
@@ -210,10 +214,6 @@ func main() {
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
 		{Value: &a},
-	}
-	// we need to add the multimetrics children to the graph as well
-	for _, obj := range metricsSingleton.Children() {
-		objects = append(objects, &inject.Object{Value: obj})
 	}
 	err = g.Provide(objects...)
 	if err != nil {
@@ -234,19 +234,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// We need to remove the upstream and peer transmissions from the list of
-	// objects to startstop. For reasons I haven't been able to figure out,
-	// startstop sometimes decides to start them before the rest of the objects
-	// are ready, which causes a panic. We have to do it this way because
-	// startstop deliberately randomizes the graph order.
-	var nonxmitObjects []*inject.Object
-	for _, obj := range g.Objects() {
-		if obj.Name == "upstreamTransmission" || obj.Name == "peerTransmission" {
-			continue
-		}
-		nonxmitObjects = append(nonxmitObjects, obj)
-	}
-
 	// the logger provided to startstop must be valid before any service is
 	// started, meaning it can't rely on injected configs. make a custom logger
 	// just for this step
@@ -257,13 +244,10 @@ func main() {
 	// we can stop all the objects in one call, but we need to start the
 	// transmissions manually.
 	defer startstop.Stop(g.Objects(), ststLogger)
-	if err := startstop.Start(nonxmitObjects, ststLogger); err != nil {
+	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
 	}
-	// now start these manually
-	upstreamTransmission.Start()
-	peerTransmission.Start()
 
 	// these have to be done after the injection (of metrics)
 	// these are the metrics that libhoney will emit; we preregister them so that they always appear
