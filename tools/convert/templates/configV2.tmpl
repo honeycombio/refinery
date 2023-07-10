@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-07-06 at 19:51:05 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-07-10 at 15:15:57 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -751,7 +751,10 @@ Collection:
     ## not set, then `MaxMemory` cannot be used to calculate the maximum
     ## allocation and `MaxAlloc` will be used instead. If set, then this must
     ## be a memory size. 64-bit values are supported. Sizes with standard
-    ## unit suffixes like "MB" and "GiB" are also supported.
+    ## unit suffixes like "MB" and "GiB" are also supported. The full list of
+    ## supported values can be found at
+    ## https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
+    ## Kubernetes unit abbreviations are also supported.
     ##
     ## Eligible for live reload.
     {{ memorysize .Data "AvailableMemory" "AvailableMemory" "4Gb" }}
@@ -766,7 +769,8 @@ Collection:
     ## bytes to this calculated value. If allocation is too high, then traces
     ## will be ejected from the cache early to reduce memory. Useful values
     ## for this setting are generally in the range of 70-90. If this value is
-    ## `0`, then `MaxAlloc` will be used.
+    ## `0`, then `MaxAlloc` will be used. Kubernetes unit  abbreviations are
+    ## also supported.
     ##
     ## default: 75
     ## Eligible for live reload.
