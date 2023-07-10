@@ -731,6 +731,8 @@ If this value is zero or not set, then `MaxMemory` cannot be used to calculate t
 If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
+The full list of supported values can be found at  https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
+Kubernetes unit abbreviations are also supported.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -747,6 +749,7 @@ If set to a non-zero value, then once per tick (see `SendTicker`) the collector 
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
 If this value is `0`, then `MaxAlloc` will be used.
+Kubernetes unit  abbreviations are also supported.
 
 - Eligible for live reload.
 - Type: `percentage`
@@ -871,7 +874,6 @@ If `false`, then the gRPC server is not started and no gRPC traffic is accepted.
 
 - Not eligible for live reload.
 - Type: `bool`
-- Default: `true`
 
 ### `ListenAddr`
 
@@ -881,7 +883,6 @@ Incoming traffic is expected to be unencrypted, so if using SSL, then put someth
 
 - Not eligible for live reload.
 - Type: `hostport`
-- Default: `0.0.0.0:4317`
 - Environment variable: `REFINERY_GRPC_LISTEN_ADDRESS`
 - Command line switch: `--grpc-listen-address`
 

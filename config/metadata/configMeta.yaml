@@ -128,6 +128,7 @@ groups:
       - name: ReceiveKeys
         type: stringarray
         valuetype: stringarray
+        v1name: APIKeys
         example: "your-key-goes-here"
         reload: false
         validations:
@@ -926,6 +927,9 @@ groups:
           allocation and `MaxAlloc` will be used instead. If set, then this
           must be a memory size. 64-bit values are supported. Sizes with
           standard unit suffixes like "MB" and "GiB" are also supported.
+          The full list of supported values can be found at 
+          https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
+          Kubernetes unit abbreviations are also supported.
 
       - name: MaxMemoryPercentage
         type: percentage
@@ -947,7 +951,8 @@ groups:
           allocated bytes to this calculated value. If allocation is too high,
           then traces will be ejected from the cache early to reduce memory.
           Useful values for this setting are generally in the range of 70-90.
-          If this value is `0`, then `MaxAlloc` will be used.
+          If this value is `0`, then `MaxAlloc` will be used. Kubernetes unit 
+          abbreviations are also supported.
 
       - name: MaxAlloc
         v1group: InMemCollector
@@ -1128,7 +1133,7 @@ groups:
       - name: Enabled
         type: bool
         valuetype: nondefault
-        default: true
+        default: false
         reload: false
         summary: specifies whether the gRPC server is enabled.
         description: >
@@ -1139,7 +1144,7 @@ groups:
         v1name: GRPCListenAddr
         type: hostport
         valuetype: nondefault
-        default: "0.0.0.0:4317"
+        default: ""
         reload: false
         envvar: REFINERY_GRPC_LISTEN_ADDRESS
         commandLine: grpc-listen-address
