@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-06-28 at 21:40:58 UTC.
+It was automatically generated on 2023-07-10 at 16:05:02 UTC.
 
 ## The Config file
 
@@ -746,6 +746,8 @@ If this value is zero or not set, then `MaxMemory` cannot be used to calculate t
 If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
+The full list of supported values can be found at  https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
+Kubernetes unit abbreviations are also supported.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -762,6 +764,7 @@ If set to a non-zero value, then once per tick (see `SendTicker`) the collector 
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
 If this value is `0`, then `MaxAlloc` will be used.
+Kubernetes unit  abbreviations are also supported.
 
 - Eligible for live reload.
 - Type: `percentage`

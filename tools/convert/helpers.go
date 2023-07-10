@@ -172,7 +172,7 @@ func memorysize(data map[string]any, key, oldkey string, example string) string 
 		case int:
 			i64 = int64(i)
 		}
-		return fmt.Sprintf(`# %s: %s`, key, units.HumanSize(float64(i64)))
+		return fmt.Sprintf(`%s: %s`, key, units.HumanSize(float64(i64)))
 	}
 	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }
@@ -275,7 +275,7 @@ func renderMap(data map[string]any, key, oldkey string, example string) string {
 func renderStringarray(data map[string]any, key, oldkey string, example string) string {
 	var sa []string
 	comment := ""
-	if v, ok := data[key]; ok {
+	if v, ok := _fetch(data, oldkey); ok {
 		switch value := v.(type) {
 		case []interface{}:
 			for _, s := range value {

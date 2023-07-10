@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-06-28 at 21:40:58 UTC.
+It was automatically generated on 2023-07-10 at 16:05:02 UTC.
 
 ## The Rules file
 
@@ -98,7 +98,7 @@ Type: `int`
 
 The duration after which the Dynamic Sampler should reset its internal counters.
 It should be specified as a duration string.
-For example,"30s" or "1m".
+For example, "30s" or "1m".
 
 Type: `duration`
 
@@ -569,7 +569,7 @@ Type: `int`
 
 The duration after which the Dynamic Sampler should reset its internal counters.
 It should be specified as a duration string.
-For example,"30s" or "1m".
+For example, "30s" or "1m".
 
 Type: `duration`
 

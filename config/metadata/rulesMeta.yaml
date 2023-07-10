@@ -66,7 +66,7 @@ groups:
         summary: is the duration over which the sampler will calculate the sample rate.
         description: >
           The duration after which the Dynamic Sampler should reset its internal
-          counters. It should be specified as a duration string. For example,"30s" or "1m".
+          counters. It should be specified as a duration string. For example, "30s" or "1m".
       - name: FieldList
         type: stringarray
         validations:

@@ -8,12 +8,12 @@ import (
 type Level int
 
 const (
-	DebugLevel Level = iota
+	UnknownLevel Level = iota
+	DebugLevel
 	InfoLevel
 	WarnLevel
 	ErrorLevel
 	PanicLevel
-	UnknownLevel // unknown should be higher than everything
 )
 
 func ParseLevel(s string) Level {
