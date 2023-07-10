@@ -1134,7 +1134,8 @@ groups:
     fields:
       - name: Enabled
         type: bool
-        valuetype: nondefault
+        valuetype: conditional
+        extra: "nonempty GRPCListenAddr"
         default: false
         reload: false
         summary: specifies whether the gRPC server is enabled.

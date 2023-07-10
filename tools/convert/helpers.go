@@ -110,6 +110,14 @@ func conditional(data map[string]any, key string, extra string) string {
 				return fmt.Sprintf("%s: true", key)
 			}
 		}
+	case "nonempty":
+		k := extras[1]
+		if value, ok := _fetch(data, k); ok {
+			v := fmt.Sprintf("%v", value)
+			if v != "" {
+				return fmt.Sprintf("%s: true", key)
+			}
+		}
 	default:
 		panic("Unknown conditional: " + extra)
 	}
