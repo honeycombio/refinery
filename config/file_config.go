@@ -38,7 +38,14 @@ func (m MemorySize) MarshalText() ([]byte, error) {
 }
 
 func (m *MemorySize) UnmarshalText(text []byte) error {
-	size, err := units.RAMInBytes(string(text))
+	txt := string(text)
+	// Kubernetes uses 2 digit representation for power-of-two representation
+	// (Ki, Mi, Gi, etc), but our package expects a `B` as a third character
+	s := txt[len(txt)-1:]
+	if s == "i" {
+		txt += "B"
+	}
+	size, err := units.RAMInBytes(txt)
 	if err != nil {
 		return err
 	}

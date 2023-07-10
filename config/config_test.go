@@ -729,3 +729,42 @@ func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
 	assert.Equal(t, []string{"trace.trace_id", "traceId"}, c.GetTraceIdFieldNames())
 	assert.Equal(t, []string{"trace.parent_id", "parentId"}, c.GetParentIdFieldNames())
 }
+
+func TestMemorySizeUnmarshal(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected MemorySize
+	}{
+		{
+			name:     "single letter",
+			input:    "1G",
+			expected: 1024 * 1024 * 1024,
+		},
+		{
+			name:     "B included",
+			input:    "1GB",
+			expected: 1024 * 1024 * 1024,
+		},
+		{
+			name:     "iB included",
+			input:    "1GiB",
+			expected: 1024 * 1024 * 1024,
+		},
+		{
+			name:     "k8s format",
+			input:    "1Gi",
+			expected: 1024 * 1024 * 1024,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var m MemorySize
+			err := m.UnmarshalText([]byte(tt.input))
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, m)
+
+		})
+	}
+
+}
