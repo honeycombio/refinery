@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-06-28 at 21:40:56 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-07-06 at 19:51:05 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -129,7 +129,7 @@ AccessKeys:
     ## keys.
     ##
     ## Not eligible for live reload.
-    {{ renderStringarray .Data "ReceiveKeys" "ReceiveKeys" "your-key-goes-here" }}
+    {{ renderStringarray .Data "ReceiveKeys" "APIKeys" "your-key-goes-here" }}
 
     ## AcceptOnlyListedKeys is a boolean flag that causes events arriving
     ## with API keys not in the `ReceiveKeys` list to be rejected.
