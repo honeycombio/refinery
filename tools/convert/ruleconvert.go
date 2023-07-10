@@ -19,6 +19,14 @@ func transformSamplerMap(m map[string]any) map[string]any {
 		switch val := v.(type) {
 		case map[string]any:
 			v = transformSamplerMap(val)
+		case []any:
+			for i, x := range val {
+				if m, ok := x.(map[string]any); ok {
+					m = transformSamplerMap(m)
+					val[i] = m
+				}
+			}
+			v = val
 		}
 
 		k = strings.ToLower(k)
@@ -31,7 +39,16 @@ func transformSamplerMap(m map[string]any) map[string]any {
 			k = "clearfrequency"
 			v = config.Duration(v.(int64)) * config.Duration(time.Second)
 		case "adjustmentinterval":
-			v = config.Duration(v.(int64)) * config.Duration(time.Second)
+			if _, ok := v.(config.Duration); !ok {
+				var i64 int64
+				switch i := v.(type) {
+				case int64:
+					i64 = i
+				case int:
+					i64 = int64(i)
+				}
+				v = config.Duration(i64) * config.Duration(time.Second)
+			}
 		}
 		newmap[k] = v
 	}
