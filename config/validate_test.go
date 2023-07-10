@@ -76,6 +76,7 @@ func Test_validateType(t *testing.T) {
 		{"url blank", "k", "", "url", `field k may not be blank`},
 		{"url noscheme", "k", "example.com", "url", `field k (example.com) must be a valid URL with a host`},
 		{"url badscheme", "k", "ftp://example.com", "url", `field k (ftp://example.com) must use an http or https scheme`},
+		{"memorysize", "k", "test", "memorysize", `field k (test) must be a valid memory size like '1Gb' or '100_000_000'`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
