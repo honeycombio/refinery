@@ -46,21 +46,7 @@ type Metrics interface {
 }
 
 func GetMetricsImplementation(c config.Config) *MultiMetrics {
-	multi := NewMultiMetrics()
-
-	if c.GetLegacyMetricsConfig().Enabled {
-		multi.AddChild(&LegacyMetrics{})
-	}
-
-	if c.GetPrometheusMetricsConfig().Enabled {
-		multi.AddChild(&PromMetrics{})
-	}
-
-	if c.GetOTelMetricsConfig().Enabled {
-		multi.AddChild(&OTelMetrics{})
-	}
-
-	return multi
+	return NewMultiMetrics()
 }
 
 func ConvertNumeric(val interface{}) float64 {

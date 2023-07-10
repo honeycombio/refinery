@@ -2,11 +2,14 @@ package metrics
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,11 +31,15 @@ func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
 		mm.AddChild(child)
 	}
 	objects := []*inject.Object{
+		{Value: "version", Name: "version"},
+		{Value: &http.Transport{}, Name: "upstreamTransport"},
+		{Value: &http.Transport{}, Name: "peerTransport"},
+		{Value: &LegacyMetrics{}, Name: "legacyMetrics"},
+		{Value: &PromMetrics{}, Name: "promMetrics"},
+		{Value: &OTelMetrics{}, Name: "otelMetrics"},
 		{Value: mm, Name: "metrics"},
-	}
-	// we need to add the multimetrics children to the graph as well
-	for i, obj := range mm.Children() {
-		objects = append(objects, &inject.Object{Value: obj, Name: fmt.Sprintf("metricsChild_%d", i)})
+		{Value: &config.MockConfig{}},
+		{Value: &logger.NullLogger{}},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err := g.Provide(objects...)
