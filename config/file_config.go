@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +32,54 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	return nil
 }
 
+const (
+	K = uint64(1000)
+	M = 1000 * K
+	G = 1000 * M
+	T = 1000 * G
+	P = 1000 * T
+	E = 1000 * P
+
+	Ki = uint64(1024)
+	Mi = 1024 * Ki
+	Gi = 1024 * Mi
+	Ti = 1024 * Gi
+	Pi = 1024 * Ti
+	Ei = 1024 * Pi
+
+	invalidSizeError = "invalid size: %s"
+)
+
+var binaryMap = map[string]uint64{
+	"ki":  Ki,
+	"kib": Ki,
+	"mi":  Mi,
+	"mib": Mi,
+	"gi":  Gi,
+	"gib": Gi,
+	"ti":  Ti,
+	"tib": Ti,
+	"pi":  Pi,
+	"pib": Pi,
+	"ei":  Ei,
+	"eib": Ei,
+}
+
+var decimalMap = map[string]uint64{
+	"k":  K,
+	"kb": K,
+	"m":  M,
+	"mb": M,
+	"g":  G,
+	"gb": G,
+	"t":  T,
+	"tb": T,
+	"p":  P,
+	"pb": P,
+	"e":  E,
+	"eb": E,
+}
+
 // We also use a special type for memory sizes
 type MemorySize uint64
 
@@ -39,17 +89,47 @@ func (m MemorySize) MarshalText() ([]byte, error) {
 
 func (m *MemorySize) UnmarshalText(text []byte) error {
 	txt := string(text)
-	// Kubernetes uses 2 digit representation for power-of-two representation
-	// (Ki, Mi, Gi, etc), but our package expects a `B` as a third character
-	s := txt[len(txt)-1:]
-	if s == "i" {
-		txt += "B"
+
+	r := regexp.MustCompile("(?P<number>[0-9]+)(?P<unit>[a-zA-Z]*)")
+	matches := r.FindStringSubmatch(strings.ToLower(txt))
+	if matches == nil {
+		return fmt.Errorf(invalidSizeError, txt)
 	}
-	size, err := units.RAMInBytes(txt)
-	if err != nil {
-		return err
+
+	var number uint64
+	var unit string
+	var err error
+	for i, name := range r.SubexpNames() {
+		if i == 0 {
+			continue
+		}
+
+		switch name {
+		case "number":
+			number, err = strconv.ParseUint(matches[i], 10, 64)
+			if err != nil {
+				return fmt.Errorf(invalidSizeError, text)
+			}
+		case "unit":
+			unit = matches[i]
+		default:
+			return fmt.Errorf("error converting %v to MemorySize, this is a bug with Refinery", text)
+		}
 	}
-	*m = MemorySize(size)
+
+	// No unit means bytes
+	if unit == "" {
+		*m = MemorySize(number)
+	} else {
+		scalar, ok := decimalMap[unit]
+		if !ok {
+			scalar, ok = binaryMap[unit]
+			if !ok {
+				return fmt.Errorf(invalidSizeError, text)
+			}
+		}
+		*m = MemorySize(number * scalar)
+	}
 	return nil
 }
 

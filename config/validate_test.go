@@ -80,6 +80,7 @@ func Test_validateType(t *testing.T) {
 		{"valid memorysize G", "k", "1G", "memorysize", ""},
 		{"valid memorysize Gi", "k", "1Gi", "memorysize", ""},
 		{"valid memorysize GiB", "k", "1GiB", "memorysize", ""},
+		{"valid memorysize GB", "k", "1GB", "memorysize", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
