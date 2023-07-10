@@ -35,6 +35,9 @@ type Config interface {
 	// data before forwarding it to a peer.
 	GetCompressPeerCommunication() bool
 
+	// GetGRPCEnabled returns or not the GRPC server is enabled.
+	GetGRPCEnabled() bool
+
 	// GetGRPCListenAddr returns the address and port on which to listen for
 	// incoming events over gRPC
 	GetGRPCListenAddr() (string, error)

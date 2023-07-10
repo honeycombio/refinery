@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-07-10 at 16:05:01 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-07-10 at 20:11:37 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -905,7 +905,7 @@ GRPCServerParameters:
     ## accepted.
     ##
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Enabled" "Enabled" false }}
+    {{ conditional .Data "Enabled" "nonempty GRPCListenAddr" }}
 
     ## ListenAddr is the address Refinery listens to for incoming GRPC
     ## OpenTelemetry events.

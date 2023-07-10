@@ -208,7 +208,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Handler: muxxer,
 	}
 
-	if len(grpcAddr) > 0 {
+	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
 			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
