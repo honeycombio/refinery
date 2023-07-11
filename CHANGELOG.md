@@ -26,6 +26,7 @@ Validation has now been extended to include validation of values specified in en
 
 # Maintenance
 
+- docs: General Improvements (#789) | [Mary J](https://github.com/mjingle)
 - docs: Update docs to fix memory description (#785) | [Kent Quirk](https://github.com/kentquirk)
 - maint: Update release notes (#779) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - maint(deps): bump github.com/klauspost/compress from 1.16.6 to 1.16.7 (#763)
