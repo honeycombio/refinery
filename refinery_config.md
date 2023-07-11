@@ -749,7 +749,7 @@ If set to a non-zero value, then once per tick (see `SendTicker`) the collector 
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
 If this value is `0`, then `MaxAlloc` will be used.
-Kubernetes unit abbreviations are also supported.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
 
 - Eligible for live reload.
 - Type: `percentage`
@@ -762,8 +762,7 @@ Kubernetes unit abbreviations are also supported.
 
 If set, then this must be a memory size.
 64-bit values are supported.
-Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
-The full list of supported values can be found at https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
 See `MaxMemory` for more details.
 
 - Eligible for live reload.
