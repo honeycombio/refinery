@@ -124,7 +124,7 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 		if s.mode != Monitor && cfg.MinimumStartupDuration != 0 {
 			s.stressed = true
 			s.stayOnUntil = time.Now().Add(time.Duration(cfg.MinimumStartupDuration))
-			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", "MinimumStartupDuration").Logf("StressRelief has been activated")
+			s.Logger.Warn().WithField("stress_level", s.stressLevel).WithField("reason", "MinimumStartupDuration").Logf("StressRelief has been activated")
 		}
 		s.mode = Monitor
 	case "always":
@@ -292,7 +292,7 @@ func (s *StressRelief) Recalc() {
 		// If it's off, should we activate it?
 		if !s.stressed && s.stressLevel >= s.activateLevel {
 			s.stressed = true
-			s.Logger.Info().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
+			s.Logger.Warn().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
 		}
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
@@ -303,7 +303,7 @@ func (s *StressRelief) Recalc() {
 		// If it's on, should we deactivate it?
 		if s.stressed && s.stressLevel < s.deactivateLevel && time.Now().After(s.stayOnUntil) {
 			s.stressed = false
-			s.Logger.Info().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
+			s.Logger.Warn().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
 		}
 	}
 }
