@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"regexp"
@@ -11,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/go-units"
 	"gopkg.in/yaml.v3"
 )
 
@@ -50,7 +50,40 @@ const (
 	invalidSizeError = "invalid size: %s"
 )
 
+var unitSlice = []uint64{
+	Ei,
+	E,
+	Pi,
+	P,
+	Ti,
+	T,
+	Gi,
+	G,
+	Mi,
+	M,
+	Ki,
+	K,
+	1,
+}
+
+var reverseUnitMap = map[uint64]string{
+	Ki: "Ki",
+	Mi: "Mi",
+	Gi: "Gi",
+	Ti: "Ti",
+	Pi: "Pi",
+	Ei: "Ei",
+	K:  "K",
+	M:  "M",
+	G:  "G",
+	T:  "T",
+	P:  "P",
+	E:  "E",
+}
+
 var unitMap = map[string]uint64{
+	"bi":  1,
+	"bib": 1,
 	"ki":  Ki,
 	"kib": Ki,
 	"mi":  Mi,
@@ -63,6 +96,8 @@ var unitMap = map[string]uint64{
 	"pib": Pi,
 	"ei":  Ei,
 	"eib": Ei,
+	"b":   1,
+	"bb":  1,
 	"k":   K,
 	"kb":  K,
 	"m":   M,
@@ -81,7 +116,19 @@ var unitMap = map[string]uint64{
 type MemorySize uint64
 
 func (m MemorySize) MarshalText() ([]byte, error) {
-	return []byte(units.HumanSize(float64(m))), nil
+	if m > 0 {
+		for _, size := range unitSlice {
+			result := float64(m) / float64(size)
+			if result == math.Trunc(result) {
+				unit, ok := reverseUnitMap[size]
+				if !ok {
+					break
+				}
+				return []byte(fmt.Sprintf("%v%v", result, unit)), nil
+			}
+		}
+	}
+	return []byte(fmt.Sprintf("%v", m)), nil
 }
 
 func (m *MemorySize) UnmarshalText(text []byte) error {

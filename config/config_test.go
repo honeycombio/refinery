@@ -783,6 +783,16 @@ func TestMemorySizeUnmarshal(t *testing.T) {
 			expected: 100000,
 		},
 		{
+			name:     "b",
+			input:    "1b",
+			expected: 1,
+		},
+		{
+			name:     "bi",
+			input:    "1Bi",
+			expected: 1,
+		},
+		{
 			name:     "k",
 			input:    "1K",
 			expected: 1000,
@@ -862,6 +872,82 @@ func TestMemorySizeUnmarshalInvalid(t *testing.T) {
 			var m MemorySize
 			err := m.UnmarshalText([]byte(tt.input))
 			assert.Contains(t, err.Error(), fmt.Sprintf(invalidSizeError, tt.input))
+		})
+	}
+}
+
+func TestMemorySizeMarshal(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    MemorySize
+		expected string
+	}{
+		{
+			name:     "zero",
+			input:    0,
+			expected: "0",
+		},
+		{
+			name:     "ei",
+			input:    MemorySize(3 * Ei),
+			expected: "3Ei",
+		},
+		{
+			name:     "e",
+			input:    MemorySize(3 * E),
+			expected: "3E",
+		},
+		{
+			name:     "pi",
+			input:    MemorySize(3 * Pi),
+			expected: "3Pi",
+		},
+		{
+			name:     "p",
+			input:    MemorySize(3 * P),
+			expected: "3P",
+		},
+		{
+			name:     "gi",
+			input:    MemorySize(3 * Gi),
+			expected: "3Gi",
+		},
+		{
+			name:     "g",
+			input:    MemorySize(3 * G),
+			expected: "3G",
+		},
+		{
+			name:     "mi",
+			input:    MemorySize(3 * Mi),
+			expected: "3Mi",
+		},
+		{
+			name:     "m",
+			input:    MemorySize(3 * M),
+			expected: "3M",
+		},
+		{
+			name:     "ki",
+			input:    MemorySize(3 * Ki),
+			expected: "3Ki",
+		},
+		{
+			name:     "k",
+			input:    MemorySize(3 * K),
+			expected: "3K",
+		},
+		{
+			name:     "b",
+			input:    MemorySize(3),
+			expected: "3",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.input.MarshalText()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, string(result))
 		})
 	}
 }
