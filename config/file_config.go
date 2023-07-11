@@ -50,7 +50,7 @@ const (
 	invalidSizeError = "invalid size: %s"
 )
 
-var binaryMap = map[string]uint64{
+var unitMap = map[string]uint64{
 	"ki":  Ki,
 	"kib": Ki,
 	"mi":  Mi,
@@ -63,21 +63,18 @@ var binaryMap = map[string]uint64{
 	"pib": Pi,
 	"ei":  Ei,
 	"eib": Ei,
-}
-
-var decimalMap = map[string]uint64{
-	"k":  K,
-	"kb": K,
-	"m":  M,
-	"mb": M,
-	"g":  G,
-	"gb": G,
-	"t":  T,
-	"tb": T,
-	"p":  P,
-	"pb": P,
-	"e":  E,
-	"eb": E,
+	"k":   K,
+	"kb":  K,
+	"m":   M,
+	"mb":  M,
+	"g":   G,
+	"gb":  G,
+	"t":   T,
+	"tb":  T,
+	"p":   P,
+	"pb":  P,
+	"e":   E,
+	"eb":  E,
 }
 
 // We also use a special type for memory sizes
@@ -121,12 +118,9 @@ func (m *MemorySize) UnmarshalText(text []byte) error {
 	if unit == "" {
 		*m = MemorySize(number)
 	} else {
-		scalar, ok := decimalMap[unit]
+		scalar, ok := unitMap[unit]
 		if !ok {
-			scalar, ok = binaryMap[unit]
-			if !ok {
-				return fmt.Errorf(invalidSizeError, text)
-			}
+			return fmt.Errorf(invalidSizeError, text)
 		}
 		*m = MemorySize(number * scalar)
 	}
