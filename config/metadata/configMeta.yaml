@@ -1,4 +1,9 @@
-# this contains a list of all of the config items supported by Refinery
+# This contains a list of all of the config items supported by Refinery.
+#
+# This file is a YAML file containing configuration information for all of the values in Refinery.
+# If you modify this file, you must `cd tools/convert` and run `make all` to regenerate the
+# dependent files. Note that refinery_config.md and refinery_rules.md are used by the documentation
+# system, so you must also copy them to the docs directory and create a PR there.
 groups:
   - name: "General"
     title: "General Configuration"
