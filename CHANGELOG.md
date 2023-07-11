@@ -22,6 +22,7 @@ This patch release fixes several small, but annoying, bugs in Refinery 2.0.0
 
 ## Maintenance
 
+- docs: Update docs to fix memory description (#785) | [Kent Quirk](https://github.com/kentquirk)
 - maint: Update release notes (#779) | @(12352919+TylerHelmuth@users.noreply.github.com)
 - maint(deps): bump github.com/klauspost/compress from 1.16.6 to 1.16.7 (#763)
 - maint(deps): bump github.com/sirupsen/logrus from 1.9.2 to 1.9.3 (#761)
