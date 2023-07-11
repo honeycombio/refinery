@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -106,7 +107,8 @@ func load(r io.Reader, format Format, into any) error {
 	}
 }
 
-func validateConfig(location string) ([]string, error) {
+func validateConfig(opts *CmdEnv) ([]string, error) {
+	location := opts.ConfigLocation
 	r, format, err := getReaderFor(location)
 	if err != nil {
 		return nil, err
@@ -115,7 +117,7 @@ func validateConfig(location string) ([]string, error) {
 
 	var userData map[string]any
 	if err := load(r, format, &userData); err != nil {
-		return nil, fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
+		return nil, fmt.Errorf("validateConfig unable to load config %s: %w", location, err)
 	}
 
 	metadata, err := LoadConfigMetadata()
@@ -124,6 +126,61 @@ func validateConfig(location string) ([]string, error) {
 	}
 
 	failures := metadata.Validate(userData)
+	if len(failures) > 0 {
+		return failures, nil
+	}
+
+	// Basic validation worked. Now we need to reload it into the struct so that
+	// we can apply defaults and options, and then validate a second time.
+
+	// we need a new reader for the source data
+	r2, _, err := getReaderFor(location)
+	if err != nil {
+		return nil, err
+	}
+	defer r2.Close()
+
+	var config configContents
+	if err := load(r2, format, &config); err != nil {
+		// this should never happen, since we already validated the config
+		return nil, fmt.Errorf("validateConfig unable to RELOAD config %s: %w", location, err)
+	}
+	// apply defaults and options
+	if err := defaults.Set(&config); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to apply defaults: %w", err)
+	}
+
+	// apply command line options
+	if err := opts.ApplyTags(reflect.ValueOf(&config)); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to apply command line options: %w", err)
+	}
+
+	// possibly inject some keys to keep the validator happy
+	if config.HoneycombLogger.APIKey == "" {
+		config.HoneycombLogger.APIKey = "InvalidHoneycombAPIKey"
+	}
+	if config.LegacyMetrics.APIKey == "" {
+		config.LegacyMetrics.APIKey = "InvalidHoneycombAPIKey"
+	}
+	if config.OTelMetrics.APIKey == "" {
+		config.OTelMetrics.APIKey = "InvalidHoneycombAPIKey"
+	}
+
+	// write it out to a YAML buffer
+	buf := new(bytes.Buffer)
+	encoder := yaml.NewEncoder(buf)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(config); err != nil {
+		return nil, fmt.Errorf("readConfigInto unable to reencode config: %w", err)
+	}
+
+	var rewrittenUserData map[string]any
+	if err := load(buf, format, &rewrittenUserData); err != nil {
+		return nil, fmt.Errorf("validateConfig unable to reload hydrated config from buffer: %w", err)
+	}
+
+	// and finally validate the rewritten config
+	failures = metadata.Validate(rewrittenUserData)
 	return failures, nil
 }
 
@@ -136,7 +193,7 @@ func validateRules(location string) ([]string, error) {
 
 	var userData map[string]any
 	if err := load(r, format, &userData); err != nil {
-		return nil, fmt.Errorf("readConfigInto unable to load config %s: %w", location, err)
+		return nil, fmt.Errorf("validateRules unable to load config %s: %w", location, err)
 	}
 
 	metadata, err := LoadRulesMetadata()

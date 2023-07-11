@@ -184,6 +184,13 @@ func validateDatatype(k string, v any, typ string) string {
 	return ""
 }
 
+func maskString(s string) string {
+	if len(s) < 4 {
+		return "****"
+	}
+	return "****" + s[len(s)-4:]
+}
+
 // Validate checks that the given data is valid according to the metadata.
 // It returns a list of errors, or an empty list if there are no errors.
 // The errors are strings that are suitable for showing to the user.
@@ -251,10 +258,12 @@ func (m *Metadata) Validate(data map[string]any) []string {
 			case "format":
 				var pat *regexp.Regexp
 				var format string
+				mask := false
 				switch validation.Arg.(string) {
 				case "apikey":
 					pat = regexp.MustCompile(`^[a-f0-9]{32}|[a-zA-Z0-9]{20,23}$`)
-					format = "field %s (%v) must be a Honeycomb API key"
+					format = "field %s (%v) must be a valid Honeycomb API key"
+					mask = true
 				case "version":
 					pat = regexp.MustCompile(`^v[0-9]+\.[0-9]+$`)
 					format = "field %s (%v) must be a valid major.minor version number, like v2.0"
@@ -265,6 +274,9 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					panic("unknown pattern type " + validation.Arg.(string))
 				}
 				if !(isString(v) && pat.MatchString(v.(string))) {
+					if mask {
+						v = maskString(v.(string))
+					}
 					errors = append(errors, fmt.Sprintf(format, k, v))
 				}
 			case "minimum":

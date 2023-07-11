@@ -362,7 +362,7 @@ func (e *FileConfigError) Error() string {
 func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfig(opts.ConfigLocation)
+		cfgFails, err := validateConfig(opts)
 		if err != nil {
 			return nil, err
 		}
