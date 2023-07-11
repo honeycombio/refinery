@@ -2,6 +2,25 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.0.1
+
+This is a patch release of Refinery that fixes several small, but annoying, bugs from Refinery 2.0.0
+
+### Configuration
+- `AvailableMemory` and `MaxAlloc` now also support Kubernetes units.
+- Configuration validation will now pass if an expected value is being set by an environment variable.
+- `GRPCServerParameters.Enabled` is not properly used by Refinery.
+- `debug` log level now works properly.
+
+### Refinery Logs
+- StressRelief logs will now log on log level `warn`.
+
+### Conversion Tool
+- Now properly treats the default value for `PeerManagement.Type` as `file` instead of `redis`.
+- Now properly converts nested samplers within any RulesBasesSampler configurations.
+- Now properly converts `APIKeys`.
+- Now properly converts `InMemCollector.MaxAlloc`.
+
 ## Version 2.0.0
 
 This is a major release of Refinery with a new configuration file format, new samplers, and updated runtime behavior. It has several breaking changes, especially for configuration and sampling, so it also comes with [a conversion tool](https://github.com/honeycombio/refinery/tree/main/tools/convert).
