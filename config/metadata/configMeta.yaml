@@ -934,8 +934,8 @@ groups:
           not set, then `MaxMemory` cannot be used to calculate the maximum
           allocation and `MaxAlloc` will be used instead. If set, then this must
           be a memory size. 64-bit values are supported. Sizes with standard
-          unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc)
-          are also supported.
+          unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, 
+          etc.) are also supported.
 
       - name: MaxMemoryPercentage
         type: percentage
