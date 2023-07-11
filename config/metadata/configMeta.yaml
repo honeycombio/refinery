@@ -1,4 +1,9 @@
-# this contains a list of all of the config items supported by Refinery
+# This contains a list of all of the config items supported by Refinery.
+#
+# This file is a YAML file containing configuration information for all of the values in Refinery.
+# If you modify this file, you must `cd tools/convert` and run `make all` to regenerate the
+# dependent files. Note that refinery_config.md and refinery_rules.md are used by the documentation
+# system, so you must also copy them to the docs directory and create a PR there.
 groups:
   - name: "General"
     title: "General Configuration"
@@ -666,7 +671,7 @@ groups:
         type: string
         valuetype: choice
         choices: ["redis", "file"]
-        default: "redis"
+        default: "file"
         reload: false
         validations:
           - type: choice
@@ -929,7 +934,7 @@ groups:
           allocation and `MaxAlloc` will be used instead. If set, then this
           must be a memory size. 64-bit values are supported. Sizes with
           standard unit suffixes like "MB" and "GiB" are also supported.
-          The full list of supported values can be found at 
+          The full list of supported values can be found at
           https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
           Kubernetes unit abbreviations are also supported.
 
@@ -953,7 +958,7 @@ groups:
           allocated bytes to this calculated value. If allocation is too high,
           then traces will be ejected from the cache early to reduce memory.
           Useful values for this setting are generally in the range of 70-90.
-          If this value is `0`, then `MaxAlloc` will be used. Kubernetes unit 
+          If this value is `0`, then `MaxAlloc` will be used. Kubernetes unit
           abbreviations are also supported.
 
       - name: MaxAlloc
