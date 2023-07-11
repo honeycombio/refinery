@@ -1,6 +1,34 @@
 # Refinery Changelog
 
-## 2.0 2023-06-27
+## 2.0.1 2023-07-11
+
+This patch release fixes several small, but annoying, bugs in Refinery 2.0.0
+
+## Features
+- feat: Extended validation of config files (#781) | [Kent Quirk](https://github.com/kentquirk)
+
+## Fixes
+
+- fix: Update validate logic to use MemorySize (#782) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Promote stress relief activation and deactivation logs to warn (#784) | [Kent Quirk](https://github.com/kentquirk)
+- fix: The peer management default value was wrong. (#783) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Update file_config to honor GRPCServerParameters.Enabled (#771) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: hack a fix for adjustmentinterval not converting inside rules based samples (#768) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Inject all metrics and config later (#780) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Add missing validation for LegacyMetrics APIKey (#774) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Add ability to handle k8s unit format (#778) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Move Unknown log level to zero position (#772) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: Fix bugs with convert (#764) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
+## Maintenance
+
+- maint: Update release notes (#779) | @(12352919+TylerHelmuth@users.noreply.github.com)
+- maint(deps): bump github.com/klauspost/compress from 1.16.6 to 1.16.7 (#763)
+- maint(deps): bump github.com/sirupsen/logrus from 1.9.2 to 1.9.3 (#761)
+- maint(deps): bump google.golang.org/protobuf from 1.30.0 to 1.31.0 (#759)
+- maint(deps): bump google.golang.org/grpc from 1.55.0 to 1.56.1 (#758)
+
+## 2.0 2023-07-06
 
 ** NEW MAJOR VERSION **
 !! BREAKING CHANGES !!
