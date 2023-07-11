@@ -315,7 +315,7 @@ The setting specifies where (and if) Refinery sends logs.
 - Not eligible for live reload.
 - Type: `string`
 - Default: `stdout`
-- Options: `stdout honeycomb none`
+- Options: `stdout`, `honeycomb`, `none`
 
 ### `Level`
 
@@ -327,7 +327,7 @@ The setting specifies where (and if) Refinery sends logs.
 - Not eligible for live reload.
 - Type: `string`
 - Default: `warn`
-- Options: `debug info warn error panic`
+- Options: `debug`, `info`, `warn`, `error`, `panic`
 
 ## Honeycomb Logger
 
@@ -554,7 +554,7 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Not eligible for live reload.
 - Type: `string`
 - Default: `gzip`
-- Options: `none gzip`
+- Options: `none`, `gzip`
 
 ## Peer Management
 
@@ -571,7 +571,7 @@ Peer management is the mechanism by which Refinery locates its peers.
 - Not eligible for live reload.
 - Type: `string`
 - Default: `file`
-- Options: `redis file`
+- Options: `redis`, `file`
 
 ### `Identifier`
 
@@ -730,7 +730,7 @@ This value will typically be set through an environment variable controlled by t
 If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
 If set, then this must be a memory size.
 64-bit values are supported.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`,  etc.) are also supported.
 
 - Eligible for live reload.
 - Type: `memorysize`
