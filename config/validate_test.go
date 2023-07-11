@@ -76,10 +76,19 @@ func Test_validateType(t *testing.T) {
 		{"url blank", "k", "", "url", `field k may not be blank`},
 		{"url noscheme", "k", "example.com", "url", `field k (example.com) must be a valid URL with a host`},
 		{"url badscheme", "k", "ftp://example.com", "url", `field k (ftp://example.com) must use an http or https scheme`},
+		{"invalid memorysize", "k", "test", "memorysize", `field k (test) must be a valid memory size like '1Gb' or '100_000_000'`},
+		{"valid memorysize G", "k", "1G", "memorysize", ""},
+		{"valid memorysize Gi", "k", "1Gi", "memorysize", ""},
+		{"valid memorysize GiB", "k", "1GiB", "memorysize", ""},
+		{"valid memorysize GB", "k", "1GB", "memorysize", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := validateDatatype(tt.k, tt.v, tt.typ); got != tt.want {
+			got := validateDatatype(tt.k, tt.v, tt.typ)
+			if tt.want == "" && len(got) != 0 {
+				t.Errorf("validateType() = %v, want empty", got)
+			}
+			if got != tt.want {
 				t.Errorf("validateType() = %v, want %v", got, tt.want)
 			}
 		})

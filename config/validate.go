@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/go-units"
 	"golang.org/x/exp/slices"
 )
 
@@ -142,7 +141,10 @@ func validateDatatype(k string, v any, typ string) string {
 			// we support pure numbers here, so if it's not already a string, then stringize it
 			v = fmt.Sprintf("%v", v)
 		}
-		if _, err := units.FromHumanSize(v.(string)); err != nil {
+		var m MemorySize
+		// When validating we need to take advantage of the custom logic in MemorySize.UnmarshalText
+		err := m.UnmarshalText([]byte(v.(string)))
+		if err != nil {
 			return fmt.Sprintf("field %s (%v) must be a valid memory size like '1Gb' or '100_000_000'", k, v)
 		}
 	case "hostport":

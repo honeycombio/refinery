@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/honeycombio/refinery/config"
 	"html/template"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/docker/go-units"
 )
 
 // This file contains template helper functions, which must be listed in this
@@ -180,7 +179,8 @@ func memorysize(data map[string]any, key, oldkey string, example string) string 
 		case int:
 			i64 = int64(i)
 		}
-		return fmt.Sprintf(`%s: %s`, key, units.HumanSize(float64(i64)))
+		txt, _ := config.MemorySize(i64).MarshalText()
+		return fmt.Sprintf(`%s: %s`, key, string(txt))
 	}
 	return fmt.Sprintf(`# %s: %v`, key, yamlf(example))
 }

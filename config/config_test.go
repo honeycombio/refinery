@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -739,12 +740,12 @@ func TestMemorySizeUnmarshal(t *testing.T) {
 		{
 			name:     "single letter",
 			input:    "1G",
-			expected: 1024 * 1024 * 1024,
+			expected: 1000 * 1000 * 1000,
 		},
 		{
 			name:     "B included",
 			input:    "1GB",
-			expected: 1024 * 1024 * 1024,
+			expected: 1000 * 1000 * 1000,
 		},
 		{
 			name:     "iB included",
@@ -756,6 +757,91 @@ func TestMemorySizeUnmarshal(t *testing.T) {
 			input:    "1Gi",
 			expected: 1024 * 1024 * 1024,
 		},
+		{
+			name:     "single letter lowercase",
+			input:    "1g",
+			expected: 1000 * 1000 * 1000,
+		},
+		{
+			name:     "b included lowercase",
+			input:    "1gb",
+			expected: 1000 * 1000 * 1000,
+		},
+		{
+			name:     "ib included  lowercase",
+			input:    "1gib",
+			expected: 1024 * 1024 * 1024,
+		},
+		{
+			name:     "k8s format lowercase",
+			input:    "1gi",
+			expected: 1024 * 1024 * 1024,
+		},
+		{
+			name:     "bytes",
+			input:    "100000",
+			expected: 100000,
+		},
+		{
+			name:     "b",
+			input:    "1b",
+			expected: 1,
+		},
+		{
+			name:     "bi",
+			input:    "1Bi",
+			expected: 1,
+		},
+		{
+			name:     "k",
+			input:    "1K",
+			expected: 1000,
+		},
+		{
+			name:     "ki",
+			input:    "1Ki",
+			expected: 1024,
+		},
+		{
+			name:     "m",
+			input:    "1M",
+			expected: 1000 * 1000,
+		},
+		{
+			name:     "mi",
+			input:    "1Mi",
+			expected: 1024 * 1024,
+		},
+		{
+			name:     "t",
+			input:    "1T",
+			expected: 1000 * 1000 * 1000 * 1000,
+		},
+		{
+			name:     "ti",
+			input:    "1Ti",
+			expected: 1024 * 1024 * 1024 * 1024,
+		},
+		{
+			name:     "p",
+			input:    "1p",
+			expected: 1000 * 1000 * 1000 * 1000 * 1000,
+		},
+		{
+			name:     "pi",
+			input:    "1pi",
+			expected: 1024 * 1024 * 1024 * 1024 * 1024,
+		},
+		{
+			name:     "e",
+			input:    "1e",
+			expected: 1000 * 1000 * 1000 * 1000 * 1000 * 1000,
+		},
+		{
+			name:     "ei",
+			input:    "1ei",
+			expected: 1024 * 1024 * 1024 * 1024 * 1024 * 1024,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -763,8 +849,105 @@ func TestMemorySizeUnmarshal(t *testing.T) {
 			err := m.UnmarshalText([]byte(tt.input))
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, m)
-
 		})
 	}
+}
 
+func TestMemorySizeUnmarshalInvalid(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "no number",
+			input: "G",
+		},
+		{
+			name:  "invalid unit",
+			input: "1A",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var m MemorySize
+			err := m.UnmarshalText([]byte(tt.input))
+			assert.Contains(t, err.Error(), fmt.Sprintf(invalidSizeError, tt.input))
+		})
+	}
+}
+
+func TestMemorySizeMarshal(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    MemorySize
+		expected string
+	}{
+		{
+			name:     "zero",
+			input:    0,
+			expected: "0",
+		},
+		{
+			name:     "ei",
+			input:    MemorySize(3 * Ei),
+			expected: "3Ei",
+		},
+		{
+			name:     "e",
+			input:    MemorySize(3 * E),
+			expected: "3E",
+		},
+		{
+			name:     "pi",
+			input:    MemorySize(3 * Pi),
+			expected: "3Pi",
+		},
+		{
+			name:     "p",
+			input:    MemorySize(3 * P),
+			expected: "3P",
+		},
+		{
+			name:     "gi",
+			input:    MemorySize(3 * Gi),
+			expected: "3Gi",
+		},
+		{
+			name:     "g",
+			input:    MemorySize(3 * G),
+			expected: "3G",
+		},
+		{
+			name:     "mi",
+			input:    MemorySize(3 * Mi),
+			expected: "3Mi",
+		},
+		{
+			name:     "m",
+			input:    MemorySize(3 * M),
+			expected: "3M",
+		},
+		{
+			name:     "ki",
+			input:    MemorySize(3 * Ki),
+			expected: "3Ki",
+		},
+		{
+			name:     "k",
+			input:    MemorySize(3 * K),
+			expected: "3K",
+		},
+		{
+			name:     "b",
+			input:    MemorySize(3),
+			expected: "3",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.input.MarshalText()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, string(result))
+		})
+	}
 }

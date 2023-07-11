@@ -7,7 +7,6 @@ require (
 	github.com/creasty/defaults v1.7.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371
-	github.com/docker/go-units v0.5.0
 	github.com/facebookgo/inject v0.0.0-20180706035515-f23751cae28b
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
 	github.com/gomodule/redigo v1.8.9

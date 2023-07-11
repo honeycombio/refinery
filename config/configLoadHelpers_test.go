@@ -112,9 +112,9 @@ func Test_loadMemsize(t *testing.T) {
 		want    any
 		wantErr bool
 	}{
-		{"yaml", FormatYAML, `M: 1Gb`, &mem{}, &mem{MemorySize(0x4000_0000)}, false},
-		{"json", FormatJSON, `{"M": "1Gb"}`, &mem{}, &mem{MemorySize(0x4000_0000)}, false},
-		{"toml", FormatTOML, `M="1Gb"`, &mem{}, &mem{MemorySize(0x4000_0000)}, false},
+		{"yaml", FormatYAML, `M: 1Gb`, &mem{}, &mem{MemorySize(G)}, false},
+		{"json", FormatJSON, `{"M": "1Gb"}`, &mem{}, &mem{MemorySize(G)}, false},
+		{"toml", FormatTOML, `M="1Gb"`, &mem{}, &mem{MemorySize(G)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
