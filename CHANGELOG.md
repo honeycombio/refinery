@@ -9,6 +9,7 @@ This patch release fixes several small, but annoying, bugs in Refinery 2.0.0
 
 ## Fixes
 
+- fix: Remove excess validation for api keys (#786) | @(kentquirk@honeycomb.io)
 - fix: Update validate logic to use MemorySize (#782) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - fix: Promote stress relief activation and deactivation logs to warn (#784) | [Kent Quirk](https://github.com/kentquirk)
 - fix: The peer management default value was wrong. (#783) | [Kent Quirk](https://github.com/kentquirk)
