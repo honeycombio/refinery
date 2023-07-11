@@ -37,6 +37,14 @@ Specific configuration changes worth noting:
 - All dynamic samplers now correctly count spans, not traces. Although they were documented as counting the number of spans in previous versions, they were in fact only counting traces, which often made it difficult to achieve appropriate target rates. **After running the conversion tool, existing configurations should be adjusted!**
 - New Samplers: The `WindowedThroughputSampler` and `EMAThroughputSampler` are two new samplers. We highly recommend replacing any use of `TotalThroughputSampler` in favor of one of these. Both use dynamic sampling techniques to adjust sample rates to achieve a desired throughput. The `WindowedThroughputSampler` does so with a moving window of samples, while the `EMAThroughputSampler` maintains a moving average.
 - Individual samplers now report metrics relating to key size and the number of spans and traces processed.
+- Samplers now report metrics using their own prefix identifier instead of all using `dynamic_`. If you depended on this metric but are not using the Dynamic Sampler you will need to update your queries.
+  - Deterministic Sampler uses `deterministic_`
+  - Dynamic Sampler uses `dynamic_`
+  - Dynamic EMA Sampler uses `emadynamic_`
+  - EMA Throughput Sampler uses `emathroughput_`
+  - Rules Sampler uses `rulesbased_`
+  - Total Throughput Sampler uses `totalthroughput_`
+  - Windowed Throughput Sampler uses `windowedthroughput_`
 - Samplers now always have a bounded `MaxKeys` value, which defaults to `500`. Systems relying on a larger keyspace should set this value explicitly for a sampler.
 
 ### Refinery Metrics Updates
