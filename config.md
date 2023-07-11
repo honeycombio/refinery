@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-07-10 at 20:11:38 UTC.
+It was automatically generated on 2023-07-11 at 15:26:09 UTC.
 
 ## The Config file
 
@@ -585,7 +585,7 @@ Peer management is the mechanism by which Refinery locates its peers.
 
 - Not eligible for live reload.
 - Type: `string`
-- Default: `redis`
+- Default: `file`
 - Options: `redis file`
 
 ### `Identifier`
@@ -746,7 +746,7 @@ If this value is zero or not set, then `MaxMemory` cannot be used to calculate t
 If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes like "MB" and "GiB" are also supported.
-The full list of supported values can be found at  https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
+The full list of supported values can be found at https://pkg.go.dev/github.com/docker/go-units#pkg-constants.
 Kubernetes unit abbreviations are also supported.
 
 - Eligible for live reload.
@@ -764,7 +764,7 @@ If set to a non-zero value, then once per tick (see `SendTicker`) the collector 
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
 If this value is `0`, then `MaxAlloc` will be used.
-Kubernetes unit  abbreviations are also supported.
+Kubernetes unit abbreviations are also supported.
 
 - Eligible for live reload.
 - Type: `percentage`

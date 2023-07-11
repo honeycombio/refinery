@@ -7,3 +7,4 @@
 5. Push the tag upstream (this will kick off the release pipeline in CI)
 6. Copy change log entry for newest version into draft GitHub release created as part of CI publish steps
 7. Update the `appVersion` and any relevant chart changes in [helm-charts](https://github.com/honeycombio/helm-charts/tree/main/charts/refinery)
+8. If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also copy these files to docs and do a docs PR.
