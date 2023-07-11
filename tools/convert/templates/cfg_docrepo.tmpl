@@ -73,7 +73,7 @@ The remainder of this document describes the sections within the file and the fi
 {{- println -}}
 {{- end -}}
 {{- if eq $field.ValueType "choice" -}}
-- Options: `{{- printf "%s" (join $field.Choices " ") -}}`
+- Options: `{{- printf "%s" (join $field.Choices "`, `") -}}`
 {{- println -}}
 {{- end -}}
 {{- if $field.Envvar -}}

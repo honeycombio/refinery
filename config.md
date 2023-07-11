@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-07-11 at 17:52:54 UTC.
+It was automatically generated on 2023-07-11 at 21:19:53 UTC.
 
 ## The Config file
 
@@ -334,7 +334,7 @@ The setting specifies where (and if) Refinery sends logs.
 - Not eligible for live reload.
 - Type: `string`
 - Default: `stdout`
-- Options: `stdout honeycomb none`
+- Options: `stdout`, `honeycomb`, `none`
 
 ### `Level`
 
@@ -346,7 +346,7 @@ Level is the logging level above which Refinery should send a log to the logger.
 - Not eligible for live reload.
 - Type: `string`
 - Default: `warn`
-- Options: `debug info warn error panic`
+- Options: `debug`, `info`, `warn`, `error`, `panic`
 
 ## Honeycomb Logger
 
@@ -570,7 +570,7 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Not eligible for live reload.
 - Type: `string`
 - Default: `gzip`
-- Options: `none gzip`
+- Options: `none`, `gzip`
 
 ## Peer Management
 
@@ -586,7 +586,7 @@ Peer management is the mechanism by which Refinery locates its peers.
 - Not eligible for live reload.
 - Type: `string`
 - Default: `file`
-- Options: `redis file`
+- Options: `redis`, `file`
 
 ### `Identifier`
 
