@@ -37,7 +37,7 @@ const (
 	redisScanTimeout = 5 * time.Second
 
 	// redisScanBatchSize indicates how many keys to retrieve from Redis at a time.
-	redisScanBatchSize = "10"
+	redisScanBatchSize = "1000"
 )
 
 // RedisMembership implements the Membership interface using Redis as the backend
