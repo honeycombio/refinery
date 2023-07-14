@@ -189,6 +189,21 @@ func main() {
 	peerTransmission := transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer")
 
 	// we need to include all the metrics types so we can inject them in case they're needed
+	// but we only want to instantiate the ones that are enabled with non-null values
+	var legacyMetrics metrics.Metrics = &metrics.NullMetrics{}
+	var promMetrics metrics.Metrics = &metrics.NullMetrics{}
+	var oTelMetrics metrics.Metrics = &metrics.NullMetrics{}
+	if c.GetLegacyMetricsConfig().Enabled {
+		legacyMetrics = &metrics.LegacyMetrics{}
+	}
+	if c.GetPrometheusMetricsConfig().Enabled {
+		promMetrics = &metrics.PromMetrics{}
+	}
+	if c.GetOTelMetricsConfig().Enabled {
+		oTelMetrics = &metrics.OTelMetrics{}
+	}
+
+	// we need to include all the metrics types so we can inject them in case they're needed
 	var g inject.Graph
 	if opts.Debug {
 		g.Logger = graphLogger{}
@@ -203,9 +218,9 @@ func main() {
 		{Value: peerTransmission, Name: "peerTransmission"},
 		{Value: shrdr},
 		{Value: collector},
-		{Value: &metrics.LegacyMetrics{}, Name: "legacyMetrics"},
-		{Value: &metrics.PromMetrics{}, Name: "promMetrics"},
-		{Value: &metrics.OTelMetrics{}, Name: "otelMetrics"},
+		{Value: legacyMetrics, Name: "legacyMetrics"},
+		{Value: promMetrics, Name: "promMetrics"},
+		{Value: oTelMetrics, Name: "otelMetrics"},
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
