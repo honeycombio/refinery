@@ -1,5 +1,22 @@
 # Refinery Changelog
 
+
+## 2.0.2 2023-07-14
+
+This is a patch release to address additional issues with Refinery 2.0.
+
+## Fixes
+
+- fix: Redis scan batch size increase (#794) | [Renning Bruns](https://github.com/nullren)
+- fix: Don't inject real metrics if they're not enabled. (#795) | [Kent Quirk](https://github.com/kentquirk)
+
+## Maintenance
+
+- maint: Dont try to publish external PRs to ECR (#797) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: replace slash with dash in branch name (#796) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: Docker tagging updates (#791) | [Terra Field](https://github.com/RainOfTerra)
+
+
 ## 2.0.1 2023-07-11
 
 This is a patch release to address several issues in the 2.0.0 release.

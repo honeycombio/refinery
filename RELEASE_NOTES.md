@@ -2,9 +2,16 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.0.2
+
+This is a patch release to address additional issues with Refinery 2.0:
+
+* Fixes a performance issue where cluster membership was being queried from Redis with an unreasonably small limit, requiring many round trips and causing occasional timeouts in very large clusters.
+* Fixes a situation where OTel metrics was inappropriately initialized when not configured, causing many errors to be logged as it tried to communicate with Honeycomb.
+
 ## Version 2.0.1
 
-This is a patch release of Refinery that fixes several small, but annoying, bugs from Refinery 2.0.0
+This is a patch release of Refinery that fixes several small, but annoying, bugs from Refinery 2.0.0.
 
 ### Configuration
 - `AvailableMemory` and `MaxAlloc` now also support Kubernetes units.
