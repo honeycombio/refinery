@@ -6,7 +6,8 @@ set -o xtrace
 TAGS=""
 # Check if CIRCLE_BRANCH is set and not empty
 if [[ -n "${CIRCLE_BRANCH}" ]]; then
-    export TAGS="${CIRCLE_BUILD_NUM},branch-${CIRCLE_BRANCH}"
+    BRANCH_TAG=${CIRCLE_BRANCH//\//-}
+    TAGS="${CIRCLE_BUILD_NUM},branch-${BRANCH_TAG}"
 fi
 
 # We only want to tag main with latest on ECR
