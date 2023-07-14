@@ -35,6 +35,9 @@ const (
 
 	// redisScanTimeout indicates how long to attempt to scan for peers.
 	redisScanTimeout = 5 * time.Second
+
+	// redisScanBatchSize indicates how many keys to retrieve from Redis at a time.
+	redisScanBatchSize = "1000"
 )
 
 // RedisMembership implements the Membership interface using Redis as the backend
@@ -152,7 +155,7 @@ func (rm *RedisMembership) getMembersOnce(ctx context.Context) ([]string, error)
 		return nil, err
 	}
 	defer conn.Close()
-	keysChan, errChan := rm.scan(conn, keyPrefix, "10", redisScanTimeout)
+	keysChan, errChan := rm.scan(conn, keyPrefix, redisScanBatchSize, redisScanTimeout)
 	memberList := make([]string, 0)
 	for key := range keysChan {
 		name := strings.Split(key, "•")[2]
