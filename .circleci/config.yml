@@ -244,6 +244,9 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+          filters:
+            branches:
+              ignore: /pull\/.*/
       - publish_github:
           context: Honeycomb Secrets for Public Repos
           requires:
