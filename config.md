@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-07-11 at 21:19:53 UTC.
+It was automatically generated on 2023-07-17 at 17:49:09 UTC.
 
 ## The Config file
 
@@ -538,7 +538,7 @@ If this is blank, then Refinery will not set the Honeycomb-specific headers for 
 - Not eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_METRICS_OTEL_API_KEY, HONEYCOMB_API_KEY`
+- Environment variable: `REFINERY_OTEL_METRICS_API_KEY, HONEYCOMB_API_KEY`
 
 ### `Dataset`
 
@@ -744,7 +744,7 @@ AvailableMemory is the amount of system memory available to the Refinery process
 This value will typically be set through an environment variable controlled by the container or deploy script.
 If set, then this must be a memory size and `Collections.maxAlloc` must not be defined to avoid unclear configuration.
 64-bit values are supported.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are also supported.
 
 - Eligible for live reload.
 - Type: `memorysize`
