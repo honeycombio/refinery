@@ -4,7 +4,7 @@ The Refinery `rules` file is a YAML file.
 
 ## Example
 
-Here is a simple example of a `rules` file:
+Here is a simple example of a `rules` file (for a complete example, [visit the refinery GitHub repo](https://github.com/honeycombio/refinery/blob/main/rules_complete.yaml)):
 
 ```yaml
 RulesVersion: 2
@@ -503,6 +503,7 @@ Errors in conversion will result in the comparison evaluating to `false`.
 This is especially useful when a field like `http status code` may be rendered as strings by some environments and as numbers or booleans by others.
 
 - Type: `string`
+- Values: one of `bool`, `int`, `float`, or `string`
 
 ## Total Throughput Sampler
 
