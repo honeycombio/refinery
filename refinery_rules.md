@@ -4,7 +4,7 @@ The Refinery `rules` file is a YAML file.
 
 ## Example
 
-Here is a simple example of a `rules` file (for a complete example, [visit the refinery GitHub repo](https://github.com/honeycombio/refinery/blob/main/rules_complete.yaml)):
+Here is a simple example of a `rules` file:
 
 ```yaml
 RulesVersion: 2
@@ -60,7 +60,7 @@ The Dynamic Sampler (`DynamicSampler`) is the basic Dynamic Sampler implementati
 Most installations will find the EMA Dynamic Sampler to be a better choice.
 This sampler collects the values of a number of fields from a trace and uses them to form a key.
 This key is handed to the standard dynamic sampler algorithm, which generates a sample rate based on the frequency with which that key has appeared during the previous `ClearFrequency`.
-See https://github.com/honeycombio/dynsampler-go for more detail on the mechanics of the Dynamic Sampler.
+See <https://github.com/honeycombio/dynsampler-go> for more detail on the mechanics of the Dynamic Sampler.
 This sampler uses the `AvgSampleRate` algorithm from that package.
 
 ### `SampleRate`
@@ -321,7 +321,8 @@ Windowed Throughput Sampler (`WindowedThroughputSampler`) is an enhanced version
 Just like the `TotalThroughput` Sampler, `WindowedThroughputSampler` attempts to meet the goal of fixed number of events per second sent to Honeycomb.
 The original throughput sampler updates the sampling rate every "ClearFrequency" seconds.
 While this parameter is configurable, it suffers from the following tradeoff:
-  - Decreasing it is more responsive to load spikes, but with the
+
+- Decreasing it is more responsive to load spikes, but with the
   cost of making the sampling decision on less data.
 - Increasing it is less responsive to load spikes, but sample rates
   will be more stable because they are made with more data.
@@ -512,9 +513,9 @@ This sampler is **deprecated** and present mainly for compatibility.
 Consider using either `EMAThroughputSampler` or `WindowedThroughputSampler` instead.
 If your key space is sharded across different servers, then this is a good method for making sure each server sends roughly the same volume of content to Honeycomb.
 It performs poorly when the active keyspace is very large.
-`GoalThroughputPerSec` * `ClearFrequency` defines the upper limit of the number of keys that can be reported and stay under the goal, but with that many keys, you'll only get one event per key per `ClearFrequencySec`, which is very coarse.
+`GoalThroughputPerSec` *`ClearFrequency` defines the upper limit of the number of keys that can be reported and stay under the goal, but with that many keys, you'll only get one event per key per `ClearFrequencySec`, which is very coarse.
 Aim for at least 1 event per key per sec to 1 event per key per 10sec to get reasonable data.
-In other words, the number of active keys should be less than 10 * `GoalThroughputPerSec`.
+In other words, the number of active keys should be less than 10* `GoalThroughputPerSec`.
 
 ### `GoalThroughputPerSec`
 
@@ -564,4 +565,3 @@ The number of spans is exact, so if there are normally small variations in trace
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 - Type: `bool`
-
