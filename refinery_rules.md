@@ -504,7 +504,6 @@ Errors in conversion will result in the comparison evaluating to `false`.
 This is especially useful when a field like `http status code` may be rendered as strings by some environments and as numbers or booleans by others.
 
 - Type: `string`
-- Values: one of `bool`, `int`, `float`, or `string`
 
 ## Total Throughput Sampler
 
