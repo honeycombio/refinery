@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -52,6 +53,7 @@ type StressRelief struct {
 	upperBound      uint64
 	stressLevel     uint
 	reason          string
+	formula         string
 	stressed        bool
 	stayOnUntil     time.Time
 	minDuration     time.Duration
@@ -268,11 +270,13 @@ func (s *StressRelief) Recalc() {
 
 	var level float64
 	var reason string
+	var formula string
 	for _, c := range s.calcs {
 		stress := 100 * s.algorithms[c.Algorithm](c.Numerator, c.Denominator)
 		if stress > level {
 			level = stress
 			reason = c.Reason
+			formula = fmt.Sprintf("%s(%v/%v)=%v", c.Algorithm, c.Numerator, c.Denominator, stress)
 		}
 	}
 	s.Logger.Debug().WithField("stress_level", level).WithField("reason", reason).Logf("calculated stress level")
@@ -282,6 +286,7 @@ func (s *StressRelief) Recalc() {
 
 	s.stressLevel = uint(level)
 	s.reason = reason
+	s.formula = formula
 
 	switch s.mode {
 	case Never:
@@ -292,7 +297,7 @@ func (s *StressRelief) Recalc() {
 		// If it's off, should we activate it?
 		if !s.stressed && s.stressLevel >= s.activateLevel {
 			s.stressed = true
-			s.Logger.Warn().WithField("stress_level", s.stressLevel).WithField("reason", s.reason).Logf("StressRelief has been activated")
+			s.Logger.Warn().WithField("stress_level", s.stressLevel).WithField("stress_formula", s.formula).WithField("reason", s.reason).Logf("StressRelief has been activated")
 		}
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
