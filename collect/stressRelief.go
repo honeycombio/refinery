@@ -279,7 +279,7 @@ func (s *StressRelief) Recalc() {
 			formula = fmt.Sprintf("%s(%v/%v)=%v", c.Algorithm, c.Numerator, c.Denominator, stress)
 		}
 	}
-	s.Logger.Debug().WithField("stress_level", level).WithField("reason", reason).Logf("calculated stress level")
+	s.Logger.Debug().WithField("stress_level", level).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
