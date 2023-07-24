@@ -340,7 +340,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 						}
 					}
 				}
-			case "required", "requiredInGroup", "requiredWith":
+			case "required", "requiredInGroup", "requiredWith", "conflictsWith":
 				// these are handled below
 			default:
 				panic("unknown validation type: " + validation.Type)
@@ -368,8 +368,15 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					// if the named key is specified then this one must be also
 					otherName := validation.Arg.(string)
 					if _, ok := flatdata[group.Name+"."+otherName]; ok {
-						if _, ok := flatdata[group.Name+"."+field.Name]; !ok {
+						if _, ok := flatdata[group.Name+"."+field.Name]; !ok && m.GetField(group.Name+"."+field.Name).Default == nil {
 							errors = append(errors, fmt.Sprintf("the group %s includes %s, which also requires %s", group.Name, otherName, field.Name))
+						}
+					}
+				case "conflictsWith":
+					otherName := validation.Arg.(string)
+					if _, ok := flatdata[group.Name+"."+otherName]; ok {
+						if _, ok := flatdata[group.Name+"."+field.Name]; ok {
+                            errors = append(errors, fmt.Sprintf("the group %s includes %s, which conflicts with %s", group.Name, otherName, field.Name))
 						}
 					}
 				}

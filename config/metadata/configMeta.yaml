@@ -935,7 +935,8 @@ groups:
           allocation and `MaxAlloc` will be used instead. If set, then this must
           be a memory size. 64-bit values are supported. Sizes with standard
           unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, 
-          etc.) are also supported.
+          etc.) are also supported. If set, `Collections.maxAlloc` must not be
+          defined.
 
       - name: MaxMemoryPercentage
         type: percentage
@@ -957,7 +958,6 @@ groups:
           allocated bytes to this calculated value. If allocation is too high,
           then traces will be ejected from the cache early to reduce memory.
           Useful values for this setting are generally in the range of 70-90.
-          If this value is `0`, then `MaxAlloc` will be used.
 
       - name: MaxAlloc
         v1group: InMemCollector
@@ -966,11 +966,15 @@ groups:
         valuetype: memorysize
         default: 0
         reload: true
+        validatons:
+          - type: conflictsWith
+            arg: AvailableMemory
         summary: is the maximum number of bytes that should be allocated by the Collector.
         description: >
           If set, then this must be a memory size. 64-bit values are supported.
           Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units
           (`M`, `Gi`, etc) are also supported. See `MaxMemory` for more details.
+          If set, `Collections.AvailableMemory` must not be defined.
 
   - name: BufferSizes
     title: "Buffer Sizes"
