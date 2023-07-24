@@ -742,8 +742,7 @@ The number of traces in the cache should be many multiples (100x to 1000x) of th
 AvailableMemory is the amount of system memory available to the Refinery process.
 
 This value will typically be set through an environment variable controlled by the container or deploy script.
-If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
-If set, then this must be a memory size.
+If set, then this must be a memory size and `Collections.maxAlloc` must not be defined to avoid unclear configuration.
 64-bit values are supported.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
 
@@ -761,7 +760,6 @@ If nonzero, then it must be an integer value between 1 and 100, representing the
 If set to a non-zero value, then once per tick (see `SendTicker`) the collector will compare total allocated bytes to this calculated value.
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
-If this value is `0`, then `MaxAlloc` will be used.
 
 - Eligible for live reload.
 - Type: `percentage`
@@ -772,7 +770,7 @@ If this value is `0`, then `MaxAlloc` will be used.
 
 MaxAlloc is the maximum number of bytes that should be allocated by the Collector.
 
-If set, then this must be a memory size.
+If set, then this must be a memory size and `Collections.AvailableMemory` must not be defined to avoid unclear configuration.
 64-bit values are supported.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
 See `MaxMemory` for more details.
