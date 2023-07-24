@@ -376,7 +376,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					otherName := validation.Arg.(string)
 					if _, ok := flatdata[group.Name+"."+otherName]; ok {
 						if _, ok := flatdata[group.Name+"."+field.Name]; ok {
-                            errors = append(errors, fmt.Sprintf("the group %s includes %s, which conflicts with %s", group.Name, otherName, field.Name))
+							errors = append(errors, fmt.Sprintf("the group %s includes %s, which conflicts with %s", group.Name, otherName, field.Name))
 						}
 					}
 				}
