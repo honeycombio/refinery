@@ -529,10 +529,10 @@ func (f *fileConfig) monitor() {
 			f.mainHash = cfg.mainHash
 			f.rulesConfig = cfg.rulesConfig
 			f.rulesHash = cfg.rulesHash
+			f.mux.Unlock() // can't defer -- routine never ends, and callbacks will deadlock
 			for _, cb := range f.callbacks {
 				cb()
 			}
-			f.mux.Unlock() // can't defer since the goroutine never ends
 		}
 	}
 }
