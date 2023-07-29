@@ -120,9 +120,9 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 				reason += rule.Name
+				s.Metrics.Histogram(s.prefix+"sample_rate", float64(rate))
 			}
 
-			s.Metrics.Histogram(s.prefix+"sample_rate", float64(rule.SampleRate))
 			if keep {
 				s.Metrics.Increment(s.prefix + "num_kept")
 			} else {
