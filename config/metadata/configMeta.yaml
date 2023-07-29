@@ -160,8 +160,7 @@ groups:
           accepted. Events arriving with API keys not in the `ReceiveKeys` list
           will be rejected with an HTTP `401` error.
 
-          If `false`, then all traffic is accepted and `ReceiveKeys` is
-          ignored. Must be specified if `ReceiveKeys` is specified.
+          If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
 
   - name: RefineryTelemetry
     title: "Refinery Telemetry"
@@ -935,7 +934,7 @@ groups:
           allocation and `MaxAlloc` will be used instead. If set, then this must
           be a memory size. 64-bit values are supported. Sizes with standard
           unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, 
-          etc.) are also supported. If set, `Collections.maxAlloc` must not be
+          etc.) are also supported. If set, `Collections.MaxAlloc` must not be
           defined.
 
       - name: MaxMemoryPercentage

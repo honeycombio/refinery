@@ -373,6 +373,8 @@ func (m *Metadata) Validate(data map[string]any) []string {
 						}
 					}
 				case "conflictsWith":
+					// if both values are defined then report an error. Default values can also lead to conflicts and should not be
+					// used with this validation.
 					otherName := validation.Arg.(string)
 					if _, ok := flatdata[group.Name+"."+otherName]; ok {
 						if _, ok := flatdata[group.Name+"."+field.Name]; ok {
