@@ -339,7 +339,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
-								Operator: "exists",
+								Operator: config.Exists,
 							},
 						},
 					},
@@ -393,7 +393,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
-								Operator: "starts-with",
+								Operator: config.StartsWith,
 								Value:    "honey",
 							},
 						},
@@ -421,7 +421,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
-								Operator: "contains",
+								Operator: config.Contains,
 								Value:    "eyco",
 							},
 						},
@@ -449,7 +449,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
-								Operator: "does-not-contain",
+								Operator: config.DoesNotContain,
 								Value:    "noteyco",
 							},
 						},
@@ -724,7 +724,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
-								Operator: "exists",
+								Operator: config.Exists,
 							},
 						},
 					},
@@ -1203,7 +1203,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "contains",
+								Operator: config.Contains,
 								Value:    "ru",
 								Datatype: "string",
 							},

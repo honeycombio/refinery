@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Define some constants for comparison operators
+// Define some constants for rule comparison operators
 const (
 	NEQ = "!="
 	EQ  = "="
@@ -14,6 +14,15 @@ const (
 	LT  = "<"
 	GTE = ">="
 	LTE = "<="
+)
+
+// and also the rule keyword operators
+const (
+	Contains       = "contains"
+	DoesNotContain = "does-not-contain"
+	StartsWith     = "starts-with"
+	Exists         = "exists"
+	NotExists      = "not-exists"
 )
 
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
@@ -223,19 +232,19 @@ func (r *RulesBasedSamplerCondition) String() string {
 
 func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 	switch r.Operator {
-	case "exists":
+	case Exists:
 		r.Matches = func(value any, exists bool) bool {
 			return exists
 		}
 		return nil
-	case "not-exists":
+	case NotExists:
 		r.Matches = func(value any, exists bool) bool {
 			return !exists
 		}
 		return nil
 	case NEQ, EQ, GT, LT, LTE, GTE:
 		return setCompareOperators(r, r.Operator)
-	case "starts-with", "contains", "does-not-contain":
+	case StartsWith, Contains, DoesNotContain:
 		err := setMatchStringBasedOperators(r, r.Operator)
 		if err != nil {
 			return err
@@ -516,7 +525,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 	}
 
 	switch condition {
-	case "starts-with":
+	case StartsWith:
 		r.Matches = func(spanValue any, exists bool) bool {
 			s, ok := tryConvertToString(spanValue)
 			if ok {
@@ -524,7 +533,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 			}
 			return false
 		}
-	case "contains":
+	case Contains:
 		r.Matches = func(spanValue any, exists bool) bool {
 			s, ok := tryConvertToString(spanValue)
 			if ok {
@@ -532,7 +541,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 			}
 			return false
 		}
-	case "does-not-contain":
+	case DoesNotContain:
 		r.Matches = func(spanValue any, exists bool) bool {
 			s, ok := tryConvertToString(spanValue)
 			if ok {
