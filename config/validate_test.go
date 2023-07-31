@@ -152,7 +152,22 @@ groups:
         validations:
           - type: requiredWith
             arg: FieldB
+      - name: FieldE
+        type: int
+        validations:
+          - type: requiredWith
+            arg: FieldA
+        default: 100
 
+  - name: ConflictTest
+    fields:
+      - name: FieldA
+        type: int
+      - name: FieldB
+        type: int
+        validations:
+          - type: conflictsWith
+            arg: FieldA
 
   - name: Traces
     fields:
@@ -276,8 +291,10 @@ func Test_validate(t *testing.T) {
 		{"good require A", mm("RequireTest.FieldA", 1, "RequireTest.FieldC", 3), ""},
 		{"good require B", mm("RequireTest.FieldB", 2, "RequireTest.FieldC", 3, "RequireTest.FieldD", 4), ""},
 		{"good require C", mm("RequireTest.FieldC", 3), ""},
+        {"good require E with default", mm("RequireTest.FieldA", 2, "RequireTest.FieldC", 3), ""},
 		{"bad require", mm("RequireTest.FieldA", 1), "the group RequireTest is missing its required field FieldC"},
-		{"bad require", mm("RequireTest.FieldA", 1, "RequireTest.FieldB", 2), "the group RequireTest includes FieldB, which also requires FieldD"},
+        {"bad conflicts with A", mm("ConflictTest.FieldA", 2, "ConflictTest.FieldB", 3), "the group ConflictTest includes FieldA, which conflicts with FieldB"},
+        {"good conflicts with A", mm("ConflictTest.FieldA", 2), ""},
 		{"good slice elementType", mm("Traces.AStringArray", []any{"0.0.0.0:8080", "192.168.1.1:8080"}), ""},
 		{"bad slice elementType", mm("Traces.AStringArray", []any{"0.0.0.0"}), "field Traces.AStringArray[0] (0.0.0.0) must be a hostport: address 0.0.0.0: missing port in address"},
 		{"good map elementType", mm("Traces.AStringMap", map[string]any{"k": "v"}), ""},
