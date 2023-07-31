@@ -607,6 +607,8 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	if key != "" {
 		logFields["sample_key"] = key
 	}
+	// This will observe sample rate attempts even if the trace is dropped
+	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
 	i.sampleTraceCache.Record(trace, shouldSend)
 
@@ -617,6 +619,8 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		return
 	}
 	i.Metrics.Increment("trace_send_kept")
+	// This will observe sample rate decisions only if the trace is kept
+	i.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
