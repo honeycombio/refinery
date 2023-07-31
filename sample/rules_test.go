@@ -29,7 +29,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(1),
 							},
 						},
@@ -57,7 +57,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">",
+								Operator: config.GT,
 								Value:    int64(1),
 							},
 						},
@@ -85,7 +85,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "<",
+								Operator: config.LT,
 								Value:    int64(2),
 							},
 						},
@@ -113,7 +113,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "<",
+								Operator: config.LT,
 								Value:    2.2,
 							},
 						},
@@ -141,7 +141,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">",
+								Operator: config.GT,
 								Value:    2.2,
 							},
 						},
@@ -174,17 +174,17 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "<=",
+								Operator: config.LTE,
 								Value:    2.2,
 							},
 							{
 								Field:    "test",
-								Operator: ">=",
+								Operator: config.GTE,
 								Value:    2.2,
 							},
 							{
 								Field:    "test_two",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    true,
 							},
 						},
@@ -220,7 +220,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">",
+								Operator: config.GT,
 								Value:    int64(2),
 							},
 						},
@@ -269,12 +269,12 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(1),
 							},
 							{
 								Field:    "second",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(2),
 							},
 						},
@@ -311,7 +311,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "first",
-								Operator: "!=",
+								Operator: config.NEQ,
 								Value:    int64(10),
 							},
 						},
@@ -477,7 +477,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">",
+								Operator: config.GT,
 								Value:    int(1),
 							},
 						},
@@ -505,7 +505,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "meta.span_count",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int(2),
 							},
 						},
@@ -548,7 +548,7 @@ func TestRules(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "meta.span_count",
-								Operator: ">=",
+								Operator: config.GTE,
 								Value:    int(2),
 							},
 						},
@@ -634,7 +634,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    "a",
 							},
 						},
@@ -665,7 +665,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test.test1",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    "a",
 							},
 						},
@@ -788,7 +788,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "rule_test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(1),
 							},
 						},
@@ -868,7 +868,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "rule_test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(1),
 							},
 						},
@@ -1006,12 +1006,12 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 								Conditions: []*config.RulesBasedSamplerCondition{
 									{
 										Field:    "rule_test",
-										Operator: "=",
+										Operator: config.EQ,
 										Value:    int64(1),
 									},
 									{
 										Field:    "http.status_code",
-										Operator: "=",
+										Operator: config.EQ,
 										Value:    "200",
 									},
 								},
@@ -1058,7 +1058,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(1),
 								Datatype: "int",
 							},
@@ -1087,7 +1087,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    float64(1.01),
 								Datatype: "float",
 							},
@@ -1116,7 +1116,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    "foo",
 								Datatype: "string",
 							},
@@ -1145,7 +1145,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    "true",
 								Datatype: "string",
 							},
@@ -1174,7 +1174,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    true,
 								Datatype: "bool",
 							},
@@ -1232,7 +1232,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    int64(10),
 								Datatype: "int",
 							},
@@ -1261,7 +1261,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "<",
+								Operator: config.LT,
 								Value:    float64(100.01),
 								Datatype: "float",
 							},
@@ -1290,7 +1290,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    "500",
 								Datatype: "string",
 							},
@@ -1319,7 +1319,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "=",
+								Operator: config.EQ,
 								Value:    500,
 								Datatype: "int",
 							},
@@ -1348,7 +1348,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">",
+								Operator: config.GT,
 								Value:    "1",
 								Datatype: "string",
 							},
@@ -1377,7 +1377,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">",
+								Operator: config.GT,
 								Value:    "10.3",
 								Datatype: "string",
 							},
@@ -1406,7 +1406,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "<=",
+								Operator: config.LTE,
 								Value:    4.13,
 								Datatype: "float",
 							},
@@ -1435,7 +1435,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: ">=",
+								Operator: config.GTE,
 								Value:    4.13,
 								Datatype: "float",
 							},
@@ -1464,7 +1464,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "!=",
+								Operator: config.NEQ,
 								Value:    "notRightValue",
 								Datatype: "string",
 							},
@@ -1493,7 +1493,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "!=",
+								Operator: config.NEQ,
 								Value:    "667",
 								Datatype: "string",
 							},
@@ -1522,7 +1522,7 @@ func TestRulesDatatypes(t *testing.T) {
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "test",
-								Operator: "!=",
+								Operator: config.NEQ,
 								Value:    int64(1),
 								Datatype: "int",
 							},
