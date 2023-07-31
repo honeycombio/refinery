@@ -495,7 +495,7 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 		switch condition {
 		case NEQ:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n := tryConvertToBool(spanValue); exists && n {
+				if n := tryConvertToBool(spanValue); exists {
 					return n != conditionValue
 				}
 				return false
@@ -503,7 +503,7 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			return nil
 		case EQ:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n := tryConvertToBool(spanValue); exists && n {
+				if n := tryConvertToBool(spanValue); exists {
 					return n == conditionValue
 				}
 				return false
