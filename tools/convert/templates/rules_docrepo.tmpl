@@ -109,7 +109,7 @@ Example: `{{ $field.Example }}`
 
 {{- end }}
 {{ if eq $field.ValueType "choice" -}}
-- {{ printf "Options: %s" (join $field.Choices "`, `") }}
-{{- end }}
+- {{ printf "Options: `%s`" (join $field.Choices "`, `") }}
+{{ end }}
 {{- println -}}
 {{- end -}}
