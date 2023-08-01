@@ -66,14 +66,6 @@ Samplers:
                     - Field: http.route
                       Operator: =
                       Value: /health-check
-                - Name: drop incomplete traces from the buggy service
-                  Drop: true
-                  Conditions:
-                    - Operator: has-root-span
-                      Value: false
-                    - Field: service.name
-                      Operator: =
-                      Value: buggy-service
                 - Name: keep slow 500 errors
                   SampleRate: 1
                   Conditions:
@@ -109,6 +101,14 @@ Samplers:
                     - Field: trace.parent_id
                       Operator: =
                       Value: root
+                - Name: drop incomplete traces from the buggy service
+                  Drop: true
+                  Conditions:
+                    - Operator: has-root-span
+                      Value: false
+                    - Field: service.name
+                      Operator: =
+                      Value: buggy-service
                 # This is the default rule (with no conditions) and therefore
                 # sets the sample rate used if no other rule matches.
                 - Name: default rule
