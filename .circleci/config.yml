@@ -64,7 +64,7 @@ jobs:
   test:
     docker:
       - image: cimg/go:1.19
-      - image: redis:6
+      - image: redis:6.2
     steps:
       - checkout
       - restore_cache:
