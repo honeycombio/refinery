@@ -119,6 +119,7 @@ func (o *OTelMetrics) Start() error {
 		resource.WithAttributes(resource.Default().Attributes()...),
 		resource.WithAttributes(attribute.KeyValue{Key: "service.name", Value: attribute.StringValue("refinery")}),
 		resource.WithAttributes(attribute.KeyValue{Key: "service.version", Value: attribute.StringValue(o.Version)}),
+		resource.WithAttributes(attribute.KeyValue{Key: "host.name", Value: attribute.StringValue(hostname)}),
 		resource.WithAttributes(attribute.KeyValue{Key: "hostname", Value: attribute.StringValue(hostname)}),
 	)
 
@@ -151,10 +152,9 @@ func (o *OTelMetrics) Start() error {
 	name = "memory_inuse"
 	// This is just reporting the gauge we already track under a different name.
 	var fmem metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-		o.lock.RLock()
+		// this is an 'ok' value, not an error, so it's safe to ignore it.
 		v, _ := o.Get("memory_heap_allocation")
 		result.Observe(v)
-		o.lock.RUnlock()
 		return nil
 	}
 	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fmem))
