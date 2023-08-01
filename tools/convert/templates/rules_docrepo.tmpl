@@ -7,7 +7,8 @@ It was automatically generated {{ now }}.
 ## The Rules file
 
 The rules file is a YAML file.
-Here is a simple example of a rules file:
+Below is a simple example of a `rules` file.
+View a [complete example](https://github.com/honeycombio/refinery/blob/main/rules_complete.yaml).
 
 ```yaml
 RulesVersion: 2
@@ -108,8 +109,7 @@ Example: `{{ $field.Example }}`
 
 {{- end }}
 {{ if eq $field.ValueType "choice" -}}
-{{ printf "Options: %s" (join $field.Choices " ") }}
-
-{{- end }}
+- {{ printf "Options: `%s`" (join $field.Choices "`, `") }}
+{{ end }}
 {{- println -}}
 {{- end -}}

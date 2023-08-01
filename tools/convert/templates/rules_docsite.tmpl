@@ -5,7 +5,8 @@ The Refinery `rules` file is a YAML file.
 
 ## Example
 
-Here is a simple example of a `rules` file:
+Below is a simple example of a `rules` file.
+For a complete example, [visit the Refinery GitHub repository](https://github.com/honeycombio/refinery/blob/main/rules_complete.yaml).
 
 ```yaml
 RulesVersion: 2
@@ -80,7 +81,7 @@ The remainder of this page describes the samplers that can be used within the `S
 {{- println -}}
 {{- end -}}
 {{- if eq $field.ValueType "choice" -}}
-- {{ printf "Options: %s" (join $field.Choices " ") }}
+- {{ printf "Options: `%s`" (join $field.Choices "`, `") }}
 {{- println -}}
 {{- end }}
 {{- println -}}

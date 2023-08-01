@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-07-17 at 17:49:09 UTC.
+It was automatically generated on 2023-08-01 at 15:26:34 UTC.
 
 ## The Config file
 
@@ -158,7 +158,6 @@ AcceptOnlyListedKeys is a boolean flag that causes events arriving with API keys
 If `true`, then only traffic using the keys listed in `ReceiveKeys` is accepted.
 Events arriving with API keys not in the `ReceiveKeys` list will be rejected with an HTTP `401` error.
 If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
-Must be specified if `ReceiveKeys` is specified.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -742,9 +741,11 @@ The number of traces in the cache should be many multiples (100x to 1000x) of th
 AvailableMemory is the amount of system memory available to the Refinery process.
 
 This value will typically be set through an environment variable controlled by the container or deploy script.
-If set, then this must be a memory size and `Collections.maxAlloc` must not be defined to avoid unclear configuration.
+If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
+If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are also supported.
+If set, `Collections.MaxAlloc` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -770,10 +771,11 @@ Useful values for this setting are generally in the range of 70-90.
 
 MaxAlloc is the maximum number of bytes that should be allocated by the Collector.
 
-If set, then this must be a memory size and `Collections.AvailableMemory` must not be defined to avoid unclear configuration.
+If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
 See `MaxMemory` for more details.
+If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
