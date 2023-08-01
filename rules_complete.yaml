@@ -66,6 +66,14 @@ Samplers:
                     - Field: http.route
                       Operator: =
                       Value: /health-check
+                - Name: drop incomplete traces from the buggy service
+                  Drop: true
+                  Conditions:
+                    - Operator: has-root-span
+                      Value: false
+                    - Field: service.name
+                      Operator: =
+                      Value: buggy-service
                 - Name: keep slow 500 errors
                   SampleRate: 1
                   Conditions:
