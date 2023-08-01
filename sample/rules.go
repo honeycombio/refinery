@@ -226,33 +226,33 @@ func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value i
 	switch exists {
 	case true:
 		switch condition.Operator {
-		case "exists":
+		case config.Exists:
 			match = exists
-		case "!=":
+		case config.NEQ:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison != equal
 			}
-		case "=":
+		case config.EQ:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison == equal
 			}
-		case ">":
+		case config.GT:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison == more
 			}
-		case ">=":
+		case config.GTE:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison == more || comparison == equal
 			}
-		case "<":
+		case config.LT:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison == less
 			}
-		case "<=":
+		case config.LTE:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison == less || comparison == equal
 			}
-		case "starts-with":
+		case config.StartsWith:
 			switch a := value.(type) {
 			case string:
 				switch b := condition.Value.(type) {
@@ -260,7 +260,7 @@ func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value i
 					match = strings.HasPrefix(a, b)
 				}
 			}
-		case "contains":
+		case config.Contains:
 			switch a := value.(type) {
 			case string:
 				switch b := condition.Value.(type) {
@@ -268,7 +268,7 @@ func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value i
 					match = strings.Contains(a, b)
 				}
 			}
-		case "does-not-contain":
+		case config.DoesNotContain:
 			switch a := value.(type) {
 			case string:
 				switch b := condition.Value.(type) {
@@ -279,7 +279,7 @@ func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value i
 		}
 	case false:
 		switch condition.Operator {
-		case "not-exists":
+		case config.NotExists:
 			match = !exists
 		}
 	}
