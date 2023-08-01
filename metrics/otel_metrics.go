@@ -3,6 +3,8 @@ package metrics
 import (
 	"context"
 	"net/url"
+	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -105,10 +107,20 @@ func (o *OTelMetrics) Start() error {
 		return err
 	}
 
+	// Fetch the hostname once and add it as an attribute to all metrics
+	var hostname string
+	if hn, err := os.Hostname(); err != nil {
+		hostname = "unknown: " + err.Error()
+	} else {
+		hostname = hn
+	}
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(resource.Default().Attributes()...),
 		resource.WithAttributes(attribute.KeyValue{Key: "service.name", Value: attribute.StringValue("refinery")}),
 		resource.WithAttributes(attribute.KeyValue{Key: "service.version", Value: attribute.StringValue(o.Version)}),
+		resource.WithAttributes(attribute.KeyValue{Key: "host.name", Value: attribute.StringValue(hostname)}),
+		resource.WithAttributes(attribute.KeyValue{Key: "hostname", Value: attribute.StringValue(hostname)}),
 	)
 
 	if err != nil {
@@ -124,6 +136,45 @@ func (o *OTelMetrics) Start() error {
 		sdkmetric.WithResource(res),
 	)
 	o.meter = provider.Meter("otelmetrics")
+
+	// These metrics are dynamic fields that should always be collected
+	name := "num_goroutines"
+	var fgo metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
+		result.Observe(float64(runtime.NumGoroutine()))
+		return nil
+	}
+	g, err := o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fgo))
+	if err != nil {
+		return err
+	}
+	o.gauges[name] = g
+
+	name = "memory_inuse"
+	// This is just reporting the gauge we already track under a different name.
+	var fmem metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
+		// this is an 'ok' value, not an error, so it's safe to ignore it.
+		v, _ := o.Get("memory_heap_allocation")
+		result.Observe(v)
+		return nil
+	}
+	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fmem))
+	if err != nil {
+		return err
+	}
+	o.gauges[name] = g
+
+	startTime := time.Now()
+	name = "process_uptime_seconds"
+	var fup metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
+		result.Observe(float64(time.Since(startTime) / time.Second))
+		return nil
+	}
+	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fup))
+	if err != nil {
+		return err
+	}
+	o.gauges[name] = g
+
 	return nil
 }
 
