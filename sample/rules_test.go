@@ -591,6 +591,99 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: false,
 			ExpectedRate: 0,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Check that root span is missing",
+						Drop:       true,
+						SampleRate: 0,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Operator: config.HasRootSpan,
+								Value:    false,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "654321",
+							"trace.parent_id": "54321",
+							"test":            int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54321",
+							"test":            int64(3),
+						},
+					},
+				},
+			},
+			ExpectedName: "Check that root span is missing",
+			ExpectedKeep: false,
+			ExpectedRate: 0,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Check that root span is present",
+						SampleRate: 99,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Operator: config.HasRootSpan,
+								Value:    true,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "54321",
+							"meta.span_count": int64(2),
+							"test":            int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "654321",
+							"trace.parent_id": "54321",
+							"test":            int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54321",
+							"test":            int64(3),
+						},
+					},
+				},
+			},
+			ExpectedName: "Check that root span is present",
+			ExpectedKeep: true,
+			ExpectedRate: 99,
+		},
 	}
 
 	for _, d := range data {
@@ -604,6 +697,9 @@ func TestRules(t *testing.T) {
 
 		for _, span := range d.Spans {
 			trace.AddSpan(span)
+			if _, ok := span.Data["trace.parent_id"]; ok == false {
+				trace.RootSpan = span
+			}
 		}
 
 		rate, keep, reason, key := sampler.GetSampleRate(trace)

@@ -64,14 +64,13 @@ jobs:
   test:
     docker:
       - image: cimg/go:1.19
-      - image: redis:6
+      - image: redis:6.2
     steps:
       - checkout
       - restore_cache:
           keys:
             - v1-dockerize-{{ checksum "Makefile" }}
             - v1-dockerize-
-      - run: make verify-licenses
       - run: make dockerize
       - save_cache:
           key: v1-dockerize-{{ checksum "Makefile" }}
@@ -80,6 +79,7 @@ jobs:
       - restore_cache:
           keys:
             - v3-go-mod-{{ checksum "go.sum" }}
+      - run: make verify-licenses
       - run: make test
       - save_cache:
           key: v3-go-mod-{{ checksum "go.sum" }}

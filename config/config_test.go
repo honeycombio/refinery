@@ -338,7 +338,7 @@ func TestReadRulesConfig(t *testing.T) {
 	assert.NoError(t, err)
 	switch r := d.(type) {
 	case *RulesBasedSamplerConfig:
-		assert.Len(t, r.Rules, 5)
+		assert.Len(t, r.Rules, 6)
 
 		var rule *RulesBasedSamplerRule
 
@@ -356,7 +356,7 @@ func TestReadRulesConfig(t *testing.T) {
 		assert.Equal(t, 5, rule.SampleRate)
 		assert.Equal(t, "span", rule.Scope)
 
-		rule = r.Rules[4]
+		rule = r.Rules[5]
 		assert.Equal(t, 10, rule.SampleRate)
 		assert.Equal(t, "", rule.Scope)
 

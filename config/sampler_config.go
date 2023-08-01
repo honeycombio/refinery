@@ -23,6 +23,7 @@ const (
 	StartsWith     = "starts-with"
 	Exists         = "exists"
 	NotExists      = "not-exists"
+	HasRootSpan    = "has-root-span"
 )
 
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
@@ -249,6 +250,9 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 		if err != nil {
 			return err
 		}
+	case HasRootSpan:
+		// this is evaluated at the trace level, so we don't need to do anything here
+		return nil
 	default:
 		return fmt.Errorf("unknown operator '%s'", r.Operator)
 	}
@@ -302,7 +306,7 @@ func tryConvertToString(v any) (string, bool) {
 	return fmt.Sprintf("%v", v), true
 }
 
-func tryConvertToBool(v any) bool {
+func TryConvertToBool(v any) bool {
 	value, ok := tryConvertToString(v)
 	if !ok {
 		return false
@@ -490,12 +494,12 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			return nil
 		}
 	case "bool":
-		conditionValue := tryConvertToBool(r.Value)
+		conditionValue := TryConvertToBool(r.Value)
 
 		switch condition {
 		case NEQ:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n := tryConvertToBool(spanValue); exists {
+				if n := TryConvertToBool(spanValue); exists {
 					return n != conditionValue
 				}
 				return false
@@ -503,7 +507,7 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			return nil
 		case EQ:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n := tryConvertToBool(spanValue); exists {
+				if n := TryConvertToBool(spanValue); exists {
 					return n == conditionValue
 				}
 				return false

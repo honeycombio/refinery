@@ -149,6 +149,20 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 	var matched int
 
 	for _, condition := range rule.Conditions {
+		// This condition is evaluated for the trace as a whole.
+		// If RootSpan is nil, it means the trace timer has fired or the trace has been
+		// ejected from the cache before the root span has arrived.
+		if condition.Operator == config.HasRootSpan {
+			if (t.RootSpan != nil) == config.TryConvertToBool(condition.Value) {
+				matched++
+				continue
+			} else {
+				// if HasRootSpan is one of the conditions and it didn't match,
+				// there's no need to check the rest of the conditions.
+				return false
+			}
+		}
+
 	span:
 		for _, span := range t.GetSpans() {
 			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
