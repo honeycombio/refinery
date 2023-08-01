@@ -4,7 +4,8 @@ The Refinery `rules` file is a YAML file.
 
 ## Example
 
-Here is a simple example of a `rules` file:
+Below is a simple example of a `rules` file.
+For a complete example, [visit the Refinery GitHub repository](https://github.com/honeycombio/refinery/blob/main/rules_complete.yaml).
 
 ```yaml
 RulesVersion: 2
@@ -321,7 +322,7 @@ Windowed Throughput Sampler (`WindowedThroughputSampler`) is an enhanced version
 Just like the `TotalThroughput` Sampler, `WindowedThroughputSampler` attempts to meet the goal of fixed number of events per second sent to Honeycomb.
 The original throughput sampler updates the sampling rate every "ClearFrequency" seconds.
 While this parameter is configurable, it suffers from the following tradeoff:
-- Decreasing it is more responsive to load spikes, but with the
+  - Decreasing it is more responsive to load spikes, but with the
   cost of making the sampling decision on less data.
 - Increasing it is less responsive to load spikes, but sample rates
   will be more stable because they are made with more data.
@@ -563,3 +564,4 @@ The number of spans is exact, so if there are normally small variations in trace
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 - Type: `bool`
+

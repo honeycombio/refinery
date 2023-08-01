@@ -135,7 +135,6 @@ This list only applies to span traffic - other Honeycomb API actions will be pro
 If `true`, then only traffic using the keys listed in `ReceiveKeys` is accepted.
 Events arriving with API keys not in the `ReceiveKeys` list will be rejected with an HTTP `401` error.
 If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
-Must be specified if `ReceiveKeys` is specified.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -731,6 +730,7 @@ If this value is zero or not set, then `MaxMemory` cannot be used to calculate t
 If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are also supported.
+If set, `Collections.MaxAlloc` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -746,7 +746,6 @@ If nonzero, then it must be an integer value between 1 and 100, representing the
 If set to a non-zero value, then once per tick (see `SendTicker`) the collector will compare total allocated bytes to this calculated value.
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
-If this value is `0`, then `MaxAlloc` will be used.
 
 - Eligible for live reload.
 - Type: `percentage`
@@ -761,6 +760,7 @@ If set, then this must be a memory size.
 64-bit values are supported.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
 See `MaxMemory` for more details.
+If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`

@@ -1,12 +1,13 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-07-11 at 16:32:35 UTC.
+It was automatically generated on 2023-08-01 at 15:01:24 UTC.
 
 ## The Rules file
 
 The rules file is a YAML file.
-Here is a simple example of a rules file:
+Below is a simple example of a `rules` file.
+View a [complete example](https://github.com/honeycombio/refinery/blob/main/rules_complete.yaml).
 
 ```yaml
 RulesVersion: 2
