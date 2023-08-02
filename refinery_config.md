@@ -63,14 +63,14 @@ When Refinery receives telemetry using an API key associated with a Honeycomb Cl
 
 `ConfigReloadInterval` is the average interval between attempts at reloading the configuration file.
 
-A single instance of Refinery will attempt to read its configuration and check for changes at approximately this interval.
-This time is varied by a random amount to avoid all instances refreshing together.
-Within a cluster, Refinery will gossip information about new configuration so that all instances can reload at close to the same time.
-Disable this feature with a value of `0s`.
+Refinery will attempt to read its configuration and check for changes at approximately this interval.
+This time is varied by a random amount up to 10% to avoid all instances refreshing together.
+In installations where configuration changes are handled by restarting Refinery, which is often the case when using Kubernetes, disable this feature with a value of `0s`.
+If the config file is being loaded from a URL, it may be wise to increase this value to avoid overloading the file server.
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `5m`
+- Default: `15s`
 
 ## Network Configuration
 

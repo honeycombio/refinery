@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-08-01 at 15:26:34 UTC.
+It was automatically generated on 2023-08-02 at 02:45:17 UTC.
 
 ## The Rules file
 
@@ -528,7 +528,7 @@ String comparisons are case-sensitive.
 
 Type: `string`
 
-- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`
+- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`
 
 ### `Value`
 
