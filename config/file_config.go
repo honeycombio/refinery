@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"os"
 	"regexp"
@@ -216,7 +217,7 @@ type GeneralConfig struct {
 	ConfigurationVersion int      `yaml:"ConfigurationVersion"`
 	MinRefineryVersion   string   `yaml:"MinRefineryVersion" default:"v2.0"`
 	DatasetPrefix        string   `yaml:"DatasetPrefix" `
-	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"5m"`
+	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"15s"`
 }
 
 type NetworkConfig struct {
@@ -505,7 +506,9 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 
 func (f *fileConfig) monitor() {
 	f.done = make(chan struct{})
-	f.ticker = time.NewTicker(time.Duration(f.mainConfig.General.ConfigReloadInterval))
+	// adjust the time by +/- 10% to avoid everyone reloading at the same time
+	reload := time.Duration(float64(f.mainConfig.General.ConfigReloadInterval) * (0.9 + 0.2*rand.Float64()))
+	f.ticker = time.NewTicker(time.Duration(reload))
 	for {
 		select {
 		case <-f.done:

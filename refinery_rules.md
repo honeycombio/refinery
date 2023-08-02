@@ -488,7 +488,7 @@ The comparison operator to use.
 String comparisons are case-sensitive.
 
 - Type: `string`
-- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`
+- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`
 
 ### `Value`
 
