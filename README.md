@@ -117,24 +117,27 @@ Refinery supports the following environment variables.  Environment variables ta
 | `REFINERY_HONEYCOMB_METRICS_API_KEY` `REFINERY_HONEYCOMB_API_KEY`    | `LegacyMetrics.APIKey`           |
 | `REFINERY_QUERY_AUTH_TOKEN`                                       | `QueryAuthToken`                 |
 
-Note, `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
+Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
 
 ### Mixing Classic and Environment & Services Rule Definitions
 
-With the change to support Environments in Honeycomb, some users will want to support both sending telemetry to a classic dataset and a new environment called the same thing (eg `production`).
+**Note**: This section only applies to Honeycomb users who had a team before the [Honeycomb Environments and Services](https://changelog.honeycomb.io/preview-new-environments-and-services-functionality-in-honeycomb!-227356) change and have a Classic environment.
 
-This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for the classic datasets.
+With the change to support Environments in Honeycomb, some users will want to support both sending telemetry to a classic dataset and a new environment called the same thing. For example, `production`.
 
-When Refinery receives telemetry using an API key associated to a classic dataset, it will then use the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition. Note that when doing so, you should quote the entire name.
+This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for your Classic datasets.
 
-For example
-config.toml
-```toml
+When Refinery receives telemetry using an API key associated to a Classic dataset, it uses the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition. Note that when doing this, you should quote the entire name.
+
+For example, in `config.yaml`, set `DatasetPrefix`.
+
+```yaml
 DatasetPrefix = "classic"
 ```
 
-rules.toml
-```toml
+In `rules.yaml`, use "classic" as the prefix to designate your Classic dataset.
+
+```yaml
 # default rules
 Sampler = "DeterministicSampler"
 SampleRate = 1
