@@ -13,14 +13,16 @@ import (
 )
 
 type EMAThroughputSampler struct {
-	Config  *config.EMAThroughputSamplerConfig
-	Logger  logger.Logger
-	Metrics metrics.Metrics
+	Config         *config.EMAThroughputSamplerConfig
+	Logger         logger.Logger
+	Metrics        metrics.Metrics
+	GetClusterSize func(bool) int
 
 	adjustmentInterval   config.Duration
 	weight               float64
 	initialSampleRate    int
-	goalthroughputpersec int
+	goalThroughputPerSec int
+	useClusterSize       bool
 	ageOutValue          float64
 	burstMultiple        float64
 	burstDetectionDelay  uint
@@ -30,14 +32,15 @@ type EMAThroughputSampler struct {
 
 	key *traceKey
 
-	dynsampler dynsampler.Sampler
+	dynsampler *dynsampler.EMAThroughput
 }
 
 func (d *EMAThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMAThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMAThroughputSampler") }()
 	d.initialSampleRate = d.Config.InitialSampleRate
-	d.goalthroughputpersec = d.Config.GoalThroughputPerSec
+	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
+	d.useClusterSize = d.Config.UseClusterSize
 	d.adjustmentInterval = d.Config.AdjustmentInterval
 	d.weight = d.Config.Weight
 	d.ageOutValue = d.Config.AgeOutValue
@@ -52,7 +55,7 @@ func (d *EMAThroughputSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: d.goalthroughputpersec,
+		GoalThroughputPerSec: d.goalThroughputPerSec / d.GetClusterSize(d.useClusterSize),
 		InitialSampleRate:    d.initialSampleRate,
 		AdjustmentInterval:   time.Duration(d.adjustmentInterval),
 		Weight:               d.weight,
@@ -78,6 +81,8 @@ func (d *EMAThroughputSampler) Start() error {
 func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
+	// update the dynsampler with the latest goal throughput in case cluster size changed
+	d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / d.GetClusterSize(d.useClusterSize)
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1

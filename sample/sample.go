@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -18,9 +20,38 @@ type Sampler interface {
 
 // SamplerFactory is used to create new samplers with common (injected) resources
 type SamplerFactory struct {
-	Config  config.Config   `inject:""`
-	Logger  logger.Logger   `inject:""`
-	Metrics metrics.Metrics `inject:"genericMetrics"`
+	Config        config.Config   `inject:""`
+	Logger        logger.Logger   `inject:""`
+	Metrics       metrics.Metrics `inject:"genericMetrics"`
+	Peers         peer.Peers      `inject:""`
+	peerCount     int
+	peerCountLock sync.RWMutex
+}
+
+func (s *SamplerFactory) GetClusterSize(useClusterSize bool) int {
+	if useClusterSize {
+		s.peerCountLock.RLock()
+		defer s.peerCountLock.RUnlock()
+		return s.peerCount
+	}
+	return 1
+}
+
+func (s *SamplerFactory) Start() error {
+	// default peer count is 1 since we divide by it
+	s.peerCount = 1
+	updatePeerCount := func() {
+		s.peerCountLock.Lock()
+		peers, err := s.Peers.GetPeers()
+		// Only update if there were no errors
+		if err == nil && len(peers) > 0 {
+			s.peerCount = len(peers)
+		}
+		s.peerCountLock.Unlock()
+	}
+	s.Peers.RegisterUpdatedPeersCallback(updatePeerCount)
+	updatePeerCount()
+	return nil
 }
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
@@ -49,11 +80,11 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 	case *config.RulesBasedSamplerConfig:
 		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.TotalThroughputSamplerConfig:
-		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, GetClusterSize: s.GetClusterSize}
 	case *config.EMAThroughputSamplerConfig:
-		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, GetClusterSize: s.GetClusterSize}
 	case *config.WindowedThroughputSamplerConfig:
-		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, GetClusterSize: s.GetClusterSize}
 	default:
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)

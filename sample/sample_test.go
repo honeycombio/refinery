@@ -69,6 +69,15 @@ func makeYAML(args ...interface{}) string {
 	return string(b)
 }
 
+type MockPeers struct {
+	peers []string
+}
+
+func (p *MockPeers) GetPeers() ([]string, error) {
+	return p.peers, nil
+}
+func (p *MockPeers) RegisterUpdatedPeersCallback(callback func()) {}
+
 func TestDependencyInjection(t *testing.T) {
 	var g inject.Graph
 	err := g.Provide(
@@ -77,6 +86,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &MockPeers{[]string{"foo", "bar"}}},
 	)
 	if err != nil {
 		t.Error(err)
@@ -129,4 +139,97 @@ func TestDatasetPrefix(t *testing.T) {
 	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", true))
 	assert.Equal(t, envSampler, factory.GetSamplerImplementationForKey("production", false))
 	assert.Equal(t, datasetSampler, factory.GetSamplerImplementationForKey("production", true))
+}
+
+func TestTotalThroughputClusterSize(t *testing.T) {
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/TotalThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/production/TotalThroughputSampler/UseClusterSize", true,
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   &MockPeers{[]string{"foo", "bar"}},
+	}
+	factory.Start()
+	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler.Start()
+	assert.NotNil(t, sampler)
+	impl := sampler.(*TotalThroughputSampler)
+	defer impl.dynsampler.Stop()
+	assert.Equal(t, 5, impl.dynsampler.GoalThroughputPerSec)
+}
+
+func TestEMAThroughputClusterSize(t *testing.T) {
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/EMAThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/production/EMAThroughputSampler/UseClusterSize", true,
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   &MockPeers{[]string{"foo", "bar"}},
+	}
+	factory.Start()
+	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler.Start()
+	assert.NotNil(t, sampler)
+	impl := sampler.(*EMAThroughputSampler)
+	defer impl.dynsampler.Stop()
+	assert.Equal(t, 5, impl.dynsampler.GoalThroughputPerSec)
+}
+
+func TestWindowedThroughputClusterSize(t *testing.T) {
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/WindowedThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/production/WindowedThroughputSampler/UseClusterSize", true,
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   &MockPeers{[]string{"foo", "bar"}},
+	}
+	factory.Start()
+	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler.Start()
+	assert.NotNil(t, sampler)
+	impl := sampler.(*WindowedThroughputSampler)
+	defer impl.dynsampler.Stop()
+	assert.Equal(t, 5.0, impl.dynsampler.GoalThroughputPerSec)
 }

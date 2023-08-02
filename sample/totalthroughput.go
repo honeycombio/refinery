@@ -13,11 +13,13 @@ import (
 )
 
 type TotalThroughputSampler struct {
-	Config  *config.TotalThroughputSamplerConfig
-	Logger  logger.Logger
-	Metrics metrics.Metrics
+	Config         *config.TotalThroughputSamplerConfig
+	Logger         logger.Logger
+	Metrics        metrics.Metrics
+	GetClusterSize func(bool) int
 
-	goalThroughputPerSec int64
+	goalThroughputPerSec int
+	useClusterSize       bool
 	clearFrequency       config.Duration
 	maxKeys              int
 	prefix               string
@@ -25,7 +27,7 @@ type TotalThroughputSampler struct {
 
 	key *traceKey
 
-	dynsampler dynsampler.Sampler
+	dynsampler *dynsampler.TotalThroughput
 }
 
 func (d *TotalThroughputSampler) Start() error {
@@ -36,6 +38,7 @@ func (d *TotalThroughputSampler) Start() error {
 		d.Config.GoalThroughputPerSec = 100
 	}
 	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
+	d.useClusterSize = d.Config.UseClusterSize
 	if d.Config.ClearFrequency == 0 {
 		d.Config.ClearFrequency = config.Duration(30 * time.Second)
 	}
@@ -49,7 +52,7 @@ func (d *TotalThroughputSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.TotalThroughput{
-		GoalThroughputPerSec:   int(d.goalThroughputPerSec),
+		GoalThroughputPerSec:   int(d.goalThroughputPerSec) / d.GetClusterSize(d.useClusterSize),
 		ClearFrequencyDuration: time.Duration(d.clearFrequency),
 		MaxKeys:                d.maxKeys,
 	}
@@ -70,6 +73,8 @@ func (d *TotalThroughputSampler) Start() error {
 func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
+	// update the dynsampler with the latest goal throughput in case cluster size changed
+	d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / d.GetClusterSize(d.useClusterSize)
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
