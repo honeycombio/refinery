@@ -7,6 +7,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/stretchr/testify/assert"
@@ -69,15 +70,6 @@ func makeYAML(args ...interface{}) string {
 	return string(b)
 }
 
-type MockPeers struct {
-	peers []string
-}
-
-func (p *MockPeers) GetPeers() ([]string, error) {
-	return p.peers, nil
-}
-func (p *MockPeers) RegisterUpdatedPeersCallback(callback func()) {}
-
 func TestDependencyInjection(t *testing.T) {
 	var g inject.Graph
 	err := g.Provide(
@@ -86,7 +78,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
-		&inject.Object{Value: &MockPeers{[]string{"foo", "bar"}}},
+		&inject.Object{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 	)
 	if err != nil {
 		t.Error(err)
@@ -161,7 +153,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &MockPeers{[]string{"foo", "bar"}},
+		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production", false)
@@ -192,7 +184,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &MockPeers{[]string{"foo", "bar"}},
+		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production", false)
@@ -223,7 +215,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &MockPeers{[]string{"foo", "bar"}},
+		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production", false)

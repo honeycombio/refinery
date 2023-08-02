@@ -14,6 +14,7 @@ import (
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
@@ -790,6 +791,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
 		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
+		&inject.Object{Value: &peer.MockPeers{}},
 	)
 	if err != nil {
 		t.Error(err)
