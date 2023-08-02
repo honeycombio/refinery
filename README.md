@@ -35,11 +35,19 @@ Refinery processes must be able to communicate with each other to concentrate tr
 
 Within your application (or other Honeycomb event sources) you would configure the `API Host` to be http(s)://load-balancer/. Everything else remains the same (api key, dataset name, etc. - all that lives with the originating client).
 
-### Minimum configuration
+### Minimum Configuration
 
-The Refinery cluster should have at least 2 servers with 2GB RAM and access to 2 cores each.
+To begin, your Refinery cluster requires a minimum of:
 
-Additional RAM and CPU can be used by increasing configuration values to have a larger `CacheCapacity`. The cluster should be monitored for panics caused by running out of memory and scaled up (with either more servers or more RAM per server) when they occur.
+- a `linux/amd64` or `linux/arm64` operating system
+- 2GB RAM for each server used
+- Access to 2 cores for each server used
+
+In many cases, Refinery only needs one node.
+If experiencing a large volume of traffic, you may need to scale out to multiple nodes, and likely need a small Redis cluster to handle scaling.
+
+We recommend increasing the amount of RAM and the number of cores after your initial set-up.
+Use our [scaling and troubleshooting documentation](/manage-data-volume/refinery/scale-and-troubleshoot/) to learn more.
 
 ### Setting up Refinery in Kubernetes
 
@@ -67,7 +75,7 @@ Configuration is done in one of two ways:
 
 There are a few vital configuration options; read through this list and make sure all the variables are set.
 
-### File-based Config
+### File-based Configuration
 
 - API Keys: Refinery itself needs to be configured with a list of your API keys. This lets it respond with a `401`/Unauthorized if an unexpected API key is used. You can configure Refinery to accept all API keys by setting it to `*` but then you will lose the authentication feedback to your application. Refinery will accept all events even if those events will eventually be rejected by the Honeycomb API due to an API key issue.
 
@@ -81,9 +89,9 @@ There are a few vital configuration options; read through this list and make sur
 
 There are a few components of Refinery with multiple implementations; the config file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level config item that lets you choose which implementation to use and then a section further down with additional config options for that choice (for example, the Honeycomb logger requires an API key).
 
-When configuration changes, Refinery will automatically reload the configuration[^1].
+When configuration changes, Refinery will automatically reload the configuration.
 
-[^1]: When running Refinery within docker, be sure to mount the directory containing configuration & rules files so that [reloading will work](https://github.com/spf13/viper/issues/920) as expected.
+**Note**: When running Refinery within Docker, be sure to mount the directory containing Configuration and Rules files so that [reloading will work](https://github.com/spf13/viper/issues/920) as expected.
 
 ### Redis-based Peer Management
 
