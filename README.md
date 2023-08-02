@@ -182,7 +182,12 @@ Each sampling method has their own algorithm and use case strengths. Refer to th
 
 ## Dry Run Mode
 
-When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. By enabling Dry Run Mode, all spans in each trace will be marked with the sampling decision in a field called `refinery_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. The `SampleRate` will not be changed, but the calculated `SampleRate` will be stored in a field called `meta.dryrun.sample_rate`. You can then run queries in Honeycomb to check your results and verify that the rules are working as intended. Enable dry run mode by adding `DryRun = true` in your configuration, as noted in [`config_complete.yaml`](https://github.com/honeycombio/refinery/blob/main/config_complete.yaml).
+When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery. 
+
+Enable Dry Run Mode by adding `DryRun = true` in your configuration file (`config.yaml`), as noted in [`config_complete.yaml`](https://github.com/honeycombio/refinery/blob/main/config_complete.yaml).
+Then, use [Query Builder in the Honeycomb UI](https://docs.honeycomb.io/working-with-your-data/queries/) to run queries to check your results and verify that the rules are working as intended. 
+
+By enabling Dry Run Mode, all spans in each trace will be marked with the sampling decision in a field called `refinery_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. The `SampleRate` will not be changed, but the calculated `SampleRate` will be stored in a field called `meta.dryrun.sample_rate`.
 
 When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain `0`, reflecting that we are sending all traces to Honeycomb.
 
