@@ -20,10 +20,10 @@ Tail-based sampling allows you to inspect a whole trace and make a decision to s
 
 Refinery support several kinds of tail sampling:
 
-* **Dynamic sampling** - By configuring a set of fields on a trace that make up a key, the sampler automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, a key made up of `http.status_code` will sample much less traffic for requests that return 200 than for requests that return `404`.
-* **Rules-based sampling** - This enables you to define sampling rates for well-known conditions. For example, you can sample 100% of traces with an error and then fall back to dynamic sampling for all other traffic.
-* **Throughput-based sampling** - This enables you to sample traces based on a fixed upper bound on the number of spans per second. The sampler will sample traces with a goal to keep the throughput below the specified limit.
-* **Deterministic probability sampling** - Although deterministic probability sampling is also used in head sampling, it is still possible to use it in tail sampling.
+- **Dynamic sampling** - This sampling type configures a key based on a trace's set of fields and automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, using a key based on `http.status_code`, requests that return `200` could be included less often in the forwarded sample data, since `200` indicates success and appears in higher frequency, compared to requests that return `404` errors and require investigation.
+- **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, you can sample 100% of traces with an error and then fall back to dynamic sampling for all other traffic.
+- **Throughput-based sampling** - This sampling type enables you to sample traces based on a fixed upper-bound for the number of spans per second. The sampler will dynamically sample traces with a goal to keep the throughput below the specified limit.
+- **Deterministic probability sampling*** - This sampling type consistently applies sampling decisions without factoring the trace's field or values. For example, you can include 1 out of every 12 traces in the sampled data sent to Honeycomb. If this sample type is the only type you plan to use, consider using [head sampling options](/manage-data-volume/sampling/#head-sampling) instead of Refinery.
 
 Refinery lets you combine all of the above techniques to achieve your desired sampling behavior.
 
@@ -33,7 +33,7 @@ Refinery is designed to sit within your infrastructure where all traces can reac
 A standard deployment will have a cluster of two or more Refinery processes accessible via a separate load balancer.
 Refinery processes must be able to communicate with each other to concentrate traces on single servers.
 
-Within your application (or other Honeycomb event sources) you would configure the `API Host` to be http(s)://load-balancer/. Everything else remains the same (api key, dataset name, etc. - all that lives with the originating client).
+Within your application (or other Honeycomb event sources) you would configure the `API Host` to be `http(s)://load-balancer/``. Everything else remains the same (API key, dataset name, and so on - all that lives with the originating client).
 
 ### Minimum Configuration
 
@@ -60,11 +60,13 @@ helm repo add honeycomb https://honeycombio.github.io/helm-charts
 helm install refinery honeycomb/refinery
 ```
 
-This will use the default values file. You can also supply your own:
+This installation will use the default values file. You can also supply your own:
 
 ```bash
 helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
 ```
+
+To install a specific version or override the default values, refer to [Refinery Helm chart documentation](https://artifacthub.io/packages/helm/honeycomb/refinery) to learn more about configuration.
 
 ## Configuration
 
