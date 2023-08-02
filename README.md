@@ -151,13 +151,22 @@ SampleRate = 1
     SampleRate = 10
 ```
 
-## How sampling decisions are made
+## How Sampling Decisions are Made
 
-In the configuration file, you can choose from a few sampling methods and specify options for each. The `DynamicSampler` is the most interesting and most commonly used. It uses the `AvgSampleRate` algorithm from the [`dynsampler-go`](https://github.com/honeycombio/dynsampler-go) package. Briefly described, you configure Refinery to examine the trace for a set of fields (for example, `request.status_code` and `request.method`). It collects all the values found in those fields anywhere in the trace (eg "200" and "GET") together into a key it hands to the dynsampler. The dynsampler code will look at the frequency that key appears during the previous 30 seconds (or other value set by the `ClearFrequency` setting) and use that to hand back a desired sample rate. More frequent keys are sampled more heavily, so that an even distribution of traffic across the keyspace is represented in Honeycomb.
+In the Rules configuration file (`rules.yaml`), choose from several sampling methods and define the fields that determine your sampled data. By selecting fields well, you can drop significant amounts of traffic while still retaining good visibility into interesting areas of traffic. For example, if you want to make sure you have a complete list of all URL handlers invoked, you can add the URL (or a normalized form) as one of the fields to include. <!--Still need to include a better example that's upgraded from dynsampler, which is no longer recommended by us --->
 
-By selecting fields well, you can drop significant amounts of traffic while still retaining good visibility into the areas of traffic that interest you. For example, if you want to make sure you have a complete list of all URL handlers invoked, you would add the URL (or a normalized form) as one of the fields to include. Be careful in your selection though, because if the combination of fields creates a unique key each time, you won't sample out any traffic. Because of this it is not effective to use fields that have unique values (like a UUID) as one of the sampling fields. Each field included should ideally have values that appear many times within any given 30 second window in order to effectively turn into a sample rate.
+Each field included should ideally have values that appear many times within any given 30 second window in order to effectively turn into a sample rate. Try to select a combination of fields that doesn't create a unique key each time. Unique values, like a UUID, will cause data to be not sampled.
 
-For more detail on how this algorithm works, please refer to the `dynsampler` package itself.
+Each sampling method has their own algorithm and use case strengths. Refer to the existing sampling methods and their options in [refinery_rules.md](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md). Available options include:
+
+- [Dynamic Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#dynamic-sampler) 
+- [Deterministic Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#deterministic-sampler)
+- [EMA Dynamic Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#ema-dynamic-sampler)
+- [EMA Throughput Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#ema-throughput-sampler)
+- [Windowed Throughput Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#windowed-throughput-sampler)
+- [Rules-based Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#rules-based-sampler)
+
+
 
 ## Dry Run Mode
 
