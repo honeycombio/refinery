@@ -60,14 +60,16 @@ helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
 
 ## Configuration
 
-Configuration is done in one of two ways, either entirely by the config file or a combination of the config file and a Redis service for managing the list of peers in the cluster.
-When using Redis, it only manages peers; all other configuration remains managed by the config file.
+Configuration is done in one of two ways:
+
+1. Entirely by the configuration file 
+1. A combination of the configuration file and a Redis service. All other configuration remains managed by the config file while A Redis service manages the list of peers in the cluster.
 
 There are a few vital configuration options; read through this list and make sure all the variables are set.
 
 ### File-based Config
 
-- API Keys: Refinery itself needs to be configured with a list of your API keys. This lets it respond with a 401/Unauthorized if an unexpected API key is used. You can configure Refinery to accept all API keys by setting it to `*` but then you will lose the authentication feedback to your application. Refinery will accept all events even if those events will eventually be rejected by the Honeycomb API due to an API key issue.
+- API Keys: Refinery itself needs to be configured with a list of your API keys. This lets it respond with a `401`/Unauthorized if an unexpected API key is used. You can configure Refinery to accept all API keys by setting it to `*` but then you will lose the authentication feedback to your application. Refinery will accept all events even if those events will eventually be rejected by the Honeycomb API due to an API key issue.
 
 - Goal Sample Rate and the list of fields you'd like to use to generate the keys off which sample rate is chosen. This is where the power of the proxy comes in - being able to dynamically choose sample rates based on the contents of the traces as they go by. There is an overall default and dataset-specific sections for this configuration, so that different datasets can have different sets of fields and goal sample rates.
 
@@ -85,23 +87,23 @@ When configuration changes, Refinery will automatically reload the configuration
 
 ### Redis-based Peer Management
 
-With peer management in Redis, all config options _except_ peer management are still handled by the config file.
+When using peer management in Redis, all other configuration options **except** peer management are still handled by the configuration file.
 Only coordinating the list of peers in the Refinery cluster is managed with Redis.
 
-To enable the redis-based config:
+To enable the Redis-based config:
 
-- set PeerManagement.Type in the config file to "redis"
+- set `PeerManagement.Type` in the configuration file to "redis"
 
-When launched in redis-config mode, Refinery needs a redis host to use for managing the list of peers in the Refinery cluster. This hostname and port can be specified in one of two ways:
+When launched in `redis-config` mode, Refinery needs a Redis host to use for managing the list of peers in the Refinery cluster. This hostname and port can be specified in one of two ways:
 
-- set the `REFINERY_REDIS_HOST` environment variable (and optionally the `REFINERY_REDIS_USERNAME` and `REFINERY_REDIS_PASSWORD` environment variables)
-- set the `RedisHost` field in the config file (and optionally the `RedisUsername` and `RedisPassword` fields in the config file)
+- set the `REFINERY_REDIS_HOST` environment variable (and optionally set the `REFINERY_REDIS_USERNAME` and `REFINERY_REDIS_PASSWORD` environment variables)
+- set the `RedisHost` field in the configuration file (and optionally the `RedisUsername` and `RedisPassword` fields in the same file)
 
-The Redis host should be a hostname and a port, for example `redis.mydomain.com:6379`. The example config file has `localhost:6379` which obviously will not work with more than one host. When TLS is required to connect to the Redis instance, set the `UseTLS` config to `true`.
+The Redis host should be a hostname and a port, such as `redis.mydomain.com:6379`. The example configuration file has `localhost:6379`, which will not work with more than one host. When TLS is required to connect to the Redis instance, set the `UseTLS` config to `true`.
 
 By default, a Refinery process will register itself in Redis using its local hostname as its identifier for peer communications.
 In environments where domain name resolution is slow or unreliable, override the reliance on name lookups by specifying the name of the peering network interface with the `IdentifierInterfaceName` configuration option.
-See the [Refinery documentation](https://docs.honeycomb.io/manage-data-volume/refinery/) for more details on tuning a cluster.
+For more details on tuning a cluster, read the [Refinery Scale and Troubleshooting documentation](https://docs.honeycomb.io/manage-data-volume/refinery/scale-and-troubleshoot/).
 
 ### Environment Variables
 
