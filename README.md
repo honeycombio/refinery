@@ -123,11 +123,11 @@ Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEY
 
 **Note**: This section only applies to Honeycomb users who had a team before the [Honeycomb Environments and Services](https://changelog.honeycomb.io/preview-new-environments-and-services-functionality-in-honeycomb!-227356) change and have a Classic environment.
 
-With the change to support Environments in Honeycomb, some users will want to support both sending telemetry to a classic dataset and a new environment called the same thing. For example, `production`.
+Use the `DatasetPrefix` configuration property to support both sending telemetry to a classic dataset and a new environment with the same name, such as `production`.
 
-This can be accomplished by leveraging the new `DatasetPrefix` configuration property and then using that prefix in the rules definitions for your Classic datasets.
+After setting the `DatasetPrefix` value, use that prefix in the rules definitions for your Classic datasets.
 
-When Refinery receives telemetry using an API key associated to a Classic dataset, it uses the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition. Note that when doing this, you should quote the entire name.
+When Refinery receives telemetry using an API key associated to a Classic dataset, it uses the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition. Using the prefix and the Classic dataset name together is required when sending to a Classic dataset.
 
 For example, in `config.yaml`, set `DatasetPrefix`.
 
