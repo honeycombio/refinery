@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-08-02 at 02:45:17 UTC.
+It was automatically generated on 2023-08-02 at 23:32:04 UTC.
 
 ## The Config file
 
@@ -171,6 +171,9 @@ AddRuleReasonToTrace controls whether to decorate traces with Refinery rule eval
 
 When enabled, this setting causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
 This field contains text indicating which rule was evaluated that caused the trace to be included.
+This setting also includes the field `meta.refinery.send_reason`, which contains the reason that the trace was sent.
+Possible values of this field are `trace_send_got_root`, which means that the root span arrived; `trace_send_expired`, which means that TraceTimeout was reached; `trace_send_ejected_full`, which means that the trace cache was full; and `trace_send_ejected_memsize`, which means that refinery was out of memory.
+These names are also the names of metrics that refinery tracks.
 We recommend enabling this setting whenever a rules-based sampler is in use, as it is useful for debugging and understanding the behavior of your Refinery installation.
 
 - Eligible for live reload.
