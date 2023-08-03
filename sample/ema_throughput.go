@@ -20,7 +20,9 @@ type EMAThroughputSampler struct {
 	adjustmentInterval   config.Duration
 	weight               float64
 	initialSampleRate    int
-	goalthroughputpersec int
+	goalThroughputPerSec int
+	clusterSize          int
+	useClusterSize       bool
 	ageOutValue          float64
 	burstMultiple        float64
 	burstDetectionDelay  uint
@@ -30,14 +32,18 @@ type EMAThroughputSampler struct {
 
 	key *traceKey
 
-	dynsampler dynsampler.Sampler
+	dynsampler *dynsampler.EMAThroughput
 }
 
 func (d *EMAThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMAThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMAThroughputSampler") }()
 	d.initialSampleRate = d.Config.InitialSampleRate
-	d.goalthroughputpersec = d.Config.GoalThroughputPerSec
+	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
+	d.useClusterSize = d.Config.UseClusterSize
+	if d.clusterSize == 0 {
+		d.clusterSize = 1
+	}
 	d.adjustmentInterval = d.Config.AdjustmentInterval
 	d.weight = d.Config.Weight
 	d.ageOutValue = d.Config.AgeOutValue
@@ -52,7 +58,7 @@ func (d *EMAThroughputSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: d.goalthroughputpersec,
+		GoalThroughputPerSec: d.goalThroughputPerSec / d.clusterSize,
 		InitialSampleRate:    d.initialSampleRate,
 		AdjustmentInterval:   time.Duration(d.adjustmentInterval),
 		Weight:               d.weight,
@@ -73,6 +79,13 @@ func (d *EMAThroughputSampler) Start() error {
 	d.Metrics.Register("dynsampler_sample_rate", "histogram")
 
 	return nil
+}
+
+func (d *EMAThroughputSampler) SetClusterSize(size int) {
+	if d.useClusterSize {
+		d.clusterSize = size
+		d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / size
+	}
 }
 
 func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {

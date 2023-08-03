@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -16,11 +17,43 @@ type Sampler interface {
 	Start() error
 }
 
+type ClusterSizer interface {
+	SetClusterSize(size int)
+}
+
 // SamplerFactory is used to create new samplers with common (injected) resources
 type SamplerFactory struct {
-	Config  config.Config   `inject:""`
-	Logger  logger.Logger   `inject:""`
-	Metrics metrics.Metrics `inject:"genericMetrics"`
+	Config    config.Config   `inject:""`
+	Logger    logger.Logger   `inject:""`
+	Metrics   metrics.Metrics `inject:"genericMetrics"`
+	Peers     peer.Peers      `inject:""`
+	peerCount int
+	samplers  []Sampler
+}
+
+func (s *SamplerFactory) updatePeerCounts() {
+	if s.Peers != nil {
+		peers, err := s.Peers.GetPeers()
+		// Only update the stored count if there were no errors
+		if err == nil && len(peers) > 0 {
+			s.peerCount = len(peers)
+		}
+	}
+
+	// all the samplers who want it should use the stored count
+	for _, sampler := range s.samplers {
+		if clusterSizer, ok := sampler.(ClusterSizer); ok {
+			clusterSizer.SetClusterSize(s.peerCount)
+		}
+	}
+}
+
+func (s *SamplerFactory) Start() error {
+	s.peerCount = 1
+	if s.Peers != nil {
+		s.Peers.RegisterUpdatedPeersCallback(s.updatePeerCounts)
+	}
+	return nil
 }
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
@@ -66,6 +99,9 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 	}
 
 	s.Logger.Debug().WithField("dataset", samplerKey).Logf("created implementation for sampler type %T", c)
+	// call this every time we add a sampler
+	s.samplers = append(s.samplers, sampler)
+	s.updatePeerCounts()
 
 	return sampler
 }
