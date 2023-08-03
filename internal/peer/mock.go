@@ -7,4 +7,6 @@ type MockPeers struct {
 func (p *MockPeers) GetPeers() ([]string, error) {
 	return p.Peers, nil
 }
-func (p *MockPeers) RegisterUpdatedPeersCallback(callback func()) {}
+func (p *MockPeers) RegisterUpdatedPeersCallback(callback func()) {
+	callback()
+}

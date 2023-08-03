@@ -108,6 +108,7 @@ func TestDatasetPrefix(t *testing.T) {
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())
 
 	factory := SamplerFactory{Config: c, Logger: &logger.NullLogger{}, Metrics: &metrics.NullMetrics{}}
+	factory.Start()
 
 	defaultSampler := &DeterministicSampler{
 		Config: &config.DeterministicSamplerConfig{SampleRate: 1},

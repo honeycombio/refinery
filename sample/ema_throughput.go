@@ -13,15 +13,15 @@ import (
 )
 
 type EMAThroughputSampler struct {
-	Config         *config.EMAThroughputSamplerConfig
-	Logger         logger.Logger
-	Metrics        metrics.Metrics
-	GetClusterSize func(bool) int
+	Config  *config.EMAThroughputSamplerConfig
+	Logger  logger.Logger
+	Metrics metrics.Metrics
 
 	adjustmentInterval   config.Duration
 	weight               float64
 	initialSampleRate    int
 	goalThroughputPerSec int
+	clusterSize          int
 	useClusterSize       bool
 	ageOutValue          float64
 	burstMultiple        float64
@@ -41,6 +41,9 @@ func (d *EMAThroughputSampler) Start() error {
 	d.initialSampleRate = d.Config.InitialSampleRate
 	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
 	d.useClusterSize = d.Config.UseClusterSize
+	if d.clusterSize == 0 {
+		d.clusterSize = 1
+	}
 	d.adjustmentInterval = d.Config.AdjustmentInterval
 	d.weight = d.Config.Weight
 	d.ageOutValue = d.Config.AgeOutValue
@@ -55,7 +58,7 @@ func (d *EMAThroughputSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: d.goalThroughputPerSec / d.GetClusterSize(d.useClusterSize),
+		GoalThroughputPerSec: d.goalThroughputPerSec / d.clusterSize,
 		InitialSampleRate:    d.initialSampleRate,
 		AdjustmentInterval:   time.Duration(d.adjustmentInterval),
 		Weight:               d.weight,
@@ -78,11 +81,16 @@ func (d *EMAThroughputSampler) Start() error {
 	return nil
 }
 
+func (d *EMAThroughputSampler) SetClusterSize(size int) {
+	if d.useClusterSize {
+		d.clusterSize = size
+		d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / size
+	}
+}
+
 func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
-	// update the dynsampler with the latest goal throughput in case cluster size changed
-	d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / d.GetClusterSize(d.useClusterSize)
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1

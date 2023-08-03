@@ -13,14 +13,14 @@ import (
 )
 
 type WindowedThroughputSampler struct {
-	Config         *config.WindowedThroughputSamplerConfig
-	Logger         logger.Logger
-	Metrics        metrics.Metrics
-	GetClusterSize func(bool) int
+	Config  *config.WindowedThroughputSamplerConfig
+	Logger  logger.Logger
+	Metrics metrics.Metrics
 
 	updatefrequency      config.Duration
 	lookbackfrequency    config.Duration
 	goalThroughputPerSec int
+	clusterSize          int
 	useClusterSize       bool
 	maxKeys              int
 	prefix               string
@@ -36,6 +36,9 @@ func (d *WindowedThroughputSampler) Start() error {
 	defer func() { d.Logger.Debug().Logf("Finished starting WindowedThroughputSampler") }()
 	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
 	d.useClusterSize = d.Config.UseClusterSize
+	if d.clusterSize == 0 {
+		d.clusterSize = 1
+	}
 	d.updatefrequency = d.Config.UpdateFrequency
 	d.lookbackfrequency = d.Config.LookbackFrequency
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
@@ -47,7 +50,7 @@ func (d *WindowedThroughputSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.WindowedThroughput{
-		GoalThroughputPerSec:      float64(d.goalThroughputPerSec) / float64(d.GetClusterSize(d.useClusterSize)),
+		GoalThroughputPerSec:      float64(d.goalThroughputPerSec) / float64(d.clusterSize),
 		UpdateFrequencyDuration:   time.Duration(d.updatefrequency),
 		LookbackFrequencyDuration: time.Duration(d.lookbackfrequency),
 		MaxKeys:                   d.maxKeys,
@@ -66,11 +69,16 @@ func (d *WindowedThroughputSampler) Start() error {
 	return nil
 }
 
+func (d *WindowedThroughputSampler) SetClusterSize(size int) {
+	if d.useClusterSize {
+		d.clusterSize = size
+		d.dynsampler.GoalThroughputPerSec = float64(d.goalThroughputPerSec) / float64(size)
+	}
+}
+
 func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
-	// update the dynsampler with the latest goal throughput in case cluster size changed
-	d.dynsampler.GoalThroughputPerSec = float64(d.goalThroughputPerSec) / float64(d.GetClusterSize(d.useClusterSize))
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1

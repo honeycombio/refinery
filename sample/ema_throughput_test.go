@@ -23,9 +23,6 @@ func TestEMAThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
-		GetClusterSize: func(b bool) int {
-			return 1
-		},
 	}
 
 	trace := &types.Trace{}

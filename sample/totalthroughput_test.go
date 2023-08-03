@@ -23,9 +23,6 @@ func TestTotalThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
-		GetClusterSize: func(useClusterSize bool) int {
-			return 1
-		},
 	}
 
 	trace := &types.Trace{}
