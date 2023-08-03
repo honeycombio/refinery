@@ -100,6 +100,9 @@ jobs:
       - go-build:
           os: darwin
           arch: amd64
+      - go-build:
+          os: darwin
+          arch: arm64
       - go-build-convert:
           os: linux
           arch: amd64
@@ -109,6 +112,9 @@ jobs:
       - go-build-convert:
           os: darwin
           arch: amd64
+      - go-build-convert:
+          os: darwin
+          arch: arm64
       - run:
           name: apt_get_update
           command: sudo apt-get -qq update
