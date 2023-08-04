@@ -62,7 +62,7 @@ helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
 
 When operating in a cluster, Refinery expects to gather all of the spans in a trace onto a single instance so that it can make a trace decision. Since each span arrives independently, each Refinery instance needs to be able to communicate with all of its peers in order to distribute traces to the correct instance.
 
-This communication can be managed in two ways: via an explicit list of peers the configuration file, or by using self-registration via a shared Redis cache. Installations should generally prefer to use Redis. Even in large installations, the load on the Redis server is quite light, with each instance only making a few requests per minute. A single Redis instance with fractional CPU is usually sufficient.
+This communication can be managed in two ways: via an explicit list of peers in the configuration file, or by using self-registration via a shared Redis cache. Installations should generally prefer to use Redis. Even in large installations, the load on the Redis server is quite light, with each instance only making a few requests per minute. A single Redis instance with fractional CPU is usually sufficient.
 
 
 ## Configuration
