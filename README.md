@@ -73,7 +73,7 @@ To install a specific version or override the default values, refer to [Refinery
 Configuration is done in one of two ways:
 
 1. Entirely by the configuration file 
-1. A combination of the configuration file and a Redis service. All other configuration remains managed by the config file while A Redis service manages the list of peers in the cluster.
+1. A combination of the configuration file and a Redis service. All other configuration remains managed by the configuration file while a Redis service manages the list of peers in the cluster.
 
 There are a few vital configuration options; read through this list and make sure all the variables are set.
 
@@ -89,7 +89,7 @@ There are a few vital configuration options; read through this list and make sur
 
 - Buffer size: The `InMemCollector`'s `CacheCapacity` setting determines how many in-flight traces you can have. This should be large enough to avoid overflow. Some multiple (2x, 3x) the total number of in-flight traces you expect is a good place to start. If it's too low you will see the `collect_cache_buffer_overrun` metric increment. If you see that, you should increase the size of the buffer.
 
-There are a few components of Refinery with multiple implementations; the config file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level config item that lets you choose which implementation to use and then a section further down with additional config options for that choice (for example, the Honeycomb logger requires an API key).
+There are a few components of Refinery with multiple implementations; the configuration file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level configuration item that lets you choose which implementation to use and then a section further down with additional configuration options for that choice (for example, the Honeycomb logger requires an API key).
 
 When configuration changes, Refinery will automatically reload the configuration.
 
@@ -109,7 +109,7 @@ When launched in `redis-config` mode, Refinery needs a Redis host to use for man
 - set the `REFINERY_REDIS_HOST` environment variable (and optionally set the `REFINERY_REDIS_USERNAME` and `REFINERY_REDIS_PASSWORD` environment variables)
 - set the `RedisHost` field in the configuration file (and optionally the `RedisUsername` and `RedisPassword` fields in the same file)
 
-The Redis host should be a hostname and a port, such as `redis.mydomain.com:6379`. The example configuration file has `localhost:6379`, which will not work with more than one host. When TLS is required to connect to the Redis instance, set the `UseTLS` config to `true`.
+The Redis host should be a hostname and a port, such as `redis.mydomain.com:6379`. The example configuration file has `localhost:6379`, which will not work with more than one host. When TLS is required to connect to the Redis instance, set the `UseTLS` configuration to `true`.
 
 By default, a Refinery process will register itself in Redis using its local hostname as its identifier for peer communications.
 In environments where domain name resolution is slow or unreliable, override the reliance on name lookups by specifying the name of the peering network interface with the `IdentifierInterfaceName` configuration option.
@@ -117,9 +117,9 @@ For more details on tuning a cluster, read the [Refinery Scale and Troubleshooti
 
 ### Environment Variables
 
-Refinery supports the following environment variables.  Environment variables take precedence over file configuration.
+Refinery supports the following environment variables. Environment variables take precedence over file configuration.
 
-| Environment Variable                                              | Config Field                     |
+| Environment Variable                                              | Configuration Field              |
 |-------------------------------------------------------------------|----------------------------------|
 | `REFINERY_GRPC_LISTEN_ADDRESS`                                    | `GRPCListenAddr`                 |
 | `REFINERY_REDIS_HOST`                                             | `PeerManagement.RedisHost`       |
@@ -178,8 +178,6 @@ Each sampling method has their own algorithm and use case strengths. Refer to th
 - [Windowed Throughput Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#windowed-throughput-sampler)
 - [Rules-based Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#rules-based-sampler)
 
-
-
 ## Dry Run Mode
 
 When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery. 
@@ -202,7 +200,7 @@ Determining the number of machines necessary in the cluster is not an exact scie
 Refinery emits a number of metrics to give some indication about the health of the process. These metrics can be exposed to Prometheus or sent up to Honeycomb. The interesting ones to watch are:
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
-- [incoming|peer]_router_\*: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
+- `[incoming|peer]_router_\*`: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
 - `collect_cache_buffer_overrun`: this should remain zero; a positive value indicates the need to grow the size of the collector's circular buffer (via configuration `CacheCapacity`).
 - `process_uptime_seconds`: records the uptime of each process; look for unexpected restarts as a key towards memory constraints.
 
@@ -222,7 +220,7 @@ For file-based configurations (the only type currently supported), the `hash` va
 
 For all of these commands:
 - `$REFINERY_HOST` should be the URL of your refinery.
-- `$FORMAT` can be one of `json`, `yaml`, or `toml`.
+- `$FORMAT` can be one of `yaml`, `toml`, or `json`.
 - `$DATASET` is the name of the dataset you want to check.
 
 To retrieve the entire Rules configuration:
@@ -245,7 +243,7 @@ curl --include --get $REFINERY_HOST/query/configmetadata --header "x-honeycomb-r
 
 ### Sampling
 
-Refinery can send telemetry that includes information that can help debug the sampling decisions that are made. To enable, in the config file, set `AddRuleReasonToTrace` to `true`. This will cause traces that are sent to Honeycomb to include a field `meta.refinery.reason`, which will contain text indicating which rule was evaluated that caused the trace to be included.
+Refinery can send telemetry that includes information that can help debug the sampling decisions that are made. To enable, in the configuration file, set `AddRuleReasonToTrace` to `true`. This will cause traces that are sent to Honeycomb to include a field `meta.refinery.reason`, which will contain text indicating which rule was evaluated that caused the trace to be included.
 
 ## Restarts
 
@@ -269,6 +267,6 @@ Within each directory, the interface the dependency exports is in the file with 
 
 `sampler` contains algorithms to compute sample rates based on the traces provided.
 
-`sharder` determines which peer in a clustered Refinery config is supposed to handle an individual trace.
+`sharder` determines which peer in a clustered Refinery configuration is supposed to handle an individual trace.
 
 `types` contains a few type definitions that are used to hand data in between packages.
