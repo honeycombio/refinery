@@ -1,5 +1,30 @@
 # Refinery Changelog
 
+## 2.1.0 2023-08-04
+
+This is a minor release with several new features and bug fixes, and is recommended for all Refinery users. See [Release Notes](./RELEASE_NOTES.md) for a summary of changes.
+
+## Features
+- feat: Add darwin-arm64 to the list of binaries. (#829) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Allow setting throughput for the cluster. (#827) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Record the event that caused trace evaluation. (#828) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add `has-root-span` operator to rules. (#814) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Validate Collection memory config through adding `conflictsWith` validation.(#806) | [Mason Legere](https://github.com/MasonLegere)
+- feat: add a field with the formula used to decide to activate stress relief (#805) | [Terra Field](https://github.com/RainOfTerra)
+
+## Fixes
+- fix: Change default ConfigReloadInterval, add jitter, fix docs (#823) | [Kent Quirk](https://github.com/kentquirk)
+- fix: add missing metrics fields (#811) | [Kent Quirk](https://github.com/kentquirk)
+- fix: live reload deadlock (#810) | [Kent Quirk](https://github.com/kentquirk)
+- fix: location and content of sample_rate metric (#809) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Update metadata for bad envvar and regenerate (#800) | [Kent Quirk](https://github.com/kentquirk)
+
+## Maintenance
+- docs: Touch up readme (#832) | [Kent Quirk](https://github.com/kentquirk)
+- maint: use Go v1.20 (#831) | [Kent Quirk](https://github.com/kentquirk)
+- maint: convert hardcoded operators to constants (#813) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Bump dependencies (#821) | [Kent Quirk](https://github.com/kentquirk)
+- docs: refinery_rules.md (#802) | [Terra Field](https://github.com/RainOfTerra)
 
 ## 2.0.2 2023-07-14
 

@@ -2,12 +2,30 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.1.0
+
+This is a minor release with several new features and bug fixes, and is recommended for all Refinery users.
+
+### Notable features
+- The Throughput samplers now include an [optional configuration parameter](./refinery_rules.md#useclustersize-2) called `UseClusterSize` -- when set to `true`, this causes the sampler to treat `GoalThroughputPerSec` as a target for the cluster as a whole, meaning that if the number of instances changes, the configuration doesn't have to change.
+- When using `AddRuleReasonToTrace`, Refinery now also [records an additional](./refinery_config.md#addrulereasontotrace) field, `meta.refinery.send_reason`, that indicates the event which caused refinery to evaluate the trace.
+- There is a new rules operator, `has-root-span`, which returns a boolean value indicating if the trace being evaluated has a root span. The most likely use case is for dropping potentially large long-lived traces.
+- Refinery builds now include binaries for OS/X using arm64 (Apple's M series CPUs)
+
+### Notable fixes
+- The default value for `ConfigReloadInterval` has been lowered to 15s and [its documentation](./refinery_config.md#configreloadinterval) was fixed; it had been incorrectly documented with a feature that was not implemented.
+- OtelMetrics now includes some metrics that were inadvertently omitted from previous releases, like `num_goroutines` and `host.name`.
+- LiveReload now works without deadlocking Refinery.
+- Documentation was improved.
+
+See [the Changelog](./CHANGELOG.md) for the full list of changes.
+
 ## Version 2.0.2
 
 This is a patch release to address additional issues with Refinery 2.0:
 
-* Fixes a performance issue where cluster membership was being queried from Redis with an unreasonably small limit, requiring many round trips and causing occasional timeouts in very large clusters.
-* Fixes a situation where OTel metrics was inappropriately initialized when not configured, causing many errors to be logged as it tried to communicate with Honeycomb.
+- Fixes a performance issue where cluster membership was being queried from Redis with an unreasonably small limit, requiring many round trips and causing occasional timeouts in very large clusters.
+- Fixes a situation where OTel metrics was inappropriately initialized when not configured, causing many errors to be logged as it tried to communicate with Honeycomb.
 
 ## Version 2.0.1
 
