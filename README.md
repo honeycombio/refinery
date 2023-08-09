@@ -12,17 +12,20 @@ For more readable information about recent changes, please see [RELEASE_NOTES.md
 
 ## Purpose
 
-Refinery is a tail-based sampling proxy that operates at the the level of an entire trace. It examines whole traces and intelligently applies sampling decisions (whether to keep or discard) to each trace.
+Refinery is a tail-based sampling proxy and operates at the level of an entire [trace](https://docs.honeycomb.io/concepts/tracing/). Refinery examines whole traces and intelligently applies sampling decisions to each trace. These decisions determine whether to include or discard the trace data in the sampled data forwarded to Honeycomb.
 
-A tail-based sampling model allows you to inspect an entire trace at one time and make a decision to sample based on its contents. For example, perhaps the root span has the HTTP status code to serve for a request, whereas another span might have information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
+A tail-based sampling model allows you to inspect an entire trace at one time and make a decision to sample based on its contents. For example, your data may have a root span that contains the HTTP status code to serve for a request, and another span that contains information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
 
 ### Refinery's tail sampling capabilities
 
 Refinery support several kinds of tail sampling:
 
-* **Dynamic sampling** - This sampling type configures a key based on a trace's set of fields and automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, using a key based on `http.status_code`, requests that return `200` could be included less often in the forwarded sample data, since `200` indicates success and appears in higher frequency, compared to requests that return `404` errors and require investigation.
-* **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, you can sample 100% of traces with an error and then fall back to dynamic sampling for all other traffic.
-* **Throughput-based sampling** - This sampling type enables you to sample traces based on a fixed upper-bound for the number of spans per second. The sampler will dynamically sample traces with a goal to keep the throughput below the specified limit.
+* **Dynamic sampling** - This sampling type configures a key based on a trace's set of fields and automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, using a key based on `http.status_code`, you can include in your sampled data:
+  - one out of every 1,000 traces for requests that return `2xx`
+  - one out of every 10 traces for requests that return `4xx`
+  - every request that returns `5xx`
+* **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, in your sampled data, you can keep 100% of traces with an error and then apply dynamic sampling to all other traffic.
+* **Throughput-based sampling** - This sampling type enables you to sample traces based on a fixed upper-bound for the number of spans per second. The sampler will dynamically sample traces with a goal of keeping the throughput below the specified limit.
 * **Deterministic probability sampling** - This sampling type consistently applies sampling decisions without considering the contents of the trace other than its trace ID. For example, you can include 1 out of every 12 traces in the sampled data sent to Honeycomb. This kind of sampling can also be done using [head sampling](https://docs.honeycomb.io/manage-data-volume/sampling/#head-sampling), and if you use both, Refinery takes that into account.
 
 Refinery lets you combine all of the above techniques to achieve your desired sampling behavior.
@@ -49,7 +52,7 @@ If experiencing a large volume of traffic, you may need to scale out to multiple
 
 We recommend increasing the amount of RAM and the number of cores after your initial set-up.
 Additional RAM and CPU can be used by increasing configuration values; in particular, `CacheCapacity` is an important configuration value. Refinery's `Stress Relief` system provides a good indication of how hard Refinery is working, and when invoked, logs (as `reason`) the name of the Refinery configuration value that should be increased to reduce stress.
-Use our [scaling and troubleshooting documentation](/manage-data-volume/refinery/scale-and-troubleshoot/) to learn more.
+Use our [scaling and troubleshooting documentation](https://docs.honeycomb.io/manage-data-volume/refinery/scale-and-troubleshoot/) to learn more.
 
 ### Setting up Refinery in Kubernetes
 
@@ -76,9 +79,11 @@ This communication can be managed in two ways: via an explicit list of peers in 
 
 ## Configuration
 
-Configuration is controlled by Refinery's two configuration files. For information on all of the configuration parameters that control Refinery's operation, please see [the configuration documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/).
+Configuration is controlled by Refinery's two configuration files - `config.yaml` for general configuration and `rules.yaml` for sampling configuration.
 
-For information on sampler configuration, please see [the sampling methods documentation](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/).
+Learn more about `config.yaml` and all the parameters that control Refinery's operation in our [Refinery configuration documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/).
+
+Learn more about `rules.yaml` and sampler configuration in our [Refinery sampling methods documentation](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/).
 
 ## Running Refinery
 
@@ -88,7 +93,7 @@ Refinery is a typical linux-style command line application, and supports several
 
 ### Environment Variables
 
-Refinery supports the following key environment variables; please see the command line help or the online documentation for the full list. Command line switches take precedence over file configuration, and environment variables take precendence over both.
+Refinery supports the following key environment variables; please see the command line help or the online documentation for the full list. Command line switches take precedence over file configuration, and environment variables take precedence over both.
 
 | Environment Variable                                              | Configuration Field              |
 |-------------------------------------------------------------------|----------------------------------|
@@ -97,7 +102,8 @@ Refinery supports the following key environment variables; please see the comman
 | `REFINERY_REDIS_USERNAME`                                         | `PeerManagement.RedisUsername`   |
 | `REFINERY_REDIS_PASSWORD`                                         | `PeerManagement.RedisPassword`   |
 | `REFINERY_HONEYCOMB_API_KEY`                                      | `HoneycombLogger.LoggerAPIKey`   |
-| `REFINERY_HONEYCOMB_METRICS_API_KEY` `REFINERY_HONEYCOMB_API_KEY`    | `LegacyMetrics.APIKey`           |
+| `REFINERY_HONEYCOMB_METRICS_API_KEY`                              | `LegacyMetrics.APIKey`           |
+| `REFINERY_HONEYCOMB_API_KEY`                                      | `LegacyMetrics.APIKey`           |
 | `REFINERY_QUERY_AUTH_TOKEN`                                       | `QueryAuthToken`                 |
 
 Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
@@ -106,16 +112,16 @@ Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEY
 
 When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery. 
 
-Enable Dry Run Mode by adding `DryRun = true` in your configuration file (`config.yaml`), as noted in [`config_complete.yaml`](https://github.com/honeycombio/refinery/blob/main/config_complete.yaml).
+Enable [Dry Run Mode](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/#run-refinery-in-dry-run-mode) by adding `DryRun = true` in your configuration file (`config.yaml`).
 Then, use [Query Builder in the Honeycomb UI](https://docs.honeycomb.io/working-with-your-data/queries/) to run queries to check your results and verify that the rules are working as intended. 
 
 When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain `0`, reflecting that we are sending all traces to Honeycomb.
 
 ## Scaling Up
 
-Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have statistics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled), but some sampling decisions will be made on incomplete data. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (for example, traces / second started) and multiply that by the maximum duration of a trace (such as 3 seconds), then multiply that by some large buffer (maybe 10x). This estimate will give a good buffer.
+Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have statistics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled), but some sampling decisions will be made on incomplete data. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (for example, traces / second started) and multiply that by the maximum duration of a trace (such as 3 seconds), then multiply that by some large buffer (maybe 10x). This estimate will give a good headroom.
 
-Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2G of memory to handle 5000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
+Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2GB of memory to handle 5,000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
 
 ## Understanding Regular Operation
 
