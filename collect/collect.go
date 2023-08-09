@@ -552,7 +552,7 @@ func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
 	return true
 }
 
-func (i *InMemCollector) send(trace *types.Trace, reason string) {
+func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
@@ -572,7 +572,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 		i.Metrics.Increment("trace_send_no_root")
 	}
 
-	i.Metrics.Increment(reason)
+	i.Metrics.Increment(sendReason)
 
 	var sampler sample.Sampler
 	var found bool
@@ -630,6 +630,7 @@ func (i *InMemCollector) send(trace *types.Trace, reason string) {
 	for _, sp := range trace.GetSpans() {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
+			sp.Data["meta.refinery.send_reason"] = sendReason
 			if key != "" {
 				sp.Data["meta.refinery.sample_key"] = key
 			}

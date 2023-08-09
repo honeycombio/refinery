@@ -159,6 +159,7 @@ type EMADynamicSamplerConfig struct {
 
 type EMAThroughputSamplerConfig struct {
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	InitialSampleRate    int      `json:"initialsamplerate" yaml:"InitialSampleRate,omitempty"`
 	AdjustmentInterval   Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
 	Weight               float64  `json:"weight" yaml:"Weight,omitempty"`
@@ -174,13 +175,15 @@ type WindowedThroughputSamplerConfig struct {
 	UpdateFrequency      Duration `json:"updatefrequency" yaml:"UpdateFrequency,omitempty"`
 	LookbackFrequency    Duration `json:"lookbackfrequency" yaml:"LookbackFrequency,omitempty"`
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty"`
 	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
 type TotalThroughputSamplerConfig struct {
-	GoalThroughputPerSec int64    `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
+	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
+	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
 	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`

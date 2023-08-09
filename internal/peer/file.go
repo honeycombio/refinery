@@ -25,5 +25,7 @@ func (p *filePeers) GetPeers() ([]string, error) {
 }
 
 func (p *filePeers) RegisterUpdatedPeersCallback(callback func()) {
-	// do nothing, file based peers are not reloaded
+	// whenever registered, call the callback immediately
+	// otherwise do nothing since they never change
+	callback()
 }

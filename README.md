@@ -12,41 +12,43 @@ For more readable information about recent changes, please see [RELEASE_NOTES.md
 
 ## Purpose
 
-Refinery is a trace-aware tail-based sampling proxy. It examines whole traces and intelligently applies sampling decisions (whether to keep or discard) to each trace.
+Refinery is a tail-based sampling proxy that operates at the the level of an entire trace. It examines whole traces and intelligently applies sampling decisions (whether to keep or discard) to each trace.
 
-Tail-based sampling allows you to inspect a whole trace and make a decision to sample based on its contents. For example, the root span has the HTTP status code to serve for a request, whereas another span might have information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
+A tail-based sampling model allows you to inspect an entire trace at one time and make a decision to sample based on its contents. For example, perhaps the root span has the HTTP status code to serve for a request, whereas another span might have information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
 
 ### Refinery's tail sampling capabilities
 
 Refinery support several kinds of tail sampling:
 
-- **Dynamic sampling** - This sampling type configures a key based on a trace's set of fields and automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, using a key based on `http.status_code`, requests that return `200` could be included less often in the forwarded sample data, since `200` indicates success and appears in higher frequency, compared to requests that return `404` errors and require investigation.
-- **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, you can sample 100% of traces with an error and then fall back to dynamic sampling for all other traffic.
-- **Throughput-based sampling** - This sampling type enables you to sample traces based on a fixed upper-bound for the number of spans per second. The sampler will dynamically sample traces with a goal to keep the throughput below the specified limit.
-- **Deterministic probability sampling*** - This sampling type consistently applies sampling decisions without factoring the trace's field or values. For example, you can include 1 out of every 12 traces in the sampled data sent to Honeycomb. If this sample type is the only type you plan to use, consider using [head sampling options](/manage-data-volume/sampling/#head-sampling) instead of Refinery.
+* **Dynamic sampling** - This sampling type configures a key based on a trace's set of fields and automatically increases or decreases the sampling rate based on how frequently each unique value of that key occurs. For example, using a key based on `http.status_code`, requests that return `200` could be included less often in the forwarded sample data, since `200` indicates success and appears in higher frequency, compared to requests that return `404` errors and require investigation.
+* **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, you can sample 100% of traces with an error and then fall back to dynamic sampling for all other traffic.
+* **Throughput-based sampling** - This sampling type enables you to sample traces based on a fixed upper-bound for the number of spans per second. The sampler will dynamically sample traces with a goal to keep the throughput below the specified limit.
+* **Deterministic probability sampling** - This sampling type consistently applies sampling decisions without considering the contents of the trace other than its trace ID. For example, you can include 1 out of every 12 traces in the sampled data sent to Honeycomb. This kind of sampling can also be done using [head sampling](https://docs.honeycomb.io/manage-data-volume/sampling/#head-sampling), and if you use both, Refinery takes that into account.
 
 Refinery lets you combine all of the above techniques to achieve your desired sampling behavior.
 
 ## Setting up Refinery
 
-Refinery is designed to sit within your infrastructure where all traces can reach it.
-A standard deployment will have a cluster of two or more Refinery processes accessible via a separate load balancer.
+Refinery is designed to sit within your infrastructure where all traces can reach it. Refinery can run standalone or be deployed in a cluster of two or more Refinery processes accessible via a separate load balancer.
+
 Refinery processes must be able to communicate with each other to concentrate traces on single servers.
 
 Within your application (or other Honeycomb event sources) you would configure the `API Host` to be `http(s)://load-balancer/`. Everything else remains the same (API key, dataset name, and so on - all that lives with the originating client).
 
 ### Minimum Configuration
 
-To begin, your Refinery cluster requires a minimum of:
+Every Refinery instance should have a minimum of:
 
 - a `linux/amd64` or `linux/arm64` operating system
 - 2GB RAM for each server used
 - Access to 2 cores for each server used
 
 In many cases, Refinery only needs one node.
+Refinery clusters usually run best with fewer, larger servers; for large installations, 16 cores and 16GB of RAM per server is not unusual (with appropriate tuning).
 If experiencing a large volume of traffic, you may need to scale out to multiple nodes, and likely need a small Redis cluster to handle scaling.
 
 We recommend increasing the amount of RAM and the number of cores after your initial set-up.
+Additional RAM and CPU can be used by increasing configuration values; in particular, `CacheCapacity` is an important configuration value. Refinery's `Stress Relief` system provides a good indication of how hard Refinery is working, and when invoked, logs (as `reason`) the name of the Refinery configuration value that should be increased to reduce stress.
 Use our [scaling and troubleshooting documentation](/manage-data-volume/refinery/scale-and-troubleshoot/) to learn more.
 
 ### Setting up Refinery in Kubernetes
@@ -66,58 +68,27 @@ This installation will use the default values file. You can also supply your own
 helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
 ```
 
-To install a specific version or override the default values, refer to [Refinery Helm chart documentation](https://artifacthub.io/packages/helm/honeycomb/refinery) to learn more about configuration.
+## Peer Management
+
+When operating in a cluster, Refinery expects to gather all of the spans in a trace onto a single instance so that it can make a trace decision. Since each span arrives independently, each Refinery instance needs to be able to communicate with all of its peers in order to distribute traces to the correct instance.
+
+This communication can be managed in two ways: via an explicit list of peers in the configuration file, or by using self-registration via a shared Redis cache. Installations should generally prefer to use Redis. Even in large installations, the load on the Redis server is quite light, with each instance only making a few requests per minute. A single Redis instance with fractional CPU is usually sufficient.
 
 ## Configuration
 
-Configuration is done in one of two ways:
+Configuration is controlled by Refinery's two configuration files. For information on all of the configuration parameters that control Refinery's operation, please see [the configuration documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/).
 
-1. Entirely by the configuration file 
-1. A combination of the configuration file and a Redis service. All other configuration remains managed by the configuration file while a Redis service manages the list of peers in the cluster.
+For information on sampler configuration, please see [the sampling methods documentation](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/).
 
-There are a few vital configuration options; read through this list and make sure all the variables are set.
+## Running Refinery
 
-### File-based Configuration
+Refinery is a typical linux-style command line application, and supports several command line switches.
 
-- API Keys: Refinery itself needs to be configured with a list of your API keys. This lets it respond with a `401`/Unauthorized if an unexpected API key is used. You can configure Refinery to accept all API keys by setting it to `*` but then you will lose the authentication feedback to your application. Refinery will accept all events even if those events will eventually be rejected by the Honeycomb API due to an API key issue.
-
-- Goal Sample Rate and the list of fields you'd like to use to generate the keys off which sample rate is chosen. This is where the power of the proxy comes in - being able to dynamically choose sample rates based on the contents of the traces as they go by. There is an overall default and dataset-specific sections for this configuration, so that different datasets can have different sets of fields and goal sample rates.
-
-- Trace timeout - it should be set higher (maybe double?) the longest expected trace. If all of your traces complete in under 10 seconds, 30 is a good value here. If you have traces that can last minutes, it should be raised accordingly. Note that the trace doesn't _have_ to complete before this timer expires - but the sampling decision will be made at that time. So any spans that contain fields that you want to use to compute the sample rate should arrive before this timer expires. Additional spans that arrive after the timer has expired will be sent or dropped according to the sampling decision made when the timer expired.
-
-- Peer list: this is a list of all the other servers participating in this Refinery cluster. Traces are evenly distributed across all available servers, and any one trace must be concentrated on one server, regardless of which server handled the incoming spans. The peer list lets the cluster move spans around to the server that is handling the trace. (Not used in the Redis-based config.)
-
-- Buffer size: The `InMemCollector`'s `CacheCapacity` setting determines how many in-flight traces you can have. This should be large enough to avoid overflow. Some multiple (2x, 3x) the total number of in-flight traces you expect is a good place to start. If it's too low you will see the `collect_cache_buffer_overrun` metric increment. If you see that, you should increase the size of the buffer.
-
-There are a few components of Refinery with multiple implementations; the configuration file lets you choose which you'd like. As an example, there are two logging implementations - one that uses `logrus` and sends logs to STDOUT and a `honeycomb` implementation that sends the log messages to a Honeycomb dataset instead. Components with multiple implementations have one top level configuration item that lets you choose which implementation to use and then a section further down with additional configuration options for that choice (for example, the Honeycomb logger requires an API key).
-
-When configuration changes, Refinery will automatically reload the configuration.
-
-**Note**: When running Refinery within Docker, be sure to mount the directory containing Configuration and Rules files so that [reloading will work](https://github.com/spf13/viper/issues/920) as expected.
-
-### Redis-based Peer Management
-
-When using peer management in Redis, all other configuration options **except** peer management are still handled by the configuration file.
-Only coordinating the list of peers in the Refinery cluster is managed with Redis.
-
-To enable the Redis-based config:
-
-- set `PeerManagement.Type` in the configuration file to "redis"
-
-When launched in `redis-config` mode, Refinery needs a Redis host to use for managing the list of peers in the Refinery cluster. This hostname and port can be specified in one of two ways:
-
-- set the `REFINERY_REDIS_HOST` environment variable (and optionally set the `REFINERY_REDIS_USERNAME` and `REFINERY_REDIS_PASSWORD` environment variables)
-- set the `RedisHost` field in the configuration file (and optionally the `RedisUsername` and `RedisPassword` fields in the same file)
-
-The Redis host should be a hostname and a port, such as `redis.mydomain.com:6379`. The example configuration file has `localhost:6379`, which will not work with more than one host. When TLS is required to connect to the Redis instance, set the `UseTLS` configuration to `true`.
-
-By default, a Refinery process will register itself in Redis using its local hostname as its identifier for peer communications.
-In environments where domain name resolution is slow or unreliable, override the reliance on name lookups by specifying the name of the peering network interface with the `IdentifierInterfaceName` configuration option.
-For more details on tuning a cluster, read the [Refinery Scale and Troubleshooting documentation](https://docs.honeycomb.io/manage-data-volume/refinery/scale-and-troubleshoot/).
+`refinery -h` will print an extended help text listing all command line options and supported environment variables.
 
 ### Environment Variables
 
-Refinery supports the following environment variables. Environment variables take precedence over file configuration.
+Refinery supports the following key environment variables; please see the command line help or the online documentation for the full list. Command line switches take precedence over file configuration, and environment variables take precendence over both.
 
 | Environment Variable                                              | Configuration Field              |
 |-------------------------------------------------------------------|----------------------------------|
@@ -131,53 +102,6 @@ Refinery supports the following environment variables. Environment variables tak
 
 Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
 
-### Mixing Classic and Environment & Services Rule Definitions
-
-**Note**: This section only applies to Honeycomb users who had a team before the [Honeycomb Environments and Services](https://changelog.honeycomb.io/preview-new-environments-and-services-functionality-in-honeycomb!-227356) change and have a Classic environment.
-
-Use the `DatasetPrefix` configuration property to support both sending telemetry to a classic dataset and a new environment with the same name, such as `production`.
-
-After setting the `DatasetPrefix` value, use that prefix in the rules definitions for your Classic datasets.
-
-When Refinery receives telemetry using an API key associated to a Classic dataset, it uses the prefix in the form `{prefix}.{dataset}` when trying to resolve the rules definition. Using the prefix and the Classic dataset name together is required when sending to a Classic dataset.
-
-For example, in `config.yaml`, set `DatasetPrefix`.
-
-```yaml
-DatasetPrefix = "classic"
-```
-
-In `rules.yaml`, use "classic" as the prefix to designate your Classic dataset.
-
-```yaml
-# default rules
-Sampler = "DeterministicSampler"
-SampleRate = 1
-
-    [production] # environment called "production"
-    Sampler = "DeterministicSampler"
-    SampleRate = 5
-
-    [classic.production] # dataset called "production"
-    Sampler = "DeterministicSampler"
-    SampleRate = 10
-```
-
-## How Sampling Decisions are Made
-
-In the Rules configuration file (`rules.yaml`), choose from several sampling methods and define the fields that determine your sampled data. By selecting fields well, you can drop significant amounts of traffic while still retaining good visibility into interesting areas of traffic. For example, if you want to make sure you have a complete list of all URL handlers invoked, you can add the URL (or a normalized form) as one of the fields to include. <!--Still need to include a better example that's upgraded from dynsampler, which is no longer recommended by us --->
-
-Each field included should ideally have values that appear many times within any given 30 second window in order to effectively turn into a sample rate. Try to select a combination of fields that doesn't create a unique key each time. Unique values, like a UUID, will cause data to be not sampled.
-
-Each sampling method has their own algorithm and use case strengths. Refer to the existing sampling methods and their options in [refinery_rules.md](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md). Available options include:
-
-- [Dynamic Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#dynamic-sampler) 
-- [Deterministic Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#deterministic-sampler)
-- [EMA Dynamic Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#ema-dynamic-sampler)
-- [EMA Throughput Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#ema-throughput-sampler)
-- [Windowed Throughput Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#windowed-throughput-sampler)
-- [Rules-based Sampler](https://github.com/honeycombio/refinery/blob/main/refinery_rules.md#rules-based-sampler)
-
 ## Dry Run Mode
 
 When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery. 
@@ -185,19 +109,17 @@ When getting started with Refinery or when updating sampling rules, it may be he
 Enable Dry Run Mode by adding `DryRun = true` in your configuration file (`config.yaml`), as noted in [`config_complete.yaml`](https://github.com/honeycombio/refinery/blob/main/config_complete.yaml).
 Then, use [Query Builder in the Honeycomb UI](https://docs.honeycomb.io/working-with-your-data/queries/) to run queries to check your results and verify that the rules are working as intended. 
 
-By enabling Dry Run Mode, all spans in each trace will be marked with the sampling decision in a field called `refinery_kept`. All traces will be sent to Honeycomb regardless of the sampling decision. The `SampleRate` will not be changed, but the calculated `SampleRate` will be stored in a field called `meta.dryrun.sample_rate`.
-
 When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain `0`, reflecting that we are sending all traces to Honeycomb.
 
 ## Scaling Up
 
-Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have statistics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled) but the sampling decisions will be inconsistent so you'll wind up with partial traces making it through the sampler and it will be very confusing. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces, such as traces / second started, and multiply that by the maximum duration of a trace (such as 3 seconds), then multiply that by some large buffer (maybe 10x). This estimate will give you good headroom.
+Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have statistics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled), but some sampling decisions will be made on incomplete data. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (for example, traces / second started) and multiply that by the maximum duration of a trace (such as 3 seconds), then multiply that by some large buffer (maybe 10x). This estimate will give a good buffer.
 
 Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2G of memory to handle 5000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
 
 ## Understanding Regular Operation
 
-Refinery emits a number of metrics to give some indication about the health of the process. These metrics can be exposed to Prometheus or sent up to Honeycomb. The interesting ones to watch are:
+Refinery emits a number of metrics to give some indication about the health of the process. These metrics should be sent to Honeycomb, typically with Open Telemetry, and can also be exposed to Prometheus. The interesting ones to watch are:
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
 - `[incoming|peer]_router_\*`: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
@@ -208,11 +130,15 @@ Refinery emits a number of metrics to give some indication about the health of t
 
 ### Logging
 
-The default logging level of `warn` is almost entirely silent. The `debug` level emits too much data to be used in production, but contains excellent information in a pre-production environment. Setting the logging level to `debug` during initial configuration will help understand what's working and what's not, but when traffic volumes increase it should be set to `warn`.
+The default logging level of `warn` is fairly quiet. The `debug` level emits too much data to be used in production, but contains excellent information in a pre-production environment,including trace decision information. `info` is somewhere between. Setting the logging level to `debug` during initial configuration will help understand what's working and what's not, but when traffic volumes increase it should be set to `warn` or even `error`. Logs may be sent to stdout or to Honeycomb.
 
-### Configuration
+### Configuration Validation
 
-When using the standard configuration file formats, such as TOML and YAML, check the loaded configuration by using one of the `/query` endpoints from the command line on a server that can access a refinery host.
+Refinery validates its configuration on startup or when a configuration is reloaded, and it emits diagnostics for any problems. On startup, it will refuse to start; on reload, it will not change the existing configuration.
+
+### Configuration Query
+
+When using the standard configuration file formats, such as TOML and YAML, check the loaded configuration by using one of the `/query` endpoints from the command line on a server that can access a Refinery host.
 
 The `/query` endpoints are protected and can be enabled by specifying `QueryAuthToken` in the configuration file or specifying `REFINERY_QUERY_AUTH_TOKEN` in the environment. All requests to any `/query` endpoint must include the header `X-Honeycomb-Refinery-Query` set to the value of the specified token.
 

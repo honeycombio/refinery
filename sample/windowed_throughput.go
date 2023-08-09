@@ -19,20 +19,26 @@ type WindowedThroughputSampler struct {
 
 	updatefrequency      config.Duration
 	lookbackfrequency    config.Duration
-	goalthroughputpersec int
+	goalThroughputPerSec int
+	clusterSize          int
+	useClusterSize       bool
 	maxKeys              int
 	prefix               string
 	lastMetrics          map[string]int64
 
 	key *traceKey
 
-	dynsampler dynsampler.Sampler
+	dynsampler *dynsampler.WindowedThroughput
 }
 
 func (d *WindowedThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting WindowedThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting WindowedThroughputSampler") }()
-	d.goalthroughputpersec = d.Config.GoalThroughputPerSec
+	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
+	d.useClusterSize = d.Config.UseClusterSize
+	if d.clusterSize == 0 {
+		d.clusterSize = 1
+	}
 	d.updatefrequency = d.Config.UpdateFrequency
 	d.lookbackfrequency = d.Config.LookbackFrequency
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
@@ -44,7 +50,7 @@ func (d *WindowedThroughputSampler) Start() error {
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.WindowedThroughput{
-		GoalThroughputPerSec:      float64(d.goalthroughputpersec),
+		GoalThroughputPerSec:      float64(d.goalThroughputPerSec) / float64(d.clusterSize),
 		UpdateFrequencyDuration:   time.Duration(d.updatefrequency),
 		LookbackFrequencyDuration: time.Duration(d.lookbackfrequency),
 		MaxKeys:                   d.maxKeys,
@@ -61,6 +67,13 @@ func (d *WindowedThroughputSampler) Start() error {
 	d.Metrics.Register(d.prefix+"sample_rate", "histogram")
 
 	return nil
+}
+
+func (d *WindowedThroughputSampler) SetClusterSize(size int) {
+	if d.useClusterSize {
+		d.clusterSize = size
+		d.dynsampler.GoalThroughputPerSec = float64(d.goalThroughputPerSec) / float64(size)
+	}
 }
 
 func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {

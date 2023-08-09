@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-08-01 at 15:26:34 UTC.
+It was automatically generated on 2023-08-02 at 02:45:17 UTC.
 
 ## The Rules file
 
@@ -260,6 +260,14 @@ This value is calculated for the individual instance, not for the cluster; if yo
 
 Type: `int`
 
+### `UseClusterSize`
+
+Indicates whether to use the cluster size to calculate the goal throughput.
+If `true`, then the goal throughput will be divided by the number of instances in the cluster.
+If `false`, then the goal throughput will be the value specified in `GoalThroughputPerSec`.
+
+Type: `bool`
+
 ### `InitialSampleRate`
 
 `InitialSampleRate` is the sample rate to use during startup, before the sampler has accumulated enough data to calculate a reasonable throughput.
@@ -372,6 +380,14 @@ The sampler will adjust sample rates to try to achieve this desired throughput.
 This value is calculated for the individual instance, not for the cluster; if your cluster has multiple instances, then you will need to divide your total desired sample rate by the number of instances to get this value.
 
 Type: `int`
+
+### `UseClusterSize`
+
+Indicates whether to use the cluster size to calculate the goal throughput.
+If `true`, then the goal throughput will be divided by the number of instances in the cluster.
+If `false`, then the goal throughput will be the value specified in `GoalThroughputPerSec`.
+
+Type: `bool`
 
 ### `UpdateFrequency`
 
@@ -528,7 +544,7 @@ String comparisons are case-sensitive.
 
 Type: `string`
 
-- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`
+- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`
 
 ### `Value`
 
@@ -567,6 +583,14 @@ This is the number of events per second you want to send.
 This is not the same as the Sample Rate.
 
 Type: `int`
+
+### `UseClusterSize`
+
+Indicates whether to use the cluster size to calculate the goal throughput.
+If `true`, then the goal throughput will be divided by the number of instances in the cluster.
+If `false`, then the goal throughput will be the value specified in `GoalThroughputPerSec`.
+
+Type: `bool`
 
 ### `ClearFrequency`
 

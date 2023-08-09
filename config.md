@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-08-01 at 15:26:34 UTC.
+It was automatically generated on 2023-08-02 at 23:32:04 UTC.
 
 ## The Config file
 
@@ -87,14 +87,14 @@ When Refinery receives telemetry using an API key associated with a Honeycomb Cl
 
 ConfigReloadInterval is the average interval between attempts at reloading the configuration file.
 
-A single instance of Refinery will attempt to read its configuration and check for changes at approximately this interval.
-This time is varied by a random amount to avoid all instances refreshing together.
-Within a cluster, Refinery will gossip information about new configuration so that all instances can reload at close to the same time.
-Disable this feature with a value of `0s`.
+Refinery will attempt to read its configuration and check for changes at approximately this interval.
+This time is varied by a random amount up to 10% to avoid all instances refreshing together.
+In installations where configuration changes are handled by restarting Refinery, which is often the case when using Kubernetes, disable this feature with a value of `0s`.
+If the config file is being loaded from a URL, it may be wise to increase this value to avoid overloading the file server.
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `5m`
+- Default: `15s`
 
 ## Network Configuration
 
@@ -171,6 +171,9 @@ AddRuleReasonToTrace controls whether to decorate traces with Refinery rule eval
 
 When enabled, this setting causes traces that are sent to Honeycomb to include the field `meta.refinery.reason`.
 This field contains text indicating which rule was evaluated that caused the trace to be included.
+This setting also includes the field `meta.refinery.send_reason`, which contains the reason that the trace was sent.
+Possible values of this field are `trace_send_got_root`, which means that the root span arrived; `trace_send_expired`, which means that TraceTimeout was reached; `trace_send_ejected_full`, which means that the trace cache was full; and `trace_send_ejected_memsize`, which means that refinery was out of memory.
+These names are also the names of metrics that refinery tracks.
 We recommend enabling this setting whenever a rules-based sampler is in use, as it is useful for debugging and understanding the behavior of your Refinery installation.
 
 - Eligible for live reload.

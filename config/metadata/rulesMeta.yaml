@@ -265,6 +265,8 @@ groups:
         type: int
         validations:
           - type: requiredInGroup
+          - type: minimum
+            arg: 1
         summary: is the desired throughput per second of events sent to Honeycomb.
         description: >
           The desired throughput **per second**. This is the number of events
@@ -274,6 +276,14 @@ groups:
           cluster has multiple instances, then you will need to divide your
           total desired sample rate by the number of instances to get this
           value.
+      - name: UseClusterSize
+        type: bool
+        summary: indicates whether to use the cluster size to calculate the goal throughput.
+        description: >
+          Indicates whether to use the cluster size to calculate the goal
+          throughput. If `true`, then the goal throughput will be divided by the
+          number of instances in the cluster. If `false`, then the goal
+          throughput will be the value specified in `GoalThroughputPerSec`.
       - name: InitialSampleRate
         type: int
         summary: is the sample rate to use.
@@ -363,6 +373,8 @@ groups:
         type: int
         validations:
           - type: requiredInGroup
+          - type: minimum
+            arg: 1
         summary: is the desired throughput per second of events sent to Honeycomb.
         description: >
           The desired throughput **per second**. This is the number of events
@@ -372,6 +384,14 @@ groups:
           cluster has multiple instances, then you will need to divide your
           total desired sample rate by the number of instances to get this
           value.
+      - name: UseClusterSize
+        type: bool
+        summary: indicates whether to use the cluster size to calculate the goal throughput.
+        description: >
+          Indicates whether to use the cluster size to calculate the goal
+          throughput. If `true`, then the goal throughput will be divided by the
+          number of instances in the cluster. If `false`, then the goal
+          throughput will be the value specified in `GoalThroughputPerSec`.
       - name: UpdateFrequency
         type: duration
         summary: is how often the sampling rate is recomputed.
@@ -429,11 +449,21 @@ groups:
         type: int
         validations:
           - type: requiredInGroup
+          - type: minimum
+            arg: 1
         summary: is the desired throughput per second of events sent to Honeycomb.
         description: >
           The desired throughput per second of events sent to Honeycomb. This is
           the number of events per second you want to send. This is not the same
           as the Sample Rate.
+      - name: UseClusterSize
+        type: bool
+        summary: indicates whether to use the cluster size to calculate the goal throughput.
+        description: >
+          Indicates whether to use the cluster size to calculate the goal
+          throughput. If `true`, then the goal throughput will be divided by the
+          number of instances in the cluster. If `false`, then the goal
+          throughput will be the value specified in `GoalThroughputPerSec`.
       - name: ClearFrequency
         type: duration
         summary: is the duration over which the sampler will calculate the throughput.
