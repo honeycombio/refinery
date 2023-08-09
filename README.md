@@ -36,7 +36,7 @@ Refinery is designed to sit within your infrastructure where all traces can reac
 
 Refinery processes must be able to communicate with each other to concentrate traces on single servers.
 
-Within your application (or other Honeycomb event sources) you would configure the `API Host` to be `http(s)://load-balancer/`. Everything else remains the same (API key, dataset name, and so on - all that lives with the originating client).
+Within your application (or other Honeycomb event sources), you would configure the `API Host` to be `http(s)://load-balancer/`. Everything else remains the same, such as API key, dataset name, and so on since all that lives with the originating client.
 
 ### Minimum Configuration
 
@@ -58,18 +58,20 @@ Use our [scaling and troubleshooting documentation](https://docs.honeycomb.io/ma
 
 Refinery is available as a Helm chart in the Honeycomb Helm repository.
 
-You can install Refinery with the following command:
+You can install Refinery with the following command, which uses the default values file:
 
 ```bash
 helm repo add honeycomb https://honeycombio.github.io/helm-charts
 helm install refinery honeycomb/refinery
 ```
 
-This installation will use the default values file. You can also supply your own:
+Alternatively, supply your own custom values file:
 
 ```bash
 helm install refinery honeycomb/refinery --values /path/to/refinery-values.yaml
 ```
+
+where `/path/to/refinery-values.yaml` is the file's path.
 
 ## Peer Management
 
@@ -129,7 +131,7 @@ Refinery emits a number of metrics to give some indication about the health of t
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
 - `[incoming|peer]_router_\*`: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
-- `collect_cache_buffer_overrun`: this should remain zero; a positive value indicates the need to grow the size of the collector's circular buffer (via configuration `CacheCapacity`).
+- `collect_cache_buffer_overrun`: this should remain zero; a positive value indicates the need to grow the size of the Collector's circular buffer (via configuration `CacheCapacity`).
 - `process_uptime_seconds`: records the uptime of each process; look for unexpected restarts as a key towards memory constraints.
 
 ## Troubleshooting
@@ -185,13 +187,13 @@ Refinery does not yet buffer traces or sampling decisions to disk. When you rest
 
 Within each directory, the interface the dependency exports is in the file with the same name as the directory and then (for the most part) each of the other files are alternative implementations of that interface. For example, in `logger`, `/logger/logger.go` contains the interface definition and `logger/honeycomb.go` contains the implementation of the `logger` interface that will send logs to Honeycomb.
 
-`main.go` sets up the app and makes choices about which versions of dependency implementations to use (eg which logger, which sampler, etc.) It starts up everything and then launches `App`
+`main.go` sets up the app and makes choices about which versions of dependency implementations to use (eg which logger, which sampler, etc.) It starts up everything and then launches `App`.
 
 `app/app.go` is the main control point. When its `Start` function ends, the program shuts down. It launches two `Router`s which listen for incoming events.
 
 `route/route.go` listens on the network for incoming traffic. There are two routers running and they handle different types of incoming traffic: events coming from the outside world (the `incoming` router) and events coming from another member of the Refinery cluster (`peer` traffic). Once it gets an event, it decides where it should go next: is this incoming request an event (or batch of events), and if so, does it have a trace ID? Everything that is not an event or an event that does not have a trace ID is immediately handed to `transmission` to be forwarded on to Honeycomb. If it is an event with a trace ID, the router extracts the trace ID and then uses the `sharder` to decide which member of the Refinery cluster should handle this trace. If it's a peer, the event will be forwarded to that peer. If it's us, the event will be transformed into an internal representation and handed to the `collector` to bundle spans into traces.
 
-`collect/collect.go` the collector is responsible for bundling spans together into traces and deciding when to send them to Honeycomb or if they should be dropped. The first time a trace ID is seen, the collector starts a timer. If the root span (aka a span with a trace ID and no parent ID) arrives before the timer expires, then the trace is considered complete. The trace is sent and the timer is canceled. If the timer expires before the root span arrives, the trace will be sent whether or not it is complete. Just before sending, the collector asks the `sampler` for a sample rate and whether or not to keep the trace. The collector obeys this sampling decision and records it (the record is applied to any spans that may come in as part of the trace after the decision has been made). After making the sampling decision, if the trace is to be kept, it is passed along to the `transmission` for actual sending.
+`collect/collect.go` the Collector is responsible for bundling spans together into traces and deciding when to send them to Honeycomb or if they should be dropped. The first time a trace ID is seen, the Collector starts a timer. If the root span, which is a span with a trace ID and no parent ID, arrives before the timer expires, then the trace is considered complete. The trace is sent and the timer is canceled. If the timer expires before the root span arrives, the trace will be sent whether or not it is complete. Just before sending, the Collector asks the `sampler` for a sample rate and whether or not to keep the trace. The Collector obeys this sampling decision and records it (the record is applied to any spans that may come in as part of the trace after the decision has been made). After making the sampling decision, if the trace is to be kept, it is passed along to the `transmission` for actual sending.
 
 `transmit/transmit.go` is a wrapper around the HTTP interactions with the Honeycomb API. It handles batching events together and sending them upstream.
 
