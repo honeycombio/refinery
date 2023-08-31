@@ -140,11 +140,13 @@ groups:
         validations:
           - type: elementType
             arg: string
-        summary: is a set of Honeycomb API keys that the proxy will treat specially.
+        summary: is a set of Honeycomb API keys that the proxy will pass along to Honeycomb.
         description: >
-          This list only applies to span traffic - other Honeycomb API actions
-          will be proxied through to the upstream API directly without modifying
-          keys.
+          This list of Honeycomb API keys will be verified against incoming span
+          traffic. Depending on `AcceptOnlyListedKeys`, spans with API Keys not
+          matching this list could be rejected. This list only applies to span
+          traffic - other Honeycomb API actions will be proxied through to the
+          upstream API directly without modifying keys.
 
       - name: AcceptOnlyListedKeys
         type: bool
