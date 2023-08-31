@@ -20,6 +20,7 @@ commands:
       - run: |
           GOOS=<< parameters.os >> \
           GOARCH=<< parameters.arch >> \
+          CGO_ENABLED=0 \
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
           -o $GOPATH/bin/refinery-<< parameters.os >>-<< parameters.arch >> \
           ./cmd/refinery
@@ -42,6 +43,7 @@ commands:
       - run: |
           GOOS=<< parameters.os >> \
           GOARCH=<< parameters.arch >> \
+          CGO_ENABLED=0 \
           go build -ldflags "-X main.BuildID=${CIRCLE_TAG:-${CIRCLE_SHA1:0:7}}" \
           -o $GOPATH/bin/convert-<< parameters.os >>-<< parameters.arch >> \
           ./tools/convert
