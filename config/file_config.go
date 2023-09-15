@@ -304,6 +304,7 @@ type RedisPeerManagementConfig struct {
 	Host           string   `yaml:"Host" cmdenv:"RedisHost"`
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
+	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
 	Prefix         string   `yaml:"Prefix" default:"refinery"`
 	Database       int      `yaml:"Database"`
 	UseTLS         bool     `yaml:"UseTLS" `
@@ -667,6 +668,13 @@ func (f *fileConfig) GetRedisPassword() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.Password, nil
+}
+
+func (f *fileConfig) GetRedisAuthCode() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.AuthCode, nil
 }
 
 func (f *fileConfig) GetRedisDatabase() int {
