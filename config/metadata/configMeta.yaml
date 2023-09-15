@@ -806,6 +806,19 @@ groups:
         description: >
           Many Redis installations do not use this field.
 
+      - name: AuthCode
+        v1group: PeerManagement
+        v1name: AuthCode
+        type: string
+        default: ""
+        valuetype: nonemptystring
+        reload: false
+        envvar: REFINERY_REDIS_AUTH_CODE
+        commandline: redis-auth-code
+        summary: is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command.
+        description: >
+          Many Redis installations do not use this field.
+
       - name: Prefix
         v1group: PeerManagement
         v1name: Prefix
