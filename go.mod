@@ -27,7 +27,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.8.4
-	github.com/tidwall/gjson v1.16.0
+	github.com/tidwall/gjson v1.17.0
 	github.com/vmihailenco/msgpack/v4 v4.3.11
 	go.opentelemetry.io/otel v1.17.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.40.0
