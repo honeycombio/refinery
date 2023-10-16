@@ -14,8 +14,8 @@ import (
 	"sync"
 	"syscall"
 
+	deltaprof "github.com/grafana/pyroscope-go/godeltaprof/http/pprof"
 	"github.com/honeycombio/refinery/config"
-	deltaprof "github.com/pyroscope-io/godeltaprof/http/pprof"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/rcrowley/go-metrics/exp"
 	"github.com/sirupsen/logrus"
