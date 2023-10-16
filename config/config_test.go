@@ -122,6 +122,20 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	}
 }
 
+func TestRedisAuthCodeEnvVar(t *testing.T) {
+	const authCode = "A:LKNGSDKLSHOE&SDLFKN"
+	const envVarName = "REFINERY_REDIS_AUTH_CODE"
+	os.Setenv(envVarName, authCode)
+	defer os.Unsetenv(envVarName)
+
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	assert.NoError(t, err)
+
+	if d, _ := c.GetRedisAuthCode(); d != authCode {
+		t.Error("received", d, "expected", authCode)
+	}
+}
+
 func TestMetricsAPIKeyEnvVar(t *testing.T) {
 	testCases := []struct {
 		name   string

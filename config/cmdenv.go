@@ -34,6 +34,7 @@ type CmdEnv struct {
 	RedisHost             string `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
 	RedisUsername         string `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username"`
 	RedisPassword         string `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password"`
+	RedisAuthCode         string `long:"redis-auth-code" env:"REFINERY_REDIS_AUTH_CODE" description:"Redis AUTH code"`
 	HoneycombAPI          string `long:"honeycomb-api" env:"REFINERY_HONEYCOMB_API" description:"Honeycomb API URL"`
 	HoneycombAPIKey       string `long:"honeycomb-api-key" env:"REFINERY_HONEYCOMB_API_KEY" description:"Honeycomb API key (for logger and metrics)"`
 	HoneycombLoggerAPIKey string `long:"logger-api-key" env:"REFINERY_HONEYCOMB_LOGGER_API_KEY" description:"Honeycomb logger API key"`

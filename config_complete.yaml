@@ -673,6 +673,14 @@ RedisPeerManagement:
     ## Not eligible for live reload.
     # Password: ""
 
+    ## AuthCode is the string used to connect to Redis for peer cluster
+    ## membership management using an explicit AUTH command.
+    ##
+    ## Many Redis installations do not use this field.
+    ##
+    ## Not eligible for live reload.
+    # Password: ""
+
     ## Prefix is a string used as a prefix for the keys in Redis while
     ## storing the peer membership.
     ##
