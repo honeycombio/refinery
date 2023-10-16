@@ -11,6 +11,7 @@ require (
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
 	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/mux v1.8.0
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.3
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/honeycombio/dynsampler-go v0.5.1
 	github.com/honeycombio/husky v0.22.4
@@ -22,7 +23,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.1.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/pyroscope-io/godeltaprof v0.1.2
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/sourcegraph/conc v0.3.0
