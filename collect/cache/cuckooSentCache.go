@@ -136,20 +136,25 @@ func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 }
 
 func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
+	sr, ok := c.CheckTraceID(span.TraceID)
+	// if we kept it, then this span being checked needs counting too
+	if ok {
+		sr.Count(span)
+	}
+	return sr, ok
+}
+
+func (c *cuckooSentCache) CheckTraceID(traceID string) (TraceSentRecord, bool) {
 	// was it dropped?
-	if c.dropped.Check(span.TraceID) {
+	if c.dropped.Check(traceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
 		return &cuckooDroppedRecord{}, false
 	}
 	// was it kept?
 	c.keptMut.Lock()
 	defer c.keptMut.Unlock()
-	if sentRecord, found := c.kept.Get(span.TraceID); found {
-		if sr, ok := sentRecord.(*cuckooKeptRecord); ok {
-			// if we kept it, then this span being checked needs counting too
-			sr.Count(span)
-			return sr, true
-		}
+	if sentRecord, found := c.kept.Get(traceID); found {
+		return sentRecord.(*cuckooKeptRecord), found
 	}
 	// we have no memory of this place
 	return nil, false

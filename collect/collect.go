@@ -29,6 +29,7 @@ type Collector interface {
 	Stressed() bool
 	GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string)
 	ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string)
+	AlreadySeen(traceID string) (keep bool, timeout uint, err error)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -259,6 +260,22 @@ func (i *InMemCollector) checkAlloc() {
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) error {
 	return i.add(sp, i.incoming)
+}
+
+// AlreadySeen(traceID string) (keep bool, timeout uint)
+func (i *InMemCollector) AlreadySeen(traceID string) (keep bool, timeout uint, err error) {
+	sr, kept := i.sampleTraceCache.CheckTraceID(traceID)
+	if sr != nil { // sr is only nil if it's never been found.
+		return kept, 0, nil
+	}
+
+	trace := i.cache.Get(traceID)
+	if trace != nil { // trace is in the cache. How long is left?
+		plzwait := time.Until(trace.SendBy)
+		return false, uint(plzwait.Milliseconds()), nil
+	}
+
+	return false, 0, errors.New("problem looking up trace")
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately

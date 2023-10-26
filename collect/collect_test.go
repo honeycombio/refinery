@@ -945,6 +945,10 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.Equal(t, "late", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
 	transmission.Mux.RUnlock()
+
+	// hitchhiking test for the AlreadySeen functionality related to link-awareness
+	alreadyseen, _, _ := coll.AlreadySeen(traceID)
+	assert.Equal(t, true, alreadyseen)
 }
 
 // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
