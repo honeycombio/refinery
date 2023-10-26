@@ -452,6 +452,21 @@ func TestMaxAlloc(t *testing.T) {
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
 }
 
+func TestAvailableMemoryCmdLine(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.AvailableMemory", 2_000_000_000)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules, "--available-memory", "8Gib"})
+	assert.NoError(t, err)
+
+	expected := MemorySize(8 * 1024 * 1024 * 1024)
+	inMemConfig, err := c.GetCollectionConfig()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, inMemConfig.AvailableMemory)
+}
+
 func TestGetSamplerTypes(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2)
 	rm := makeYAML(
