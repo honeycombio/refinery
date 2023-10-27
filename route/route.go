@@ -313,28 +313,27 @@ func (r *Router) getTraceDecision(w http.ResponseWriter, req *http.Request) {
 	if !shard.Equals(r.Sharder.MyShard()) {
 		w.Write([]byte(fmt.Sprintf("traceid %v is not on this shard, try %v", traceID, shard.GetAddress())))
 		w.WriteHeader(http.StatusNotFound) // maybe better to use `http.StatusMisdirectedRequest`
-	} // fallthrough to active cache
+		return
+	}
 
 	// look in the decided traces pile and cache
 	kept, timeout, err := r.Collector.AlreadySeen(traceID)
 	if err != nil {
-		w.Write([]byte(fmt.Sprintf("traceid %v cache lookup failed", traceID)))
-		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(fmt.Sprintf("traceid %v cache lookup failed: %v", traceID, err)))
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 	if timeout > 0 {
-		w.Write([]byte(fmt.Sprintf("traceid %v has not ended yet, wait %v ms", traceID, timeout)))
-		w.WriteHeader(http.StatusContinue)
+		w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","decision":"wait","timeout_ms":%d}`, traceID, timeout)))
+		w.WriteHeader(http.StatusOK)
 		return
 	}
+	decision := "dropped"
 	if kept {
-		w.Write([]byte(fmt.Sprintf("traceid %v has been sampled (kept)", traceID)))
-		w.WriteHeader(http.StatusOK)
+		decision = "kept"
 	}
-
-	// return traceID has never been seen
-	w.Write([]byte(fmt.Sprintf("traceid %v is unknown", traceID)))
-	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","decision":"%v"}`, traceID, decision)))
+	w.WriteHeader(http.StatusOK)
 }
 
 func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format string) {

@@ -54,6 +54,10 @@ type Trace struct {
 
 	RootSpan *Span
 
+	// SpanLinks contains a map of spans that are indexed by the trace.parent_id
+	// so that they can be recalled by using th RootSpan.span_id in rootoverride.
+	SpanLinks map[string]*Span
+
 	// DataSize is the sum of the DataSize of spans that are added.
 	// It's used to help expire the most expensive traces.
 	DataSize int
@@ -118,6 +122,14 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 	}
 
 	return env, false
+}
+
+func (t *Trace) AddSpanLink(parentId string, sp *Span) error {
+	if t.SpanLinks == nil {
+		t.SpanLinks = map[string]*Span{}
+	}
+	t.SpanLinks[parentId] = sp
+	return nil
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace
