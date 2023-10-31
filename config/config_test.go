@@ -590,6 +590,44 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
+func TestStdoutLoggerConfig(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Logger.Type", "stdout",
+		"StdoutLogger.Structured", true,
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	fmt.Println(config)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	loggerConfig, err := c.GetStdoutLoggerConfig()
+
+	assert.NoError(t, err)
+
+	assert.True(t, loggerConfig.Structured)
+}
+
+func TestStdoutLoggerConfigDefaults(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	loggerConfig, err := c.GetStdoutLoggerConfig()
+
+	assert.NoError(t, err)
+
+	assert.False(t, loggerConfig.Structured)
+}
 func TestDatasetPrefix(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,

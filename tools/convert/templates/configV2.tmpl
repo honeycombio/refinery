@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-08-02 at 23:32:03 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-10-31 at 20:19:40 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -420,9 +420,8 @@ StdoutLogger:
     ## `true` generates structured logs (JSON). `false` generates plain text
     ## logs.
     ##
-    ## default: true
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Structured" "Structured" true }}
+    {{ nonDefaultOnly .Data "Structured" "Structured" false }}
 
 ########################
 ## Prometheus Metrics ##
@@ -677,6 +676,14 @@ RedisPeerManagement:
     ##
     ## Not eligible for live reload.
     {{ nonEmptyString .Data "Password" "PeerManagement.Password" "" }}
+
+    ## AuthCode is the string used to connect to Redis for peer cluster
+    ## membership management using an explicit AUTH command.
+    ##
+    ## Many Redis installations do not use this field.
+    ##
+    ## Not eligible for live reload.
+    {{ nonEmptyString .Data "AuthCode" "PeerManagement.AuthCode" "" }}
 
     ## Prefix is a string used as a prefix for the keys in Redis while
     ## storing the peer membership.

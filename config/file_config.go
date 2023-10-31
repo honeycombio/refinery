@@ -275,7 +275,7 @@ type HoneycombLoggerConfig struct {
 }
 
 type StdoutLoggerConfig struct {
-	Structured bool `yaml:"Structured" default:"true"`
+	Structured bool `yaml:"Structured" default:"false"`
 }
 
 type PrometheusMetricsConfig struct {
@@ -753,6 +753,13 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.HoneycombLogger, nil
+}
+
+func (f *fileConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.StdoutLogger, nil
 }
 
 func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {

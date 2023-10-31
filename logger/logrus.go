@@ -25,6 +25,15 @@ type LogrusEntry struct {
 func (l *StdoutLogger) Start() error {
 	l.logger = logrus.New()
 	l.logger.SetLevel(l.level)
+	cfg, err := l.Config.GetStdoutLoggerConfig()
+	if err != nil {
+		return err
+	}
+
+	if cfg.Structured {
+		l.logger.SetFormatter(&logrus.JSONFormatter{})
+	}
+
 	return nil
 }
 

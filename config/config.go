@@ -109,6 +109,9 @@ type Config interface {
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
 
+	// GetStdoutLoggerConfig returns the config specific to the StdoutLogger
+	GetStdoutLoggerConfig() (StdoutLoggerConfig, error)
+
 	// GetCollectionConfig returns the config specific to the InMemCollector
 	GetCollectionConfig() (CollectionConfig, error)
 
