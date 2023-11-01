@@ -413,9 +413,9 @@ StdoutLogger:
     ## `true` generates structured logs (JSON). `false` generates plain text
     ## logs.
     ##
-    ## default: true
+    ## default: false
     ## Not eligible for live reload.
-    # Structured: true
+    # Structured: false
 
 ########################
 ## Prometheus Metrics ##

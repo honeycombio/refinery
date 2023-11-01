@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-08-02 at 23:32:04 UTC.
+It was automatically generated on 2023-10-31 at 20:19:42 UTC.
 
 ## The Config file
 
@@ -419,7 +419,6 @@ Structured controls whether to use structured logging.
 
 - Not eligible for live reload.
 - Type: `bool`
-- Default: `true`
 
 ## Prometheus Metrics
 
@@ -670,6 +669,16 @@ Many Redis installations do not use this field.
 - Not eligible for live reload.
 - Type: `string`
 - Environment variable: `REFINERY_REDIS_PASSWORD`
+
+### `AuthCode`
+
+AuthCode is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command.
+
+Many Redis installations do not use this field.
+
+- Not eligible for live reload.
+- Type: `string`
+- Environment variable: `REFINERY_REDIS_AUTH_CODE`
 
 ### `Prefix`
 

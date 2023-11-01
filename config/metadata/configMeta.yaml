@@ -477,7 +477,7 @@ groups:
       - name: Structured
         type: bool
         valuetype: nondefault
-        default: true
+        default: false
         reload: false
         summary: controls whether to use structured logging.
         description: >

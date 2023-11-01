@@ -402,7 +402,6 @@ Only used if `Logger.Type` is "stdout".
 
 - Not eligible for live reload.
 - Type: `bool`
-- Default: `true`
 
 ## Prometheus Metrics
 
@@ -655,6 +654,16 @@ Many Redis installations do not use this field.
 - Not eligible for live reload.
 - Type: `string`
 - Environment variable: `REFINERY_REDIS_PASSWORD`
+
+### `AuthCode`
+
+`AuthCode` is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command.
+
+Many Redis installations do not use this field.
+
+- Not eligible for live reload.
+- Type: `string`
+- Environment variable: `REFINERY_REDIS_AUTH_CODE`
 
 ### `Prefix`
 

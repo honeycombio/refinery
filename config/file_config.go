@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jessevdk/go-flags"
 	"gopkg.in/yaml.v3"
 )
 
@@ -175,6 +176,13 @@ func (m *MemorySize) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// Make sure we implement flags.Unmarshaler so that it works with cmdenv.
+var _ flags.Unmarshaler = (*MemorySize)(nil)
+
+func (m *MemorySize) UnmarshalFlag(value string) error {
+	return m.UnmarshalText([]byte(value))
+}
+
 type fileConfig struct {
 	mainConfig    *configContents
 	mainHash      string
@@ -267,7 +275,7 @@ type HoneycombLoggerConfig struct {
 }
 
 type StdoutLoggerConfig struct {
-	Structured bool `yaml:"Structured" default:"true"`
+	Structured bool `yaml:"Structured" default:"false"`
 }
 
 type PrometheusMetricsConfig struct {
@@ -745,6 +753,13 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.HoneycombLogger, nil
+}
+
+func (f *fileConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.StdoutLogger, nil
 }
 
 func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
