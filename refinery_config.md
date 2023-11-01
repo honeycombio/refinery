@@ -411,7 +411,6 @@ The sample rate is controlled by the `SamplerThroughput` setting.
 
 - Not eligible for live reload.
 - Type: `bool`
-- Default: `true`
 
 ### `SamplerThroughput`
 

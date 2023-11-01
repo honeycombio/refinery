@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-11-01 at 19:04:53 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-11-01 at 20:28:38 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -428,9 +428,8 @@ StdoutLogger:
     ##
     ## The sample rate is controlled by the `SamplerThroughput` setting.
     ##
-    ## default: true
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "SamplerEnabled" "SamplerEnabled" true }}
+    {{ nonDefaultOnly .Data "SamplerEnabled" "SamplerEnabled" false }}
 
     ## SamplerThroughput is the sampling throughput for logs in events per
     ## second.

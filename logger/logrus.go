@@ -144,7 +144,10 @@ func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
 
 func (l *LogrusEntry) Logf(f string, args ...interface{}) {
 	if l.sampler != nil {
-		rate := l.sampler.GetSampleRate(fmt.Sprintf("%s:%s", l.level, fmt.Sprintf(f, args...)))
+		// use the level and format string as the key to sample on
+		// this will give us a different sample rate for each level and format string
+		// and avoid high cardinality args making the throughput sampler less effective
+		rate := l.sampler.GetSampleRate(fmt.Sprintf("%s:%s", l.level, f))
 		if shouldDrop(uint(rate)){
 			return 
 		}

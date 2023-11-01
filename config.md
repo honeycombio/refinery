@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-11-01 at 19:04:55 UTC.
+It was automatically generated on 2023-11-01 at 20:28:40 UTC.
 
 ## The Config file
 
@@ -428,7 +428,6 @@ The sample rate is controlled by the `SamplerThroughput` setting.
 
 - Not eligible for live reload.
 - Type: `bool`
-- Default: `true`
 
 ### `SamplerThroughput`
 
