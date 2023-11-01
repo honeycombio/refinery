@@ -29,6 +29,8 @@ type MockConfig struct {
 	GetLoggerTypeVal                 string
 	GetHoneycombLoggerConfigErr      error
 	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
+	GetStdoutLoggerConfigErr         error
+	GetStdoutLoggerConfigVal         StdoutLoggerConfig
 	GetLoggerLevelVal                Level
 	GetPeersErr                      error
 	GetPeersVal                      []string
@@ -188,6 +190,13 @@ func (m *MockConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetHoneycombLoggerConfigVal, m.GetHoneycombLoggerConfigErr
+}
+
+func (m *MockConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetStdoutLoggerConfigVal, m.GetStdoutLoggerConfigErr
 }
 
 func (m *MockConfig) GetLoggerLevel() Level {
