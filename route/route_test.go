@@ -313,7 +313,7 @@ func TestDebugTrace(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	router := &Router{
-		Sharder: &TestSharder{},
+		Sharder: &sharder.TestSharder{},
 	}
 
 	router.debugTrace(rr, req)
@@ -425,7 +425,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
-		&inject.Object{Value: &TestSharder{}},
+		&inject.Object{Value: &sharder.TestSharder{}},
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
@@ -439,23 +439,6 @@ func TestDependencyInjection(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-type TestSharder struct{}
-
-func (s *TestSharder) MyShard() sharder.Shard { return nil }
-
-func (s *TestSharder) WhichShard(string) sharder.Shard {
-	return &TestShard{
-		addr: "http://localhost:12345",
-	}
-}
-
-type TestShard struct {
-	addr string
-}
-
-func (s *TestShard) Equals(other sharder.Shard) bool { return true }
-func (s *TestShard) GetAddress() string              { return s.addr }
 
 func TestEnvironmentCache(t *testing.T) {
 	t.Run("calls getFn on cache miss", func(t *testing.T) {
