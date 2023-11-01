@@ -276,6 +276,8 @@ type HoneycombLoggerConfig struct {
 
 type StdoutLoggerConfig struct {
 	Structured bool `yaml:"Structured" default:"false"`
+	SamplerEnabled	bool   `yaml:"SamplerEnabled" `
+	SamplerThroughput int    `yaml:"SamplerThroughput" default:"5"`
 }
 
 type PrometheusMetricsConfig struct {
