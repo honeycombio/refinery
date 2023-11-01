@@ -595,6 +595,8 @@ func TestStdoutLoggerConfig(t *testing.T) {
 		"General.ConfigurationVersion", 2,
 		"Logger.Type", "stdout",
 		"StdoutLogger.Structured", true,
+		"StdoutLogger.SamplerThroughput", 10,
+		"StdoutLogger.SamplerEnabled", true,
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -609,6 +611,8 @@ func TestStdoutLoggerConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, loggerConfig.Structured)
+	assert.True(t, loggerConfig.SamplerEnabled)
+	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 
 func TestStdoutLoggerConfigDefaults(t *testing.T) {
@@ -627,6 +631,8 @@ func TestStdoutLoggerConfigDefaults(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.False(t, loggerConfig.Structured)
+	assert.False(t, loggerConfig.SamplerEnabled)
+	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 func TestDatasetPrefix(t *testing.T) {
 	cm := makeYAML(

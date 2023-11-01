@@ -148,6 +148,7 @@ func (l *LogrusEntry) Logf(f string, args ...interface{}) {
 		if shouldDrop(uint(rate)){
 			return 
 		}
+		l.entry.WithField("sample_rate", rate)
 	}
 
 	switch l.level {
