@@ -242,8 +242,8 @@ type AccessKeyConfig struct {
 
 type RefineryTelemetryConfig struct {
 	AddRuleReasonToTrace   bool `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot"`
-	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace"`
+	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot" default:"true"`
+	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace" default:"true"`
 }
 
 type TracesConfig struct {
@@ -270,19 +270,19 @@ type HoneycombLoggerConfig struct {
 	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    bool   `yaml:"SamplerEnabled" `
+	SamplerEnabled    bool   `yaml:"SamplerEnabled" default:"true"`
 	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
 }
 
 type StdoutLoggerConfig struct {
-	Structured bool `yaml:"Structured" default:"false"`
-	SamplerEnabled	bool   `yaml:"SamplerEnabled" `
-	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
+	Structured        bool `yaml:"Structured" default:"false"`
+	SamplerEnabled    bool `yaml:"SamplerEnabled" `
+	SamplerThroughput int  `yaml:"SamplerThroughput" default:"10"`
 }
 
 type PrometheusMetricsConfig struct {
 	Enabled    bool   `yaml:"Enabled" default:"false"`
-	ListenAddr string `yaml:"ListenAddr"`
+	ListenAddr string `yaml:"ListenAddr" default:"localhost:2112"`
 }
 
 type LegacyMetricsConfig struct {
@@ -339,7 +339,7 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 
 type BufferSizeConfig struct {
 	UpstreamBufferSize int `yaml:"UpstreamBufferSize" default:"10_000"`
-	PeerBufferSize     int `yaml:"PeerBufferSize" default:"10_000"`
+	PeerBufferSize     int `yaml:"PeerBufferSize" default:"100_000"`
 }
 
 type SpecializedConfig struct {
@@ -376,7 +376,7 @@ type StressReliefConfig struct {
 	Mode                      string   `yaml:"Mode" default:"never"`
 	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90"`
 	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
-	SamplingRate              uint64   `yaml:"SamplingRate" default:"1000"`
+	SamplingRate              uint64   `yaml:"SamplingRate" default:"100"`
 	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
 	MinimumStartupDuration    Duration `yaml:"MinimumStartupDuration" default:"3s"`
 }
