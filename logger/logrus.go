@@ -151,7 +151,7 @@ func (l *LogrusEntry) Logf(f string, args ...interface{}) {
 		if shouldDrop(uint(rate)){
 			return 
 		}
-		l.entry.WithField("sample_rate", rate)
+		l.entry.WithField("SampleRate", rate)
 	}
 
 	switch l.level {
@@ -159,6 +159,8 @@ func (l *LogrusEntry) Logf(f string, args ...interface{}) {
 		l.entry.Debugf(f, args...)
 	case logrus.InfoLevel:
 		l.entry.Infof(f, args...)
+	case logrus.WarnLevel:
+		l.entry.Warnf(f, args...)
 	default:
 		l.entry.Errorf(f, args...)
 	}
