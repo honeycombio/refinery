@@ -237,7 +237,9 @@ func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 		level = "unknown"
 	}
 	if h.sampler != nil {
-		rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, msg))
+		// use the level and the format string as the key for the sampler
+		// this allows us to avoid sampling on high-cardinality fields in the message
+		rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, f))
 		ev.SampleRate = uint(rate)
 	}
 	ev.Send()
