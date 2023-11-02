@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-11-02 at 19:50:49 UTC.
+It was automatically generated on 2023-11-02 at 21:09:53 UTC.
 
 ## The Config file
 
@@ -403,7 +403,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 - Not eligible for live reload.
 - Type: `float`
-- Default: `5`
+- Default: `10`
 - Example: `10`
 
 ## Stdout Logger
@@ -437,7 +437,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 - Not eligible for live reload.
 - Type: `float`
-- Default: `5`
+- Default: `10`
 - Example: `10`
 
 ## Prometheus Metrics

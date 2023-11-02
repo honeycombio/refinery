@@ -460,7 +460,7 @@ groups:
       - name: SamplerThroughput
         valuetype: showexample
         type: float
-        default: 5
+        default: 10
         example: 10
         reload: false
         summary: is the sampling throughput for logs in events per second.
@@ -496,7 +496,7 @@ groups:
       - name: SamplerThroughput
         valuetype: showexample
         type: float
-        default: 5
+        default: 10
         example: 10
         reload: false
         summary: is the sampling throughput for logs in events per second.

@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-11-02 at 19:50:45 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-11-02 at 21:09:51 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -404,7 +404,7 @@ HoneycombLogger:
     ## throughput approximates this value, while also ensuring that all
     ## unique logs arrive at Honeycomb at least once per sampling period.
     ##
-    ## default: 5
+    ## default: 10
     ## Not eligible for live reload.
     # SamplerThroughput: 10
 
@@ -438,7 +438,7 @@ StdoutLogger:
     ## throughput approximates this value, while also ensuring that all
     ## unique logs arrive at stdout at least once per sampling period.
     ##
-    ## default: 5
+    ## default: 10
     ## Not eligible for live reload.
     # SamplerThroughput: 10
 

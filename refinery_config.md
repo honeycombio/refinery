@@ -385,7 +385,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 - Not eligible for live reload.
 - Type: `float`
-- Default: `5`
+- Default: `10`
 - Example: `10`
 
 ## Stdout Logger
@@ -420,7 +420,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 - Not eligible for live reload.
 - Type: `float`
-- Default: `5`
+- Default: `10`
 - Example: `10`
 
 ## Prometheus Metrics
