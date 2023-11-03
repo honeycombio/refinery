@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-10-31 at 20:19:42 UTC.
+It was automatically generated on 2023-11-02 at 21:09:53 UTC.
 
 ## The Config file
 
@@ -419,6 +419,26 @@ Structured controls whether to use structured logging.
 
 - Not eligible for live reload.
 - Type: `bool`
+
+### `SamplerEnabled`
+
+SamplerEnabled controls whether logs are sampled before sending to stdout.
+
+The sample rate is controlled by the `SamplerThroughput` setting.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `SamplerThroughput`
+
+SamplerThroughput is the sampling throughput for logs in events per second.
+
+The sampling algorithm attempts to make sure that the average throughput approximates this value, while also ensuring that all unique logs arrive at stdout at least once per sampling period.
+
+- Not eligible for live reload.
+- Type: `float`
+- Default: `10`
+- Example: `10`
 
 ## Prometheus Metrics
 

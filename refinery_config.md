@@ -403,6 +403,26 @@ Only used if `Logger.Type` is "stdout".
 - Not eligible for live reload.
 - Type: `bool`
 
+### `SamplerEnabled`
+
+`SamplerEnabled` controls whether logs are sampled before sending to stdout.
+
+The sample rate is controlled by the `SamplerThroughput` setting.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `SamplerThroughput`
+
+`SamplerThroughput` is the sampling throughput for logs in events per second.
+
+The sampling algorithm attempts to make sure that the average throughput approximates this value, while also ensuring that all unique logs arrive at stdout at least once per sampling period.
+
+- Not eligible for live reload.
+- Type: `float`
+- Default: `10`
+- Example: `10`
+
 ## Prometheus Metrics
 
 `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.

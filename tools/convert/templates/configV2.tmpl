@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-10-31 at 20:19:40 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-11-02 at 21:09:51 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -422,6 +422,25 @@ StdoutLogger:
     ##
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "Structured" "Structured" false }}
+
+    ## SamplerEnabled controls whether logs are sampled before sending to
+    ## stdout.
+    ##
+    ## The sample rate is controlled by the `SamplerThroughput` setting.
+    ##
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "SamplerEnabled" "SamplerEnabled" false }}
+
+    ## SamplerThroughput is the sampling throughput for logs in events per
+    ## second.
+    ##
+    ## The sampling algorithm attempts to make sure that the average
+    ## throughput approximates this value, while also ensuring that all
+    ## unique logs arrive at stdout at least once per sampling period.
+    ##
+    ## default: 10
+    ## Not eligible for live reload.
+    # SamplerThroughput: 10
 
 ########################
 ## Prometheus Metrics ##
