@@ -484,6 +484,27 @@ groups:
           `true` generates structured logs (JSON).
           `false` generates plain text logs.
 
+      - name: SamplerEnabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: controls whether logs are sampled before sending to stdout.
+        description: >
+          The sample rate is controlled by the `SamplerThroughput` setting.
+
+      - name: SamplerThroughput
+        valuetype: showexample
+        type: float
+        default: 10
+        example: 10
+        reload: false
+        summary: is the sampling throughput for logs in events per second.
+        description: >
+          The sampling algorithm attempts to make sure that the average
+          throughput approximates this value, while also ensuring that all
+          unique logs arrive at stdout at least once per sampling
+          period.
   - name: PrometheusMetrics
     title: "Prometheus Metrics"
     description: contains configuration for Refinery's internally-generated metrics as made available through Prometheus.

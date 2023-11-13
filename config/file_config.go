@@ -271,11 +271,13 @@ type HoneycombLoggerConfig struct {
 	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
 	SamplerEnabled    bool   `yaml:"SamplerEnabled" `
-	SamplerThroughput int    `yaml:"SamplerThroughput" default:"5"`
+	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
 }
 
 type StdoutLoggerConfig struct {
 	Structured bool `yaml:"Structured" default:"false"`
+	SamplerEnabled	bool   `yaml:"SamplerEnabled" `
+	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
 }
 
 type PrometheusMetricsConfig struct {

@@ -547,7 +547,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 		"HoneycombLogger.APIKey", "1234",
 		"HoneycombLogger.Dataset", "loggerDataset",
 		"HoneycombLogger.SamplerEnabled", true,
-		"HoneycombLogger.SamplerThroughput", 10,
+		"HoneycombLogger.SamplerThroughput", 5,
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -564,7 +564,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.Equal(t, "1234", loggerConfig.APIKey)
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
 	assert.Equal(t, true, loggerConfig.SamplerEnabled)
-	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
+	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
 func TestHoneycombLoggerConfigDefaults(t *testing.T) {
@@ -587,7 +587,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, false, loggerConfig.SamplerEnabled)
-	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
+	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 
 func TestStdoutLoggerConfig(t *testing.T) {
@@ -595,6 +595,8 @@ func TestStdoutLoggerConfig(t *testing.T) {
 		"General.ConfigurationVersion", 2,
 		"Logger.Type", "stdout",
 		"StdoutLogger.Structured", true,
+		"StdoutLogger.SamplerThroughput", 5,
+		"StdoutLogger.SamplerEnabled", true,
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -609,6 +611,8 @@ func TestStdoutLoggerConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, loggerConfig.Structured)
+	assert.True(t, loggerConfig.SamplerEnabled)
+	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
 func TestStdoutLoggerConfigDefaults(t *testing.T) {
@@ -627,6 +631,8 @@ func TestStdoutLoggerConfigDefaults(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.False(t, loggerConfig.Structured)
+	assert.False(t, loggerConfig.SamplerEnabled)
+	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 func TestDatasetPrefix(t *testing.T) {
 	cm := makeYAML(
