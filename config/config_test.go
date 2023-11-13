@@ -320,8 +320,8 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
-	if d := c.GetAddHostMetadataToTrace(); d != false {
-		t.Error("received", d, "expected", false)
+	if d := c.GetAddHostMetadataToTrace(); d != true {
+		t.Error("received", d, "expected", true)
 	}
 
 	if d := c.GetEnvironmentCacheTTL(); d != time.Hour {
@@ -586,7 +586,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, false, loggerConfig.SamplerEnabled)
+	assert.Equal(t, true, loggerConfig.SamplerEnabled)
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 

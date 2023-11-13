@@ -1438,7 +1438,7 @@ groups:
         v1name: DeactivationLevel
         type: percentage
         valuetype: nondefault
-        default: 70
+        default: 75
         reload: true
         summary: is the `stress_level` (from 0-100) at which Stress Relief is turned off.
         description: >
