@@ -118,6 +118,7 @@ func (h *LegacyMetrics) initLibhoney(mc config.LegacyMetricsConfig) error {
 	}
 	h.libhClient = libhClient
 
+	h.libhClient.AddField("refinery_version", h.Version)
 	// add some general go metrics to every report
 	// goroutines
 	if hostname, err := os.Hostname(); err == nil {
