@@ -455,7 +455,9 @@ groups:
         reload: false
         summary: controls whether logs are sampled before sending to Honeycomb.
         description: >
-          The sample rate is controlled by the `SamplerThroughput` setting.
+          The sample rate is controlled by the `SamplerThroughput` setting. The sampler
+          used throttles the rate of logs sent to Honeycomb from any given source within
+          Refinery -- it should effectively limit the rate of redundant messages.
 
       - name: SamplerThroughput
         valuetype: showexample
@@ -1211,7 +1213,7 @@ groups:
         v1name: MaxConnectionIdle
         type: duration
         valuetype: nondefault
-        default: 0s
+        default: 1m
         example: 1m
         reload: false
         validations:
@@ -1249,7 +1251,7 @@ groups:
         v1name: MaxConnectionAgeGrace
         type: duration
         valuetype: nondefault
-        default: 60s
+        default: 1m
         reload: false
         summary: is the duration beyond `MaxConnectionAge` after which the connection will be forcibly closed.
         description: >
@@ -1436,7 +1438,7 @@ groups:
         v1name: DeactivationLevel
         type: percentage
         valuetype: nondefault
-        default: 70
+        default: 75
         reload: true
         summary: is the `stress_level` (from 0-100) at which Stress Relief is turned off.
         description: >
