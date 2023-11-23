@@ -252,6 +252,7 @@ type TracesConfig struct {
 	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s"`
 	MaxBatchSize uint     `yaml:"MaxBatchSize" default:"500"`
 	SendTicker   Duration `yaml:"SendTicker" default:"100ms"`
+	LinkStrategy string   `yaml:"LinkStrategy" default:"ignore"`
 }
 
 type DebuggingConfig struct {
@@ -351,6 +352,7 @@ type SpecializedConfig struct {
 type IDFieldsConfig struct {
 	TraceNames  []string `yaml:"TraceNames" default:"[\"trace.trace_id\",\"traceId\"]"`
 	ParentNames []string `yaml:"ParentNames" default:"[\"trace.parent_id\",\"parentId\"]"`
+	LinkNames   []string `yaml:"LinkNames" default:"[\"link.trace.trace_id\",\"linkTraceId\"]"`
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
@@ -874,6 +876,21 @@ func (f *fileConfig) GetSendTickerValue() time.Duration {
 	return time.Duration(f.mainConfig.Traces.SendTicker)
 }
 
+func (f *fileConfig) GetLinkStrategy() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	switch f.mainConfig.Traces.LinkStrategy {
+	case "":
+	case "ignore":
+		return "ignore", nil
+	case "RootLinkOverride":
+		return "RootLinkOverride", nil
+	}
+
+	return "", errors.New("invalid LinkStrategy")
+}
+
 func (f *fileConfig) GetDebugServiceAddr() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -1004,6 +1021,12 @@ func (f *fileConfig) GetTraceIdFieldNames() []string {
 	return f.mainConfig.IDFieldNames.TraceNames
 }
 
+func (f *fileConfig) GetLinkFieldNames() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.IDFieldNames.LinkNames
+}
 func (f *fileConfig) GetParentIdFieldNames() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

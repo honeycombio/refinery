@@ -153,6 +153,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
+	muxxer.HandleFunc("/decision/{traceID}", r.getTraceDecision).Name("get trace decision")
 
 	// require a local auth for query usage
 	queryMuxxer := muxxer.PathPrefix("/query/").Methods("GET").Subrouter()
@@ -304,6 +305,35 @@ func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 func (r *Router) getConfigMetadata(w http.ResponseWriter, req *http.Request) {
 	cm := r.Config.GetConfigMetadata()
 	r.marshalToFormat(w, cm, "json")
+}
+
+func (r *Router) getTraceDecision(w http.ResponseWriter, req *http.Request) {
+	traceID := mux.Vars(req)["traceID"]
+	shard := r.Sharder.WhichShard(traceID)
+	if !shard.Equals(r.Sharder.MyShard()) {
+		w.Write([]byte(fmt.Sprintf("traceid %v is not on this shard, try %v", traceID, shard.GetAddress())))
+		w.WriteHeader(http.StatusNotFound) // maybe better to use `http.StatusMisdirectedRequest`
+		return
+	}
+
+	// look in the decided traces pile and cache
+	kept, timeout, err := r.Collector.AlreadySeen(traceID)
+	if err != nil {
+		w.Write([]byte(fmt.Sprintf("traceid %v cache lookup failed: %v", traceID, err)))
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if timeout > 0 {
+		w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","decision":"wait","timeout_ms":%d}`, traceID, timeout)))
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	decision := "dropped"
+	if kept {
+		decision = "kept"
+	}
+	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","decision":"%v"}`, traceID, decision)))
+	w.WriteHeader(http.StatusOK)
 }
 
 func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format string) {

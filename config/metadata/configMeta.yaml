@@ -292,6 +292,19 @@ groups:
           events to reduce `incoming_` or `peer_router_dropped` spikes.
           Decreasing this will check the trace cache for timeouts more
           frequently.
+      
+      - name: LinkStrategy
+        type: string
+        valuetype: string
+        default: ignore
+        reload: true
+        summary: tells refinery how to consider span links in sampling decisions.
+        description: >
+          Span links relate one trace to another by linking a span from one trace
+          to a span in another trace. Options include "ignore" or "RootLinkOverride".
+          "ignore" does not consider span links at all. "RootLinkOverride" considers links
+          that are attached to a root span. It will request the decision from the
+          shard that owns the trace identifier set by TraceName.
 
   - name: Debugging
     title: "Debugging"
@@ -1177,6 +1190,19 @@ groups:
           The first field in the list that is present in an event will be used
           as the parent ID. A trace without a `parent_id` is assumed to be a
           root span.
+      
+      - name: LinkNames
+        type: stringarray
+        valuetype: stringarray
+        example: "trace.link.trace_id,trace.link_id"
+        reload: true
+        validations:
+          - type: elementType
+            arg: string
+        summary: is the list of field names to use for link-awareness.
+        description: >
+          Spans are checked for these fields to identify if a span link is present.
+          These must link to a trace identifier from TraceNames configuration.
 
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"

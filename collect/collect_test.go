@@ -18,6 +18,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 )
@@ -792,6 +793,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &sample.SamplerFactory{}},
 		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
+		&inject.Object{Value: &sharder.TestSharder{}},
 	)
 	if err != nil {
 		t.Error(err)
@@ -945,6 +947,10 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.Equal(t, "late", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
 	transmission.Mux.RUnlock()
+
+	// hitchhiking test for the AlreadySeen functionality related to link-awareness
+	alreadyseen, _, _ := coll.AlreadySeen(traceID)
+	assert.Equal(t, true, alreadyseen)
 }
 
 // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field

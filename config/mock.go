@@ -91,7 +91,9 @@ type MockConfig struct {
 	AdditionalAttributes             map[string]string
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
+	LinkIdFieldNames                 []string
 	CfgMetadata                      []ConfigMetadata
+	LinkStrategy                     string
 
 	Mux sync.RWMutex
 }
@@ -548,4 +550,18 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalAttributes
+}
+
+func (f *MockConfig) GetLinkStrategy() (string, error) {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.LinkStrategy, nil
+}
+
+func (f *MockConfig) GetLinkFieldNames() []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.ParentIdFieldNames
 }

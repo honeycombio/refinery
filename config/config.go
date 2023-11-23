@@ -88,6 +88,9 @@ type Config interface {
 	// complete before sending it, to allow stragglers to arrive
 	GetSendDelay() (time.Duration, error)
 
+	// GetLinkStrategy returns a name for the link strategy to use.
+	GetLinkStrategy() (string, error)
+
 	// GetBatchTimeout returns how often to send off batches in seconds
 	GetBatchTimeout() time.Duration
 
@@ -191,6 +194,8 @@ type Config interface {
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string
+
+	GetLinkFieldNames() []string
 }
 
 type ConfigMetadata struct {

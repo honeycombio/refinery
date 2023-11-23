@@ -26,4 +26,6 @@ type TraceSentCache interface {
 	Stop()
 	// Resize adjusts the size of the cache according to the Config passed in
 	Resize(cfg config.SampleCacheConfig) error
+	// Ask the cache directly about TraceIDs
+	CheckTraceID(traceID string) (TraceSentRecord, bool)
 }
