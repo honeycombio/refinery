@@ -1,19 +1,22 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package lru
 
 import (
-	"math/rand"
+	"reflect"
 	"testing"
 )
 
 func BenchmarkLRU_Rand(b *testing.B) {
-	l, err := New(8192)
+	l, err := New[int64, int64](8192)
 	if err != nil {
 		b.Fatalf("err: %v", err)
 	}
 
 	trace := make([]int64, b.N*2)
 	for i := 0; i < b.N*2; i++ {
-		trace[i] = rand.Int63() % 32768
+		trace[i] = getRand(b) % 32768
 	}
 
 	b.ResetTimer()
@@ -23,19 +26,18 @@ func BenchmarkLRU_Rand(b *testing.B) {
 		if i%2 == 0 {
 			l.Add(trace[i], trace[i])
 		} else {
-			_, ok := l.Get(trace[i])
-			if ok {
+			if _, ok := l.Get(trace[i]); ok {
 				hit++
 			} else {
 				miss++
 			}
 		}
 	}
-	b.Logf("hit: %d miss: %d ratio: %f", hit, miss, float64(hit)/float64(miss))
+	b.Logf("hit: %d miss: %d ratio: %f", hit, miss, float64(hit)/float64(hit+miss))
 }
 
 func BenchmarkLRU_Freq(b *testing.B) {
-	l, err := New(8192)
+	l, err := New[int64, int64](8192)
 	if err != nil {
 		b.Fatalf("err: %v", err)
 	}
@@ -43,9 +45,9 @@ func BenchmarkLRU_Freq(b *testing.B) {
 	trace := make([]int64, b.N*2)
 	for i := 0; i < b.N*2; i++ {
 		if i%2 == 0 {
-			trace[i] = rand.Int63() % 16384
+			trace[i] = getRand(b) % 16384
 		} else {
-			trace[i] = rand.Int63() % 32768
+			trace[i] = getRand(b) % 32768
 		}
 	}
 
@@ -56,19 +58,18 @@ func BenchmarkLRU_Freq(b *testing.B) {
 	}
 	var hit, miss int
 	for i := 0; i < b.N; i++ {
-		_, ok := l.Get(trace[i])
-		if ok {
+		if _, ok := l.Get(trace[i]); ok {
 			hit++
 		} else {
 			miss++
 		}
 	}
-	b.Logf("hit: %d miss: %d ratio: %f", hit, miss, float64(hit)/float64(miss))
+	b.Logf("hit: %d miss: %d ratio: %f", hit, miss, float64(hit)/float64(hit+miss))
 }
 
 func TestLRU(t *testing.T) {
 	evictCounter := 0
-	onEvicted := func(k interface{}, v interface{}) {
+	onEvicted := func(k int, v int) {
 		if k != v {
 			t.Fatalf("Evict values not equal (%v!=%v)", k, v)
 		}
@@ -95,22 +96,24 @@ func TestLRU(t *testing.T) {
 			t.Fatalf("bad key: %v", k)
 		}
 	}
+	for i, v := range l.Values() {
+		if v != i+128 {
+			t.Fatalf("bad value: %v", v)
+		}
+	}
 	for i := 0; i < 128; i++ {
-		_, ok := l.Get(i)
-		if ok {
+		if _, ok := l.Get(i); ok {
 			t.Fatalf("should be evicted")
 		}
 	}
 	for i := 128; i < 256; i++ {
-		_, ok := l.Get(i)
-		if !ok {
+		if _, ok := l.Get(i); !ok {
 			t.Fatalf("should not be evicted")
 		}
 	}
 	for i := 128; i < 192; i++ {
 		l.Remove(i)
-		_, ok := l.Get(i)
-		if ok {
+		if _, ok := l.Get(i); ok {
 			t.Fatalf("should be deleted")
 		}
 	}
@@ -135,7 +138,7 @@ func TestLRU(t *testing.T) {
 // test that Add returns true/false if an eviction occurred
 func TestLRUAdd(t *testing.T) {
 	evictCounter := 0
-	onEvicted := func(k interface{}, v interface{}) {
+	onEvicted := func(k int, v int) {
 		evictCounter++
 	}
 
@@ -154,7 +157,7 @@ func TestLRUAdd(t *testing.T) {
 
 // test that Contains doesn't update recent-ness
 func TestLRUContains(t *testing.T) {
-	l, err := New(2)
+	l, err := New[int, int](2)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -173,7 +176,7 @@ func TestLRUContains(t *testing.T) {
 
 // test that ContainsOrAdd doesn't update recent-ness
 func TestLRUContainsOrAdd(t *testing.T) {
-	l, err := New(2)
+	l, err := New[int, int](2)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -203,7 +206,7 @@ func TestLRUContainsOrAdd(t *testing.T) {
 
 // test that PeekOrAdd doesn't update recent-ness
 func TestLRUPeekOrAdd(t *testing.T) {
-	l, err := New(2)
+	l, err := New[int, int](2)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -236,7 +239,7 @@ func TestLRUPeekOrAdd(t *testing.T) {
 
 // test that Peek doesn't update recent-ness
 func TestLRUPeek(t *testing.T) {
-	l, err := New(2)
+	l, err := New[int, int](2)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -256,7 +259,7 @@ func TestLRUPeek(t *testing.T) {
 // test that Resize can upsize and downsize
 func TestLRUResize(t *testing.T) {
 	onEvictCounter := 0
-	onEvicted := func(k interface{}, v interface{}) {
+	onEvicted := func(k int, v int) {
 		onEvictCounter++
 	}
 	l, err := NewWithEvict(2, onEvicted)
@@ -267,7 +270,7 @@ func TestLRUResize(t *testing.T) {
 	// Downsize
 	l.Add(1, 1)
 	l.Add(2, 2)
-	evicted := l.Resize(1);
+	evicted := l.Resize(1)
 	if evicted != 1 {
 		t.Errorf("1 element should have been evicted: %v", evicted)
 	}
@@ -281,7 +284,7 @@ func TestLRUResize(t *testing.T) {
 	}
 
 	// Upsize
-	evicted = l.Resize(2);
+	evicted = l.Resize(2)
 	if evicted != 0 {
 		t.Errorf("0 elements should have been evicted: %v", evicted)
 	}
@@ -290,4 +293,151 @@ func TestLRUResize(t *testing.T) {
 	if !l.Contains(3) || !l.Contains(4) {
 		t.Errorf("Cache should have contained 2 elements")
 	}
+}
+
+func (c *Cache[K, V]) wantKeys(t *testing.T, want []K) {
+	t.Helper()
+	got := c.Keys()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wrong keys got: %v, want: %v ", got, want)
+	}
+}
+
+func TestCache_EvictionSameKey(t *testing.T) {
+	t.Run("Add", func(t *testing.T) {
+		var evictedKeys []int
+
+		cache, _ := NewWithEvict(
+			2,
+			func(key int, _ struct{}) {
+				evictedKeys = append(evictedKeys, key)
+			})
+
+		if evicted := cache.Add(1, struct{}{}); evicted {
+			t.Error("First 1: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1})
+
+		if evicted := cache.Add(2, struct{}{}); evicted {
+			t.Error("2: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1, 2})
+
+		if evicted := cache.Add(1, struct{}{}); evicted {
+			t.Error("Second 1: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{2, 1})
+
+		if evicted := cache.Add(3, struct{}{}); !evicted {
+			t.Error("3: did not get expected eviction")
+		}
+		cache.wantKeys(t, []int{1, 3})
+
+		want := []int{2}
+		if !reflect.DeepEqual(evictedKeys, want) {
+			t.Errorf("evictedKeys got: %v want: %v", evictedKeys, want)
+		}
+	})
+
+	t.Run("ContainsOrAdd", func(t *testing.T) {
+		var evictedKeys []int
+
+		cache, _ := NewWithEvict(
+			2,
+			func(key int, _ struct{}) {
+				evictedKeys = append(evictedKeys, key)
+			})
+
+		contained, evicted := cache.ContainsOrAdd(1, struct{}{})
+		if contained {
+			t.Error("First 1: got unexpected contained")
+		}
+		if evicted {
+			t.Error("First 1: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1})
+
+		contained, evicted = cache.ContainsOrAdd(2, struct{}{})
+		if contained {
+			t.Error("2: got unexpected contained")
+		}
+		if evicted {
+			t.Error("2: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1, 2})
+
+		contained, evicted = cache.ContainsOrAdd(1, struct{}{})
+		if !contained {
+			t.Error("Second 1: did not get expected contained")
+		}
+		if evicted {
+			t.Error("Second 1: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1, 2})
+
+		contained, evicted = cache.ContainsOrAdd(3, struct{}{})
+		if contained {
+			t.Error("3: got unexpected contained")
+		}
+		if !evicted {
+			t.Error("3: did not get expected eviction")
+		}
+		cache.wantKeys(t, []int{2, 3})
+
+		want := []int{1}
+		if !reflect.DeepEqual(evictedKeys, want) {
+			t.Errorf("evictedKeys got: %v want: %v", evictedKeys, want)
+		}
+	})
+
+	t.Run("PeekOrAdd", func(t *testing.T) {
+		var evictedKeys []int
+
+		cache, _ := NewWithEvict(
+			2,
+			func(key int, _ struct{}) {
+				evictedKeys = append(evictedKeys, key)
+			})
+
+		_, contained, evicted := cache.PeekOrAdd(1, struct{}{})
+		if contained {
+			t.Error("First 1: got unexpected contained")
+		}
+		if evicted {
+			t.Error("First 1: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1})
+
+		_, contained, evicted = cache.PeekOrAdd(2, struct{}{})
+		if contained {
+			t.Error("2: got unexpected contained")
+		}
+		if evicted {
+			t.Error("2: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1, 2})
+
+		_, contained, evicted = cache.PeekOrAdd(1, struct{}{})
+		if !contained {
+			t.Error("Second 1: did not get expected contained")
+		}
+		if evicted {
+			t.Error("Second 1: got unexpected eviction")
+		}
+		cache.wantKeys(t, []int{1, 2})
+
+		_, contained, evicted = cache.PeekOrAdd(3, struct{}{})
+		if contained {
+			t.Error("3: got unexpected contained")
+		}
+		if !evicted {
+			t.Error("3: did not get expected eviction")
+		}
+		cache.wantKeys(t, []int{2, 3})
+
+		want := []int{1}
+		if !reflect.DeepEqual(evictedKeys, want) {
+			t.Errorf("evictedKeys got: %v want: %v", evictedKeys, want)
+		}
+	})
 }
