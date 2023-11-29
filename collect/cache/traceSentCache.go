@@ -11,14 +11,13 @@ type TraceSentRecord interface {
 	// Rate() returns the sample rate for the trace
 	Rate() uint
 	// DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
-	DescendantCount() uint
+	DescendantCount() uint32
 	// SpanEventCount returns the count of span events in the trace.
-	SpanEventCount() uint
+	SpanEventCount() uint32
 	// SpanLinkCount returns the count of span links in the trace.
-	SpanLinkCount() uint
+	SpanLinkCount() uint32
 	// SpanCount returns the count of child spans in the trace.
-	SpanCount() uint
-
+	SpanCount() uint32
 	// Count records additional spans in the totals
 	Count(*types.Span)
 }

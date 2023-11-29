@@ -390,7 +390,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
 			// having none at all
-			i.dealWithSentTrace(sr.Kept(), sp, sr.Rate(), sr.DescendantCount(), sr.SpanCount(), sr.SpanEventCount(), sr.SpanLinkCount())
+			i.dealWithSentTrace(sr, sp)
 			return
 		}
 		// trace hasn't already been sent (or this span is really old); let's
@@ -421,7 +421,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		i.dealWithSentTrace(trace.KeepSample, sp, trace.SampleRate, trace.DescendantCount(), trace.SpanCount(), trace.SpanEventCount(), trace.SpanLinkCount())
+		i.dealWithSentTrace(cache.NewKeptTraceCacheEntry(trace), sp)
 	}
 
 	// great! trace is live. add the span.
@@ -483,7 +483,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(keep bool, sp *types.Span, sampleRate, eventCount, spanCount, spanEventCount, spanLinkCount uint) {
+func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.Span) {
 	if i.Config.GetAddRuleReasonToTrace() {
 		sp.Data["meta.refinery.reason"] = "late"
 	}
@@ -491,6 +491,8 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sp *types.Span, sampleRate
 		sp.Data["meta.refinery.local_hostname"] = i.hostname
 	}
 	isDryRun := i.Config.GetIsDryRun()
+	keep := tr.Kept()
+
 	if isDryRun {
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
 		sp.Data[config.DryRunFieldName] = keep
@@ -503,16 +505,16 @@ func (i *InMemCollector) dealWithSentTrace(keep bool, sp *types.Span, sampleRate
 	}
 	if keep {
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
-		mergeTraceAndSpanSampleRates(sp, sampleRate, isDryRun)
+		mergeTraceAndSpanSampleRates(sp, tr.Rate(), isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
 		if i.isRootSpan(sp) {
 			if i.Config.GetAddCountsToRoot() {
-				sp.Data["meta.span_event_count"] = int64(spanEventCount)
-				sp.Data["meta.span_link_count"] = int64(spanLinkCount)
-				sp.Data["meta.span_count"] = int64(spanCount)
-				sp.Data["meta.event_count"] = int64(eventCount)
+				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
+				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
+				sp.Data["meta.span_count"] = int64(tr.SpanCount())
+				sp.Data["meta.event_count"] = int64(tr.DescendantCount())
 			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data["meta.span_count"] = int64(eventCount)
+				sp.Data["meta.span_count"] = int64(tr.DescendantCount())
 			}
 
 		}

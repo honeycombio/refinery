@@ -100,14 +100,14 @@ func (t *Trace) GetSpans() []*Span {
 }
 
 // DescendantCount gets the number of descendants of all kinds currently in this trace
-func (t *Trace) DescendantCount() uint {
-	return uint(len(t.spans))
+func (t *Trace) DescendantCount() uint32 {
+	return uint32(len(t.spans))
 }
 
 // SpanCount gets the number of spans currently in this trace.
 // This is different from DescendantCount because it doesn't include span events or links.
-func (t *Trace) SpanCount() uint {
-	var count uint
+func (t *Trace) SpanCount() uint32 {
+	var count uint32
 	for _, s := range t.spans {
 		switch s.AnnotationType() {
 		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
@@ -121,8 +121,8 @@ func (t *Trace) SpanCount() uint {
 }
 
 // SpanLinkCount gets the number of span links currently in this trace.
-func (t *Trace) SpanLinkCount() uint {
-	var count uint
+func (t *Trace) SpanLinkCount() uint32 {
+	var count uint32
 	for _, s := range t.spans {
 		if s.AnnotationType() == SpanAnnotationTypeLink {
 			count++
@@ -132,8 +132,8 @@ func (t *Trace) SpanLinkCount() uint {
 }
 
 // SpanEventCount gets the number of span events currently in this trace.
-func (t *Trace) SpanEventCount() uint {
-	var count uint
+func (t *Trace) SpanEventCount() uint32 {
+	var count uint32
 	for _, s := range t.spans {
 		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
 			count++

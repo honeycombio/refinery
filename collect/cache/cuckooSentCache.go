@@ -17,46 +17,60 @@ import (
 // The size of the sent cache is still set based on the size of the live trace cache,
 // and the size of the dropped cache is an independent value.
 
-// cuckooKeptRecord is an internal record we leave behind when keeping a trace to remember
+// keptTraceCacheEntry is an internal record we leave behind when keeping a trace to remember
 // our decision for the future. We only store them if the record was kept.
-type cuckooKeptRecord struct {
-	rate           uint // sample rate used when sending the trace
-	eventCount     uint // number of descendants in the trace (we decorate the root span with this)
-	spanEventCount uint // number of span events in the trace
-	spanLinkCount  uint // number of span links in the trace
-	spanCount      uint // number of spans in the trace
+type keptTraceCacheEntry struct {
+	rate           uint   // sample rate used when sending the trace
+	eventCount     uint32 // number of descendants in the trace (we decorate the root span with this)
+	spanEventCount uint32 // number of span events in the trace
+	spanLinkCount  uint32 // number of span links in the trace
+	spanCount      uint32 // number of spans in the trace
 }
 
-func (t *cuckooKeptRecord) Kept() bool {
+func NewKeptTraceCacheEntry(trace *types.Trace) *keptTraceCacheEntry {
+	if trace == nil {
+		return &keptTraceCacheEntry{}
+	}
+
+	return &keptTraceCacheEntry{
+		rate:           trace.SampleRate,
+		eventCount:     trace.DescendantCount(),
+		spanEventCount: trace.SpanEventCount(),
+		spanLinkCount:  trace.SpanLinkCount(),
+		spanCount:      trace.SpanCount(),
+	}
+}
+
+func (t *keptTraceCacheEntry) Kept() bool {
 	return true
 }
 
-func (t *cuckooKeptRecord) Rate() uint {
+func (t *keptTraceCacheEntry) Rate() uint {
 	return t.rate
 }
 
 // DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
-func (t *cuckooKeptRecord) DescendantCount() uint {
+func (t *keptTraceCacheEntry) DescendantCount() uint32 {
 	return t.eventCount
 }
 
 // SpanEventCount returns the count of span events in the trace.
-func (t *cuckooKeptRecord) SpanEventCount() uint {
+func (t *keptTraceCacheEntry) SpanEventCount() uint32 {
 	return t.spanEventCount
 }
 
 // SpanLinkCount returns the count of span links in the trace.
-func (t *cuckooKeptRecord) SpanLinkCount() uint {
+func (t *keptTraceCacheEntry) SpanLinkCount() uint32 {
 	return t.spanLinkCount
 }
 
 // SpanCount returns the count of spans in the trace.
-func (t *cuckooKeptRecord) SpanCount() uint {
+func (t *keptTraceCacheEntry) SpanCount() uint32 {
 	return t.spanCount
 }
 
 // Count records additional spans in the cache record.
-func (t *cuckooKeptRecord) Count(s *types.Span) {
+func (t *keptTraceCacheEntry) Count(s *types.Span) {
 	t.eventCount++
 	switch s.AnnotationType() {
 	case types.SpanAnnotationTypeSpanEvent:
@@ -69,7 +83,7 @@ func (t *cuckooKeptRecord) Count(s *types.Span) {
 }
 
 // Make sure it implements TraceSentRecord
-var _ TraceSentRecord = (*cuckooKeptRecord)(nil)
+var _ TraceSentRecord = (*keptTraceCacheEntry)(nil)
 
 // cuckooSentRecord is what we return when the trace was dropped.
 // It's always the same one.
@@ -83,19 +97,19 @@ func (t *cuckooDroppedRecord) Rate() uint {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) DescendantCount() uint {
+func (t *cuckooDroppedRecord) DescendantCount() uint32 {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) SpanEventCount() uint {
+func (t *cuckooDroppedRecord) SpanEventCount() uint32 {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) SpanLinkCount() uint {
+func (t *cuckooDroppedRecord) SpanLinkCount() uint32 {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) SpanCount() uint {
+func (t *cuckooDroppedRecord) SpanCount() uint32 {
 	return 0
 }
 
@@ -162,16 +176,11 @@ func (c *cuckooSentCache) Stop() {
 func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
-		sentRecord := cuckooKeptRecord{
-			rate:           trace.SampleRate,
-			eventCount:     trace.DescendantCount(),
-			spanEventCount: trace.SpanEventCount(),
-			spanLinkCount:  trace.SpanLinkCount(),
-			spanCount:      trace.SpanCount(),
-		}
+		sentRecord := NewKeptTraceCacheEntry(trace)
+
 		c.keptMut.Lock()
 		defer c.keptMut.Unlock()
-		c.kept.Add(trace.TraceID, &sentRecord)
+		c.kept.Add(trace.TraceID, sentRecord)
 		return
 	}
 	// if we're not keeping it, save it in the dropped trace filter
