@@ -21,7 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
-	"github.com/vmihailenco/msgpack/v4"
+	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -730,9 +730,9 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
-		return msgpack.NewDecoder(data).
-			UseDecodeInterfaceLoose(true).
-			Decode(v)
+		decoder := msgpack.NewDecoder(data)
+		decoder.UseLooseInterfaceDecoding(true)
+		return decoder.Decode(v)
 	default:
 		return jsoniter.NewDecoder(data).Decode(v)
 	}
