@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -69,8 +70,8 @@ func main() {
 			os.Exit(1)
 		}
 		// sort interfaces by name since there are a lot of them
-		slices.SortFunc(ifaces, func(i, j net.Interface) bool {
-			return i.Name < j.Name
+		slices.SortFunc(ifaces, func(i, j net.Interface) int {
+			return strings.Compare(i.Name, j.Name)
 		})
 		for _, i := range ifaces {
 			fmt.Println(i.Name)
