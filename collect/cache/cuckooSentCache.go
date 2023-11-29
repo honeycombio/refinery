@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -66,7 +66,7 @@ func (t *cuckooDroppedRecord) Count(*types.Span) {
 var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 
 type cuckooSentCache struct {
-	kept    *lru.Cache
+	kept    *lru.Cache[string, *cuckooKeptRecord]
 	dropped *CuckooTraceChecker
 	cfg     config.SampleCacheConfig
 
@@ -85,7 +85,7 @@ type cuckooSentCache struct {
 var _ TraceSentCache = (*cuckooSentCache)(nil)
 
 func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
-	stc, err := lru.New(int(cfg.KeptSize))
+	stc, err := lru.New[string, *cuckooKeptRecord](int(cfg.KeptSize))
 	if err != nil {
 		return nil, err
 	}
@@ -145,18 +145,16 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 	c.keptMut.Lock()
 	defer c.keptMut.Unlock()
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
-		if sr, ok := sentRecord.(*cuckooKeptRecord); ok {
-			// if we kept it, then this span being checked needs counting too
-			sr.Count(span)
-			return sr, true
-		}
+		// if we kept it, then this span being checked needs counting too
+		sentRecord.Count(span)
+		return sentRecord, true
 	}
 	// we have no memory of this place
 	return nil, false
 }
 
 func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
-	stc, err := lru.New(int(cfg.KeptSize))
+	stc, err := lru.New[string, *cuckooKeptRecord](int(cfg.KeptSize))
 	if err != nil {
 		return err
 	}
