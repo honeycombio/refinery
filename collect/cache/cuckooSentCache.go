@@ -20,8 +20,11 @@ import (
 // cuckooKeptRecord is an internal record we leave behind when keeping a trace to remember
 // our decision for the future. We only store them if the record was kept.
 type cuckooKeptRecord struct {
-	rate      uint // sample rate used when sending the trace
-	spanCount uint // number of spans in the trace (we decorate the root span with this)
+	rate           uint // sample rate used when sending the trace
+	eventCount     uint // number of descendants in the trace (we decorate the root span with this)
+	spanEventCount uint // number of span events in the trace
+	spanLinkCount  uint // number of span links in the trace
+	spanCount      uint // number of spans in the trace
 }
 
 func (t *cuckooKeptRecord) Kept() bool {
@@ -32,12 +35,37 @@ func (t *cuckooKeptRecord) Rate() uint {
 	return t.rate
 }
 
+// DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
 func (t *cuckooKeptRecord) DescendantCount() uint {
-	return uint(t.spanCount)
+	return t.eventCount
 }
 
-func (t *cuckooKeptRecord) Count(*types.Span) {
-	t.spanCount++
+// SpanEventCount returns the count of span events in the trace.
+func (t *cuckooKeptRecord) SpanEventCount() uint {
+	return t.spanEventCount
+}
+
+// SpanLinkCount returns the count of span links in the trace.
+func (t *cuckooKeptRecord) SpanLinkCount() uint {
+	return t.spanLinkCount
+}
+
+// SpanCount returns the count of spans in the trace.
+func (t *cuckooKeptRecord) SpanCount() uint {
+	return t.spanCount
+}
+
+// Count records additional spans in the cache record.
+func (t *cuckooKeptRecord) Count(s *types.Span) {
+	t.eventCount++
+	switch s.AnnotationType() {
+	case types.SpanAnnotationTypeSpanEvent:
+		t.spanEventCount++
+	case types.SpanAnnotationTypeLink:
+		t.spanLinkCount++
+	default:
+		t.spanCount++
+	}
 }
 
 // Make sure it implements TraceSentRecord
@@ -56,6 +84,18 @@ func (t *cuckooDroppedRecord) Rate() uint {
 }
 
 func (t *cuckooDroppedRecord) DescendantCount() uint {
+	return 0
+}
+
+func (t *cuckooDroppedRecord) SpanEventCount() uint {
+	return 0
+}
+
+func (t *cuckooDroppedRecord) SpanLinkCount() uint {
+	return 0
+}
+
+func (t *cuckooDroppedRecord) SpanCount() uint {
 	return 0
 }
 
@@ -123,8 +163,11 @@ func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
 		sentRecord := cuckooKeptRecord{
-			rate:      trace.SampleRate,
-			spanCount: trace.DescendantCount(),
+			rate:           trace.SampleRate,
+			eventCount:     trace.DescendantCount(),
+			spanEventCount: trace.SpanEventCount(),
+			spanLinkCount:  trace.SpanLinkCount(),
+			spanCount:      trace.SpanCount(),
 		}
 		c.keptMut.Lock()
 		defer c.keptMut.Unlock()

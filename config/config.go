@@ -180,6 +180,8 @@ type Config interface {
 
 	GetAddSpanCountToRoot() bool
 
+	GetAddCountsToRoot() bool
+
 	GetConfigMetadata() []ConfigMetadata
 
 	GetSampleCacheConfig() SampleCacheConfig

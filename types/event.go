@@ -104,6 +104,44 @@ func (t *Trace) DescendantCount() uint {
 	return uint(len(t.spans))
 }
 
+// SpanCount gets the number of spans currently in this trace.
+// This is different from DescendantCount because it doesn't include span events or links.
+func (t *Trace) SpanCount() uint {
+	var count uint
+	for _, s := range t.spans {
+		switch s.AnnotationType() {
+		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
+			continue
+		default:
+			count++
+
+		}
+	}
+	return count
+}
+
+// SpanLinkCount gets the number of span links currently in this trace.
+func (t *Trace) SpanLinkCount() uint {
+	var count uint
+	for _, s := range t.spans {
+		if s.AnnotationType() == SpanAnnotationTypeLink {
+			count++
+		}
+	}
+	return count
+}
+
+// SpanEventCount gets the number of span events currently in this trace.
+func (t *Trace) SpanEventCount() uint {
+	var count uint
+	for _, s := range t.spans {
+		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
+			count++
+		}
+	}
+	return count
+}
+
 func (t *Trace) GetSamplerKey() (string, bool) {
 	if IsLegacyAPIKey(t.APIKey) {
 		return t.Dataset, true
@@ -150,6 +188,31 @@ func (sp *Span) GetDataSize() int {
 		}
 	}
 	return total
+}
+
+// SpanAnnotationType is an enum for the type of annotation this span is.
+type SpanAnnotationType int
+
+const (
+	// SpanAnnotationTypeUnknown is the default value for an unknown annotation type.
+	SpanAnnotationTypeUnknown SpanAnnotationType = iota
+	// SpanAnnotationTypeSpanEvent is the type for a span event.
+	SpanAnnotationTypeSpanEvent
+	// SpanAnnotationTypeLink is the type for a span link.
+	SpanAnnotationTypeLink
+)
+
+// AnnotationType returns the type of annotation this span is.
+func (sp *Span) AnnotationType() SpanAnnotationType {
+	t := sp.Data["meta.annotation_type"]
+	switch t {
+	case "span_event":
+		return SpanAnnotationTypeSpanEvent
+	case "link":
+		return SpanAnnotationTypeLink
+	default:
+		return SpanAnnotationTypeUnknown
+	}
 }
 
 // cacheImpactFactor controls how much more we weigh older spans compared to newer ones;
