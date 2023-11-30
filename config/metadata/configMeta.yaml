@@ -970,7 +970,7 @@ groups:
       - name: AvailableMemory
         type: memorysize
         valuetype: memorysize
-        example: "4Gb"
+        example: "4.5Gb"
         reload: true
         envvar: REFINERY_AVAILABLE_MEMORY
         commandLine: available-memory
@@ -980,10 +980,10 @@ groups:
           controlled by the container or deploy script. If this value is zero or
           not set, then `MaxMemory` cannot be used to calculate the maximum
           allocation and `MaxAlloc` will be used instead. If set, then this must
-          be a memory size. 64-bit values are supported. Sizes with standard
-          unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`,
-          etc.) are also supported. If set, `Collections.MaxAlloc` must not be
-          defined.
+          be a memory size. Sizes with standard unit suffixes (`MB`, `GiB`,
+          etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported. Fractional
+          values with a suffix are supported. If `AvailableMemory` is set,
+          `Collections.MaxAlloc` must not be defined.
 
       - name: MaxMemoryPercentage
         type: percentage
@@ -1018,10 +1018,11 @@ groups:
             arg: AvailableMemory
         summary: is the maximum number of bytes that should be allocated by the Collector.
         description: >
-          If set, then this must be a memory size. 64-bit values are supported.
-          Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units
-          (`M`, `Gi`, etc) are also supported. See `MaxMemory` for more details.
-          If set, `Collections.AvailableMemory` must not be defined.
+          If set, then this must be a memory size. Sizes with standard unit
+          suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.)
+          are supported. Fractional values with a suffix are supported. See
+          `MaxMemory` for more details. If set, `Collections.AvailableMemory`
+          must not be defined.
 
   - name: BufferSizes
     title: "Buffer Sizes"
