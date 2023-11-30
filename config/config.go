@@ -42,6 +42,9 @@ type Config interface {
 	// incoming events over gRPC
 	GetGRPCListenAddr() (string, error)
 
+	// Returns the entire GRPC config block
+	GetGRPCConfig() GRPCServerParameters
+
 	// IsAPIKeyValid checks if the given API key is valid according to the rules
 	IsAPIKeyValid(key string) bool
 
@@ -163,16 +166,6 @@ type Config interface {
 
 	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
 	GetQueryAuthToken() string
-
-	GetGRPCMaxConnectionIdle() time.Duration
-
-	GetGRPCMaxConnectionAge() time.Duration
-
-	GetGRPCMaxConnectionAgeGrace() time.Duration
-
-	GetGRPCKeepAlive() time.Duration
-
-	GetGRPCKeepAliveTimeout() time.Duration
 
 	GetPeerTimeout() time.Duration
 

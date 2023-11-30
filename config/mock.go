@@ -25,6 +25,7 @@ type MockConfig struct {
 	GetGRPCEnabledVal                bool
 	GetGRPCListenAddrErr             error
 	GetGRPCListenAddrVal             string
+	GetGRPCServerParameters          GRPCServerParameters
 	GetLoggerTypeErr                 error
 	GetLoggerTypeVal                 string
 	GetHoneycombLoggerConfigErr      error
@@ -77,11 +78,6 @@ type MockConfig struct {
 	EnvironmentCacheTTL              time.Duration
 	DatasetPrefix                    string
 	QueryAuthToken                   string
-	GRPCMaxConnectionIdle            time.Duration
-	GRPCMaxConnectionAge             time.Duration
-	GRPCMaxConnectionAgeGrace        time.Duration
-	GRPCTime                         time.Duration
-	GRPCTimeout                      time.Duration
 	PeerTimeout                      time.Duration
 	AdditionalErrorFields            []string
 	AddSpanCountToRoot               bool
@@ -454,39 +450,11 @@ func (f *MockConfig) GetQueryAuthToken() string {
 	return f.QueryAuthToken
 }
 
-func (f *MockConfig) GetGRPCMaxConnectionIdle() time.Duration {
+func (f *MockConfig) GetGRPCConfig() GRPCServerParameters {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
-	return f.GRPCMaxConnectionIdle
-}
-
-func (f *MockConfig) GetGRPCMaxConnectionAge() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCMaxConnectionAge
-}
-
-func (f *MockConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCMaxConnectionAgeGrace
-}
-
-func (f *MockConfig) GetGRPCKeepAlive() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCTime
-}
-
-func (f *MockConfig) GetGRPCKeepAliveTimeout() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCTimeout
+	return f.GetGRPCServerParameters
 }
 
 func (f *MockConfig) GetPeerTimeout() time.Duration {

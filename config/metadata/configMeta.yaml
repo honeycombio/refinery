@@ -1330,6 +1330,40 @@ groups:
           activity, then it pings the client to see if the transport is still
           alive. "0s" sets duration to 20 seconds.
 
+      - name: MaxSendMsgSize
+        type: memorysize
+        valuetype: memorysize
+        default: 6MiB
+        reload: false
+        firstversion: v2.2
+        validations:
+          - type: minimum
+            arg: 1MB
+          - type: maximum
+            arg: 1GiB
+        summary: is the maximum message size the server can send.
+        description: >
+          The server enforces a maximum message size to avoid exhausting the
+          memory available to the process by a single request. The size is
+          expressed in bytes.
+
+      - name: MaxRecvMsgSize
+        type: memorysize
+        valuetype: memorysize
+        default: 7MiB
+        reload: false
+        firstversion: v2.2
+        validations:
+          - type: minimum
+            arg: 1MB
+          - type: maximum
+            arg: 1GiB
+        summary: is the maximum message size the server can receive.
+        description: >
+          The server enforces a maximum message size to avoid exhausting the
+          memory available to the process by a single request. The size is
+          expressed in bytes.
+
   - name: SampleCache
     title: "Sample Cache"
     description: >
