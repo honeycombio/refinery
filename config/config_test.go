@@ -651,14 +651,13 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	grpcConfig := c.GetGRPCConfig()
-
-	assert.NoError(t, err)
-
 	assert.Equal(t, true, c.GetGRPCEnabled())
+
 	a, err := c.GetGRPCListenAddr()
 	assert.NoError(t, err)
 	assert.Equal(t, "localhost:4343", a)
+
+	grpcConfig := c.GetGRPCConfig()
 	assert.Equal(t, true, grpcConfig.Enabled)
 	assert.Equal(t, "localhost:4343", grpcConfig.ListenAddr)
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionIdle))
