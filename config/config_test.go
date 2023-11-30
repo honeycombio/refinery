@@ -458,10 +458,10 @@ func TestAvailableMemoryCmdLine(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules, "--available-memory", "8Gib"})
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules, "--available-memory", "2.5Gib"})
 	assert.NoError(t, err)
 
-	expected := MemorySize(8 * 1024 * 1024 * 1024)
+	expected := MemorySize(2*1024*1024*1024 + 512*1024*1024)
 	inMemConfig, err := c.GetCollectionConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.AvailableMemory)
