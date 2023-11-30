@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-11-29 at 18:47:23 UTC.
+It was automatically generated on 2023-11-30 at 19:50:24 UTC.
 
 ## The Rules file
 
@@ -12,17 +12,17 @@ View a [complete example](https://github.com/honeycombio/refinery/blob/main/rule
 ```yaml
 RulesVersion: 2
 Samplers:
-    __default__:
-        DeterministicSampler:
-            SampleRate: 1
-    production:
-        DynamicSampler:
-            SampleRate: 2
-            ClearFrequency: 30s
-            FieldList:
-                - request.method
-                - http.target
-                - response.status_code
+  __default__:
+    DeterministicSampler:
+      SampleRate: 1
+  production:
+    DynamicSampler:
+      SampleRate: 2
+      ClearFrequency: 30s
+      FieldList:
+        - request.method
+        - http.target
+        - response.status_code
 ```
 
 Name: `RulesVersion`
@@ -44,6 +44,7 @@ If the API key is a new-style key (20-23 alphanumeric characters), the key's env
 The remainder of this document describes the samplers that can be used within the `Samplers` section and the fields that control their behavior.
 
 ## Table of Contents
+
 - [Deterministic Sampler](#deterministic-sampler)
 - [Dynamic Sampler](#dynamic-sampler)
 - [EMA Dynamic Sampler](#ema-dynamic-sampler)
@@ -55,6 +56,7 @@ The remainder of this document describes the samplers that can be used within th
 - [Total Throughput Sampler](#total-throughput-sampler)
 
 ---
+
 ## Deterministic Sampler
 
 ### Name: `DeterministicSampler`
@@ -74,6 +76,7 @@ The sample rate is calculated from the trace ID, so all spans with the same trac
 Type: `int`
 
 ---
+
 ## Dynamic Sampler
 
 ### Name: `DynamicSampler`
@@ -137,6 +140,7 @@ If your traces are consistent lengths and changes in trace length is a useful in
 Type: `bool`
 
 ---
+
 ## EMA Dynamic Sampler
 
 ### Name: `EMADynamicSampler`
@@ -238,6 +242,7 @@ If your traces are consistent lengths and changes in trace length is a useful in
 Type: `bool`
 
 ---
+
 ## EMA Throughput Sampler
 
 ### Name: `EMAThroughputSampler`
@@ -352,6 +357,7 @@ If your traces are consistent lengths and changes in trace length is a useful in
 Type: `bool`
 
 ---
+
 ## Windowed Throughput Sampler
 
 ### Name: `WindowedThroughputSampler`
@@ -360,17 +366,18 @@ Windowed Throughput Sampler (`WindowedThroughputSampler`) is an enhanced version
 Just like the `TotalThroughput` Sampler, `WindowedThroughputSampler` attempts to meet the goal of fixed number of events per second sent to Honeycomb.
 The original throughput sampler updates the sampling rate every "ClearFrequency" seconds.
 While this parameter is configurable, it suffers from the following tradeoff:
-  - Decreasing it is more responsive to load spikes, but with the
+
+- Decreasing it is more responsive to load spikes, but with the
   cost of making the sampling decision on less data.
 - Increasing it is less responsive to load spikes, but sample rates
   will be more stable because they are made with more data.
-The Windowed Throughput Sampler resolves this by introducing two different, tunable parameters:
+  The Windowed Throughput Sampler resolves this by introducing two different, tunable parameters:
   - `UpdateFrequency`: how often the sampling rate is recomputed
   - `LookbackFrequency`: how much total time is considered when
-  recomputing sampling rate.
-A standard configuration would be to set `UpdateFrequency` to `1s` and `LookbackFrequency` to `30s`.
-In this configuration, for every second, we lookback at the last 30 seconds of data in order to compute the new sampling rate.
-The actual sampling rate computation is nearly identical to the original Throughput Sampler, but this variant has better support for floating point numbers.
+    recomputing sampling rate.
+    A standard configuration would be to set `UpdateFrequency` to `1s` and `LookbackFrequency` to `30s`.
+    In this configuration, for every second, we lookback at the last 30 seconds of data in order to compute the new sampling rate.
+    The actual sampling rate computation is nearly identical to the original Throughput Sampler, but this variant has better support for floating point numbers.
 
 ### `GoalThroughputPerSec`
 
@@ -439,6 +446,7 @@ If your traces are consistent lengths and changes in trace length is a useful in
 Type: `bool`
 
 ---
+
 ## Rules-based Sampler
 
 ### Name: `RulesBasedSampler`
@@ -465,6 +473,7 @@ This is a computationally expensive option and may cause performance problems if
 Type: `bool`
 
 ---
+
 ## Rules for Rules-based Samplers
 
 ### Name: `Rules`
@@ -520,6 +529,7 @@ If set to "span", then all of the conditions in the rule will be evaluated again
 Type: `string`
 
 ---
+
 ## Conditions for the Rules in Rules-based Samplers
 
 ### Name: `Conditions`
@@ -563,6 +573,7 @@ This is especially useful when a field like `http status code` may be rendered a
 Type: `string`
 
 ---
+
 ## Total Throughput Sampler
 
 ### Name: `TotalThroughputSampler`
@@ -572,9 +583,9 @@ This sampler is **deprecated** and present mainly for compatibility.
 Consider using either `EMAThroughputSampler` or `WindowedThroughputSampler` instead.
 If your key space is sharded across different servers, then this is a good method for making sure each server sends roughly the same volume of content to Honeycomb.
 It performs poorly when the active keyspace is very large.
-`GoalThroughputPerSec` * `ClearFrequency` defines the upper limit of the number of keys that can be reported and stay under the goal, but with that many keys, you'll only get one event per key per `ClearFrequencySec`, which is very coarse.
+`GoalThroughputPerSec` _ `ClearFrequency` defines the upper limit of the number of keys that can be reported and stay under the goal, but with that many keys, you'll only get one event per key per `ClearFrequencySec`, which is very coarse.
 Aim for at least 1 event per key per sec to 1 event per key per 10sec to get reasonable data.
-In other words, the number of active keys should be less than 10 * `GoalThroughputPerSec`.
+In other words, the number of active keys should be less than 10 _ `GoalThroughputPerSec`.
 
 ### `GoalThroughputPerSec`
 
@@ -632,4 +643,3 @@ The number of spans is exact, so if there are normally small variations in trace
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 Type: `bool`
-

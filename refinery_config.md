@@ -762,6 +762,32 @@ The number of traces in the cache should be many multiples (100x to 1000x) of th
 - Type: `int`
 - Default: `10000`
 
+### `PeerQueueSize`
+
+`PeerQueueSize` is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
+
+The peer span queue serves as a buffer for spans redirected from other peers before they are processed.
+In the event that this queue reaches its capacity, any subsequent spans will be discarded.
+The size of this queue is contingent upon the number of peers within the cluster.
+Specifically, with N peers, the queue's span capacity is determined by (N-1)/N of the total number of spans.
+Its minimum value should be at least three times the CacheCapacity.
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `30000`
+
+### `IncomingQueueSize`
+
+`IncomingQueueSize` is the number of in-flight spans to keep in the incoming span queue.
+
+The incoming span queue is used to buffer spans before they are processed.
+If this queue fills up, then subsequent spans will be dropped.
+Its minimum value should be at least three times the CacheCapacity.
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `30000`
+
 ### `AvailableMemory`
 
 `AvailableMemory` is the amount of system memory available to the Refinery process.
@@ -769,13 +795,13 @@ The number of traces in the cache should be many multiples (100x to 1000x) of th
 This value will typically be set through an environment variable controlled by the container or deploy script.
 If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
 If set, then this must be a memory size.
-64-bit values are supported.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are also supported.
-If set, `Collections.MaxAlloc` must not be defined.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+Fractional values with a suffix are supported.
+If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
-- Example: `4Gb`
+- Example: `4.5Gb`
 - Environment variable: `REFINERY_AVAILABLE_MEMORY`
 - Command line switch: `--available-memory`
 
@@ -798,8 +824,8 @@ Useful values for this setting are generally in the range of 70-90.
 `MaxAlloc` is the maximum number of bytes that should be allocated by the Collector.
 
 If set, then this must be a memory size.
-64-bit values are supported.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+Fractional values with a suffix are supported.
 See `MaxMemory` for more details.
 If set, `Collections.AvailableMemory` must not be defined.
 

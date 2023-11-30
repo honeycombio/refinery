@@ -982,6 +982,30 @@ groups:
           many multiples (100x to 1000x) of the total number of concurrently
           active traces (trace throughput * trace duration).
 
+      - name: PeerQueueSize
+        type: int
+        default: 30_000
+        valuetype: nondefault
+        reload: false
+        summary: is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
+        description: >
+          The peer span queue serves as a buffer for spans redirected from other peers before they are processed.
+          In the event that this queue reaches its capacity, any subsequent spans will be discarded. The size of this
+          queue is contingent upon the number of peers within the cluster. Specifically, with N peers, the queue's span
+          capacity is determined by (N-1)/N of the total number of spans.
+          Its minimum value should be at least three times the CacheCapacity.
+
+      - name: IncomingQueueSize
+        type: int
+        default: 30_000
+        valuetype: nondefault
+        reload: false
+        summary: is the number of in-flight spans to keep in the incoming span queue.
+        description: >
+          The incoming span queue is used to buffer spans before they are processed.
+          If this queue fills up, then subsequent spans will be dropped.
+          Its minimum value should be at least three times the CacheCapacity.
+
       - name: AvailableMemory
         type: memorysize
         valuetype: memorysize

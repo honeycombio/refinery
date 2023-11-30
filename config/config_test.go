@@ -452,6 +452,54 @@ func TestMaxAlloc(t *testing.T) {
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
 }
 
+func TestPeerAndIncomingQueueSize(t *testing.T) {
+	testcases := []struct {
+		name                string
+		configYAML          string
+		expectedForPeer     int
+		expectedForIncoming int
+	}{
+		{
+			name:                "default",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000),
+			expectedForPeer:     3000,
+			expectedForIncoming: 3000,
+		},
+		{
+			name:                "PeerInMemoryCapacity is set",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.PeerQueueSize", 4000),
+			expectedForPeer:     4000,
+			expectedForIncoming: 3000,
+		},
+		{
+			name:                "IncomingInMemoryCapacity is set",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.IncomingQueueSize", 4000),
+			expectedForPeer:     3000,
+			expectedForIncoming: 4000,
+		},
+		{
+			name:                "below the minimum",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.PeerQueueSize", 2000, "Collection.IncomingQueueSize", 2000),
+			expectedForPeer:     3000,
+			expectedForIncoming: 3000,
+		},
+	}
+
+	for _, tc := range testcases {
+		rm := makeYAML("ConfigVersion", 2)
+		config, rules := createTempConfigs(t, tc.configYAML, rm)
+		defer os.Remove(rules)
+		defer os.Remove(config)
+		c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+		assert.NoError(t, err)
+
+		inMemConfig, err := c.GetCollectionConfig()
+		assert.NoError(t, err)
+		assert.Equal(t, tc.expectedForPeer, inMemConfig.GetPeerQueueSize())
+		assert.Equal(t, tc.expectedForIncoming, inMemConfig.GetIncomingQueueSize())
+	}
+}
+
 func TestAvailableMemoryCmdLine(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.AvailableMemory", 2_000_000_000)
 	rm := makeYAML("ConfigVersion", 2)
