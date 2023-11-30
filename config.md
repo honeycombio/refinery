@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-11-30 at 19:50:23 UTC.
+It was automatically generated on 2023-11-30 at 22:36:51 UTC.
 
 ## The Config file
 
@@ -130,6 +130,17 @@ Incoming traffic is expected to be HTTP, so if using SSL use something like ngin
 - Default: `0.0.0.0:8081`
 - Environment variable: `REFINERY_PEER_LISTEN_ADDRESS`
 - Command line switch: `--peer-listen-address`
+
+### `HTTPIdleTimeout`
+
+HTTPIdleTimeout is the duration the http server waits for activity on the connection.
+
+This is the amount of time after which if the http server does not see any activity, then it pings the client to see if the transport is still alive.
+"0s" means no timeout.
+
+- Not eligible for live reload.
+- Type: `duration`
+- Default: `0s`
 
 ### `HoneycombAPI`
 
@@ -1035,6 +1046,28 @@ This is the amount of time after which if the server does not see any activity, 
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `20s`
+
+### `MaxSendMsgSize`
+
+MaxSendMsgSize is the maximum message size the server can send.
+
+The server enforces a maximum message size to avoid exhausting the memory available to the process by a single request.
+The size is expressed in bytes.
+
+- Not eligible for live reload.
+- Type: `memorysize`
+- Default: `6MiB`
+
+### `MaxRecvMsgSize`
+
+MaxRecvMsgSize is the maximum message size the server can receive.
+
+The server enforces a maximum message size to avoid exhausting the memory available to the process by a single request.
+The size is expressed in bytes.
+
+- Not eligible for live reload.
+- Type: `memorysize`
+- Default: `7MiB`
 
 ## Sample Cache
 

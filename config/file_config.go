@@ -76,9 +76,10 @@ type GeneralConfig struct {
 }
 
 type NetworkConfig struct {
-	ListenAddr     string `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
-	PeerListenAddr string `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
-	HoneycombAPI   string `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	ListenAddr      string   `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
 }
 
 type AccessKeyConfig struct {
@@ -463,6 +464,13 @@ func (f *fileConfig) GetPeerListenAddr() (string, error) {
 		return "", err
 	}
 	return f.mainConfig.Network.PeerListenAddr, nil
+}
+
+func (f *fileConfig) GetHTTPIdleTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return time.Duration(f.mainConfig.Network.HTTPIdleTimeout)
 }
 
 func (f *fileConfig) GetCompressPeerCommunication() bool {

@@ -423,6 +423,20 @@ func TestDebugServiceAddr(t *testing.T) {
 	}
 }
 
+func TestHTTPIdleTimeout(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "Network.HTTPIdleTimeout", "60s")
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	if d := c.GetHTTPIdleTimeout(); d != time.Minute {
+		t.Error("received", d, "expected", time.Minute)
+	}
+}
+
 func TestDryRun(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "Debugging.DryRun", true)
 	rm := makeYAML("ConfigVersion", 2)

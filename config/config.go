@@ -31,6 +31,9 @@ type Config interface {
 	// peer traffic
 	GetPeerListenAddr() (string, error)
 
+	// GetHTTPIdleTimeout returns the idle timeout for refinery's HTTP server
+	GetHTTPIdleTimeout() time.Duration
+
 	// GetCompressPeerCommunication will be true if refinery should compress
 	// data before forwarding it to a peer.
 	GetCompressPeerCommunication() bool
