@@ -50,23 +50,23 @@ func (t *keptTraceCacheEntry) Rate() uint {
 }
 
 // DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
-func (t *keptTraceCacheEntry) DescendantCount() uint32 {
-	return t.eventCount
+func (t *keptTraceCacheEntry) DescendantCount() uint {
+	return uint(t.eventCount)
 }
 
 // SpanEventCount returns the count of span events in the trace.
-func (t *keptTraceCacheEntry) SpanEventCount() uint32 {
-	return t.spanEventCount
+func (t *keptTraceCacheEntry) SpanEventCount() uint {
+	return uint(t.spanEventCount)
 }
 
 // SpanLinkCount returns the count of span links in the trace.
-func (t *keptTraceCacheEntry) SpanLinkCount() uint32 {
-	return t.spanLinkCount
+func (t *keptTraceCacheEntry) SpanLinkCount() uint {
+	return uint(t.spanLinkCount)
 }
 
 // SpanCount returns the count of spans in the trace.
-func (t *keptTraceCacheEntry) SpanCount() uint32 {
-	return t.spanCount
+func (t *keptTraceCacheEntry) SpanCount() uint {
+	return uint(t.spanCount)
 }
 
 // Count records additional spans in the cache record.
@@ -97,19 +97,19 @@ func (t *cuckooDroppedRecord) Rate() uint {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) DescendantCount() uint32 {
+func (t *cuckooDroppedRecord) DescendantCount() uint {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) SpanEventCount() uint32 {
+func (t *cuckooDroppedRecord) SpanEventCount() uint {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) SpanLinkCount() uint32 {
+func (t *cuckooDroppedRecord) SpanLinkCount() uint {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) SpanCount() uint32 {
+func (t *cuckooDroppedRecord) SpanCount() uint {
 	return 0
 }
 
