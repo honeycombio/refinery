@@ -229,13 +229,15 @@ type IDFieldsConfig struct {
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	Enabled               bool     `yaml:"Enabled" default:"true"`
-	ListenAddr            string   `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
-	MaxConnectionIdle     Duration `yaml:"MaxConnectionIdle" default:"1m"`
-	MaxConnectionAge      Duration `yaml:"MaxConnectionAge" default:"3m"`
-	MaxConnectionAgeGrace Duration `yaml:"MaxConnectionAgeGrace" default:"1m"`
-	KeepAlive             Duration `yaml:"KeepAlive" default:"1m"`
-	KeepAliveTimeout      Duration `yaml:"KeepAliveTimeout" default:"20s"`
+	Enabled               bool       `yaml:"Enabled" default:"true"`
+	ListenAddr            string     `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
+	MaxConnectionIdle     Duration   `yaml:"MaxConnectionIdle" default:"1m"`
+	MaxConnectionAge      Duration   `yaml:"MaxConnectionAge" default:"3m"`
+	MaxConnectionAgeGrace Duration   `yaml:"MaxConnectionAgeGrace" default:"1m"`
+	KeepAlive             Duration   `yaml:"KeepAlive" default:"1m"`
+	KeepAliveTimeout      Duration   `yaml:"KeepAliveTimeout" default:"20s"`
+	MaxSendMsgSize        MemorySize `yaml:"MaxSendMsgSize" default:"5MB"`
+	MaxRecvMsgSize        MemorySize `yaml:"MaxRecvMsgSize" default:"5MB"`
 }
 
 type SampleCacheConfig struct {
@@ -488,6 +490,13 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 		}
 	}
 	return f.mainConfig.GRPCServerParameters.ListenAddr, nil
+}
+
+func (f *fileConfig) GetGRPCConfig() GRPCServerParameters {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.GRPCServerParameters
 }
 
 func (f *fileConfig) IsAPIKeyValid(key string) bool {
@@ -797,41 +806,6 @@ func (f *fileConfig) GetQueryAuthToken() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Debugging.QueryAuthToken
-}
-
-func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionIdle)
-}
-
-func (f *fileConfig) GetGRPCMaxConnectionAge() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAge)
-}
-
-func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAgeGrace)
-}
-
-func (f *fileConfig) GetGRPCKeepAlive() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.KeepAlive)
-}
-
-func (f *fileConfig) GetGRPCKeepAliveTimeout() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.KeepAliveTimeout)
 }
 
 func (f *fileConfig) GetPeerTimeout() time.Duration {

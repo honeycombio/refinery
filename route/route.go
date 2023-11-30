@@ -215,15 +215,16 @@ func (r *Router) LnS(incomingOrPeer string) {
 		}
 
 		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
+		grpcConfig := r.Config.GetGRPCConfig()
 		serverOpts := []grpc.ServerOption{
-			grpc.MaxSendMsgSize(GRPCMessageSizeMax), // default is math.MaxInt32
-			grpc.MaxRecvMsgSize(GRPCMessageSizeMax), // default is 4MB
+			grpc.MaxSendMsgSize(int(grpcConfig.MaxSendMsgSize)),
+			grpc.MaxRecvMsgSize(int(grpcConfig.MaxRecvMsgSize)),
 			grpc.KeepaliveParams(keepalive.ServerParameters{
-				MaxConnectionIdle:     r.Config.GetGRPCMaxConnectionIdle(),
-				MaxConnectionAge:      r.Config.GetGRPCMaxConnectionAge(),
-				MaxConnectionAgeGrace: r.Config.GetGRPCMaxConnectionAgeGrace(),
-				Time:                  r.Config.GetGRPCKeepAlive(),
-				Timeout:               r.Config.GetGRPCKeepAliveTimeout(),
+				MaxConnectionIdle:     time.Duration(grpcConfig.MaxConnectionIdle),
+				MaxConnectionAge:      time.Duration(grpcConfig.MaxConnectionAge),
+				MaxConnectionAgeGrace: time.Duration(grpcConfig.MaxConnectionAgeGrace),
+				Time:                  time.Duration(grpcConfig.KeepAlive),
+				Timeout:               time.Duration(grpcConfig.KeepAliveTimeout),
 			}),
 		}
 		traceServer := NewTraceServer(r)

@@ -57,6 +57,12 @@ func asFloat(v any) (float64, string) {
 		if err == nil {
 			return float64(f.Milliseconds()), ""
 		}
+		// can we interpret it as a memory size?
+		var m MemorySize
+		err = m.UnmarshalText([]byte(v.(string)))
+		if err == nil {
+			return float64(m), ""
+		}
 	default:
 	}
 	return 0, fmt.Sprintf("%#v (%T) cannot be interpreted as a quantity", v, v)

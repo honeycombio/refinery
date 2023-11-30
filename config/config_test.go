@@ -638,6 +638,36 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 
+func TestHoneycombGRPCConfigDefaults(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"GRPCServerParameters.Enabled", true,
+		"GRPCServerParameters.ListenAddr", "localhost:4343",
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	grpcConfig := c.GetGRPCConfig()
+
+	assert.NoError(t, err)
+
+	assert.Equal(t, true, c.GetGRPCEnabled())
+	a, err := c.GetGRPCListenAddr()
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost:4343", a)
+	assert.Equal(t, true, grpcConfig.Enabled)
+	assert.Equal(t, "localhost:4343", grpcConfig.ListenAddr)
+	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionIdle))
+	assert.Equal(t, 3*time.Minute, time.Duration(grpcConfig.MaxConnectionAge))
+	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionAgeGrace))
+	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.KeepAlive))
+	assert.Equal(t, 20*time.Second, time.Duration(grpcConfig.KeepAliveTimeout))
+}
+
 func TestStdoutLoggerConfig(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
@@ -730,11 +760,13 @@ func TestGRPCServerParameters(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	assert.Equal(t, 1*time.Minute, c.GetGRPCMaxConnectionIdle())
-	assert.Equal(t, 2*time.Minute, c.GetGRPCMaxConnectionAge())
-	assert.Equal(t, 3*time.Minute, c.GetGRPCMaxConnectionAgeGrace())
-	assert.Equal(t, 4*time.Minute, c.GetGRPCKeepAlive())
-	assert.Equal(t, 5*time.Minute, c.GetGRPCKeepAliveTimeout())
+	gc := c.GetGRPCConfig()
+
+	assert.Equal(t, 1*time.Minute, time.Duration(gc.MaxConnectionIdle))
+	assert.Equal(t, 2*time.Minute, time.Duration(gc.MaxConnectionAge))
+	assert.Equal(t, 3*time.Minute, time.Duration(gc.MaxConnectionAgeGrace))
+	assert.Equal(t, 4*time.Minute, time.Duration(gc.KeepAlive))
+	assert.Equal(t, 5*time.Minute, time.Duration(gc.KeepAliveTimeout))
 	assert.Equal(t, true, c.GetGRPCEnabled())
 	addr, err := c.GetGRPCListenAddr()
 	assert.NoError(t, err)
