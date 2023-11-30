@@ -20,7 +20,7 @@ import (
 // keptTraceCacheEntry is an internal record we leave behind when keeping a trace to remember
 // our decision for the future. We only store them if the record was kept.
 type keptTraceCacheEntry struct {
-	rate           uint   // sample rate used when sending the trace
+	rate           uint32 // sample rate used when sending the trace
 	eventCount     uint32 // number of descendants in the trace (we decorate the root span with this)
 	spanEventCount uint32 // number of span events in the trace
 	spanLinkCount  uint32 // number of span links in the trace
@@ -33,7 +33,7 @@ func NewKeptTraceCacheEntry(trace *types.Trace) *keptTraceCacheEntry {
 	}
 
 	return &keptTraceCacheEntry{
-		rate:           trace.SampleRate,
+		rate:           uint32(trace.SampleRate),
 		eventCount:     trace.DescendantCount(),
 		spanEventCount: trace.SpanEventCount(),
 		spanLinkCount:  trace.SpanLinkCount(),
@@ -46,7 +46,7 @@ func (t *keptTraceCacheEntry) Kept() bool {
 }
 
 func (t *keptTraceCacheEntry) Rate() uint {
-	return t.rate
+	return uint(t.rate)
 }
 
 // DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
@@ -120,7 +120,7 @@ func (t *cuckooDroppedRecord) Count(*types.Span) {
 var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 
 type cuckooSentCache struct {
-	kept    *lru.Cache[string, *cuckooKeptRecord]
+	kept    *lru.Cache[string, *keptTraceCacheEntry]
 	dropped *CuckooTraceChecker
 	cfg     config.SampleCacheConfig
 
@@ -139,7 +139,7 @@ type cuckooSentCache struct {
 var _ TraceSentCache = (*cuckooSentCache)(nil)
 
 func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
-	stc, err := lru.New[string, *cuckooKeptRecord](int(cfg.KeptSize))
+	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 }
 
 func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
-	stc, err := lru.New[string, *cuckooKeptRecord](int(cfg.KeptSize))
+	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
 		return err
 	}
