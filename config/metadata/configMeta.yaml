@@ -198,14 +198,29 @@ groups:
         valuetype: nondefault
         default: true
         reload: true
-        summary: controls whether to add a metadata field to root spans that indicates the number of child spans.
+        validations:
+        summary: controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
         description: >
           The added metadata field, `meta.span_count`, indicates
-          the number of child spans on the trace at the time the sampling
+          the number of child elements on the trace at the time the sampling
           decision was made. This value is available to the rules-based sampler,
           making it possible to write rules that are dependent upon the number
-          of spans in the trace. If `true`, then Refinery will add `meta.
-          span_count` to the root span.
+          of spans, span events, and span links in the trace. If `true` and `AddCountsToRoot` is set to false, then Refinery
+          will add `meta.span_count` to the root span.
+
+      - name: AddCountsToRoot
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
+        description: >
+          If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root
+          span based on the values at the time the sampling decision was made:
+          - `meta.span_count`: the number of child spans on the trace
+          - `meta.span_event_count`: the number of span events on the trace
+          - `meta.span_link_count`: the number of span links on the trace
+          - `meta.event_count`: the number of honeycomb events on the trace
 
       - name: AddHostMetadataToTrace
         type: bool

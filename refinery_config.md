@@ -160,16 +160,24 @@ We recommend enabling this setting whenever a rules-based sampler is in use, as 
 
 ### `AddSpanCountToRoot`
 
-`AddSpanCountToRoot` controls whether to add a metadata field to root spans that indicates the number of child spans.
+`AddSpanCountToRoot` controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
 
-The added metadata field, `meta.span_count`, indicates the number of child spans on the trace at the time the sampling decision was made.
-This value is available to the rules-based sampler, making it possible to write rules that are dependent upon the number of spans in the trace.
-If `true`, then Refinery will add `meta.
-span_count` to the root span.
+The added metadata field, `meta.span_count`, indicates the number of child elements on the trace at the time the sampling decision was made.
+This value is available to the rules-based sampler, making it possible to write rules that are dependent upon the number of spans, span events, and span links in the trace.
+If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.span_count` to the root span.
 
 - Eligible for live reload.
 - Type: `bool`
 - Default: `true`
+
+### `AddCountsToRoot`
+
+`AddCountsToRoot` controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
+
+If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made: - `meta.span_count`: the number of child spans on the trace - `meta.span_event_count`: the number of span events on the trace - `meta.span_link_count`: the number of span links on the trace - `meta.event_count`: the number of honeycomb events on the trace
+
+- Eligible for live reload.
+- Type: `bool`
 
 ### `AddHostMetadataToTrace`
 
@@ -372,6 +380,7 @@ Only used if `APIKey` is specified.
 `SamplerEnabled` controls whether logs are sampled before sending to Honeycomb.
 
 The sample rate is controlled by the `SamplerThroughput` setting.
+The sampler used throttles the rate of logs sent to Honeycomb from any given source within Refinery -- it should effectively limit the rate of redundant messages.
 
 - Not eligible for live reload.
 - Type: `bool`
@@ -924,7 +933,7 @@ A duration for the amount of time after which an idle connection will be closed 
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `0s`
+- Default: `1m`
 - Example: `1m`
 
 ### `MaxConnectionAge`
@@ -948,7 +957,7 @@ This setting is in case the upstream node ignores the `GoAway` request.
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `60s`
+- Default: `1m`
 
 ### `KeepAlive`
 
@@ -1058,7 +1067,7 @@ The value must be less than `ActivationLevel`.
 
 - Eligible for live reload.
 - Type: `percentage`
-- Default: `70`
+- Default: `75`
 
 ### `SamplingRate`
 

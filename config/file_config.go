@@ -90,6 +90,7 @@ type AccessKeyConfig struct {
 type RefineryTelemetryConfig struct {
 	AddRuleReasonToTrace   bool `yaml:"AddRuleReasonToTrace"`
 	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot" default:"true"`
+	AddCountsToRoot        bool `yaml:"AddCountsToRoot"`
 	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace" default:"true"`
 }
 
@@ -828,6 +829,13 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Telemetry.AddSpanCountToRoot
+}
+
+func (f *fileConfig) GetAddCountsToRoot() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Telemetry.AddCountsToRoot
 }
 
 func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {
