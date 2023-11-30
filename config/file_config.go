@@ -173,16 +173,40 @@ type RedisPeerManagementConfig struct {
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
+	PeerQueueSize       int        `yaml:"PeerQueueSize"`
+	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 }
 
+// GetMaxAlloc returns the maximum amount of memory to use for the cache.
+// If AvailableMemory is set, it uses that and MaxMemoryPercentage to calculate
 func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	if c.AvailableMemory == 0 || c.MaxMemoryPercentage == 0 {
 		return c.MaxAlloc
 	}
 	return c.AvailableMemory * MemorySize(c.MaxMemoryPercentage) / 100
+}
+
+// GetPeerBufferCapacity returns the capacity of the in-memory channel for peer traces.
+// If PeerBufferCapacity is not set, it uses 3x the cache capacity.
+// The minimum value is 3x the cache capacity.
+func (c CollectionConfig) GetPeerQueueSize() int {
+	if c.PeerQueueSize == 0 || c.PeerQueueSize < c.CacheCapacity*3 {
+		return c.CacheCapacity * 3
+	}
+	return c.PeerQueueSize
+}
+
+// GetIncomingBufferCapacity returns the capacity of the in-memory channel for incoming traces.
+// If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
+// The minimum value is 3x the cache capacity.
+func (c CollectionConfig) GetIncomingQueueSize() int {
+	if c.IncomingQueueSize == 0 || c.IncomingQueueSize < c.CacheCapacity*3 {
+		return c.CacheCapacity * 3
+	}
+	return c.IncomingQueueSize
 }
 
 type BufferSizeConfig struct {
