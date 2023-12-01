@@ -679,6 +679,8 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionAgeGrace))
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.KeepAlive))
 	assert.Equal(t, 20*time.Second, time.Duration(grpcConfig.KeepAliveTimeout))
+	assert.Equal(t, MemorySize(5*1_000_000), grpcConfig.MaxSendMsgSize)
+	assert.Equal(t, MemorySize(5*1_000_000), grpcConfig.MaxRecvMsgSize)
 }
 
 func TestStdoutLoggerConfig(t *testing.T) {
