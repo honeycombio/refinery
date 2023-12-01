@@ -1032,7 +1032,7 @@ groups:
         description: >
           This value will typically be set through an environment variable
           controlled by the container or deploy script. If this value is zero or
-          not set, then `MaxMemory` cannot be used to calculate the maximum
+          not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum
           allocation and `MaxAlloc` will be used instead. If set, then this must
           be a memory size. Sizes with standard unit suffixes (`MB`, `GiB`,
           etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported. Fractional
@@ -1075,7 +1075,7 @@ groups:
           If set, then this must be a memory size. Sizes with standard unit
           suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.)
           are supported. Fractional values with a suffix are supported. See
-          `MaxMemory` for more details. If set, `Collections.AvailableMemory`
+          `MaxMemoryPercentage` for more details. If set, `Collections.AvailableMemory`
           must not be defined.
 
   - name: BufferSizes
