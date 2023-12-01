@@ -1333,7 +1333,7 @@ groups:
       - name: MaxSendMsgSize
         type: memorysize
         valuetype: memorysize
-        default: 6MiB
+        default: 5MB
         reload: false
         firstversion: v2.2
         validations:
@@ -1350,7 +1350,7 @@ groups:
       - name: MaxRecvMsgSize
         type: memorysize
         valuetype: memorysize
-        default: 7MiB
+        default: 5MB
         reload: false
         firstversion: v2.2
         validations:
