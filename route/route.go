@@ -204,8 +204,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	r.iopLogger.Info().Logf("Listening on %s", listenAddr)
 	r.server = &http.Server{
-		Addr:    listenAddr,
-		Handler: muxxer,
+		Addr:        listenAddr,
+		Handler:     muxxer,
+		IdleTimeout: r.Config.GetHTTPIdleTimeout(),
 	}
 
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {

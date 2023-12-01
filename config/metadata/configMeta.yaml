@@ -111,6 +111,21 @@ groups:
           Incoming traffic is expected to be HTTP, so if using SSL
           use something like nginx or a load balancer to do the decryption.
 
+      - name: HTTPIdleTimeout
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.2
+        reload: false
+        default: 0s
+        validations:
+          - type: minOrZero
+            arg: 1s
+        summary: is the duration the http server waits for activity on the connection.
+        description: >
+          This is the amount of time after which if the http server does not see any
+          activity, then it pings the client to see if the transport is still
+          alive. "0s" means no timeout.
+
       - name: HoneycombAPI
         type: url
         valuetype: nondefault
