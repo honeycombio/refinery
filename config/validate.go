@@ -301,7 +301,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					errors = append(errors, msg)
 				} else {
 					fm := mustFloat(validation.Arg)
-					if fv == 0 || fv < fm {
+					if fv != 0 && fv < fm {
 						errors = append(errors, fmt.Sprintf("field %s must be at least %v, or zero", k, validation.Arg))
 					}
 				}

@@ -21,6 +21,7 @@ type MockConfig struct {
 	GetListenAddrVal                 string
 	GetPeerListenAddrErr             error
 	GetPeerListenAddrVal             string
+	GetHTTPIdleTimeoutVal            time.Duration
 	GetCompressPeerCommunicationsVal bool
 	GetGRPCEnabledVal                bool
 	GetGRPCListenAddrErr             error
@@ -153,6 +154,13 @@ func (m *MockConfig) GetPeerListenAddr() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
+}
+
+func (m *MockConfig) GetHTTPIdleTimeout() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetHTTPIdleTimeoutVal
 }
 
 func (m *MockConfig) GetCompressPeerCommunication() bool {
