@@ -2,6 +2,23 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.2.0
+
+This is a minor release with several new features and bug fixes mostly around config values. This release is recommended for all Refinery users.
+
+### Configuration
+- `HTTPIdleTimeout` allows users to configure Refinery's http server's idle timeout.
+- New GRPC config values that control the max size of send and receive blocks.
+- New config values that provide separate control of the peer and incoming span queue.
+- `AddCountsToRoot`, used instead of `AddSpanCountToRoot`, reports 4 separate values on a trace: child spans, span events, span links, and total child elements.
+- Redis now supports Auth string for connection.
+
+### Notable fixes
+- The default stdout logger now supports sampling, so that in error loop situations, the number of log messages is constrained.
+- Config values that need a memory size input can now use floating point values, which should mean that Refinery's parsing of memory size is compatible with that of Kubernetes, making helm charts easier to write.
+- Documentation was improved.
+
+See [the Changelog](./CHANGELOG.md) for the full list of changes.
 ## Version 2.1.0
 
 This is a minor release with several new features and bug fixes, and is recommended for all Refinery users.

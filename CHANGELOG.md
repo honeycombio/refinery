@@ -1,5 +1,46 @@
 # Refinery Changelog
 
+## 2.2.0 2023-12-04
+
+This is a minor release with several new configuration options and bug fixes, and is recommended for all Refinery users. See [Release Notes](./RELEASE_NOTES.md) for a summary of changes.
+
+## Features
+- feat(config): expose IdleTimeout for http.Server (#919) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add GRPC configuration option, rework grpc config a bit (#917) | [Kent Quirk](https://github.com/kentquirk)
+- feat(config): allow separate config for peer and incoming span queue (#916) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat(config): add AddCountsToRoot to report counts data for traces (#910) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: enable sampling for stdout logger (#892) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add Redis Auth Authentication (#859) | [Davin Taddeo](https://github.com/tdarwin)
+
+## Fixes
+- fix(config/metadata): fix reference in description for MaxMemoryPercentage (#926) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: default values in new config parameters (#925) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Allow non-ints in memorysize (#914) | [Kent Quirk](https://github.com/kentquirk)
+- fix: load default config and rules file in service file (#900) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: add refinery version to refinery metric and log (#899) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: add steps for local setup and config changes to CONTRIBUTING.md (#895) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: Correct defaults that got messed up in 2.x. (#894) | [Kent Quirk](https://github.com/kentquirk)
+- fix: change sample key to not include args in honeycomb logger (#893) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: [config]: fix structured logging (#884) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: ClearFrequencySec crash (#880) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Fix AvailableMemory parsing on the cmd line (#875) | [Kent Quirk](https://github.com/kentquirk)
+- fix: [build] disable cgo for binary-only deploys (#846) | [Liz Fong-Jones](https://github.com/lizthegrey)
+- fix: Updating metric registrations in the start function of the EMAThroughputSampler (#845) | [Davin Taddeo](https://github.com/tdarwin)
+
+## Maintenance
+- maint: Respond to docs feedback. (#931) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Bump all dependabot deps at once (#927) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Add some detail about release tasks (#915) | [Kent Quirk](https://github.com/kentquirk)
+- maint: update circleci config to build docker images with go 1.20 (#913) | [Ryan Katkov](https://github.com/solidspark)
+- maint: Update msgpack to v5 (#911) | [Kent Quirk](https://github.com/kentquirk)
+- maint: update hashicorp/golang-lru (#909) | [Kent Quirk](https://github.com/kentquirk)
+- maint: update dependency for x/exp (#908) | [Kent Quirk](https://github.com/kentquirk)
+- maint: bump dependencies (#891) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: Bump all dependencies at once (#876) | [Kent Quirk](https://github.com/kentquirk)
+- maint: bump dependencies (#856) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: Refinery Readme improvements (#837) | [Mary J](https://github.com/mjingle)
+
+
 ## 2.1.0 2023-08-04
 
 This is a minor release with several new features and bug fixes, and is recommended for all Refinery users. See [Release Notes](./RELEASE_NOTES.md) for a summary of changes.
