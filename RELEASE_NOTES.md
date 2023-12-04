@@ -10,7 +10,7 @@ This is a minor release with several new features and bug fixes mostly around co
 - `HTTPIdleTimeout` allows users to configure Refinery's http server's idle timeout.
 - New GRPC config values that control the max size of send and receive blocks.
 - New config values that provide separate control of the peer and incoming span queue.
-- `AddCountsToRoot` reports child spans, span events, span links, and total child elements on a trace.
+- `AddCountsToRoot`, used instead of `AddSpanCountToRoot`, reports 4 separate values on a trace: child spans, span events, span links, and total child elements.
 - Redis now supports Auth string for connection.
 
 ### Notable fixes

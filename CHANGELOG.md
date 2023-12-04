@@ -28,6 +28,7 @@ This is a minor release with several new configuration options and bug fixes, an
 - fix: Updating metric registrations in the start function of the EMAThroughputSampler (#845) | [Davin Taddeo](https://github.com/tdarwin)
 
 ## Maintenance
+- maint: Respond to docs feedback. (#931) | [Kent Quirk](https://github.com/kentquirk)
 - maint: Bump all dependabot deps at once (#927) | [Kent Quirk](https://github.com/kentquirk)
 - maint: Add some detail about release tasks (#915) | [Kent Quirk](https://github.com/kentquirk)
 - maint: update circleci config to build docker images with go 1.20 (#913) | [Ryan Katkov](https://github.com/solidspark)
@@ -39,44 +40,6 @@ This is a minor release with several new configuration options and bug fixes, an
 - maint: bump dependencies (#856) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - maint: Refinery Readme improvements (#837) | [Mary J](https://github.com/mjingle)
 
-## 2.2.0 2023-12-04
-
-This is a minor release with several new configuration options and bug fixes, and is recommended for all Refinery users. See [Release Notes](./RELEASE_NOTES.md) for a summary of changes.
-
-## Features
-- feat(config): expose IdleTimeout for http.Server (#919) | [Yingrong Zhao](https://github.com/vinozzZ)
-- feat: Add GRPC configuration option, rework grpc config a bit (#917) | [Kent Quirk](https://github.com/kentquirk)
-- feat(config): allow separate config for peer and incoming span queue (#916) | [Yingrong Zhao](https://github.com/vinozzZ)
-- feat(config): add AddCountsToRoot to report counts data for traces (#910) | [Yingrong Zhao](https://github.com/vinozzZ)
-- feat: enable sampling for stdout logger (#892) | [Yingrong Zhao](https://github.com/vinozzZ)
-- feat: Add Redis Auth Authentication (#859) | [Davin Taddeo](https://github.com/tdarwin)
-
-## Fixes
-- fix(config/metadata): fix reference in description for MaxMemoryPercentage (#926) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: default values in new config parameters (#925) | [Kent Quirk](https://github.com/kentquirk)
-- fix: Allow non-ints in memorysize (#914) | [Kent Quirk](https://github.com/kentquirk)
-- fix: load default config and rules file in service file (#900) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: add refinery version to refinery metric and log (#899) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: add steps for local setup and config changes to CONTRIBUTING.md (#895) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: Correct defaults that got messed up in 2.x. (#894) | [Kent Quirk](https://github.com/kentquirk)
-- fix: change sample key to not include args in honeycomb logger (#893) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: [config]: fix structured logging (#884) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: ClearFrequencySec crash (#880) | [Kent Quirk](https://github.com/kentquirk)
-- fix: Fix AvailableMemory parsing on the cmd line (#875) | [Kent Quirk](https://github.com/kentquirk)
-- fix: [build] disable cgo for binary-only deploys (#846) | [Liz Fong-Jones](https://github.com/lizthegrey)
-- fix: Updating metric registrations in the start function of the EMAThroughputSampler (#845) | [Davin Taddeo](https://github.com/tdarwin)
-
-## Maintenance
-
-- maint: Bump all dependabot deps at once (#927) | [Kent Quirk](https://github.com/kentquirk)
-- maint: Add some detail about release tasks (#915) | [Kent Quirk](https://github.com/kentquirk)
-- maint: update circleci config to build docker images with go 1.20 (#913) | [Ryan Katkov](https://github.com/solidspark)
-- maint: Update msgpack to v5 (#911) | [Kent Quirk](https://github.com/kentquirk)
-- maint: update hashicorp/golang-lru (#909) | [Kent Quirk](https://github.com/kentquirk)
-- maint: update dependency for x/exp (#908) | [Kent Quirk](https://github.com/kentquirk)
-- maint: bump dependencies (#891) | [Tyler Helmuth](https://github.com/TylerHelmuth)
-- maint: Bump all dependencies at once (#876) | [Kent Quirk](https://github.com/kentquirk)
-- maint: bump dependencies (#856) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 
 ## 2.1.0 2023-08-04
 
@@ -91,7 +54,6 @@ This is a minor release with several new features and bug fixes, and is recommen
 - feat: add a field with the formula used to decide to activate stress relief (#805) | [Terra Field](https://github.com/RainOfTerra)
 
 ## Fixes
-
 - fix: Change default ConfigReloadInterval, add jitter, fix docs (#823) | [Kent Quirk](https://github.com/kentquirk)
 - fix: add missing metrics fields (#811) | [Kent Quirk](https://github.com/kentquirk)
 - fix: live reload deadlock (#810) | [Kent Quirk](https://github.com/kentquirk)
@@ -99,7 +61,6 @@ This is a minor release with several new features and bug fixes, and is recommen
 - fix: Update metadata for bad envvar and regenerate (#800) | [Kent Quirk](https://github.com/kentquirk)
 
 ## Maintenance
-
 - docs: Touch up readme (#832) | [Kent Quirk](https://github.com/kentquirk)
 - maint: use Go v1.20 (#831) | [Kent Quirk](https://github.com/kentquirk)
 - maint: convert hardcoded operators to constants (#813) | [Kent Quirk](https://github.com/kentquirk)
@@ -120,6 +81,7 @@ This is a patch release to address additional issues with Refinery 2.0.
 - maint: Dont try to publish external PRs to ECR (#797) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - maint: replace slash with dash in branch name (#796) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - maint: Docker tagging updates (#791) | [Terra Field](https://github.com/RainOfTerra)
+
 
 ## 2.0.1 2023-07-11
 
@@ -156,6 +118,7 @@ Validation has now been extended to include validation of values specified in en
 - maint(deps): bump google.golang.org/grpc from 1.55.0 to 1.56.1 (#758)
 
 ## 2.0 2023-07-06
+
 
 ** NEW MAJOR VERSION **
 !! BREAKING CHANGES !!
@@ -237,16 +200,13 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 ## 1.21.0 2023-04-14
 
 ### Summary
-
 Adds many fixes for existing features such as meta fields for use with stress relief mode. Adds ability to annotate sample rates that
 were already set upstream before refinery sampling for debugging purposes.
 
 ### Enhancements
-
 - feat: annotate incoming sample rate (#658) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 
 ### Bug Fixes
-
 - fix: Replace incorrectly used Systemd Alias directive with a WantedBy (#657) | [Irving Popovetsky](https://github.com/IrvingPopovetsky)
 - fix: add hostname to span during stress relief mode (#666) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - fix: only decorate late spans when configured to do so (#665) | [Faith Chikwekwe](https://github.com/fchikwekwe)
@@ -258,8 +218,7 @@ were already set upstream before refinery sampling for debugging purposes.
 - fix: correct syntax error in config_complete.toml (#639) | [Hazel Weakly](https://github.com/HazelWeakly)
 
 ### Maintenance
-
-- chore: Update MetricsReportingInterval in config_complete.toml (#653) | [Davin Taddeo](https://github.com/tdarwin)
+- chore: Update MetricsReportingInterval in config_complete.toml (#653) | [Davin](https://github.com/Davin)
 - maint: switch dependabot to collection (#660) | [Vera Reynolds](https://github.com/Vera Reynolds)
 - maint(deps): bump google.golang.org/protobuf from 1.28.1 to 1.30.0 (#663) | [dependabot[bot]](https://github.com/dependabot[bot])
 - maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#662) | [dependabot[bot]](https://github.com/dependabot[bot])
@@ -275,14 +234,12 @@ were already set upstream before refinery sampling for debugging purposes.
 ## 1.20.0 2023-03-10
 
 ### Summary
-
 This is a significant new release of Refinery, with several features designed to help when operating Refinery at scale:
 
 For details on all of the new features, please see the [new Release Notes document](./RELEASE_NOTES.md)
 New features must be enabled by adjusting configuration.
 
 ### Enhancements
-
 - feat: Add configuration for trace and parent ID field names (#630) | [Davin Taddeo](https://github.com/tdarwin)
 - feat: allow ability to add new attributes to refinery data (#621) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - feat: Add ability to set Redis database and prefix in config (#614) | [Kent Quirk](https://github.com/kentquirk)
@@ -296,14 +253,12 @@ New features must be enabled by adjusting configuration.
 - feat: Extract Sent Cache to an interface for future expansion (#561) | [Kent Quirk](https://github.com/kentquirk)
 
 ### Bug fixes
-
 - fix: do not send sample rate in dry run (#611) | [Faith Chikwekwe](https://github.com/fchikwekwe)
 - fix: Remove API key logging (#606) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - fix: Fix flaky tests, clean up logic on rules (#596) | [Kent Quirk](https://github.com/kentquirk)
 - fix: Add missing done channel to fix build (#573) | [Kent Quirk](https://github.com/kentquirk)
 
 ### Maintenance
-
 - chore: publish should only happen on main (#627) | [Kent Quirk](https://github.com/kentquirk)
 - chore: Publish every build to honeycomb's ecr (#613) | [Kent Quirk](https://github.com/kentquirk)
 - docs: update FieldList (#591) | [Tyler Helmuth](https://github.com/TylerHelmuth)
@@ -397,7 +352,7 @@ This release contains a number of small new features to assist in running refine
 
 - Adds new endpoints to help in debugging refinery rules (see README.md)
 - Fixes issues with SampleRate
-- Adds some new configuration parameters (see the \*\_complete.toml files for more)
+- Adds some new configuration parameters (see the *_complete.toml files for more)
 - Conforms to the GRPC standard for health probes
 - Accepts OTLP/JSON traces and conforms to the most recent OTLP trace specification
 
@@ -710,10 +665,10 @@ Do **not** use this version with Environment & Services.
 ### Changed
 
 - Remove redundant peer/api suffix from response error metrics (#247) | [@vreynolds](https://github.com/vreynolds)
-  - `api_response_errors_api`, `api_response_errors_peer`, `peer_response_errors_api`, `peer_response_errors_peer`
-  - replaced by `api_response_errors`, `peer_response_errors`
+    - `api_response_errors_api`, `api_response_errors_peer`, `peer_response_errors_api`, `peer_response_errors_peer`
+    - replaced by `api_response_errors`, `peer_response_errors`
 - Fix rules sampler to emit correct metric (#236) | [@isnotajoke](https://github.com/isnotajoke)
-  - Previously `dynsampler_num_dropped` was emitted, now `rulessampler_num_dropped` will be emitted
+    - Previously `dynsampler_num_dropped` was emitted, now `rulessampler_num_dropped` will be emitted
 
 ### Maintenance
 
