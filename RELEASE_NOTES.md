@@ -14,7 +14,7 @@ This is a minor release with several new features and bug fixes mostly around co
 - Redis now supports Auth string for connection.
 
 ### Notable fixes
-- The default stdout logger gets sampling support.
+- The default stdout logger now supports sampling, so that in error loop situations, the number of log messages is constrained.
 - Config values that need a memory size input can now use floating point values, which should mean that Refinery's parsing of memory size is compatible with that of Kubernetes, making helm charts easier to write.
 - Documentation was improved.
 
