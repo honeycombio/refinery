@@ -22,9 +22,9 @@ With the new configuration format redesign in v2.0.0, the workflow for making a 
 
 - Make changes to the YAML tags for a configuration struct.
 - Update `config/metadata/configMeta.yaml` or `config/metadata/rulesMeta.yaml` to reflect such change.
-- Run the command below from inside the `./refinery/tools/` directory to generate the updated `config_complete.yaml` and `rules_complete.yaml`. These two files are used to generate the official Refinery configuration documentation.
-
+- Run the command below from inside the `./refinery/tools/convert/` directory to generate the updated `config.md`, `config_complete.md`, and `rules.md`. These two files are used to generate the official Refinery configuration documentation.
 `make all`
+- If there're changes to rules, you should manually update `rules_complete.yaml`.
 
 # References
 
