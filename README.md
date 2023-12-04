@@ -12,7 +12,7 @@ For more readable information about recent changes, please see [RELEASE_NOTES.md
 
 ## Purpose
 
-Refinery is a tail-based sampling proxy and operates at the level of an entire [trace](https://docs.honeycomb.io/concepts/tracing/). Refinery examines whole traces and intelligently applies sampling decisions to each trace. These decisions determine whether to include or discard the trace data in the sampled data forwarded to Honeycomb.
+Refinery is a tail-based sampling proxy and operates at the level of an entire [trace](https://docs.honeycomb.io/concepts/tracing/). Refinery examines whole traces and intelligently applies sampling decisions to each trace. These decisions determine whether to keep or drop the trace data in the sampled data forwarded to Honeycomb.
 
 A tail-based sampling model allows you to inspect an entire trace at one time and make a decision to sample based on its contents. For example, your data may have a root span that contains the HTTP status code to serve for a request, and another span that contains information on whether the data was served from a cache. Using Refinery, you can choose to keep only traces that had a `500` status code and were also served from a cache.
 
@@ -24,7 +24,7 @@ Refinery support several kinds of tail sampling:
   - one out of every 1,000 traces for requests that return `2xx`
   - one out of every 10 traces for requests that return `4xx`
   - every request that returns `5xx`
-* **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, in your sampled data, you can keep 100% of traces with an error and then apply dynamic sampling to all other traffic.
+* **Rules-based sampling** - This sampling type enables you to define sampling rates for well-known conditions. For example, you can keep 100% of traces with an error and then apply dynamic sampling to all other traffic.
 * **Throughput-based sampling** - This sampling type enables you to sample traces based on a fixed upper-bound for the number of spans per second. The sampler will dynamically sample traces with a goal of keeping the throughput below the specified limit.
 * **Deterministic probability sampling** - This sampling type consistently applies sampling decisions without considering the contents of the trace other than its trace ID. For example, you can include 1 out of every 12 traces in the sampled data sent to Honeycomb. This kind of sampling can also be done using [head sampling](https://docs.honeycomb.io/manage-data-volume/sampling/#head-sampling), and if you use both, Refinery takes that into account.
 
@@ -47,8 +47,7 @@ Every Refinery instance should have a minimum of:
 - Access to 2 cores for each server used
 
 In many cases, Refinery only needs one node.
-Refinery clusters usually run best with fewer, larger servers; for large installations, 16 cores and 16GB of RAM per server is not unusual (with appropriate tuning).
-If experiencing a large volume of traffic, you may need to scale out to multiple nodes, and likely need a small Redis cluster to handle scaling.
+If experiencing a large volume of traffic, you may need to scale out to multiple nodes, and likely need a small Redis instance to handle scaling.
 
 We recommend increasing the amount of RAM and the number of cores after your initial set-up.
 Additional RAM and CPU can be used by increasing configuration values; in particular, `CacheCapacity` is an important configuration value. Refinery's `Stress Relief` system provides a good indication of how hard Refinery is working, and when invoked, logs (as `reason`) the name of the Refinery configuration value that should be increased to reduce stress.
@@ -81,7 +80,7 @@ This communication can be managed in two ways: via an explicit list of peers in 
 
 ## Configuration
 
-Configuration is controlled by Refinery's two configuration files - `config.yaml` for general configuration and `rules.yaml` for sampling configuration.
+Configuration is controlled by Refinery's two configuration files, which is generally referred to as `config.yaml` for general configuration and `rules.yaml` for sampling configuration.
 
 Learn more about `config.yaml` and all the parameters that control Refinery's operation in our [Refinery configuration documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/).
 
@@ -130,8 +129,8 @@ Determining the number of machines necessary in the cluster is not an exact scie
 Refinery emits a number of metrics to give some indication about the health of the process. These metrics should be sent to Honeycomb, typically with Open Telemetry, and can also be exposed to Prometheus. The interesting ones to watch are:
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
-- `[incoming|peer]_router_\*`: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
-- `collect_cache_buffer_overrun`: this should remain zero; a positive value indicates the need to grow the size of the Collector's circular buffer (via configuration `CacheCapacity`).
+- `[incoming|peer]_router_*`: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
+- `collect_cache_buffer_overrun`: this should remain zero; a positive value indicates the need to grow the size of Refinery's circular trace buffer (via configuration `CacheCapacity`).
 - `process_uptime_seconds`: records the uptime of each process; look for unexpected restarts as a key towards memory constraints.
 
 ## Troubleshooting
@@ -146,7 +145,7 @@ Refinery validates its configuration on startup or when a configuration is reloa
 
 ### Configuration Query
 
-When using the standard configuration file formats, such as TOML and YAML, check the loaded configuration by using one of the `/query` endpoints from the command line on a server that can access a Refinery host.
+Check the loaded configuration by using one of the `/query` endpoints from the command line on a server that can access a Refinery host.
 
 The `/query` endpoints are protected and can be enabled by specifying `QueryAuthToken` in the configuration file or specifying `REFINERY_QUERY_AUTH_TOKEN` in the environment. All requests to any `/query` endpoint must include the header `X-Honeycomb-Refinery-Query` set to the value of the specified token.
 
