@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-11-30 at 22:36:51 UTC.
+It was automatically generated on 2023-12-04 at 18:06:13 UTC.
 
 ## The Config file
 
@@ -10,9 +10,7 @@ The file is split into sections; each section is a group of related configuratio
 Each section has a name, and the name is used to refer to the section in other parts of the config file.
 
 ## Sample
-
 This is a sample config file:
-
 ```yaml
 General:
   ConfigurationVersion: 2
@@ -27,7 +25,6 @@ OTelMetrics:
 The remainder of this document describes the sections within the file and the fields in each.
 
 ## Table of Contents
-
 - [General Configuration](#general-configuration)
 - [Network Configuration](#network-configuration)
 - [Access Key Configuration](#access-key-configuration)
@@ -49,11 +46,9 @@ The remainder of this document describes the sections within the file and the fi
 - [gRPC Server Parameters](#grpc-server-parameters)
 - [Sample Cache](#sample-cache)
 - [Stress Relief](#stress-relief)
-
 ## General Configuration
 
 `General` contains general configuration options that apply to the entire Refinery process.
-
 ### `ConfigurationVersion`
 
 ConfigurationVersion is the file format of this particular configuration file.
@@ -104,7 +99,6 @@ If the config file is being loaded from a URL, it may be wise to increase this v
 ## Network Configuration
 
 `Network` contains network configuration options.
-
 ### `ListenAddr`
 
 ListenAddr is the address where Refinery listens for incoming requests.
@@ -182,7 +176,6 @@ If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
 ## Refinery Telemetry
 
 `RefineryTelemetry` contains configuration information for the telemetry that Refinery uses to record its own operation.
-
 ### `AddRuleReasonToTrace`
 
 AddRuleReasonToTrace controls whether to decorate traces with Refinery rule evaluation results.
@@ -232,7 +225,6 @@ If `true`, then Refinery will add the following tag to all traces: - `meta.refin
 ## Traces
 
 `Traces` contains configuration for how traces are managed.
-
 ### `SendDelay`
 
 SendDelay is the duration to wait before sending a trace.
@@ -297,7 +289,6 @@ Decreasing this will check the trace cache for timeouts more frequently.
 ## Debugging
 
 `Debugging` contains configuration values used when setting up and debugging Refinery.
-
 ### `DebugServiceAddr`
 
 DebugServiceAddr is the IP and port where the debug service runs.
@@ -352,7 +343,6 @@ In addition, `SampleRate` will be set to the incoming rate for all traces, and t
 ## Refinery Logger
 
 `Logger` contains configuration for logging.
-
 ### `Type`
 
 Type is the type of logger to use.
@@ -383,7 +373,6 @@ Level is the logging level above which Refinery should send a log to the logger.
 
 `HoneycombLogger` contains configuration for logging to Honeycomb.
 Only used if `Logger.Type` is "honeycomb".
-
 ### `APIHost`
 
 APIHost is the URL of the Honeycomb API where Refinery sends its logs.
@@ -441,7 +430,6 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 `StdoutLogger` contains configuration for logging to `stdout`.
 Only used if `Logger.Type` is "stdout".
-
 ### `Structured`
 
 Structured controls whether to use structured logging.
@@ -475,7 +463,6 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 ## Prometheus Metrics
 
 `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
-
 ### `Enabled`
 
 Enabled controls whether to expose Refinery metrics over the `PrometheusListenAddr` port.
@@ -629,7 +616,6 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 ## Peer Management
 
 `PeerManagement` controls how the Refinery cluster communicates between peers.
-
 ### `Type`
 
 Type is the type of peer management to use.
@@ -796,7 +782,7 @@ This is not recommended for production use since a burst of traffic could cause 
 CacheCapacity is the number of traces to keep in the cache's circular buffer.
 
 The collection cache is used to collect all spans into a trace as well as remember the sampling decision for any spans that might come in after the trace has been marked "complete" (either by timing out or seeing the root span).
-The number of traces in the cache should be many multiples (100x to 1000x) of the total number of concurrently active traces (trace throughput \* trace duration).
+The number of traces in the cache should be many multiples (100x to 1000x) of the total number of concurrently active traces (trace throughput * trace duration).
 
 - Eligible for live reload.
 - Type: `int`
@@ -833,7 +819,7 @@ Its minimum value should be at least three times the CacheCapacity.
 AvailableMemory is the amount of system memory available to the Refinery process.
 
 This value will typically be set through an environment variable controlled by the container or deploy script.
-If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
+If this value is zero or not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
 If set, then this must be a memory size.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
 Fractional values with a suffix are supported.
@@ -866,7 +852,7 @@ MaxAlloc is the maximum number of bytes that should be allocated by the Collecto
 If set, then this must be a memory size.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
 Fractional values with a suffix are supported.
-See `MaxMemory` for more details.
+See `MaxMemoryPercentage` for more details.
 If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
@@ -903,7 +889,6 @@ If this happens, then you should increase this buffer size.
 ## Specialized Configuration
 
 `Specialized` contains special-purpose configuration options that are not typically needed.
-
 ### `EnvironmentCacheTTL`
 
 EnvironmentCacheTTL is the duration for which environment information is cached.
@@ -1056,7 +1041,7 @@ The size is expressed in bytes.
 
 - Not eligible for live reload.
 - Type: `memorysize`
-- Default: `6MiB`
+- Default: `5MB`
 
 ### `MaxRecvMsgSize`
 
@@ -1067,7 +1052,7 @@ The size is expressed in bytes.
 
 - Not eligible for live reload.
 - Type: `memorysize`
-- Default: `7MiB`
+- Default: `5MB`
 
 ## Sample Cache
 
@@ -1191,3 +1176,4 @@ If this duration is `0`, then Refinery will not start in stressed mode, which wi
 - Eligible for live reload.
 - Type: `duration`
 - Default: `3s`
+

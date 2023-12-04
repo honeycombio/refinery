@@ -804,7 +804,7 @@ Its minimum value should be at least three times the CacheCapacity.
 `AvailableMemory` is the amount of system memory available to the Refinery process.
 
 This value will typically be set through an environment variable controlled by the container or deploy script.
-If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
+If this value is zero or not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
 If set, then this must be a memory size.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
 Fractional values with a suffix are supported.
@@ -837,7 +837,7 @@ Useful values for this setting are generally in the range of 70-90.
 If set, then this must be a memory size.
 Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
 Fractional values with a suffix are supported.
-See `MaxMemory` for more details.
+See `MaxMemoryPercentage` for more details.
 If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
@@ -1027,7 +1027,7 @@ The size is expressed in bytes.
 
 - Not eligible for live reload.
 - Type: `memorysize`
-- Default: `6MiB`
+- Default: `5MB`
 
 ### `MaxRecvMsgSize`
 
@@ -1038,7 +1038,7 @@ The size is expressed in bytes.
 
 - Not eligible for live reload.
 - Type: `memorysize`
-- Default: `7MiB`
+- Default: `5MB`
 
 ## Sample Cache
 
