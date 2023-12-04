@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2023-11-30 at 22:36:48 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2023-12-04 at 18:06:10 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -841,12 +841,12 @@ Collection:
     ##
     ## This value will typically be set through an environment variable
     ## controlled by the container or deploy script. If this value is zero or
-    ## not set, then `MaxMemory` cannot be used to calculate the maximum
-    ## allocation and `MaxAlloc` will be used instead. If set, then this must
-    ## be a memory size. Sizes with standard unit suffixes (`MB`, `GiB`,
-    ## etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported. Fractional
-    ## values with a suffix are supported. If `AvailableMemory` is set,
-    ## `Collections.MaxAlloc` must not be defined.
+    ## not set, then `MaxMemoryPercentage` cannot be used to calculate the
+    ## maximum allocation and `MaxAlloc` will be used instead. If set, then
+    ## this must be a memory size. Sizes with standard unit suffixes (`MB`,
+    ## `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+    ## Fractional values with a suffix are supported. If `AvailableMemory` is
+    ## set, `Collections.MaxAlloc` must not be defined.
     ##
     ## Eligible for live reload.
     {{ memorysize .Data "AvailableMemory" "AvailableMemory" "4.5Gb" }}
@@ -872,8 +872,8 @@ Collection:
     ## If set, then this must be a memory size. Sizes with standard unit
     ## suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.)
     ## are supported. Fractional values with a suffix are supported. See
-    ## `MaxMemory` for more details. If set, `Collections.AvailableMemory`
-    ## must not be defined.
+    ## `MaxMemoryPercentage` for more details. If set,
+    ## `Collections.AvailableMemory` must not be defined.
     ##
     ## Eligible for live reload.
     {{ memorysize .Data "MaxAlloc" "InMemCollector.MaxAlloc" "" }}
@@ -1074,7 +1074,7 @@ GRPCServerParameters:
     ## memory available to the process by a single request. The size is
     ## expressed in bytes.
     ##
-    ## default: 6MiB
+    ## default: 5MB
     ## Not eligible for live reload.
     {{ memorysize .Data "MaxSendMsgSize" "MaxSendMsgSize" "" }}
 
@@ -1084,7 +1084,7 @@ GRPCServerParameters:
     ## memory available to the process by a single request. The size is
     ## expressed in bytes.
     ##
-    ## default: 7MiB
+    ## default: 5MB
     ## Not eligible for live reload.
     {{ memorysize .Data "MaxRecvMsgSize" "MaxRecvMsgSize" "" }}
 
