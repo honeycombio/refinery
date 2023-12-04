@@ -21,14 +21,18 @@ type MockConfig struct {
 	GetListenAddrVal                 string
 	GetPeerListenAddrErr             error
 	GetPeerListenAddrVal             string
+	GetHTTPIdleTimeoutVal            time.Duration
 	GetCompressPeerCommunicationsVal bool
 	GetGRPCEnabledVal                bool
 	GetGRPCListenAddrErr             error
 	GetGRPCListenAddrVal             string
+	GetGRPCServerParameters          GRPCServerParameters
 	GetLoggerTypeErr                 error
 	GetLoggerTypeVal                 string
 	GetHoneycombLoggerConfigErr      error
 	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
+	GetStdoutLoggerConfigErr         error
+	GetStdoutLoggerConfigVal         StdoutLoggerConfig
 	GetLoggerLevelVal                Level
 	GetPeersErr                      error
 	GetPeersVal                      []string
@@ -38,6 +42,8 @@ type MockConfig struct {
 	GetRedisUsernameVal              string
 	GetRedisPasswordErr              error
 	GetRedisPasswordVal              string
+	GetRedisAuthCodeErr              error
+	GetRedisAuthCodeVal              string
 	GetRedisDatabaseVal              int
 	GetRedisPrefixVal                string
 	GetUseTLSErr                     error
@@ -73,14 +79,10 @@ type MockConfig struct {
 	EnvironmentCacheTTL              time.Duration
 	DatasetPrefix                    string
 	QueryAuthToken                   string
-	GRPCMaxConnectionIdle            time.Duration
-	GRPCMaxConnectionAge             time.Duration
-	GRPCMaxConnectionAgeGrace        time.Duration
-	GRPCTime                         time.Duration
-	GRPCTimeout                      time.Duration
 	PeerTimeout                      time.Duration
 	AdditionalErrorFields            []string
 	AddSpanCountToRoot               bool
+	AddCountsToRoot                  bool
 	CacheOverrunStrategy             string
 	SampleCache                      SampleCacheConfig
 	StressRelief                     StressReliefConfig
@@ -154,6 +156,13 @@ func (m *MockConfig) GetPeerListenAddr() (string, error) {
 	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
 }
 
+func (m *MockConfig) GetHTTPIdleTimeout() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetHTTPIdleTimeoutVal
+}
+
 func (m *MockConfig) GetCompressPeerCommunication() bool {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
@@ -186,6 +195,13 @@ func (m *MockConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetHoneycombLoggerConfigVal, m.GetHoneycombLoggerConfigErr
+}
+
+func (m *MockConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetStdoutLoggerConfigVal, m.GetStdoutLoggerConfigErr
 }
 
 func (m *MockConfig) GetLoggerLevel() Level {
@@ -221,6 +237,13 @@ func (m *MockConfig) GetRedisPassword() (string, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetRedisPasswordVal, m.GetRedisPasswordErr
+}
+
+func (m *MockConfig) GetRedisAuthCode() (string, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisAuthCodeVal, m.GetRedisAuthCodeErr
 }
 
 func (m *MockConfig) GetRedisPrefix() string {
@@ -435,39 +458,11 @@ func (f *MockConfig) GetQueryAuthToken() string {
 	return f.QueryAuthToken
 }
 
-func (f *MockConfig) GetGRPCMaxConnectionIdle() time.Duration {
+func (f *MockConfig) GetGRPCConfig() GRPCServerParameters {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
-	return f.GRPCMaxConnectionIdle
-}
-
-func (f *MockConfig) GetGRPCMaxConnectionAge() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCMaxConnectionAge
-}
-
-func (f *MockConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCMaxConnectionAgeGrace
-}
-
-func (f *MockConfig) GetGRPCKeepAlive() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCTime
-}
-
-func (f *MockConfig) GetGRPCKeepAliveTimeout() time.Duration {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GRPCTimeout
+	return f.GetGRPCServerParameters
 }
 
 func (f *MockConfig) GetPeerTimeout() time.Duration {
@@ -485,6 +480,13 @@ func (f *MockConfig) GetAdditionalErrorFields() []string {
 }
 
 func (f *MockConfig) GetAddSpanCountToRoot() bool {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.AddSpanCountToRoot
+}
+
+func (f *MockConfig) GetAddCountsToRoot() bool {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 

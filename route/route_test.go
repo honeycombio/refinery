@@ -25,7 +25,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
-	"github.com/vmihailenco/msgpack/v4"
+	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 )

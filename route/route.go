@@ -21,7 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
-	"github.com/vmihailenco/msgpack/v4"
+	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -204,8 +204,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	r.iopLogger.Info().Logf("Listening on %s", listenAddr)
 	r.server = &http.Server{
-		Addr:    listenAddr,
-		Handler: muxxer,
+		Addr:        listenAddr,
+		Handler:     muxxer,
+		IdleTimeout: r.Config.GetHTTPIdleTimeout(),
 	}
 
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
@@ -215,15 +216,16 @@ func (r *Router) LnS(incomingOrPeer string) {
 		}
 
 		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
+		grpcConfig := r.Config.GetGRPCConfig()
 		serverOpts := []grpc.ServerOption{
-			grpc.MaxSendMsgSize(GRPCMessageSizeMax), // default is math.MaxInt32
-			grpc.MaxRecvMsgSize(GRPCMessageSizeMax), // default is 4MB
+			grpc.MaxSendMsgSize(int(grpcConfig.MaxSendMsgSize)),
+			grpc.MaxRecvMsgSize(int(grpcConfig.MaxRecvMsgSize)),
 			grpc.KeepaliveParams(keepalive.ServerParameters{
-				MaxConnectionIdle:     r.Config.GetGRPCMaxConnectionIdle(),
-				MaxConnectionAge:      r.Config.GetGRPCMaxConnectionAge(),
-				MaxConnectionAgeGrace: r.Config.GetGRPCMaxConnectionAgeGrace(),
-				Time:                  r.Config.GetGRPCKeepAlive(),
-				Timeout:               r.Config.GetGRPCKeepAliveTimeout(),
+				MaxConnectionIdle:     time.Duration(grpcConfig.MaxConnectionIdle),
+				MaxConnectionAge:      time.Duration(grpcConfig.MaxConnectionAge),
+				MaxConnectionAgeGrace: time.Duration(grpcConfig.MaxConnectionAgeGrace),
+				Time:                  time.Duration(grpcConfig.KeepAlive),
+				Timeout:               time.Duration(grpcConfig.KeepAliveTimeout),
 			}),
 		}
 		traceServer := NewTraceServer(r)
@@ -730,9 +732,9 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
-		return msgpack.NewDecoder(data).
-			UseDecodeInterfaceLoose(true).
-			Decode(v)
+		decoder := msgpack.NewDecoder(data)
+		decoder.UseLooseInterfaceDecoding(true)
+		return decoder.Decode(v)
 	default:
 		return jsoniter.NewDecoder(data).Decode(v)
 	}

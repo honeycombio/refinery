@@ -122,6 +122,20 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	}
 }
 
+func TestRedisAuthCodeEnvVar(t *testing.T) {
+	const authCode = "A:LKNGSDKLSHOE&SDLFKN"
+	const envVarName = "REFINERY_REDIS_AUTH_CODE"
+	os.Setenv(envVarName, authCode)
+	defer os.Unsetenv(envVarName)
+
+	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
+	assert.NoError(t, err)
+
+	if d, _ := c.GetRedisAuthCode(); d != authCode {
+		t.Error("received", d, "expected", authCode)
+	}
+}
+
 func TestMetricsAPIKeyEnvVar(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -306,8 +320,8 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
-	if d := c.GetAddHostMetadataToTrace(); d != false {
-		t.Error("received", d, "expected", false)
+	if d := c.GetAddHostMetadataToTrace(); d != true {
+		t.Error("received", d, "expected", true)
 	}
 
 	if d := c.GetEnvironmentCacheTTL(); d != time.Hour {
@@ -409,6 +423,20 @@ func TestDebugServiceAddr(t *testing.T) {
 	}
 }
 
+func TestHTTPIdleTimeout(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "Network.HTTPIdleTimeout", "60s")
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	if d := c.GetHTTPIdleTimeout(); d != time.Minute {
+		t.Error("received", d, "expected", time.Minute)
+	}
+}
+
 func TestDryRun(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "Debugging.DryRun", true)
 	rm := makeYAML("ConfigVersion", 2)
@@ -436,6 +464,69 @@ func TestMaxAlloc(t *testing.T) {
 	inMemConfig, err := c.GetCollectionConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
+}
+
+func TestPeerAndIncomingQueueSize(t *testing.T) {
+	testcases := []struct {
+		name                string
+		configYAML          string
+		expectedForPeer     int
+		expectedForIncoming int
+	}{
+		{
+			name:                "default",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000),
+			expectedForPeer:     3000,
+			expectedForIncoming: 3000,
+		},
+		{
+			name:                "PeerInMemoryCapacity is set",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.PeerQueueSize", 4000),
+			expectedForPeer:     4000,
+			expectedForIncoming: 3000,
+		},
+		{
+			name:                "IncomingInMemoryCapacity is set",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.IncomingQueueSize", 4000),
+			expectedForPeer:     3000,
+			expectedForIncoming: 4000,
+		},
+		{
+			name:                "below the minimum",
+			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.PeerQueueSize", 2000, "Collection.IncomingQueueSize", 2000),
+			expectedForPeer:     3000,
+			expectedForIncoming: 3000,
+		},
+	}
+
+	for _, tc := range testcases {
+		rm := makeYAML("ConfigVersion", 2)
+		config, rules := createTempConfigs(t, tc.configYAML, rm)
+		defer os.Remove(rules)
+		defer os.Remove(config)
+		c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+		assert.NoError(t, err)
+
+		inMemConfig, err := c.GetCollectionConfig()
+		assert.NoError(t, err)
+		assert.Equal(t, tc.expectedForPeer, inMemConfig.GetPeerQueueSize())
+		assert.Equal(t, tc.expectedForIncoming, inMemConfig.GetIncomingQueueSize())
+	}
+}
+
+func TestAvailableMemoryCmdLine(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.AvailableMemory", 2_000_000_000)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules, "--available-memory", "2.5Gib"})
+	assert.NoError(t, err)
+
+	expected := MemorySize(2*1024*1024*1024 + 512*1024*1024)
+	inMemConfig, err := c.GetCollectionConfig()
+	assert.NoError(t, err)
+	assert.Equal(t, expected, inMemConfig.AvailableMemory)
 }
 
 func TestGetSamplerTypes(t *testing.T) {
@@ -518,7 +609,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 		"HoneycombLogger.APIKey", "1234",
 		"HoneycombLogger.Dataset", "loggerDataset",
 		"HoneycombLogger.SamplerEnabled", true,
-		"HoneycombLogger.SamplerThroughput", 10,
+		"HoneycombLogger.SamplerThroughput", 5,
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -535,7 +626,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.Equal(t, "1234", loggerConfig.APIKey)
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
 	assert.Equal(t, true, loggerConfig.SamplerEnabled)
-	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
+	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
 func TestHoneycombLoggerConfigDefaults(t *testing.T) {
@@ -557,10 +648,85 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, false, loggerConfig.SamplerEnabled)
+	assert.Equal(t, true, loggerConfig.SamplerEnabled)
+	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
+}
+
+func TestHoneycombGRPCConfigDefaults(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"GRPCServerParameters.Enabled", true,
+		"GRPCServerParameters.ListenAddr", "localhost:4343",
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	assert.Equal(t, true, c.GetGRPCEnabled())
+
+	a, err := c.GetGRPCListenAddr()
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost:4343", a)
+
+	grpcConfig := c.GetGRPCConfig()
+	assert.Equal(t, true, grpcConfig.Enabled)
+	assert.Equal(t, "localhost:4343", grpcConfig.ListenAddr)
+	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionIdle))
+	assert.Equal(t, 3*time.Minute, time.Duration(grpcConfig.MaxConnectionAge))
+	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionAgeGrace))
+	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.KeepAlive))
+	assert.Equal(t, 20*time.Second, time.Duration(grpcConfig.KeepAliveTimeout))
+	assert.Equal(t, MemorySize(5*1_000_000), grpcConfig.MaxSendMsgSize)
+	assert.Equal(t, MemorySize(5*1_000_000), grpcConfig.MaxRecvMsgSize)
+}
+
+func TestStdoutLoggerConfig(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Logger.Type", "stdout",
+		"StdoutLogger.Structured", true,
+		"StdoutLogger.SamplerThroughput", 5,
+		"StdoutLogger.SamplerEnabled", true,
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	fmt.Println(config)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	loggerConfig, err := c.GetStdoutLoggerConfig()
+
+	assert.NoError(t, err)
+
+	assert.True(t, loggerConfig.Structured)
+	assert.True(t, loggerConfig.SamplerEnabled)
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
+func TestStdoutLoggerConfigDefaults(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	loggerConfig, err := c.GetStdoutLoggerConfig()
+
+	assert.NoError(t, err)
+
+	assert.False(t, loggerConfig.Structured)
+	assert.False(t, loggerConfig.SamplerEnabled)
+	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
+}
 func TestDatasetPrefix(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
@@ -609,11 +775,13 @@ func TestGRPCServerParameters(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	assert.Equal(t, 1*time.Minute, c.GetGRPCMaxConnectionIdle())
-	assert.Equal(t, 2*time.Minute, c.GetGRPCMaxConnectionAge())
-	assert.Equal(t, 3*time.Minute, c.GetGRPCMaxConnectionAgeGrace())
-	assert.Equal(t, 4*time.Minute, c.GetGRPCKeepAlive())
-	assert.Equal(t, 5*time.Minute, c.GetGRPCKeepAliveTimeout())
+	gc := c.GetGRPCConfig()
+
+	assert.Equal(t, 1*time.Minute, time.Duration(gc.MaxConnectionIdle))
+	assert.Equal(t, 2*time.Minute, time.Duration(gc.MaxConnectionAge))
+	assert.Equal(t, 3*time.Minute, time.Duration(gc.MaxConnectionAgeGrace))
+	assert.Equal(t, 4*time.Minute, time.Duration(gc.KeepAlive))
+	assert.Equal(t, 5*time.Minute, time.Duration(gc.KeepAliveTimeout))
 	assert.Equal(t, true, c.GetGRPCEnabled())
 	addr, err := c.GetGRPCListenAddr()
 	assert.NoError(t, err)

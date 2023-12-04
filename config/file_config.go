@@ -3,12 +3,9 @@ package config
 import (
 	"errors"
 	"fmt"
-	"math"
 	"math/rand"
 	"net"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,148 +27,6 @@ func (d *Duration) UnmarshalText(text []byte) error {
 		return err
 	}
 	*d = Duration(dur)
-	return nil
-}
-
-const (
-	K = uint64(1000)
-	M = 1000 * K
-	G = 1000 * M
-	T = 1000 * G
-	P = 1000 * T
-	E = 1000 * P
-
-	Ki = uint64(1024)
-	Mi = 1024 * Ki
-	Gi = 1024 * Mi
-	Ti = 1024 * Gi
-	Pi = 1024 * Ti
-	Ei = 1024 * Pi
-
-	invalidSizeError = "invalid size: %s"
-)
-
-var unitSlice = []uint64{
-	Ei,
-	E,
-	Pi,
-	P,
-	Ti,
-	T,
-	Gi,
-	G,
-	Mi,
-	M,
-	Ki,
-	K,
-	1,
-}
-
-var reverseUnitMap = map[uint64]string{
-	Ki: "Ki",
-	Mi: "Mi",
-	Gi: "Gi",
-	Ti: "Ti",
-	Pi: "Pi",
-	Ei: "Ei",
-	K:  "K",
-	M:  "M",
-	G:  "G",
-	T:  "T",
-	P:  "P",
-	E:  "E",
-}
-
-var unitMap = map[string]uint64{
-	"bi":  1,
-	"bib": 1,
-	"ki":  Ki,
-	"kib": Ki,
-	"mi":  Mi,
-	"mib": Mi,
-	"gi":  Gi,
-	"gib": Gi,
-	"ti":  Ti,
-	"tib": Ti,
-	"pi":  Pi,
-	"pib": Pi,
-	"ei":  Ei,
-	"eib": Ei,
-	"b":   1,
-	"bb":  1,
-	"k":   K,
-	"kb":  K,
-	"m":   M,
-	"mb":  M,
-	"g":   G,
-	"gb":  G,
-	"t":   T,
-	"tb":  T,
-	"p":   P,
-	"pb":  P,
-	"e":   E,
-	"eb":  E,
-}
-
-// We also use a special type for memory sizes
-type MemorySize uint64
-
-func (m MemorySize) MarshalText() ([]byte, error) {
-	if m > 0 {
-		for _, size := range unitSlice {
-			result := float64(m) / float64(size)
-			if result == math.Trunc(result) {
-				unit, ok := reverseUnitMap[size]
-				if !ok {
-					break
-				}
-				return []byte(fmt.Sprintf("%v%v", result, unit)), nil
-			}
-		}
-	}
-	return []byte(fmt.Sprintf("%v", m)), nil
-}
-
-func (m *MemorySize) UnmarshalText(text []byte) error {
-	txt := string(text)
-
-	r := regexp.MustCompile("(?P<number>[0-9]+)(?P<unit>[a-zA-Z]*)")
-	matches := r.FindStringSubmatch(strings.ToLower(txt))
-	if matches == nil {
-		return fmt.Errorf(invalidSizeError, txt)
-	}
-
-	var number uint64
-	var unit string
-	var err error
-	for i, name := range r.SubexpNames() {
-		if i == 0 {
-			continue
-		}
-
-		switch name {
-		case "number":
-			number, err = strconv.ParseUint(matches[i], 10, 64)
-			if err != nil {
-				return fmt.Errorf(invalidSizeError, text)
-			}
-		case "unit":
-			unit = matches[i]
-		default:
-			return fmt.Errorf("error converting %v to MemorySize, this is a bug with Refinery", text)
-		}
-	}
-
-	// No unit means bytes
-	if unit == "" {
-		*m = MemorySize(number)
-	} else {
-		scalar, ok := unitMap[unit]
-		if !ok {
-			return fmt.Errorf(invalidSizeError, text)
-		}
-		*m = MemorySize(number * scalar)
-	}
 	return nil
 }
 
@@ -221,9 +76,10 @@ type GeneralConfig struct {
 }
 
 type NetworkConfig struct {
-	ListenAddr     string `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
-	PeerListenAddr string `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
-	HoneycombAPI   string `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	ListenAddr      string   `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
 }
 
 type AccessKeyConfig struct {
@@ -234,8 +90,9 @@ type AccessKeyConfig struct {
 
 type RefineryTelemetryConfig struct {
 	AddRuleReasonToTrace   bool `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot"`
-	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace"`
+	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot" default:"true"`
+	AddCountsToRoot        bool `yaml:"AddCountsToRoot"`
+	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace" default:"true"`
 }
 
 type TracesConfig struct {
@@ -262,17 +119,19 @@ type HoneycombLoggerConfig struct {
 	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    bool   `yaml:"SamplerEnabled" `
-	SamplerThroughput int    `yaml:"SamplerThroughput" default:"5"`
+	SamplerEnabled    bool   `yaml:"SamplerEnabled" default:"true"`
+	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
 }
 
 type StdoutLoggerConfig struct {
-	Structured bool `yaml:"Structured" default:"true"`
+	Structured        bool `yaml:"Structured" default:"false"`
+	SamplerEnabled    bool `yaml:"SamplerEnabled" `
+	SamplerThroughput int  `yaml:"SamplerThroughput" default:"10"`
 }
 
 type PrometheusMetricsConfig struct {
 	Enabled    bool   `yaml:"Enabled" default:"false"`
-	ListenAddr string `yaml:"ListenAddr"`
+	ListenAddr string `yaml:"ListenAddr" default:"localhost:2112"`
 }
 
 type LegacyMetricsConfig struct {
@@ -304,6 +163,7 @@ type RedisPeerManagementConfig struct {
 	Host           string   `yaml:"Host" cmdenv:"RedisHost"`
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
+	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
 	Prefix         string   `yaml:"Prefix" default:"refinery"`
 	Database       int      `yaml:"Database"`
 	UseTLS         bool     `yaml:"UseTLS" `
@@ -314,11 +174,15 @@ type RedisPeerManagementConfig struct {
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
+	PeerQueueSize       int        `yaml:"PeerQueueSize"`
+	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 }
 
+// GetMaxAlloc returns the maximum amount of memory to use for the cache.
+// If AvailableMemory is set, it uses that and MaxMemoryPercentage to calculate
 func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	if c.AvailableMemory == 0 || c.MaxMemoryPercentage == 0 {
 		return c.MaxAlloc
@@ -326,9 +190,29 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	return c.AvailableMemory * MemorySize(c.MaxMemoryPercentage) / 100
 }
 
+// GetPeerBufferCapacity returns the capacity of the in-memory channel for peer traces.
+// If PeerBufferCapacity is not set, it uses 3x the cache capacity.
+// The minimum value is 3x the cache capacity.
+func (c CollectionConfig) GetPeerQueueSize() int {
+	if c.PeerQueueSize == 0 || c.PeerQueueSize < c.CacheCapacity*3 {
+		return c.CacheCapacity * 3
+	}
+	return c.PeerQueueSize
+}
+
+// GetIncomingBufferCapacity returns the capacity of the in-memory channel for incoming traces.
+// If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
+// The minimum value is 3x the cache capacity.
+func (c CollectionConfig) GetIncomingQueueSize() int {
+	if c.IncomingQueueSize == 0 || c.IncomingQueueSize < c.CacheCapacity*3 {
+		return c.CacheCapacity * 3
+	}
+	return c.IncomingQueueSize
+}
+
 type BufferSizeConfig struct {
 	UpstreamBufferSize int `yaml:"UpstreamBufferSize" default:"10_000"`
-	PeerBufferSize     int `yaml:"PeerBufferSize" default:"10_000"`
+	PeerBufferSize     int `yaml:"PeerBufferSize" default:"100_000"`
 }
 
 type SpecializedConfig struct {
@@ -346,13 +230,15 @@ type IDFieldsConfig struct {
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	Enabled               bool     `yaml:"Enabled" default:"true"`
-	ListenAddr            string   `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
-	MaxConnectionIdle     Duration `yaml:"MaxConnectionIdle" default:"1m"`
-	MaxConnectionAge      Duration `yaml:"MaxConnectionAge" default:"3m"`
-	MaxConnectionAgeGrace Duration `yaml:"MaxConnectionAgeGrace" default:"1m"`
-	KeepAlive             Duration `yaml:"KeepAlive" default:"1m"`
-	KeepAliveTimeout      Duration `yaml:"KeepAliveTimeout" default:"20s"`
+	Enabled               bool       `yaml:"Enabled" default:"true"`
+	ListenAddr            string     `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
+	MaxConnectionIdle     Duration   `yaml:"MaxConnectionIdle" default:"1m"`
+	MaxConnectionAge      Duration   `yaml:"MaxConnectionAge" default:"3m"`
+	MaxConnectionAgeGrace Duration   `yaml:"MaxConnectionAgeGrace" default:"1m"`
+	KeepAlive             Duration   `yaml:"KeepAlive" default:"1m"`
+	KeepAliveTimeout      Duration   `yaml:"KeepAliveTimeout" default:"20s"`
+	MaxSendMsgSize        MemorySize `yaml:"MaxSendMsgSize" default:"5MB"`
+	MaxRecvMsgSize        MemorySize `yaml:"MaxRecvMsgSize" default:"5MB"`
 }
 
 type SampleCacheConfig struct {
@@ -365,7 +251,7 @@ type StressReliefConfig struct {
 	Mode                      string   `yaml:"Mode" default:"never"`
 	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90"`
 	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
-	SamplingRate              uint64   `yaml:"SamplingRate" default:"1000"`
+	SamplingRate              uint64   `yaml:"SamplingRate" default:"100"`
 	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
 	MinimumStartupDuration    Duration `yaml:"MinimumStartupDuration" default:"3s"`
 }
@@ -580,6 +466,13 @@ func (f *fileConfig) GetPeerListenAddr() (string, error) {
 	return f.mainConfig.Network.PeerListenAddr, nil
 }
 
+func (f *fileConfig) GetHTTPIdleTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return time.Duration(f.mainConfig.Network.HTTPIdleTimeout)
+}
+
 func (f *fileConfig) GetCompressPeerCommunication() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -605,6 +498,13 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 		}
 	}
 	return f.mainConfig.GRPCServerParameters.ListenAddr, nil
+}
+
+func (f *fileConfig) GetGRPCConfig() GRPCServerParameters {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.GRPCServerParameters
 }
 
 func (f *fileConfig) IsAPIKeyValid(key string) bool {
@@ -667,6 +567,13 @@ func (f *fileConfig) GetRedisPassword() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.Password, nil
+}
+
+func (f *fileConfig) GetRedisAuthCode() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.AuthCode, nil
 }
 
 func (f *fileConfig) GetRedisDatabase() int {
@@ -737,6 +644,13 @@ func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.HoneycombLogger, nil
+}
+
+func (f *fileConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.StdoutLogger, nil
 }
 
 func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
@@ -902,41 +816,6 @@ func (f *fileConfig) GetQueryAuthToken() string {
 	return f.mainConfig.Debugging.QueryAuthToken
 }
 
-func (f *fileConfig) GetGRPCMaxConnectionIdle() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionIdle)
-}
-
-func (f *fileConfig) GetGRPCMaxConnectionAge() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAge)
-}
-
-func (f *fileConfig) GetGRPCMaxConnectionAgeGrace() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.MaxConnectionAgeGrace)
-}
-
-func (f *fileConfig) GetGRPCKeepAlive() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.KeepAlive)
-}
-
-func (f *fileConfig) GetGRPCKeepAliveTimeout() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.GRPCServerParameters.KeepAliveTimeout)
-}
-
 func (f *fileConfig) GetPeerTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -956,6 +835,13 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Telemetry.AddSpanCountToRoot
+}
+
+func (f *fileConfig) GetAddCountsToRoot() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Telemetry.AddCountsToRoot
 }
 
 func (f *fileConfig) GetSampleCacheConfig() SampleCacheConfig {

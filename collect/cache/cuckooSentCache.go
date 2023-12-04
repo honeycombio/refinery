@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -17,31 +17,73 @@ import (
 // The size of the sent cache is still set based on the size of the live trace cache,
 // and the size of the dropped cache is an independent value.
 
-// cuckooKeptRecord is an internal record we leave behind when keeping a trace to remember
+// keptTraceCacheEntry is an internal record we leave behind when keeping a trace to remember
 // our decision for the future. We only store them if the record was kept.
-type cuckooKeptRecord struct {
-	rate      uint // sample rate used when sending the trace
-	spanCount uint // number of spans in the trace (we decorate the root span with this)
+type keptTraceCacheEntry struct {
+	rate           uint32 // sample rate used when sending the trace
+	eventCount     uint32 // number of descendants in the trace (we decorate the root span with this)
+	spanEventCount uint32 // number of span events in the trace
+	spanLinkCount  uint32 // number of span links in the trace
+	spanCount      uint32 // number of spans in the trace
 }
 
-func (t *cuckooKeptRecord) Kept() bool {
+func NewKeptTraceCacheEntry(trace *types.Trace) *keptTraceCacheEntry {
+	if trace == nil {
+		return &keptTraceCacheEntry{}
+	}
+
+	return &keptTraceCacheEntry{
+		rate:           uint32(trace.SampleRate),
+		eventCount:     trace.DescendantCount(),
+		spanEventCount: trace.SpanEventCount(),
+		spanLinkCount:  trace.SpanLinkCount(),
+		spanCount:      trace.SpanCount(),
+	}
+}
+
+func (t *keptTraceCacheEntry) Kept() bool {
 	return true
 }
 
-func (t *cuckooKeptRecord) Rate() uint {
-	return t.rate
+func (t *keptTraceCacheEntry) Rate() uint {
+	return uint(t.rate)
 }
 
-func (t *cuckooKeptRecord) DescendantCount() uint {
+// DescendantCount returns the count of items associated with the trace, including all types of children like span links and span events.
+func (t *keptTraceCacheEntry) DescendantCount() uint {
+	return uint(t.eventCount)
+}
+
+// SpanEventCount returns the count of span events in the trace.
+func (t *keptTraceCacheEntry) SpanEventCount() uint {
+	return uint(t.spanEventCount)
+}
+
+// SpanLinkCount returns the count of span links in the trace.
+func (t *keptTraceCacheEntry) SpanLinkCount() uint {
+	return uint(t.spanLinkCount)
+}
+
+// SpanCount returns the count of spans in the trace.
+func (t *keptTraceCacheEntry) SpanCount() uint {
 	return uint(t.spanCount)
 }
 
-func (t *cuckooKeptRecord) Count(*types.Span) {
-	t.spanCount++
+// Count records additional spans in the cache record.
+func (t *keptTraceCacheEntry) Count(s *types.Span) {
+	t.eventCount++
+	switch s.AnnotationType() {
+	case types.SpanAnnotationTypeSpanEvent:
+		t.spanEventCount++
+	case types.SpanAnnotationTypeLink:
+		t.spanLinkCount++
+	default:
+		t.spanCount++
+	}
 }
 
 // Make sure it implements TraceSentRecord
-var _ TraceSentRecord = (*cuckooKeptRecord)(nil)
+var _ TraceSentRecord = (*keptTraceCacheEntry)(nil)
 
 // cuckooSentRecord is what we return when the trace was dropped.
 // It's always the same one.
@@ -59,6 +101,18 @@ func (t *cuckooDroppedRecord) DescendantCount() uint {
 	return 0
 }
 
+func (t *cuckooDroppedRecord) SpanEventCount() uint {
+	return 0
+}
+
+func (t *cuckooDroppedRecord) SpanLinkCount() uint {
+	return 0
+}
+
+func (t *cuckooDroppedRecord) SpanCount() uint {
+	return 0
+}
+
 func (t *cuckooDroppedRecord) Count(*types.Span) {
 }
 
@@ -66,7 +120,7 @@ func (t *cuckooDroppedRecord) Count(*types.Span) {
 var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 
 type cuckooSentCache struct {
-	kept    *lru.Cache
+	kept    *lru.Cache[string, *keptTraceCacheEntry]
 	dropped *CuckooTraceChecker
 	cfg     config.SampleCacheConfig
 
@@ -85,7 +139,7 @@ type cuckooSentCache struct {
 var _ TraceSentCache = (*cuckooSentCache)(nil)
 
 func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
-	stc, err := lru.New(int(cfg.KeptSize))
+	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
 		return nil, err
 	}
@@ -122,13 +176,11 @@ func (c *cuckooSentCache) Stop() {
 func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
-		sentRecord := cuckooKeptRecord{
-			rate:      trace.SampleRate,
-			spanCount: trace.DescendantCount(),
-		}
+		sentRecord := NewKeptTraceCacheEntry(trace)
+
 		c.keptMut.Lock()
 		defer c.keptMut.Unlock()
-		c.kept.Add(trace.TraceID, &sentRecord)
+		c.kept.Add(trace.TraceID, sentRecord)
 		return
 	}
 	// if we're not keeping it, save it in the dropped trace filter
@@ -145,18 +197,16 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 	c.keptMut.Lock()
 	defer c.keptMut.Unlock()
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
-		if sr, ok := sentRecord.(*cuckooKeptRecord); ok {
-			// if we kept it, then this span being checked needs counting too
-			sr.Count(span)
-			return sr, true
-		}
+		// if we kept it, then this span being checked needs counting too
+		sentRecord.Count(span)
+		return sentRecord, true
 	}
 	// we have no memory of this place
 	return nil, false
 }
 
 func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
-	stc, err := lru.New(int(cfg.KeptSize))
+	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
 		return err
 	}

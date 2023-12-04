@@ -74,9 +74,9 @@ func (d *EMAThroughputSampler) Start() error {
 	for name := range d.lastMetrics {
 		d.Metrics.Register(name, getMetricType(name))
 	}
-	d.Metrics.Register("dynsampler_num_dropped", "counter")
-	d.Metrics.Register("dynsampler_num_kept", "counter")
-	d.Metrics.Register("dynsampler_sample_rate", "histogram")
+	d.Metrics.Register(d.prefix+"num_dropped", "counter")
+	d.Metrics.Register(d.prefix+"num_kept", "counter")
+	d.Metrics.Register(d.prefix+"sample_rate", "histogram")
 
 	return nil
 }

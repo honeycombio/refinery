@@ -57,6 +57,12 @@ func asFloat(v any) (float64, string) {
 		if err == nil {
 			return float64(f.Milliseconds()), ""
 		}
+		// can we interpret it as a memory size?
+		var m MemorySize
+		err = m.UnmarshalText([]byte(v.(string)))
+		if err == nil {
+			return float64(m), ""
+		}
 	default:
 	}
 	return 0, fmt.Sprintf("%#v (%T) cannot be interpreted as a quantity", v, v)
@@ -295,7 +301,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					errors = append(errors, msg)
 				} else {
 					fm := mustFloat(validation.Arg)
-					if fv == 0 || fv < fm {
+					if fv != 0 && fv < fm {
 						errors = append(errors, fmt.Sprintf("field %s must be at least %v, or zero", k, validation.Arg))
 					}
 				}

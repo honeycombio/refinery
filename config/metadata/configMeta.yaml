@@ -111,6 +111,21 @@ groups:
           Incoming traffic is expected to be HTTP, so if using SSL
           use something like nginx or a load balancer to do the decryption.
 
+      - name: HTTPIdleTimeout
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.2
+        reload: false
+        default: 0s
+        validations:
+          - type: minOrZero
+            arg: 1s
+        summary: is the duration the http server waits for activity on the connection.
+        description: >
+          This is the amount of time after which if the http server does not see any
+          activity, then it pings the client to see if the transport is still
+          alive. "0s" means no timeout.
+
       - name: HoneycombAPI
         type: url
         valuetype: nondefault
@@ -198,14 +213,29 @@ groups:
         valuetype: nondefault
         default: true
         reload: true
-        summary: controls whether to add a metadata field to root spans that indicates the number of child spans.
+        validations:
+        summary: controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
         description: >
           The added metadata field, `meta.span_count`, indicates
-          the number of child spans on the trace at the time the sampling
+          the number of child elements on the trace at the time the sampling
           decision was made. This value is available to the rules-based sampler,
           making it possible to write rules that are dependent upon the number
-          of spans in the trace. If `true`, then Refinery will add `meta.
-          span_count` to the root span.
+          of spans, span events, and span links in the trace. If `true` and `AddCountsToRoot` is set to false, then Refinery
+          will add `meta.span_count` to the root span.
+
+      - name: AddCountsToRoot
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
+        description: >
+          If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root
+          span based on the values at the time the sampling decision was made:
+          - `meta.span_count`: the number of child spans on the trace
+          - `meta.span_event_count`: the number of span events on the trace
+          - `meta.span_link_count`: the number of span links on the trace
+          - `meta.event_count`: the number of honeycomb events on the trace
 
       - name: AddHostMetadataToTrace
         type: bool
@@ -455,7 +485,9 @@ groups:
         reload: false
         summary: controls whether logs are sampled before sending to Honeycomb.
         description: >
-          The sample rate is controlled by the `SamplerThroughput` setting.
+          The sample rate is controlled by the `SamplerThroughput` setting. The sampler
+          used throttles the rate of logs sent to Honeycomb from any given source within
+          Refinery -- it should effectively limit the rate of redundant messages.
 
       - name: SamplerThroughput
         valuetype: showexample
@@ -477,13 +509,34 @@ groups:
       - name: Structured
         type: bool
         valuetype: nondefault
-        default: true
+        default: false
         reload: false
         summary: controls whether to use structured logging.
         description: >
           `true` generates structured logs (JSON).
           `false` generates plain text logs.
 
+      - name: SamplerEnabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: controls whether logs are sampled before sending to stdout.
+        description: >
+          The sample rate is controlled by the `SamplerThroughput` setting.
+
+      - name: SamplerThroughput
+        valuetype: showexample
+        type: float
+        default: 10
+        example: 10
+        reload: false
+        summary: is the sampling throughput for logs in events per second.
+        description: >
+          The sampling algorithm attempts to make sure that the average
+          throughput approximates this value, while also ensuring that all
+          unique logs arrive at stdout at least once per sampling
+          period.
   - name: PrometheusMetrics
     title: "Prometheus Metrics"
     description: contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
@@ -806,6 +859,19 @@ groups:
         description: >
           Many Redis installations do not use this field.
 
+      - name: AuthCode
+        v1group: PeerManagement
+        v1name: AuthCode
+        type: string
+        default: ""
+        valuetype: nonemptystring
+        reload: false
+        envvar: REFINERY_REDIS_AUTH_CODE
+        commandline: redis-auth-code
+        summary: is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command.
+        description: >
+          Many Redis installations do not use this field.
+
       - name: Prefix
         v1group: PeerManagement
         v1name: Prefix
@@ -931,10 +997,34 @@ groups:
           many multiples (100x to 1000x) of the total number of concurrently
           active traces (trace throughput * trace duration).
 
+      - name: PeerQueueSize
+        type: int
+        default: 30_000
+        valuetype: nondefault
+        reload: false
+        summary: is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
+        description: >
+          The peer span queue serves as a buffer for spans redirected from other peers before they are processed.
+          In the event that this queue reaches its capacity, any subsequent spans will be discarded. The size of this
+          queue is contingent upon the number of peers within the cluster. Specifically, with N peers, the queue's span
+          capacity is determined by (N-1)/N of the total number of spans.
+          Its minimum value should be at least three times the CacheCapacity.
+
+      - name: IncomingQueueSize
+        type: int
+        default: 30_000
+        valuetype: nondefault
+        reload: false
+        summary: is the number of in-flight spans to keep in the incoming span queue.
+        description: >
+          The incoming span queue is used to buffer spans before they are processed.
+          If this queue fills up, then subsequent spans will be dropped.
+          Its minimum value should be at least three times the CacheCapacity.
+
       - name: AvailableMemory
         type: memorysize
         valuetype: memorysize
-        example: "4Gb"
+        example: "4.5Gb"
         reload: true
         envvar: REFINERY_AVAILABLE_MEMORY
         commandLine: available-memory
@@ -942,12 +1032,12 @@ groups:
         description: >
           This value will typically be set through an environment variable
           controlled by the container or deploy script. If this value is zero or
-          not set, then `MaxMemory` cannot be used to calculate the maximum
+          not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum
           allocation and `MaxAlloc` will be used instead. If set, then this must
-          be a memory size. 64-bit values are supported. Sizes with standard
-          unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`,
-          etc.) are also supported. If set, `Collections.MaxAlloc` must not be
-          defined.
+          be a memory size. Sizes with standard unit suffixes (`MB`, `GiB`,
+          etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported. Fractional
+          values with a suffix are supported. If `AvailableMemory` is set,
+          `Collections.MaxAlloc` must not be defined.
 
       - name: MaxMemoryPercentage
         type: percentage
@@ -982,10 +1072,11 @@ groups:
             arg: AvailableMemory
         summary: is the maximum number of bytes that should be allocated by the Collector.
         description: >
-          If set, then this must be a memory size. 64-bit values are supported.
-          Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units
-          (`M`, `Gi`, etc) are also supported. See `MaxMemory` for more details.
-          If set, `Collections.AvailableMemory` must not be defined.
+          If set, then this must be a memory size. Sizes with standard unit
+          suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.)
+          are supported. Fractional values with a suffix are supported. See
+          `MaxMemoryPercentage` for more details. If set, `Collections.AvailableMemory`
+          must not be defined.
 
   - name: BufferSizes
     title: "Buffer Sizes"
@@ -1177,7 +1268,7 @@ groups:
         v1name: MaxConnectionIdle
         type: duration
         valuetype: nondefault
-        default: 0s
+        default: 1m
         example: 1m
         reload: false
         validations:
@@ -1215,7 +1306,7 @@ groups:
         v1name: MaxConnectionAgeGrace
         type: duration
         valuetype: nondefault
-        default: 60s
+        default: 1m
         reload: false
         summary: is the duration beyond `MaxConnectionAge` after which the connection will be forcibly closed.
         description: >
@@ -1253,6 +1344,40 @@ groups:
           This is the amount of time after which if the server does not see any
           activity, then it pings the client to see if the transport is still
           alive. "0s" sets duration to 20 seconds.
+
+      - name: MaxSendMsgSize
+        type: memorysize
+        valuetype: memorysize
+        default: 5MB
+        reload: false
+        firstversion: v2.2
+        validations:
+          - type: minimum
+            arg: 1MB
+          - type: maximum
+            arg: 1GiB
+        summary: is the maximum message size the server can send.
+        description: >
+          The server enforces a maximum message size to avoid exhausting the
+          memory available to the process by a single request. The size is
+          expressed in bytes.
+
+      - name: MaxRecvMsgSize
+        type: memorysize
+        valuetype: memorysize
+        default: 5MB
+        reload: false
+        firstversion: v2.2
+        validations:
+          - type: minimum
+            arg: 1MB
+          - type: maximum
+            arg: 1GiB
+        summary: is the maximum message size the server can receive.
+        description: >
+          The server enforces a maximum message size to avoid exhausting the
+          memory available to the process by a single request. The size is
+          expressed in bytes.
 
   - name: SampleCache
     title: "Sample Cache"
@@ -1402,7 +1527,7 @@ groups:
         v1name: DeactivationLevel
         type: percentage
         valuetype: nondefault
-        default: 70
+        default: 75
         reload: true
         summary: is the `stress_level` (from 0-100) at which Stress Relief is turned off.
         description: >

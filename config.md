@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2023-08-02 at 23:32:04 UTC.
+It was automatically generated on 2023-12-04 at 18:06:13 UTC.
 
 ## The Config file
 
@@ -125,6 +125,17 @@ Incoming traffic is expected to be HTTP, so if using SSL use something like ngin
 - Environment variable: `REFINERY_PEER_LISTEN_ADDRESS`
 - Command line switch: `--peer-listen-address`
 
+### `HTTPIdleTimeout`
+
+HTTPIdleTimeout is the duration the http server waits for activity on the connection.
+
+This is the amount of time after which if the http server does not see any activity, then it pings the client to see if the transport is still alive.
+"0s" means no timeout.
+
+- Not eligible for live reload.
+- Type: `duration`
+- Default: `0s`
+
 ### `HoneycombAPI`
 
 HoneycombAPI is the URL of the upstream Honeycomb API where the data will be sent.
@@ -182,16 +193,24 @@ We recommend enabling this setting whenever a rules-based sampler is in use, as 
 
 ### `AddSpanCountToRoot`
 
-AddSpanCountToRoot controls whether to add a metadata field to root spans that indicates the number of child spans.
+AddSpanCountToRoot controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
 
-The added metadata field, `meta.span_count`, indicates the number of child spans on the trace at the time the sampling decision was made.
-This value is available to the rules-based sampler, making it possible to write rules that are dependent upon the number of spans in the trace.
-If `true`, then Refinery will add `meta.
-span_count` to the root span.
+The added metadata field, `meta.span_count`, indicates the number of child elements on the trace at the time the sampling decision was made.
+This value is available to the rules-based sampler, making it possible to write rules that are dependent upon the number of spans, span events, and span links in the trace.
+If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.span_count` to the root span.
 
 - Eligible for live reload.
 - Type: `bool`
 - Default: `true`
+
+### `AddCountsToRoot`
+
+AddCountsToRoot controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
+
+If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made: - `meta.span_count`: the number of child spans on the trace - `meta.span_event_count`: the number of span events on the trace - `meta.span_link_count`: the number of span links on the trace - `meta.event_count`: the number of honeycomb events on the trace
+
+- Eligible for live reload.
+- Type: `bool`
 
 ### `AddHostMetadataToTrace`
 
@@ -390,6 +409,7 @@ Only used if `APIKey` is specified.
 SamplerEnabled controls whether logs are sampled before sending to Honeycomb.
 
 The sample rate is controlled by the `SamplerThroughput` setting.
+The sampler used throttles the rate of logs sent to Honeycomb from any given source within Refinery -- it should effectively limit the rate of redundant messages.
 
 - Not eligible for live reload.
 - Type: `bool`
@@ -419,7 +439,26 @@ Structured controls whether to use structured logging.
 
 - Not eligible for live reload.
 - Type: `bool`
-- Default: `true`
+
+### `SamplerEnabled`
+
+SamplerEnabled controls whether logs are sampled before sending to stdout.
+
+The sample rate is controlled by the `SamplerThroughput` setting.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `SamplerThroughput`
+
+SamplerThroughput is the sampling throughput for logs in events per second.
+
+The sampling algorithm attempts to make sure that the average throughput approximates this value, while also ensuring that all unique logs arrive at stdout at least once per sampling period.
+
+- Not eligible for live reload.
+- Type: `float`
+- Default: `10`
+- Example: `10`
 
 ## Prometheus Metrics
 
@@ -671,6 +710,16 @@ Many Redis installations do not use this field.
 - Type: `string`
 - Environment variable: `REFINERY_REDIS_PASSWORD`
 
+### `AuthCode`
+
+AuthCode is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command.
+
+Many Redis installations do not use this field.
+
+- Not eligible for live reload.
+- Type: `string`
+- Environment variable: `REFINERY_REDIS_AUTH_CODE`
+
 ### `Prefix`
 
 Prefix is a string used as a prefix for the keys in Redis while storing the peer membership.
@@ -739,20 +788,46 @@ The number of traces in the cache should be many multiples (100x to 1000x) of th
 - Type: `int`
 - Default: `10000`
 
+### `PeerQueueSize`
+
+PeerQueueSize is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
+
+The peer span queue serves as a buffer for spans redirected from other peers before they are processed.
+In the event that this queue reaches its capacity, any subsequent spans will be discarded.
+The size of this queue is contingent upon the number of peers within the cluster.
+Specifically, with N peers, the queue's span capacity is determined by (N-1)/N of the total number of spans.
+Its minimum value should be at least three times the CacheCapacity.
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `30000`
+
+### `IncomingQueueSize`
+
+IncomingQueueSize is the number of in-flight spans to keep in the incoming span queue.
+
+The incoming span queue is used to buffer spans before they are processed.
+If this queue fills up, then subsequent spans will be dropped.
+Its minimum value should be at least three times the CacheCapacity.
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `30000`
+
 ### `AvailableMemory`
 
 AvailableMemory is the amount of system memory available to the Refinery process.
 
 This value will typically be set through an environment variable controlled by the container or deploy script.
-If this value is zero or not set, then `MaxMemory` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
+If this value is zero or not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
 If set, then this must be a memory size.
-64-bit values are supported.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are also supported.
-If set, `Collections.MaxAlloc` must not be defined.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+Fractional values with a suffix are supported.
+If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
-- Example: `4Gb`
+- Example: `4.5Gb`
 - Environment variable: `REFINERY_AVAILABLE_MEMORY`
 - Command line switch: `--available-memory`
 
@@ -775,9 +850,9 @@ Useful values for this setting are generally in the range of 70-90.
 MaxAlloc is the maximum number of bytes that should be allocated by the Collector.
 
 If set, then this must be a memory size.
-64-bit values are supported.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc) and Kubernetes units (`M`, `Gi`, etc) are also supported.
-See `MaxMemory` for more details.
+Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+Fractional values with a suffix are supported.
+See `MaxMemoryPercentage` for more details.
 If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
@@ -909,7 +984,7 @@ A duration for the amount of time after which an idle connection will be closed 
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `0s`
+- Default: `1m`
 - Example: `1m`
 
 ### `MaxConnectionAge`
@@ -933,7 +1008,7 @@ This setting is in case the upstream node ignores the `GoAway` request.
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `60s`
+- Default: `1m`
 
 ### `KeepAlive`
 
@@ -956,6 +1031,28 @@ This is the amount of time after which if the server does not see any activity, 
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `20s`
+
+### `MaxSendMsgSize`
+
+MaxSendMsgSize is the maximum message size the server can send.
+
+The server enforces a maximum message size to avoid exhausting the memory available to the process by a single request.
+The size is expressed in bytes.
+
+- Not eligible for live reload.
+- Type: `memorysize`
+- Default: `5MB`
+
+### `MaxRecvMsgSize`
+
+MaxRecvMsgSize is the maximum message size the server can receive.
+
+The server enforces a maximum message size to avoid exhausting the memory available to the process by a single request.
+The size is expressed in bytes.
+
+- Not eligible for live reload.
+- Type: `memorysize`
+- Default: `5MB`
 
 ## Sample Cache
 
@@ -1043,7 +1140,7 @@ The value must be less than `ActivationLevel`.
 
 - Eligible for live reload.
 - Type: `percentage`
-- Default: `70`
+- Default: `75`
 
 ### `SamplingRate`
 

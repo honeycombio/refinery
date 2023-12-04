@@ -41,6 +41,30 @@ func TestSpan_GetDataSize(t *testing.T) {
 	}
 }
 
+func TestSpan_AnnotationType(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+		want SpanAnnotationType
+	}{
+		{"unknown", map[string]any{}, SpanAnnotationTypeUnknown},
+		{"span_event", map[string]any{"meta.annotation_type": "span_event"}, SpanAnnotationTypeSpanEvent},
+		{"link", map[string]any{"meta.annotation_type": "link"}, SpanAnnotationTypeLink},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: tt.data,
+				},
+			}
+			if got := sp.AnnotationType(); got != tt.want {
+				t.Errorf("Span.AnnotationType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // These benchmarks were just to verify that the size calculation is acceptable
 // even on big spans. The P99 for normal (20-field) spans shows that it will take ~1
 // microsecond (on an m1 laptop) but a 1000-field span (extremely rare!) will take

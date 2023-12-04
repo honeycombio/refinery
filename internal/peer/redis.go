@@ -72,9 +72,23 @@ func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Pe
 				case <-timeout:
 					return nil, err
 				default:
-					conn, err = redis.Dial("tcp", redisHost, options...)
-					if err == nil {
-						return conn, nil
+					if authCode, _ := c.GetRedisAuthCode(); authCode != "" {
+						conn, err = redis.Dial("tcp", redisHost, options...)
+						if err != nil {
+							return nil, err
+						}
+						if _, err := conn.Do("AUTH", authCode); err != nil {
+							conn.Close()
+							return nil, err
+						}
+						if err == nil {
+							return conn, nil
+						}
+					} else {
+						conn, err = redis.Dial("tcp", redisHost, options...)
+						if err == nil {
+							return conn, nil
+						}
 					}
 					time.Sleep(time.Second)
 				}

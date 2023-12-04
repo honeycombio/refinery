@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2023-06-28 at 13:29:41 UTC from ../../config.yaml using a template generated on 2023-06-28 at 13:29:01 UTC
+# created on 2023-12-04 at 18:06:30 UTC from ../../config.yaml using a template generated on 2023-12-04 at 18:06:10 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -58,17 +58,18 @@ General:
     ## ConfigReloadInterval is the average interval between attempts at
     ## reloading the configuration file.
     ##
-    ## A single instance of Refinery will attempt to read its configuration
-    ## and check for changes at approximately this interval. This time is
-    ## varied by a random amount to avoid all instances refreshing together.
-    ## Within a cluster, Refinery will gossip information about new
-    ## configuration so that all instances can reload at close to the same
-    ## time. Disable this feature with a value of `0s`.
+    ## Refinery will attempt to read its configuration and check for changes
+    ## at approximately this interval. This time is varied by a random amount
+    ## up to 10% to avoid all instances refreshing together. In installations
+    ## where configuration changes are handled by restarting Refinery, which
+    ## is often the case when using Kubernetes, disable this feature with a
+    ## value of `0s`. If the config file is being loaded from a URL, it may
+    ## be wise to increase this value to avoid overloading the file server.
     ##
-    ## Accepts a duration string with units, like "5m".
-    ## default: 5m
+    ## Accepts a duration string with units, like "15s".
+    ## default: 15s
     ## Not eligible for live reload.
-    # ConfigReloadInterval: 5m
+    # ConfigReloadInterval: 15s
 
 ###########################
 ## Network Configuration ##
@@ -102,6 +103,18 @@ Network:
     ## Not eligible for live reload.
     # PeerListenAddr: "0.0.0.0:8081"
 
+    ## HTTPIdleTimeout is the duration the http server waits for activity on
+    ## the connection.
+    ##
+    ## This is the amount of time after which if the http server does not see
+    ## any activity, then it pings the client to see if the transport is
+    ## still alive. "0s" means no timeout.
+    ##
+    ## Accepts a duration string with units, like "0s".
+    ## default: 0s
+    ## Not eligible for live reload.
+    # HTTPIdleTimeout: 0s
+
     ## HoneycombAPI is the URL of the upstream Honeycomb API where the data
     ## will be sent.
     ##
@@ -116,7 +129,7 @@ Network:
 ## Access Key Configuration ##
 ##############################
 AccessKeys:
-  ## AccessKeys Contains access keys -- API keys that the proxy will treat
+  ## AccessKeys contains access keys -- API keys that the proxy will treat
   ## specially, and other flags that control how the proxy handles API
   ## keys.
   ##
@@ -139,7 +152,6 @@ AccessKeys:
     ## accepted. Events arriving with API keys not in the `ReceiveKeys` list
     ## will be rejected with an HTTP `401` error.
     ## If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
-    ## Must be specified if `ReceiveKeys` is specified.
     ##
     ## Eligible for live reload.
     # AcceptOnlyListedKeys: false
@@ -157,26 +169,51 @@ RefineryTelemetry:
     ## When enabled, this setting causes traces that are sent to Honeycomb to
     ## include the field `meta.refinery.reason`. This field contains text
     ## indicating which rule was evaluated that caused the trace to be
-    ## included. We recommend enabling this setting whenever a rules-based
-    ## sampler is in use, as it is useful for debugging and understanding the
-    ## behavior of your Refinery installation.
+    ## included.
+    ## This setting also includes the field `meta.refinery.send_reason`,
+    ## which contains the reason that the trace was sent. Possible values of
+    ## this field are `trace_send_got_root`, which means that the root span
+    ## arrived; `trace_send_expired`, which means that TraceTimeout was
+    ## reached; `trace_send_ejected_full`, which means that the trace cache
+    ## was full; and `trace_send_ejected_memsize`, which means that refinery
+    ## was out of memory.
+    ## These names are also the names of metrics that refinery tracks.
+    ## We recommend enabling this setting whenever a rules-based sampler is
+    ## in use, as it is useful for debugging and understanding the behavior
+    ## of your Refinery installation.
     ##
     ## Eligible for live reload.
     # AddRuleReasonToTrace: false
 
     ## AddSpanCountToRoot controls whether to add a metadata field to root
-    ## spans that indicates the number of child spans.
+    ## spans that indicates the number of child elements in a trace.
     ##
     ## The added metadata field, `meta.span_count`, indicates the number of
-    ## child spans on the trace at the time the sampling decision was made.
-    ## This value is available to the rules-based sampler, making it possible
-    ## to write rules that are dependent upon the number of spans in the
-    ## trace. If `true`, then Refinery will add `meta. span_count` to the
-    ## root span.
+    ## child elements on the trace at the time the sampling decision was
+    ## made. This value is available to the rules-based sampler, making it
+    ## possible to write rules that are dependent upon the number of spans,
+    ## span events, and span links in the trace. If `true` and
+    ## `AddCountsToRoot` is set to false, then Refinery will add
+    ## `meta.span_count` to the root span.
     ##
     ## default: true
     ## Eligible for live reload.
     # AddSpanCountToRoot: true
+
+    ## AddCountsToRoot controls whether to add metadata fields to root spans
+    ## that indicates the number of child spans, span events, span links, and
+    ## honeycomb events.
+    ##
+    ## If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting
+    ## and add the following fields to the root span based on the values at
+    ## the time the sampling decision was made: - `meta.span_count`: the
+    ## number of child spans on the trace - `meta.span_event_count`: the
+    ## number of span events on the trace - `meta.span_link_count`: the
+    ## number of span links on the trace - `meta.event_count`: the number of
+    ## honeycomb events on the trace
+    ##
+    ## Eligible for live reload.
+    # AddCountsToRoot: false
 
     ## AddHostMetadataToTrace specifies whether to add host metadata to
     ## traces.
@@ -384,7 +421,10 @@ HoneycombLogger:
     ## SamplerEnabled controls whether logs are sampled before sending to
     ## Honeycomb.
     ##
-    ## The sample rate is controlled by the `SamplerThroughput` setting.
+    ## The sample rate is controlled by the `SamplerThroughput` setting. The
+    ## sampler used throttles the rate of logs sent to Honeycomb from any
+    ## given source within Refinery -- it should effectively limit the rate
+    ## of redundant messages.
     ##
     ## default: true
     ## Not eligible for live reload.
@@ -413,9 +453,27 @@ StdoutLogger:
     ## `true` generates structured logs (JSON). `false` generates plain text
     ## logs.
     ##
-    ## default: true
     ## Not eligible for live reload.
-    # Structured: true
+    # Structured: false
+
+    ## SamplerEnabled controls whether logs are sampled before sending to
+    ## stdout.
+    ##
+    ## The sample rate is controlled by the `SamplerThroughput` setting.
+    ##
+    ## Not eligible for live reload.
+    # SamplerEnabled: false
+
+    ## SamplerThroughput is the sampling throughput for logs in events per
+    ## second.
+    ##
+    ## The sampling algorithm attempts to make sure that the average
+    ## throughput approximates this value, while also ensuring that all
+    ## unique logs arrive at stdout at least once per sampling period.
+    ##
+    ## default: 10
+    ## Not eligible for live reload.
+    # SamplerThroughput: 10
 
 ########################
 ## Prometheus Metrics ##
@@ -449,11 +507,11 @@ PrometheusMetrics:
 ## Legacy Metrics ##
 ####################
 LegacyMetrics:
-  ## LegacyMetrics `LegacyMetrics` contains configuration for Refinery's
-  ## legacy metrics. Version 1.x of Refinery used this format for sending
-  ## Metrics to Honeycomb. The metrics generated that way are nonstandard
-  ## and will be deprecated in a future release. New installations should
-  ## prefer `OTelMetrics`.
+  ## LegacyMetrics contains configuration for Refinery's legacy metrics.
+  ## Version 1.x of Refinery used this format for sending Metrics to
+  ## Honeycomb. The metrics generated that way are nonstandard and will be
+  ## deprecated in a future release. New installations should prefer
+  ## `OTelMetrics`.
   ##
   ####
     ## Enabled controls whether to send legacy-formatted metrics to
@@ -505,9 +563,9 @@ LegacyMetrics:
 ## OpenTelemetry Metrics ##
 ###########################
 OTelMetrics:
-  ## OTelMetrics `OTelMetrics` contains configuration for Refinery's
-  ## OpenTelemetry (OTel) metrics. This is the preferred way to send
-  ## metrics to Honeycomb. New installations should prefer `OTelMetrics`.
+  ## OTelMetrics contains configuration for Refinery's OpenTelemetry (OTel)
+  ## metrics. This is the preferred way to send metrics to Honeycomb. New
+  ## installations should prefer `OTelMetrics`.
   ##
   ####
     ## Enabled controls whether to send metrics via OpenTelemetry.
@@ -586,10 +644,10 @@ PeerManagement:
     ## `redis` means that Refinery self-registers with a Redis instance and
     ## gets its peer list from there.
     ##
-    ## default: redis
+    ## default: file
     ## Not eligible for live reload.
     ## Options: redis file
-    # Type: redis
+    # Type: file
 
     ## Identifier specifies the identifier to use when registering itself
     ## with peers.
@@ -643,8 +701,8 @@ PeerManagement:
 ## Redis Peer Management ##
 ###########################
 RedisPeerManagement:
-  ## RedisPeerManagement `RedisPeerManagement` controls how the Refinery
-  ## cluster communicates between peers when using Redis. Only applies when
+  ## RedisPeerManagement controls how the Refinery cluster communicates
+  ## between peers when using Redis. Only applies when
   ## `PeerManagement.Type` is "redis".
   ##
   ####
@@ -672,6 +730,14 @@ RedisPeerManagement:
     ##
     ## Not eligible for live reload.
     # Password: ""
+
+    ## AuthCode is the string used to connect to Redis for peer cluster
+    ## membership management using an explicit AUTH command.
+    ##
+    ## Many Redis installations do not use this field.
+    ##
+    ## Not eligible for live reload.
+    # AuthCode: ""
 
     ## Prefix is a string used as a prefix for the keys in Redis while
     ## storing the peer membership.
@@ -726,11 +792,11 @@ RedisPeerManagement:
 ## Collection Settings ##
 #########################
 Collection:
-  ## Collection `Collection` contains the settings that are relevant to
-  ## collecting spans together to make traces. If none of the memory
-  ## settings are used, then Refinery will not attempt to limit its memory
-  ## usage. This is not recommended for production use since a burst of
-  ## traffic could cause Refinery to run out of memory and crash.
+  ## Collection contains the settings that are relevant to collecting spans
+  ## together to make traces. If none of the memory settings are used, then
+  ## Refinery will not attempt to limit its memory usage. This is not
+  ## recommended for production use since a burst of traffic could cause
+  ## Refinery to run out of memory and crash.
   ##
   ####
     ## CacheCapacity is the number of traces to keep in the cache's circular
@@ -747,18 +813,47 @@ Collection:
     ## Eligible for live reload.
     # CacheCapacity: 10_000
 
+    ## PeerQueueSize is the maximum number of in-flight spans redirected from
+    ## other peers stored in the peer span queue.
+    ##
+    ## The peer span queue serves as a buffer for spans redirected from other
+    ## peers before they are processed. In the event that this queue reaches
+    ## its capacity, any subsequent spans will be discarded. The size of this
+    ## queue is contingent upon the number of peers within the cluster.
+    ## Specifically, with N peers, the queue's span capacity is determined by
+    ## (N-1)/N of the total number of spans. Its minimum value should be at
+    ## least three times the CacheCapacity.
+    ##
+    ## default: 30000
+    ## Not eligible for live reload.
+    # PeerQueueSize: 30_000
+
+    ## IncomingQueueSize is the number of in-flight spans to keep in the
+    ## incoming span queue.
+    ##
+    ## The incoming span queue is used to buffer spans before they are
+    ## processed. If this queue fills up, then subsequent spans will be
+    ## dropped. Its minimum value should be at least three times the
+    ## CacheCapacity.
+    ##
+    ## default: 30000
+    ## Not eligible for live reload.
+    # IncomingQueueSize: 30_000
+
     ## AvailableMemory is the amount of system memory available to the
     ## Refinery process.
     ##
     ## This value will typically be set through an environment variable
     ## controlled by the container or deploy script. If this value is zero or
-    ## not set, then `MaxMemory` cannot be used to calculate the maximum
-    ## allocation and `MaxAlloc` will be used instead. If set, then this must
-    ## be a memory size. 64-bit values are supported. Sizes with standard
-    ## unit suffixes like "MB" and "GiB" are also supported.
+    ## not set, then `MaxMemoryPercentage` cannot be used to calculate the
+    ## maximum allocation and `MaxAlloc` will be used instead. If set, then
+    ## this must be a memory size. Sizes with standard unit suffixes (`MB`,
+    ## `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+    ## Fractional values with a suffix are supported. If `AvailableMemory` is
+    ## set, `Collections.MaxAlloc` must not be defined.
     ##
     ## Eligible for live reload.
-    # AvailableMemory: 4Gb
+    # AvailableMemory: "4.5Gb"
 
     ## MaxMemoryPercentage is the maximum percentage of memory that should be
     ## allocated by the span collector.
@@ -769,8 +864,7 @@ Collection:
     ## per tick (see `SendTicker`) the collector will compare total allocated
     ## bytes to this calculated value. If allocation is too high, then traces
     ## will be ejected from the cache early to reduce memory. Useful values
-    ## for this setting are generally in the range of 70-90. If this value is
-    ## `0`, then `MaxAlloc` will be used.
+    ## for this setting are generally in the range of 70-90.
     ##
     ## default: 75
     ## Eligible for live reload.
@@ -779,11 +873,11 @@ Collection:
     ## MaxAlloc is the maximum number of bytes that should be allocated by
     ## the Collector.
     ##
-    ## If set, then this must be a memory size. 64-bit values are supported.
-    ## Sizes with standard unit suffixes like "MB" and "GiB" are also
-    ## supported. The full list of supported values can be found at
-    ## https://pkg.go.dev/github.com/docker/go-units#pkg-constants. See
-    ## `MaxMemory` for more details.
+    ## If set, then this must be a memory size. Sizes with standard unit
+    ## suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.)
+    ## are supported. Fractional values with a suffix are supported. See
+    ## `MaxMemoryPercentage` for more details. If set,
+    ## `Collections.AvailableMemory` must not be defined.
     ##
     ## Eligible for live reload.
     # MaxAlloc: ""
@@ -792,8 +886,8 @@ Collection:
 ## Buffer Sizes ##
 ##################
 BufferSizes:
-  ## BufferSizes `BufferSizes` contains the settings that are relevant to
-  ## the sizes of communications buffers.
+  ## BufferSizes contains the settings that are relevant to the sizes of
+  ## communications buffers.
   ##
   ####
     ## UpstreamBufferSize is the size of the queue used to buffer spans to
@@ -869,9 +963,9 @@ Specialized:
 ## ID Fields ##
 ###############
 IDFields:
-  ## IDFields `IDFields` controls the field names to use for the event ID
-  ## fields. These fields are used to identify events that are part of the
-  ## same trace.
+  ## IDFields controls the field names to use for the event ID fields.
+  ## These fields are used to identify events that are part of the same
+  ## trace.
   ##
   ####
     ## TraceNames is the list of field names to use for the trace ID.
@@ -901,8 +995,8 @@ IDFields:
 ## gRPC Server Parameters ##
 ############################
 GRPCServerParameters:
-  ## GRPCServerParameters `GRPCServerParameters` controls the parameters of
-  ## the gRPC server used to receive OpenTelemetry data in gRPC format.
+  ## GRPCServerParameters controls the parameters of the gRPC server used
+  ## to receive OpenTelemetry data in gRPC format.
   ##
   ####
     ## Enabled specifies whether the gRPC server is enabled.
@@ -931,10 +1025,10 @@ GRPCServerParameters:
     ## Refinery deployments behind a load balancer, because it will prevent
     ## the load balancer from distributing load evenly among peers.
     ##
-    ## Accepts a duration string with units, like "0s".
-    ## default: 0s
+    ## Accepts a duration string with units, like "1m".
+    ## default: 1m
     ## Not eligible for live reload.
-    # MaxConnectionIdle: 0s
+    # MaxConnectionIdle: 1m
 
     ## MaxConnectionAge is the maximum amount of time a gRPC connection may
     ## exist.
@@ -956,10 +1050,10 @@ GRPCServerParameters:
     ## This setting is in case the upstream node ignores the `GoAway`
     ## request. "0s" sets duration to infinity.
     ##
-    ## Accepts a duration string with units, like "60s".
-    ## default: 60s
+    ## Accepts a duration string with units, like "1m".
+    ## default: 1m
     ## Not eligible for live reload.
-    # MaxConnectionAgeGrace: 60s
+    # MaxConnectionAgeGrace: 1m
 
     ## KeepAlive is the duration between keep-alive pings.
     ##
@@ -984,13 +1078,32 @@ GRPCServerParameters:
     ## Not eligible for live reload.
     # KeepAliveTimeout: 20s
 
+    ## MaxSendMsgSize is the maximum message size the server can send.
+    ##
+    ## The server enforces a maximum message size to avoid exhausting the
+    ## memory available to the process by a single request. The size is
+    ## expressed in bytes.
+    ##
+    ## default: 5MB
+    ## Not eligible for live reload.
+    # MaxSendMsgSize: ""
+
+    ## MaxRecvMsgSize is the maximum message size the server can receive.
+    ##
+    ## The server enforces a maximum message size to avoid exhausting the
+    ## memory available to the process by a single request. The size is
+    ## expressed in bytes.
+    ##
+    ## default: 5MB
+    ## Not eligible for live reload.
+    # MaxRecvMsgSize: ""
+
 ##################
 ## Sample Cache ##
 ##################
 SampleCache:
-  ## SampleCache `SampleCache` controls the sample cache used to retain
-  ## information about trace status after the sampling decision has been
-  ## made.
+  ## SampleCache controls the sample cache used to retain information about
+  ## trace status after the sampling decision has been made.
   ##
   ####
     ## KeptSize is the number of traces preserved in the cuckoo kept traces
@@ -1032,9 +1145,8 @@ SampleCache:
 ## Stress Relief ##
 ###################
 StressRelief:
-  ## StressRelief `StressRelief` controls the Stress Relief mechanism,
-  ## which is used to prevent Refinery from being overwhelmed by a large
-  ## number of traces.
+  ## StressRelief controls the Stress Relief mechanism, which is used to
+  ## prevent Refinery from being overwhelmed by a large number of traces.
   ## There is a metric called `stress_level` that is emitted as part of
   ## Refinery metrics. It is a measure of Refinery's throughput rate
   ## relative to its processing rate, combined with the amount of room in
@@ -1094,9 +1206,9 @@ StressRelief:
     ## This setting is subject to `MinimumActivationDuration`. The value must
     ## be less than `ActivationLevel`.
     ##
-    ## default: 70
+    ## default: 75
     ## Eligible for live reload.
-    # DeactivationLevel: 70
+    # DeactivationLevel: 75
 
     ## SamplingRate is the sampling rate to use when Stress Relief is
     ## activated.

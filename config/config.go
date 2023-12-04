@@ -31,6 +31,9 @@ type Config interface {
 	// peer traffic
 	GetPeerListenAddr() (string, error)
 
+	// GetHTTPIdleTimeout returns the idle timeout for refinery's HTTP server
+	GetHTTPIdleTimeout() time.Duration
+
 	// GetCompressPeerCommunication will be true if refinery should compress
 	// data before forwarding it to a peer.
 	GetCompressPeerCommunication() bool
@@ -41,6 +44,9 @@ type Config interface {
 	// GetGRPCListenAddr returns the address and port on which to listen for
 	// incoming events over gRPC
 	GetGRPCListenAddr() (string, error)
+
+	// Returns the entire GRPC config block
+	GetGRPCConfig() GRPCServerParameters
 
 	// IsAPIKeyValid checks if the given API key is valid according to the rules
 	IsAPIKeyValid(key string) bool
@@ -61,6 +67,10 @@ type Config interface {
 	// GetRedisPassword returns the password of a Redis instance to use for peer
 	// management.
 	GetRedisPassword() (string, error)
+
+	// GetRedisAuthCode returns the AUTH string to use for connecting to a Redis
+	// instance to use for peer management
+	GetRedisAuthCode() (string, error)
 
 	// GetRedisPrefix returns the prefix string used in the keys for peer
 	// management.
@@ -104,6 +114,9 @@ type Config interface {
 
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error)
+
+	// GetStdoutLoggerConfig returns the config specific to the StdoutLogger
+	GetStdoutLoggerConfig() (StdoutLoggerConfig, error)
 
 	// GetCollectionConfig returns the config specific to the InMemCollector
 	GetCollectionConfig() (CollectionConfig, error)
@@ -157,21 +170,13 @@ type Config interface {
 	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
 	GetQueryAuthToken() string
 
-	GetGRPCMaxConnectionIdle() time.Duration
-
-	GetGRPCMaxConnectionAge() time.Duration
-
-	GetGRPCMaxConnectionAgeGrace() time.Duration
-
-	GetGRPCKeepAlive() time.Duration
-
-	GetGRPCKeepAliveTimeout() time.Duration
-
 	GetPeerTimeout() time.Duration
 
 	GetAdditionalErrorFields() []string
 
 	GetAddSpanCountToRoot() bool
+
+	GetAddCountsToRoot() bool
 
 	GetConfigMetadata() []ConfigMetadata
 
