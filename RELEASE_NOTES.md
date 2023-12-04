@@ -15,7 +15,7 @@ This is a minor release with several new features and bug fixes mostly around co
 
 ### Notable fixes
 - The default stdout logger gets sampling support.
-- Now config values that needs a memory size input can use floating point value.
+- Config values that need a memory size input can now use floating point values, which should mean that Refinery's parsing of memory size is compatible with that of Kubernetes, making helm charts easier to write.
 - Documentation was improved.
 
 See [the Changelog](./CHANGELOG.md) for the full list of changes.
