@@ -185,7 +185,11 @@ If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.sp
 
 `AddCountsToRoot` controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
 
-If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made: - `meta.span_count`: the number of child spans on the trace - `meta.span_event_count`: the number of span events on the trace - `meta.span_link_count`: the number of span links on the trace - `meta.event_count`: the number of honeycomb events on the trace
+If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made:
+- `meta.span_count`: the number of child spans on the trace
+- `meta.span_event_count`: the number of span events on the trace
+- `meta.span_link_count`: the number of span links on the trace
+- `meta.event_count`: the number of honeycomb events on the trace
 
 - Eligible for live reload.
 - Type: `bool`
@@ -425,7 +429,7 @@ Only used if `Logger.Type` is "stdout".
 
 ### `SamplerEnabled`
 
-`SamplerEnabled` controls whether logs are sampled before sending to stdout.
+`SamplerEnabled` controls whether logs are sampled before sending to `stdout`.
 
 The sample rate is controlled by the `SamplerThroughput` setting.
 
@@ -436,7 +440,7 @@ The sample rate is controlled by the `SamplerThroughput` setting.
 
 `SamplerThroughput` is the sampling throughput for logs in events per second.
 
-The sampling algorithm attempts to make sure that the average throughput approximates this value, while also ensuring that all unique logs arrive at stdout at least once per sampling period.
+The sampling algorithm attempts to make sure that the average throughput approximates this value, while also ensuring that all unique logs arrive at `stdout` at least once per sampling period.
 
 - Not eligible for live reload.
 - Type: `float`
@@ -781,7 +785,7 @@ The peer span queue serves as a buffer for spans redirected from other peers bef
 In the event that this queue reaches its capacity, any subsequent spans will be discarded.
 The size of this queue is contingent upon the number of peers within the cluster.
 Specifically, with N peers, the queue's span capacity is determined by (N-1)/N of the total number of spans.
-Its minimum value should be at least three times the CacheCapacity.
+Its minimum value should be at least three times the `CacheCapacity`.
 
 - Not eligible for live reload.
 - Type: `int`
@@ -793,7 +797,7 @@ Its minimum value should be at least three times the CacheCapacity.
 
 The incoming span queue is used to buffer spans before they are processed.
 If this queue fills up, then subsequent spans will be dropped.
-Its minimum value should be at least three times the CacheCapacity.
+Its minimum value should be at least three times the `CacheCapacity`.
 
 - Not eligible for live reload.
 - Type: `int`
@@ -806,7 +810,7 @@ Its minimum value should be at least three times the CacheCapacity.
 This value will typically be set through an environment variable controlled by the container or deploy script.
 If this value is zero or not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
 If set, then this must be a memory size.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
 
@@ -835,7 +839,7 @@ Useful values for this setting are generally in the range of 70-90.
 `MaxAlloc` is the maximum number of bytes that should be allocated by the Collector.
 
 If set, then this must be a memory size.
-Sizes with standard unit suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
+Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
 See `MaxMemoryPercentage` for more details.
 If set, `Collections.AvailableMemory` must not be defined.
