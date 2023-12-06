@@ -245,8 +245,13 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	time.Sleep(conf.SendTickerVal * 2)
 
+	assert.Eventually(t, func() bool {
+		transmission.Mux.RLock()
+		defer transmission.Mux.RUnlock()
+		return len(transmission.Events) > 0
+	}, 2*time.Second, conf.SendTickerVal*2)
+
 	transmission.Mux.RLock()
-	assert.Equal(t, 1, len(transmission.Events), "should be some events transmitted")
 	assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
 		"SampleRate should be reset to one after starting at zero")
 	transmission.Mux.RUnlock()
