@@ -2,6 +2,7 @@ package collect
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
 	"sort"
@@ -63,6 +64,7 @@ type InMemCollector struct {
 	datasetSamplers map[string]sample.Sampler
 
 	sampleTraceCache cache.TraceSentCache
+	sentReasonsCache *cache.SentReasonsCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
@@ -123,6 +125,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.sentReasonsCache = cache.NewSentReasonsCache()
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -178,6 +181,9 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
+	// clear out any sent reasons we have previously seen
+	// so that reasons based on the new config will be used
+	i.sentReasonsCache = cache.NewSentReasonsCache()
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
 	i.datasetSamplers = make(map[string]sample.Sampler)
@@ -462,6 +468,10 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	}
 	// we do want a record of how we disposed of traces in case more come in after we've
 	// turned off stress relief (if stress relief is on we'll keep making the same decisions)
+	if keep {
+		reasonKey := i.sentReasonsCache.Set(reason)
+		trace.SentReason = reasonKey
+	}
 	i.sampleTraceCache.Record(trace, keep)
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
@@ -485,7 +495,13 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.Span) {
 	if i.Config.GetAddRuleReasonToTrace() {
-		sp.Data["meta.refinery.reason"] = "late"
+		metaReason, ok := i.sentReasonsCache.Get(tr.Reason())
+		if ok {
+			metaReason = fmt.Sprintf("%s - late arriving span", metaReason)
+		} else {
+			metaReason = "late arriving span"
+		}
+		sp.Data["meta.refinery.reason"] = metaReason
 	}
 	if i.hostname != "" {
 		sp.Data["meta.refinery.local_hostname"] = i.hostname
@@ -628,6 +644,10 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// This will observe sample rate attempts even if the trace is dropped
 	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
+	if shouldSend {
+		reasonKey := i.sentReasonsCache.Set(reason)
+		trace.SentReason = reasonKey
+	}
 	i.sampleTraceCache.Record(trace, shouldSend)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.

@@ -25,6 +25,7 @@ type keptTraceCacheEntry struct {
 	spanEventCount uint32 // number of span events in the trace
 	spanLinkCount  uint32 // number of span links in the trace
 	spanCount      uint32 // number of spans in the trace
+	reason         uint32 // which rule was used to decide to keep the trace
 }
 
 func NewKeptTraceCacheEntry(trace *types.Trace) *keptTraceCacheEntry {
@@ -38,6 +39,7 @@ func NewKeptTraceCacheEntry(trace *types.Trace) *keptTraceCacheEntry {
 		spanEventCount: trace.SpanEventCount(),
 		spanLinkCount:  trace.SpanLinkCount(),
 		spanCount:      trace.SpanCount(),
+		reason:         uint32(trace.SentReason),
 	}
 }
 
@@ -67,6 +69,10 @@ func (t *keptTraceCacheEntry) SpanLinkCount() uint {
 // SpanCount returns the count of spans in the trace.
 func (t *keptTraceCacheEntry) SpanCount() uint {
 	return uint(t.spanCount)
+}
+
+func (t *keptTraceCacheEntry) Reason() uint {
+	return uint(t.reason)
 }
 
 // Count records additional spans in the cache record.
@@ -114,6 +120,10 @@ func (t *cuckooDroppedRecord) SpanCount() uint {
 }
 
 func (t *cuckooDroppedRecord) Count(*types.Span) {
+}
+
+func (t *cuckooDroppedRecord) Reason() uint {
+	return 0
 }
 
 // Make sure it implements TraceSentRecord
@@ -181,6 +191,8 @@ func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 		c.keptMut.Lock()
 		defer c.keptMut.Unlock()
 		c.kept.Add(trace.TraceID, sentRecord)
+
+		// record the reason for this decision
 		return
 	}
 	// if we're not keeping it, save it in the dropped trace filter

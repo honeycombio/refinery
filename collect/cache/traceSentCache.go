@@ -20,6 +20,9 @@ type TraceSentRecord interface {
 	SpanCount() uint
 	// Count records additional spans in the totals
 	Count(*types.Span)
+
+	// Reason returns the reason the trace was kept or dropped
+	Reason() uint
 }
 
 type TraceSentCache interface {

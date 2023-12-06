@@ -921,6 +921,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 	}
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
+	coll.sentReasonsCache = cache.NewSentReasonsCache()
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
@@ -980,7 +981,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 	assert.Equal(t, int64(2), transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
 	assert.Equal(t, int64(1), transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
 	assert.Equal(t, int64(5), transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
-	assert.Equal(t, "late", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
+	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
 	transmission.Mux.RUnlock()
 }
 
