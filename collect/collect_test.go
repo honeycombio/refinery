@@ -152,7 +152,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	// Spin until a sample gets triggered
 	sendAttemptCount := 0
-	for getEventsLength(transmission) < 1 || sendAttemptCount > 10 {
+	for getEventsLength(transmission) < 1 {
 		sendAttemptCount++
 		span := &types.Span{
 			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
@@ -164,11 +164,11 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			},
 		}
 		coll.AddSpan(span)
-		time.Sleep(conf.SendTickerVal * 2)
+		time.Sleep(conf.SendTickerVal * 5)
 	}
 
 	transmission.Mux.RLock()
-	assert.Greater(t, len(transmission.Events), 0, "should be some events transmitted")
+	assert.Greater(t, len(transmission.Events), 0, "should be at least one event transmitted")
 	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"],
 		"metadata should be populated with original sample rate")
 	transmission.Mux.RUnlock()
