@@ -22,8 +22,9 @@ Usage:
 	For config files, the new v2 config file is commented in detail to help explain what each
 	value does in the new configuration.
 
-	For example, if the v1 file specified "MetricsAPIKey" in the "HoneycombMetrics" section, the v2
-	file will list that key under the "LegacyMetrics" section under the "APIKey" name.
+	Values that are the same as default values are commented out in the generated output file
+	(since the default values are correct). Only values that do not match the default are
+	enabled in the output file.
 
 	The tool can also convert rules files to the new rules file format.
 
@@ -60,3 +61,15 @@ Help Options:
   -h, --help         Show this help message
 
 ```
+
+## Workflow
+
+The convert tool employs Go templates to dynamically generate output based on metadata definitions located in the `config/metadata/` directory.
+This process involves comparing an input file with the template to produce an updated configuration or rules file.
+
+The metadata in the `config/metadata/` directory serves as a reference for default values and documentation and outlines the structure of the output files.
+
+During the comparison process, if a field in the input file holds the same value as its corresponding default value specified in the metadata, the convert tool
+intelligently comments out that particular field in the output file. Consequently, only fields with non-default values are retained in the uncommented sections of the output file.
+
+For instance, when provided with a minimal config.yaml file containing only necessary values for a barebone setup, the convert tool generates a comprehensive configuration file with all default values. 

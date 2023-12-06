@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample docs validateConfig validateRules build
+all: template names sample complete docs validate build
 
 .PHONY: build
 #: build the binary
@@ -33,6 +33,14 @@ sample:
 	@echo "+++ generating sample config"
 	@echo
 	go run . sample --output=minimal_config.yaml
+
+.PHONY: complete
+#: generate the complete config
+complete:
+	@echo
+	@echo "+++ generating complete config"
+	@echo
+	go run . config --input=../../config.yaml --output=../../config_complete.yaml
 
 .PHONY: docs
 docs: docconfig docrules websiteconfig websiterules
@@ -71,11 +79,17 @@ websiterules:
 
 .PHONY: validate
 #: validate the sample config
-validateConfig:
+validateSampleConfig:
 	@echo
 	@echo "+++ validating sample config"
 	@echo
 	go run . validate config --input=minimal_config.yaml
+
+validateConfig:
+	@echo
+	@echo "+++ validating sample config"
+	@echo
+	go run . validate config --input=../../config_complete.yaml
 
 validateRules:
 	@echo
