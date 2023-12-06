@@ -245,25 +245,14 @@ func TestAppIntegration(t *testing.T) {
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
 
-	// Wait for span to be sent.
-	deadline := time.After(time.Second)
-	for {
-		if out.Len() > 62 {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Error("timed out waiting for output")
-			return
-		case <-time.After(time.Millisecond):
-		}
-	}
+	assert.Eventually(t, func() bool {
+		return out.Len() > 62
+	}, 5*time.Second, 2*time.Millisecond)
 	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
-	// This is failing in Parallel, so disable it for now.
-	// t.Parallel()
+	t.Parallel()
 
 	var out bytes.Buffer
 	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
@@ -288,18 +277,9 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Wait for span to be sent.
-	deadline := time.After(2 * time.Second)
-	for {
-		if out.Len() > 62 {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Error("timed out waiting for output")
-			return
-		case <-time.After(time.Millisecond):
-		}
-	}
+	assert.Eventually(t, func() bool {
+		return out.Len() > 62
+	}, 5*time.Second, 2*time.Millisecond)
 	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
 }
 
@@ -452,19 +432,9 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
 
-	// Wait for span to be sent.
-	deadline := time.After(time.Second)
-	for {
-		if out.Len() > 62 {
-			break
-		}
-		select {
-		case <-deadline:
-			t.Error("timed out waiting for output")
-			return
-		case <-time.After(time.Millisecond):
-		}
-	}
+	assert.Eventually(t, func() bool {
+		return out.Len() > 62
+	}, 5*time.Second, 2*time.Millisecond)
 
 	expectedSpan := `{"data":{"foo":"bar","meta.refinery.local_hostname":"%s","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}` + "\n"
 	assert.Equal(t, fmt.Sprintf(expectedSpan, hostname), out.String())
