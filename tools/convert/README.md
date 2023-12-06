@@ -22,9 +22,9 @@ Usage:
 	For config files, the new v2 config file is commented in detail to help explain what each
 	value does in the new configuration.
 
-	For example, if the v1 file specifield has the same value as the default value, it will be commented out in the output file. Only non-default
-	value is not commented out.d "MetricsAPIKey" in the "HoneycombMetrics" section, the v2
-	file will list that key under the "LegacyMetrics" section under the "APIKey" name.
+	Values that are the same as default values are commented out in the generated output file
+	(since the default values are correct). Only values that do not match the default are
+	enabled in the output file.
 
 	The tool can also convert rules files to the new rules file format.
 

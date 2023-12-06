@@ -1,8 +1,9 @@
 # Release Process
 
 1. Check that licenses are current with `make verify-licenses`
-2. Regenerate documentation with `make all` from within the `tools/convert` folder. If there's changes to `rules.md`, you must manually modify the `rules_complete.yaml` to reflect the same change.
-3. If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also copy these files to [docs](https://github.com/honeycombio/docs) and do a docs PR. Address any feedback from the the docs team and apply those feedback back into this repo.
+2. Regenerate documentation with `make all` from within the `tools/convert` folder. If there have
+been changes to `rules.md`, you may need to manually modify the `rules_complete.yaml` to reflect the same change.
+3. If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also copy these files to [docs](https://github.com/honeycombio/docs) and do a docs PR. Address any feedback from the the docs team and apply that feedback back into this repo.
 4. After addressing any docs change, add release entry to [changelog](./CHANGELOG.md)
     - Use below command to get a list of all commits since last release
     ```
@@ -10,6 +11,7 @@
     ```
     - Copy the output from the command above into the top of [changelog](./CHANGELOG.md)
     - fix each `https://github.com/<author-name>` to point to the correct github username
+    (the `git log` command can't do this automatically)
     - organize each commit based on their prefix into below three categories:
     ```
         ## Features
