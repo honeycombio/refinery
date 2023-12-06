@@ -223,13 +223,16 @@ func post(t testing.TB, req *http.Request) {
 }
 
 func TestAppIntegration(t *testing.T) {
+	t.Parallel()
+	port := 10500
+
 	var out bytes.Buffer
-	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil, false)
+	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, port, nil, false)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
-		"http://localhost:10000/1/batch/dataset",
+		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
@@ -250,15 +253,19 @@ func TestAppIntegration(t *testing.T) {
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
+	// Parallel integration tests need different ports!
+	t.Parallel()
+	port := 10600
+
 	var out bytes.Buffer
-	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
+	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, port, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
-		"http://localhost:10500/1/batch/dataset",
+		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
@@ -280,15 +287,19 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 }
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
+	// Parallel integration tests need different ports!
+	t.Parallel()
+	port := 10700
+
 	var out bytes.Buffer
-	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
+	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, port, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
-		"http://localhost:10500/v1/traces",
+		fmt.Sprintf("http://localhost:%d/v1/traces", port),
 		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", "badkey")
@@ -307,6 +318,7 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 }
 
 func TestPeerRouting(t *testing.T) {
+	// Parallel integration tests need different ports!
 	t.Parallel()
 
 	peers := &testPeers{
