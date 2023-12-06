@@ -172,11 +172,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	authedMuxxer.HandleFunc("/batch/{datasetName}", r.batch).Name("batch")
 
 	// require an auth header for OTLP requests
-	otlpMuxxer := muxxer.PathPrefix("/v1/").Methods("POST").Subrouter()
-	otlpMuxxer.Use(r.apiKeyChecker)
-
-	// handle OTLP trace requests
-	otlpMuxxer.HandleFunc("/traces", r.postOTLP).Name("otlp")
+	r.AddOTLPMuxxer(muxxer)
 
 	// pass everything else through unmolested
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
@@ -902,4 +898,15 @@ func (r *Router) Watch(req *grpc_health_v1.HealthCheckRequest, server grpc_healt
 	return server.Send(&grpc_health_v1.HealthCheckResponse{
 		Status: grpc_health_v1.HealthCheckResponse_SERVING,
 	})
+}
+
+// AddOTLPMuxxer adds muxxer for OTLP requests
+func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
+	// require an auth header for OTLP requests
+	otlpMuxxer := muxxer.PathPrefix("/v1/").Methods("POST").Subrouter()
+	otlpMuxxer.Use(r.apiKeyChecker)
+
+	// handle OTLP trace requests
+	otlpMuxxer.HandleFunc("/traces", r.postOTLP).Name("otlp")
+	otlpMuxxer.HandleFunc("/traces/", r.postOTLP).Name("otlp")
 }

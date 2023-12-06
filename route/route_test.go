@@ -21,6 +21,9 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/sharder"
@@ -28,6 +31,7 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestDecompression(t *testing.T) {
@@ -319,6 +323,53 @@ func TestDebugTrace(t *testing.T) {
 	router.debugTrace(rr, req)
 	if body := rr.Body.String(); body != `{"traceID":"123abcdef","node":"http://localhost:12345"}` {
 		t.Error(body)
+	}
+}
+
+func TestOTLPRequest(t *testing.T) {
+	mockMetrics := metrics.MockMetrics{}
+	mockMetrics.Start()
+	mockTransmission := &transmit.MockTransmission{}
+	mockTransmission.Start()
+	router := &Router{
+		Config:               &config.MockConfig{},
+		Metrics:              &mockMetrics,
+		UpstreamTransmission: mockTransmission,
+		iopLogger: iopLogger{
+			Logger:         &logger.MockLogger{},
+			incomingOrPeer: "incoming",
+		},
+		Logger:           &logger.MockLogger{},
+		environmentCache: newEnvironmentCache(time.Second, nil),
+	}
+
+	muxxer := mux.NewRouter()
+	router.AddOTLPMuxxer(muxxer)
+	server := httptest.NewServer(muxxer)
+	defer server.Close()
+
+	request := &collectortrace.ExportTraceServiceRequest{
+		ResourceSpans: []*trace.ResourceSpans{{
+			ScopeSpans: []*trace.ScopeSpans{{
+				Spans: helperOTLPRequestSpansWithStatus(),
+			}},
+		}},
+	}
+	body, err := protojson.Marshal(request)
+	if err != nil {
+		t.Error(err)
+	}
+
+	for _, tracePath := range []string{"/v1/traces", "/v1/traces/"} {
+		req, _ := http.NewRequest("POST", server.URL+tracePath, bytes.NewReader(body))
+		req.Header = http.Header{}
+		req.Header.Set("content-type", "application/json")
+		req.Header.Set("x-honeycomb-team", legacyAPIKey)
+		req.Header.Set("x-honeycomb-dataset", "dataset")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 }
 
