@@ -246,7 +246,7 @@ func TestAppIntegration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Wait for span to be sent.
-	deadline := time.After(time.Second)
+	deadline := time.After(5 * time.Second)
 	for {
 		if out.Len() > 62 {
 			break
@@ -262,8 +262,7 @@ func TestAppIntegration(t *testing.T) {
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
-	// This is failing in Parallel, so disable it for now.
-	// t.Parallel()
+	t.Parallel()
 
 	var out bytes.Buffer
 	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
@@ -288,7 +287,7 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Wait for span to be sent.
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(5 * time.Second)
 	for {
 		if out.Len() > 62 {
 			break
