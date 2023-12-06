@@ -223,8 +223,6 @@ func post(t testing.TB, req *http.Request) {
 }
 
 func TestAppIntegration(t *testing.T) {
-	t.Parallel()
-
 	var out bytes.Buffer
 	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10000, nil, false)
 
@@ -252,8 +250,6 @@ func TestAppIntegration(t *testing.T) {
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
-	t.Parallel()
-
 	var out bytes.Buffer
 	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
@@ -284,8 +280,6 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 }
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
-	t.Parallel()
-
 	var out bytes.Buffer
 	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 10500, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
