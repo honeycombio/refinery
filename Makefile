@@ -2,6 +2,8 @@ MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 MAKEFLAGS += --no-builtin-variables
 
+GOTESTCMD = $(if $(shell which gotestsum),gotestsum --junitfile $(1).xml --format testname --,go test)
+
 .PHONY: test
 #: run all tests
 test: test_with_race test_all
@@ -12,7 +14,7 @@ test_with_race: wait_for_redis
 	@echo
 	@echo "+++ testing - race conditions?"
 	@echo
-	go test -tags race --race --timeout 60s -v ./...
+	$(call GOTESTCMD, $@) -tags race --race --timeout 60s -v ./...
 
 .PHONY: test_all
 #: run all tests, but with no race condition detection
@@ -20,7 +22,7 @@ test_all: wait_for_redis
 	@echo
 	@echo "+++ testing - all the tests"
 	@echo
-	go test -tags all --timeout 60s -v ./...
+	$(call GOTESTCMD, $@) -tags all --timeout 60s -v ./...
 
 .PHONY: wait_for_redis
 # wait for Redis to become available for test suite
