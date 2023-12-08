@@ -42,6 +42,7 @@ const (
 	TraceSendExpired        = "trace_send_expired"
 	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
+	TraceSendLateSpan       = "trace_send_late_span"
 )
 
 // InMemCollector is a single threaded collector.
@@ -109,6 +110,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendExpired, "counter")
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
+	i.Metrics.Register(TraceSendLateSpan, "counter")
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
 	i.Metrics.Register(cache.CurrentCapacity, "gauge")
@@ -502,6 +504,8 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.S
 			metaReason = "late arriving span"
 		}
 		sp.Data["meta.refinery.reason"] = metaReason
+		sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
+
 	}
 	if i.hostname != "" {
 		sp.Data["meta.refinery.local_hostname"] = i.hostname
@@ -514,6 +518,7 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.S
 		sp.Data[config.DryRunFieldName] = keep
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
+			i.Metrics.Increment(TraceSendLateSpan)
 			i.addAdditionalAttributes(sp)
 			i.Transmission.EnqueueSpan(sp)
 			return
@@ -534,6 +539,7 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.S
 			}
 
 		}
+		i.Metrics.Increment(TraceSendLateSpan)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
 		return

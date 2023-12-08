@@ -34,19 +34,8 @@ func newCache() (cache.TraceSentCache, error) {
 	return cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
 }
 
-// TestAddRootSpan tests that adding a root span winds up with a trace object in
-// the cache and that that trace gets sent
-func TestAddRootSpan(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-	}
-	coll := &InMemCollector{
+func newTestCollector(conf config.Config, transmission transmit.Transmission) *InMemCollector {
+	return &InMemCollector{
 		Config:       conf,
 		Logger:       &logger.NullLogger{},
 		Transmission: transmission,
@@ -56,7 +45,23 @@ func TestAddRootSpan(t *testing.T) {
 			Config: conf,
 			Logger: &logger.NullLogger{},
 		},
+		sentReasonsCache: cache.NewSentReasonsCache(),
 	}
+}
+
+// TestAddRootSpan tests that adding a root span winds up with a trace object in
+// the cache and that that trace gets sent
+func TestAddRootSpan(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
@@ -117,8 +122,6 @@ func TestAddRootSpan(t *testing.T) {
 // happening upstream of refinery. Writing down what got sent to refinery
 // will help people figure out what is going on.
 func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -126,17 +129,9 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
@@ -198,8 +193,6 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 // behaves better/more consistently if the SampleRate is explicitly
 // set instead of inferred
 func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -207,17 +200,9 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
@@ -267,8 +252,6 @@ func getEventsLength(transmission *transmit.MockTransmission) int {
 // TestAddSpan tests that adding a span winds up with a trace object in the
 // cache
 func TestAddSpan(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -276,17 +259,10 @@ func TestAddSpan(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -335,8 +311,6 @@ func TestAddSpan(t *testing.T) {
 // TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the
 // sampling decision is marked on each span in the trace
 func TestDryRunMode(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -347,19 +321,16 @@ func TestDryRunMode(t *testing.T) {
 		DryRun:             true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	samplerFactory := &sample.SamplerFactory{
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
 	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
-	coll := &InMemCollector{
-		Config:         conf,
-		Logger:         &logger.NullLogger{},
-		Transmission:   transmission,
-		Metrics:        &metrics.NullMetrics{},
-		StressRelief:   &MockStressReliever{},
-		SamplerFactory: samplerFactory,
-	}
+	coll.SamplerFactory = samplerFactory
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -465,9 +436,6 @@ func TestDryRunMode(t *testing.T) {
 }
 
 func TestCacheSizeReload(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 10 * time.Minute,
@@ -484,17 +452,9 @@ func TestCacheSizeReload(t *testing.T) {
 		},
 	}
 
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
 
 	err := coll.Start()
 	assert.NoError(t, err)
@@ -550,10 +510,6 @@ func TestCacheSizeReload(t *testing.T) {
 }
 
 func TestSampleConfigReload(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-
-	transmission.Start()
-
 	conf := &config.MockConfig{
 		GetSendDelayVal:        0,
 		GetTraceTimeoutVal:     60 * time.Second,
@@ -568,17 +524,9 @@ func TestSampleConfigReload(t *testing.T) {
 		},
 	}
 
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
 
 	err := coll.Start()
 	assert.NoError(t, err)
@@ -634,8 +582,6 @@ func TestSampleConfigReload(t *testing.T) {
 }
 
 func TestStableMaxAlloc(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 10 * time.Minute,
@@ -643,17 +589,11 @@ func TestStableMaxAlloc(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	spandata := make([]map[string]interface{}, 500)
 	for i := 0; i < 500; i++ {
 		spandata[i] = map[string]interface{}{
@@ -734,8 +674,6 @@ func TestStableMaxAlloc(t *testing.T) {
 }
 
 func TestAddSpanNoBlock(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 10 * time.Minute,
@@ -743,17 +681,11 @@ func TestAddSpanNoBlock(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -810,8 +742,6 @@ func TestDependencyInjection(t *testing.T) {
 // the cache and that that trace gets span count, span event count, span link count, and event count added to it
 // This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
 func TestAddCountsToRoot(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -821,17 +751,11 @@ func TestAddCountsToRoot(t *testing.T) {
 		AddCountsToRoot:    true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -896,8 +820,6 @@ func TestAddCountsToRoot(t *testing.T) {
 // TestLateRootGetsCounts tests that the root span gets decorated with the right counts
 // even if the trace had already been sent
 func TestLateRootGetsCounts(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:      0,
 		GetTraceTimeoutVal:   5 * time.Millisecond,
@@ -908,17 +830,11 @@ func TestLateRootGetsCounts(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	coll.sentReasonsCache = cache.NewSentReasonsCache()
@@ -988,8 +904,6 @@ func TestLateRootGetsCounts(t *testing.T) {
 // TestAddSpanCount tests that adding a root span winds up with a trace object in
 // the cache and that that trace gets span count added to it
 func TestAddSpanCount(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -998,17 +912,10 @@ func TestAddSpanCount(t *testing.T) {
 		AddSpanCountToRoot: true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -1059,8 +966,6 @@ func TestAddSpanCount(t *testing.T) {
 // TestLateRootGetsSpanCount tests that the root span gets decorated with the right span count
 // even if the trace had already been sent
 func TestLateRootGetsSpanCount(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:      0,
 		GetTraceTimeoutVal:   5 * time.Millisecond,
@@ -1070,17 +975,10 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -1127,15 +1025,13 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
-	assert.Equal(t, "late", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
+	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
 	transmission.Mux.RUnlock()
 }
 
 // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
 // if the AddRuleReasonToTrace attribute not set in config
 func TestLateSpanNotDecorated(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 5 * time.Minute,
@@ -1143,17 +1039,11 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -1198,8 +1088,6 @@ func TestLateSpanNotDecorated(t *testing.T) {
 }
 
 func TestAddAdditionalAttributes(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
@@ -1210,17 +1098,10 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			"other": "bar",
 		},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
@@ -1269,8 +1150,6 @@ func TestAddAdditionalAttributes(t *testing.T) {
 // TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
 // StressReliefMode is active
 func TestStressReliefDecorateHostname(t *testing.T) {
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 5 * time.Minute,
@@ -1284,18 +1163,12 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			SamplingRate:      100,
 		},
 	}
-	coll := &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
-		},
-		hostname: "host123",
-	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
+	coll.hostname = "host123"
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
