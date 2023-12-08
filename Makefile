@@ -2,7 +2,7 @@ MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 MAKEFLAGS += --no-builtin-variables
 
-GOTESTCMD = $(if $(shell which gotestsum),gotestsum --junitfile ./test_results/$(1).xml --format testname --,go test)
+GOTESTCMD = $(if $(shell command -v gotestsum),gotestsum --junitfile ./test_results/$(1).xml --format testname --,go test)
 
 .PHONY: test
 #: run all tests
@@ -50,7 +50,7 @@ dockerize.tar.gz:
 	@echo "+++ Retrieving dockerize tool for Redis readiness check."
 	@echo
 # make sure that file is available
-ifeq (, $(shell which file))
+ifeq (, $(shell command -v file))
 	sudo apt-get update
 	sudo apt-get -y install file
 endif
