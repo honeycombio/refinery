@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -24,6 +25,9 @@ const (
 	Exists         = "exists"
 	NotExists      = "not-exists"
 	HasRootSpan    = "has-root-span"
+	MatchesRegexp  = "matches"
+	In             = "in"
+	NotIn          = "not-in"
 )
 
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
@@ -221,7 +225,7 @@ func (r *RulesBasedSamplerRule) String() string {
 type RulesBasedSamplerCondition struct {
 	Field    string                            `json:"field" yaml:"Field" validate:"required"`
 	Operator string                            `json:"operator" yaml:"Operator" validate:"required"`
-	Value    interface{}                       `json:"value" yaml:"Value" `
+	Value    any                               `json:"value" yaml:"Value" `
 	Datatype string                            `json:"datatype" yaml:"Datatype,omitempty"`
 	Matches  func(value any, exists bool) bool `json:"-" yaml:"-"`
 }
@@ -250,6 +254,11 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 		return setCompareOperators(r, r.Operator)
 	case StartsWith, Contains, DoesNotContain:
 		err := setMatchStringBasedOperators(r, r.Operator)
+		if err != nil {
+			return err
+		}
+	case MatchesRegexp:
+		err := setRegexStringMatchOperator(r)
 		if err != nil {
 			return err
 		}
@@ -333,7 +342,6 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 			return fmt.Errorf("could not convert %v to string", r.Value)
 		}
 
-		// check if conditionValue and spanValue are not equal
 		switch condition {
 		case NEQ:
 			r.Matches = func(spanValue any, exists bool) bool {
@@ -556,6 +564,28 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 			}
 			return false
 		}
+	}
+
+	return nil
+}
+
+func setRegexStringMatchOperator(r *RulesBasedSamplerCondition) error {
+	conditionValue, ok := tryConvertToString(r.Value)
+	if !ok {
+		return fmt.Errorf("regex value must be a string, but was '%s'", r.Value)
+	}
+
+	regex, err := regexp.Compile(conditionValue)
+	if err != nil {
+		return fmt.Errorf("'matches' pattern must be a valid Go regexp, but was '%s'", r.Value)
+	}
+
+	r.Matches = func(spanValue any, exists bool) bool {
+		s, ok := tryConvertToString(spanValue)
+		if ok {
+			return regex.MatchString(s)
+		}
+		return false
 	}
 
 	return nil

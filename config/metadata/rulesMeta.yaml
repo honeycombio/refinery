@@ -625,6 +625,7 @@ groups:
               - exists
               - not-exists
               - has-root-span
+              - matches
         summary: is the comparison operator to use.
         description: >
           The comparison operator to use. String comparisons are case-sensitive.
