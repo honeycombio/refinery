@@ -50,8 +50,10 @@ dockerize.tar.gz:
 	@echo "+++ Retrieving dockerize tool for Redis readiness check."
 	@echo
 # make sure that file is available
+ifeq (, $(shell which file))
 	sudo apt-get update
 	sudo apt-get -y install file
+endif
 	curl --location --silent --show-error \
 		--output dockerize.tar.gz \
 		https://github.com/jwilder/dockerize/releases/download/${DOCKERIZE_VERSION}/${DOCKERIZE_RELEASE_ASSET} \
