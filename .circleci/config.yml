@@ -83,6 +83,8 @@ jobs:
             - v3-go-mod-{{ checksum "go.sum" }}
       - run: make verify-licenses
       - run: make test
+      - store_test_results:
+          path: test_results
       - save_cache:
           key: v3-go-mod-{{ checksum "go.sum" }}
           paths:
