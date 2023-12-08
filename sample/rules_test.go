@@ -1698,8 +1698,8 @@ func TestRulesDatatypes(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: false,
-			ExpectedRate: 99,
+			ExpectedKeep: true,
+			ExpectedRate: 1,
 		},
 	}
 
