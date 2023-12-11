@@ -192,7 +192,6 @@ func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
 		defer c.keptMut.Unlock()
 		c.kept.Add(trace.TraceID, sentRecord)
 
-		// record the reason for this decision
 		return
 	}
 	// if we're not keeping it, save it in the dropped trace filter
