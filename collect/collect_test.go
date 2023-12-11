@@ -35,6 +35,8 @@ func newCache() (cache.TraceSentCache, error) {
 }
 
 func newTestCollector(conf config.Config, transmission transmit.Transmission) *InMemCollector {
+	s := &metrics.MockMetrics{}
+	s.Start()
 	return &InMemCollector{
 		Config:       conf,
 		Logger:       &logger.NullLogger{},
@@ -45,7 +47,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Config: conf,
 			Logger: &logger.NullLogger{},
 		},
-		sentReasonsCache: cache.NewSentReasonsCache(),
+		sentReasonsCache: cache.NewSentReasonsCache(s),
 	}
 }
 
@@ -837,7 +839,6 @@ func TestLateRootGetsCounts(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	coll.sentReasonsCache = cache.NewSentReasonsCache()
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc

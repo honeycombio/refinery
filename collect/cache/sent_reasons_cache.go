@@ -5,14 +5,17 @@ import (
 	"sync"
 
 	"github.com/dgryski/go-wyhash"
+	"github.com/honeycombio/refinery/metrics"
 )
 
 // SentReasonsCache is a cache of reasons a trace was sent.
 // It acts as a mapping between the string representation of send reason
 // and a uint.
 // This is used to reduce the memory footprint of the trace cache.
+
 type SentReasonsCache struct {
-	// TODO: maybe add a metric for the size of this cache?
+	mectrics metrics.Metrics
+
 	data    []string
 	keys    map[uint64]uint
 	counter uint
@@ -22,8 +25,11 @@ type SentReasonsCache struct {
 }
 
 // NewSentReasonsCache returns a new SentReasonsCache.
-func NewSentReasonsCache() *SentReasonsCache {
+func NewSentReasonsCache(metrics metrics.Metrics) *SentReasonsCache {
+	metrics.Register("collect_sent_reasons_cache_entries", "histogram")
+
 	return &SentReasonsCache{
+		mectrics: metrics,
 		keys:     make(map[uint64]uint),
 		hashSeed: rand.Uint64(),
 	}
@@ -43,6 +49,7 @@ func (c *SentReasonsCache) Set(key string) int {
 		c.counter++
 		c.keys[hash] = c.counter
 		val = c.counter
+		c.mectrics.Increment("collect_sent_reasons_cache_entries")
 	}
 	return int(val)
 }

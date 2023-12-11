@@ -127,7 +127,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
-	i.sentReasonsCache = cache.NewSentReasonsCache()
+	i.sentReasonsCache = cache.NewSentReasonsCache(i.Metrics)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -183,9 +183,6 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
-	// clear out any sent reasons we have previously seen
-	// so that reasons based on the new config will be used
-	i.sentReasonsCache = cache.NewSentReasonsCache()
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
 	i.datasetSamplers = make(map[string]sample.Sampler)
