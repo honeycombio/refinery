@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/honeycombio/refinery/config"
@@ -687,6 +688,12 @@ func TestRules(t *testing.T) {
 	}
 
 	for _, d := range data {
+		for _, rule := range d.Rules.Rules {
+			for _, cond := range rule.Conditions {
+				err := cond.Init()
+				assert.NoError(t, err)
+			}
+		}
 		sampler := &RulesBasedSampler{
 			Config:  d.Rules,
 			Logger:  &logger.NullLogger{},
@@ -1638,6 +1645,62 @@ func TestRulesDatatypes(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 10,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "regexp1",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: config.MatchesRegexp,
+								Value:    "^[0-9]+$",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": int64(123),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "regexpWholeStringFail",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: config.MatchesRegexp,
+								Value:    "^[0-9]+$",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "abc",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+		},
 	}
 
 	for _, d := range data {
@@ -1662,6 +1725,79 @@ func TestRulesDatatypes(t *testing.T) {
 			if !d.ExpectedKeep {
 				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 			}
+		})
+	}
+}
+
+func TestRegexpRules(t *testing.T) {
+	testdata := []struct {
+		re      string
+		value   any
+		rate    uint
+		wantErr bool
+	}{
+		{`\d+`, "abc", 1, false},
+		{`\d+`, "123", 10, false},
+		{`^\d+$`, "123abc", 1, false},
+		{`^\d+`, "123abc", 10, false},
+		{`\d+$`, "123abc", 1, false},
+		{`\d+`, 123, 10, false},
+		{`/foo/bar/[a-z]+`, "/foo/bar/abc", 10, false},
+		{`/foo/bar/[a-z]+`, "/foo/bar/123", 1, false},
+		{`[a-z+`, "/foo/bar/123", 1, true},
+	}
+
+	for i, d := range testdata {
+		name := fmt.Sprintf("regexp-%d", i)
+		t.Run(name, func(t *testing.T) {
+			rules := &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       name,
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: config.MatchesRegexp,
+								Value:    d.re,
+							},
+						},
+					},
+				},
+			}
+			for _, rule := range rules.Rules {
+				err := rule.Conditions[0].Init()
+				if d.wantErr != (err != nil) {
+					t.Errorf("parse error = %v, wantErr %v", err, d.wantErr)
+				}
+			}
+
+			sampler := &RulesBasedSampler{
+				Config:  rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
+
+			sampler.Start()
+
+			trace := &types.Trace{}
+
+			spans := []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": d.value,
+						},
+					},
+				},
+			}
+
+			for _, span := range spans {
+				trace.AddSpan(span)
+			}
+
+			rate, _, _, _ := sampler.GetSampleRate(trace)
+			assert.Equal(t, d.rate, rate, d)
 		})
 	}
 }

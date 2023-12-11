@@ -235,6 +235,10 @@ func extractValueFromSpan(span *types.Span, condition *config.RulesBasedSamplerC
 	return value, exists
 }
 
+// This only gets called when we're using one of the basic operators, and
+// there is no datatype specified (meaning that the Matches function has not
+// been set). In this case, we need to do some type conversion and comparison
+// to determine whether the condition matches the value.
 func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value interface{}, exists bool) bool {
 	var match bool
 	switch exists {
@@ -265,30 +269,6 @@ func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value i
 		case config.LTE:
 			if comparison, ok := compare(value, condition.Value); ok {
 				match = comparison == less || comparison == equal
-			}
-		case config.StartsWith:
-			switch a := value.(type) {
-			case string:
-				switch b := condition.Value.(type) {
-				case string:
-					match = strings.HasPrefix(a, b)
-				}
-			}
-		case config.Contains:
-			switch a := value.(type) {
-			case string:
-				switch b := condition.Value.(type) {
-				case string:
-					match = strings.Contains(a, b)
-				}
-			}
-		case config.DoesNotContain:
-			switch a := value.(type) {
-			case string:
-				switch b := condition.Value.(type) {
-				case string:
-					match = !strings.Contains(a, b)
-				}
 			}
 		}
 	case false:
