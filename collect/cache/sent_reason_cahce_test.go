@@ -9,24 +9,21 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/stretchr/testify/assert"
 )
 
-const charset = "abcdefghijklmnopqrstuvwxyz" +
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-var seededRand *rand.Rand = rand.New(
-	rand.NewSource(time.Now().UnixNano()))
-
-func stringWithCharset(length int, charset string) string {
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
+func TestSentReasonCache(t *testing.T) {
+	c := cache.NewSentReasonsCache()
+	keys := make([]int, 0)
+	entries := []string{"foo", "bar", "baz"}
+	for _, item := range entries {
+		keys = append(keys, c.Set(item))
 	}
-	return string(b)
-}
-
-func randomString(length int) string {
-	return stringWithCharset(length, charset)
+	for i, key := range keys {
+		item, ok := c.Get(uint(key))
+		assert.True(t, ok, "key %d should exist", key)
+		assert.Equal(t, entries[i], item)
+	}
 }
 
 func BenchmarkSentReasonCache_Set(b *testing.B) {
@@ -84,4 +81,22 @@ func BenchmarkSentReasonsCache_Set_Parallel(b *testing.B) {
 			})
 		}
 	}
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyz" +
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var seededRand *rand.Rand = rand.New(
+	rand.NewSource(time.Now().UnixNano()))
+
+func stringWithCharset(length int, charset string) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func randomString(length int) string {
+	return stringWithCharset(length, charset)
 }

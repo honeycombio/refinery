@@ -40,8 +40,9 @@ func (c *SentReasonsCache) Set(key string) int {
 	val, ok := c.keys[hash]
 	if !ok {
 		c.data = append(c.data, key)
-		val = c.counter + 1
-		c.keys[hash] = val
+		c.counter++
+		c.keys[hash] = c.counter
+		val = c.counter
 	}
 	return int(val)
 }
