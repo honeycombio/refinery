@@ -38,6 +38,11 @@ func TestMemorySize_UnmarshalText(t *testing.T) {
 		{"-1K", 0, true},
 		{"  4.5G", 4*G + 500*M, false},
 		{"4.5G  ", 4*G + 500*M, false},
+		{"1717600000 ", 1*G + 717*M + 600*K, false},
+		{" 1717600000 ", 1*G + 717*M + 600*K, false},
+		{" 1717600000", 1*G + 717*M + 600*K, false},
+		{"100_000_000", 100 * M, false},
+		{"1G", 1 * G, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.text, func(t *testing.T) {

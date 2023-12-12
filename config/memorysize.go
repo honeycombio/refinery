@@ -113,7 +113,7 @@ func (m MemorySize) MarshalText() ([]byte, error) {
 func (m *MemorySize) UnmarshalText(text []byte) error {
 	txt := string(text)
 
-	r := regexp.MustCompile(`^\s*(?P<number>[0-9.]+)(?P<unit>[a-zA-Z]*)\s*$`)
+	r := regexp.MustCompile(`^\s*(?P<number>[0-9\._]+)(?P<unit>[a-zA-Z]*)\s*$`)
 	matches := r.FindStringSubmatch(strings.ToLower(txt))
 	if matches == nil {
 		return fmt.Errorf(invalidSizeError, txt)
