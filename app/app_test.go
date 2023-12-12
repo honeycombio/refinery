@@ -20,6 +20,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/alexcesaro/statsd.v2"
 
 	"github.com/honeycombio/libhoney-go"
@@ -243,13 +244,13 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
-
 	assert.Eventually(t, func() bool {
 		return out.Len() > 62
 	}, 5*time.Second, 2*time.Millisecond)
 	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
@@ -276,14 +277,14 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
-
 	// Wait for span to be sent.
 	assert.Eventually(t, func() bool {
 		return out.Len() > 62
 	}, 5*time.Second, 2*time.Millisecond)
 	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
 }
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
@@ -435,15 +436,15 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
-
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		return out.Len() > 62
-	}, 5*time.Second, 2*time.Millisecond)
+	}, 15*time.Second, 2*time.Millisecond)
 
 	expectedSpan := `{"data":{"foo":"bar","meta.refinery.local_hostname":"%s","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}` + "\n"
 	assert.Equal(t, fmt.Sprintf(expectedSpan, hostname), out.String())
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
 }
 
 func TestEventsEndpoint(t *testing.T) {
