@@ -61,3 +61,7 @@ func (c *SentReasonsCache) Get(key uint) (string, bool) {
 	}
 	return c.data[key-1], true
 }
+
+func (c *SentReasonsCache) Metrics() metrics.Metrics {
+	return c.mectrics
+}

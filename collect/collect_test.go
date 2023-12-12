@@ -44,8 +44,9 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 		Metrics:      &metrics.NullMetrics{},
 		StressRelief: &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
-			Config: conf,
-			Logger: &logger.NullLogger{},
+			Config:  conf,
+			Metrics: s,
+			Logger:  &logger.NullLogger{},
 		},
 		sentReasonsCache: cache.NewSentReasonsCache(s),
 	}
@@ -1212,4 +1213,135 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	assert.Equal(t, "host123", transmission.Events[1].Data["meta.refinery.local_hostname"])
 	transmission.Mux.RUnlock()
 
+}
+
+func TestLateSpanWithRuleReason(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 5 * time.Millisecond,
+		GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
+			Rules: []*config.RulesBasedSamplerRule{
+				{
+					Name:       "rule 1",
+					Scope:      "trace",
+					SampleRate: 1,
+					Conditions: []*config.RulesBasedSamplerCondition{
+						{
+							Field:    "test",
+							Operator: config.EQ,
+							Value:    int64(1),
+						},
+					},
+					Sampler: &config.RulesBasedDownstreamSampler{
+						DynamicSampler: &config.DynamicSamplerConfig{
+							SampleRate: 1,
+							FieldList:  []string{"http.status_code"},
+						},
+					},
+				},
+				{
+					Name:  "rule 2",
+					Scope: "span",
+					Conditions: []*config.RulesBasedSamplerCondition{
+						{
+							Field:    "test",
+							Operator: config.EQ,
+							Value:    int64(2),
+						},
+					},
+					Sampler: &config.RulesBasedDownstreamSampler{
+						EMADynamicSampler: &config.EMADynamicSamplerConfig{
+							GoalSampleRate: 1,
+							FieldList:      []string{"http.status_code"},
+						},
+					},
+				},
+			}},
+		SendTickerVal:        2 * time.Millisecond,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	traceIDs := []string{"trace1", "trace2"}
+
+	for i := 0; i < 4; i++ {
+		span := &types.Span{
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id":  "unused",
+					"http.status_code": 200,
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		switch i {
+		case 0, 1:
+			span.TraceID = traceIDs[0]
+			span.Data["test"] = int64(1)
+		case 2, 3:
+			span.TraceID = traceIDs[1]
+			span.Data["test"] = int64(2)
+		}
+		coll.AddSpanFromPeer(span)
+	}
+	time.Sleep(conf.SendTickerVal * 10)
+
+	for i, traceID := range traceIDs {
+		assert.Nil(t, coll.getFromCache(traceID), "trace should have been sent although the root span hasn't arrived")
+		rootSpan := &types.Span{
+			TraceID: traceID,
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"http.status_code": 200,
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		if i == 0 {
+			rootSpan.Data["test"] = int64(1)
+		} else {
+			rootSpan.Data["test"] = int64(2)
+		}
+
+		coll.AddSpan(rootSpan)
+	}
+	// now we add the root span and verify that both got sent and that the root span had the span count
+	time.Sleep(conf.SendTickerVal * 2)
+	transmission.Mux.RLock()
+	assert.Equal(t, 6, len(transmission.Events), "adding a root span should send all spans in the trace")
+	for _, event := range transmission.Events {
+		reason := event.Data["meta.refinery.reason"]
+		if event.Data["test"] == int64(1) {
+			if _, ok := event.Data["trace.parent_id"]; ok {
+				assert.Equal(t, "rules/trace/rule 1:dynamic", reason, event.Data)
+			} else {
+				assert.Equal(t, "rules/trace/rule 1:dynamic - late arriving span", reason, event.Data)
+			}
+		} else {
+			if _, ok := event.Data["trace.parent_id"]; ok {
+				assert.Equal(t, "rules/span/rule 2:emadynamic", reason, event.Data)
+			} else {
+				assert.Equal(t, "rules/span/rule 2:emadynamic - late arriving span", reason, event.Data)
+			}
+		}
+	}
+	transmission.Mux.RUnlock()
 }
