@@ -60,6 +60,42 @@ func BenchmarkSentReasonCache_Get(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkSentReasonsCache_Get_Parallel(b *testing.B) {
+	for _, numGoroutines := range []int{1, 50, 300} {
+		for _, numUniqueEntries := range []int{50, 500, 2000} {
+			b.Run(fmt.Sprintf("entries%d-g%d", numUniqueEntries, numGoroutines), func(b *testing.B) {
+				s := &metrics.MockMetrics{}
+				s.Start()
+				cache := cache.NewSentReasonsCache(s)
+
+				entries := make([]string, numUniqueEntries)
+				for i := 0; i < numUniqueEntries; i++ {
+					entries[i] = randomString(50)
+					cache.Set(entries[i])
+				}
+
+				wg := sync.WaitGroup{}
+				count := b.N / numGoroutines
+				if count == 0 {
+					count = 1
+				}
+				b.ResetTimer()
+				for g := 0; g < numGoroutines; g++ {
+					wg.Add(1)
+					go func() {
+						for n := 0; n < count; n++ {
+							_, _ = cache.Get(uint(count % numUniqueEntries))
+						}
+						wg.Done()
+					}()
+				}
+				wg.Wait()
+			})
+		}
+	}
+}
+
 func BenchmarkSentReasonsCache_Set_Parallel(b *testing.B) {
 	for _, numGoroutines := range []int{1, 50, 300} {
 		for _, numUniqueEntries := range []int{50, 500, 2000} {
@@ -81,7 +117,7 @@ func BenchmarkSentReasonsCache_Set_Parallel(b *testing.B) {
 					wg.Add(1)
 					go func() {
 						for n := 0; n < count; n++ {
-							_ = cache.Set(entries[seededRand.Intn(numUniqueEntries)])
+							_ = cache.Set(entries[count%numUniqueEntries])
 						}
 						wg.Done()
 					}()
