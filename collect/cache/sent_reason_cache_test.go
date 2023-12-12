@@ -17,7 +17,7 @@ func TestSentReasonCache(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
 	c := cache.NewSentReasonsCache(s)
-	keys := make([]int, 0)
+	keys := make([]uint, 0)
 	entries := []string{"foo", "bar", "baz"}
 	for _, item := range entries {
 		keys = append(keys, c.Set(item))
