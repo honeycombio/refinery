@@ -227,8 +227,8 @@ func TestAppIntegration(t *testing.T) {
 	t.Parallel()
 	port := 10500
 
-	var out bytes.Buffer
-	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, port, nil, false)
+	sender := &transmission.MockSender{}
+	app, graph := newStartedApp(t, sender, port, nil, false)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -244,10 +244,15 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	assert.Eventually(t, func() bool {
-		return out.Len() > 62
-	}, 5*time.Second, 2*time.Millisecond)
-	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+	time.Sleep(2 * app.Config.GetSendTickerValue())
+
+	events := sender.Events()
+	require.Len(t, events, 1)
+
+	assert.Equal(t, "dataset", events[0].Dataset)
+	assert.Equal(t, "bar", events[0].Data["foo"])
+	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
+	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -258,8 +263,8 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 	port := 10600
 
-	var out bytes.Buffer
-	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, port, nil, false)
+	sender := &transmission.MockSender{}
+	a, graph := newStartedApp(t, sender, port, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
@@ -278,10 +283,14 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for span to be sent.
-	assert.Eventually(t, func() bool {
-		return out.Len() > 62
-	}, 5*time.Second, 2*time.Millisecond)
-	assert.Equal(t, `{"data":{"foo":"bar","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}`+"\n", out.String())
+	time.Sleep(2 * a.Config.GetSendTickerValue())
+	events := sender.Events()
+	require.Len(t, events, 1)
+
+	assert.Equal(t, "dataset", events[0].Dataset)
+	assert.Equal(t, "bar", events[0].Data["foo"])
+	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
+	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -292,8 +301,8 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	t.Parallel()
 	port := 10700
 
-	var out bytes.Buffer
-	a, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, port, nil, false)
+	sender := &transmission.MockSender{}
+	a, graph := newStartedApp(t, sender, port, nil, false)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
@@ -417,15 +426,15 @@ func TestPeerRouting(t *testing.T) {
 
 func TestHostMetadataSpanAdditions(t *testing.T) {
 	t.Parallel()
+	port := 14000
 
-	var out bytes.Buffer
-	_, graph := newStartedApp(t, &transmission.WriterSender{W: &out}, 14000, nil, true)
-	hostname, _ := os.Hostname()
+	sender := &transmission.MockSender{}
+	app, graph := newStartedApp(t, sender, port, nil, true)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
-		"http://localhost:14000/1/batch/dataset",
+		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
 		strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"1"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
@@ -436,12 +445,17 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	require.Eventually(t, func() bool {
-		return out.Len() > 62
-	}, 15*time.Second, 2*time.Millisecond)
+	time.Sleep(2 * app.Config.GetSendTickerValue())
 
-	expectedSpan := `{"data":{"foo":"bar","meta.refinery.local_hostname":"%s","meta.refinery.original_sample_rate":1,"trace.trace_id":"1"},"dataset":"dataset"}` + "\n"
-	assert.Equal(t, fmt.Sprintf(expectedSpan, hostname), out.String())
+	events := sender.Events()
+	require.Len(t, events, 1)
+
+	assert.Equal(t, "dataset", events[0].Dataset)
+	assert.Equal(t, "bar", events[0].Data["foo"])
+	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
+	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	hostname, _ := os.Hostname()
+	assert.Equal(t, hostname, events[0].Data["meta.refinery.local_hostname"])
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
