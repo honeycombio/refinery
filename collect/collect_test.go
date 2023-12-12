@@ -1215,7 +1215,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 }
 
-func TestLateSpanWithRuleReason(t *testing.T) {
+func TestSpanWithRuleReasons(t *testing.T) {
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 5 * time.Millisecond,
