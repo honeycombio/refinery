@@ -69,8 +69,7 @@ func makeYAML(args ...interface{}) string {
 func TestGRPCListenAddrEnvVar(t *testing.T) {
 	const address = "127.0.0.1:4317"
 	const envVarName = "REFINERY_GRPC_LISTEN_ADDRESS"
-	os.Setenv(envVarName, address)
-	defer os.Unsetenv(envVarName)
+	t.Setenv(envVarName, address)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -83,8 +82,7 @@ func TestGRPCListenAddrEnvVar(t *testing.T) {
 func TestRedisHostEnvVar(t *testing.T) {
 	const host = "redis.magic:1337"
 	const envVarName = "REFINERY_REDIS_HOST"
-	os.Setenv(envVarName, host)
-	defer os.Unsetenv(envVarName)
+	t.Setenv(envVarName, host)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -97,8 +95,7 @@ func TestRedisHostEnvVar(t *testing.T) {
 func TestRedisUsernameEnvVar(t *testing.T) {
 	const username = "admin"
 	const envVarName = "REFINERY_REDIS_USERNAME"
-	os.Setenv(envVarName, username)
-	defer os.Unsetenv(envVarName)
+	t.Setenv(envVarName, username)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -111,8 +108,7 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 func TestRedisPasswordEnvVar(t *testing.T) {
 	const password = "admin1234"
 	const envVarName = "REFINERY_REDIS_PASSWORD"
-	os.Setenv(envVarName, password)
-	defer os.Unsetenv(envVarName)
+	t.Setenv(envVarName, password)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -125,8 +121,7 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 func TestRedisAuthCodeEnvVar(t *testing.T) {
 	const authCode = "A:LKNGSDKLSHOE&SDLFKN"
 	const envVarName = "REFINERY_REDIS_AUTH_CODE"
-	os.Setenv(envVarName, authCode)
-	defer os.Unsetenv(envVarName)
+	t.Setenv(envVarName, authCode)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -156,8 +151,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			os.Setenv(tc.envVar, tc.key)
-			defer os.Unsetenv(tc.envVar)
+			t.Setenv(tc.envVar, tc.key)
 
 			c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 			if err != nil {
@@ -177,10 +171,8 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	const fallbackKey = "this should not be set in the config"
 	const fallbackEnvVarName = "REFINERY_HONEYCOMB_API_KEY"
 
-	os.Setenv(specificEnvVarName, specificKey)
-	defer os.Unsetenv(specificEnvVarName)
-	os.Setenv(fallbackEnvVarName, fallbackKey)
-	defer os.Unsetenv(fallbackEnvVarName)
+	t.Setenv(specificEnvVarName, specificKey)
+	t.Setenv(fallbackEnvVarName, fallbackKey)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -193,8 +185,7 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	const key = "abc1234"
 	const envVarName = "REFINERY_HONEYCOMB_API_KEY"
-	os.Setenv(envVarName, key)
-	defer os.Unsetenv(envVarName)
+	t.Setenv(envVarName, key)
 
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
