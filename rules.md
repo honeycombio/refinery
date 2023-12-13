@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-12-04 at 18:06:13 UTC.
+It was automatically generated on 2023-12-13 at 23:01:54 UTC.
 
 ## The Rules file
 
@@ -531,11 +531,23 @@ If there are no conditions, then the rule will always match.
 ### `Field`
 
 The field to check.
-This can be any field in the trace.
+This can name any field in the trace.
 If the field is not present, then the condition will not match.
 The comparison is case-sensitive.
 
 Type: `string`
+
+### `Fields`
+
+An array of field names to check.
+These can name any field in the trace.
+The fields are checked in the order defined here, and the first named field that contains a value will be used for the condition.
+Only the first populated field will be used, even if the condition fails.
+If none of the fields are present, then the condition will not match.
+The comparison is case-sensitive.
+All fields are checked as individual fields before any of them are checked as nested fields (see `CheckNestedFields`).
+
+Type: `stringarray`
 
 ### `Operator`
 
@@ -544,7 +556,7 @@ String comparisons are case-sensitive.
 
 Type: `string`
 
-- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`
+- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`, `matches`
 
 ### `Value`
 
