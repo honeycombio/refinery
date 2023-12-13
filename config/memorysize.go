@@ -102,7 +102,7 @@ func (m MemorySize) MarshalText() ([]byte, error) {
 				if !ok {
 					break
 				}
-				return []byte(fmt.Sprintf("%v%v", result, unit)), nil
+				return []byte(fmt.Sprintf("%.0f%v", result, unit)), nil
 			}
 		}
 	}

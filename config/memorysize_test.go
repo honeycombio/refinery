@@ -41,6 +41,7 @@ func TestMemorySize_UnmarshalText(t *testing.T) {
 		{"1717600000 ", 1*G + 717*M + 600*K, false},
 		{" 1717600000 ", 1*G + 717*M + 600*K, false},
 		{" 1717600000", 1*G + 717*M + 600*K, false},
+		{"1717600K", 1*G + 717*M + 600*K, false},
 		{"100_000_000", 100 * M, false},
 		{"1G", 1 * G, false},
 	}
@@ -89,7 +90,7 @@ func TestMemorySize_Roundtrip(t *testing.T) {
 		{"1.5Ei", "1536Pi"},
 		{"55834574848", "52Gi"},
 		{"55834574847", "55834574847"},
-		{"1717600000", "1717600000"},
+		{"1717600000", "1717600K"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
