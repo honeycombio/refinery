@@ -54,6 +54,8 @@ func (s *RulesBasedSampler) Start() error {
 				sampler = &EMAThroughputSampler{Config: rule.Sampler.EMAThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else if rule.Sampler.WindowedThroughputSampler != nil {
 				sampler = &WindowedThroughputSampler{Config: rule.Sampler.WindowedThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
+			} else if rule.Sampler.DeterministicSampler != nil {
+				sampler = &DeterministicSampler{Config: rule.Sampler.DeterministicSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
