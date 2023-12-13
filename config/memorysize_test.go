@@ -89,6 +89,7 @@ func TestMemorySize_Roundtrip(t *testing.T) {
 		{"1.5Ei", "1536Pi"},
 		{"55834574848", "52Gi"},
 		{"55834574847", "55834574847"},
+		{"1717600000", "1717600000"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
