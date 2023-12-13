@@ -2,6 +2,7 @@ package collect
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"runtime"
 	"sort"
@@ -41,6 +42,7 @@ const (
 	TraceSendExpired        = "trace_send_expired"
 	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
+	TraceSendLateSpan       = "trace_send_late_span"
 )
 
 // InMemCollector is a single threaded collector.
@@ -63,6 +65,7 @@ type InMemCollector struct {
 	datasetSamplers map[string]sample.Sampler
 
 	sampleTraceCache cache.TraceSentCache
+	sentReasonsCache *cache.SentReasonsCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
@@ -107,6 +110,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendExpired, "counter")
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
+	i.Metrics.Register(TraceSendLateSpan, "counter")
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
 	i.Metrics.Register(cache.CurrentCapacity, "gauge")
@@ -123,6 +127,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.sentReasonsCache = cache.NewSentReasonsCache(i.Metrics)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -462,6 +467,10 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	}
 	// we do want a record of how we disposed of traces in case more come in after we've
 	// turned off stress relief (if stress relief is on we'll keep making the same decisions)
+	if keep {
+		reasonKey := i.sentReasonsCache.Set(reason)
+		trace.SentReason = reasonKey
+	}
 	i.sampleTraceCache.Record(trace, keep)
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
@@ -485,7 +494,15 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.Span) {
 	if i.Config.GetAddRuleReasonToTrace() {
-		sp.Data["meta.refinery.reason"] = "late"
+		metaReason, ok := i.sentReasonsCache.Get(tr.Reason())
+		if ok {
+			metaReason = fmt.Sprintf("%s - late arriving span", metaReason)
+		} else {
+			metaReason = "late arriving span"
+		}
+		sp.Data["meta.refinery.reason"] = metaReason
+		sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
+
 	}
 	if i.hostname != "" {
 		sp.Data["meta.refinery.local_hostname"] = i.hostname
@@ -498,6 +515,7 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.S
 		sp.Data[config.DryRunFieldName] = keep
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
+			i.Metrics.Increment(TraceSendLateSpan)
 			i.addAdditionalAttributes(sp)
 			i.Transmission.EnqueueSpan(sp)
 			return
@@ -518,6 +536,7 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.S
 			}
 
 		}
+		i.Metrics.Increment(TraceSendLateSpan)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
 		return
@@ -628,6 +647,10 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// This will observe sample rate attempts even if the trace is dropped
 	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
+	if shouldSend {
+		reasonKey := i.sentReasonsCache.Set(reason)
+		trace.SentReason = reasonKey
+	}
 	i.sampleTraceCache.Record(trace, shouldSend)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.

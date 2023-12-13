@@ -206,6 +206,7 @@ type RulesBasedDownstreamSampler struct {
 	EMAThroughputSampler      *EMAThroughputSamplerConfig      `json:"emathroughputsampler" yaml:"EMAThroughputSampler,omitempty"`
 	WindowedThroughputSampler *WindowedThroughputSamplerConfig `json:"windowedthroughputsampler" yaml:"WindowedThroughputSampler,omitempty"`
 	TotalThroughputSampler    *TotalThroughputSamplerConfig    `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
+	DeterministicSampler      *DeterministicSamplerConfig      `json:"deterministicsampler" yaml:"DeterministicSampler,omitempty"`
 }
 
 type RulesBasedSamplerRule struct {
