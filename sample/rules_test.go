@@ -685,13 +685,100 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 99,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Search multiple fields (success)",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test", "test2"},
+								Operator: config.EQ,
+								Value:    int(17),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test2": int64(17),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Search multiple fields (fails)",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test", "test2"},
+								Operator: config.EQ,
+								Value:    int(17),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test2": int64(16),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedName: "no rule matched",
+			ExpectedRate: 1,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Multiple fields, multiple values (fails)",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test", "test2"},
+								Operator: config.EQ,
+								Value:    int(17),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test":  int64(2),
+							"test2": int64(17),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedName: "no rule matched",
+			ExpectedRate: 1,
+		},
 	}
 
 	for _, d := range data {
 		for _, rule := range d.Rules.Rules {
 			for _, cond := range rule.Conditions {
 				err := cond.Init()
-				assert.NoError(t, err)
+				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
 		sampler := &RulesBasedSampler{

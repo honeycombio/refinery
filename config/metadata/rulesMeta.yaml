@@ -603,10 +603,32 @@ groups:
       - name: Field
         type: string
         summary: is the field to check.
+        validations:
+          - type: conflictsWith
+            arg: Fields
         description: >
-          The field to check. This can be any field in the trace. If the field
+          The field to check. This can name any field in the trace. If the field
           is not present, then the condition will not match. The comparison is
           case-sensitive.
+      - name: Fields
+        type: stringarray
+        valuetype: stringarray
+        validations:
+          - type: elementType
+            arg: string
+          - type: conflictsWith
+            arg: Field
+        description: >
+          An array of field names to check. These can name any field in the
+          trace. The fields are checked in the order defined here, and the first
+          named field that contains a value will be used for the condition. Only
+          the first populated field will be used, even if the condition fails.
+
+          If none of the fields are present, then the condition will not match.
+          The comparison is case-sensitive.
+
+          All fields are checked as individual fields before any of them are
+          checked as nested fields (see `CheckNestedFields`).
       - name: Operator
         type: string
         valuetype: choice

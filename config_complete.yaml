@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2023-12-04 at 18:06:30 UTC from ../../config.yaml using a template generated on 2023-12-04 at 18:06:10 UTC
+# created on 2023-12-13 at 23:01:53 UTC from ../../config.yaml using a template generated on 2023-12-13 at 23:01:51 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -206,11 +206,11 @@ RefineryTelemetry:
     ##
     ## If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting
     ## and add the following fields to the root span based on the values at
-    ## the time the sampling decision was made: - `meta.span_count`: the
-    ## number of child spans on the trace - `meta.span_event_count`: the
-    ## number of span events on the trace - `meta.span_link_count`: the
-    ## number of span links on the trace - `meta.event_count`: the number of
-    ## honeycomb events on the trace
+    ## the time the sampling decision was made:
+    ## - `meta.span_count`: the number of child spans on the trace
+    ## - `meta.span_event_count`: the number of span events on the trace
+    ## - `meta.span_link_count`: the number of span links on the trace
+    ## - `meta.event_count`: the number of honeycomb events on the trace
     ##
     ## Eligible for live reload.
     # AddCountsToRoot: false
@@ -457,7 +457,7 @@ StdoutLogger:
     # Structured: false
 
     ## SamplerEnabled controls whether logs are sampled before sending to
-    ## stdout.
+    ## `stdout`.
     ##
     ## The sample rate is controlled by the `SamplerThroughput` setting.
     ##
@@ -469,7 +469,7 @@ StdoutLogger:
     ##
     ## The sampling algorithm attempts to make sure that the average
     ## throughput approximates this value, while also ensuring that all
-    ## unique logs arrive at stdout at least once per sampling period.
+    ## unique logs arrive at `stdout` at least once per sampling period.
     ##
     ## default: 10
     ## Not eligible for live reload.
@@ -822,7 +822,7 @@ Collection:
     ## queue is contingent upon the number of peers within the cluster.
     ## Specifically, with N peers, the queue's span capacity is determined by
     ## (N-1)/N of the total number of spans. Its minimum value should be at
-    ## least three times the CacheCapacity.
+    ## least three times the `CacheCapacity`.
     ##
     ## default: 30000
     ## Not eligible for live reload.
@@ -834,7 +834,7 @@ Collection:
     ## The incoming span queue is used to buffer spans before they are
     ## processed. If this queue fills up, then subsequent spans will be
     ## dropped. Its minimum value should be at least three times the
-    ## CacheCapacity.
+    ## `CacheCapacity`.
     ##
     ## default: 30000
     ## Not eligible for live reload.
@@ -847,10 +847,10 @@ Collection:
     ## controlled by the container or deploy script. If this value is zero or
     ## not set, then `MaxMemoryPercentage` cannot be used to calculate the
     ## maximum allocation and `MaxAlloc` will be used instead. If set, then
-    ## this must be a memory size. Sizes with standard unit suffixes (`MB`,
-    ## `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.) are supported.
-    ## Fractional values with a suffix are supported. If `AvailableMemory` is
-    ## set, `Collections.MaxAlloc` must not be defined.
+    ## this must be a memory size. Sizes with standard unit suffixes (such as
+    ## `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are
+    ## supported. Fractional values with a suffix are supported. If
+    ## `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
     ##
     ## Eligible for live reload.
     # AvailableMemory: "4.5Gb"
@@ -874,9 +874,9 @@ Collection:
     ## the Collector.
     ##
     ## If set, then this must be a memory size. Sizes with standard unit
-    ## suffixes (`MB`, `GiB`, etc.) and Kubernetes units (`M`, `Gi`, etc.)
-    ## are supported. Fractional values with a suffix are supported. See
-    ## `MaxMemoryPercentage` for more details. If set,
+    ## suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M`
+    ## and `Gi`) are supported. Fractional values with a suffix are
+    ## supported. See `MaxMemoryPercentage` for more details. If set,
     ## `Collections.AvailableMemory` must not be defined.
     ##
     ## Eligible for live reload.
