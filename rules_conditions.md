@@ -1,26 +1,40 @@
-# Refinery Rules Operators
+# Refinery Conditions
+
+## Overview
+
+text goes here
+
+## `Field` or `Fields`
+
+text goes here
+
+## Operators
 
 Operators in Refinery rules configuration files may be one of the following:
 
-## =, eq
+### `=`
 
-## !=, ne
+### `!=`
 
-## <, lt
+### `<`
 
+### `<=`
 
+### `>`
 
-## starts-with
+### `>=`
 
-## contains
+### starts-with
 
-## does-not-contain, not-contains
+### contains
 
-## exists
+### does-not-contain
 
-## not-exists
+### exists
 
-## matches
+### not-exists
+
+### matches
 
 For clarity, regular expressions in YAML should usually be quoted with single
 quotes (`'`). This is because this form is unambiguous and does not process
@@ -36,8 +50,11 @@ quotes looks like this: `"\\d+"`.
 
 The Go language Regular expression syntax is documented [here](https://pkg.go.dev/regexp/syntax).
 
-## in
+## Value
 
-## not-in
+text goes here
 
-Requires Datatype to be specified
+## Datatype
+
+text goes here
+
