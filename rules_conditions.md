@@ -2,13 +2,21 @@
 
 ## Overview
 
-text goes here
+Refinery rules are described as a series of conditions.
+Each condition is composed from a combination of these named elements:
+
+- `Field` (or `Fields)
+- `Operator`
+- `Value`
+- `Datatype`
+
+The `Operator` is never optional, and controls which of the elements are required and which are optional.
 
 ## `Field` or `Fields`
 
 text goes here
 
-## Operators
+## `Operator`
 
 Operators in Refinery rules configuration files may be one of the following:
 
@@ -50,11 +58,11 @@ quotes looks like this: `"\\d+"`.
 
 The Go language Regular expression syntax is documented [here](https://pkg.go.dev/regexp/syntax).
 
-## Value
+## `Value`
 
 text goes here
 
-## Datatype
+## `Datatype`
 
 text goes here
 
