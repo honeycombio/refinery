@@ -31,7 +31,6 @@ func (s *RulesBasedSampler) Start() error {
 
 	s.samplers = make(map[string]Sampler)
 
-	// Check if any rule has a downstream sampler and create it
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
 			if err := cond.Init(); err != nil {
@@ -42,6 +41,7 @@ func (s *RulesBasedSampler) Start() error {
 				continue
 			}
 		}
+		// Check if any rule has a downstream sampler and create it
 		if rule.Sampler != nil {
 			var sampler Sampler
 			if rule.Sampler.DynamicSampler != nil {
@@ -222,19 +222,27 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 
 func extractValueFromSpan(span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
 	// whether this condition is matched by this span.
-	value, exists := span.Data[condition.Field]
+	var value any
+	var exists bool
+	for _, field := range condition.Fields {
+		value, exists = span.Data[field]
+		if exists {
+			return value, exists
+		}
+	}
 	if !exists && checkNestedFields {
 		jsonStr, err := json.Marshal(span.Data)
 		if err == nil {
-			result := gjson.Get(string(jsonStr), condition.Field)
-			if result.Exists() {
-				value = result.String()
-				exists = true
+			for _, field := range condition.Fields {
+				result := gjson.Get(string(jsonStr), field)
+				if result.Exists() {
+					return result.String(), true
+				}
 			}
 		}
 	}
 
-	return value, exists
+	return nil, false
 }
 
 // This only gets called when we're using one of the basic operators, and

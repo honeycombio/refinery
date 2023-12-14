@@ -685,13 +685,100 @@ func TestRules(t *testing.T) {
 			ExpectedKeep: true,
 			ExpectedRate: 99,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Search multiple fields (success)",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test", "test2"},
+								Operator: config.EQ,
+								Value:    int(17),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test2": int64(17),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Search multiple fields (fails)",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test", "test2"},
+								Operator: config.EQ,
+								Value:    int(17),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test2": int64(16),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedName: "no rule matched",
+			ExpectedRate: 1,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Multiple fields, multiple values (fails)",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test", "test2"},
+								Operator: config.EQ,
+								Value:    int(17),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test":  int64(2),
+							"test2": int64(17),
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedName: "no rule matched",
+			ExpectedRate: 1,
+		},
 	}
 
 	for _, d := range data {
 		for _, rule := range d.Rules.Rules {
 			for _, cond := range rule.Conditions {
 				err := cond.Init()
-				assert.NoError(t, err)
+				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
 		sampler := &RulesBasedSampler{
@@ -849,35 +936,74 @@ func TestRulesWithNestedFields(t *testing.T) {
 			ExpectedRate: 1,
 			ExpectedName: "no rule matched",
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "nested fields",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"test.test1", "test.test2"},
+								Operator: config.EQ,
+								Value:    "a",
+							},
+						},
+					},
+				},
+				CheckNestedFields: true,
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": map[string]interface{}{
+								"test2": "a",
+							},
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
 	}
 
 	for _, d := range data {
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
-			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
-		}
+		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
+			for _, rule := range d.Rules.Rules {
+				for _, cond := range rule.Conditions {
+					err := cond.Init()
+					assert.NoError(t, err, "error in "+rule.Name)
+				}
+			}
+			sampler := &RulesBasedSampler{
+				Config:  d.Rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
 
-		trace := &types.Trace{}
+			trace := &types.Trace{}
 
-		for _, span := range d.Spans {
-			trace.AddSpan(span)
-		}
+			for _, span := range d.Spans {
+				trace.AddSpan(span)
+			}
 
-		rate, keep, reason, key := sampler.GetSampleRate(trace)
+			rate, keep, reason, key := sampler.GetSampleRate(trace)
 
-		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
-		name := d.ExpectedName
-		if name == "" {
-			name = d.Rules.Rules[0].Name
-		}
-		assert.Contains(t, reason, name)
-		assert.Equal(t, "", key)
+			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+			name := d.ExpectedName
+			if name == "" {
+				name = d.Rules.Rules[0].Name
+			}
+			assert.Contains(t, reason, name)
+			assert.Equal(t, "", key)
 
-		// we can only test when we don't expect to keep the trace
-		if !d.ExpectedKeep {
-			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
-		}
+			// we can only test when we don't expect to keep the trace
+			if !d.ExpectedKeep {
+				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+			}
+		})
 	}
 }
 
@@ -928,6 +1054,12 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 	}
 
 	for _, d := range data {
+		for _, rule := range d.Rules.Rules {
+			for _, cond := range rule.Conditions {
+				err := cond.Init()
+				assert.NoError(t, err, "error in "+rule.Name)
+			}
+		}
 		sampler := &RulesBasedSampler{
 			Config:  d.Rules,
 			Logger:  &logger.NullLogger{},
@@ -1008,6 +1140,12 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 	}
 
 	for _, d := range data {
+		for _, rule := range d.Rules.Rules {
+			for _, cond := range rule.Conditions {
+				err := cond.Init()
+				assert.NoError(t, err, "error in "+rule.Name)
+			}
+		}
 		sampler := &RulesBasedSampler{
 			Config:  d.Rules,
 			Logger:  &logger.NullLogger{},
@@ -1128,6 +1266,14 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 					},
 					Logger:  &logger.NullLogger{},
 					Metrics: &metrics.NullMetrics{},
+				}
+				for _, s := range sampler.samplers {
+					for _, rule := range s.(*RulesBasedSampler).Config.Rules {
+						for _, cond := range rule.Conditions {
+							err := cond.Init()
+							assert.NoError(t, err, "error in "+rule.Name)
+						}
+					}
 				}
 
 				trace := &types.Trace{}
@@ -1848,6 +1994,12 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 	}
 
 	for _, d := range data {
+		for _, rule := range d.Rules.Rules {
+			for _, cond := range rule.Conditions {
+				err := cond.Init()
+				assert.NoError(t, err, "error in "+rule.Name)
+			}
+		}
 		sampler := &RulesBasedSampler{
 			Config:  d.Rules,
 			Logger:  &logger.NullLogger{},

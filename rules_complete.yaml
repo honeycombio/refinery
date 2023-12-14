@@ -66,10 +66,12 @@ Samplers:
                     - Field: http.route
                       Operator: =
                       Value: /health-check
-                - Name: keep slow 500 errors
+                - Name: keep slow 500 errors across semantic conventions
                   SampleRate: 1
                   Conditions:
-                    - Field: status_code
+                    - Fields:
+                        - http.status_code
+                        - http.response.status_code
                       Operator: =
                       Value: 500
                       Datatype: int
@@ -77,9 +79,11 @@ Samplers:
                       Operator: '>='
                       Value: 1000
                       Datatype: float
-                - Name: dynamically sample 200 responses
+                - Name: dynamically sample 200 responses across semantic conventions
                   Conditions:
-                    - Field: status_code
+                    - Fields:
+                        - http.status_code
+                        - http.response.status_code
                       Operator: =
                       Value: 200
                       Datatype: int

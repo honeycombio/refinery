@@ -224,7 +224,8 @@ func (r *RulesBasedSamplerRule) String() string {
 }
 
 type RulesBasedSamplerCondition struct {
-	Field    string                            `json:"field" yaml:"Field" validate:"required"`
+	Field    string                            `json:"field" yaml:"Field"`
+	Fields   []string                          `json:"fields" yaml:"Fields,omitempty"`
 	Operator string                            `json:"operator" yaml:"Operator" validate:"required"`
 	Value    any                               `json:"value" yaml:"Value" `
 	Datatype string                            `json:"datatype" yaml:"Datatype,omitempty"`
@@ -232,6 +233,16 @@ type RulesBasedSamplerCondition struct {
 }
 
 func (r *RulesBasedSamplerCondition) Init() error {
+	// if Field is specified, we move it into Fields so that we don't have to deal with checking both.
+	if r.Field != "" {
+		// we're going to check that both aren't defined -- this should have been caught by validation
+		// but we'll also check here just in case.
+		if len(r.Fields) > 0 {
+			return fmt.Errorf("both Field and Fields are defined in a single condition")
+		}
+		// now we know it's safe to move Field into Fields
+		r.Fields = []string{r.Field}
+	}
 	return r.setMatchesFunction()
 }
 
