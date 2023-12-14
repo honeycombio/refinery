@@ -30,6 +30,16 @@ const (
 	NotIn          = "not-in"
 )
 
+// ComputedField is a virtual field. It's value is calculated during rule evaluation.
+// We use the `?.` prefix to distinguish computed fields from regular fields.
+type ComputedField string
+
+const (
+	// ComputedFieldPrefix is the prefix for computed fields.
+	ComputedFieldPrefix               = "?."
+	NUM_DESCENDANTS     ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
+)
+
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
 // They are deliberately all lowercase.
 // The yaml tags are used for the new format and are PascalCase.
@@ -248,6 +258,14 @@ func (r *RulesBasedSamplerCondition) Init() error {
 
 func (r *RulesBasedSamplerCondition) String() string {
 	return fmt.Sprintf("%+v", *r)
+}
+
+func (r *RulesBasedSamplerCondition) GetComputedField() (ComputedField, bool) {
+	if strings.HasPrefix(r.Field, ComputedFieldPrefix) {
+		return ComputedField(r.Field), true
+	}
+	return "", false
+
 }
 
 func (r *RulesBasedSamplerCondition) setMatchesFunction() error {

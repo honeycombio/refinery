@@ -167,7 +167,7 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 	span:
 		for _, span := range t.GetSpans() {
-			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+			value, exists := extractValueFromSpan(t, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if conditionMatchesValue(condition, value, exists) {
 					matched++
@@ -194,7 +194,7 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		ruleMatched := true
 		for _, condition := range rule.Conditions {
 			// whether this condition is matched by this span.
-			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+			value, exists := extractValueFromSpan(trace, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if !conditionMatchesValue(condition, value, exists) {
 					ruleMatched = false
@@ -220,7 +220,15 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	return false
 }
 
-func extractValueFromSpan(span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+	// If the condition is a descendant count, we extract the count from trace and return it.
+	if f, ok := condition.GetComputedField(); ok {
+		switch f {
+		case config.NUM_DESCENDANTS:
+			return int64(trace.DescendantCount()), true
+		}
+	}
+
 	// whether this condition is matched by this span.
 	var value any
 	var exists bool

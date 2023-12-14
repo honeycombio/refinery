@@ -772,6 +772,126 @@ func TestRules(t *testing.T) {
 			ExpectedName: "no rule matched",
 			ExpectedRate: 1,
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Check that the number of descendants is greater than 3",
+						SampleRate: 1,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    string(config.NUM_DESCENDANTS),
+								Operator: config.GT,
+								Value:    int(3),
+								Datatype: "int",
+							},
+						},
+						Drop: true,
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "54322",
+							"trace.parent_id": "54321",
+							"meta.span_count": int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "654321",
+							"trace.parent_id": "54322",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54322",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54322",
+						},
+					},
+				},
+			},
+			ExpectedName: "Check that the number of descendants is greater than 3",
+			ExpectedKeep: false,
+			ExpectedRate: 1,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "Check that the number of descendants is less than 3",
+						SampleRate: 1,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    string(config.NUM_DESCENDANTS),
+								Operator: config.LT,
+								Value:    int(3),
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "54322",
+							"trace.parent_id": "54321",
+							"meta.span_count": int64(2),
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "654321",
+							"trace.parent_id": "54322",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54322",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace.trace_id":  "12345",
+							"trace.span_id":   "754321",
+							"trace.parent_id": "54322",
+						},
+					},
+				},
+			},
+			ExpectedName: "no rule matched",
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+		},
 	}
 
 	for _, d := range data {
