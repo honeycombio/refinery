@@ -14,7 +14,54 @@ The `Operator` is never optional, and controls which of the elements are require
 
 ## `Field` or `Fields`
 
-text goes here
+A `Field` points to a specific attribute in the trace data. It can refer to various aspects of the trace,
+such as HTTP-related information, duration, service names, and more.
+
+When a Field value is absent in any spans within a trace, the associated rule does not apply to that trace.
+
+```yaml
+Condition:
+    Field: http.route
+    Operator: =
+    Value: /health-check
+```
+### Leveraging Special Refinery Telemetry in Root Spans
+
+Refinery enriches the configuration possibilities by introducing special attributes for root spans. For example,
+when `AddCountsToRoot` is enabled, `meta.span_count`` is appended to all root spans, allowing for the creation
+of conditions based on span counts.
+
+```yaml
+Condition:
+    Field: "meta.span_count"
+    Operator: ">"
+    Value: 300
+    Datatype: int
+```
+In this scenario, the rule applies to traces with more than 300 spans.
+For details about all supported special fields, check out [documentation here](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/#refinery-telemetry)
+
+### Virtual Fields
+
+To handle scenarios where rules are required before the arrival of root spans, Refinery introduces the concept of virtual fields. These fields provide metadata about traces that have timed out while waiting for their root span.
+
+```yaml
+Rules:
+    - Name: Drop any big traces
+      Drop: true
+      Field: "?.NUM_DESCENDANTS"
+      Operator: ">"
+      Value: 1000
+      Datatype: int
+
+```
+This example showcases a rule that drops traces containing more than 1000 spans, utilizing the virtual field "?.NUM_DESCENDANTS".
+
+#### Supported Virtual Fields
+
+All virtual fields has been prefixed with `?.`.
+
+- "?.NUM_DESCENDANTS": the number of child elements within a trace.
 
 ## `Operator`
 
