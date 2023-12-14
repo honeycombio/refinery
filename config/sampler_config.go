@@ -30,6 +30,13 @@ const (
 	NotIn          = "not-in"
 )
 
+const (
+	ComputedFieldPrefix               = "?."
+	NUM_DESCENDANTS     ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
+)
+
+type ComputedField string
+
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
 // They are deliberately all lowercase.
 // The yaml tags are used for the new format and are PascalCase.
@@ -248,6 +255,14 @@ func (r *RulesBasedSamplerCondition) Init() error {
 
 func (r *RulesBasedSamplerCondition) String() string {
 	return fmt.Sprintf("%+v", *r)
+}
+
+func (r *RulesBasedSamplerCondition) GetComputedField() (ComputedField, bool) {
+	if strings.HasPrefix(r.Field, ComputedFieldPrefix) {
+		return ComputedField(r.Field), true
+	}
+	return "", false
+
 }
 
 func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
