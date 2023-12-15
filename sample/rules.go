@@ -31,7 +31,6 @@ func (s *RulesBasedSampler) Start() error {
 
 	s.samplers = make(map[string]Sampler)
 
-	// Check if any rule has a downstream sampler and create it
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
 			if err := cond.Init(); err != nil {
@@ -42,6 +41,7 @@ func (s *RulesBasedSampler) Start() error {
 				continue
 			}
 		}
+		// Check if any rule has a downstream sampler and create it
 		if rule.Sampler != nil {
 			var sampler Sampler
 			if rule.Sampler.DynamicSampler != nil {
@@ -54,6 +54,8 @@ func (s *RulesBasedSampler) Start() error {
 				sampler = &EMAThroughputSampler{Config: rule.Sampler.EMAThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else if rule.Sampler.WindowedThroughputSampler != nil {
 				sampler = &WindowedThroughputSampler{Config: rule.Sampler.WindowedThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
+			} else if rule.Sampler.DeterministicSampler != nil {
+				sampler = &DeterministicSampler{Config: rule.Sampler.DeterministicSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
@@ -165,7 +167,7 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 	span:
 		for _, span := range t.GetSpans() {
-			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+			value, exists := extractValueFromSpan(t, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if conditionMatchesValue(condition, value, exists) {
 					matched++
@@ -192,7 +194,7 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		ruleMatched := true
 		for _, condition := range rule.Conditions {
 			// whether this condition is matched by this span.
-			value, exists := extractValueFromSpan(span, condition, checkNestedFields)
+			value, exists := extractValueFromSpan(trace, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if !conditionMatchesValue(condition, value, exists) {
 					ruleMatched = false
@@ -218,21 +220,37 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	return false
 }
 
-func extractValueFromSpan(span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+	// If the condition is a descendant count, we extract the count from trace and return it.
+	if f, ok := condition.GetComputedField(); ok {
+		switch f {
+		case config.NUM_DESCENDANTS:
+			return int64(trace.DescendantCount()), true
+		}
+	}
+
 	// whether this condition is matched by this span.
-	value, exists := span.Data[condition.Field]
+	var value any
+	var exists bool
+	for _, field := range condition.Fields {
+		value, exists = span.Data[field]
+		if exists {
+			return value, exists
+		}
+	}
 	if !exists && checkNestedFields {
 		jsonStr, err := json.Marshal(span.Data)
 		if err == nil {
-			result := gjson.Get(string(jsonStr), condition.Field)
-			if result.Exists() {
-				value = result.String()
-				exists = true
+			for _, field := range condition.Fields {
+				result := gjson.Get(string(jsonStr), field)
+				if result.Exists() {
+					return result.String(), true
+				}
 			}
 		}
 	}
 
-	return value, exists
+	return nil, false
 }
 
 // This only gets called when we're using one of the basic operators, and
