@@ -78,6 +78,10 @@ websiterules:
 	go run . website rules --output=../../refinery_rules.md
 
 .PHONY: validate
+#: validate the sample config and rules
+validate: validateSampleConfig validateConfig validateRules
+
+.PHONY: validateSampleConfig
 #: validate the sample config
 validateSampleConfig:
 	@echo
@@ -85,12 +89,14 @@ validateSampleConfig:
 	@echo
 	go run . validate config --input=minimal_config.yaml
 
+.PHONY: validateSampleRules
 validateConfig:
 	@echo
 	@echo "+++ validating sample config"
 	@echo
 	go run . validate config --input=../../config_complete.yaml
 
+.PHONY: validateRules
 validateRules:
 	@echo
 	@echo "+++ validating sample rules"

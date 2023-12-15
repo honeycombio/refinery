@@ -30,6 +30,16 @@ const (
 	NotIn          = "not-in"
 )
 
+// ComputedField is a virtual field. It's value is calculated during rule evaluation.
+// We use the `?.` prefix to distinguish computed fields from regular fields.
+type ComputedField string
+
+const (
+	// ComputedFieldPrefix is the prefix for computed fields.
+	ComputedFieldPrefix               = "?."
+	NUM_DESCENDANTS     ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
+)
+
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
 // They are deliberately all lowercase.
 // The yaml tags are used for the new format and are PascalCase.
@@ -206,6 +216,7 @@ type RulesBasedDownstreamSampler struct {
 	EMAThroughputSampler      *EMAThroughputSamplerConfig      `json:"emathroughputsampler" yaml:"EMAThroughputSampler,omitempty"`
 	WindowedThroughputSampler *WindowedThroughputSamplerConfig `json:"windowedthroughputsampler" yaml:"WindowedThroughputSampler,omitempty"`
 	TotalThroughputSampler    *TotalThroughputSamplerConfig    `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
+	DeterministicSampler      *DeterministicSamplerConfig      `json:"deterministicsampler" yaml:"DeterministicSampler,omitempty"`
 }
 
 type RulesBasedSamplerRule struct {
@@ -223,7 +234,8 @@ func (r *RulesBasedSamplerRule) String() string {
 }
 
 type RulesBasedSamplerCondition struct {
-	Field    string                            `json:"field" yaml:"Field" validate:"required"`
+	Field    string                            `json:"field" yaml:"Field"`
+	Fields   []string                          `json:"fields" yaml:"Fields,omitempty"`
 	Operator string                            `json:"operator" yaml:"Operator" validate:"required"`
 	Value    any                               `json:"value" yaml:"Value" `
 	Datatype string                            `json:"datatype" yaml:"Datatype,omitempty"`
@@ -231,11 +243,29 @@ type RulesBasedSamplerCondition struct {
 }
 
 func (r *RulesBasedSamplerCondition) Init() error {
+	// if Field is specified, we move it into Fields so that we don't have to deal with checking both.
+	if r.Field != "" {
+		// we're going to check that both aren't defined -- this should have been caught by validation
+		// but we'll also check here just in case.
+		if len(r.Fields) > 0 {
+			return fmt.Errorf("both Field and Fields are defined in a single condition")
+		}
+		// now we know it's safe to move Field into Fields
+		r.Fields = []string{r.Field}
+	}
 	return r.setMatchesFunction()
 }
 
 func (r *RulesBasedSamplerCondition) String() string {
 	return fmt.Sprintf("%+v", *r)
+}
+
+func (r *RulesBasedSamplerCondition) GetComputedField() (ComputedField, bool) {
+	if strings.HasPrefix(r.Field, ComputedFieldPrefix) {
+		return ComputedField(r.Field), true
+	}
+	return "", false
+
 }
 
 func (r *RulesBasedSamplerCondition) setMatchesFunction() error {

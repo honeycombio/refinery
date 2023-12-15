@@ -44,7 +44,8 @@ type Trace struct {
 	// KeepSample should only be changed if the changer holds the SendSampleLock
 	KeepSample bool
 	// Sent should only be changed if the changer holds the SendSampleLock
-	Sent bool
+	Sent       bool
+	SentReason uint
 
 	SendBy time.Time
 
