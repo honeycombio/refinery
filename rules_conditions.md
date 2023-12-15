@@ -3,18 +3,18 @@
 ## Overview
 
 Refinery rules are described as a series of conditions.
-Each condition is composed from a combination of these named elements:
+Each condition is composed from a combination of these named parameters:
 
 - `Field` (or `Fields)
 - `Operator`
 - `Value`
 - `Datatype`
 
-The `Operator` is never optional, and controls which of the elements are required and which are optional.
+The `Operator` is never optional, and controls which of the parameters are required and which are optional.
 
 ## `Field`
 
-A `Field` points to a specific named element in the trace data.
+The `Field` parameter points to a specific named element in the trace data.
 If a `Field` is named within a span, then it `exists`.
 A specific `Field` may or may not exist on any specific span in a trace.
 It might not even exist within a trace at all.
@@ -70,42 +70,76 @@ This example shows a rule that drops traces containing more than 1000 spans, usi
 #### Supported Virtual Fields
 
 All virtual fields will be prefixed with `?.` to distinguish them from normal fields.
+Currently only one virtual field is supported.
 
 - `?.NUM_DESCENDANTS`: the current number of child elements contained within a trace.
 
 ## `Fields`
 
-`Fields` is exactly equivalent to `Field`, except that it must be expressed as an array of strings.
+The `Fields` parameter is exactly equivalent to `Field`, except that it must be expressed as an array of strings.
 The array defines a sequences of `Field` names that are checked in order for each span being considered.
 The first field that `exists` on any given span is used for the condition.
 
 ## `Operator`
 
-Operators in Refinery rules configuration files may be one of the following:
+The `Operator` parameter controls how rules are evaluated.
+The `Operator` may be one of the following:
 
 ### `=`
 
+Tests for equality -- `equals`.
+True if the value of the named Field is equal to the `Value` specified.
+See [`Datatype`](#datatype) below for how different datatypes are handled.
+
 ### `!=`
+
+Tests for inequality -- `not equals`.
+True if the value of the named Field is not equal to the `Value` specified.
+See [`Datatype`](#datatype) below for how different datatypes are handled.
 
 ### `<`
 
+Comparison -- `less than`.
+True if the value of the named Field is less than the `Value` specified.
+See [`Datatype`](#datatype) below for how different datatypes are handled.
+
 ### `<=`
+
+Comparison -- `less than or equal to`.
+True if the value of the named Field is less than or equal to the `Value` specified.
+See [`Datatype`](#datatype) below for how different datatypes are handled.
 
 ### `>`
 
+Comparison -- `greater than`.
+True if the value of the named Field is greater than the `Value` specified.
+See [`Datatype`](#datatype) below for how different datatypes are handled.
+
 ### `>=`
+
+Comparison -- `greater than or equal to`.
+True if the value of the named Field is greater than or equal to the `Value` specified.
+See [`Datatype`](#datatype) below for how different datatypes are handled.
 
 ### starts-with
 
+Values are always coerced to strings -- the `Datatype` parameter is ignored.
+
 ### contains
 
+Values are always coerced to strings -- the `Datatype` parameter is ignored.
 ### does-not-contain
 
+Values are always coerced to strings -- the `Datatype` parameter is ignored.
 ### exists
+
+Both the `Value` and the `Datatype` parameters are ignored.
 
 ### not-exists
 
+Both the `Value` and the `Datatype` parameters are ignored.
 ### matches
+Values are always coerced to strings -- the `Datatype` parameter is ignored.
 
 For clarity, regular expressions in YAML should usually be quoted with single
 quotes (`'`). This is because this form is unambiguous and does not process
@@ -127,5 +161,16 @@ text goes here
 
 ## `Datatype`
 
-text goes here
+The `Datatype` parameter controls the type of the values used when evaluating rules for the basic comparison operators.
+When `Datatype` is present, before evaluating the `Operator`, both the span value and the `Value` parameter are coerced (converted if necessary) to the specified format, and the comparison takes place as appropriate for that datatype.
+
+There are 4 possibilities:
+
+- `string` -- the comparison uses string operations (for example, "2" is considered to be greater than "10" because '2' > '1')
+- `int` -- the comparison uses integers (1.5 == 1 because 1.5 gets converted to 1)
+- `float` -- the comparison uses floating point, which generally reflects how most people think of numbers
+- `bool` -- the comparison tries to convert values to boolean. Note that because of the semantics of YAML, the `Value` parameter will interpret not only `true/false` but also all of `yes/no`, `y/n`, and `on/off` as boolean values. Span values, for historical reasons, interpret `true/false` and `1/0` as boolean, and all other values are considered to be `false`.
+
+If the `Datatype` parameter is not specified, then Refinery determines the type of the incoming span value. If the value is numeric or boolean, it attempts to convert the `Value` parameter to the same type. If the span value is a string, the `Value` parameter must also be a string or the comparison will fail.
+
 
