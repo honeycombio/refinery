@@ -16,6 +16,16 @@ at the root of the Refinery directory.
 
 `go run ./cmd/refinery/main.go -c config_complete.yaml -r rules_complete.yaml`
 
+# Running Refinery tests locally
+
+Refinery tests require a local instance of Redis to execute. A simple way to run this is using Docker:
+
+`docker run --name refinery-redis -p 6379:6379 -d redis`
+
+Then you can execute the tests with:
+
+`make test`
+
 # Making changes to configuration code
 
 With the new configuration format redesign in v2.0.0, the workflow for making a configuration requires the following steps:
