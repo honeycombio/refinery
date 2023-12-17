@@ -5,7 +5,7 @@
 Refinery rules are described as a series of conditions.
 Each condition is composed from a combination of these named parameters:
 
-- `Field` (or `Fields)
+- `Field` (or `Fields`)
 - `Operator`
 - `Value`
 - `Datatype`
@@ -28,7 +28,7 @@ No transformations for case or punctuation are performed.
 ### Example use of `Field`
 
 ```yaml
-Condition:
+Conditions:
     Field: http.route
     Operator: =
     Value: /health-check
@@ -40,7 +40,7 @@ Some Refinery configuration options introduce special names that are added to te
 For example, when `AddCountsToRoot` is enabled, `meta.span_count` is added to all root spans, allowing for the creation of rule conditions based on span counts.
 
 ```yaml
-Condition:
+Conditions:
     Field: "meta.span_count"
     Operator: ">"
     Value: 300
@@ -58,10 +58,11 @@ To handle specific scenarios when rules are evaluated before the arrival of root
 Rules:
     - Name: Drop any big traces
       Drop: true
-      Field: "?.NUM_DESCENDANTS"
-      Operator: ">"
-      Value: 1000
-      Datatype: int
+      Conditions:
+        Field: "?.NUM_DESCENDANTS"
+        Operator: ">"
+        Value: 1000
+        Datatype: int
 
 ```
 
@@ -80,66 +81,101 @@ The `Fields` parameter is exactly equivalent to `Field`, except that it must be 
 The array defines a sequences of `Field` names that are checked in order for each span being considered.
 The first field that `exists` on any given span is used for the condition.
 
+### Example use of `Fields`
+
+This example shows how one might write a rule designed to cope with an expected name change of a key field.
+
+```yaml
+Conditions:
+    Fields:
+        - http.status
+        - http.request.status
+    Operator: =
+    Value: 200
+    Datatype: int
+```
+
 ## `Operator`
 
 The `Operator` parameter controls how rules are evaluated.
+Because YAML treats certain characters like less-than (`<`) specially, it is good practice to always enclose the basic comparison operators in single quotes (like `'<'`).
+
 The `Operator` may be one of the following:
 
-### `=`
+### `'='`
 
-Tests for equality -- `equals`.
+Basic comparison -- `equals`.
 True if the value of the named Field is equal to the `Value` specified.
-See [`Datatype`](#datatype) below for how different datatypes are handled.
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
-### `!=`
+### `'!='`
 
-Tests for inequality -- `not equals`.
+Basic comparison -- `not equals`.
 True if the value of the named Field is not equal to the `Value` specified.
-See [`Datatype`](#datatype) below for how different datatypes are handled.
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
-### `<`
+### `'<'`
 
-Comparison -- `less than`.
+Basic comparison -- `less than`.
 True if the value of the named Field is less than the `Value` specified.
-See [`Datatype`](#datatype) below for how different datatypes are handled.
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
-### `<=`
+### `'<='`
 
-Comparison -- `less than or equal to`.
+Basic comparison -- `less than or equal to`.
 True if the value of the named Field is less than or equal to the `Value` specified.
-See [`Datatype`](#datatype) below for how different datatypes are handled.
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
-### `>`
+### `'>'`
 
-Comparison -- `greater than`.
+Basic comparison -- `greater than`.
 True if the value of the named Field is greater than the `Value` specified.
-See [`Datatype`](#datatype) below for how different datatypes are handled.
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
-### `>=`
+### `'>='`
 
-Comparison -- `greater than or equal to`.
+Basic comparison -- `greater than or equal to`.
 True if the value of the named Field is greater than or equal to the `Value` specified.
-See [`Datatype`](#datatype) below for how different datatypes are handled.
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
 ### starts-with
+
+Tests if the span value named by the `Field` begins with the text specified in the `Value` parameter.
+Comparisons are case-sensitive and exact.
 
 Values are always coerced to strings -- the `Datatype` parameter is ignored.
 
 ### contains
 
-Values are always coerced to strings -- the `Datatype` parameter is ignored.
-### does-not-contain
+Tests if the span value named by the `Field` contains the text specified in the `Value` parameter.
+Comparisons are case-sensitive and exact.
 
 Values are always coerced to strings -- the `Datatype` parameter is ignored.
+
+### does-not-contain
+
+Tests if the span value named by the `Field` does not contain the text specified in the `Value` parameter.
+Comparisons are case-sensitive and exact.
+
+Values are always coerced to strings -- the `Datatype` parameter is ignored.
+
 ### exists
+
+Tests if the specified span contains the field named by the `Field` parameter, without considering its value.
 
 Both the `Value` and the `Datatype` parameters are ignored.
 
 ### not-exists
 
+Tests if the specified span does not contain the field named by the `Field` parameter, without considering its value.
+
 Both the `Value` and the `Datatype` parameters are ignored.
+
 ### matches
-Values are always coerced to strings -- the `Datatype` parameter is ignored.
+
+Tests if the span value specified by the `Field` parameter matches the regular expression specified by the `Value` parameter.
+The regular expression grammar used is the syntax used by the Go programming language.
+It is documented [here](https://pkg.go.dev/regexp/syntax).
 
 For clarity, regular expressions in YAML should usually be quoted with single
 quotes (`'`). This is because this form is unambiguous and does not process
@@ -153,11 +189,25 @@ backslash (`\`). This implies that backslashes intended for the regular
 expression will have to be doubled. The same expression as above using double
 quotes looks like this: `"\\d+"`.
 
-The Go language Regular expression syntax is documented [here](https://pkg.go.dev/regexp/syntax).
+Example:
+```yaml
+      RulesBasedSampler:
+            Rules:
+                - Name: Drop traces for any path element starting with /health or /status
+                  Conditions:
+                    - Field: http.target
+                      Operator: matches
+                      Value: '/(health/status)\w+'
+ ```
+
+Values are always coerced to strings -- the `Datatype` parameter is ignored.
 
 ## `Value`
 
-text goes here
+The `Value` parameter can be any value of a supported type.
+Its meaning and interpretation depends on the `Operator` in use.
+
+See [`Datatype`](#datatype) ffor how different datatypes are handled.
 
 ## `Datatype`
 
