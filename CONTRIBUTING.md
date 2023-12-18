@@ -18,11 +18,9 @@ at the root of the Refinery directory.
 
 # Running Refinery tests locally
 
-Refinery tests require a local instance of Redis to execute. A simple way to run this is using Docker:
+Tests require a local installation of redis. See [here](https://redis.io/docs/install/install-stack) for how to get it running.
 
-`docker run --name refinery-redis -p 6379:6379 -d redis`
-
-Then you can execute the tests with:
+With Redis running, you can run Refinery tests by running the command below at the root of the Refinery directory.
 
 `make test`
 
