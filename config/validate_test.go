@@ -25,6 +25,7 @@ func Test_asFloat(t *testing.T) {
 		{"MemorySize1K", "1K", 1000, ""},
 		{"MemorySize1KiB", "1Kib", 1024, ""},
 		{"MemorySize1G", "1G", 1_000_000_000, ""},
+		{"MemorySize1717600000", "1717600000", 1_717_600_000, ""},
 		{"nil", nil, 0, `<nil> (<nil>) cannot be interpreted as a quantity`},
 	}
 	for _, tt := range tests {
@@ -84,6 +85,8 @@ func Test_validateType(t *testing.T) {
 		{"valid memorysize Gi", "k", "1Gi", "memorysize", ""},
 		{"valid memorysize GiB", "k", "1GiB", "memorysize", ""},
 		{"valid memorysize GB", "k", "1GB", "memorysize", ""},
+		{"valid memorysize", "k", "1717600000", "memorysize", ""},
+		{"valid memorysize", "k", "1717600K", "memorysize", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
