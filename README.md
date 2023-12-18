@@ -92,6 +92,18 @@ Refinery is a typical linux-style command line application, and supports several
 
 `refinery -h` will print an extended help text listing all command line options and supported environment variables.
 
+### Stress Relief 
+
+Refinery offers a mechanism called Stress Relief that improves stability allows it to handle a large volume of traces. 
+Stress relief is activated when the overall trace volume becomes to high relative to Refinery's overall processing rate. This overall workload is measured as a stress level from 0 to 100. 
+When stress levels reach 100, Refinery can become unstable very quickly causing crashes and node restarts. Once the `ActivationLevel`is reached, Stress Relief mode will become active. With Stress Relief active. Refinery will deterministically sample each span based on `TraceID` without having to store the rest of the trace. 
+Sampling decisions are made based on the `SamplingRate` indicated below. Stress Relief will remain active until stress falls below the `DeactivationLevel` specified in the config. 
+
+- `Mode` - Setting to indicate how Stress Relief is used. `never` indicates that Stress Relief will not activate. `monitor` means Stress Relief will activate when the `ActivationLevel` and deactivate when the is reached. `always` means that Stress Relief mode will continuously be engaged. The `always` mode is intended for use in emergency situations.  
+- `ActivationLevel` - When the stress level rises above this threshold, Refinery will activate Stress Relief Mode. 
+- `DeactivationLevel` - When the stress level falls below this threshold, Refinery will deactivate Stress Relief Mode. 
+- `SamplingRate` - The rate at which Refinery samples while Stress Relief is active. 
+
 ### Environment Variables
 
 Refinery supports the following key environment variables; please see the command line help or the online documentation for the full list. Command line switches take precedence over file configuration, and environment variables take precedence over both.
