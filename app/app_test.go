@@ -244,7 +244,7 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(2 * app.Config.GetSendTickerValue())
+	time.Sleep(5 * app.Config.GetSendTickerValue())
 
 	events := sender.Events()
 	require.Len(t, events, 1)
@@ -445,7 +445,7 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(2 * app.Config.GetSendTickerValue())
+	time.Sleep(5 * app.Config.GetSendTickerValue())
 
 	events := sender.Events()
 	require.Len(t, events, 1)
