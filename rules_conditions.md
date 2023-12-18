@@ -107,37 +107,37 @@ The `Operator` may be one of the following:
 ### `'='`
 
 Basic comparison -- `equals`.
-The result is true if the value of the named Field is equal to the `Value` specified.
+The result is true if the value of the named `Field` is equal to the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
 ### `'!='`
 
 Basic comparison -- `not equals`.
-The result is true if the value of the named Field is not equal to the `Value` specified.
+The result is true if the value of the named `Field` is not equal to the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
 ### `'<'`
 
 Basic comparison -- `less than`.
-The result is true if the value of the named Field is less than the `Value` specified.
+The result is true if the value of the named `Field` is less than the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
 ### `'<='`
 
 Basic comparison -- `less than or equal to`.
-The result is true if the value of the named Field is less than or equal to the `Value` specified.
+The result is true if the value of the named `Field` is less than or equal to the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
 ### `'>'`
 
 Basic comparison -- `greater than`.
-The result is true if the value of the named Field is greater than the `Value` specified.
+The result is true if the value of the named `Field` is greater than the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
 ### `'>='`
 
 Basic comparison -- `greater than or equal to`.
-The result is true if the value of the named Field is greater than or equal to the `Value` specified.
+The result is true if the value of the named `Field` is greater than or equal to the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
 ### `starts-with`
