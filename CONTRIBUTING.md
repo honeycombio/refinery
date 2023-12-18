@@ -20,7 +20,7 @@ at the root of the Refinery directory.
 
 Tests require a local installation of redis. See [here](https://redis.io/docs/install/install-stack) for how to get it running.
 
-With Redis running, you can run Refinery tests by running the command below at the root of the Refinery directory.
+You can run Refinery tests by running the command below at the root of the Refinery directory.
 
 `make test`
 
