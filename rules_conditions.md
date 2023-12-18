@@ -38,6 +38,7 @@ Conditions:
 Some Refinery configuration options introduce special fields that are added to telemetry.
 
 For example, when `AddCountsToRoot` is enabled, `meta.span_count` is added to all root spans, and allows for the creation of rule conditions based on span counts.
+In this `meta.span_count` example, the Refinery rule applies to traces with more than 300 spans.
 
 ```yaml
 Conditions:
@@ -47,7 +48,6 @@ Conditions:
     Datatype: int
 ```
 
-In this `meta.span_count` example, the Refinery rule applies to traces with more than 300 spans.
 For details about all supported special fields, check out our [Refinery Telemetry documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/#refinery-telemetry).
 
 ### Virtual Fields
