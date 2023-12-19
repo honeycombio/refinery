@@ -111,10 +111,10 @@ Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEY
 
 ## Dry Run Mode
 
-When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery. 
+When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery.
 
 Enable [Dry Run Mode](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/#run-refinery-in-dry-run-mode) by adding `DryRun = true` in your configuration file (`config.yaml`).
-Then, use [Query Builder in the Honeycomb UI](https://docs.honeycomb.io/working-with-your-data/queries/) to run queries to check your results and verify that the rules are working as intended. 
+Then, use [Query Builder in the Honeycomb UI](https://docs.honeycomb.io/working-with-your-data/queries/) to run queries to check your results and verify that the rules are working as intended.
 
 When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for each trace, and the metric for `trace_send_dropped` will remain `0`, reflecting that we are sending all traces to Honeycomb.
 
@@ -123,6 +123,23 @@ When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for ea
 Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have statistics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled), but some sampling decisions will be made on incomplete data. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (for example, traces / second started) and multiply that by the maximum duration of a trace (such as 3 seconds), then multiply that by some large buffer (maybe 10x). This estimate will give a good headroom.
 
 Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2GB of memory to handle 5,000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
+
+### Stress Relief
+
+Refinery offers a mechanism called `Stress Relief` that improves stability under heavy load.
+The `stress_level` metric is a synthetic metric on a scale from 0 to 100 that is constructed from several Refinery metrics relating to queue sizes and memory usage.
+Under normal operation, its value should usually be in the single digits. During bursts of high traffic, the stress levels might creep up and then drop again as the volume drops. As it approaches 100, it is more and more likely that Refinery will start to fail and possibly crash.
+
+`Stress Relief` is a system that can monitor the `stress_level` metric and shed load when stress becomes a danger to stability. Once the `ActivationLevel`is reached, `Stress Relief` mode will become active. In this state. Refinery will deterministically sample each span based on `TraceID` without having to store the rest of the trace or evaluate rule conditions. `Stress Relief` will remain active until stress falls below the `DeactivationLevel` specified in the config.
+
+The stress relief settings are:
+
+- `Mode` - Setting to indicate how `Stress Relief` is used. `never` indicates that `Stress Relief` will not activate. `monitor` means `Stress Relief` will activate when the `ActivationLevel` and deactivate when the is reached. `always` means that `Stress Relief` mode will continuously be engaged. The `always` mode is intended for use in emergency situations.
+- `ActivationLevel` - When the stress level rises above this threshold, Refinery will activate `Stress Relief`.
+- `DeactivationLevel` - When the stress level falls below this threshold, Refinery will deactivate `Stress Relief`.
+- `SamplingRate` - The rate at which Refinery samples while `Stress Relief` is active.
+
+The `stress_level` is currently the best proxy for the overall load on Refinery. Even if `Stress Relief` is not active, if `stress_level` is frequently above 50, it is a good indicator that Refinery needs more resources -- more CPUs, more memory, or more nodes. On the other hand, if `stress_level` never goes into double digits it is likely that Refinery is overprovisioned.
 
 ## Understanding Regular Operation
 
@@ -166,7 +183,7 @@ To retrieve the rule set that Refinery uses for the specified dataset, which wil
 
 ```curl
 curl --include --get $REFINERY_HOST/query/rules/$FORMAT/$DATASET --header "x-honeycomb-refinery-query: my-local-token"
-``` 
+```
 
 To retrieve information about the configurations currently in use, including the timestamp when the configuration was last loaded:
 
