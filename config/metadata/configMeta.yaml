@@ -114,8 +114,8 @@ groups:
       - name: HTTPIdleTimeout
         type: duration
         valuetype: nondefault
-        firstversion: v2.2
         reload: false
+        firstversion: v2.2
         default: 0s
         validations:
           - type: minOrZero
@@ -226,6 +226,7 @@ groups:
       - name: AddCountsToRoot
         type: bool
         valuetype: nondefault
+        firstversion: v2.2
         default: false
         reload: true
         summary: controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
@@ -525,6 +526,7 @@ groups:
         valuetype: nondefault
         default: false
         reload: false
+        firstversion: v2.2
         summary: controls whether logs are sampled before sending to `stdout`.
         description: >
           The sample rate is controlled by the `SamplerThroughput` setting.
@@ -535,12 +537,14 @@ groups:
         default: 10
         example: 10
         reload: false
+        firstversion: v2.2
         summary: is the sampling throughput for logs in events per second.
         description: >
           The sampling algorithm attempts to make sure that the average
           throughput approximates this value, while also ensuring that all
           unique logs arrive at `stdout` at least once per sampling
           period.
+
   - name: PrometheusMetrics
     title: "Prometheus Metrics"
     description: contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
@@ -870,6 +874,7 @@ groups:
         default: ""
         valuetype: nonemptystring
         reload: false
+        firstversion: v2.2
         envvar: REFINERY_REDIS_AUTH_CODE
         commandline: redis-auth-code
         summary: is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command.
@@ -1006,6 +1011,7 @@ groups:
         default: 30_000
         valuetype: nondefault
         reload: false
+        firstversion: v2.2
         summary: is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
         description: >
           The peer span queue serves as a buffer for spans redirected from other peers before they are processed.
@@ -1019,6 +1025,7 @@ groups:
         default: 30_000
         valuetype: nondefault
         reload: false
+        firstversion: v2.2
         summary: is the number of in-flight spans to keep in the incoming span queue.
         description: >
           The incoming span queue is used to buffer spans before they are processed.

@@ -492,11 +492,23 @@ If there are no conditions, then the rule will always match.
 ### `Field`
 
 The field to check.
-This can be any field in the trace.
+This can name any field in the trace.
 If the field is not present, then the condition will not match.
 The comparison is case-sensitive.
 
 - Type: `string`
+
+### `Fields`
+
+An array of field names to check.
+These can name any field in the trace.
+The fields are checked in the order defined here, and the first named field that contains a value will be used for the condition.
+Only the first populated field will be used, even if the condition fails.
+If none of the fields are present, then the condition will not match.
+The comparison is case-sensitive.
+All fields are checked as individual fields before any of them are checked as nested fields (see `CheckNestedFields`).
+
+- Type: `stringarray`
 
 ### `Operator`
 
@@ -504,7 +516,7 @@ The comparison operator to use.
 String comparisons are case-sensitive.
 
 - Type: `string`
-- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`
+- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`, `matches`
 
 ### `Value`
 
