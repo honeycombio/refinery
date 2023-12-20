@@ -2,6 +2,26 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.3.0
+
+This release is mainly focused on some improvements to rules and bug fixes. It is recommended for all Refinery users.
+
+### Rules Improvements
+
+Users of Rules-based samplers have several new features with this release:
+
+* A new `matches` operator can match the contents of fields using a regular expression. The regular expression language supported is the one used by the Go programming language. This will enable certain advanced rules that were previously impossible to achieve. It should be noted that complex regular expressions can be significantly slower than normal comparisons, so use this feature with the appropriate level of caution.
+* A new `Fields` parameter may be used in conditions instead of `Field`. This parameter takes a list of field names, and evaluates the rule based on the first name that matches an existing field. This is intended to be used mainly when telemetry field names are changing, to avoid having to create duplicated rules.
+* Refinery now supports a "virtual" `Field` called `?.NUM_DESCENDANTS`. This field is evaluated as the current number of descendants in a trace, even if the root span has not arrived. This permits a rule that correctly evaluates the number of spans in a trace even if the trace is exceptionally long-lived. This sort of rule can be used to drop exceptionally large traces to avoid sending them to Honeycomb.
+* There is a [new documentation page](rules_conditions.md) in this repository containing detailed information on constructing rule conditions.
+
+### Other Notable Changes
+
+* Previously, spans that arrived after the trace decision had been made were simply marked with `meta.refinery.reason: late`. Now, refinery will remember and attache the reason used when the span decision was made.
+* MemorySize parameters in config can now accept a floating point value like `2.5Gb`, which is more compatible with values used in Kubernetes. This should help eliminate bugs in Helm charts.
+* OTLP requests to `/v1/traces/` will now be accepted along with `/v1/traces`, which eliminates a minor annoyance when configuring upstream senders.
+* There were many improvements to testing and documentation that should improve quality of life for contributors.
+
 ## Version 2.2.0
 
 This is a minor release with several new features and bug fixes mostly around config values. This release is recommended for all Refinery users.

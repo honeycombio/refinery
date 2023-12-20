@@ -1,5 +1,37 @@
 # Refinery Changelog
 
+## 2.3.0 2023-12-20
+
+## Features
+
+- feat: Add `matches` operator to rules (#939) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add Fields option for rules (#949) | [Kent Quirk](https://github.com/kentquirk)
+- feat: use a computed field for current descendant count in rules (#950) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: add sent reason for late arriving spans (#936) | [Yingrong Zhao](https://github.com/vinozzZ)
+- docs: Add rule conditions documentation (#951) | [Kent Quirk](https://github.com/kentquirk)
+- docs: document stress relief in readme (#955) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+
+## Fixes
+
+- fix: Fix memory size parsing (#944) | [tvdfly](https://github.com/tvdfly)
+- fix: handle otlp request with /v1/traces/ path (#933) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+## Maintenance
+
+- maint: Update `firstversion` for 2.2  (#957) | [Kent Quirk](https://github.com/kentquirk)
+- maint: update codeowners to pipeline (#937) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint: update codeowners to pipeline-team (#942) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint: update project workflow for pipeline (#938) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint: upload test result to circle ci  (#940) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: use command to check for other commands (#941) | [Robb Kidd](https://github.com/robbkidd)
+- docs: Add section on running tests to contributing guide (#953) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- docs: update doc for release process and config/rules doc generation process (#932) | [Yingrong Zhao](https://github.com/vinozzZ)
+- test: Integration tests fail in parallel (#935) | [Kent Quirk](https://github.com/kentquirk)
+- test: try to deflake several flaky tests (#934) | [Kent Quirk](https://github.com/kentquirk)
+- test: attempt to fix flaky integration tests (#945) | [Yingrong Zhao](https://github.com/vinozzZ)
+- test: add deterministic fallback test (#948) | [Faith Chikwekwe](https://github.com/fchikwekwe)
+- test: use `t.Setenv` to set env vars in tests (#947) | [Eng Zer Jun](https://github.com/Juneezee)
+
 ## 2.2.0 2023-12-04
 
 This is a minor release with several new configuration options and bug fixes, and is recommended for all Refinery users. See [Release Notes](./RELEASE_NOTES.md) for a summary of changes.
