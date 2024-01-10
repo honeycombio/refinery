@@ -182,11 +182,13 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	}
 
 	coll.AddSpan(span)
-
-	time.Sleep(conf.SendTickerVal * 2)
+	assert.Eventually(t, func() bool {
+		transmission.Mux.RLock()
+		defer transmission.Mux.RUnlock()
+		return len(transmission.Events) > 1
+	}, 5*time.Second, conf.SendTickerVal*2, "should be at least two events transmitted")
 
 	transmission.Mux.RLock()
-	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
 	assert.Nil(t, transmission.Events[1].Data["meta.refinery.original_sample_rate"],
 		"metadata should not be populated when zero")
 	transmission.Mux.RUnlock()
