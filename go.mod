@@ -13,7 +13,7 @@ require (
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
 	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/mux v1.8.1
-	github.com/grafana/pyroscope-go/godeltaprof v0.1.5
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.6
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.5.1
 	github.com/honeycombio/husky v0.24.0
