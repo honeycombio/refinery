@@ -66,8 +66,8 @@ github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1 h1:MXRxSUQ+8B1wPV5eqSkLjlCOhH1hYx876Uc/DJQRxYE=
 github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1/go.mod h1:VvArVnXCHeB+tpxMOLWvaoItNHWYEgOx8Lgs1JoS+cI=
-github.com/honeycombio/dynsampler-go v0.5.1 h1:rwOsxLaSlE8RiriiCgBo/LoZjiLEe24CuXPABOGXV+k=
-github.com/honeycombio/dynsampler-go v0.5.1/go.mod h1:pJqWFeoMN3syX74PEvlusieyGBbtIBjmTVjLc3thmK4=
+github.com/honeycombio/dynsampler-go v0.6.0 h1:fs4mrfeFGU5V+ClwpblFzbWqn4Apb+lKlE7Ja5zL22I=
+github.com/honeycombio/dynsampler-go v0.6.0/go.mod h1:pJqWFeoMN3syX74PEvlusieyGBbtIBjmTVjLc3thmK4=
 github.com/honeycombio/husky v0.24.0 h1:/kaua19ixUFVBLirnHMvffDdK0QSEy1pkG1ZTOWm/nk=
 github.com/honeycombio/husky v0.24.0/go.mod h1:7qtQ3fCfYpfhN57rE+yS1St1QpnWKUTGLtpQVuWa9bQ=
 github.com/honeycombio/libhoney-go v1.20.0 h1:PL54R0P9vxIyb28H3twbLb+DCqQlJdMQM55VZg1abKA=

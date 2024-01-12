@@ -15,7 +15,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.6
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/honeycombio/dynsampler-go v0.5.1
+	github.com/honeycombio/dynsampler-go v0.6.0
 	github.com/honeycombio/husky v0.24.0
 	github.com/honeycombio/libhoney-go v1.20.0
 	github.com/jessevdk/go-flags v1.5.0
