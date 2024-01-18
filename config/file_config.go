@@ -90,7 +90,7 @@ type AccessKeyConfig struct {
 
 type RefineryTelemetryConfig struct {
 	AddRuleReasonToTrace   bool  `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     bool  `yaml:"AddSpanCountToRoot" default:"true"`
+	AddSpanCountToRoot     *bool `yaml:"AddSpanCountToRoot" default:"true"`
 	AddCountsToRoot        bool  `yaml:"AddCountsToRoot"`
 	AddHostMetadataToTrace *bool `yaml:"AddHostMetadataToTrace" default:"true"`
 }
@@ -119,7 +119,7 @@ type HoneycombLoggerConfig struct {
 	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    bool   `yaml:"SamplerEnabled" default:"true"`
+	SamplerEnabled    *bool  `yaml:"SamplerEnabled" default:"true"`
 	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
 }
 
@@ -217,7 +217,7 @@ type BufferSizeConfig struct {
 
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
-	CompressPeerCommunication bool              `yaml:"CompressPeerCommunication" default:"true"`
+	CompressPeerCommunication *bool             `yaml:"CompressPeerCommunication" default:"true"`
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
@@ -477,7 +477,14 @@ func (f *fileConfig) GetCompressPeerCommunication() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Specialized.CompressPeerCommunication
+	var compressPeerCommunication bool
+	if f.mainConfig.Specialized.CompressPeerCommunication == nil {
+		compressPeerCommunication = true
+	} else {
+		compressPeerCommunication = *f.mainConfig.Specialized.CompressPeerCommunication
+	}
+
+	return compressPeerCommunication
 }
 
 func (f *fileConfig) GetGRPCEnabled() bool {
@@ -850,7 +857,15 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Telemetry.AddSpanCountToRoot
+	var addSpanCountToRoot bool
+
+	if f.mainConfig.Telemetry.AddSpanCountToRoot == nil {
+		addSpanCountToRoot = true // TODO: lookup default from struct
+	} else {
+		addSpanCountToRoot = *f.mainConfig.Telemetry.AddSpanCountToRoot
+	}
+
+	return addSpanCountToRoot
 }
 
 func (f *fileConfig) GetAddCountsToRoot() bool {
