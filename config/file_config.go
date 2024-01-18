@@ -230,7 +230,7 @@ type IDFieldsConfig struct {
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	Enabled               bool       `yaml:"Enabled" default:"true"`
+	Enabled               *bool      `yaml:"Enabled" default:"true"`
 	ListenAddr            string     `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
 	MaxConnectionIdle     Duration   `yaml:"MaxConnectionIdle" default:"1m"`
 	MaxConnectionAge      Duration   `yaml:"MaxConnectionAge" default:"3m"`
@@ -483,7 +483,15 @@ func (f *fileConfig) GetCompressPeerCommunication() bool {
 func (f *fileConfig) GetGRPCEnabled() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
-	return f.mainConfig.GRPCServerParameters.Enabled
+
+	var enabled bool
+	if f.mainConfig.GRPCServerParameters.Enabled == nil {
+		enabled = true
+	} else {
+		enabled = *f.mainConfig.GRPCServerParameters.Enabled
+	}
+
+	return enabled
 }
 
 func (f *fileConfig) GetGRPCListenAddr() (string, error) {
