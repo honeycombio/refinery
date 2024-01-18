@@ -890,6 +890,31 @@ func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
 	assert.Equal(t, []string{"trace.parent_id", "parentId"}, c.GetParentIdFieldNames())
 }
 
+func TestOverrideConfigDefaults(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"RefineryTelemetry.AddSpanCountToRoot", false,
+		"RefineryTelemetry.AddHostMetadataToTrace", false,
+		"HoneycombLogger.SamplerEnabled", false,
+		"Specialized.CompressPeerCommunication", false,
+		"GRPCServerParameters.Enabled", false,
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	assert.Equal(t, false, c.GetAddSpanCountToRoot())
+	assert.Equal(t, false, c.GetAddHostMetadataToTrace())
+	loggerConfig, err := c.GetHoneycombLoggerConfig()
+	assert.NoError(t, err)
+	assert.Equal(t, false, loggerConfig.SamplerEnabled)
+	assert.Equal(t, false, c.GetCompressPeerCommunication())
+	assert.Equal(t, false, c.GetGRPCEnabled())
+}
+
 func TestMemorySizeUnmarshal(t *testing.T) {
 	tests := []struct {
 		name     string
