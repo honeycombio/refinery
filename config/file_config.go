@@ -89,10 +89,10 @@ type AccessKeyConfig struct {
 }
 
 type RefineryTelemetryConfig struct {
-	AddRuleReasonToTrace   bool `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     bool `yaml:"AddSpanCountToRoot" default:"true"`
-	AddCountsToRoot        bool `yaml:"AddCountsToRoot"`
-	AddHostMetadataToTrace bool `yaml:"AddHostMetadataToTrace" default:"true"`
+	AddRuleReasonToTrace   bool  `yaml:"AddRuleReasonToTrace"`
+	AddSpanCountToRoot     bool  `yaml:"AddSpanCountToRoot" default:"true"`
+	AddCountsToRoot        bool  `yaml:"AddCountsToRoot"`
+	AddHostMetadataToTrace *bool `yaml:"AddHostMetadataToTrace" default:"true"`
 }
 
 type TracesConfig struct {
@@ -785,7 +785,15 @@ func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Telemetry.AddHostMetadataToTrace
+	var addHostMetadataToTrace bool
+
+	if f.mainConfig.Telemetry.AddHostMetadataToTrace == nil {
+		addHostMetadataToTrace = true // TODO: the default, but maybe look that up on the struct?
+	} else {
+		addHostMetadataToTrace = *f.mainConfig.Telemetry.AddHostMetadataToTrace
+	}
+
+	return addHostMetadataToTrace
 }
 
 func (f *fileConfig) GetAddRuleReasonToTrace() bool {
