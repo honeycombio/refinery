@@ -119,8 +119,19 @@ type HoneycombLoggerConfig struct {
 	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
 	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    *bool  `yaml:"SamplerEnabled" default:"true"`
+	SamplerEnabled    *bool  `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
 	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
+}
+
+// GetSamplerEnabled returns whether configuration has enabled sampling of
+// Refinery's own logs destined for Honeycomb.
+func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool) {
+	if c.SamplerEnabled == nil {
+		enabled = true
+	} else {
+		enabled = *c.SamplerEnabled
+	}
+	return enabled
 }
 
 type StdoutLoggerConfig struct {

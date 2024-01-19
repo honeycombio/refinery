@@ -10,10 +10,8 @@ import (
 
 func TestHoneycombLoggerRespectsLogLevelAfterStart(t *testing.T) {
 	cfg := &config.MockConfig{
-		GetLoggerLevelVal: config.WarnLevel,
-		GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{
-			SamplerEnabled: func() *bool { b := false; return &b }(), // shenanigans to get a pointer to a bool
-		},
+		GetLoggerLevelVal:           config.WarnLevel,
+		GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{},
 	}
 	hcLogger := &HoneycombLogger{
 		Config:       cfg,

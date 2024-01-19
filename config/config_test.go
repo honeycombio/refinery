@@ -616,7 +616,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.Equal(t, "http://honeycomb.io", loggerConfig.APIHost)
 	assert.Equal(t, "1234", loggerConfig.APIKey)
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
-	assert.Equal(t, true, *loggerConfig.SamplerEnabled)
+	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
@@ -639,7 +639,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, true, *loggerConfig.SamplerEnabled)
+	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 
@@ -910,7 +910,7 @@ func TestOverrideConfigDefaults(t *testing.T) {
 	assert.Equal(t, false, c.GetAddHostMetadataToTrace())
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
 	assert.NoError(t, err)
-	assert.Equal(t, false, *loggerConfig.SamplerEnabled)
+	assert.Equal(t, false, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, false, c.GetCompressPeerCommunication())
 	assert.Equal(t, false, c.GetGRPCEnabled())
 }
