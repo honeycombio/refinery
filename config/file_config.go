@@ -90,9 +90,9 @@ type AccessKeyConfig struct {
 
 type RefineryTelemetryConfig struct {
 	AddRuleReasonToTrace   bool  `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     *bool `yaml:"AddSpanCountToRoot" default:"true"`
+	AddSpanCountToRoot     *bool `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
 	AddCountsToRoot        bool  `yaml:"AddCountsToRoot"`
-	AddHostMetadataToTrace *bool `yaml:"AddHostMetadataToTrace" default:"true"`
+	AddHostMetadataToTrace *bool `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
 }
 
 type TracesConfig struct {
@@ -228,7 +228,7 @@ type BufferSizeConfig struct {
 
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
-	CompressPeerCommunication *bool             `yaml:"CompressPeerCommunication" default:"true"`
+	CompressPeerCommunication *bool             `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
@@ -241,7 +241,7 @@ type IDFieldsConfig struct {
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	Enabled               *bool      `yaml:"Enabled" default:"true"`
+	Enabled               *bool      `yaml:"Enabled" default:"true"` // Avoid pointer woe on access, use GetGRPCEnabled() instead.
 	ListenAddr            string     `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
 	MaxConnectionIdle     Duration   `yaml:"MaxConnectionIdle" default:"1m"`
 	MaxConnectionAge      Duration   `yaml:"MaxConnectionAge" default:"3m"`
