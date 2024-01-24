@@ -341,6 +341,8 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		return nil, err
 	}
 
+	rulesconf.SetUniqueSamplingFields()
+
 	cfg := &fileConfig{
 		mainConfig:  mainconf,
 		mainHash:    mainhash,
