@@ -331,7 +331,7 @@ func TestReadRulesConfig(t *testing.T) {
 
 	rules, err := c.GetAllSamplerRules()
 	assert.NoError(t, err)
-	assert.Len(t, rules.UniqueFields(), 10)
+	assert.Len(t, rules.UniqueSamplingFields(), 10)
 
 	d, name, err := c.GetSamplerConfigForDestName("doesnt-exist")
 	assert.NoError(t, err)

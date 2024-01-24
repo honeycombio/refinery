@@ -143,17 +143,17 @@ func (v *RulesBasedDownstreamSampler) NameMeaningfulRate() string {
 }
 
 type V2SamplerConfig struct {
-	RulesVersion int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
-	Samplers     map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
-	uniqueFields map[string]struct{}
+	RulesVersion         int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
+	Samplers             map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
+	uniqueSamplingFields map[string]struct{}
 }
 
-func (v *V2SamplerConfig) UniqueFields() map[string]struct{} {
-	return v.uniqueFields
+func (v *V2SamplerConfig) UniqueSamplingFields() map[string]struct{} {
+	return v.uniqueSamplingFields
 }
 
-func (v *V2SamplerConfig) SetUniqueFields() {
-	v.uniqueFields = make(map[string]struct{})
+func (v *V2SamplerConfig) SetUniqueSamplingFields() {
+	v.uniqueSamplingFields = make(map[string]struct{})
 
 	for _, sampler := range v.Samplers {
 		if sampler == nil {
@@ -166,22 +166,22 @@ func (v *V2SamplerConfig) SetUniqueFields() {
 		}
 
 		if c, ok := s.(SamplerConfigger); ok {
-			for _, field := range c.GetFields() {
-				v.uniqueFields[field] = struct{}{}
+			for _, field := range c.GetSamplingFields() {
+				v.uniqueSamplingFields[field] = struct{}{}
 			}
 		}
 	}
 }
 
 type SamplerConfigger interface {
-	GetFields() []string
+	GetSamplingFields() []string
 }
 
 type DeterministicSamplerConfig struct {
 	SampleRate int `json:"samplerate" yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
 }
 
-func (d *DeterministicSamplerConfig) GetFields() []string {
+func (d *DeterministicSamplerConfig) GetSamplingFields() []string {
 	return nil
 }
 
@@ -193,7 +193,7 @@ type DynamicSamplerConfig struct {
 	UseTraceLength bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *DynamicSamplerConfig) GetFields() []string {
+func (d *DynamicSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -209,7 +209,7 @@ type EMADynamicSamplerConfig struct {
 	UseTraceLength      bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *EMADynamicSamplerConfig) GetFields() []string {
+func (d *EMADynamicSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -227,7 +227,7 @@ type EMAThroughputSamplerConfig struct {
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *EMAThroughputSamplerConfig) GetFields() []string {
+func (d *EMAThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -241,7 +241,7 @@ type WindowedThroughputSamplerConfig struct {
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *WindowedThroughputSamplerConfig) GetFields() []string {
+func (d *WindowedThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -254,7 +254,7 @@ type TotalThroughputSamplerConfig struct {
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *TotalThroughputSamplerConfig) GetFields() []string {
+func (d *TotalThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -264,7 +264,7 @@ type RulesBasedSamplerConfig struct {
 	CheckNestedFields bool                     `json:"checknestedfields" yaml:"CheckNestedFields,omitempty"`
 }
 
-func (r *RulesBasedSamplerConfig) GetFields() []string {
+func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 	fields := make([]string, 0)
 
 	for _, rule := range r.Rules {
@@ -281,7 +281,7 @@ func (r *RulesBasedSamplerConfig) GetFields() []string {
 		}
 
 		if rule.Sampler != nil {
-			fields = append(fields, rule.Sampler.GetFields()...)
+			fields = append(fields, rule.Sampler.GetSamplingFields()...)
 		}
 	}
 
@@ -297,31 +297,31 @@ type RulesBasedDownstreamSampler struct {
 	DeterministicSampler      *DeterministicSamplerConfig      `json:"deterministicsampler" yaml:"DeterministicSampler,omitempty"`
 }
 
-func (r *RulesBasedDownstreamSampler) GetFields() []string {
+func (r *RulesBasedDownstreamSampler) GetSamplingFields() []string {
 	fields := make([]string, 0)
 
 	if r.DeterministicSampler != nil {
-		fields = append(fields, r.DeterministicSampler.GetFields()...)
+		fields = append(fields, r.DeterministicSampler.GetSamplingFields()...)
 	}
 
 	if r.DynamicSampler != nil {
-		fields = append(fields, r.DynamicSampler.GetFields()...)
+		fields = append(fields, r.DynamicSampler.GetSamplingFields()...)
 	}
 
 	if r.EMADynamicSampler != nil {
-		fields = append(fields, r.EMADynamicSampler.GetFields()...)
+		fields = append(fields, r.EMADynamicSampler.GetSamplingFields()...)
 	}
 
 	if r.EMAThroughputSampler != nil {
-		fields = append(fields, r.EMAThroughputSampler.GetFields()...)
+		fields = append(fields, r.EMAThroughputSampler.GetSamplingFields()...)
 	}
 
 	if r.WindowedThroughputSampler != nil {
-		fields = append(fields, r.WindowedThroughputSampler.GetFields()...)
+		fields = append(fields, r.WindowedThroughputSampler.GetSamplingFields()...)
 	}
 
 	if r.TotalThroughputSampler != nil {
-		fields = append(fields, r.TotalThroughputSampler.GetFields()...)
+		fields = append(fields, r.TotalThroughputSampler.GetSamplingFields()...)
 	}
 
 	return fields
