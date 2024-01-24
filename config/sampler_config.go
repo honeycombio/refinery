@@ -166,7 +166,7 @@ func (v *V2SamplerConfig) SetUniqueSamplingFields() {
 		}
 
 		if c, ok := s.(GetSamplingFielder); ok {
-			for _, field := range c.GeFields() {
+			for _, field := range c.GetSamplingFields() {
 				v.uniqueSamplingFields[field] = struct{}{}
 			}
 		}
@@ -174,7 +174,7 @@ func (v *V2SamplerConfig) SetUniqueSamplingFields() {
 }
 
 type GetSamplingFielder interface {
-	GeFields() []string
+	GetSamplingFields() []string
 }
 
 var _ GetSamplingFielder = (*DeterministicSamplerConfig)(nil)
@@ -183,7 +183,7 @@ type DeterministicSamplerConfig struct {
 	SampleRate int `json:"samplerate" yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
 }
 
-func (d *DeterministicSamplerConfig) GeFields() []string {
+func (d *DeterministicSamplerConfig) GetSamplingFields() []string {
 	return nil
 }
 
@@ -197,7 +197,7 @@ type DynamicSamplerConfig struct {
 	UseTraceLength bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *DynamicSamplerConfig) GeFields() []string {
+func (d *DynamicSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -215,7 +215,7 @@ type EMADynamicSamplerConfig struct {
 	UseTraceLength      bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *EMADynamicSamplerConfig) GeFields() []string {
+func (d *EMADynamicSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -235,7 +235,7 @@ type EMAThroughputSamplerConfig struct {
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *EMAThroughputSamplerConfig) GeFields() []string {
+func (d *EMAThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -251,7 +251,7 @@ type WindowedThroughputSamplerConfig struct {
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *WindowedThroughputSamplerConfig) GeFields() []string {
+func (d *WindowedThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -266,7 +266,7 @@ type TotalThroughputSamplerConfig struct {
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
-func (d *TotalThroughputSamplerConfig) GeFields() []string {
+func (d *TotalThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
@@ -278,7 +278,7 @@ type RulesBasedSamplerConfig struct {
 	CheckNestedFields bool                     `json:"checknestedfields" yaml:"CheckNestedFields,omitempty"`
 }
 
-func (r *RulesBasedSamplerConfig) GeFields() []string {
+func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 	fields := make([]string, 0)
 
 	for _, rule := range r.Rules {
@@ -295,7 +295,7 @@ func (r *RulesBasedSamplerConfig) GeFields() []string {
 		}
 
 		if rule.Sampler != nil {
-			fields = append(fields, rule.Sampler.GeFields()...)
+			fields = append(fields, rule.Sampler.GetSamplingFields()...)
 		}
 	}
 
@@ -313,31 +313,31 @@ type RulesBasedDownstreamSampler struct {
 	DeterministicSampler      *DeterministicSamplerConfig      `json:"deterministicsampler" yaml:"DeterministicSampler,omitempty"`
 }
 
-func (r *RulesBasedDownstreamSampler) GeFields() []string {
+func (r *RulesBasedDownstreamSampler) GetSamplingFields() []string {
 	fields := make([]string, 0)
 
 	if r.DeterministicSampler != nil {
-		fields = append(fields, r.DeterministicSampler.GeFields()...)
+		fields = append(fields, r.DeterministicSampler.GetSamplingFields()...)
 	}
 
 	if r.DynamicSampler != nil {
-		fields = append(fields, r.DynamicSampler.GeFields()...)
+		fields = append(fields, r.DynamicSampler.GetSamplingFields()...)
 	}
 
 	if r.EMADynamicSampler != nil {
-		fields = append(fields, r.EMADynamicSampler.GeFields()...)
+		fields = append(fields, r.EMADynamicSampler.GetSamplingFields()...)
 	}
 
 	if r.EMAThroughputSampler != nil {
-		fields = append(fields, r.EMAThroughputSampler.GeFields()...)
+		fields = append(fields, r.EMAThroughputSampler.GetSamplingFields()...)
 	}
 
 	if r.WindowedThroughputSampler != nil {
-		fields = append(fields, r.WindowedThroughputSampler.GeFields()...)
+		fields = append(fields, r.WindowedThroughputSampler.GetSamplingFields()...)
 	}
 
 	if r.TotalThroughputSampler != nil {
-		fields = append(fields, r.TotalThroughputSampler.GeFields()...)
+		fields = append(fields, r.TotalThroughputSampler.GetSamplingFields()...)
 	}
 
 	return fields
