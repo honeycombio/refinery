@@ -3,6 +3,7 @@ package cache
 import (
 	"time"
 
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -165,13 +166,13 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
-func (d *DefaultInMemCache) RemoveTraces(toDelete map[string]struct{}) {
+func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.traceBuffer)))
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
 	for i, t := range d.traceBuffer {
 		if t != nil {
-			if _, ok := toDelete[t.TraceID]; ok {
+			if toDelete.Contains(t.TraceID) {
 				d.traceBuffer[i] = nil
 				delete(d.cache, t.TraceID)
 			}

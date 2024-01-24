@@ -11,6 +11,7 @@ import (
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
@@ -235,10 +236,10 @@ func (i *InMemCollector) checkAlloc() {
 	i.Metrics.Gauge("collector_cache_size", cap)
 
 	totalDataSizeSent := 0
-	tracesSent := make(map[string]struct{})
+	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
-		tracesSent[trace.TraceID] = struct{}{}
+		tracesSent.Add(trace.TraceID)
 		totalDataSizeSent += trace.DataSize
 		i.send(trace, TraceSendEjectedMemsize)
 		if totalDataSizeSent > int(totalToRemove) {
