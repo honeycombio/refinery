@@ -177,6 +177,8 @@ type SamplerConfigger interface {
 	GetSamplingFields() []string
 }
 
+var _ SamplerConfigger = (*DeterministicSamplerConfig)(nil)
+
 type DeterministicSamplerConfig struct {
 	SampleRate int `json:"samplerate" yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
 }
@@ -184,6 +186,8 @@ type DeterministicSamplerConfig struct {
 func (d *DeterministicSamplerConfig) GetSamplingFields() []string {
 	return nil
 }
+
+var _ SamplerConfigger = (*DynamicSamplerConfig)(nil)
 
 type DynamicSamplerConfig struct {
 	SampleRate     int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
@@ -196,6 +200,8 @@ type DynamicSamplerConfig struct {
 func (d *DynamicSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
+
+var _ SamplerConfigger = (*EMADynamicSamplerConfig)(nil)
 
 type EMADynamicSamplerConfig struct {
 	GoalSampleRate      int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
@@ -212,6 +218,8 @@ type EMADynamicSamplerConfig struct {
 func (d *EMADynamicSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
+
+var _ SamplerConfigger = (*EMAThroughputSamplerConfig)(nil)
 
 type EMAThroughputSamplerConfig struct {
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
@@ -231,6 +239,8 @@ func (d *EMAThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
+var _ SamplerConfigger = (*WindowedThroughputSamplerConfig)(nil)
+
 type WindowedThroughputSamplerConfig struct {
 	UpdateFrequency      Duration `json:"updatefrequency" yaml:"UpdateFrequency,omitempty"`
 	LookbackFrequency    Duration `json:"lookbackfrequency" yaml:"LookbackFrequency,omitempty"`
@@ -245,6 +255,8 @@ func (d *WindowedThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
 
+var _ SamplerConfigger = (*TotalThroughputSamplerConfig)(nil)
+
 type TotalThroughputSamplerConfig struct {
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
@@ -257,6 +269,8 @@ type TotalThroughputSamplerConfig struct {
 func (d *TotalThroughputSamplerConfig) GetSamplingFields() []string {
 	return d.FieldList
 }
+
+var _ SamplerConfigger = (*RulesBasedSamplerConfig)(nil)
 
 type RulesBasedSamplerConfig struct {
 	// Rules has deliberately different names for json and yaml for conversion from old to new format
@@ -287,6 +301,8 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 
 	return fields
 }
+
+var _ SamplerConfigger = (*RulesBasedDownstreamSampler)(nil)
 
 type RulesBasedDownstreamSampler struct {
 	DynamicSampler            *DynamicSamplerConfig            `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
