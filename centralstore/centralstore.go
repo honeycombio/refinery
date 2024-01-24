@@ -142,9 +142,8 @@ type CentralStorer interface {
 	// will not change the state of these traces after this call.
 	GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error)
 
-	// GetTracesWithStates returns a list of live trace status blocks that match any of
-	// the provided statuses.
-	GetTracesWithStates(states []CentralTraceState) ([]*CentralTraceStatus, error)
+	// GetTracesForState returns a list of trace IDs that match the provided status.
+	GetTracesForState(state CentralTraceState) ([]string, error)
 
 	// SetTraceStatuses sets the status of a set of traces in the central store.
 	// This is used to record the decision made by the trace decision engine. If
