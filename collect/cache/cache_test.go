@@ -92,7 +92,7 @@ func TestRemoveSentTraces(t *testing.T) {
 		c.Set(t)
 	}
 
-	deletes := generics.NewSet("1", "2", "4", "5")
+	deletes := generics.NewSet("1", "3", "4", "5")
 	c.RemoveTraces(deletes)
 
 	all := c.GetAll()
