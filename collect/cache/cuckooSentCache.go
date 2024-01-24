@@ -28,18 +28,31 @@ type keptTraceCacheEntry struct {
 	reason         uint32 // which rule was used to decide to keep the trace
 }
 
-func NewKeptTraceCacheEntry(trace *types.Trace) *keptTraceCacheEntry {
-	if trace == nil {
+// KeptTrace is an interface for a trace that was kept.
+// It contains all the information we need to remember about the trace.
+type KeptTrace interface {
+	ID() string
+	SampleRate() uint
+	DescendantCount() uint32
+	SpanEventCount() uint32
+	SpanLinkCount() uint32
+	SpanCount() uint32
+	SetSentReason(uint)
+	SentReason() uint
+}
+
+func newKeptTraceCacheEntry(t KeptTrace) *keptTraceCacheEntry {
+	if t == nil {
 		return &keptTraceCacheEntry{}
 	}
 
 	return &keptTraceCacheEntry{
-		rate:           uint32(trace.SampleRate),
-		eventCount:     trace.DescendantCount(),
-		spanEventCount: trace.SpanEventCount(),
-		spanLinkCount:  trace.SpanLinkCount(),
-		spanCount:      trace.SpanCount(),
-		reason:         uint32(trace.SentReason),
+		rate:           uint32(t.SampleRate()),
+		eventCount:     t.DescendantCount(),
+		spanEventCount: t.SpanEventCount(),
+		spanLinkCount:  t.SpanLinkCount(),
+		spanCount:      t.SpanCount(),
+		reason:         uint32(t.SentReason()),
 	}
 }
 
@@ -69,10 +82,6 @@ func (t *keptTraceCacheEntry) SpanLinkCount() uint {
 // SpanCount returns the count of spans in the trace.
 func (t *keptTraceCacheEntry) SpanCount() uint {
 	return uint(t.spanCount)
-}
-
-func (t *keptTraceCacheEntry) Reason() uint {
-	return uint(t.reason)
 }
 
 // Count records additional spans in the cache record.
@@ -142,7 +151,8 @@ type cuckooSentCache struct {
 	done chan struct{}
 
 	// This mutex is for managing kept traces
-	keptMut sync.Mutex
+	keptMut     sync.Mutex
+	sentReasons *SentReasonsCache
 }
 
 // Make sure it implements TraceSentCache
@@ -156,10 +166,11 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 	dropped := NewCuckooTraceChecker(cfg.DroppedSize, met)
 
 	cache := &cuckooSentCache{
-		kept:    stc,
-		dropped: dropped,
-		cfg:     cfg,
-		done:    make(chan struct{}),
+		kept:        stc,
+		dropped:     dropped,
+		cfg:         cfg,
+		sentReasons: NewSentReasonsCache(met),
+		done:        make(chan struct{}),
 	}
 	go cache.monitor()
 	return cache, nil
@@ -183,26 +194,27 @@ func (c *cuckooSentCache) Stop() {
 	close(c.done)
 }
 
-func (c *cuckooSentCache) Record(trace *types.Trace, keep bool) {
+func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
-		sentRecord := NewKeptTraceCacheEntry(trace)
+		trace.SetSentReason(c.sentReasons.Set(reason))
+		sentRecord := newKeptTraceCacheEntry(trace)
 
 		c.keptMut.Lock()
 		defer c.keptMut.Unlock()
-		c.kept.Add(trace.TraceID, sentRecord)
+		c.kept.Add(trace.ID(), sentRecord)
 
 		return
 	}
 	// if we're not keeping it, save it in the dropped trace filter
-	c.dropped.Add(trace.TraceID)
+	c.dropped.Add(trace.ID())
 }
 
-func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
+func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(span.TraceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
-		return &cuckooDroppedRecord{}, false
+		return &cuckooDroppedRecord{}, "", false
 	}
 	// was it kept?
 	c.keptMut.Lock()
@@ -210,10 +222,11 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, bool) {
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
 		// if we kept it, then this span being checked needs counting too
 		sentRecord.Count(span)
-		return sentRecord, true
+		reason, _ := c.sentReasons.Get(uint(sentRecord.reason))
+		return sentRecord, reason, true
 	}
 	// we have no memory of this place
-	return nil, false
+	return nil, "", false
 }
 
 func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {

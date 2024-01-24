@@ -66,7 +66,6 @@ type InMemCollector struct {
 	datasetSamplers map[string]sample.Sampler
 
 	sampleTraceCache cache.TraceSentCache
-	sentReasonsCache *cache.SentReasonsCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
@@ -128,7 +127,6 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
-	i.sentReasonsCache = cache.NewSentReasonsCache(i.Metrics)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -391,12 +389,12 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, found := i.sampleTraceCache.Check(sp); found {
+		if sr, sentReason, found := i.sampleTraceCache.Check(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
 			// having none at all
-			i.dealWithSentTrace(sr, sp)
+			i.dealWithSentTrace(sr, sentReason, sp)
 			return
 		}
 		// trace hasn't already been sent (or this span is really old); let's
@@ -416,8 +414,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			TraceID:     sp.TraceID,
 			ArrivalTime: now,
 			SendBy:      now.Add(timeout),
-			SampleRate:  sp.SampleRate, // if it had a sample rate, we want to keep it
 		}
+		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
 		if ejectedTrace != nil {
@@ -427,7 +425,14 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		i.dealWithSentTrace(cache.NewKeptTraceCacheEntry(trace), sp)
+		if sr, reason, found := i.sampleTraceCache.Check(sp); found {
+			// bump the count of records on this trace -- if the root span isn't
+			// the last late span, then it won't be perfect, but it will be better than
+			// having none at all
+			i.dealWithSentTrace(sr, reason, sp)
+			return
+		}
+		// TODO: would it be possible that it's not in the cache?
 	}
 
 	// great! trace is live. add the span.
@@ -468,11 +473,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	}
 	// we do want a record of how we disposed of traces in case more come in after we've
 	// turned off stress relief (if stress relief is on we'll keep making the same decisions)
-	if keep {
-		reasonKey := i.sentReasonsCache.Set(reason)
-		trace.SentReason = reasonKey
-	}
-	i.sampleTraceCache.Record(trace, keep)
+	i.sampleTraceCache.Record(trace, keep, reason)
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
 		return
@@ -493,11 +494,11 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sp *types.Span) {
+func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason string, sp *types.Span) {
 	if i.Config.GetAddRuleReasonToTrace() {
-		metaReason, ok := i.sentReasonsCache.Get(tr.Reason())
-		if ok {
-			metaReason = fmt.Sprintf("%s - late arriving span", metaReason)
+		var metaReason string
+		if len(sentReason) > 0 {
+			metaReason = fmt.Sprintf("%s - late arriving span", sentReason)
 		} else {
 			metaReason = "late arriving span"
 		}
@@ -639,7 +640,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	// make sampling decision and update the trace
 	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
-	trace.SampleRate = rate
+	trace.SetSampleRate(rate)
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
 	if key != "" {
@@ -648,11 +649,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// This will observe sample rate attempts even if the trace is dropped
 	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
-	if shouldSend {
-		reasonKey := i.sentReasonsCache.Set(reason)
-		trace.SentReason = reasonKey
-	}
-	i.sampleTraceCache.Record(trace, shouldSend)
+	i.sampleTraceCache.Record(trace, shouldSend, reason)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
@@ -698,7 +695,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		if i.hostname != "" {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname
 		}
-		mergeTraceAndSpanSampleRates(sp, trace.SampleRate, isDryRun)
+		mergeTraceAndSpanSampleRates(sp, trace.SampleRate(), isDryRun)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
 	}

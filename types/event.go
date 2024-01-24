@@ -40,12 +40,12 @@ type Trace struct {
 	TraceID string
 
 	// SampleRate should only be changed if the changer holds the SendSampleLock
-	SampleRate uint
+	sampleRate uint
 	// KeepSample should only be changed if the changer holds the SendSampleLock
 	KeepSample bool
 	// Sent should only be changed if the changer holds the SendSampleLock
 	Sent       bool
-	SentReason uint
+	sentReason uint
 
 	SendBy time.Time
 
@@ -98,6 +98,26 @@ func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
 // GetSpans returns the list of descendants in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
+}
+
+func (t *Trace) ID() string {
+	return t.TraceID
+}
+
+func (t *Trace) SampleRate() uint {
+	return t.sampleRate
+}
+
+func (t *Trace) SetSampleRate(rate uint) {
+	t.sampleRate = rate
+}
+
+func (t *Trace) SentReason() uint {
+	return t.sentReason
+}
+
+func (t *Trace) SetSentReason(reason uint) {
+	t.sentReason = reason
 }
 
 // DescendantCount gets the number of descendants of all kinds currently in this trace

@@ -20,17 +20,14 @@ type TraceSentRecord interface {
 	SpanCount() uint
 	// Count records additional spans in the totals
 	Count(*types.Span)
-
-	// Reason returns the reason the trace was kept or dropped
-	Reason() uint
 }
 
 type TraceSentCache interface {
 	// Record preserves the record of a trace being sent or not.
-	Record(trace *types.Trace, keep bool)
+	Record(trace KeptTrace, keep bool, reason string)
 	// Check tests if a trace corresponding to the span is in the cache; if found, it returns the appropriate TraceSentRecord and true,
 	// else nil and false.
-	Check(span *types.Span) (TraceSentRecord, bool)
+	Check(span *types.Span) (TraceSentRecord, string, bool)
 	// Stop halts the cache in preparation for shutdown
 	Stop()
 	// Resize adjusts the size of the cache according to the Config passed in

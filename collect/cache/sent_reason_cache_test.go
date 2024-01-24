@@ -23,7 +23,7 @@ func TestSentReasonCache(t *testing.T) {
 		keys = append(keys, c.Set(item))
 	}
 	for i, key := range keys {
-		item, ok := c.Get(uint(key))
+		item, ok := c.Get(key)
 		assert.True(t, ok, "key %d should exist", key)
 		assert.Equal(t, entries[i], item)
 	}
