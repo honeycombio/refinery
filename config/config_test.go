@@ -329,6 +329,10 @@ func TestReadRulesConfig(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules_complete.yaml"})
 	assert.NoError(t, err)
 
+	rules, err := c.GetAllSamplerRules()
+	assert.NoError(t, err)
+	assert.Len(t, rules.UniqueSamplingFields(), 10)
+
 	d, name, err := c.GetSamplerConfigForDestName("doesnt-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &DeterministicSamplerConfig{}, d)
