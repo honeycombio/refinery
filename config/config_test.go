@@ -891,6 +891,7 @@ func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
 }
 
 func TestOverrideConfigDefaults(t *testing.T) {
+	/// Check that fields that default to true can be set to false
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
 		"RefineryTelemetry.AddSpanCountToRoot", false,
