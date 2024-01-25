@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/honeycombio/refinery/generics"
 	"gopkg.in/yaml.v3"
 )
 
@@ -85,7 +86,7 @@ type NetworkConfig struct {
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
-	keymap               map[string]struct{}
+	keymap               generics.Set[string]
 }
 
 type RefineryTelemetryConfig struct {
@@ -543,14 +544,10 @@ func (f *fileConfig) IsAPIKeyValid(key string) bool {
 
 	// if we haven't built the keymap yet, do it now
 	if f.mainConfig.AccessKeys.keymap == nil {
-		f.mainConfig.AccessKeys.keymap = make(map[string]struct{})
-		for _, key := range f.mainConfig.AccessKeys.ReceiveKeys {
-			f.mainConfig.AccessKeys.keymap[key] = struct{}{}
-		}
+		f.mainConfig.AccessKeys.keymap = generics.NewSet(f.mainConfig.AccessKeys.ReceiveKeys...)
 	}
 
-	_, ok := f.mainConfig.AccessKeys.keymap[key]
-	return ok
+	return f.mainConfig.AccessKeys.keymap.Contains(key)
 }
 
 func (f *fileConfig) GetPeerManagementType() (string, error) {

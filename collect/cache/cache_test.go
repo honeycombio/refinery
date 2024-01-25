@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -91,13 +92,7 @@ func TestRemoveSentTraces(t *testing.T) {
 		c.Set(t)
 	}
 
-	deletes := map[string]struct{}{
-		"1": {},
-		"3": {},
-		"4": {},
-		"5": {}, // not present
-	}
-
+	deletes := generics.NewSet("1", "3", "4", "5")
 	c.RemoveTraces(deletes)
 
 	all := c.GetAll()

@@ -1073,7 +1073,6 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -1084,11 +1083,15 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 2)
-	transmission.Mux.RLock()
-	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
-	transmission.Mux.RUnlock()
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		transmission.Mux.RLock()
+		assert.Equal(c, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+		if len(transmission.Events) == 2 {
+			assert.Equal(c, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
+		}
+		transmission.Mux.RUnlock()
+	}, 5*time.Second, conf.SendTickerVal)
 }
 
 func TestAddAdditionalAttributes(t *testing.T) {
