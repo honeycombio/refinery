@@ -1,0 +1,1 @@
+{"RulesVersion":2,"Samplers":{"__default__":{"DeterministicSampler":{"SampleRate":1}},"TheNewWorld":{"EMADynamicSampler":{"GoalSampleRate":6,"AdjustmentInterval":"2s","Weight":0.5,"AgeOutValue":0.5,"BurstMultiple":200,"BurstDetectionDelay":30,"FieldList":["error","url","status"],"UseTraceLength":false,"MaxKeys":2000}}}}
