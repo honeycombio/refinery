@@ -48,7 +48,6 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Metrics: s,
 			Logger:  &logger.NullLogger{},
 		},
-		sentReasonsCache: cache.NewSentReasonsCache(s),
 	}
 }
 
