@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/honeycombio/refinery/generics"
 )
 
 // Define some constants for rule comparison operators
@@ -81,39 +83,35 @@ func (v *V2SamplerChoice) Sampler() (any, string) {
 // because the way that sample rates are computed has changed. It's used
 // by the rules converter.
 func (v *V2SamplerChoice) NameMeaningfulSamplers() []string {
-	names := make(map[string]struct{})
+	names := generics.NewSet[string]()
 	switch {
 	case v.DeterministicSampler != nil:
-		names["DeterministicSampler"] = struct{}{}
+		names.Add("DeterministicSampler")
 	case v.RulesBasedSampler != nil:
 		for _, rule := range v.RulesBasedSampler.Rules {
 			if rule.Sampler != nil {
 				if rule.SampleRate > 1 {
-					names[fmt.Sprintf("RulesBasedSampler(%s)", rule.Name)] = struct{}{}
+					names.Add(fmt.Sprintf("RulesBasedSampler(%s)", rule.Name))
 				} else if rule.Sampler.NameMeaningfulRate() != "" {
-					names[fmt.Sprintf("RulesBasedSampler(%s, downstream Sampler %s)", rule.Name, rule.Sampler.NameMeaningfulRate())] = struct{}{}
+					names.Add(fmt.Sprintf("RulesBasedSampler(%s, downstream Sampler %s)", rule.Name, rule.Sampler.NameMeaningfulRate()))
 				}
 			}
 		}
 	case v.DynamicSampler != nil:
-		names["DynamicSampler"] = struct{}{}
+		names.Add("DynamicSampler")
 	case v.EMADynamicSampler != nil:
-		names["EMADynamicSampler"] = struct{}{}
+		names.Add("EMADynamicSampler")
 	case v.EMAThroughputSampler != nil:
-		names["EMAThroughputSampler"] = struct{}{}
+		names.Add("EMAThroughputSampler")
 	case v.WindowedThroughputSampler != nil:
-		names["WindowedThroughputSampler"] = struct{}{}
+		names.Add("WindowedThroughputSampler")
 	case v.TotalThroughputSampler != nil:
-		names["TotalThroughputSampler"] = struct{}{}
+		names.Add("TotalThroughputSampler")
 	default:
 		return nil
 	}
 
-	r := make([]string, 0, len(names))
-	for name := range names {
-		r = append(r, name)
-	}
-	return r
+	return names.Members()
 }
 
 func (v *RulesBasedDownstreamSampler) NameMeaningfulRate() string {
