@@ -426,13 +426,14 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// span.
 	if trace.Sent {
 		if sr, reason, found := i.sampleTraceCache.Check(sp); found {
-			// bump the count of records on this trace -- if the root span isn't
-			// the last late span, then it won't be perfect, but it will be better than
-			// having none at all
+			i.Metrics.Increment("trace_sent_cache_hit")
 			i.dealWithSentTrace(sr, reason, sp)
 			return
 		}
-		// TODO: would it be possible that it's not in the cache?
+		// trace has already been sent, but this is not in the sent cache.
+		// we will just use the default late span reason as the sent reason which is
+		// set inside the dealWithSentTrace function
+		i.dealWithSentTrace(cache.NewKeptTraceCacheEntry(trace), "", sp)
 	}
 
 	// great! trace is live. add the span.

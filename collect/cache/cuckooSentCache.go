@@ -41,7 +41,7 @@ type KeptTrace interface {
 	SentReason() uint
 }
 
-func newKeptTraceCacheEntry(t KeptTrace) *keptTraceCacheEntry {
+func NewKeptTraceCacheEntry(t KeptTrace) *keptTraceCacheEntry {
 	if t == nil {
 		return &keptTraceCacheEntry{}
 	}
@@ -198,7 +198,7 @@ func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
 		trace.SetSentReason(c.sentReasons.Set(reason))
-		sentRecord := newKeptTraceCacheEntry(trace)
+		sentRecord := NewKeptTraceCacheEntry(trace)
 
 		c.keptMut.Lock()
 		defer c.keptMut.Unlock()
