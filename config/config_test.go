@@ -616,7 +616,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.Equal(t, "http://honeycomb.io", loggerConfig.APIHost)
 	assert.Equal(t, "1234", loggerConfig.APIKey)
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
-	assert.Equal(t, true, loggerConfig.SamplerEnabled)
+	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
@@ -639,7 +639,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	assert.Equal(t, true, loggerConfig.SamplerEnabled)
+	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 
@@ -663,7 +663,7 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 	assert.Equal(t, "localhost:4343", a)
 
 	grpcConfig := c.GetGRPCConfig()
-	assert.Equal(t, true, grpcConfig.Enabled)
+	assert.Equal(t, true, *grpcConfig.Enabled)
 	assert.Equal(t, "localhost:4343", grpcConfig.ListenAddr)
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionIdle))
 	assert.Equal(t, 3*time.Minute, time.Duration(grpcConfig.MaxConnectionAge))
@@ -888,6 +888,32 @@ func TestHoneycombIdFieldsConfigDefault(t *testing.T) {
 
 	assert.Equal(t, []string{"trace.trace_id", "traceId"}, c.GetTraceIdFieldNames())
 	assert.Equal(t, []string{"trace.parent_id", "parentId"}, c.GetParentIdFieldNames())
+}
+
+func TestOverrideConfigDefaults(t *testing.T) {
+	/// Check that fields that default to true can be set to false
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"RefineryTelemetry.AddSpanCountToRoot", false,
+		"RefineryTelemetry.AddHostMetadataToTrace", false,
+		"HoneycombLogger.SamplerEnabled", false,
+		"Specialized.CompressPeerCommunication", false,
+		"GRPCServerParameters.Enabled", false,
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	assert.Equal(t, false, c.GetAddSpanCountToRoot())
+	assert.Equal(t, false, c.GetAddHostMetadataToTrace())
+	loggerConfig, err := c.GetHoneycombLoggerConfig()
+	assert.NoError(t, err)
+	assert.Equal(t, false, loggerConfig.GetSamplerEnabled())
+	assert.Equal(t, false, c.GetCompressPeerCommunication())
+	assert.Equal(t, false, c.GetGRPCEnabled())
 }
 
 func TestMemorySizeUnmarshal(t *testing.T) {
