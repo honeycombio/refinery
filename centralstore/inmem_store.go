@@ -3,6 +3,11 @@ package centralstore
 import (
 	"fmt"
 	"sync"
+	"time"
+
+	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 )
 
 type statusMap map[string]*CentralTraceStatus
@@ -25,10 +30,11 @@ type InMemStore struct {
 	// indexed by trace ID.
 	states map[CentralTraceState]statusMap
 	// traces holds the current data for each trace
-	traces    map[string]*CentralTrace
-	keyfields []string
-	spanChan  chan *CentralSpan
-	mut       sync.RWMutex
+	traces        map[string]*CentralTrace
+	keyfields     []string
+	spanChan      chan *CentralSpan
+	decisionCache cache.TraceSentCache
+	mut           sync.RWMutex
 }
 
 // ensure that we implement CentralStorer
@@ -36,10 +42,23 @@ var _ CentralStorer = (*InMemStore)(nil)
 
 // NewInMemStore creates a new InMemStore.
 func NewInMemStore() *InMemStore {
+	// TODO: make these configurable
+	cfg := config.SampleCacheConfig{
+		KeptSize:          10000,
+		DroppedSize:       1_000_000,
+		SizeCheckInterval: config.Duration(10 * time.Second),
+	}
+	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
+	if err != nil {
+		// TODO: handle this better
+		panic(err)
+	}
+
 	i := &InMemStore{
-		states:   make(map[CentralTraceState]statusMap),
-		traces:   make(map[string]*CentralTrace),
-		spanChan: make(chan *CentralSpan, 1000),
+		states:        make(map[CentralTraceState]statusMap),
+		traces:        make(map[string]*CentralTrace),
+		spanChan:      make(chan *CentralSpan, 1000),
+		decisionCache: decisionCache,
 	}
 
 	var cts CentralTraceState
@@ -136,6 +155,9 @@ func (i *InMemStore) SetKeyFields(keyFields []string) error {
 func (i *InMemStore) WriteSpan(span *CentralSpan) error {
 	// first let's check if we've already processed and dropped this trace; if so, we're done and
 	// can just ignore the span.
+	if i.decisionCache.Dropped(span.TraceID) {
+		return nil
+	}
 
 	// if the span channel doesn't exist, we're shutting down and we can't accept any more spans
 	if i.spanChan == nil {
@@ -162,42 +184,34 @@ func (i *InMemStore) ProcessSpans() {
 		switch state {
 		case DecisionDrop:
 			// The decision has been made and we can't affect it, so we just ignore the span
+			// We'll only get here if the decision was made after the span was added
+			// to the channel but before it got read out.
 			continue
 		case DecisionKeep, AwaitingDecision:
-			// The decision has been made and we can't affect it, so we add the span to the trace
-			// if it exists; if it doesn't exist in the traces map anymore, we create it again
-			// this happens to work with just a single statement because the map will create the
-			// trace if it doesn't exist
-			i.traces[span.TraceID].Spans = append(i.traces[span.TraceID].Spans, span)
-			i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
+			// The decision has been made and we can't affect it anymore, so we add the span to the trace
+			// if it exists; if it doesn't exist in the traces map anymore, we'll create it again.
+			// We do need to mark it late, though.
+			// i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
 		case Collecting, WaitingToDecide, ReadyForDecision:
 			// we're in a state where we can just add the span
-			i.traces[span.TraceID].Spans = append(i.traces[span.TraceID].Spans, span)
 		case Unknown:
 			// we don't have a state for this trace, so we create it
-			i.traces[span.TraceID].Spans = append(i.traces[span.TraceID].Spans, span)
 			i.states[Collecting][span.TraceID] = &CentralTraceStatus{TraceID: span.TraceID, State: Collecting}
 		}
 
-		// TODO: deal with root span state transitions
+		// Add the span to the trace; this works even if the trace doesn't exist yet
+		i.traces[span.TraceID].Spans = append(i.traces[span.TraceID].Spans, span)
 
-		// if the trace doesn't exist, create it
-		// var root *CentralSpan
-		// if span.ParentID == "" {
-		// 	root = span
-		// }
-
-		// if _, ok := i.traces[span.TraceID]; !ok {
-		// 	i.traces[span.TraceID] = &CentralTrace{
-		// 		Root:  root,
-		// 		Spans: []*CentralSpan{span},
-		// 	}
-		// 	i.states[Collecting][span.TraceID] = &CentralTraceStatus{TraceID: span.TraceID, State: Collecting}
-		// 	return
-		// }
-
-		// i.traces[span.TraceID].Spans = append(i.traces[span.TraceID].Spans, span)
-		// return
+		if span.ParentID == "" {
+			// this is a root span, so we need to move it to the right state
+			i.traces[span.TraceID].Root = span
+			switch state {
+			case Collecting:
+				i.changeTraceState(span.TraceID, Collecting, WaitingToDecide)
+			default:
+				// for all other states, we don't need to do anything
+			}
+		}
 	}
 }
 
