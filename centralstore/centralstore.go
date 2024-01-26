@@ -73,6 +73,17 @@ func NewCentralTraceStatus(traceID string, state CentralTraceState) *CentralTrac
 	}
 }
 
+func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
+	return &CentralTraceStatus{
+		TraceID:     s.TraceID,
+		State:       s.State,
+		Rate:        s.Rate,
+		KeepReason:  s.KeepReason,
+		reasonIndex: s.reasonIndex,
+		timestamp:   s.timestamp, // we might want this to not copy the timestamp, but to set it to now()
+	}
+}
+
 type CentralTrace struct {
 	Root  *CentralSpan
 	Spans []*CentralSpan
