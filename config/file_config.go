@@ -361,7 +361,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 		return nil, err
 	}
 
-	rulesconf.SetUniqueSamplingFields()
+	rulesconf.ExtractUniqueSamplingFields()
 
 	cfg := &fileConfig{
 		mainConfig:  mainconf,
