@@ -34,19 +34,31 @@ type InMemStore struct {
 	keyfields     []string
 	spanChan      chan *CentralSpan
 	decisionCache cache.TraceSentCache
+	done          chan struct{}
 	mutex         sync.RWMutex
 }
 
 // ensure that we implement CentralStorer
 var _ CentralStorer = (*InMemStore)(nil)
 
+// this probably gets moved into config eventually
+type InMemStoreOptions struct {
+	KeptSize          uint
+	DroppedSize       uint
+	SpanChannelSize   int
+	SizeCheckInterval config.Duration
+	StateTicker       config.Duration
+	SendDelay         config.Duration
+	TraceTimeout      config.Duration
+	DecisionTimeout   config.Duration
+}
+
 // NewInMemStore creates a new InMemStore.
-func NewInMemStore() *InMemStore {
-	// TODO: make these configurable
+func NewInMemStore(options InMemStoreOptions) *InMemStore {
 	cfg := config.SampleCacheConfig{
-		KeptSize:          10000,
-		DroppedSize:       1_000_000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
+		KeptSize:          options.KeptSize,
+		DroppedSize:       options.DroppedSize,
+		SizeCheckInterval: options.SizeCheckInterval,
 	}
 	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
 	if err != nil {
@@ -57,8 +69,9 @@ func NewInMemStore() *InMemStore {
 	i := &InMemStore{
 		states:        make(map[CentralTraceState]statusMap),
 		traces:        make(map[string]*CentralTrace),
-		spanChan:      make(chan *CentralSpan, 1000),
+		spanChan:      make(chan *CentralSpan, options.SpanChannelSize),
 		decisionCache: decisionCache,
+		done:          make(chan struct{}),
 	}
 
 	var cts CentralTraceState
@@ -70,15 +83,22 @@ func NewInMemStore() *InMemStore {
 	// start the span processor
 	go i.ProcessSpans()
 
+	// start the state manager
+	go i.ManageStates(options)
+
 	return i
 }
 
 func (i *InMemStore) Stop() {
 	// close the span channel to stop the span processor,
 	// but first set spanChan to nil so that we won't accept any more spans
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 	schan := i.spanChan
 	i.spanChan = nil
 	close(schan)
+	// stop the state manager
+	close(i.done)
 }
 
 // findTraceStatus returns the state and status of a trace, or Unknown if the trace
@@ -91,10 +111,6 @@ func (i *InMemStore) findTraceStatus(traceID string) (CentralTraceState, *Centra
 		}
 	}
 	return Unknown, nil
-}
-
-func (i *InMemStore) addTraceStatus(status *CentralTraceStatus) {
-	i.states[status.State][status.TraceID] = status
 }
 
 // changes the status of a trace; if fromState is Unknown, the trace will be searched for
@@ -115,6 +131,7 @@ func (i *InMemStore) changeTraceState(traceID string, fromState, toState Central
 
 	status.State = toState
 	i.states[toState][traceID] = status
+	status.timestamp = time.Now()
 	delete(i.states[fromState], traceID)
 	return true
 }
@@ -197,7 +214,7 @@ func (i *InMemStore) ProcessSpans() {
 			// we're in a state where we can just add the span
 		case Unknown:
 			// we don't have a state for this trace, so we create it
-			i.states[Collecting][span.TraceID] = &CentralTraceStatus{TraceID: span.TraceID, State: Collecting}
+			i.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting)
 		}
 
 		// Add the span to the trace; this works even if the trace doesn't exist yet
@@ -214,6 +231,45 @@ func (i *InMemStore) ProcessSpans() {
 			}
 		}
 		i.mutex.Unlock()
+	}
+}
+
+// ManageStates is a goroutine that manages the time-based transitions between states.
+// It runs once each tick of the stateTicker and looks for several different transitions.
+// We unlock the mutex between the different state transitions so that we don't block for too long
+func (i *InMemStore) ManageStates(options InMemStoreOptions) {
+	ticker := time.NewTicker(time.Duration(options.StateTicker))
+	for {
+		select {
+		case <-i.done:
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			// traces that are past SendDelay should be moved to ready for decision
+			i.mutex.Lock()
+			for _, status := range i.states[WaitingToDecide] {
+				if time.Since(status.timestamp) > time.Duration(options.SendDelay) {
+					i.changeTraceState(status.TraceID, WaitingToDecide, ReadyForDecision)
+				}
+			}
+			// trace that are past TraceTimeout should be moved to waiting to decide
+			i.mutex.Unlock()
+			i.mutex.Lock()
+			for _, status := range i.states[Collecting] {
+				if time.Since(status.timestamp) > time.Duration(options.TraceTimeout) {
+					i.changeTraceState(status.TraceID, Collecting, WaitingToDecide)
+				}
+			}
+			i.mutex.Unlock()
+			i.mutex.Lock()
+			// see if AwaitDecision traces have been waiting too long
+			for _, status := range i.states[AwaitingDecision] {
+				if time.Since(status.timestamp) > time.Duration(options.DecisionTimeout) {
+					i.changeTraceState(status.TraceID, AwaitingDecision, ReadyForDecision)
+				}
+			}
+			i.mutex.Unlock()
+		}
 	}
 }
 
@@ -248,7 +304,7 @@ func (i *InMemStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatu
 		if state, status := i.findTraceStatus(traceID); state != Unknown {
 			statuses = append(statuses, status)
 		} else {
-			statuses = append(statuses, &CentralTraceStatus{TraceID: traceID, State: state})
+			statuses = append(statuses, NewCentralTraceStatus(traceID, state))
 		}
 	}
 	return statuses, nil

@@ -1,6 +1,8 @@
 package centralstore
 
 import (
+	"time"
+
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/types"
 )
@@ -57,9 +59,18 @@ func (CentralTraceState) ValidStates() []CentralTraceState {
 type CentralTraceStatus struct {
 	TraceID     string
 	State       CentralTraceState
-	KeepReason  string
-	reasonIndex uint // this is the cache ID for the reason
 	Rate        uint
+	KeepReason  string
+	reasonIndex uint      // this is the cache ID for the reason
+	timestamp   time.Time // this is the last time the trace state was changed
+}
+
+func NewCentralTraceStatus(traceID string, state CentralTraceState) *CentralTraceStatus {
+	return &CentralTraceStatus{
+		TraceID:   traceID,
+		State:     state,
+		timestamp: time.Now(),
+	}
 }
 
 type CentralTrace struct {
