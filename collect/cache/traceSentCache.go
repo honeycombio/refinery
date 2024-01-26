@@ -25,6 +25,8 @@ type TraceSentRecord interface {
 type TraceSentCache interface {
 	// Record preserves the record of a trace being sent or not.
 	Record(trace KeptTrace, keep bool, reason string)
+	// Fast check to see if a trace was dropped
+	Dropped(traceID string) bool
 	// Check tests if a trace corresponding to the span is in the cache; if found, it returns the appropriate TraceSentRecord and true,
 	// else nil and false.
 	Check(span *types.Span) (TraceSentRecord, string, bool)
