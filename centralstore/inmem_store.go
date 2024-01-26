@@ -34,7 +34,7 @@ type InMemStore struct {
 	keyfields     []string
 	spanChan      chan *CentralSpan
 	decisionCache cache.TraceSentCache
-	mut           sync.RWMutex
+	mutex         sync.RWMutex
 }
 
 // ensure that we implement CentralStorer
@@ -177,6 +177,7 @@ func (i *InMemStore) WriteSpan(span *CentralSpan) error {
 // goroutine and runs indefinitely until cancelled by calling Stop().
 func (i *InMemStore) ProcessSpans() {
 	for span := range i.spanChan {
+		i.mutex.Lock()
 		// we have to find the state and decide what to do based on that
 		state, _ := i.findTraceStatus(span.TraceID)
 
@@ -212,6 +213,7 @@ func (i *InMemStore) ProcessSpans() {
 				// for all other states, we don't need to do anything
 			}
 		}
+		i.mutex.Unlock()
 	}
 }
 
@@ -222,6 +224,8 @@ func (i *InMemStore) ProcessSpans() {
 // they should not be sent as telemetry unless AllFields is non-null. If the
 // trace has a root span, it will be the first span in the list.
 func (i *InMemStore) GetTrace(traceID string) (*CentralTrace, error) {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
 	if trace, ok := i.traces[traceID]; ok {
 		return trace, nil
 	}
@@ -237,7 +241,9 @@ func (i *InMemStore) GetTrace(traceID string) (*CentralTrace, error) {
 // considered to be final and appropriately disposed of; the central store
 // will not change the state of these traces after this call.
 func (i *InMemStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
-	var statuses []*CentralTraceStatus
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
+	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
 		if state, status := i.findTraceStatus(traceID); state != Unknown {
 			statuses = append(statuses, status)
@@ -250,6 +256,8 @@ func (i *InMemStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatu
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
 func (i *InMemStore) GetTracesForState(state CentralTraceState) ([]string, error) {
+	i.mutex.RLock()
+	defer i.mutex.RUnlock()
 	if _, ok := i.states[state]; !ok {
 		return nil, fmt.Errorf("invalid state %s", state)
 	}
@@ -268,6 +276,8 @@ func (i *InMemStore) GetTracesForState(state CentralTraceState) ([]string, error
 // this call, so the caller should not assume that the state persists as
 // set.
 func (i *InMemStore) SetTraceStatuses(statuses []*CentralTraceStatus) error {
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 	for _, status := range statuses {
 		i.changeTraceState(status.TraceID, Unknown, status.State)
 	}
