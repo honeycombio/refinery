@@ -1,6 +1,9 @@
 package centralstore
 
-import "github.com/honeycombio/refinery/types"
+import (
+	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/types"
+)
 
 // CentralSpan is the subset of a span that is sent to the central store.
 // If AllFields is non-nil, it contains all the fields from the original span; this
@@ -52,15 +55,55 @@ func (CentralTraceState) ValidStates() []CentralTraceState {
 }
 
 type CentralTraceStatus struct {
-	TraceID    string
-	State      CentralTraceState
-	KeepReason string
-	SampleRate int
+	TraceID     string
+	State       CentralTraceState
+	KeepReason  string
+	reasonIndex uint // this is the cache ID for the reason
+	Rate        uint
 }
 
 type CentralTrace struct {
 	Root  *CentralSpan
 	Spans []*CentralSpan
+}
+
+// ensure that CentralTraceStatus implements the KeptTrace interface
+var _ cache.KeptTrace = (*CentralTraceStatus)(nil)
+
+func (t *CentralTraceStatus) ID() string {
+	return t.TraceID
+}
+
+func (t *CentralTraceStatus) SampleRate() uint {
+	return uint(t.Rate)
+}
+
+func (t *CentralTraceStatus) DescendantCount() uint32 {
+	// TODO
+	return 0
+}
+
+func (t *CentralTraceStatus) SpanEventCount() uint32 {
+	// TODO
+	return 0
+}
+
+func (t *CentralTraceStatus) SpanLinkCount() uint32 {
+	// TODO
+	return 0
+}
+
+func (t *CentralTraceStatus) SpanCount() uint32 {
+	// TODO
+	return 0
+}
+
+func (t *CentralTraceStatus) SetSentReason(reason uint) {
+	t.reasonIndex = reason
+}
+
+func (t *CentralTraceStatus) SentReason() uint {
+	return t.reasonIndex
 }
 
 // func CentralTraceFromTrace(trace *types.Trace) *CentralTrace {
