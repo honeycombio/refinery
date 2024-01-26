@@ -115,6 +115,7 @@ func (i *InMemStore) findTraceStatus(traceID string) (CentralTraceState, *Centra
 
 // changes the status of a trace; if fromState is Unknown, the trace will be searched for
 // in all states. If the trace wasn't found, false will be returned.
+// Only call this if you're holding a Lock on i.mut.
 func (i *InMemStore) changeTraceState(traceID string, fromState, toState CentralTraceState) bool {
 	var status *CentralTraceStatus
 	var ok bool
@@ -215,6 +216,7 @@ func (i *InMemStore) ProcessSpans() {
 		case Unknown:
 			// we don't have a state for this trace, so we create it
 			i.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting)
+			i.traces[span.TraceID] = &CentralTrace{}
 		}
 
 		// Add the span to the trace; this works even if the trace doesn't exist yet
@@ -302,7 +304,7 @@ func (i *InMemStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatu
 	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
 		if state, status := i.findTraceStatus(traceID); state != Unknown {
-			statuses = append(statuses, status)
+			statuses = append(statuses, status.Clone())
 		} else {
 			statuses = append(statuses, NewCentralTraceStatus(traceID, state))
 		}
