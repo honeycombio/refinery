@@ -210,6 +210,11 @@ func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 	c.dropped.Add(trace.ID())
 }
 
+// fast check to see if we've already dropped this trace
+func (c *cuckooSentCache) Dropped(traceID string) bool {
+	return c.dropped.Check(traceID)
+}
+
 func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(span.TraceID) {
