@@ -1,6 +1,7 @@
 package centralstore
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,7 +14,7 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-func createNewInMemStore() *InMemStore {
+func standardOptions() InMemStoreOptions {
 	opts := InMemStoreOptions{
 		KeptSize:          100,
 		DroppedSize:       100,
@@ -24,12 +25,12 @@ func createNewInMemStore() *InMemStore {
 		TraceTimeout:      duration("500ms"),
 		DecisionTimeout:   duration("100ms"),
 	}
-
-	return NewInMemStore(opts)
+	return opts
 }
 
-func TestBasicStoreOperation(t *testing.T) {
-	store := createNewInMemStore()
+func TestSingleTraceOperation(t *testing.T) {
+	opts := standardOptions()
+	store := NewInMemStore(opts)
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -73,4 +74,133 @@ func TestBasicStoreOperation(t *testing.T) {
 		assert.Equal(collect, span.TraceID, states[0].TraceID)
 		assert.Equal(collect, ReadyForDecision, states[0].State)
 	}, 1*time.Second, 10*time.Millisecond)
+}
+
+func TestBasicStoreOperation(t *testing.T) {
+	opts := standardOptions()
+	store := NewInMemStore(opts)
+	defer store.Stop()
+
+	traceids := make([]string, 0)
+
+	for t := 0; t < 10; t++ {
+		tid := fmt.Sprintf("trace%d", t)
+		traceids = append(traceids, tid)
+		// write 9 child spans to the store
+		for s := 1; s < 10; s++ {
+			span := &CentralSpan{
+				TraceID:  tid,
+				SpanID:   fmt.Sprintf("span%d", s),
+				ParentID: fmt.Sprintf("span%d", s-1),
+			}
+			store.WriteSpan(span)
+		}
+		// now write the root span
+		span := &CentralSpan{
+			TraceID: tid,
+			SpanID:  "span0",
+		}
+		store.WriteSpan(span)
+	}
+
+	// wait for it to reach the Ready state
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		states, err := store.GetStatusForTraces(traceids)
+		assert.NoError(collect, err)
+		assert.Equal(collect, 10, len(states))
+		for _, state := range states {
+			assert.Equal(collect, ReadyForDecision, state.State)
+		}
+	}, 3*time.Second, 10*time.Millisecond)
+
+	// check that the spans are in the store
+	for _, tid := range traceids {
+		trace, err := store.GetTrace(tid)
+		assert.NoError(t, err)
+		assert.Equal(t, 10, len(trace.Spans))
+		assert.NotNil(t, trace.Root)
+	}
+}
+
+func BenchmarkStoreWriteSpan(b *testing.B) {
+	opts := standardOptions()
+	store := NewInMemStore(opts)
+
+	spans := make([]*CentralSpan, 0)
+	for i := 0; i < 100; i++ {
+		span := &CentralSpan{
+			TraceID: fmt.Sprintf("trace%d", i),
+			SpanID:  "span1",
+		}
+		spans = append(spans, span)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		store.WriteSpan(spans[i%100])
+	}
+}
+
+func BenchmarkStoreGetStatus(b *testing.B) {
+	opts := standardOptions()
+	store := NewInMemStore(opts)
+
+	spans := make([]*CentralSpan, 0)
+	for i := 0; i < 100; i++ {
+		span := &CentralSpan{
+			TraceID: fmt.Sprintf("trace%d", i),
+			SpanID:  "span1",
+		}
+		spans = append(spans, span)
+		store.WriteSpan(spans[i%100])
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		store.GetStatusForTraces([]string{spans[i%100].TraceID})
+	}
+}
+
+func BenchmarkStoreGetTrace(b *testing.B) {
+	opts := standardOptions()
+	store := NewInMemStore(opts)
+
+	spans := make([]*CentralSpan, 0)
+	for i := 0; i < 100; i++ {
+		span := &CentralSpan{
+			TraceID: fmt.Sprintf("trace%d", i),
+			SpanID:  "span1",
+		}
+		spans = append(spans, span)
+		store.WriteSpan(spans[i%100])
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		store.GetTrace(spans[i%100].TraceID)
+	}
+}
+
+func BenchmarkStoreGetTracesForState(b *testing.B) {
+	// we want things to happen fast, so we'll set the timeouts low
+	opts := standardOptions()
+	opts.SendDelay = duration("100ms")
+	opts.TraceTimeout = duration("100ms")
+	store := NewInMemStore(opts)
+
+	spans := make([]*CentralSpan, 0)
+	for i := 0; i < 100; i++ {
+		span := &CentralSpan{
+			TraceID: fmt.Sprintf("trace%d", i),
+			SpanID:  "span1",
+		}
+		spans = append(spans, span)
+		store.WriteSpan(spans[i%100])
+	}
+	time.Sleep(500 * time.Millisecond)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		store.GetTracesForState(ReadyForDecision)
+	}
 }
