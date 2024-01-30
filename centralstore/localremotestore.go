@@ -33,7 +33,7 @@ func NewLocalRemoteStore() *LocalRemoteStore {
 }
 
 // ensure that LocalRemoteStore implements RemoteStore
-var _ RemoteStore = (*LocalRemoteStore)(nil)
+var _ BasicStorer = (*LocalRemoteStore)(nil)
 
 // findTraceStatus returns the state and status of a trace, or Unknown if the trace
 // wasn't found in any state. If the trace is found, the status will be non-nil.

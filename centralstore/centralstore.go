@@ -187,10 +187,10 @@ type CentralTraceDecider interface {
 	Process() error
 }
 
-// CentralStorer is the interface that a central store must implement.
+// SmartStorer is the interface that an intelligent central store must implement.
 // This is the data storage interface used by the trace decision engine; it
 // is not the trace decision engine itself.
-type CentralStorer interface {
+type SmartStorer interface {
 	// Register should be called once at Refinery startup to register itself
 	// with the central store. This is used to ensure that the central store
 	// knows about all the refineries that are running, and can make decisions
@@ -240,7 +240,7 @@ type CentralStorer interface {
 	// This is used to record the decision made by the trace decision engine. If
 	// the state is DecisionKeep, the reason should be provided; if the state is
 	// DecisionDrop, the reason should be empty as it will be ignored. Note that
-	// the CentralStorer is permitted to manipulate the state of the trace after
+	// the SmartStorer is permitted to manipulate the state of the trace after
 	// this call, so the caller should not assume that the state persists as
 	// set.
 	SetTraceStatuses(statuses []*CentralTraceStatus) error
@@ -284,9 +284,8 @@ type CentralStorer interface {
 // - return the IDs of traces that have been in a given state for a given time
 // - return metrics about the traces it has seen
 
-// RemoteStore is the interface for a remote store. The WriteSpan method may be
-// asynchronous, while the Get
-type RemoteStore interface {
+// BasicStorer is the interface for a non-intelligent remote store.
+type BasicStorer interface {
 	// WriteSpan writes a span to the store. It must always contain TraceID.
 	// If this is a span containing any non-empty key fields, it must also contain
 	// SpanID (and ParentID if it is not a root span).
