@@ -1,6 +1,7 @@
 package centralstore
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -26,11 +27,7 @@ type statusMap map[string]*CentralTraceStatus
 
 // This is an implementation of CentralStorer that stores spans in memory locally.
 type InMemStore struct {
-	// states holds the current state of each trace in a map of the different states
-	// indexed by trace ID.
-	states map[CentralTraceState]statusMap
-	// traces holds the current data for each trace
-	traces        map[string]*CentralTrace
+	remoteStore   RemoteStore
 	keyfields     []string
 	spanChan      chan *CentralSpan
 	decisionCache cache.TraceSentCache
@@ -67,24 +64,16 @@ func NewInMemStore(options InMemStoreOptions) *InMemStore {
 	}
 
 	i := &InMemStore{
-		states:        make(map[CentralTraceState]statusMap),
-		traces:        make(map[string]*CentralTrace),
+		remoteStore:   NewLocalRemoteStore(),
 		spanChan:      make(chan *CentralSpan, options.SpanChannelSize),
 		decisionCache: decisionCache,
 		done:          make(chan struct{}),
 	}
-
-	var cts CentralTraceState
-	for _, state := range cts.ValidStates() {
-		// initialize the map for each state
-		i.states[state] = make(statusMap)
-	}
-
 	// start the span processor
-	go i.ProcessSpans()
+	go i.processSpans()
 
 	// start the state manager
-	go i.ManageStates(options)
+	go i.manageStates(options)
 
 	return i
 }
@@ -99,42 +88,6 @@ func (i *InMemStore) Stop() {
 	close(schan)
 	// stop the state manager
 	close(i.done)
-}
-
-// findTraceStatus returns the state and status of a trace, or Unknown if the trace
-// wasn't found in any state. If the trace is found, the status will be non-nil.
-// Only call this if you're holding at least an RLock on i.mut.
-func (i *InMemStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
-	for state, statuses := range i.states {
-		if status, ok := statuses[traceID]; ok {
-			return state, status
-		}
-	}
-	return Unknown, nil
-}
-
-// changes the status of a trace; if fromState is Unknown, the trace will be searched for
-// in all states. If the trace wasn't found, false will be returned.
-// Only call this if you're holding a Lock on i.mut.
-func (i *InMemStore) changeTraceState(traceID string, fromState, toState CentralTraceState) bool {
-	var status *CentralTraceStatus
-	var ok bool
-	if fromState == Unknown {
-		fromState, status = i.findTraceStatus(traceID)
-		if fromState == Unknown {
-			return false
-		}
-	} else {
-		if status, ok = i.states[fromState][traceID]; !ok {
-			return false
-		}
-	}
-
-	status.State = toState
-	i.states[toState][traceID] = status
-	status.timestamp = time.Now()
-	delete(i.states[fromState], traceID)
-	return true
 }
 
 // Register should be called once at Refinery startup to register itself
@@ -191,55 +144,40 @@ func (i *InMemStore) WriteSpan(span *CentralSpan) error {
 	return nil
 }
 
-// ProcessSpans processes spans from the span channel. This is run in a
+// processSpans processes spans from the span channel. This is run in a
 // goroutine and runs indefinitely until cancelled by calling Stop().
-func (i *InMemStore) ProcessSpans() {
+func (i *InMemStore) processSpans() {
 	for span := range i.spanChan {
-		i.mutex.Lock()
-		// we have to find the state and decide what to do based on that
-		state, _ := i.findTraceStatus(span.TraceID)
-
-		// TODO: Integrate the trace decision cache
-		switch state {
-		case DecisionDrop:
-			// The decision has been made and we can't affect it, so we just ignore the span
-			// We'll only get here if the decision was made after the span was added
-			// to the channel but before it got read out.
-			continue
-		case DecisionKeep, AwaitingDecision:
-			// The decision has been made and we can't affect it anymore, so we add the span to the trace
-			// if it exists; if it doesn't exist in the traces map anymore, we'll create it again.
-			// We do need to mark it late, though.
-			// i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
-		case Collecting, WaitingToDecide, ReadyForDecision:
-			// we're in a state where we can just add the span
-		case Unknown:
-			// we don't have a state for this trace, so we create it
-			i.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting)
-			i.traces[span.TraceID] = &CentralTrace{}
-		}
-
-		// Add the span to the trace; this works even if the trace doesn't exist yet
-		i.traces[span.TraceID].Spans = append(i.traces[span.TraceID].Spans, span)
-
-		if span.ParentID == "" {
-			// this is a root span, so we need to move it to the right state
-			i.traces[span.TraceID].Root = span
-			switch state {
-			case Collecting:
-				i.changeTraceState(span.TraceID, Collecting, WaitingToDecide)
-			default:
-				// for all other states, we don't need to do anything
-			}
-		}
-		i.mutex.Unlock()
+		i.remoteStore.WriteSpan(span)
 	}
 }
 
-// ManageStates is a goroutine that manages the time-based transitions between states.
+// helper function for manageStates
+func (i *InMemStore) manageTimeouts(timeout time.Duration, fromState, toState CentralTraceState) error {
+	st, err := i.remoteStore.GetTracesForState(fromState)
+	if err != nil {
+		return err
+	}
+	statuses, err := i.remoteStore.GetStatusForTraces(st)
+	if err != nil {
+		return err
+	}
+	traceIDsToChange := make([]string, 0)
+	for _, status := range statuses {
+		if time.Since(status.timestamp) > timeout {
+			traceIDsToChange = append(traceIDsToChange, status.TraceID)
+		}
+	}
+	if len(traceIDsToChange) > 0 {
+		err = i.remoteStore.ChangeTraceStatus(traceIDsToChange, fromState, toState)
+	}
+	return err
+}
+
+// manageStates is a goroutine that manages the time-based transitions between states.
 // It runs once each tick of the stateTicker and looks for several different transitions.
 // We unlock the mutex between the different state transitions so that we don't block for too long
-func (i *InMemStore) ManageStates(options InMemStoreOptions) {
+func (i *InMemStore) manageStates(options InMemStoreOptions) {
 	ticker := time.NewTicker(time.Duration(options.StateTicker))
 	for {
 		select {
@@ -248,29 +186,14 @@ func (i *InMemStore) ManageStates(options InMemStoreOptions) {
 			return
 		case <-ticker.C:
 			// traces that are past SendDelay should be moved to ready for decision
-			i.mutex.Lock()
-			for _, status := range i.states[WaitingToDecide] {
-				if time.Since(status.timestamp) > time.Duration(options.SendDelay) {
-					i.changeTraceState(status.TraceID, WaitingToDecide, ReadyForDecision)
-				}
-			}
+			// the only errors can be syntax errors, so won't happen at runtime
+			i.manageTimeouts(time.Duration(options.SendDelay), WaitingToDecide, ReadyForDecision)
+
 			// trace that are past TraceTimeout should be moved to waiting to decide
-			i.mutex.Unlock()
-			i.mutex.Lock()
-			for _, status := range i.states[Collecting] {
-				if time.Since(status.timestamp) > time.Duration(options.TraceTimeout) {
-					i.changeTraceState(status.TraceID, Collecting, WaitingToDecide)
-				}
-			}
-			i.mutex.Unlock()
-			i.mutex.Lock()
+			i.manageTimeouts(time.Duration(options.TraceTimeout), Collecting, WaitingToDecide)
+
 			// see if AwaitDecision traces have been waiting too long
-			for _, status := range i.states[AwaitingDecision] {
-				if time.Since(status.timestamp) > time.Duration(options.DecisionTimeout) {
-					i.changeTraceState(status.TraceID, AwaitingDecision, ReadyForDecision)
-				}
-			}
-			i.mutex.Unlock()
+			i.manageTimeouts(time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyForDecision)
 		}
 	}
 }
@@ -282,12 +205,7 @@ func (i *InMemStore) ManageStates(options InMemStoreOptions) {
 // they should not be sent as telemetry unless AllFields is non-null. If the
 // trace has a root span, it will be the first span in the list.
 func (i *InMemStore) GetTrace(traceID string) (*CentralTrace, error) {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
-	if trace, ok := i.traces[traceID]; ok {
-		return trace, nil
-	}
-	return nil, fmt.Errorf("trace %s not found", traceID)
+	return i.remoteStore.GetTrace(traceID)
 }
 
 // GetStatusForTraces returns the current state for a list of traces,
@@ -299,31 +217,12 @@ func (i *InMemStore) GetTrace(traceID string) (*CentralTrace, error) {
 // considered to be final and appropriately disposed of; the central store
 // will not change the state of these traces after this call.
 func (i *InMemStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
-	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
-	for _, traceID := range traceIDs {
-		if state, status := i.findTraceStatus(traceID); state != Unknown {
-			statuses = append(statuses, status.Clone())
-		} else {
-			statuses = append(statuses, NewCentralTraceStatus(traceID, state))
-		}
-	}
-	return statuses, nil
+	return i.remoteStore.GetStatusForTraces(traceIDs)
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
 func (i *InMemStore) GetTracesForState(state CentralTraceState) ([]string, error) {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
-	if _, ok := i.states[state]; !ok {
-		return nil, fmt.Errorf("invalid state %s", state)
-	}
-	traceids := make([]string, 0, len(i.states[state]))
-	for _, traceStatus := range i.states[state] {
-		traceids = append(traceids, traceStatus.TraceID)
-	}
-	return traceids, nil
+	return i.remoteStore.GetTracesForState(state)
 }
 
 // SetTraceStatuses sets the status of a set of traces in the central store.
@@ -334,12 +233,34 @@ func (i *InMemStore) GetTracesForState(state CentralTraceState) ([]string, error
 // this call, so the caller should not assume that the state persists as
 // set.
 func (i *InMemStore) SetTraceStatuses(statuses []*CentralTraceStatus) error {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
+	keeps := make([]*CentralTraceStatus, 0)
+	drops := make([]string, 0)
 	for _, status := range statuses {
-		i.changeTraceState(status.TraceID, Unknown, status.State)
+		switch status.State {
+		case DecisionKeep:
+			keeps = append(keeps, status)
+		case DecisionDrop:
+			drops = append(drops, status.TraceID)
+		default:
+			// ignore all other states -- but do we want to log something? This is a bug.
+		}
 	}
-	return nil
+
+	var err error
+	if len(keeps) > 0 {
+		err = i.remoteStore.KeepTraces(keeps)
+	}
+	if len(drops) > 0 {
+		err2 := i.remoteStore.ChangeTraceStatus(drops, WaitingToDecide, DecisionDrop)
+		if err2 != nil {
+			if err != nil {
+				err = errors.Join(err, err2)
+			} else {
+				err = err2
+			}
+		}
+	}
+	return err
 }
 
 // GetMetrics returns a map of metrics from the central store, accumulated
