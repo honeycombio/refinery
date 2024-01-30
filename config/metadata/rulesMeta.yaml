@@ -651,11 +651,11 @@ groups:
         summary: is the comparison operator to use.
         description: >
           The comparison operator to use. String comparisons are case-sensitive.
-          WARNING: using the `not-exists` operator in a rule with a scope of
+          For most cases, `not-exists` should only be used in a rule with a scope
+          of "span". WARNING: The `not-exists` operator in a rule with a scope of
           "trace" (the default) will cause the rule to match a trace if *any* span
-          in the trace does not have the field. This is almost certainly not the
-          matching behavior you want. Use `not-exists` in a rule with a scope of
-          "span".
+          in the trace lacks the specified field. This is rarely the matching
+          behavior you want.
       - name: Value
         type: anyscalar
         summary: is the value to compare against.
