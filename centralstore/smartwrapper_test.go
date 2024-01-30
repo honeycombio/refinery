@@ -14,8 +14,8 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-func standardOptions() InMemStoreOptions {
-	opts := InMemStoreOptions{
+func standardOptions() SmartWrapperOptions {
+	opts := SmartWrapperOptions{
 		KeptSize:          100,
 		DroppedSize:       100,
 		SpanChannelSize:   100,
@@ -30,7 +30,7 @@ func standardOptions() InMemStoreOptions {
 
 func TestSingleTraceOperation(t *testing.T) {
 	opts := standardOptions()
-	store := NewInMemStore(opts)
+	store := NewSmartWrapper(opts, NewLocalRemoteStore())
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -70,7 +70,7 @@ func TestSingleTraceOperation(t *testing.T) {
 
 func TestBasicStoreOperation(t *testing.T) {
 	opts := standardOptions()
-	store := NewInMemStore(opts)
+	store := NewSmartWrapper(opts, NewLocalRemoteStore())
 	defer store.Stop()
 
 	traceids := make([]string, 0)
@@ -116,7 +116,7 @@ func TestBasicStoreOperation(t *testing.T) {
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
 	opts := standardOptions()
-	store := NewInMemStore(opts)
+	store := NewSmartWrapper(opts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -135,7 +135,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 
 func BenchmarkStoreGetStatus(b *testing.B) {
 	opts := standardOptions()
-	store := NewInMemStore(opts)
+	store := NewSmartWrapper(opts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -155,7 +155,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 
 func BenchmarkStoreGetTrace(b *testing.B) {
 	opts := standardOptions()
-	store := NewInMemStore(opts)
+	store := NewSmartWrapper(opts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -178,7 +178,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	opts := standardOptions()
 	opts.SendDelay = duration("100ms")
 	opts.TraceTimeout = duration("100ms")
-	store := NewInMemStore(opts)
+	store := NewSmartWrapper(opts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
