@@ -651,12 +651,12 @@ groups:
         summary: is the comparison operator to use.
         description: >
           The comparison operator to use. String comparisons are case-sensitive.
-          For most cases, use the negative operators (`!=`, `does-not-contain`, and
-          `not-exists`) in a rule with a scope of "span". WARNING: A negative operator
-          in a rule with a scope of "trace" (the default) can cause the rule to match
-          a trace if *any* span in the trace matches the negative condition, for example
-          a single span in a trace lacks the specified field (`not-exists`).
-          This is rarely the matching behavior you want.
+          For most cases, use negative operators (`!=`, `does-not-contain`, and
+          `not-exists`) in a rule with a scope of "span".
+          WARNING: Rules can have `Scope: trace` or `Scope: span`; a negative
+          operator with `Scope: trace` will be true if **any** single span in the
+          entire trace matches the negative condition.
+          This is almost never desired behavior.
       - name: Value
         type: anyscalar
         summary: is the value to compare against.
