@@ -40,14 +40,6 @@ func TestSingleTraceOperation(t *testing.T) {
 	}
 	store.WriteSpan(span)
 
-	// check that the span is in the store
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		store.mutex.Lock()
-		defer store.mutex.Unlock()
-		_, ok := store.traces[span.TraceID]
-		assert.True(collect, ok)
-	}, 1*time.Second, 10*time.Millisecond)
-
 	// make sure that it arrived in the collecting state
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		states, err := store.GetStatusForTraces([]string{span.TraceID})

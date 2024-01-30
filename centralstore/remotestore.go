@@ -1,6 +1,7 @@
 package centralstore
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -9,7 +10,8 @@ import (
 // store that is local to the Refinery process. This is used when there is only one
 // refinery in the system, and for testing and benchmarking.
 type LocalRemoteStore struct {
-	// states holds the current state for each trace
+	// states holds the current state of each trace in a map of the different states
+	// indexed by trace ID.
 	states map[CentralTraceState]statusMap
 	// traces holds the current data for each trace
 	traces map[string]*CentralTrace
@@ -18,10 +20,16 @@ type LocalRemoteStore struct {
 
 // NewLocalRemoteStore returns a new LocalRemoteStore.
 func NewLocalRemoteStore() *LocalRemoteStore {
-	return &LocalRemoteStore{
+	lrs := &LocalRemoteStore{
 		states: make(map[CentralTraceState]statusMap),
 		traces: make(map[string]*CentralTrace),
 	}
+	var cts CentralTraceState
+	for _, state := range cts.ValidStates() {
+		// initialize the map for each state
+		lrs.states[state] = make(statusMap)
+	}
+	return lrs
 }
 
 // ensure that LocalRemoteStore implements RemoteStore
@@ -124,7 +132,12 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 // populated. Normally this call will be made after Refinery has been asked
 // to make a trace decision.
 func (lrs *LocalRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
-	return nil, nil
+	lrs.mutex.RLock()
+	defer lrs.mutex.RUnlock()
+	if trace, ok := lrs.traces[traceID]; ok {
+		return trace, nil
+	}
+	return nil, fmt.Errorf("trace %s not found", traceID)
 }
 
 // GetStatusForTraces returns the current state for a list of trace IDs,
@@ -138,24 +151,63 @@ func (lrs *LocalRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
 // after this call (although kept spans will have counts updated when late
 // spans arrive).
 func (lrs *LocalRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
-	return nil, nil
+	lrs.mutex.RLock()
+	defer lrs.mutex.RUnlock()
+	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
+	for _, traceID := range traceIDs {
+		if state, status := lrs.findTraceStatus(traceID); state != Unknown {
+			statuses = append(statuses, status.Clone())
+		} else {
+			statuses = append(statuses, NewCentralTraceStatus(traceID, state))
+		}
+	}
+	return statuses, nil
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
 func (lrs *LocalRemoteStore) GetTracesForState(state CentralTraceState) ([]string, error) {
-	return nil, nil
+	lrs.mutex.RLock()
+	defer lrs.mutex.RUnlock()
+	if _, ok := lrs.states[state]; !ok {
+		return nil, fmt.Errorf("invalid state %s", state)
+	}
+	traceids := make([]string, 0, len(lrs.states[state]))
+	for _, traceStatus := range lrs.states[state] {
+		traceids = append(traceids, traceStatus.TraceID)
+	}
+	return traceids, nil
 }
 
 // ChangeTraceStatus changes the status of a set of traces from one state to another
 // atomically. This can be used for all trace states except transition to Keep.
+// If a traceID is not found in the fromState, this is not considered to be an error.
+// TODO: should we consider returning the list of traces that were not modified? Do we care?
+// Alternative is to make this function only do one trace at a time.
 func (lrs *LocalRemoteStore) ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error {
+	lrs.mutex.Lock()
+	defer lrs.mutex.Unlock()
+	for _, traceID := range traceIDs {
+		if !lrs.changeTraceState(traceID, fromState, toState) {
+			continue
+		}
+	}
 	return nil
 }
 
 // KeepTraces changes the status of a set of traces from AwaitingDecision to Keep;
 // it is used to record the keep decisions made by the trace decision engine.
 // Statuses should include Reason and Rate; do not include State as it will be ignored.
+// If a trace is not in the AwaitingDecision state, it will be ignored.
 func (lrs *LocalRemoteStore) KeepTraces(statuses []*CentralTraceStatus) error {
+	lrs.mutex.Lock()
+	defer lrs.mutex.Unlock()
+	for _, status := range statuses {
+		if !lrs.changeTraceState(status.TraceID, AwaitingDecision, DecisionKeep) {
+			continue
+		}
+		lrs.states[DecisionKeep][status.TraceID].KeepReason = status.KeepReason
+		lrs.states[DecisionKeep][status.TraceID].Rate = status.Rate
+	}
 	return nil
 }
 
