@@ -3,7 +3,6 @@ package centralstore
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -13,33 +12,20 @@ import (
 
 type statusMap map[string]*CentralTraceStatus
 
-// func (sm statusMap) addStatus(traceID string, status *CentralTraceStatus) {
-// 	sm[traceID] = status
-// }
-
-// func (sm statusMap) getStatus(traceID string) *CentralTraceStatus {
-// 	return sm[traceID]
-// }
-
-// func (sm statusMap) deleteStatus(traceID string) {
-// 	delete(sm, traceID)
-// }
-
-// This is an implementation of CentralStorer that stores spans in memory locally.
-type InMemStore struct {
-	remoteStore   RemoteStore
+// This is an implementation of SmartStorer that stores spans in memory locally.
+type SmartWrapper struct {
+	basicStore    BasicStorer
 	keyfields     []string
 	spanChan      chan *CentralSpan
 	decisionCache cache.TraceSentCache
 	done          chan struct{}
-	mutex         sync.RWMutex
 }
 
-// ensure that we implement CentralStorer
-var _ CentralStorer = (*InMemStore)(nil)
+// ensure that we implement SmartStorer
+var _ SmartStorer = (*SmartWrapper)(nil)
 
 // this probably gets moved into config eventually
-type InMemStoreOptions struct {
+type SmartWrapperOptions struct {
 	KeptSize          uint
 	DroppedSize       uint
 	SpanChannelSize   int
@@ -50,8 +36,8 @@ type InMemStoreOptions struct {
 	DecisionTimeout   config.Duration
 }
 
-// NewInMemStore creates a new InMemStore.
-func NewInMemStore(options InMemStoreOptions) *InMemStore {
+// NewSmartWrapper creates a new SmartWrapper.
+func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer) *SmartWrapper {
 	cfg := config.SampleCacheConfig{
 		KeptSize:          options.KeptSize,
 		DroppedSize:       options.DroppedSize,
@@ -63,8 +49,8 @@ func NewInMemStore(options InMemStoreOptions) *InMemStore {
 		panic(err)
 	}
 
-	i := &InMemStore{
-		remoteStore:   NewLocalRemoteStore(),
+	i := &SmartWrapper{
+		basicStore:    basic,
 		spanChan:      make(chan *CentralSpan, options.SpanChannelSize),
 		decisionCache: decisionCache,
 		done:          make(chan struct{}),
@@ -78,11 +64,9 @@ func NewInMemStore(options InMemStoreOptions) *InMemStore {
 	return i
 }
 
-func (i *InMemStore) Stop() {
+func (i *SmartWrapper) Stop() {
 	// close the span channel to stop the span processor,
 	// but first set spanChan to nil so that we won't accept any more spans
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
 	schan := i.spanChan
 	i.spanChan = nil
 	close(schan)
@@ -95,7 +79,7 @@ func (i *InMemStore) Stop() {
 // knows about all the refineries that are running, and can make decisions
 // about which refinery is responsible for which trace.
 // For an in-memory store, this is a no-op.
-func (i *InMemStore) Register() error {
+func (i *SmartWrapper) Register() error {
 	return nil
 }
 
@@ -104,7 +88,7 @@ func (i *InMemStore) Register() error {
 // will no longer ask it to make decisions on any new traces. (Calls to
 // GetTracesNeedingDecision will return an empty list.)
 // For an in-memory store, this is a no-op.
-func (i *InMemStore) Unregister() error {
+func (i *SmartWrapper) Unregister() error {
 	return nil
 }
 
@@ -112,7 +96,7 @@ func (i *InMemStore) Unregister() error {
 // if they are changed live, inflight trace decisions may be affected.
 // Certain fields are always recorded, such as the trace ID, span ID, and
 // parent ID; listing them in keyFields is not necessary (but won't hurt).
-func (i *InMemStore) SetKeyFields(keyFields []string) error {
+func (i *SmartWrapper) SetKeyFields(keyFields []string) error {
 	// someday maybe we compare new keyFields to old keyFields and do something
 	i.keyfields = keyFields
 	return nil
@@ -123,7 +107,7 @@ func (i *InMemStore) SetKeyFields(keyFields []string) error {
 // on shutdown, when a refinery forwards all its remaining spans to the central store.
 // The latest value for a span should be retained, because during shutdown, the
 // span will contain more fields.
-func (i *InMemStore) WriteSpan(span *CentralSpan) error {
+func (i *SmartWrapper) WriteSpan(span *CentralSpan) error {
 	// first let's check if we've already processed and dropped this trace; if so, we're done and
 	// can just ignore the span.
 	if i.decisionCache.Dropped(span.TraceID) {
@@ -146,19 +130,19 @@ func (i *InMemStore) WriteSpan(span *CentralSpan) error {
 
 // processSpans processes spans from the span channel. This is run in a
 // goroutine and runs indefinitely until cancelled by calling Stop().
-func (i *InMemStore) processSpans() {
+func (i *SmartWrapper) processSpans() {
 	for span := range i.spanChan {
-		i.remoteStore.WriteSpan(span)
+		i.basicStore.WriteSpan(span)
 	}
 }
 
 // helper function for manageStates
-func (i *InMemStore) manageTimeouts(timeout time.Duration, fromState, toState CentralTraceState) error {
-	st, err := i.remoteStore.GetTracesForState(fromState)
+func (i *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState CentralTraceState) error {
+	st, err := i.basicStore.GetTracesForState(fromState)
 	if err != nil {
 		return err
 	}
-	statuses, err := i.remoteStore.GetStatusForTraces(st)
+	statuses, err := i.basicStore.GetStatusForTraces(st)
 	if err != nil {
 		return err
 	}
@@ -169,7 +153,7 @@ func (i *InMemStore) manageTimeouts(timeout time.Duration, fromState, toState Ce
 		}
 	}
 	if len(traceIDsToChange) > 0 {
-		err = i.remoteStore.ChangeTraceStatus(traceIDsToChange, fromState, toState)
+		err = i.basicStore.ChangeTraceStatus(traceIDsToChange, fromState, toState)
 	}
 	return err
 }
@@ -177,7 +161,7 @@ func (i *InMemStore) manageTimeouts(timeout time.Duration, fromState, toState Ce
 // manageStates is a goroutine that manages the time-based transitions between states.
 // It runs once each tick of the stateTicker and looks for several different transitions.
 // We unlock the mutex between the different state transitions so that we don't block for too long
-func (i *InMemStore) manageStates(options InMemStoreOptions) {
+func (i *SmartWrapper) manageStates(options SmartWrapperOptions) {
 	ticker := time.NewTicker(time.Duration(options.StateTicker))
 	for {
 		select {
@@ -204,8 +188,8 @@ func (i *InMemStore) manageStates(options InMemStoreOptions) {
 // returned from this call should be used for making the trace decision;
 // they should not be sent as telemetry unless AllFields is non-null. If the
 // trace has a root span, it will be the first span in the list.
-func (i *InMemStore) GetTrace(traceID string) (*CentralTrace, error) {
-	return i.remoteStore.GetTrace(traceID)
+func (i *SmartWrapper) GetTrace(traceID string) (*CentralTrace, error) {
+	return i.basicStore.GetTrace(traceID)
 }
 
 // GetStatusForTraces returns the current state for a list of traces,
@@ -216,23 +200,23 @@ func (i *InMemStore) GetTrace(traceID string) (*CentralTrace, error) {
 // added. Any traces with a state of DecisionKeep or DecisionDrop should be
 // considered to be final and appropriately disposed of; the central store
 // will not change the state of these traces after this call.
-func (i *InMemStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
-	return i.remoteStore.GetStatusForTraces(traceIDs)
+func (i *SmartWrapper) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
+	return i.basicStore.GetStatusForTraces(traceIDs)
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
-func (i *InMemStore) GetTracesForState(state CentralTraceState) ([]string, error) {
-	return i.remoteStore.GetTracesForState(state)
+func (i *SmartWrapper) GetTracesForState(state CentralTraceState) ([]string, error) {
+	return i.basicStore.GetTracesForState(state)
 }
 
 // SetTraceStatuses sets the status of a set of traces in the central store.
 // This is used to record the decision made by the trace decision engine. If
 // the state is DecisionKeep, the reason should be provided; if the state is
 // DecisionDrop, the reason should be empty as it will be ignored. Note that
-// the CentralStorer is permitted to manipulate the state of the trace after
+// the SmartWrapper is permitted to manipulate the state of the trace after
 // this call, so the caller should not assume that the state persists as
 // set.
-func (i *InMemStore) SetTraceStatuses(statuses []*CentralTraceStatus) error {
+func (i *SmartWrapper) SetTraceStatuses(statuses []*CentralTraceStatus) error {
 	keeps := make([]*CentralTraceStatus, 0)
 	drops := make([]string, 0)
 	for _, status := range statuses {
@@ -248,10 +232,10 @@ func (i *InMemStore) SetTraceStatuses(statuses []*CentralTraceStatus) error {
 
 	var err error
 	if len(keeps) > 0 {
-		err = i.remoteStore.KeepTraces(keeps)
+		err = i.basicStore.KeepTraces(keeps)
 	}
 	if len(drops) > 0 {
-		err2 := i.remoteStore.ChangeTraceStatus(drops, WaitingToDecide, DecisionDrop)
+		err2 := i.basicStore.ChangeTraceStatus(drops, WaitingToDecide, DecisionDrop)
 		if err2 != nil {
 			if err != nil {
 				err = errors.Join(err, err2)
@@ -265,6 +249,6 @@ func (i *InMemStore) SetTraceStatuses(statuses []*CentralTraceStatus) error {
 
 // GetMetrics returns a map of metrics from the central store, accumulated
 // since the previous time this method was called.
-func (i *InMemStore) GetMetrics() (map[string]interface{}, error) {
+func (i *SmartWrapper) GetMetrics() (map[string]interface{}, error) {
 	return nil, nil
 }
