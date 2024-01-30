@@ -65,6 +65,10 @@ func (CentralTraceState) ValidStates() []CentralTraceState {
 	}
 }
 
+func (s CentralTraceState) String() string {
+	return string(s)
+}
+
 type CentralTraceStatus struct {
 	TraceID        string
 	State          CentralTraceState
@@ -105,9 +109,10 @@ func (s *CentralTraceStatus) Update(trace *CentralTrace) {
 }
 
 type CentralTrace struct {
-	TraceID string
-	Root    *CentralSpan
-	Spans   []*CentralSpan
+	TraceID   string
+	Timestamp uint64 //
+	Root      *CentralSpan
+	Spans     []*CentralSpan
 }
 
 // ensure that CentralTraceStatus implements the KeptTrace interface
@@ -320,6 +325,7 @@ type RemoteStore interface {
 
 	// ChangeTraceStatus changes the status of a set of traces from one state to another
 	// atomically. This can be used for all trace states except transition to Keep.
+	// This call updates the timestamps in the trace status.
 	ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error
 
 	// KeepTraces changes the status of a set of traces from AwaitingDecision to Keep;
