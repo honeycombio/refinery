@@ -7,6 +7,14 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+type SpanType string
+
+const (
+	SpanTypeNormal SpanType = ""
+	SpanTypeLink   SpanType = "link"
+	SpanTypeEvent  SpanType = "span_event"
+)
+
 // CentralSpan is the subset of a span that is sent to the central store.
 // If AllFields is non-nil, it contains all the fields from the original span; this
 // is used when a refinery needs to shut down; it can forward all its spans to the central
@@ -17,6 +25,7 @@ type CentralSpan struct {
 	TraceID   string
 	SpanID    string
 	ParentID  string
+	Type      SpanType
 	KeyFields map[string]interface{}
 	AllFields map[string]interface{}
 	IsRoot    bool
@@ -57,12 +66,15 @@ func (CentralTraceState) ValidStates() []CentralTraceState {
 }
 
 type CentralTraceStatus struct {
-	TraceID     string
-	State       CentralTraceState
-	Rate        uint
-	KeepReason  string
-	reasonIndex uint      // this is the cache ID for the reason
-	timestamp   time.Time // this is the last time the trace state was changed
+	TraceID        string
+	State          CentralTraceState
+	Rate           uint
+	KeepReason     string
+	reasonIndex    uint      // this is the cache ID for the reason
+	timestamp      time.Time // this is the last time the trace state was changed
+	spanCount      uint32    // number of spans in the trace
+	spanEventCount uint32    // number of span events in the trace
+	spanLinkCount  uint32    // number of span links in the trace
 }
 
 func NewCentralTraceStatus(traceID string, state CentralTraceState) *CentralTraceStatus {
@@ -84,9 +96,18 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 	}
 }
 
+func (s *CentralTraceStatus) Update(trace *CentralTrace) {
+	s.spanCount = uint32(len(trace.Spans))
+	// for _, span := range trace.Spans {
+	// s.spanEventCount += span.EventCount
+	// s.spanLinkCount += span.LinkCount
+	// }
+}
+
 type CentralTrace struct {
-	Root  *CentralSpan
-	Spans []*CentralSpan
+	TraceID string
+	Root    *CentralSpan
+	Spans   []*CentralSpan
 }
 
 // ensure that CentralTraceStatus implements the KeptTrace interface
@@ -243,3 +264,70 @@ type CentralStorer interface {
 //   from the non-owning refinery after the timeout is ignored.
 // * Decision:Keep — this decision has been received from the refinery, and moves to a state that includes recorded trace metadata and sample rate information
 // * Decision:Drop — this decision forgets all trace information except the traceID (we typically use something like a Bloom filter to track it)
+
+// We expect a remote store to collect spans and manage the state of traces.
+// Data structures it has to provide:
+// - a list of spans for a trace
+// - a record of the state of a trace and its metadata (span count, etc)
+//
+// It should be able to:
+// - receive a span and add it to the appropriate trace, creating the trace if necessary
+// - count spans and metadata about them
+// - return the entire state of an individual trace
+// - return the IDs of traces in a given state (e.g. "WaitingToDecide")
+// - move a trace atomically from one state to another
+// - return the IDs of traces that have been in a given state for a given time
+// - return metrics about the traces it has seen
+
+// RemoteStore is the interface for a remote store. The WriteSpan method may be
+// asynchronous, while the Get
+type RemoteStore interface {
+	// WriteSpan writes a span to the store. It must always contain TraceID.
+	// If this is a span containing any non-empty key fields, it must also contain
+	// SpanID (and ParentID if it is not a root span).
+	// For span events and span links, it may contain only the TraceID and the SpanType field;
+	// these are counted but not stored.
+	// Root spans should always be sent and must contain at least SpanID, and have the IsRoot flag set.
+	// AllFields is optional and is used during shutdown.
+	// WriteSpan may be asynchronous and will only return an error if the span could not be written.
+	WriteSpan(span *CentralSpan) error
+
+	// GetTrace fetches the current state of a trace (including all of its
+	// spans) from the central store. The trace contains a list of CentralSpans,
+	// and these spans will usually (but not always) only contain the key
+	// fields. The spans returned from this call should be used for making the
+	// trace decision; they should not be sent as telemetry unless AllFields is
+	// non-null, in which case these spans should be sent if the trace decision
+	// is Keep. If the trace has a root span, the Root property will be
+	// populated. Normally this call will be made after Refinery has been asked
+	// to make a trace decision.
+	GetTrace(traceID string) (*CentralTrace, error)
+
+	// GetStatusForTraces returns the current state for a list of trace IDs,
+	// including any reason information and trace counts if the trace decision
+	// has been made and it was to keep the trace. If a requested trace was not
+	// found, it will be returned as Status:Unknown. This should be considered
+	// to be a bug in the central store, as the trace should have been created
+	// when the first span was added. Any traces with a state of DecisionKeep or
+	// DecisionDrop should be considered to be final and appropriately disposed
+	// of; the central store will not change the decision state of these traces
+	// after this call (although kept spans will have counts updated when late
+	// spans arrive).
+	GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error)
+
+	// GetTracesForState returns a list of trace IDs that match the provided status.
+	GetTracesForState(state CentralTraceState) ([]string, error)
+
+	// ChangeTraceStatus changes the status of a set of traces from one state to another
+	// atomically. This can be used for all trace states except transition to Keep.
+	ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error
+
+	// KeepTraces changes the status of a set of traces from AwaitingDecision to Keep;
+	// it is used to record the keep decisions made by the trace decision engine.
+	// Statuses should include Reason and Rate; do not include State as it will be ignored.
+	KeepTraces(statuses []*CentralTraceStatus) error
+
+	// GetMetrics returns a map of metrics from the remote store, accumulated
+	// since the previous time this method was called.
+	GetMetrics() (map[string]interface{}, error)
+}
