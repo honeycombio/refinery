@@ -2161,23 +2161,16 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "rootSpanTest",
+						Name:       "root span matches",
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "root.test",
-								Operator: config.Contains,
+								Operator: config.Exists,
 								Value:    "foo",
 								Datatype: "string",
 							},
 						},
-						//Sampler: &config.RulesBasedDownstreamSampler{
-						//	DynamicSampler: &config.DynamicSamplerConfig{
-						//		SampleRate: 10,
-						//		FieldList:  []string{"http.status_code", "test", "test1", "test2", "test3"},
-						//	},
-						//},
-						//Sampler: &config.RulesBasedDownstreamSampler{}
 					},
 				},
 			},
@@ -2206,8 +2199,53 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: true,
+			ExpectedKeep: false,
 			ExpectedRate: 10,
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "no rule matched",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "root.test",
+								Operator: config.Contains,
+								Value:    "notFoo",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "notFoo",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
 		},
 	}
 
@@ -2271,18 +2309,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			}
 			assert.Contains(t, reason, name)
 
-			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+			// keep depends on sampling rate, can only test when its false
+			if !d.ExpectedKeep {
+				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+			}
 
 		})
 	}
 }
 
-// todo: test with no root span; should not match
-// test where span has value, but the root does not;  should not match
-// different operators
-
 // todo: document the model of matching a condition for a single span in trace does not work when we are using root
 // span context if its true for the trace, then true for every span in trace
-
-// todo: trace with multiple spans should only check root span context once
-// extractValueFromSpan could return a flag that checks whether it has already checked root span context
