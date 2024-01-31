@@ -99,9 +99,8 @@ Conditions:
 
 ## Using a Prefix to Identify a Field in a Related Span
 
-You can limit conditions to a particular span context. Right now, the `root` prefix is the only context supported. 
-This limits matching spans to those where the root span matches the condition. Note that this behavior obsoletes matching 
-specific spans within a trace since the entire trace shares a root span. 
+Fields can contain a span selection prefix. Today, the only prefix supported is `root`.
+This prefix causes the root span to be searched for the specified field, rather than the span being evaluated.
 
 ```yaml
 Rules:
