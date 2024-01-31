@@ -100,7 +100,7 @@ func (t *keptTraceCacheEntry) Count(s *types.Span) {
 // Make sure it implements TraceSentRecord
 var _ TraceSentRecord = (*keptTraceCacheEntry)(nil)
 
-// cuckooSentRecord is what we return when the trace was dropped.
+// cuckooDroppedRecord is what we return when the trace was dropped.
 // It's always the same one.
 type cuckooDroppedRecord struct{}
 
@@ -227,6 +227,23 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
 		// if we kept it, then this span being checked needs counting too
 		sentRecord.Count(span)
+		reason, _ := c.sentReasons.Get(uint(sentRecord.reason))
+		return sentRecord, reason, true
+	}
+	// we have no memory of this place
+	return nil, "", false
+}
+
+func (c *cuckooSentCache) Test(traceID string) (TraceSentRecord, string, bool) {
+	// was it dropped?
+	if c.dropped.Check(traceID) {
+		// we recognize it as dropped, so just say so; there's nothing else to do
+		return &cuckooDroppedRecord{}, "", false
+	}
+	// was it kept?
+	c.keptMut.Lock()
+	defer c.keptMut.Unlock()
+	if sentRecord, found := c.kept.Get(traceID); found {
 		reason, _ := c.sentReasons.Get(uint(sentRecord.reason))
 		return sentRecord, reason, true
 	}
