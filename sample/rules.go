@@ -120,7 +120,8 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				reason += rule.Name + ":" + samplerReason
 			} else {
 				rate = uint(rule.SampleRate)
-				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
+				randInt := rand.Intn(rule.SampleRate)
+				keep = !rule.Drop && rule.SampleRate > 0 && randInt == 0
 				reason += rule.Name
 				s.Metrics.Histogram(s.prefix+"sample_rate", float64(rate))
 			}
@@ -159,10 +160,11 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 				matched++
 				continue
 			} else {
-				// if HasRootSpan is one of the conditions and it didn't match,
+				// if HasRootSpan is one of the conditions, and it didn't match,
 				// there's no need to check the rest of the conditions.
 				return false
 			}
+
 		}
 
 	span:
@@ -233,6 +235,13 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 	var value any
 	var exists bool
 	for _, field := range condition.Fields {
+		// check if field prefix "root."
+		if strings.HasPrefix(field, "root.") {
+			field = field[5:]
+			// update span to look at root span
+			span = trace.RootSpan
+		}
+
 		value, exists = span.Data[field]
 		if exists {
 			return value, exists

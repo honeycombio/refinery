@@ -19,6 +19,8 @@ type TestRulesData struct {
 	ExpectedName string
 }
 
+const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+
 func TestRules(t *testing.T) {
 	data := []TestRulesData{
 		{
@@ -2152,3 +2154,135 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 		assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 	}
 }
+
+func TestRulesRootSpanContext(t *testing.T) {
+	data := []TestRulesData{
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "rootSpanTest",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "root.test",
+								Operator: config.Contains,
+								Value:    "foo",
+								Datatype: "string",
+							},
+						},
+						//Sampler: &config.RulesBasedDownstreamSampler{
+						//	DynamicSampler: &config.DynamicSamplerConfig{
+						//		SampleRate: 10,
+						//		FieldList:  []string{"http.status_code", "test", "test1", "test2", "test3"},
+						//	},
+						//},
+						//Sampler: &config.RulesBasedDownstreamSampler{}
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "foo",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+		},
+	}
+
+	for _, d := range data {
+		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
+			sampler := &RulesBasedSampler{
+				Config:  d.Rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
+
+			sampler.Start()
+
+			trace := &types.Trace{}
+
+			trace.AddSpan(&types.Span{
+				TraceID: "123testABC",
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"test1": 1,
+						"test2": 2.2,
+						"test3": "foo",
+					},
+				},
+			})
+
+			trace.AddSpan(&types.Span{
+				TraceID: "123testABC",
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"http.status_code": "200",
+					},
+				},
+			})
+
+			rootSpan := &types.Span{
+				TraceID: "123testABC",
+				Event: types.Event{
+					Dataset: "aoeu",
+					Data: map[string]interface{}{
+						"test": "foo",
+					},
+					APIKey: legacyAPIKey,
+				},
+			}
+
+			trace.AddSpan(rootSpan)
+
+			trace.RootSpan = rootSpan
+
+			spans := trace.GetSpans()
+			assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
+
+			rate, keep, reason, key := sampler.GetSampleRate(trace)
+			assert.Equal(t, "", key)
+
+			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+			name := d.ExpectedName
+			if name == "" {
+				name = d.Rules.Rules[0].Name
+			}
+			assert.Contains(t, reason, name)
+
+			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
+
+		})
+	}
+}
+
+// todo: test with no root span; should not match
+// test where span has value, but the root does not;  should not match
+// different operators
+
+// todo: document the model of matching a condition for a single span in trace does not work when we are using root
+// span context if its true for the trace, then true for every span in trace
+
+// todo: trace with multiple spans should only check root span context once
+// extractValueFromSpan could return a flag that checks whether it has already checked root span context
