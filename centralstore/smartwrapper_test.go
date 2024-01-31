@@ -14,7 +14,7 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-func standardOptions() (SmartWrapperOptions, LRSOptions) {
+func standardOptions() SmartWrapperOptions {
 	sopts := SmartWrapperOptions{
 		SpanChannelSize: 100,
 		StateTicker:     duration("10ms"),
@@ -22,17 +22,12 @@ func standardOptions() (SmartWrapperOptions, LRSOptions) {
 		TraceTimeout:    duration("500ms"),
 		DecisionTimeout: duration("100ms"),
 	}
-	lopts := LRSOptions{
-		KeptSize:          100,
-		DroppedSize:       100,
-		SizeCheckInterval: duration("10s"),
-	}
-	return sopts, lopts
+	return sopts
 }
 
 func TestSingleTraceOperation(t *testing.T) {
-	sopts, lopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore(lopts))
+	sopts := standardOptions()
+	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -71,8 +66,8 @@ func TestSingleTraceOperation(t *testing.T) {
 }
 
 func TestBasicStoreOperation(t *testing.T) {
-	sopts, lopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore(lopts))
+	sopts := standardOptions()
+	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
 	defer store.Stop()
 
 	traceids := make([]string, 0)
@@ -117,8 +112,8 @@ func TestBasicStoreOperation(t *testing.T) {
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
-	sopts, lopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore(lopts))
+	sopts := standardOptions()
+	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -136,8 +131,8 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 }
 
 func BenchmarkStoreGetStatus(b *testing.B) {
-	sopts, lopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore(lopts))
+	sopts := standardOptions()
+	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -156,8 +151,8 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 }
 
 func BenchmarkStoreGetTrace(b *testing.B) {
-	sopts, lopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore(lopts))
+	sopts := standardOptions()
+	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -177,10 +172,10 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 
 func BenchmarkStoreGetTracesForState(b *testing.B) {
 	// we want things to happen fast, so we'll set the timeouts low
-	sopts, lopts := standardOptions()
+	sopts := standardOptions()
 	sopts.SendDelay = duration("100ms")
 	sopts.TraceTimeout = duration("100ms")
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore(lopts))
+	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {

@@ -31,16 +31,6 @@ type CentralSpan struct {
 	IsRoot    bool
 }
 
-// CentralSpanFromSpan creates a CentralSpan from a Span.
-func CentralSpanFromSpan(span *types.Span) *CentralSpan {
-	return &CentralSpan{
-		TraceID: span.TraceID,
-		// SpanID:   span.SpanID,
-		// ParentID: span.ParentID,
-	}
-	// extract key fields here
-}
-
 type CentralTraceState string
 
 const (
@@ -88,17 +78,9 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 	}
 }
 
-func (s *CentralTraceStatus) Update(trace *CentralTrace) {
-	s.spanCount = uint32(len(trace.Spans))
-	// for _, span := range trace.Spans {
-	// s.spanEventCount += span.EventCount
-	// s.spanLinkCount += span.LinkCount
-	// }
-}
-
 type CentralTrace struct {
 	TraceID   string
-	Timestamp uint64 //
+	Timestamp uint64
 	Root      *CentralSpan
 	Spans     []*CentralSpan
 }
