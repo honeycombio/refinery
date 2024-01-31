@@ -53,18 +53,6 @@ const (
 	DecisionDrop     CentralTraceState = "decision_drop"
 )
 
-func (CentralTraceState) ValidStates() []CentralTraceState {
-	return []CentralTraceState{
-		// Unknown, // not a valid state for a trace
-		Collecting,
-		WaitingToDecide,
-		ReadyForDecision,
-		AwaitingDecision,
-		DecisionKeep,
-		DecisionDrop,
-	}
-}
-
 func (s CentralTraceState) String() string {
 	return string(s)
 }
@@ -153,13 +141,6 @@ func (t *CentralTraceStatus) SetSentReason(reason uint) {
 func (t *CentralTraceStatus) SentReason() uint {
 	return t.reasonIndex
 }
-
-// func CentralTraceFromTrace(trace *types.Trace) *CentralTrace {
-// 	return &CentralTrace{
-// 		TraceID: trace.TraceID,
-// 	}
-// 	// extract spans here
-// }
 
 // The trace decision engine is responsible for managing trace decisions. It
 // presents a simple interface for adding spans to traces, and periodically

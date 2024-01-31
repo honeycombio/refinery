@@ -5,20 +5,17 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/metrics"
 )
 
 type statusMap map[string]*CentralTraceStatus
 
 // This is an implementation of SmartStorer that stores spans in memory locally.
 type SmartWrapper struct {
-	basicStore    BasicStorer
-	keyfields     []string
-	spanChan      chan *CentralSpan
-	decisionCache cache.TraceSentCache
-	done          chan struct{}
+	basicStore BasicStorer
+	keyfields  []string
+	spanChan   chan *CentralSpan
+	done       chan struct{}
 }
 
 // ensure that we implement SmartStorer
@@ -26,34 +23,19 @@ var _ SmartStorer = (*SmartWrapper)(nil)
 
 // this probably gets moved into config eventually
 type SmartWrapperOptions struct {
-	KeptSize          uint
-	DroppedSize       uint
-	SpanChannelSize   int
-	SizeCheckInterval config.Duration
-	StateTicker       config.Duration
-	SendDelay         config.Duration
-	TraceTimeout      config.Duration
-	DecisionTimeout   config.Duration
+	SpanChannelSize int
+	StateTicker     config.Duration
+	SendDelay       config.Duration
+	TraceTimeout    config.Duration
+	DecisionTimeout config.Duration
 }
 
 // NewSmartWrapper creates a new SmartWrapper.
 func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer) *SmartWrapper {
-	cfg := config.SampleCacheConfig{
-		KeptSize:          options.KeptSize,
-		DroppedSize:       options.DroppedSize,
-		SizeCheckInterval: options.SizeCheckInterval,
-	}
-	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
-	if err != nil {
-		// TODO: handle this better
-		panic(err)
-	}
-
 	i := &SmartWrapper{
-		basicStore:    basic,
-		spanChan:      make(chan *CentralSpan, options.SpanChannelSize),
-		decisionCache: decisionCache,
-		done:          make(chan struct{}),
+		basicStore: basic,
+		spanChan:   make(chan *CentralSpan, options.SpanChannelSize),
+		done:       make(chan struct{}),
 	}
 	// start the span processor
 	go i.processSpans()
@@ -108,12 +90,6 @@ func (i *SmartWrapper) SetKeyFields(keyFields []string) error {
 // The latest value for a span should be retained, because during shutdown, the
 // span will contain more fields.
 func (i *SmartWrapper) WriteSpan(span *CentralSpan) error {
-	// first let's check if we've already processed and dropped this trace; if so, we're done and
-	// can just ignore the span.
-	if i.decisionCache.Dropped(span.TraceID) {
-		return nil
-	}
-
 	// if the span channel doesn't exist, we're shutting down and we can't accept any more spans
 	if i.spanChan == nil {
 		return fmt.Errorf("span channel closed")
