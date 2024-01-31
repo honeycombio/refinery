@@ -613,7 +613,7 @@ groups:
           span context (e.g. `root.http.status`). Specifying root span context 
           limits matching conditions to those that match the root span. Using root
           span context also means that if the trace matches, every span within the
-          trace will match since they share a root span. 
+          trace will match since they share a root span.
       - name: Fields
         type: stringarray
         valuetype: stringarray
