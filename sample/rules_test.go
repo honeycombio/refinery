@@ -2201,12 +2201,59 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			ExpectedKeep: false,
 			ExpectedRate: 10,
+			ExpectedName: "root span matches",
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "no rule matched",
+						Name:       "span matches, root does not match",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "root.test",
+								Operator: config.Contains,
+								Value:    "notFoo",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "foo",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "root does not match, spans do not match",
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
@@ -2246,6 +2293,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			ExpectedKeep: true,
 			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
 		},
 	}
 
@@ -2309,7 +2357,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			}
 			assert.Contains(t, reason, name)
 
-			// keep depends on sampling rate, can only test when its false
+			// since keep depends on sampling rate, can only test when its false
 			if !d.ExpectedKeep {
 				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
 			}
@@ -2317,6 +2365,3 @@ func TestRulesRootSpanContext(t *testing.T) {
 		})
 	}
 }
-
-// todo: document the model of matching a condition for a single span in trace does not work when we are using root
-// span context if its true for the trace, then true for every span in trace
