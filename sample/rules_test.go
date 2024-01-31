@@ -9,11 +9,14 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestRulesData struct {
-	Rules        *config.RulesBasedSamplerConfig
-	Spans        []*types.Span
+	Rules *config.RulesBasedSamplerConfig
+	Spans []*types.Span
+	// Set to the matching rule's sample rate if the rule matches.
+	// Set to the default rate (1) if you expect no rule to match.
 	ExpectedRate uint
 	ExpectedKeep bool
 	ExpectedName string
@@ -2176,6 +2179,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
+					TraceID: "123testABC", // I am root.
 					Event: types.Event{
 						Data: map[string]interface{}{
 							"test": "foo",
@@ -2213,7 +2217,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 							{
 								Field:    "root.test",
 								Operator: config.Contains,
-								Value:    "notFoo",
+								Value:    "foo",
 								Datatype: "string",
 							},
 						},
@@ -2222,9 +2226,10 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
+					TraceID: "123testABC", // I am root.
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"test": "foo",
+							"test": "nope", // I am the root span that does not match.
 						},
 					},
 				},
@@ -2238,9 +2243,9 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
+							"test":  "foo", // I am the span that almost matches, but I'm not root.
 							"test1": 1,
 							"test2": 2.2,
-							"test3": "foo",
 						},
 					},
 				},
@@ -2259,7 +2264,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 							{
 								Field:    "root.test",
 								Operator: config.Contains,
-								Value:    "notFoo",
+								Value:    "foo",
 								Datatype: "string",
 							},
 						},
@@ -2268,9 +2273,10 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
+					TraceID: "123testABC", // I am root.
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"test": "notFoo",
+							"test": "nope",
 						},
 					},
 				},
@@ -2284,9 +2290,9 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
+							"test":  "nope",
 							"test1": 1,
 							"test2": 2.2,
-							"test3": "foo",
 						},
 					},
 				},
@@ -2308,41 +2314,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			sampler.Start()
 
 			trace := &types.Trace{}
-
-			trace.AddSpan(&types.Span{
-				TraceID: "123testABC",
-				Event: types.Event{
-					Data: map[string]interface{}{
-						"test1": 1,
-						"test2": 2.2,
-						"test3": "foo",
-					},
-				},
-			})
-
-			trace.AddSpan(&types.Span{
-				TraceID: "123testABC",
-				Event: types.Event{
-					Data: map[string]interface{}{
-						"http.status_code": "200",
-					},
-				},
-			})
-
-			rootSpan := &types.Span{
-				TraceID: "123testABC",
-				Event: types.Event{
-					Dataset: "aoeu",
-					Data: map[string]interface{}{
-						"test": "foo",
-					},
-					APIKey: legacyAPIKey,
-				},
+			for _, span := range d.Spans {
+				trace.AddSpan(span)
+				// We declare which span is the root span in the test cases by setting the traceID.
+				if span.TraceID != "" {
+					require.Nil(t, trace.RootSpan, "Only set the trace ID on one span in a test case to designate which is the root. This test case appears to have multiple spans with trace IDs set.")
+					trace.RootSpan = span
+				}
 			}
-
-			trace.AddSpan(rootSpan)
-
-			trace.RootSpan = rootSpan
 
 			spans := trace.GetSpans()
 			assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
