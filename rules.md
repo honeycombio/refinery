@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2024-01-30 at 22:25:30 UTC.
+It was automatically generated on 2023-12-13 at 23:01:54 UTC.
 
 ## The Rules file
 
@@ -553,9 +553,6 @@ Type: `stringarray`
 
 The comparison operator to use.
 String comparisons are case-sensitive.
-For most cases, use negative operators (`!=`, `does-not-contain`, and `not-exists`) in a rule with a scope of "span".
-WARNING: Rules can have `Scope: trace` or `Scope: span`; a negative operator with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
-This is almost never desired behavior.
 
 Type: `string`
 

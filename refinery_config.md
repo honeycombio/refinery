@@ -237,11 +237,7 @@ By default, this setting uses the `DefaultBatchTimeout` in `libhoney` as its val
 
 A long timer; it represents the outside boundary of how long to wait before making the trace decision about an incomplete trace.
 Normally trace decisions (send or drop) are made when the root span arrives.
-Sometimes the root span never arrives (for example, due to crashes).
-Once this timer fires, Refinery will make a trace decision based on the spans that have arrived so far.
-This ensures sending a trace even when the root span never arrives.
-After the trace decision has been made, Refinery retains a record of that decision for a period of time.
-When additional spans (including the root span) arrive, they will be kept or dropped based on the original decision.
+Sometimes the root span never arrives (for example, due to crashes) and this timer ensures sending a trace even without having received the root span.
 If particularly long-lived traces are present in your data, then you should increase this timer.
 Note that this increase will also increase the memory requirements for Refinery.
 
