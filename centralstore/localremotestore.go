@@ -16,20 +16,66 @@ import (
 type LocalRemoteStore struct {
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
-	states        map[CentralTraceState]statusMap
-	traces        map[string]*CentralTrace
-	decisionCache cache.TraceSentCache
-	mutex         sync.RWMutex
+	states            map[CentralTraceState]statusMap
+	traces            map[string]*CentralTrace
+	decisionCache     cache.TraceSentCache
+	mutex             sync.RWMutex
+	keptSize          uint
+	droppedSize       uint
+	sizeCheckInterval config.Duration
 }
 
-type LRSOptions struct {
-	KeptSize          uint
-	DroppedSize       uint
-	SizeCheckInterval config.Duration
+type LRSOption func(*LocalRemoteStore)
+
+func WithKeptSize(size uint) LRSOption {
+	return func(lrs *LocalRemoteStore) {
+		lrs.keptSize = size
+	}
 }
 
-func validStates() []CentralTraceState {
-	return []CentralTraceState{
+func WithDroppedSize(size uint) LRSOption {
+	return func(lrs *LocalRemoteStore) {
+		lrs.droppedSize = size
+	}
+}
+
+func WithSizeCheckInterval(interval config.Duration) LRSOption {
+	return func(lrs *LocalRemoteStore) {
+		lrs.sizeCheckInterval = interval
+	}
+}
+
+// NewLocalRemoteStore returns a new LocalRemoteStore.
+func NewLocalRemoteStore(options ...LRSOption) *LocalRemoteStore {
+	// create with some defaults
+	lrs := &LocalRemoteStore{
+		states:            make(map[CentralTraceState]statusMap),
+		traces:            make(map[string]*CentralTrace),
+		keptSize:          100,
+		droppedSize:       10000,
+		sizeCheckInterval: config.Duration(10 * time.Second),
+	}
+	// apply options which might override the defaults
+	for _, f := range options {
+		f(lrs)
+	}
+
+	cfg := config.SampleCacheConfig{
+		KeptSize:          lrs.keptSize,
+		DroppedSize:       lrs.droppedSize,
+		SizeCheckInterval: lrs.sizeCheckInterval,
+	}
+
+	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
+
+	if err != nil {
+		// TODO: handle this better
+		panic(err)
+	}
+	lrs.decisionCache = decisionCache
+
+	// these states are the ones we need to maintain as separate maps
+	mapStates := []CentralTraceState{
 		// Unknown, // not a valid state for a trace
 		Collecting,
 		WaitingToDecide,
@@ -38,26 +84,7 @@ func validStates() []CentralTraceState {
 		// DecisionKeep, // these are in the decision cache
 		// DecisionDrop, // these are in the decision cache
 	}
-}
-
-// NewLocalRemoteStore returns a new LocalRemoteStore.
-func NewLocalRemoteStore(options LRSOptions) *LocalRemoteStore {
-	cfg := config.SampleCacheConfig{
-		KeptSize:          options.KeptSize,
-		DroppedSize:       options.DroppedSize,
-		SizeCheckInterval: options.SizeCheckInterval,
-	}
-	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
-	if err != nil {
-		// TODO: handle this better
-		panic(err)
-	}
-	lrs := &LocalRemoteStore{
-		states:        make(map[CentralTraceState]statusMap),
-		traces:        make(map[string]*CentralTrace),
-		decisionCache: decisionCache,
-	}
-	for _, state := range validStates() {
+	for _, state := range mapStates {
 		// initialize the map for each state
 		lrs.states[state] = make(statusMap)
 	}
@@ -154,12 +181,19 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 		// we're in a state where we can just add the span
 	case Unknown:
 		// we don't have a state for this trace, so we create it
+		state = Collecting
 		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting)
 		lrs.traces[span.TraceID] = &CentralTrace{}
 	}
 
 	// Add the span to the trace; this works even if the trace doesn't exist yet
 	lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
+	lrs.states[state][span.TraceID].spanCount++
+	if span.Type == SpanTypeLink {
+		lrs.states[state][span.TraceID].spanLinkCount++
+	} else if span.Type == SpanTypeEvent {
+		lrs.states[state][span.TraceID].spanEventCount++
+	}
 
 	if span.ParentID == "" {
 		// this is a root span, so we need to move it to the right state
