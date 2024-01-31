@@ -23,7 +23,7 @@ const (
 // to make this decision; the refinery should know this).
 type CentralSpan struct {
 	TraceID   string
-	SpanID    string
+	SpanID    string // need access to this field for updating all fields
 	ParentID  string
 	Type      SpanType
 	KeyFields map[string]interface{}
