@@ -97,7 +97,7 @@ Conditions:
     Datatype: int
 ```
 
-## Adding Span Context to Conditions
+## Using a Prefix to Identify a Field in a Related Span
 
 You can limit conditions to a particular span context. Right now, the `root` prefix is the only context supported. 
 This limits matching spans to those where the root span matches the condition. Note that this behavior obsoletes matching 
