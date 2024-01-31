@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 )
 
 // LocalRemoteStore (yes, a contradiction in terms, deal with it) is a remote
@@ -12,20 +16,48 @@ import (
 type LocalRemoteStore struct {
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
-	states map[CentralTraceState]statusMap
-	// traces holds the current data for each trace
-	traces map[string]*CentralTrace
-	mutex  sync.RWMutex
+	states        map[CentralTraceState]statusMap
+	traces        map[string]*CentralTrace
+	decisionCache cache.TraceSentCache
+	mutex         sync.RWMutex
+}
+
+type LRSOptions struct {
+	KeptSize          uint
+	DroppedSize       uint
+	SizeCheckInterval config.Duration
+}
+
+func validStates() []CentralTraceState {
+	return []CentralTraceState{
+		// Unknown, // not a valid state for a trace
+		Collecting,
+		WaitingToDecide,
+		ReadyForDecision,
+		AwaitingDecision,
+		// DecisionKeep, // these are in the decision cache
+		// DecisionDrop, // these are in the decision cache
+	}
 }
 
 // NewLocalRemoteStore returns a new LocalRemoteStore.
-func NewLocalRemoteStore() *LocalRemoteStore {
-	lrs := &LocalRemoteStore{
-		states: make(map[CentralTraceState]statusMap),
-		traces: make(map[string]*CentralTrace),
+func NewLocalRemoteStore(options LRSOptions) *LocalRemoteStore {
+	cfg := config.SampleCacheConfig{
+		KeptSize:          options.KeptSize,
+		DroppedSize:       options.DroppedSize,
+		SizeCheckInterval: options.SizeCheckInterval,
 	}
-	var cts CentralTraceState
-	for _, state := range cts.ValidStates() {
+	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
+	if err != nil {
+		// TODO: handle this better
+		panic(err)
+	}
+	lrs := &LocalRemoteStore{
+		states:        make(map[CentralTraceState]statusMap),
+		traces:        make(map[string]*CentralTrace),
+		decisionCache: decisionCache,
+	}
+	for _, state := range validStates() {
 		// initialize the map for each state
 		lrs.states[state] = make(statusMap)
 	}
@@ -37,8 +69,17 @@ var _ BasicStorer = (*LocalRemoteStore)(nil)
 
 // findTraceStatus returns the state and status of a trace, or Unknown if the trace
 // wasn't found in any state. If the trace is found, the status will be non-nil.
-// Only call this if you're holding at least an RLock on i.mut.
+// Only call this if you're holding a Lock.
 func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
+	if tracerec, _, found := lrs.decisionCache.Test(traceID); found {
+		// it was in the decision cache, so we can return the right thing
+		if tracerec.Kept() {
+			return DecisionKeep, NewCentralTraceStatus(traceID, DecisionKeep)
+		} else {
+			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop)
+		}
+	}
+	// wasn't in the cache, look in all the other states
 	for state, statuses := range lrs.states {
 		if status, ok := statuses[traceID]; ok {
 			return state, status
@@ -49,7 +90,7 @@ func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState,
 
 // changes the status of a trace; if fromState is Unknown, the trace will be searched for
 // in all states. If the trace wasn't found, false will be returned.
-// Only call this if you're holding a Lock on i.mut.
+// Only call this if you're holding a Lock.
 func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState CentralTraceState) bool {
 	var status *CentralTraceStatus
 	var ok bool
@@ -71,17 +112,23 @@ func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState
 	return true
 }
 
-// WriteSpan writes a span to the store. It must always contain TraceID.
-// If this is a span containing any non-empty key fields, it must also contain
-// SpanID (and ParentID if it is not a root span).
-// For span events and span links, it may contain only the TraceID and the SpanType field;
-// these are counted but not stored.
-// Root spans should always be sent and must contain at least SpanID, and have the IsRoot flag set.
-// AllFields is optional and is used during shutdown.
-// WriteSpan is asynchronous and will only return an error if the span could not be written.
+// WriteSpan writes a span to the store. It must always contain TraceID. If this
+// is a span containing any non-empty key fields, it must also contain SpanID
+// (and ParentID if it is not a root span). For span events and span links, it
+// may contain only the TraceID and the SpanType field; these are counted but
+// not stored. Root spans should always be sent and must contain at least
+// SpanID, and have the IsRoot flag set. AllFields is optional and is used
+// during shutdown. WriteSpan is expecting to be called from an asynchronous
+// process and will only return an error if the span could not be written.
 func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
+
+	// first let's check if we've already processed and dropped this trace; if so, we're done and
+	// can just ignore the span.
+	if lrs.decisionCache.Dropped(span.TraceID) {
+		return nil
+	}
 
 	// we have to find the state and decide what to do based on that
 	state, _ := lrs.findTraceStatus(span.TraceID)
@@ -93,10 +140,15 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 		// We'll only get here if the decision was made after the span was added
 		// to the channel but before it got read out.
 		return nil
-	case DecisionKeep, AwaitingDecision:
-		// The decision has been made and we can't affect it anymore, so we add the span to the trace
-		// if it exists; if it doesn't exist in the traces map anymore, we'll create it again.
-		// We do need to mark it late, though.
+	case DecisionKeep:
+		// The decision has been made and we can't affect it, but we do have to count this span
+		// The centralspan needs to be converted to a span and then counted or we have to
+		// give the cache a way to count span events and links
+		// lrs.decisionCache.Check(span)
+		return nil
+	case AwaitingDecision:
+		// The decision hasn't been received yet but it has been sent to a refinery for a decision
+		// We can't affect the decision but we can append it and mark it late.
 		// i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
 	case Collecting, WaitingToDecide, ReadyForDecision:
 		// we're in a state where we can just add the span
@@ -168,6 +220,12 @@ func (lrs *LocalRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTr
 func (lrs *LocalRemoteStore) GetTracesForState(state CentralTraceState) ([]string, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
+	switch state {
+	case DecisionKeep, DecisionDrop:
+		// these are in the decision cache and can't be fetched from the states map
+		return nil, nil
+	}
+
 	if _, ok := lrs.states[state]; !ok {
 		return nil, fmt.Errorf("invalid state %s", state)
 	}
@@ -181,14 +239,20 @@ func (lrs *LocalRemoteStore) GetTracesForState(state CentralTraceState) ([]strin
 // ChangeTraceStatus changes the status of a set of traces from one state to another
 // atomically. This can be used for all trace states except transition to Keep.
 // If a traceID is not found in the fromState, this is not considered to be an error.
-// TODO: should we consider returning the list of traces that were not modified? Do we care?
-// Alternative is to make this function only do one trace at a time.
 func (lrs *LocalRemoteStore) ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, traceID := range traceIDs {
-		if !lrs.changeTraceState(traceID, fromState, toState) {
-			continue
+		if toState == DecisionDrop {
+			// if we're dropping, record it in the decision cache
+			if trace, ok := lrs.states[fromState][traceID]; ok {
+				lrs.decisionCache.Record(trace, false, "")
+				// and remove it from the states map
+				delete(lrs.states[fromState], traceID)
+				delete(lrs.traces, traceID)
+			}
+		} else {
+			lrs.changeTraceState(traceID, fromState, toState)
 		}
 	}
 	return nil
@@ -202,11 +266,11 @@ func (lrs *LocalRemoteStore) KeepTraces(statuses []*CentralTraceStatus) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
-		if !lrs.changeTraceState(status.TraceID, AwaitingDecision, DecisionKeep) {
-			continue
+		if _, ok := lrs.states[AwaitingDecision][status.TraceID]; ok {
+			lrs.decisionCache.Record(status, true, status.KeepReason)
+			delete(lrs.states[AwaitingDecision], status.TraceID)
+			delete(lrs.traces, status.TraceID)
 		}
-		lrs.states[DecisionKeep][status.TraceID].KeepReason = status.KeepReason
-		lrs.states[DecisionKeep][status.TraceID].Rate = status.Rate
 	}
 	return nil
 }
