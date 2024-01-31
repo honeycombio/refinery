@@ -97,6 +97,23 @@ Conditions:
     Datatype: int
 ```
 
+## Adding Span Context to Conditions
+
+You can limit conditions to a particular span context. Right now, the `root` prefix is the only context supported. 
+This limits matching spans to those where the root span matches the condition. Note that this behavior obsoletes matching 
+specific spans within a trace since the entire trace shares a root span. 
+
+```yaml
+Rules:
+    - Name: limit by root span context
+      Conditions:
+        Field: "root.http.status"
+        Operator: =
+        Value: "500"
+        Datatype: string
+```
+
+
 ## `Operator`
 
 The `Operator` parameter controls how rules are evaluated.
