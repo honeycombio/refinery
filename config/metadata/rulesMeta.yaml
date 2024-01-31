@@ -609,7 +609,11 @@ groups:
         description: >
           The field to check. This can name any field in the trace. If the field
           is not present, then the condition will not match. The comparison is
-          case-sensitive.
+          case-sensitive. The field can also include span context such as root 
+          span context (e.g. `root.http.status`). Specifying root span context 
+          limits matching conditions to those that match the root span. Using root
+          span context also means that if the trace matches, every span within the
+          trace will match since they share a root span. 
       - name: Fields
         type: stringarray
         valuetype: stringarray
