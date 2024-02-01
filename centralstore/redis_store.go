@@ -31,6 +31,8 @@ func NewRedisRemoteStore(host string) *RedisRemoteStore {
 	}
 }
 
+var _ RemoteStore = (*RedisRemoteStore)(nil)
+
 // RedisRemoteStore is an implementation of RemoteStore.
 type RedisRemoteStore struct {
 	client   *redisConn
@@ -61,16 +63,16 @@ func (r *RedisRemoteStore) WriteSpan(span *CentralSpan) error {
 		return err
 	}
 
-	var exists bool
+	isNewTrace := true
 	if r.statuses[DecisionKeep].Exists(span.TraceID) || r.statuses[WaitingToDecide].Exists(span.TraceID) {
-		exists = true
+		isNewTrace = false
 		// late span
 	}
 
 	collectingSet := r.statuses[Collecting]
 
 	if collectingSet.Exists(span.TraceID) {
-		exists = true
+		isNewTrace = false
 		if span.ParentID == "" {
 			err := collectingSet.Move(span.TraceID, r.statuses[WaitingToDecide])
 			if err != nil {
@@ -80,15 +82,13 @@ func (r *RedisRemoteStore) WriteSpan(span *CentralSpan) error {
 
 	}
 
-	if !exists {
-		// new trace
+	// if the span belongs to a new trace, add it to the COLLECTING state and add the trace to the traces map
+	if isNewTrace {
 		err := collectingSet.AddTrace(span.TraceID)
 		if err != nil {
 			return err
 		}
-		err = r.traces.AddTrace(&CentralTraceStatus{
-			TraceID: span.TraceID,
-		})
+		err = r.traces.AddTrace(span)
 		if err != nil {
 			return err
 		}
@@ -102,7 +102,7 @@ func (r *RedisRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
 }
 
 func (r *RedisRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
-	statusesMap, err := r.traces.GetTraceStates(traceIDs)
+	statusesMap, err := r.traces.GetTraceStatuses(traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +185,46 @@ func (r *RedisRemoteStore) changeTraceStatus(traceID string, fromState, toState 
 	return nil
 }
 
+type centralTraceStatusHash struct {
+	TraceID        string `redis:"trace_id"`
+	Rate           uint
+	KeepReason     string `redis:"keep_reason"`
+	ReasonIndex    uint   `redis:"reason_index"`
+	SpanCount      uint32 `redis:"span_count"`
+	SpanEventCount uint32 `redis:"span_event_count"`
+	SpanLinkCount  uint32 `redis:"span_link_count"`
+}
+
+func (c *centralTraceStatusHash) ToMap() map[string]interface{} {
+	return map[string]interface{}{
+		"trace_id":         c.TraceID,
+		"rate":             c.Rate,
+		"keep_reason":      c.KeepReason,
+		"reason_index":     c.ReasonIndex,
+		"span_count":       c.SpanCount,
+		"span_event_count": c.SpanEventCount,
+		"span_link_count":  c.SpanLinkCount,
+	}
+}
+
+func newCentralTraceStatusHash(status *CentralTraceStatus) *centralTraceStatusHash {
+	return &centralTraceStatusHash{
+		TraceID:        status.TraceID,
+		Rate:           status.Rate,
+		KeepReason:     status.KeepReason,
+		ReasonIndex:    status.reasonIndex,
+		SpanCount:      status.spanCount,
+		SpanEventCount: status.spanEventCount,
+		SpanLinkCount:  status.spanLinkCount,
+	}
+}
+
+// TraceStore stores trace state status and spans.
+// trace state statuses is stored in a redis hash with the key being the trace ID
+// and each field being a status field.
+// for example, an entry in the hash would be: "trace1:trace" -> "state:DecisionKeep, rate:100, reason:reason1"
+// spans are stored in a redis hash with the key being the trace ID and each field being a span ID and the value being the serialized CentralSpan.
+// for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
 type TracesStore struct {
 	traces RedisHasher // trace ID -> CentralTraceStateStatus
 	spans  *SpansList
@@ -199,16 +239,17 @@ func NewTraceStore(redis *redisConn) *TracesStore {
 	}
 }
 
-func (t *TracesStore) AddTrace(trace *CentralTraceStatus) error {
-	return t.traces.HMSET(fmt.Sprintf("%s:trace", trace.TraceID), map[string]interface{}{
-		"trace_id":         trace.TraceID,
-		"rate":             trace.Rate,
-		"keep_reason":      trace.KeepReason,
-		"reason_index":     trace.reasonIndex,
-		"span_count":       trace.spanCount,
-		"span_event_count": trace.spanEventCount,
-		"span_link_count":  trace.spanLinkCount,
-	})
+func (t *TracesStore) AddTrace(span *CentralSpan) error {
+	trace := &CentralTraceStatus{
+		TraceID: span.TraceID,
+	}
+
+	err := t.traces.HMSET(fmt.Sprintf("%s:trace", trace.TraceID), newCentralTraceStatusHash(trace).ToMap())
+	if err != nil {
+		return err
+	}
+
+	return t.spans.AddSpan(span)
 }
 
 func (t *TracesStore) GetTrace(traceID string) (*CentralTrace, error) {
@@ -224,19 +265,11 @@ func (t *TracesStore) GetTrace(traceID string) (*CentralTrace, error) {
 	}, nil
 }
 
-func (t *TracesStore) GetTraceStates(traceIDs []string) (map[string]*CentralTraceStatus, error) {
+func (t *TracesStore) GetTraceStatuses(traceIDs []string) (map[string]*CentralTraceStatus, error) {
 	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, traceID := range traceIDs {
-		var status struct {
-			TraceID        string `redis:"trace_id"`
-			Rate           uint
-			KeepReason     string `redis:"keep_reason"`
-			ReasonIndex    uint   `redis:"reason_index"`
-			SpanCount      uint32 `redis:"span_count"`
-			SpanEventCount uint32 `redis:"span_event_count"`
-			SpanLinkCount  uint32 `redis:"span_link_count"`
-		}
-		err := t.traces.HGETALLStruct(t.traceStateKey(traceID), &status)
+		status := &centralTraceStatusHash{}
+		err := t.traces.HGETALLStruct(t.traceStateKey(traceID), status)
 		if err != nil {
 			return nil, err
 		}
@@ -277,6 +310,8 @@ func (t *TracesStore) AddSpan(span *CentralSpan) error {
 	return t.spans.AddSpan(span)
 }
 
+// SpansList stores spans in a redis hash with the key being the trace ID and each field
+// being a span ID and the value being the serialized CentralSpan.
 type SpansList struct {
 	spans RedisHasher
 }
@@ -341,6 +376,12 @@ func (s *SpansList) GetAll(traceID string) ([]*CentralSpan, *CentralSpan, error)
 	return spans, rootSpan, nil
 }
 
+// TraceStateMap is a map of trace IDs to their state.
+// It's used to atomically move traces between states and to get all traces in a state.
+// In order to also record the time of the state change, we also store traceID:timestamp
+// in a hash using <state>:traces:time as the hash key.
+// By using a hash for the timestamps, we can easily get the timestamp for a trace based
+// on it's current state.
 type TraceStateMap struct {
 	traces                RedisMapper
 	stateChangeTimestamps RedisHasher
@@ -442,6 +483,12 @@ func (t *TraceStateMap) GetTimestampForTraces(traceIDs []string) (map[string]tim
 }
 
 func (t *TraceStateMap) updateStateChangeTimestamp(traceID string, state CentralTraceState) error {
+	// TODO: We could change the key to be a timerange so that we can set ttl for the key. This will allow us to
+	// do automatic cleanup of the stateChangeTimestamps
+	if _, err := t.stateChangeTimestamps.HDEL(t.stateChangeTimestampMapKey(string(t.state)), traceID); err != nil {
+		return err
+	}
+
 	return t.stateChangeTimestamps.HSET(t.stateChangeTimestampMapKey(string(state)), traceID, time.Now().Unix())
 }
 
@@ -520,6 +567,7 @@ func (r *RedisMap) SREM(key string, member interface{}) error {
 type RedisHasher interface {
 	HSET(key string, field string, value interface{}) error // sets field in the hash stored at key to value.
 	HGET(key string, field string) (interface{}, error)     // returns the value associated with field in the hash stored at key.
+	HDEL(key string, field string) (bool, error)            // removes the specified fields from the hash stored at key.
 	HMSET(key string, fields map[string]interface{}) error  // sets the specified fields to their respective values in the hash stored at key.
 	HGETALL(key string) ([]interface{}, error)              // returns all fields and values of the hash stored at key.
 	HGETALLStruct(key string, out interface{}) error        // returns all fields and values of the hash stored at key.
@@ -543,6 +591,10 @@ func (r *RedisHash) HSET(key string, field string, value interface{}) error {
 
 func (r *RedisHash) HGET(key string, field string) (interface{}, error) {
 	return r.client.Do("HGET", key, field)
+}
+
+func (r *RedisHash) HDEL(key string, field string) (bool, error) {
+	return redis.Bool(r.client.Do("HDEL", key, field))
 }
 
 func (r *RedisHash) HMSET(key string, fields map[string]interface{}) error {
