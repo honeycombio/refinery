@@ -2,6 +2,7 @@ package sample
 
 import (
 	"encoding/json"
+	"golang.org/x/exp/slices"
 	"math/rand"
 	"strings"
 
@@ -21,6 +22,8 @@ type RulesBasedSampler struct {
 }
 
 const RootPrefix = "root."
+
+var checkedRootPrefix bool
 
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
@@ -170,7 +173,12 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 	span:
 		for _, span := range t.GetSpans() {
-			value, exists := extractValueFromSpan(t, span, condition, checkNestedFields)
+			var value interface{}
+			var exists bool
+			// condition either does not have root prefix, or root span has not yet been checked
+			if checkedRootPrefix == false {
+				value, exists = extractValueFromSpan(t, span, condition, checkNestedFields)
+			}
 			if condition.Matches == nil {
 				if conditionMatchesValue(condition, value, exists) {
 					matched++
@@ -181,8 +189,9 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 				matched++
 				break span
 			}
-
 		}
+		// reset root prefix flag for the next condition
+		checkedRootPrefix = false
 	}
 	return matched == len(rule.Conditions)
 }
@@ -193,11 +202,21 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		return true
 	}
 
+	var seen []int
+
 	for _, span := range trace.GetSpans() {
 		ruleMatched := true
-		for _, condition := range rule.Conditions {
-			// whether this condition is matched by this span.
-			value, exists := extractValueFromSpan(trace, span, condition, checkNestedFields)
+		for i, condition := range rule.Conditions {
+			var value interface{}
+			var exists bool
+			// if condition has a root prefix, call extractValueFromSpan and store index in seen
+			if !slices.Contains(seen, i) && strings.Contains(condition.Field, RootPrefix) { // also maybe check Fields
+				value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+				seen = append(seen, i)
+			} else {
+				value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+			}
+
 			if condition.Matches == nil {
 				if !conditionMatchesValue(condition, value, exists) {
 					ruleMatched = false
@@ -240,6 +259,8 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 		if strings.HasPrefix(field, RootPrefix) {
 			field = field[len(RootPrefix):]
 			span = trace.RootSpan
+			// if this condition has a root prefix and the root span has already been checked, set flag to true
+			checkedRootPrefix = true
 		}
 
 		value, exists = span.Data[field]
@@ -247,6 +268,7 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 			return value, exists
 		}
 	}
+
 	if !exists && checkNestedFields {
 		jsonStr, err := json.Marshal(span.Data)
 		if err == nil {
