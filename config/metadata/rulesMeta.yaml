@@ -619,9 +619,11 @@ groups:
           
           For example:
           
+          ```
           Field: root.url
           Operator: contains
           Value: login
+          ```
 
           This condition will evaluate to true when the field called `url` on the root span of the 
           trace contains `login`.
