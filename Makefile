@@ -68,7 +68,7 @@ clean:
 
 .PHONY: install-tools
 install-tools:
-	go install github.com/google/go-licenses@latest
+	go install github.com/google/go-licenses@v1.0.0
 
 .PHONY: update-licenses
 update-licenses: install-tools
