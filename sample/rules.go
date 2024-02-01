@@ -20,6 +20,8 @@ type RulesBasedSampler struct {
 	prefix   string
 }
 
+const RootPrefix = "root."
+
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
@@ -234,10 +236,9 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 	var value any
 	var exists bool
 	for _, field := range condition.Fields {
-		// check if field prefix "root."
-		if strings.HasPrefix(field, "root.") {
-			field = field[5:]
-			// update span to look at root span
+		// check if rule uses root span context
+		if strings.HasPrefix(field, RootPrefix) {
+			field = field[len(RootPrefix):]
 			span = trace.RootSpan
 		}
 
