@@ -132,6 +132,10 @@ Basic comparison -- `not equals`.
 The result is true if the value of the named `Field` is not equal to the `Value` specified.
 See [`Datatype`](#datatype) for how different datatypes are handled.
 
+For most cases, use `'!='` in a rule with a scope of "span".
+WARNING: Rules can have `Scope: trace` or `Scope: span`; `'!='` used with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
+This is almost never desired behavior.
+
 ### `'<'`
 
 Basic comparison -- `less than`.
@@ -177,6 +181,10 @@ Comparisons are case-sensitive and exact.
 
 Values are always coerced to strings -- the `Datatype` parameter is ignored.
 
+For most cases, use `does-not-contain` in a rule with a scope of "span".
+WARNING: Rules can have `Scope: trace` or `Scope: span`; `does-not-contain` used with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
+This is almost never desired behavior.
+
 ### `exists`
 
 Tests if the specified span contains the field named by the `Field` parameter, without considering its value.
@@ -188,6 +196,10 @@ Both the `Value` and the `Datatype` parameters are ignored.
 Tests if the specified span does not contain the field named by the `Field` parameter, without considering its value.
 
 Both the `Value` and the `Datatype` parameters are ignored.
+
+For most cases, use `not-exists` in a rule with a scope of "span".
+WARNING: Rules can have `Scope: trace` or `Scope: span`; `not-exists` used with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
+This is almost never desired behavior.
 
 ### `matches`
 
