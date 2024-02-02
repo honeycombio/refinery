@@ -11,6 +11,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
@@ -124,10 +125,15 @@ func TestAddRootSpan(t *testing.T) {
 // happening upstream of refinery. Writing down what got sent to refinery
 // will help people figure out what is going on.
 func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
+	// The sample rate applied by Refinery in this test's config.
+	const expectedDeterministicSampleRate = int(2)
+	// The sample rate happening upstream of Refinery.
+	const originalSampleRate = uint(50)
+
 	conf := &config.MockConfig{
 		GetSendDelayVal:    0,
 		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
@@ -147,7 +153,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	go coll.collect()
 	defer coll.Stop()
 
-	// Spin until a sample gets triggered
+	// Generate events until one is sampled and appears on the transmission queue for sending.
 	sendAttemptCount := 0
 	for getEventsLength(transmission) < 1 {
 		sendAttemptCount++
@@ -156,7 +162,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			Event: types.Event{
 				Dataset:    "aoeu",
 				APIKey:     legacyAPIKey,
-				SampleRate: 50,
+				SampleRate: originalSampleRate,
 				Data:       make(map[string]interface{}),
 			},
 		}
@@ -164,33 +170,41 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		time.Sleep(conf.SendTickerVal * 5)
 	}
 
+	// At least one event should have been transmitted by now with an original sample rate from upstream sampling.
 	transmission.Mux.RLock()
 	assert.Greater(t, len(transmission.Events), 0, "should be at least one event transmitted")
-	assert.Equal(t, uint(50), transmission.Events[0].Data["meta.refinery.original_sample_rate"],
-		"metadata should be populated with original sample rate")
+	upstreamSampledEvent := transmission.Events[0]
 	transmission.Mux.RUnlock()
 
-	span := &types.Span{
+	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data["meta.refinery.original_sample_rate"],
+		"metadata should be populated with original sample rate")
+	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
+		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
+
+	// Generate one more event with no upstream sampling applied.
+	err = coll.AddSpan(&types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1000),
 		Event: types.Event{
-			Dataset:    "aoeu",
+			Dataset:    "no-upstream-sampling",
 			APIKey:     legacyAPIKey,
-			SampleRate: 0,
+			SampleRate: 0, // no upstream sampling
 			Data:       make(map[string]interface{}),
 		},
-	}
+	})
+	require.NoError(t, err, "should be able to add the span")
 
-	coll.AddSpan(span)
+	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
+	// should be the last event on the transmission queue.
+	var noUpstreamSampleRateEvent *types.Event
 	assert.Eventually(t, func() bool {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
-		return len(transmission.Events) > 1
-	}, 5*time.Second, conf.SendTickerVal*2, "should be at least two events transmitted")
+		noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
+		return noUpstreamSampleRateEvent.Dataset == "no-upstream-sampling"
+	}, 5*time.Second, conf.SendTickerVal*2, "the event with no upstream sampling should have appeared in the transmission queue by now")
 
-	transmission.Mux.RLock()
-	assert.Nil(t, transmission.Events[1].Data["meta.refinery.original_sample_rate"],
-		"metadata should not be populated when zero")
-	transmission.Mux.RUnlock()
+	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
+		"original sample rate should not be set in metadata when original sample rate is zero")
 }
 
 // HoneyComb treats a missing or 0 SampleRate the same as 1, but
