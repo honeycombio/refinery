@@ -615,16 +615,9 @@ groups:
           The only prefix currently supported is `root`, as in `root.http.status`. Specifying `root.` 
           causes the condition to be evaluated against the root span. 
           
-          For example:
-          
-          ```
-          Field: root.url
-          Operator: contains
-          Value: login
-          ```
-
-          This condition will evaluate to true when the field called `url` on the root span of the 
-          trace contains `login`.
+          For example, if the `Field` is `root.url`, then the condition will be processed using the url 
+          field from the root span. This condition will evaluate to true when the field called `url` 
+          on the root span of the trace contains `login`.
           
           The rule setting `Scope: span` does not change the meaning of this prefix --
           the condition is still evaluated on the root span and is treated as if it were part of the  
