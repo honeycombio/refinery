@@ -2466,6 +2466,83 @@ func TestRulesRootSpanContext(t *testing.T) {
 			ExpectedRate: 1,
 			ExpectedName: "no rule matched",
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "condition with multiple fields",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"field1", "field2", "root.field3"},
+								Operator: config.Contains,
+								Value:    "foo",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"field1": "foo",
+							"field2": "foo",
+							"field3": "foo",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+			ExpectedRate: 10,
+			ExpectedName: "condition with multiple fields",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "condition with multiple fields, does not match",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"field1", "field2", "root.field3"},
+								Operator: config.EQ,
+								Value:    1.0,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"field3": 1.5,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"field1": 1.0,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
 	}
 
 	for _, d := range data {

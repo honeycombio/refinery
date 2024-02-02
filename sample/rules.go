@@ -209,11 +209,28 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		for i, condition := range rule.Conditions {
 			var value interface{}
 			var exists bool
-			// if condition has a root prefix, call extractValueFromSpan and store index in seen
-			if !slices.Contains(seen, i) && strings.Contains(condition.Field, RootPrefix) { // also maybe check Fields
-				value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
-				seen = append(seen, i)
+			// if condition index stored in seen, then skip this condition
+			if slices.Contains(seen, i) {
+				continue
 			} else {
+				// if condition index not in seen, check if there is a root prefix in any field
+				if strings.Contains(condition.Field, RootPrefix) {
+					// if field contains root prefix, call extractValueFromSpan and add to seen
+					value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+					seen = append(seen, i)
+				}
+
+				for _, field := range condition.Fields {
+					if strings.Contains(field, RootPrefix) {
+						value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+						if !slices.Contains(seen, i) { // only append to seen for first field with root prefix
+							seen = append(seen, i)
+						}
+					}
+					// call extractValueFromSpan for each field without root prefix
+					value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+				}
+				// call extractValueFromSpan if condition.Field does not contain root prefix
 				value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
 			}
 
