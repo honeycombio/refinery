@@ -11,6 +11,7 @@ require (
 	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371
 	github.com/facebookgo/inject v0.0.0-20180706035515-f23751cae28b
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gomodule/redigo v1.8.9
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.6
@@ -19,6 +20,7 @@ require (
 	github.com/honeycombio/husky v0.24.0
 	github.com/honeycombio/libhoney-go v1.20.0
 	github.com/jessevdk/go-flags v1.5.0
+	github.com/jmoiron/sqlx v1.3.5
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.17.4
 	github.com/panmari/cuckoofilter v1.0.3
