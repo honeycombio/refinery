@@ -48,22 +48,25 @@ func (s CentralTraceState) String() string {
 }
 
 type CentralTraceStatus struct {
-	TraceID        string
-	State          CentralTraceState
-	Rate           uint
-	KeepReason     string
-	reasonIndex    uint      // this is the cache ID for the reason
-	timestamp      time.Time // this is the last time the trace state was changed
-	spanCount      uint32    // number of spans in the trace
-	spanEventCount uint32    // number of span events in the trace
-	spanLinkCount  uint32    // number of span links in the trace
+	TraceID     string
+	State       CentralTraceState
+	Rate        uint
+	KeepReason  string
+	reasonIndex uint      // this is the cache ID for the reason
+	Timestamp   time.Time // this is the last time the trace state was changed
+	Count       uint32    // number of spans in the trace
+	EventCount  uint32    // number of span events in the trace
+	LinkCount   uint32    // number of span links in the trace
 }
+
+// ensure that CentralTraceStatus implements KeptTrace
+var _ cache.KeptTrace = (*CentralTraceStatus)(nil)
 
 func NewCentralTraceStatus(traceID string, state CentralTraceState) *CentralTraceStatus {
 	return &CentralTraceStatus{
 		TraceID:   traceID,
 		State:     state,
-		timestamp: time.Now(),
+		Timestamp: time.Now(),
 	}
 }
 
@@ -74,7 +77,7 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 		Rate:        s.Rate,
 		KeepReason:  s.KeepReason,
 		reasonIndex: s.reasonIndex,
-		timestamp:   s.timestamp, // we might want this to not copy the timestamp, but to set it to now()
+		Timestamp:   s.Timestamp, // we might want this to not copy the timestamp, but to set it to now()
 	}
 }
 
@@ -97,23 +100,19 @@ func (t *CentralTraceStatus) SampleRate() uint {
 }
 
 func (t *CentralTraceStatus) DescendantCount() uint32 {
-	// TODO
-	return 0
+	return t.Count
 }
 
 func (t *CentralTraceStatus) SpanEventCount() uint32 {
-	// TODO
-	return 0
+	return t.EventCount
 }
 
 func (t *CentralTraceStatus) SpanLinkCount() uint32 {
-	// TODO
-	return 0
+	return t.LinkCount
 }
 
 func (t *CentralTraceStatus) SpanCount() uint32 {
-	// TODO
-	return 0
+	return t.Count
 }
 
 func (t *CentralTraceStatus) SetSentReason(reason uint) {
