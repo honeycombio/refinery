@@ -124,7 +124,7 @@ func (i *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState 
 	}
 	traceIDsToChange := make([]string, 0)
 	for _, status := range statuses {
-		if time.Since(status.timestamp) > timeout {
+		if time.Since(status.Timestamp) > timeout {
 			traceIDsToChange = append(traceIDsToChange, status.TraceID)
 		}
 	}
