@@ -134,7 +134,7 @@ func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState
 
 	status.State = toState
 	lrs.states[toState][traceID] = status
-	status.timestamp = time.Now()
+	status.Timestamp = time.Now()
 	delete(lrs.states[fromState], traceID)
 	return true
 }
@@ -188,11 +188,11 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 
 	// Add the span to the trace; this works even if the trace doesn't exist yet
 	lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
-	lrs.states[state][span.TraceID].spanCount++
+	lrs.states[state][span.TraceID].Count++
 	if span.Type == SpanTypeLink {
-		lrs.states[state][span.TraceID].spanLinkCount++
+		lrs.states[state][span.TraceID].LinkCount++
 	} else if span.Type == SpanTypeEvent {
-		lrs.states[state][span.TraceID].spanEventCount++
+		lrs.states[state][span.TraceID].EventCount++
 	}
 
 	if span.ParentID == "" {
