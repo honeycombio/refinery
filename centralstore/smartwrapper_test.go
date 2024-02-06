@@ -25,9 +25,30 @@ func standardOptions() SmartWrapperOptions {
 	return sopts
 }
 
+var storeType = "mysql"
+
+// var storeType = "local"
+
+func makeRemoteStore() BasicStorer {
+	switch storeType {
+	case "mysql":
+		// this connection string works if you don't have a root password on your local mysql
+		s, err := NewMySQLRemoteStore(MySQLRemoteStoreOptions{DSN: "root:@(localhost:3306)/refinery_test"})
+		s.DeleteAllData()
+		s.SetupDatabase()
+		if err != nil {
+			panic(fmt.Sprintf("failed to create mysql store: %s", err))
+		}
+		return s
+	case "local":
+		return NewLocalRemoteStore()
+	}
+	return nil
+}
+
 func TestSingleTraceOperation(t *testing.T) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
+	store := NewSmartWrapper(sopts, makeRemoteStore())
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -42,8 +63,10 @@ func TestSingleTraceOperation(t *testing.T) {
 		states, err := store.GetStatusForTraces([]string{span.TraceID})
 		assert.NoError(collect, err)
 		assert.Equal(collect, 1, len(states))
-		assert.Equal(collect, span.TraceID, states[0].TraceID)
-		assert.Equal(collect, Collecting, states[0].State)
+		if len(states) > 0 {
+			assert.Equal(collect, span.TraceID, states[0].TraceID)
+			assert.Equal(collect, Collecting, states[0].State)
+		}
 	}, 1*time.Second, 10*time.Millisecond)
 
 	// it should automatically time out to the Waiting state
@@ -51,8 +74,10 @@ func TestSingleTraceOperation(t *testing.T) {
 		states, err := store.GetStatusForTraces([]string{span.TraceID})
 		assert.NoError(collect, err)
 		assert.Equal(collect, 1, len(states))
-		assert.Equal(collect, span.TraceID, states[0].TraceID)
-		assert.Equal(collect, WaitingToDecide, states[0].State)
+		if len(states) > 0 {
+			assert.Equal(collect, span.TraceID, states[0].TraceID)
+			assert.Equal(collect, WaitingToDecide, states[0].State)
+		}
 	}, 1*time.Second, 10*time.Millisecond)
 
 	// and then to the Ready state
@@ -60,14 +85,16 @@ func TestSingleTraceOperation(t *testing.T) {
 		states, err := store.GetStatusForTraces([]string{span.TraceID})
 		assert.NoError(collect, err)
 		assert.Equal(collect, 1, len(states))
-		assert.Equal(collect, span.TraceID, states[0].TraceID)
-		assert.Equal(collect, ReadyForDecision, states[0].State)
+		if len(states) > 0 {
+			assert.Equal(collect, span.TraceID, states[0].TraceID)
+			assert.Equal(collect, ReadyForDecision, states[0].State)
+		}
 	}, 1*time.Second, 10*time.Millisecond)
 }
 
 func TestBasicStoreOperation(t *testing.T) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
+	store := NewSmartWrapper(sopts, makeRemoteStore())
 	defer store.Stop()
 
 	traceids := make([]string, 0)
@@ -113,7 +140,7 @@ func TestBasicStoreOperation(t *testing.T) {
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
+	store := NewSmartWrapper(sopts, makeRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -132,7 +159,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 
 func BenchmarkStoreGetStatus(b *testing.B) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
+	store := NewSmartWrapper(sopts, makeRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -152,7 +179,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 
 func BenchmarkStoreGetTrace(b *testing.B) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
+	store := NewSmartWrapper(sopts, makeRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -175,7 +202,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	sopts := standardOptions()
 	sopts.SendDelay = duration("100ms")
 	sopts.TraceTimeout = duration("100ms")
-	store := NewSmartWrapper(sopts, NewLocalRemoteStore())
+	store := NewSmartWrapper(sopts, makeRemoteStore())
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {

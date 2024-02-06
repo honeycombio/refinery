@@ -94,6 +94,10 @@ func NewLocalRemoteStore(options ...LRSOption) *LocalRemoteStore {
 // ensure that LocalRemoteStore implements RemoteStore
 var _ BasicStorer = (*LocalRemoteStore)(nil)
 
+func (lrs *LocalRemoteStore) Stop() error {
+	return nil
+}
+
 // findTraceStatus returns the state and status of a trace, or Unknown if the trace
 // wasn't found in any state. If the trace is found, the status will be non-nil.
 // Only call this if you're holding a Lock.

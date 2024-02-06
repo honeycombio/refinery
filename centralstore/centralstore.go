@@ -22,13 +22,13 @@ const (
 // IsRoot should be set to true if the span is the root of the trace (we don't ask the store
 // to make this decision; the refinery should know this).
 type CentralSpan struct {
-	TraceID   string
-	SpanID    string
-	ParentID  string
-	Type      SpanType
-	KeyFields map[string]interface{}
-	AllFields map[string]interface{}
-	IsRoot    bool
+	TraceID   string                 `db:"trace_id"`
+	SpanID    string                 `db:"span_id"`
+	ParentID  string                 `db:"parent_id"`
+	Type      SpanType               `db:"type"`
+	KeyFields map[string]interface{} `db:"key_fields"`
+	AllFields map[string]interface{} `db:"all_fields"`
+	IsRoot    bool                   `db:"is_root"`
 }
 
 type CentralTraceState string
@@ -48,15 +48,15 @@ func (s CentralTraceState) String() string {
 }
 
 type CentralTraceStatus struct {
-	TraceID     string
-	State       CentralTraceState
-	Rate        uint
-	KeepReason  string
-	reasonIndex uint      // this is the cache ID for the reason
-	Timestamp   time.Time // this is the last time the trace state was changed
-	Count       uint32    // number of spans in the trace
-	EventCount  uint32    // number of span events in the trace
-	LinkCount   uint32    // number of span links in the trace
+	TraceID     string            `db:"trace_id"`
+	State       CentralTraceState `db:"state"`
+	Rate        uint              `db:"rate"`
+	KeepReason  string            `db:"keep_reason"`
+	reasonIndex uint              // this is the cache ID for the reason
+	Timestamp   time.Time         `db:"last_updated"`
+	Count       uint32            `db:"span_count"`
+	EventCount  uint32            `db:"span_event_count"`
+	LinkCount   uint32            `db:"span_link_count"`
 }
 
 // ensure that CentralTraceStatus implements KeptTrace
@@ -248,6 +248,8 @@ type SmartStorer interface {
 
 // BasicStorer is the interface for a non-intelligent remote store.
 type BasicStorer interface {
+	Stop() error
+
 	// WriteSpan writes a span to the store. It must always contain TraceID.
 	// If this is a span containing any non-empty key fields, it must also contain
 	// SpanID (and ParentID if it is not a root span).

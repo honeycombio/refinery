@@ -54,6 +54,8 @@ func (i *SmartWrapper) Stop() {
 	close(schan)
 	// stop the state manager
 	close(i.done)
+	// stop the remote store
+	i.basicStore.Stop()
 }
 
 // Register should be called once at Refinery startup to register itself
@@ -108,7 +110,10 @@ func (i *SmartWrapper) WriteSpan(span *CentralSpan) error {
 // goroutine and runs indefinitely until cancelled by calling Stop().
 func (i *SmartWrapper) processSpans() {
 	for span := range i.spanChan {
-		i.basicStore.WriteSpan(span)
+		err := i.basicStore.WriteSpan(span)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 
