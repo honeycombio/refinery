@@ -15,6 +15,7 @@ type statusMap map[string]*CentralTraceStatus
 type SmartWrapper struct {
 	basicStore BasicStorer
 	keyfields  []string
+	stopped    chan struct{}
 	spanChan   chan *CentralSpan
 	done       chan struct{}
 }
@@ -35,6 +36,7 @@ type SmartWrapperOptions struct {
 func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer) *SmartWrapper {
 	w := &SmartWrapper{
 		basicStore: basic,
+		stopped:    make(chan struct{}),
 		spanChan:   make(chan *CentralSpan, options.SpanChannelSize),
 		done:       make(chan struct{}),
 	}
