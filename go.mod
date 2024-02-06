@@ -56,8 +56,10 @@ require (
 	github.com/facebookgo/structtag v0.0.0-20150214074306-217e25fb9691 // indirect
 	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/gofrs/uuid/v5 v5.0.0
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
+	github.com/jonboulle/clockwork v0.4.0
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
