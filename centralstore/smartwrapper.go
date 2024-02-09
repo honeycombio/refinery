@@ -100,6 +100,7 @@ func (i *SmartWrapper) WriteSpan(span *CentralSpan) error {
 	// otherwise, put the span in the channel but don't block
 	select {
 	case i.spanChan <- span:
+		// fmt.Println("span written")
 	default:
 		return fmt.Errorf("span queue full")
 	}
@@ -110,6 +111,7 @@ func (i *SmartWrapper) WriteSpan(span *CentralSpan) error {
 // goroutine and runs indefinitely until cancelled by calling Stop().
 func (i *SmartWrapper) processSpans() {
 	for span := range i.spanChan {
+		// fmt.Println("span read")
 		err := i.basicStore.WriteSpan(span)
 		if err != nil {
 			fmt.Println(err)
@@ -122,6 +124,9 @@ func (i *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState 
 	st, err := i.basicStore.GetTracesForState(fromState)
 	if err != nil {
 		return err
+	}
+	if len(st) == 0 || st == nil {
+		return nil
 	}
 	statuses, err := i.basicStore.GetStatusForTraces(st)
 	if err != nil {
@@ -150,15 +155,17 @@ func (i *SmartWrapper) manageStates(options SmartWrapperOptions) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
+			// the order of these is important!
+
+			// see if AwaitDecision traces have been waiting too long
+			i.manageTimeouts(time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyForDecision)
+
 			// traces that are past SendDelay should be moved to ready for decision
 			// the only errors can be syntax errors, so won't happen at runtime
 			i.manageTimeouts(time.Duration(options.SendDelay), WaitingToDecide, ReadyForDecision)
 
 			// trace that are past TraceTimeout should be moved to waiting to decide
 			i.manageTimeouts(time.Duration(options.TraceTimeout), Collecting, WaitingToDecide)
-
-			// see if AwaitDecision traces have been waiting too long
-			i.manageTimeouts(time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyForDecision)
 		}
 	}
 }

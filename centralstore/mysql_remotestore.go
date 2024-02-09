@@ -3,6 +3,7 @@ package centralstore
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -15,17 +16,14 @@ type MysqlTraceStatus struct {
 	State      CentralTraceState `db:"state"`
 	Rate       uint              `db:"rate"`
 	KeepReason string            `db:"keep_reason"`
-	Timestamp  string            `db:"last_updated"`
+	Timestamp  uint64            `db:"last_updated"`
 	Count      uint32            `db:"span_count"`
 	EventCount uint32            `db:"span_event_count"`
 	LinkCount  uint32            `db:"span_link_count"`
 }
 
 func (m *MysqlTraceStatus) ToCTS() *CentralTraceStatus {
-	ts, err := time.Parse("2006-01-02 15:04:05", m.Timestamp)
-	if err != nil {
-		ts = time.Now()
-	}
+	ts := time.Unix(int64(m.Timestamp), 0)
 	return &CentralTraceStatus{
 		TraceID:    m.TraceID,
 		State:      m.State,
@@ -39,7 +37,7 @@ func (m *MysqlTraceStatus) ToCTS() *CentralTraceStatus {
 }
 
 func GetMTS(c *CentralTraceStatus) *MysqlTraceStatus {
-	ts := c.Timestamp.String()
+	ts := uint64(c.Timestamp.Unix())
 	return &MysqlTraceStatus{
 		TraceID:    c.TraceID,
 		State:      c.State,
@@ -50,6 +48,16 @@ func GetMTS(c *CentralTraceStatus) *MysqlTraceStatus {
 		EventCount: c.EventCount,
 		LinkCount:  c.LinkCount,
 	}
+}
+
+type MysqlCentralSpan struct {
+	TraceID   string   `db:"trace_id"`
+	SpanID    string   `db:"span_id"`
+	ParentID  string   `db:"parent_id"`
+	Type      SpanType `db:"type"`
+	KeyFields []byte   `db:"key_fields"`
+	AllFields []byte   `db:"all_fields"`
+	IsRoot    bool     `db:"is_root"`
 }
 
 // MySQLRemoteStore is an implementation of RemoteStorer that stores spans in a MySQL database.
@@ -107,7 +115,7 @@ func (m *MySQLRemoteStore) SetupDatabase() {
 			state ENUM('collecting', 'waiting_to_decide', 'ready_for_decision', 'awaiting_decision', 'decision_keep', 'decision_drop') NOT NULL,
 			rate INT NOT NULL DEFAULT 1,
 			keep_reason VARCHAR(255) NOT NULL DEFAULT "",
-			last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+			last_updated INT NOT NULL DEFAULT 0,
 			span_count INT NOT NULL DEFAULT 0,
 			span_event_count INT NOT NULL DEFAULT 0,
 			span_link_count INT NOT NULL DEFAULT 0,
@@ -165,11 +173,12 @@ func (m *MySQLRemoteStore) WriteSpan(span *CentralSpan) error {
 	}
 
 	// Fetch from the trace_status table to see if we already know about this one
-	cts := CentralTraceStatus{}
-	err = tx.Get(&cts, "SELECT * FROM trace_status WHERE trace_id = ?", span.TraceID)
+	mts := MysqlTraceStatus{}
+	err = tx.Get(&mts, "SELECT * FROM trace_status WHERE trace_id = ?", span.TraceID)
 	if realerror(err) {
 		return err
 	}
+	cts := mts.ToCTS()
 	// this trace is new to us, we need to create
 	// a new traces entry for it
 	if err != nil {
@@ -230,18 +239,43 @@ func (m *MySQLRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
 	trace := CentralTrace{
 		TraceID: traceID,
 	}
-	spans := make([]*CentralSpan, 0)
+	spans := make([]*MysqlCentralSpan, 0)
 	// get all spans from the spans table
 	err := m.db.Select(&spans, "SELECT * FROM spans WHERE trace_id = ? ORDER BY is_root", traceID)
 	if realerror(err) {
 		return nil, err
 	}
+	// convert the spans to CentralSpans
+	for _, mspan := range spans {
+		span := CentralSpan{
+			TraceID:   mspan.TraceID,
+			SpanID:    mspan.SpanID,
+			ParentID:  mspan.ParentID,
+			Type:      mspan.Type,
+			KeyFields: make(map[string]interface{}),
+			AllFields: make(map[string]interface{}),
+			IsRoot:    mspan.IsRoot,
+		}
+		err = json.Unmarshal(mspan.KeyFields, &span.KeyFields)
+		if err != nil {
+			return nil, err
+		}
+		err = json.Unmarshal(mspan.AllFields, &span.AllFields)
+		if err != nil {
+			return nil, err
+		}
+		trace.Spans = append(trace.Spans, &span)
+	}
+
 	// because of our ORDER_BY, if we have a root span it's the 0th span
 	if len(spans) > 0 && spans[0].IsRoot {
-		trace.Root = spans[0]
+		trace.Root = trace.Spans[0]
 	}
-	trace.Spans = spans
 	return &trace, nil
+}
+
+func generateInClause(sa []string) string {
+	return "('" + strings.Join(sa, "', '") + "')"
 }
 
 // GetStatusForTraces returns the current state for a list of trace IDs,
@@ -257,15 +291,20 @@ func (m *MySQLRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
 func (m *MySQLRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
 	// retrieve the trace statuses from the database for all trace IDs
 	mstatuses := make([]*MysqlTraceStatus, 0)
-	tids := strings.Join(traceIDs, ", ")
-	err := m.db.Select(&mstatuses, "SELECT * FROM trace_status WHERE trace_id IN (?)", tids)
+	query := "SELECT * FROM trace_status WHERE trace_id IN " + generateInClause(traceIDs)
+	fmt.Println(query)
+	err := m.db.Select(&mstatuses, query)
 	if realerror(err) {
 		return nil, err
+	}
+	if len(mstatuses) == 0 {
+		return nil, nil
 	}
 	cstatuses := make([]*CentralTraceStatus, len(mstatuses))
 	for i, mstatus := range mstatuses {
 		cstatuses[i] = mstatus.ToCTS()
 	}
+	// fmt.Printf("GetStatusForTraces: %v\n", cstatuses)
 	return cstatuses, nil
 }
 
@@ -285,7 +324,10 @@ func (m *MySQLRemoteStore) GetTracesForState(state CentralTraceState) ([]string,
 func (m *MySQLRemoteStore) ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error {
 	// change the status of the traces in the database
 	tids := strings.Join(traceIDs, ", ")
-	_, err := m.db.Exec("UPDATE trace_status SET state = ? WHERE trace_id IN (?) AND state = ?", toState, tids, fromState)
+	fmt.Printf("changing trace status from %s to %s for %s\n", fromState, toState, tids)
+	_, err := m.db.Exec(
+		"UPDATE trace_status SET state = ? WHERE state = ? AND trace_id IN "+generateInClause(traceIDs),
+		toState, fromState)
 	if realerror(err) {
 		return err
 	}
