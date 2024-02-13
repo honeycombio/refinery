@@ -196,7 +196,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
 	// should be the last event on the transmission queue.
 	var noUpstreamSampleRateEvent *types.Event
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 		noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
