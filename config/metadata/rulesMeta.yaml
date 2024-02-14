@@ -67,6 +67,7 @@ groups:
         description: >
           The duration after which the Dynamic Sampler should reset its internal
           counters. It should be specified as a duration string. For example, "30s" or "1m".
+          Defaults to "30s".
       - name: FieldList
         type: stringarray
         validations:
@@ -169,7 +170,7 @@ groups:
         description: >
           The duration after which the EMA Dynamic Sampler should recalculate
           its internal counters. It should be specified as a duration string.
-          For example, "30s" or "1m".
+          For example, "30s" or "1m". Defaults to "15s".
       - name: Weight
         type: float
         validations:
@@ -397,7 +398,7 @@ groups:
         summary: is how often the sampling rate is recomputed.
         description: >
           The duration between sampling rate computations. It should be
-          specified as a duration string. For example, "30s" or "1m".
+          specified as a duration string. For example, "30s" or "1m". Defaults to "1s".
       - name: LookbackFrequency
         type: duration
         summary: how far back in time to look when computing the sampling rate.
@@ -466,7 +467,8 @@ groups:
           throughput will be the value specified in `GoalThroughputPerSec`.
       - name: ClearFrequency
         type: duration
-        summary: is the duration over which the sampler will calculate the throughput.
+        summary: is the duration over which the sampler will calculate the throughput. It should be
+          specified as a duration string. For example, "30s" or "1m". Defaults to "30s".
         description: $DynamicSampler.ClearFrequency
       - name: FieldList
         type: stringarray
