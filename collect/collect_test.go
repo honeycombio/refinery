@@ -166,13 +166,14 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				Data:       make(map[string]interface{}),
 			},
 		}
-		coll.AddSpan(span)
+		err := coll.AddSpan(span)
+		require.NoError(t, err, "must be able to add the span")
 		time.Sleep(conf.SendTickerVal * 5)
 	}
 
-	// At least one event should have been transmitted by now with an original sample rate from upstream sampling.
 	transmission.Mux.RLock()
-	assert.Greater(t, len(transmission.Events), 0, "should be at least one event transmitted")
+	require.Greater(t, len(transmission.Events), 0,
+		"At least one event should have been sampled and transmitted by now for us to make assertions upon.")
 	upstreamSampledEvent := transmission.Events[0]
 	transmission.Mux.RUnlock()
 
@@ -191,7 +192,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			Data:       make(map[string]interface{}),
 		},
 	})
-	require.NoError(t, err, "should be able to add the span")
+	require.NoError(t, err, "must be able to add the span")
 
 	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
 	// should be the last event on the transmission queue.
