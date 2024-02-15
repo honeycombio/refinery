@@ -557,7 +557,6 @@ func (t *traceStateMap) move(destination *traceStateMap, traceIDs ...string) err
 	conn := t.redis.Get()
 	defer conn.Close()
 
-	// only add traceIDs to the destination if they don't already exist
 	entries := make([]any, len(traceIDs)*2)
 	for i := range entries {
 		if i%2 == 0 {
@@ -566,12 +565,7 @@ func (t *traceStateMap) move(destination *traceStateMap, traceIDs ...string) err
 		}
 		entries[i] = traceIDs[i/2]
 	}
-	err := conn.ZAdd(destination.mapKey(), entries)
-	if err != nil && err != redis.ErrNil {
-		return err
-	}
 
-	_ = conn.ZRemove(t.mapKey(), traceIDs)
-
-	return nil
+	// only add traceIDs to the destination if they don't already exist
+	return conn.ZMove(t.mapKey(), destination.mapKey(), entries)
 }
