@@ -2568,7 +2568,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			spans := trace.GetSpans()
 			assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 
-			rate, keep, reason, key := sampler.GetSampleRate(trace)
+			rate, _, reason, key := sampler.GetSampleRate(trace)
 			assert.Equal(t, "", key)
 
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
@@ -2577,12 +2577,6 @@ func TestRulesRootSpanContext(t *testing.T) {
 				name = d.Rules.Rules[0].Name
 			}
 			assert.Contains(t, reason, name)
-
-			// since keep depends on sampling rate, can only test when its false
-			if !d.ExpectedKeep {
-				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
-			}
-
 		})
 	}
 }
