@@ -172,7 +172,7 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 	span:
 		for _, span := range t.GetSpans() {
-			var value interface{}
+			var value any
 			var exists bool
 
 			if checkedRootPrefix == false {
@@ -250,7 +250,7 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	return false
 }
 
-func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (value interface{}, exists bool, checkedRootPrefix bool) {
+func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (value any, exists bool, checkedRootPrefix bool) {
 	// If the condition is a descendant count, we extract the count from trace and return it.
 	if f, ok := condition.GetComputedField(); ok {
 		switch f {
