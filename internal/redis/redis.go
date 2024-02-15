@@ -28,6 +28,12 @@ type Script interface {
 	Send(ctx context.Context, conn Conn, keysAndArgs ...any) error
 }
 
+type Client interface {
+	Get() Conn
+	NewScript(keyCount int, src string) Script
+	Stop(context.Context) error
+}
+
 type Conn interface {
 	AcquireLock(string, time.Duration) (bool, func() error)
 	AcquireLockWithRetries(context.Context, string, time.Duration, int, time.Duration) (bool, func() error)
@@ -69,13 +75,15 @@ type Conn interface {
 	ZScore(string, string) (int64, error)
 	ZMScore(string, []string) ([]int64, error)
 	ZCard(string) (int64, error)
+	ZExist(string, string) (bool, error)
 	ZRemove(string, []string) error
 	TTL(string) (int64, error)
 
 	Do(string, ...any) (any, error)
+	Exec(...Command) error
 }
 
-type Client struct {
+type DefaultClient struct {
 	pool   *redis.Pool
 	Config *Config
 }
@@ -91,7 +99,7 @@ type DefaultScript struct {
 	script *redis.Script
 }
 
-func NewClient(cfg *Config) *Client {
+func NewClient(cfg *Config) Client {
 	pool := &redis.Pool{
 		MaxIdle:     cfg.MaxIdle,
 		MaxActive:   cfg.MaxActive,
@@ -108,19 +116,19 @@ func NewClient(cfg *Config) *Client {
 		},
 	}
 
-	return &Client{
+	return &DefaultClient{
 		pool:   pool,
 		Config: cfg,
 	}
 }
 
-func (d *Client) Stop(ctx context.Context) error {
+func (d *DefaultClient) Stop(ctx context.Context) error {
 	return d.pool.Close()
 }
 
 // Get returns a connection from the underlying pool. Return this connection to
 // the pool with conn.Close().
-func (d *Client) Get() Conn {
+func (d *DefaultClient) Get() Conn {
 	return &DefaultConn{
 		conn:  d.pool.Get(),
 		Clock: clockwork.NewRealClock(),
@@ -129,7 +137,7 @@ func (d *Client) Get() Conn {
 
 // NewScript returns a new script object that can be optionally registered with
 // the redis server (using Load) and then executed (using Do).
-func (c *Client) NewScript(keyCount int, src string) Script {
+func (c *DefaultClient) NewScript(keyCount int, src string) Script {
 	return &DefaultScript{
 		script: redis.NewScript(keyCount, src),
 	}
@@ -451,6 +459,10 @@ func (c *DefaultConn) ZCard(key string) (int64, error) {
 	return redis.Int64(c.conn.Do("ZCARD", key))
 }
 
+func (c *DefaultConn) ZExist(key string, member string) (bool, error) {
+	return redis.Bool(c.conn.Do("ZSCORE", key, member))
+}
+
 func (c *DefaultConn) ZMove(fromKey string, toKey string, members []any) error {
 	if err := c.conn.Send("MULTI"); err != nil {
 		return err
@@ -512,12 +524,34 @@ func (c *DefaultConn) ListFields(key string) ([]string, error) {
 
 func (c *DefaultConn) SetHash(key string, val interface{}) error {
 	args := redis.Args{key}.AddFlat(val)
-	return c.conn.Send("HSET", args...)
+	_, err := c.conn.Do("HSET", args...)
+	return err
 }
 
 // returns the value after the increment
 func (c *DefaultConn) IncrementByHash(key, field string, incrVal int64) (int64, error) {
 	return redis.Int64(c.conn.Do("HINCRBY", key, field, incrVal))
+}
+
+func (c *DefaultConn) Exec(commands ...Command) error {
+	err := c.conn.Send("MULTI")
+	if err != nil {
+		return err
+	}
+
+	for _, command := range commands {
+		err = c.conn.Send(command.Name(), command.Args()...)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = c.conn.Do("EXEC")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *DefaultConn) Do(commandString string, args ...any) (any, error) {
@@ -542,4 +576,39 @@ func (s *DefaultScript) SendHash(ctx context.Context, conn Conn, keysAndArgs ...
 func (s *DefaultScript) Send(ctx context.Context, conn Conn, keysAndArgs ...any) error {
 	defaultConn := conn.(*DefaultConn)
 	return s.script.Send(defaultConn.conn, keysAndArgs...)
+}
+
+var _ Command = command{}
+
+type command struct {
+	name string
+	args []any
+}
+
+func (c command) Args() []any {
+	return c.args
+}
+
+func (c command) Name() string {
+	return c.name
+}
+
+type Command interface {
+	Name() string
+	Args() []any
+}
+
+func NewSetHashCommand(key string, value interface{}) command {
+	args := redis.Args{key}.AddFlat(value)
+	return command{
+		name: "HSET",
+		args: args,
+	}
+}
+
+func NewIncrByHashCommand(key, field string, incrVal int64) command {
+	return command{
+		name: "HINCRBY",
+		args: redis.Args{key, field, incrVal},
+	}
 }
