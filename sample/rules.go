@@ -23,8 +23,6 @@ type RulesBasedSampler struct {
 
 const RootPrefix = "root."
 
-var checkedRootPrefix bool
-
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
@@ -147,6 +145,9 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	return 1, true, "no rule matched", ""
 }
 
+// rule evaluator object that contains "global" root span flag
+// Rule evaluator takes a rule, contains trace, trace constains spans
+// rulesMatchesTrace becomes a member func of rule evaluator
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
 	if rule.Conditions == nil {
@@ -170,14 +171,16 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 			}
 
 		}
+		var checkedRootPrefix bool
 
 	span:
 		for _, span := range t.GetSpans() {
 			var value interface{}
 			var exists bool
-			// condition either does not have root prefix, or root span has not yet been checked
+
 			if checkedRootPrefix == false {
-				value, exists = extractValueFromSpan(t, span, condition, checkNestedFields)
+				value, exists, checkedRootPrefix = extractValueFromSpan(t, span, condition, checkNestedFields)
+
 			}
 			if condition.Matches == nil {
 				if conditionMatchesValue(condition, value, exists) {
@@ -190,7 +193,6 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 				break span
 			}
 		}
-		// reset root prefix flag for the next condition
 		checkedRootPrefix = false
 	}
 	return matched == len(rule.Conditions)
@@ -204,9 +206,14 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 
 	var seen []int
 
+	//hash map for memoized version of extractValueFromSpan sits here
+
+	// does this rule use root span context
 	for _, span := range trace.GetSpans() {
 		ruleMatched := true
 		for i, condition := range rule.Conditions {
+			// for each condition check if its using root span context
+
 			var value interface{}
 			var exists bool
 			// if condition index stored in seen, then skip this condition
@@ -216,22 +223,23 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 				// if condition index not in seen, check if there is a root prefix in any field
 				if strings.Contains(condition.Field, RootPrefix) {
 					// if field contains root prefix, call extractValueFromSpan and add to seen
-					value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+
+					value, exists, _ = extractValueFromSpan(trace, span, condition, checkNestedFields)
 					seen = append(seen, i)
 				}
 
 				for _, field := range condition.Fields {
 					if strings.Contains(field, RootPrefix) {
-						value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+						value, exists, _ = extractValueFromSpan(trace, span, condition, checkNestedFields)
 						if !slices.Contains(seen, i) { // only append to seen for first field with root prefix
 							seen = append(seen, i)
 						}
 					}
 					// call extractValueFromSpan for each field without root prefix
-					value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+					value, exists, _ = extractValueFromSpan(trace, span, condition, checkNestedFields)
 				}
 				// call extractValueFromSpan if condition.Field does not contain root prefix
-				value, exists = extractValueFromSpan(trace, span, condition, checkNestedFields)
+				value, exists, _ = extractValueFromSpan(trace, span, condition, checkNestedFields)
 			}
 
 			if condition.Matches == nil {
@@ -259,12 +267,17 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	return false
 }
 
-func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+//memoize? given same trace, same span, same condition look up the answer from last time
+// wrap this func in a func that produces a hash map that hashes on trace, span and condition
+
+// add return func names
+func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool, bool) {
+	checkedRootPrefix := false
 	// If the condition is a descendant count, we extract the count from trace and return it.
 	if f, ok := condition.GetComputedField(); ok {
 		switch f {
 		case config.NUM_DESCENDANTS:
-			return int64(trace.DescendantCount()), true
+			return int64(trace.DescendantCount()), true, false
 		}
 	}
 
@@ -282,7 +295,7 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 
 		value, exists = span.Data[field]
 		if exists {
-			return value, exists
+			return value, exists, checkedRootPrefix
 		}
 	}
 
@@ -292,13 +305,13 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 			for _, field := range condition.Fields {
 				result := gjson.Get(string(jsonStr), field)
 				if result.Exists() {
-					return result.String(), true
+					return result.String(), true, checkedRootPrefix
 				}
 			}
 		}
 	}
 
-	return nil, false
+	return nil, false, false
 }
 
 // This only gets called when we're using one of the basic operators, and
