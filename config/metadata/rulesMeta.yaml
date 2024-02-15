@@ -620,7 +620,7 @@ groups:
           For example, if the `Field` is `root.url`, then the condition will be processed using the url 
           field from the root span. 
           
-          The rule setting `Scope: span` does not change the meaning of this prefix --
+          The setting `Scope: span` for a rule does not change the meaning of this prefix --
           the condition is still evaluated on the root span and is treated as if it were part of the  
           span being processed. 
       - name: Fields
