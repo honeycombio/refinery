@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
-	internal "github.com/honeycombio/refinery/internal/redis"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
 )
 
@@ -27,7 +26,7 @@ func NewRedisBasicStore(opt RedisRemoteStoreOptions) *RedisBasicStore {
 		host = "localhost:6379"
 	}
 
-	redisClient := internal.NewClient(&internal.Config{
+	redisClient := redis.NewClient(&redis.Config{
 		Addr: host,
 	})
 
@@ -48,9 +47,9 @@ func NewRedisBasicStore(opt RedisRemoteStoreOptions) *RedisBasicStore {
 	}
 }
 
-// RedisBasicStore is an implementation of RemoteStore.
+// RedisBasicStore is an implementation of BasicStorer that uses Redis as the backing store.
 type RedisBasicStore struct {
-	client        *internal.Client
+	client        redis.Client
 	decisionCache cache.TraceSentCache
 	statuses      *traceStatusStore
 	states        map[CentralTraceState]*traceStateMap
@@ -92,7 +91,7 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 	case DecisionDrop:
 		return nil
 	case DecisionKeep, AwaitingDecision:
-		_ = r.statuses.incrementSpanCounts(nil, span.TraceID, string(span.Type))
+		_ = r.statuses.incrementSpanCounts(span.TraceID, string(span.Type))
 	case Collecting:
 		if span.ParentID == "" {
 			err := r.states[Collecting].move(r.states[WaitingToDecide], span.TraceID)
@@ -256,10 +255,10 @@ func (r *RedisBasicStore) changeTraceStatus(traceIDs []string, fromState, toStat
 // for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
 type traceStatusStore struct {
 	spans *spansList
-	redis *internal.Client
+	redis redis.Client
 }
 
-func newTraceStatusStore(client *internal.Client) *traceStatusStore {
+func newTraceStatusStore(client redis.Client) *traceStatusStore {
 	spans := NewSpanList(client)
 	return &traceStatusStore{
 		spans: spans,
@@ -332,19 +331,35 @@ func (t *traceStatusStore) addSpan(span *CentralSpan) error {
 	conn := t.redis.Get()
 	defer conn.Close()
 
-	err := t.spans.addSpan(span)
+	var err error
+	commands := make([]redis.Command, 2)
+	commands[0], err = t.spans.addSpan(span)
 	if err != nil {
 		return err
 	}
 
-	return t.incrementSpanCounts(conn, span.TraceID, string(span.Type))
+	commands[1], err = t.incrementSpanCountsCMD(span.TraceID, string(span.Type))
+	if err != nil {
+		return err
+	}
+
+	return conn.Exec(commands...)
 }
 
-func (t *traceStatusStore) incrementSpanCounts(conn internal.Conn, traceID string, spanType string) error {
-	if conn == nil {
-		conn = t.redis.Get()
-		defer conn.Close()
+func (t *traceStatusStore) incrementSpanCounts(traceID string, spanType string) error {
+	conn := t.redis.Get()
+	defer conn.Close()
+
+	cmd, err := t.incrementSpanCountsCMD(traceID, spanType)
+	if err != nil {
+		return err
 	}
+
+	_, err = conn.Do(cmd.Name(), cmd.Args()...)
+	return err
+}
+
+func (t *traceStatusStore) incrementSpanCountsCMD(traceID string, spanType string) (redis.Command, error) {
 
 	var field string
 	switch spanType {
@@ -356,8 +371,8 @@ func (t *traceStatusStore) incrementSpanCounts(conn internal.Conn, traceID strin
 		field = "span_count"
 
 	}
-	_, err := conn.IncrementByHash(t.traceStateKey(traceID), field, 1)
-	return err
+
+	return redis.NewIncrByHashCommand(t.traceStateKey(traceID), field, 1), nil
 }
 
 func (t *traceStatusStore) remove(traceIDs []string) error {
@@ -378,10 +393,10 @@ func (t *traceStatusStore) remove(traceIDs []string) error {
 // spansList stores spans in a redis hash with the key being the trace ID and each field
 // being a span ID and the value being the serialized CentralSpan.
 type spansList struct {
-	redis *internal.Client
+	redis redis.Client
 }
 
-func NewSpanList(redis *internal.Client) *spansList {
+func NewSpanList(redis redis.Client) *spansList {
 	return &spansList{
 		redis: redis,
 	}
@@ -401,17 +416,17 @@ func (s *spansList) spansField(spanID string, spanType string) string {
 }
 
 // central span -> blobs
-func (s *spansList) addSpan(span *CentralSpan) error {
+func (s *spansList) addSpan(span *CentralSpan) (redis.Command, error) {
 	conn := s.redis.Get()
 	defer conn.Close()
 
 	data, err := s.serialize(span)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// overwrite the span data if it already exists
-	return conn.SetHash(s.spansKey(span.TraceID), map[string]any{s.spansField(span.SpanID, string(span.Type)): data})
+	return redis.NewSetHashCommand(s.spansKey(span.TraceID), map[string]any{s.spansField(span.SpanID, string(span.Type)): data}), nil
 }
 
 func (s *spansList) serialize(span *CentralSpan) ([]byte, error) {
@@ -469,11 +484,11 @@ func (s *spansList) remove(traceIDs []string) error {
 // By using a hash for the timestamps, we can easily get the timestamp for a trace based
 // on it's current state.
 type traceStateMap struct {
-	redis *internal.Client
+	redis redis.Client
 	state CentralTraceState
 }
 
-func newTraceStateMap(redis *internal.Client, state CentralTraceState) *traceStateMap {
+func newTraceStateMap(redis redis.Client, state CentralTraceState) *traceStateMap {
 	return &traceStateMap{
 		redis: redis,
 		state: state,
@@ -499,7 +514,6 @@ func (t *traceStateMap) getAllTraces() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return results, nil
 }
 
@@ -528,7 +542,7 @@ func (t *traceStateMap) exists(traceID string) bool {
 	conn := t.redis.Get()
 	defer conn.Close()
 
-	exist, err := redis.Bool(conn.ZScore(t.mapKey(), traceID))
+	exist, err := conn.ZExist(t.mapKey(), traceID)
 	if err != nil {
 		return false
 	}
