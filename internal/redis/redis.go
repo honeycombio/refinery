@@ -64,6 +64,7 @@ type Conn interface {
 	LRange(string, int, int) ([]any, error)
 
 	ZAdd(string, []any) error
+	ZMove(string, string, []any) error
 	ZRange(string, int, int) ([]string, error)
 	ZScore(string, string) (int64, error)
 	ZMScore(string, []string) ([]int64, error)
@@ -426,12 +427,10 @@ func (c *DefaultConn) LRange(key string, start int, end int) ([]any, error) {
 // ZAdd adds a member to a sorted set at key with a score, only if the member does not already exist
 func (c *DefaultConn) ZAdd(key string, args []interface{}) error {
 	argsList := redis.Args{key, "NX"}.AddFlat(args)
-	fmt.Println(argsList...)
 	_, err := c.conn.Do("ZADD", argsList...)
 	if err == redis.ErrNil {
 		return nil
 	}
-	fmt.Println(err)
 	return err
 }
 
@@ -451,6 +450,28 @@ func (c *DefaultConn) ZMScore(key string, members []string) ([]int64, error) {
 func (c *DefaultConn) ZCard(key string) (int64, error) {
 	return redis.Int64(c.conn.Do("ZCARD", key))
 }
+
+func (c *DefaultConn) ZMove(fromKey string, toKey string, members []any) error {
+	if err := c.conn.Send("MULTI"); err != nil {
+		return err
+	}
+
+	argsList := redis.Args{toKey, "NX"}.AddFlat(members)
+	if err := c.conn.Send("ZADD", argsList...); err != nil {
+		return err
+	}
+
+	argsList = redis.Args{fromKey, "NX"}.AddFlat(members)
+	if err := c.conn.Send("ZREM", argsList...); err != nil {
+		return err
+	}
+	_, err := redis.Values(c.conn.Do("EXEC"))
+	if err != nil {
+		return err
+	}
+	return err
+}
+
 func (c *DefaultConn) ZRemove(key string, members []string) error {
 	args := redis.Args{key}.AddFlat(members)
 	_, err := c.conn.Do("ZREM", args...)
