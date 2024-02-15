@@ -100,6 +100,7 @@ Type: `int`
 The duration after which the Dynamic Sampler should reset its internal counters.
 It should be specified as a duration string.
 For example, "30s" or "1m".
+Defaults to "30s".
 
 Type: `duration`
 
@@ -166,6 +167,7 @@ Type: `int`
 The duration after which the EMA Dynamic Sampler should recalculate its internal counters.
 It should be specified as a duration string.
 For example, "30s" or "1m".
+Defaults to "15s".
 
 Type: `duration`
 
@@ -280,6 +282,7 @@ Type: `int`
 The duration after which the EMA Dynamic Sampler should recalculate its internal counters.
 It should be specified as a duration string.
 For example, "30s" or "1m".
+Defaults to "15s".
 
 Type: `duration`
 
@@ -394,6 +397,7 @@ Type: `bool`
 The duration between sampling rate computations.
 It should be specified as a duration string.
 For example, "30s" or "1m".
+Defaults to "1s".
 
 Type: `duration`
 
@@ -609,6 +613,7 @@ Type: `bool`
 The duration after which the Dynamic Sampler should reset its internal counters.
 It should be specified as a duration string.
 For example, "30s" or "1m".
+Defaults to "30s".
 
 Type: `duration`
 
