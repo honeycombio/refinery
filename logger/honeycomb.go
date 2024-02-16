@@ -58,8 +58,12 @@ func (h *HoneycombLogger) Start() error {
 			PendingWorkCapacity: libhoney.DefaultPendingWorkCapacity,
 		}
 	}
+	enabled, err := loggerConfig.GetSamplerEnabled()
+	if err != nil {
+		return err
+	}
 
-	if loggerConfig.GetSamplerEnabled() {
+	if enabled {
 		h.sampler = &dynsampler.PerKeyThroughput{
 			ClearFrequencyDuration: 10 * time.Second,
 			PerKeyThroughputPerSec: loggerConfig.SamplerThroughput,
