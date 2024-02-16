@@ -64,7 +64,7 @@ func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTrac
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := processOTLPRequest(ctx, t.router, result.Batches, ri.ApiKey); err != nil {
+	if err := t.router.processOTLPRequest(ctx, result.Batches, ri.ApiKey); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 

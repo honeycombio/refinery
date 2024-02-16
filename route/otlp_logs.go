@@ -34,7 +34,7 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := processOTLPRequest(req.Context(), r, result.Batches, ri.ApiKey); err != nil {
+	if err := r.processOTLPRequest(req.Context(), result.Batches, ri.ApiKey); err != nil {
 		r.handlerReturnWithError(w, ErrUpstreamFailed, err)
 	}
 }
@@ -49,7 +49,7 @@ func NewLogsServer(router *Router) *LogsServer {
 	return &logsServer
 }
 
-func (t *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsServiceRequest) (*collectorlogs.ExportLogsServiceResponse, error) {
+func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsServiceRequest) (*collectorlogs.ExportLogsServiceResponse, error) {
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	if err := ri.ValidateLogsHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
@@ -60,7 +60,7 @@ func (t *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := processOTLPRequest(ctx, t.router, result.Batches, ri.ApiKey); err != nil {
+	if err := l.router.processOTLPRequest(ctx, result.Batches, ri.ApiKey); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
