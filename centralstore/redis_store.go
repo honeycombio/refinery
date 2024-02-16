@@ -284,7 +284,8 @@ func newTraceStatusStore() *tracesStore {
 
 func (t *tracesStore) addStatus(conn redis.Conn, span *CentralSpan) error {
 	trace := &CentralTraceStatus{
-		TraceID: span.TraceID,
+		TraceID:   span.TraceID,
+		timestamp: time.Now().UTC(),
 	}
 
 	err := conn.SetHash(t.traceStatusKey(span.TraceID), trace)
@@ -452,7 +453,15 @@ func newTraceStateMap(state CentralTraceState) *traceStateMap {
 	return s
 }
 
+// addTrace stores the traceID into a set and insert the current time into
+// a list. The list is used to keep track of the time the trace was added to
+// the state. The set is used to check if the trace is in the state.
 func (t *traceStateMap) addTrace(conn redis.Conn, traceID string) error {
+	// we need to make sure the state hasn't changed since we last checked
+	if !t.isValidNextState(conn, t.state, traceID) {
+		return nil
+	}
+
 	return conn.ZAdd(t.mapKey(), []any{time.Now().Unix(), traceID})
 }
 
@@ -507,16 +516,24 @@ func (t *traceStateMap) remove(conn redis.Conn, traceIDs ...string) error {
 // better to use the ZADD command.
 
 func (t *traceStateMap) move(conn redis.Conn, destination *traceStateMap, traceIDs ...string) error {
+
+	eligible := make([]string, 0, len(traceIDs))
+	for _, traceID := range traceIDs {
+		if t.isValidNextState(conn, destination.state, traceID) {
+			eligible = append(eligible, traceID)
+		}
+	}
+
 	// store the timestamp as a part of the entry in the trace state set
 	// make it into a sorted set
 	// the timestamp should be a fixed length unix timestamp
-	entries := make([]any, len(traceIDs)*2)
+	entries := make([]any, len(eligible)*2)
 	for i := range entries {
 		if i%2 == 0 {
 			entries[i] = time.Now().Unix()
 			continue
 		}
-		entries[i] = traceIDs[i/2]
+		entries[i] = eligible[i/2]
 	}
 
 	// only add traceIDs to the destination if they don't already exist
@@ -526,4 +543,18 @@ func (t *traceStateMap) move(conn redis.Conn, destination *traceStateMap, traceI
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
 // the configured time.
 func (t *traceStateMap) cleanupExpiredTraces() {
+}
+
+func (t *traceStateMap) isValidNextState(conn redis.Conn, next CentralTraceState, traceID string) bool {
+	added, err := conn.SAdd(fmt.Sprintf("%s:state", traceID), next.String())
+	if err != nil {
+		return false
+	}
+
+	_, err = conn.TTL(fmt.Sprintf("%s:state", traceID))
+	if err != nil {
+		return false
+	}
+
+	return added != 0
 }
