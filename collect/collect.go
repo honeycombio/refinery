@@ -689,7 +689,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		// with the final total as of our send time
 		if i.isRootSpan(sp) {
 			addSpanCountToRoot, _ := i.Config.GetAddSpanCountToRoot()
-			if addSpanCountToRoot {
+			if i.Config.GetAddCountsToRoot() {
 				sp.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
 				sp.Data["meta.span_count"] = int64(trace.SpanCount())
