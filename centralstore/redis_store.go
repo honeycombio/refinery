@@ -34,20 +34,24 @@ func NewRedisBasicStore(opt RedisRemoteStoreOptions) *RedisBasicStore {
 		Addr: host,
 	})
 
+	if err := ensureValidStateChangeEvents(redisClient); err != nil {
+		panic(err)
+	}
+
 	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
 	if err != nil {
 		panic(err)
 	}
-
+	changeState := redisClient.NewScript(stateChangeKey, stateChangeScript)
 	return &RedisBasicStore{
 		client:        redisClient,
 		decisionCache: decisionCache,
 		traces:        newTraceStatusStore(),
 		states: map[CentralTraceState]*traceStateMap{
-			Collecting:       newTraceStateMap(Collecting),
-			WaitingToDecide:  newTraceStateMap(WaitingToDecide),
-			ReadyForDecision: newTraceStateMap(ReadyForDecision),
-			AwaitingDecision: newTraceStateMap(AwaitingDecision),
+			Collecting:       newTraceStateMap(changeState, Collecting),
+			WaitingToDecide:  newTraceStateMap(changeState, WaitingToDecide),
+			ReadyForDecision: newTraceStateMap(changeState, ReadyForDecision),
+			AwaitingDecision: newTraceStateMap(changeState, AwaitingDecision),
 		},
 	}
 }
@@ -88,7 +92,7 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 		}
 	case WaitingToDecide, ReadyForDecision:
 	case Unknown:
-		err := r.states[Collecting].addTrace(conn, span.TraceID)
+		err := r.states[Collecting].newTrace(conn, span.TraceID)
 		if err != nil {
 			return err
 		}
@@ -445,12 +449,14 @@ func getAllSpans(conn redis.Conn, traceID string) ([]*CentralSpan, *CentralSpan,
 // By using a hash for the timestamps, we can easily get the timestamp for a trace based
 // on it's current state.
 type traceStateMap struct {
-	state CentralTraceState
+	state       CentralTraceState
+	changeState redis.Script
 }
 
-func newTraceStateMap(state CentralTraceState) *traceStateMap {
+func newTraceStateMap(changeState redis.Script, state CentralTraceState) *traceStateMap {
 	s := &traceStateMap{
-		state: state,
+		state:       state,
+		changeState: changeState,
 	}
 
 	go s.cleanupExpiredTraces()
@@ -461,21 +467,24 @@ func newTraceStateMap(state CentralTraceState) *traceStateMap {
 // addTrace stores the traceID into a set and insert the current time into
 // a list. The list is used to keep track of the time the trace was added to
 // the state. The set is used to check if the trace is in the state.
-func (t *traceStateMap) addTrace(conn redis.Conn, traceID string) error {
-	// we need to make sure the state hasn't changed since we last checked
-	if !t.isValidNextState(conn, t.state, traceID) {
+func (t *traceStateMap) newTrace(conn redis.Conn, traceID string) error {
+	if !t.isValidNextState(conn, Collecting, traceID) {
 		return nil
 	}
 
-	return conn.ZAdd(t.mapKey(), []any{time.Now().Unix(), traceID})
+	return conn.ZAdd(t.stateByTraceIDsKey(), []any{time.Now().Unix(), traceID})
 }
 
-func (t *traceStateMap) mapKey() string {
+func (t *traceStateMap) stateByTraceIDsKey() string {
 	return fmt.Sprintf("%s:traces", t.state)
 }
 
+func (t *traceStateMap) traceStatesKey(traceID string) string {
+	return fmt.Sprintf("%s:states", traceID)
+}
+
 func (t *traceStateMap) getAllTraces(conn redis.Conn) ([]string, error) {
-	results, err := conn.ZRange(t.mapKey(), 0, -1)
+	results, err := conn.ZRange(t.stateByTraceIDsKey(), 0, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +492,7 @@ func (t *traceStateMap) getAllTraces(conn redis.Conn) ([]string, error) {
 }
 
 func (t *traceStateMap) getTraces(conn redis.Conn, traceIDs []string) (map[string]time.Time, error) {
-	timestamps, err := conn.ZMScore(t.mapKey(), traceIDs)
+	timestamps, err := conn.ZMScore(t.stateByTraceIDsKey(), traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -501,7 +510,7 @@ func (t *traceStateMap) getTraces(conn redis.Conn, traceIDs []string) (map[strin
 }
 
 func (t *traceStateMap) exists(conn redis.Conn, traceID string) bool {
-	exist, err := conn.ZExist(t.mapKey(), traceID)
+	exist, err := conn.ZExist(t.stateByTraceIDsKey(), traceID)
 	if err != nil {
 		return false
 	}
@@ -510,7 +519,7 @@ func (t *traceStateMap) exists(conn redis.Conn, traceID string) bool {
 }
 
 func (t *traceStateMap) remove(conn redis.Conn, traceIDs ...string) error {
-	return conn.ZRemove(t.mapKey(), traceIDs)
+	return conn.ZRemove(t.stateByTraceIDsKey(), traceIDs)
 }
 
 // in order to create a new sorted set, we need to call ZADD for each traceID
@@ -542,7 +551,7 @@ func (t *traceStateMap) move(conn redis.Conn, destination *traceStateMap, traceI
 	}
 
 	// only add traceIDs to the destination if they don't already exist
-	return conn.ZMove(t.mapKey(), destination.mapKey(), entries)
+	return conn.ZMove(t.stateByTraceIDsKey(), destination.stateByTraceIDsKey(), entries)
 }
 
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
@@ -550,11 +559,78 @@ func (t *traceStateMap) move(conn redis.Conn, destination *traceStateMap, traceI
 func (t *traceStateMap) cleanupExpiredTraces() {
 }
 
+// get the latest state from the state list
+// check if the current state change event is valid
+// if it is, then add the state to state list
+// and add the trace to the state set
+// if it's not, then don't add the state to the state list	and abort
 func (t *traceStateMap) isValidNextState(conn redis.Conn, next CentralTraceState, traceID string) bool {
-	added, err := conn.SAddTTL(fmt.Sprintf("%s:state", traceID), next.String(), expirationForTraceState)
+	current := t.state
+	if t.state == next {
+		current = Unknown
+	}
+	result, err := t.changeState.Do(context.TODO(), conn, t.traceStatesKey(traceID), validStateChangeEventsKey, current.String(), next.String(), expirationForTraceState.Seconds())
 	if err != nil {
 		return false
 	}
+	val, ok := result.(int64)
+	if !ok {
+		return false
+	}
 
-	return added
+	return val == 1
+}
+
+const stateChangeKey = 2
+const stateChangeScript = `
+  local traceStateKey = KEYS[1]
+  local possibleStateChangeEvents = KEYS[2]
+  local previousState = ARGV[1]
+  local nextState = ARGV[2]
+  local ttl = ARGV[3]
+
+  local currentState = redis.call('LINDEX', traceStateKey, -1)
+  if (currentState == nil or currentState == false) then
+	currentState = previousState
+  end
+  local stateChangeEvent = string.format("%s-%s", currentState, nextState)
+  local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
+  if (not changeEventIsValid) then 
+    do return -1 end
+  end
+
+  redis.call('RPUSH', traceStateKey, nextState)
+  redis.call('EXPIRE', traceStateKey, ttl)
+  return 1
+`
+
+const validStateChangeEventsKey = "valid-state-change-events"
+
+func ensureValidStateChangeEvents(client redis.Client) error {
+	conn := client.Get()
+	defer conn.Close()
+
+	return conn.SAdd(validStateChangeEventsKey,
+		newTraceStateChangeEvent(Unknown, Collecting).string(),
+		newTraceStateChangeEvent(Collecting, WaitingToDecide).string(),
+		newTraceStateChangeEvent(WaitingToDecide, ReadyForDecision).string(),
+		newTraceStateChangeEvent(ReadyForDecision, AwaitingDecision).string(),
+		newTraceStateChangeEvent(AwaitingDecision, ReadyForDecision).string(),
+	)
+}
+
+type stateChangeEvent struct {
+	current CentralTraceState
+	next    CentralTraceState
+}
+
+func newTraceStateChangeEvent(current, next CentralTraceState) stateChangeEvent {
+	return stateChangeEvent{
+		current: current,
+		next:    next,
+	}
+}
+
+func (s stateChangeEvent) string() string {
+	return fmt.Sprintf("%s-%s", s.current, s.next)
 }

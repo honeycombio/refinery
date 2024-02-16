@@ -67,10 +67,11 @@ type Conn interface {
 	SetHash(string, any) error
 	SetHashTTL(string, any, time.Duration) (any, error)
 
-	RPush(string, any) error
-	LRange(string, int, int) ([]any, error)
+	SAdd(string, ...any) error
 
-	SAddTTL(string, string, time.Duration) (bool, error)
+	RPush(string, any) error
+	RPushTTL(string, string, time.Duration) (bool, error)
+	LRange(string, int, int) ([]any, error)
 
 	ZAdd(string, []any) error
 	ZMove(string, string, []any) error
@@ -640,12 +641,12 @@ func NewIncrByHashCommand(key, field string, incrVal int64) command {
 	}
 }
 
-func (c *DefaultConn) SAddTTL(key string, members string, expiration time.Duration) (bool, error) {
+func (c *DefaultConn) RPushTTL(key string, member string, expiration time.Duration) (bool, error) {
 	if err := c.conn.Send("MULTI"); err != nil {
 		return false, err
 	}
-	args := redis.Args{key}.AddFlat(members)
-	err := c.conn.Send("SADD", args...)
+
+	err := c.conn.Send("RPUSH", key, member)
 	if err != nil {
 		return false, err
 	}
@@ -672,4 +673,13 @@ func (c *DefaultConn) SAddTTL(key string, members string, expiration time.Durati
 	// TODO: do we care if the ttl is not set?
 
 	return true, nil
+}
+
+func (c *DefaultConn) SAdd(key string, members ...any) error {
+	args := redis.Args{}.Add(members...)
+	_, err := c.conn.Do("SADD", key, args)
+	if err != nil {
+		return err
+	}
+	return nil
 }
