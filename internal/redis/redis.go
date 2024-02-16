@@ -69,6 +69,8 @@ type Conn interface {
 	RPush(string, any) error
 	LRange(string, int, int) ([]any, error)
 
+	SAdd(string, ...string) (int64, error)
+
 	ZAdd(string, []any) error
 	ZMove(string, string, []any) error
 	ZRange(string, int, int) ([]string, error)
@@ -611,4 +613,9 @@ func NewIncrByHashCommand(key, field string, incrVal int64) command {
 		name: "HINCRBY",
 		args: redis.Args{key, field, incrVal},
 	}
+}
+
+func (c *DefaultConn) SAdd(key string, members ...string) (int64, error) {
+	args := redis.Args{key}.AddFlat(members)
+	return redis.Int64(c.conn.Do("SADD", args...))
 }
