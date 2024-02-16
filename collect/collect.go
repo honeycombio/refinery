@@ -128,7 +128,12 @@ func (i *InMemCollector) Start() error {
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
 
-	if i.Config.GetAddHostMetadataToTrace() {
+	addHostMetadataToTrace, err := i.Config.GetAddHostMetadataToTrace()
+	if err != nil {
+		return err
+	}
+
+	if addHostMetadataToTrace {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
 			i.hostname = hostname
 		}
@@ -529,12 +534,14 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason 
 		mergeTraceAndSpanSampleRates(sp, tr.Rate(), isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
 		if i.isRootSpan(sp) {
-			if i.Config.GetAddCountsToRoot() {
+			addSpanCountToRoot, _ := i.Config.GetAddSpanCountToRoot()
+
+			if addSpanCountToRoot {
 				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
 				sp.Data["meta.span_count"] = int64(tr.SpanCount())
 				sp.Data["meta.event_count"] = int64(tr.DescendantCount())
-			} else if i.Config.GetAddSpanCountToRoot() {
+			} else if addSpanCountToRoot {
 				sp.Data["meta.span_count"] = int64(tr.DescendantCount())
 			}
 
@@ -623,12 +630,14 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if trace.RootSpan != nil {
 		rs := trace.RootSpan
+		addSpanCountToRoot, _ := i.Config.GetAddSpanCountToRoot()
+
 		if i.Config.GetAddCountsToRoot() {
 			rs.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
 			rs.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
 			rs.Data["meta.span_count"] = int64(trace.SpanCount())
 			rs.Data["meta.event_count"] = int64(trace.DescendantCount())
-		} else if i.Config.GetAddSpanCountToRoot() {
+		} else if addSpanCountToRoot {
 			rs.Data["meta.span_count"] = int64(trace.DescendantCount())
 		}
 	}
@@ -679,12 +688,13 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		// update the root span (if we have one, which we might not if the trace timed out)
 		// with the final total as of our send time
 		if i.isRootSpan(sp) {
-			if i.Config.GetAddCountsToRoot() {
+			addSpanCountToRoot, _ := i.Config.GetAddSpanCountToRoot()
+			if addSpanCountToRoot {
 				sp.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
 				sp.Data["meta.span_count"] = int64(trace.SpanCount())
 				sp.Data["meta.event_count"] = int64(trace.DescendantCount())
-			} else if i.Config.GetAddSpanCountToRoot() {
+			} else if addSpanCountToRoot {
 				sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 			}
 		}
