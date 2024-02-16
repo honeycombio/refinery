@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -89,13 +90,35 @@ type AccessKeyConfig struct {
 	keymap               generics.Set[string]
 }
 
-type DefaultTrue *true
+type DefaultTrue bool
+
+func (dt *DefaultTrue) Get() (enabled bool) {
+	if dt == nil {
+		return true
+	}
+	return bool(*dt)
+}
+
+func (dt *DefaultTrue) MarshalText() ([]byte, error) {
+	return []byte(strconv.FormatBool(bool(*dt))), nil
+}
+
+func (dt *DefaultTrue) UnmarshalText(text []byte) error {
+	trueBool, err := strconv.ParseBool(string(text))
+	if err != nil {
+		return err
+	}
+
+	*dt = DefaultTrue(trueBool)
+
+	return nil
+}
 
 type RefineryTelemetryConfig struct {
-	AddRuleReasonToTrace   bool        `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     DefaultTrue `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
-	AddCountsToRoot        bool        `yaml:"AddCountsToRoot"`
-	AddHostMetadataToTrace *bool       `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
+	AddRuleReasonToTrace   bool         `yaml:"AddRuleReasonToTrace"`
+	AddSpanCountToRoot     *DefaultTrue `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
+	AddCountsToRoot        bool         `yaml:"AddCountsToRoot"`
+	AddHostMetadataToTrace *DefaultTrue `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
 }
 
 type TracesConfig struct {
@@ -119,38 +142,17 @@ type LoggerConfig struct {
 }
 
 type HoneycombLoggerConfig struct {
-	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
-	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
-	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    *bool  `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
-	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
+	APIHost           string       `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIKey            string       `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
+	Dataset           string       `yaml:"Dataset" default:"Refinery Logs"`
+	SamplerEnabled    *DefaultTrue `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
+	SamplerThroughput int          `yaml:"SamplerThroughput" default:"10"`
 }
 
 // GetSamplerEnabled returns whether configuration has enabled sampling of
 // Refinery's own logs destined for Honeycomb.
 func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool) {
-	if c.SamplerEnabled == nil {
-		// how to use default true to avoid hardcoding boolean values
-	} else {
-		enabled = *c.SamplerEnabled
-	}
-	return enabled
-}
-
-func (c *HoneycombLoggerConfig) GetSamplerThroughput() (throughput int) {
-	return c.SamplerThroughput
-}
-
-func (c *HoneycombLoggerConfig) GetDataset() (dataset string) {
-	return c.Dataset
-}
-
-func (c *HoneycombLoggerConfig) GetAPIKey() (apikey string) {
-	return c.APIKey
-}
-
-func (c *HoneycombLoggerConfig) GetAPIHost() (apihost string) {
-	return c.APIHost
+	return c.SamplerEnabled.Get()
 }
 
 type StdoutLoggerConfig struct {
