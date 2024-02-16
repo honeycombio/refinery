@@ -267,7 +267,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -303,7 +303,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -342,7 +342,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -369,7 +369,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 		assert.Equal(t, "{}", w.Body.String())
 
@@ -462,7 +462,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "not found in list of authorized keys")
 

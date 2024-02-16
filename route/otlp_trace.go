@@ -12,7 +12,7 @@ import (
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
-func (r *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
+func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 
 	if err := ri.ValidateTracesHeaders(); err != nil {

@@ -40,6 +40,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
+	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
@@ -218,6 +219,8 @@ func (r *Router) LnS() {
 		traceServer := NewTraceServer(r)
 		r.grpcServer = grpc.NewServer(serverOpts...)
 		collectortrace.RegisterTraceServiceServer(r.grpcServer, traceServer)
+		logsServer := NewLogsServer(r)
+		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
 
 		// health check -- manufactured by grpc health package
 		r.hsrv = healthserver.NewServer()
