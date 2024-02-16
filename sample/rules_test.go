@@ -2211,6 +2211,171 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
+						Name:       "root prefix condition matches, others don't",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field: "root.test",
+								//Fields: []
+								Operator: config.Exists,
+								Value:    "foo",
+								Datatype: "string",
+							},
+							{
+								Field:    "anotherField",
+								Operator: config.EQ,
+								Value:    "bar",
+								Datatype: "string",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "foo",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "all conditions match",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "root.test",
+								Operator: config.Exists,
+								Value:    "foo",
+							},
+							{
+								Field:    "anotherField",
+								Operator: config.GT,
+								Value:    1.0,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test":         "foo",
+							"anotherField": 3.5,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+							"anotherField":     1.1,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 10,
+			ExpectedName: "all conditions match",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "two root conditions, only one matches",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "root.test",
+								Operator: config.Exists,
+								Value:    "foo",
+							},
+							{
+								Field:    "root.nope",
+								Operator: config.Exists,
+								Value:    "nope",
+							},
+							{
+								Field:    "anotherField",
+								Operator: config.LT,
+								Value:    100,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test":         "foo",
+							"anotherField": 50,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+							"anotherField":     10,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
 						Name:       "span matches, root does not match",
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
