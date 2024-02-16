@@ -6,7 +6,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-func processOtlpRequest(
+func processOTLPRequest(
 	ctx context.Context,
 	router *Router,
 	batches []huskyotlp.Batch,
