@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -126,13 +128,22 @@ type HoneycombLoggerConfig struct {
 
 // GetSamplerEnabled returns whether configuration has enabled sampling of
 // Refinery's own logs destined for Honeycomb.
-func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool) {
+func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool, err error) {
 	if c.SamplerEnabled == nil {
-		enabled = true
+		tag := reflect.TypeOf(HoneycombLoggerConfig{}).Field(3).Tag
+		if value, ok := tag.Lookup("default"); ok {
+			if enabled, err := strconv.ParseBool(value); err != nil {
+				return enabled, err // err should be nil
+			} else {
+				return false, err
+			}
+		} else {
+			return false, errors.New("default tag not set")
+		}
 	} else {
 		enabled = *c.SamplerEnabled
 	}
-	return enabled
+	return enabled, nil
 }
 
 type StdoutLoggerConfig struct {
@@ -485,32 +496,47 @@ func (f *fileConfig) GetHTTPIdleTimeout() time.Duration {
 	return time.Duration(f.mainConfig.Network.HTTPIdleTimeout)
 }
 
-func (f *fileConfig) GetCompressPeerCommunication() bool {
+func (f *fileConfig) GetCompressPeerCommunication() (compressPeerCommunication bool, err error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var compressPeerCommunication bool
 	if f.mainConfig.Specialized.CompressPeerCommunication == nil {
-		compressPeerCommunication = true
+		tag := reflect.TypeOf(SpecializedConfig{}).Field(1).Tag
+		if value, ok := tag.Lookup("default"); ok {
+			if compressPeerCommunication, err := strconv.ParseBool(value); err != nil {
+				return compressPeerCommunication, err // err should be nil
+			} else {
+				return false, err
+			}
+		} else {
+			return false, errors.New("default tag not set")
+		}
 	} else {
 		compressPeerCommunication = *f.mainConfig.Specialized.CompressPeerCommunication
 	}
-
-	return compressPeerCommunication
+	return compressPeerCommunication, nil
 }
 
-func (f *fileConfig) GetGRPCEnabled() bool {
+func (f *fileConfig) GetGRPCEnabled() (enabled bool, err error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var enabled bool
 	if f.mainConfig.GRPCServerParameters.Enabled == nil {
-		enabled = true
+		tag := reflect.TypeOf(GRPCServerParameters{}).Field(0).Tag
+		if value, ok := tag.Lookup("default"); ok {
+			if enabled, err := strconv.ParseBool(value); err != nil {
+				return enabled, err // err should be nil
+			} else {
+				return false, err
+			}
+		} else {
+			return false, errors.New("default tag not set")
+		}
 	} else {
 		enabled = *f.mainConfig.GRPCServerParameters.Enabled
 	}
 
-	return enabled
+	return enabled, nil
 }
 
 func (f *fileConfig) GetGRPCListenAddr() (string, error) {
@@ -804,19 +830,25 @@ func (f *fileConfig) GetIsDryRun() bool {
 	return f.mainConfig.Debugging.DryRun
 }
 
-func (f *fileConfig) GetAddHostMetadataToTrace() bool {
+func (f *fileConfig) GetAddHostMetadataToTrace() (addHostMetadataToTrace bool, err error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var addHostMetadataToTrace bool
-
 	if f.mainConfig.Telemetry.AddHostMetadataToTrace == nil {
-		addHostMetadataToTrace = true // TODO: the default, but maybe look that up on the struct?
+		tag := reflect.TypeOf(RefineryTelemetryConfig{}).Field(3).Tag
+		if value, ok := tag.Lookup("default"); ok {
+			if addHostMetadataToTrace, err := strconv.ParseBool(value); err != nil {
+				return addHostMetadataToTrace, err // err should be nil
+			} else {
+				return false, err
+			}
+		} else {
+			return false, errors.New("default tag not set")
+		}
 	} else {
 		addHostMetadataToTrace = *f.mainConfig.Telemetry.AddHostMetadataToTrace
 	}
-
-	return addHostMetadataToTrace
+	return addHostMetadataToTrace, nil
 }
 
 func (f *fileConfig) GetAddRuleReasonToTrace() bool {
@@ -861,19 +893,25 @@ func (f *fileConfig) GetAdditionalErrorFields() []string {
 	return f.mainConfig.Debugging.AdditionalErrorFields
 }
 
-func (f *fileConfig) GetAddSpanCountToRoot() bool {
+func (f *fileConfig) GetAddSpanCountToRoot() (addSpanCountToRoot bool, err error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var addSpanCountToRoot bool
-
 	if f.mainConfig.Telemetry.AddSpanCountToRoot == nil {
-		addSpanCountToRoot = true // TODO: lookup default from struct
+		tag := reflect.TypeOf(RefineryTelemetryConfig{}).Field(1).Tag
+		if value, ok := tag.Lookup("default"); ok {
+			if addSpanCountToRoot, err := strconv.ParseBool(value); err != nil {
+				return addSpanCountToRoot, err // err should be nil
+			} else {
+				return false, err
+			}
+		} else {
+			return false, errors.New("default tag not set")
+		}
 	} else {
 		addSpanCountToRoot = *f.mainConfig.Telemetry.AddSpanCountToRoot
 	}
-
-	return addSpanCountToRoot
+	return addSpanCountToRoot, nil
 }
 
 func (f *fileConfig) GetAddCountsToRoot() bool {

@@ -311,9 +311,11 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", false)
 	}
 
-	if d := c.GetAddHostMetadataToTrace(); d != true {
-		t.Error("received", d, "expected", true)
+	a, err := c.GetAddHostMetadataToTrace()
+	if a != true {
+		t.Error("received", a, "expected", true)
 	}
+	assert.NoError(t, err)
 
 	if d := c.GetEnvironmentCacheTTL(); d != time.Hour {
 		t.Error("received", d, "expected", time.Hour)
@@ -616,7 +618,9 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.Equal(t, "http://honeycomb.io", loggerConfig.APIHost)
 	assert.Equal(t, "1234", loggerConfig.APIKey)
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
-	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
+	samplerEnabled, err := loggerConfig.GetSamplerEnabled()
+	assert.NoError(t, err)
+	assert.Equal(t, true, samplerEnabled)
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
 }
 
@@ -638,8 +642,8 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
 
 	assert.NoError(t, err)
-
-	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
+	samplerEnabled, err := loggerConfig.GetSamplerEnabled()
+	assert.Equal(t, true, samplerEnabled)
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
 }
 
@@ -656,7 +660,9 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	assert.Equal(t, true, c.GetGRPCEnabled())
+	enabled, err := c.GetGRPCEnabled()
+	assert.Equal(t, true, enabled)
+	assert.NoError(t, err)
 
 	a, err := c.GetGRPCListenAddr()
 	assert.NoError(t, err)
@@ -773,7 +779,9 @@ func TestGRPCServerParameters(t *testing.T) {
 	assert.Equal(t, 3*time.Minute, time.Duration(gc.MaxConnectionAgeGrace))
 	assert.Equal(t, 4*time.Minute, time.Duration(gc.KeepAlive))
 	assert.Equal(t, 5*time.Minute, time.Duration(gc.KeepAliveTimeout))
-	assert.Equal(t, true, c.GetGRPCEnabled())
+	enabled, err := c.GetGRPCEnabled()
+	assert.Equal(t, true, enabled)
+	assert.NoError(t, err)
 	addr, err := c.GetGRPCListenAddr()
 	assert.NoError(t, err)
 	assert.Equal(t, "localhost:4317", addr)
@@ -907,13 +915,28 @@ func TestOverrideConfigDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	assert.Equal(t, false, c.GetAddSpanCountToRoot())
-	assert.Equal(t, false, c.GetAddHostMetadataToTrace())
+	addSpanCountToRoot, err := c.GetAddSpanCountToRoot()
+	assert.Equal(t, false, addSpanCountToRoot)
+	assert.NoError(t, err)
+
+	addHostMetadataToTrace, err := c.GetAddHostMetadataToTrace()
+	assert.Equal(t, false, addHostMetadataToTrace)
+	assert.NoError(t, err)
+
 	loggerConfig, err := c.GetHoneycombLoggerConfig()
 	assert.NoError(t, err)
-	assert.Equal(t, false, loggerConfig.GetSamplerEnabled())
-	assert.Equal(t, false, c.GetCompressPeerCommunication())
-	assert.Equal(t, false, c.GetGRPCEnabled())
+
+	samplerEnabled, err := loggerConfig.GetSamplerEnabled()
+	assert.Equal(t, false, samplerEnabled)
+	assert.NoError(t, err)
+
+	compressPeerCommunication, err := c.GetCompressPeerCommunication()
+	assert.Equal(t, false, compressPeerCommunication)
+	assert.NoError(t, err)
+
+	enabled, err := c.GetGRPCEnabled()
+	assert.Equal(t, false, enabled)
+	assert.NoError(t, err)
 }
 
 func TestMemorySizeUnmarshal(t *testing.T) {

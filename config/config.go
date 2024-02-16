@@ -36,10 +36,10 @@ type Config interface {
 
 	// GetCompressPeerCommunication will be true if refinery should compress
 	// data before forwarding it to a peer.
-	GetCompressPeerCommunication() bool
+	GetCompressPeerCommunication() (compressPeerCommunication bool, err error)
 
 	// GetGRPCEnabled returns or not the GRPC server is enabled.
-	GetGRPCEnabled() bool
+	GetGRPCEnabled() (enabled bool, err error)
 
 	// GetGRPCListenAddr returns the address and port on which to listen for
 	// incoming events over gRPC
@@ -159,7 +159,7 @@ type Config interface {
 
 	GetIsDryRun() bool
 
-	GetAddHostMetadataToTrace() bool
+	GetAddHostMetadataToTrace() (addHostMetadataToTrace bool, err error)
 
 	GetAddRuleReasonToTrace() bool
 
@@ -174,7 +174,7 @@ type Config interface {
 
 	GetAdditionalErrorFields() []string
 
-	GetAddSpanCountToRoot() bool
+	GetAddSpanCountToRoot() (addSpanCountToRoot bool, err error)
 
 	GetAddCountsToRoot() bool
 
