@@ -469,11 +469,11 @@ func (c *DefaultConn) ZMove(fromKey string, toKey string, members []any) error {
 	}
 
 	argsList := redis.Args{toKey, "NX"}.AddFlat(members)
-	if err := c.conn.Send("ZADD", argsList...); err != nil {
+	if err := c.conn.Send("ZADD", argsList...); err != nil && err != redis.ErrNil {
 		return err
 	}
 
-	argsList = redis.Args{fromKey, "NX"}.AddFlat(members)
+	argsList = redis.Args{fromKey}.AddFlat(members)
 	if err := c.conn.Send("ZREM", argsList...); err != nil {
 		return err
 	}
