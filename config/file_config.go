@@ -89,11 +89,13 @@ type AccessKeyConfig struct {
 	keymap               generics.Set[string]
 }
 
+type DefaultTrue *true
+
 type RefineryTelemetryConfig struct {
-	AddRuleReasonToTrace   bool  `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     *bool `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
-	AddCountsToRoot        bool  `yaml:"AddCountsToRoot"`
-	AddHostMetadataToTrace *bool `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
+	AddRuleReasonToTrace   bool        `yaml:"AddRuleReasonToTrace"`
+	AddSpanCountToRoot     DefaultTrue `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
+	AddCountsToRoot        bool        `yaml:"AddCountsToRoot"`
+	AddHostMetadataToTrace *bool       `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
 }
 
 type TracesConfig struct {
@@ -128,7 +130,7 @@ type HoneycombLoggerConfig struct {
 // Refinery's own logs destined for Honeycomb.
 func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool) {
 	if c.SamplerEnabled == nil {
-		enabled = true
+		// how to use default true to avoid hardcoding boolean values
 	} else {
 		enabled = *c.SamplerEnabled
 	}
