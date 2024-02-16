@@ -762,13 +762,13 @@ func TestDependencyInjection(t *testing.T) {
 // This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
 func TestAddCountsToRoot(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
-		AddSpanCountToRoot: true,
-		AddCountsToRoot:    true,
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetSendDelayVal:       0,
+		GetTraceTimeoutVal:    60 * time.Second,
+		GetSamplerTypeVal:     &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:         2 * time.Millisecond,
+		AddSpanCountToRootVal: true,
+		AddCountsToRoot:       true,
+		ParentIdFieldNames:    []string{"trace.parent_id", "parentId"},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -840,14 +840,14 @@ func TestAddCountsToRoot(t *testing.T) {
 // even if the trace had already been sent
 func TestLateRootGetsCounts(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:      0,
-		GetTraceTimeoutVal:   5 * time.Millisecond,
-		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:        2 * time.Millisecond,
-		AddSpanCountToRoot:   true,
-		AddCountsToRoot:      true,
-		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
-		AddRuleReasonToTrace: true,
+		GetSendDelayVal:       0,
+		GetTraceTimeoutVal:    5 * time.Millisecond,
+		GetSamplerTypeVal:     &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:         2 * time.Millisecond,
+		AddSpanCountToRootVal: true,
+		AddCountsToRoot:       true,
+		ParentIdFieldNames:    []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace:  true,
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -923,12 +923,12 @@ func TestLateRootGetsCounts(t *testing.T) {
 // the cache and that that trace gets span count added to it
 func TestAddSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
-		AddSpanCountToRoot: true,
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetSendDelayVal:       0,
+		GetTraceTimeoutVal:    60 * time.Second,
+		GetSamplerTypeVal:     &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:         2 * time.Millisecond,
+		AddSpanCountToRootVal: true,
+		ParentIdFieldNames:    []string{"trace.parent_id", "parentId"},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -985,13 +985,13 @@ func TestAddSpanCount(t *testing.T) {
 // even if the trace had already been sent
 func TestLateRootGetsSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:      0,
-		GetTraceTimeoutVal:   5 * time.Millisecond,
-		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:        2 * time.Millisecond,
-		AddSpanCountToRoot:   true,
-		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
-		AddRuleReasonToTrace: true,
+		GetSendDelayVal:       0,
+		GetTraceTimeoutVal:    5 * time.Millisecond,
+		GetSamplerTypeVal:     &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:         2 * time.Millisecond,
+		AddSpanCountToRootVal: true,
+		ParentIdFieldNames:    []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace:  true,
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
