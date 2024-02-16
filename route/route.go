@@ -39,6 +39,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
+	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
@@ -224,9 +225,14 @@ func (r *Router) LnS(incomingOrPeer string) {
 				Timeout:               time.Duration(grpcConfig.KeepAliveTimeout),
 			}),
 		}
-		traceServer := NewTraceServer(r)
 		r.grpcServer = grpc.NewServer(serverOpts...)
+
+		traceServer := NewTraceServer(r)
 		collectortrace.RegisterTraceServiceServer(r.grpcServer, traceServer)
+
+		logsServer := NewLogsServer(r)
+		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
+
 		grpc_health_v1.RegisterHealthServer(r.grpcServer, r)
 		go r.grpcServer.Serve(l)
 	}
