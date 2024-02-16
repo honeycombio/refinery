@@ -167,6 +167,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	enabled, err := c.GetCompressPeerCommunication()
+
+	if err != nil {
+		fmt.Printf("unable to set GetCompressPeerCommunication")
+		os.Exit(1)
+	}
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
 			MaxBatchSize:          c.GetMaxBatchSize(),
@@ -175,7 +181,7 @@ func main() {
 			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
 			UserAgentAddition:     userAgentAddition,
 			Transport:             peerTransport,
-			DisableCompression:    !c.GetCompressPeerCommunication(),
+			DisableCompression:    !enabled,
 			EnableMsgpackEncoding: true,
 			Metrics:               peerMetricsRecorder,
 		},

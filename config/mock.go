@@ -76,6 +76,7 @@ type MockConfig struct {
 	DebugServiceAddr                 string
 	DryRun                           bool
 	DryRunFieldName                  string
+	AddHostMetadataToTrace           bool
 	AddHostMetadataToTraceVal        bool
 	AddHostMetadataToTraceErr        error
 	AddRuleReasonToTrace             bool
