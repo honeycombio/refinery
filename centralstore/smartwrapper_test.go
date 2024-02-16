@@ -53,7 +53,7 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -130,7 +130,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -246,7 +246,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -272,7 +272,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -299,7 +299,7 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -329,7 +329,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
