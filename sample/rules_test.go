@@ -2474,9 +2474,9 @@ func TestRulesRootSpanContext(t *testing.T) {
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
-								Fields:   []string{"http.status", "root.http.status"},
+								Fields:   []string{"http.status_code", "root.http.status_code"},
 								Operator: config.EQ,
-								Value:    500,
+								Value:    "500",
 							},
 						},
 					},
@@ -2506,9 +2506,9 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep: true,
-			ExpectedRate: 1,
-			ExpectedName: "no rule matches",
+			ExpectedKeep: false,
+			ExpectedRate: 10,
+			ExpectedName: "root doesnt match, next span doesnt match, third span matches",
 		},
 	}
 
