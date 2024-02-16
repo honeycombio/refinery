@@ -12,6 +12,11 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 )
 
+const (
+	expirationForTraceStatus = 24 * time.Hour
+	expirationForTraceState  = 24 * time.Hour
+)
+
 type RedisRemoteStoreOptions struct {
 	Host  string
 	Cache config.SampleCacheConfig
@@ -288,7 +293,7 @@ func (t *tracesStore) addStatus(conn redis.Conn, span *CentralSpan) error {
 		timestamp: time.Now().UTC(),
 	}
 
-	err := conn.SetHash(t.traceStatusKey(span.TraceID), trace)
+	_, err := conn.SetHashTTL(t.traceStatusKey(span.TraceID), trace, expirationForTraceStatus)
 	if err != nil {
 		return err
 	}
@@ -546,15 +551,10 @@ func (t *traceStateMap) cleanupExpiredTraces() {
 }
 
 func (t *traceStateMap) isValidNextState(conn redis.Conn, next CentralTraceState, traceID string) bool {
-	added, err := conn.SAdd(fmt.Sprintf("%s:state", traceID), next.String())
+	added, err := conn.SAddTTL(fmt.Sprintf("%s:state", traceID), next.String(), expirationForTraceState)
 	if err != nil {
 		return false
 	}
 
-	_, err = conn.TTL(fmt.Sprintf("%s:state", traceID))
-	if err != nil {
-		return false
-	}
-
-	return added != 0
+	return added
 }
