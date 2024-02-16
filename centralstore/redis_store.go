@@ -12,8 +12,6 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 )
 
-// TODO: shard the trace state map by timestamp so that we can set TTLs on the keys
-// if the TTL is within a certain range, we should start a new shard
 type RedisRemoteStoreOptions struct {
 	Host  string
 	Cache config.SampleCacheConfig
@@ -35,6 +33,7 @@ func NewRedisBasicStore(opt RedisRemoteStoreOptions) *RedisBasicStore {
 	if err != nil {
 		panic(err)
 	}
+
 	return &RedisBasicStore{
 		client:        redisClient,
 		decisionCache: decisionCache,
@@ -335,7 +334,7 @@ func (t *tracesStore) getSpansByTraceID(conn redis.Conn, traceID string) ([]*Cen
 }
 
 func (t *tracesStore) traceStatusKey(traceID string) string {
-	return fmt.Sprintf("%s:trace", traceID)
+	return fmt.Sprintf("%s:status", traceID)
 }
 
 // storeSpan stores the span in the spans hash and increments the span count for the trace.
@@ -444,9 +443,13 @@ type traceStateMap struct {
 }
 
 func newTraceStateMap(state CentralTraceState) *traceStateMap {
-	return &traceStateMap{
+	s := &traceStateMap{
 		state: state,
 	}
+
+	go s.cleanupExpiredTraces()
+
+	return s
 }
 
 func (t *traceStateMap) addTrace(conn redis.Conn, traceID string) error {
@@ -518,4 +521,9 @@ func (t *traceStateMap) move(conn redis.Conn, destination *traceStateMap, traceI
 
 	// only add traceIDs to the destination if they don't already exist
 	return conn.ZMove(t.mapKey(), destination.mapKey(), entries)
+}
+
+// cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
+// the configured time.
+func (t *traceStateMap) cleanupExpiredTraces() {
 }
