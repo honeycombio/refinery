@@ -496,7 +496,7 @@ func (f *MockConfig) GetAddCountsToRoot() bool {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
-	return f.AddSpanCountToRoot
+	return f.AddCountsToRoot
 }
 
 func (f *MockConfig) GetSampleCacheConfig() SampleCacheConfig {
