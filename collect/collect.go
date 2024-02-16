@@ -536,7 +536,7 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason 
 		if i.isRootSpan(sp) {
 			addSpanCountToRoot, _ := i.Config.GetAddSpanCountToRoot()
 
-			if addSpanCountToRoot {
+			if i.Config.GetAddCountsToRoot() {
 				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
 				sp.Data["meta.span_count"] = int64(tr.SpanCount())
