@@ -23,7 +23,9 @@ type MockConfig struct {
 	GetPeerListenAddrVal             string
 	GetHTTPIdleTimeoutVal            time.Duration
 	GetCompressPeerCommunicationsVal bool
+	GetCompressPeerCommunicationsErr error
 	GetGRPCEnabledVal                bool
+	GetGRPCEnabledErr                error
 	GetGRPCListenAddrErr             error
 	GetGRPCListenAddrVal             string
 	GetGRPCServerParameters          GRPCServerParameters
@@ -74,7 +76,8 @@ type MockConfig struct {
 	DebugServiceAddr                 string
 	DryRun                           bool
 	DryRunFieldName                  string
-	AddHostMetadataToTrace           bool
+	AddHostMetadataToTraceVal        bool
+	AddHostMetadataToTraceErr        error
 	AddRuleReasonToTrace             bool
 	EnvironmentCacheTTL              time.Duration
 	DatasetPrefix                    string
@@ -82,6 +85,8 @@ type MockConfig struct {
 	PeerTimeout                      time.Duration
 	AdditionalErrorFields            []string
 	AddSpanCountToRoot               bool
+	AddSpanCountToRootVal            bool
+	AddSpanCountToRootErr            error
 	AddCountsToRoot                  bool
 	CacheOverrunStrategy             string
 	SampleCache                      SampleCacheConfig
@@ -163,17 +168,17 @@ func (m *MockConfig) GetHTTPIdleTimeout() time.Duration {
 	return m.GetHTTPIdleTimeoutVal
 }
 
-func (m *MockConfig) GetCompressPeerCommunication() bool {
+func (m *MockConfig) GetCompressPeerCommunication() (compressPeerCommunication bool, err error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetCompressPeerCommunicationsVal
+	return m.GetCompressPeerCommunicationsVal, m.GetCompressPeerCommunicationsErr
 }
 
-func (m *MockConfig) GetGRPCEnabled() bool {
+func (m *MockConfig) GetGRPCEnabled() (enabled bool, err error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
-	return m.GetGRPCEnabledVal
+	return m.GetGRPCEnabledVal, m.GetGRPCEnabledErr
 }
 
 func (m *MockConfig) GetGRPCListenAddr() (string, error) {
@@ -423,11 +428,11 @@ func (m *MockConfig) GetIsDryRun() bool {
 	return m.DryRun
 }
 
-func (m *MockConfig) GetAddHostMetadataToTrace() bool {
+func (m *MockConfig) GetAddHostMetadataToTrace() (addHostMetadataToTrace bool, err error) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.AddHostMetadataToTrace
+	return m.AddHostMetadataToTraceVal, m.AddHostMetadataToTraceErr
 }
 
 func (m *MockConfig) GetAddRuleReasonToTrace() bool {
@@ -479,11 +484,11 @@ func (f *MockConfig) GetAdditionalErrorFields() []string {
 	return f.AdditionalErrorFields
 }
 
-func (f *MockConfig) GetAddSpanCountToRoot() bool {
+func (f *MockConfig) GetAddSpanCountToRoot() (addSpanCountToRoot bool, err error) {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
-	return f.AddSpanCountToRoot
+	return f.AddSpanCountToRootVal, f.AddSpanCountToRootErr
 }
 
 func (f *MockConfig) GetAddCountsToRoot() bool {
