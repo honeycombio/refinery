@@ -135,6 +135,22 @@ func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool) {
 	return enabled
 }
 
+func (c *HoneycombLoggerConfig) GetSamplerThroughput() (throughput int) {
+	return c.SamplerThroughput
+}
+
+func (c *HoneycombLoggerConfig) GetDataset() (dataset string) {
+	return c.Dataset
+}
+
+func (c *HoneycombLoggerConfig) GetAPIKey() (apikey string) {
+	return c.APIKey
+}
+
+func (c *HoneycombLoggerConfig) GetAPIHost() (apihost string) {
+	return c.APIHost
+}
+
 type StdoutLoggerConfig struct {
 	Structured        bool `yaml:"Structured" default:"false"`
 	SamplerEnabled    bool `yaml:"SamplerEnabled" `
