@@ -167,7 +167,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	enabled, err := c.GetCompressPeerCommunication()
+	compressPeerCommunication, err := c.GetCompressPeerCommunication()
 
 	if err != nil {
 		fmt.Printf("unable to set GetCompressPeerCommunication")
@@ -181,7 +181,7 @@ func main() {
 			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
 			UserAgentAddition:     userAgentAddition,
 			Transport:             peerTransport,
-			DisableCompression:    !enabled,
+			DisableCompression:    !compressPeerCommunication,
 			EnableMsgpackEncoding: true,
 			Metrics:               peerMetricsRecorder,
 		},
