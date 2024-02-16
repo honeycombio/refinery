@@ -204,8 +204,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 		Handler:     muxxer,
 		IdleTimeout: r.Config.GetHTTPIdleTimeout(),
 	}
-
-	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
+	enabled, err := r.Config.GetGRPCEnabled()
+	if err != nil {
+		r.iopLogger.Error().Logf("unable to get GRPCEnabled value: " + strconv.FormatBool(enabled))
+	}
+	if enabled && len(grpcAddr) > 0 {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
 			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
