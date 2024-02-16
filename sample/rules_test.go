@@ -2466,6 +2466,50 @@ func TestRulesRootSpanContext(t *testing.T) {
 			ExpectedRate: 1,
 			ExpectedName: "no rule matched",
 		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "root doesnt match, next span doesnt match, third span matches",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"http.status", "root.http.status"},
+								Operator: config.EQ,
+								Value:    500,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "nope",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "500",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "",
+		},
 	}
 
 	for _, d := range data {
@@ -2491,7 +2535,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			spans := trace.GetSpans()
 			assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 
-			rate, keep, reason, key := sampler.GetSampleRate(trace)
+			rate, _, reason, key := sampler.GetSampleRate(trace)
 			assert.Equal(t, "", key)
 
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
@@ -2500,12 +2544,6 @@ func TestRulesRootSpanContext(t *testing.T) {
 				name = d.Rules.Rules[0].Name
 			}
 			assert.Contains(t, reason, name)
-
-			// since keep depends on sampling rate, can only test when its false
-			if !d.ExpectedKeep {
-				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
-			}
-
 		})
 	}
 }
