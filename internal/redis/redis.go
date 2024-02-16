@@ -65,11 +65,12 @@ type Conn interface {
 	ListFields(string) ([]string, error)
 	IncrementByHash(string, string, int64) (int64, error)
 	SetHash(string, any) error
+	SetHashTTL(string, any, time.Duration) (any, error)
 
 	RPush(string, any) error
 	LRange(string, int, int) ([]any, error)
 
-	SAdd(string, ...string) (int64, error)
+	SAddTTL(string, string, time.Duration) (bool, error)
 
 	ZAdd(string, []any) error
 	ZMove(string, string, []any) error
@@ -530,6 +531,30 @@ func (c *DefaultConn) SetHash(key string, val interface{}) error {
 	return err
 }
 
+func (c *DefaultConn) SetHashTTL(key string, val interface{}, expiration time.Duration) (any, error) {
+	if err := c.conn.Send("MULTI"); err != nil {
+		return nil, err
+	}
+	args := redis.Args{key}.AddFlat(val)
+	err := c.conn.Send("HSET", args...)
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.conn.Send("EXPIRE", key, expiration.Seconds())
+	if err != nil {
+		return nil, err
+	}
+	// TODO: values is always "OK", but we should be able to get the values
+	// for the items in the batch
+	values, err := redis.Values(c.conn.Do("EXEC"))
+	if err != nil {
+		return nil, err
+	}
+
+	return values, nil
+}
+
 // returns the value after the increment
 func (c *DefaultConn) IncrementByHash(key, field string, incrVal int64) (int64, error) {
 	return redis.Int64(c.conn.Do("HINCRBY", key, field, incrVal))
@@ -615,7 +640,36 @@ func NewIncrByHashCommand(key, field string, incrVal int64) command {
 	}
 }
 
-func (c *DefaultConn) SAdd(key string, members ...string) (int64, error) {
+func (c *DefaultConn) SAddTTL(key string, members string, expiration time.Duration) (bool, error) {
+	if err := c.conn.Send("MULTI"); err != nil {
+		return false, err
+	}
 	args := redis.Args{key}.AddFlat(members)
-	return redis.Int64(c.conn.Do("SADD", args...))
+	err := c.conn.Send("SADD", args...)
+	if err != nil {
+		return false, err
+	}
+
+	err = c.conn.Send("EXPIRE", key, expiration.Seconds())
+	if err != nil {
+		return false, err
+	}
+	// TODO: values is always "OK", but we should be able to get the values
+	// for the items in the batch
+	results, err := redis.Int64s(c.conn.Do("EXEC"))
+	if err != nil {
+		return false, err
+	}
+
+	if len(results) != 2 {
+		return false, errors.New("unexpected response format from redis")
+	}
+
+	if results[0] == 0 {
+		return false, errors.New("failed to add member to set")
+	}
+
+	// TODO: do we care if the ttl is not set?
+
+	return true, nil
 }
