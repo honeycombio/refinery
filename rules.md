@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2023-12-13 at 23:01:54 UTC.
+It was automatically generated on 2024-02-20 at 18:13:45 UTC.
 
 ## The Rules file
 
@@ -538,6 +538,11 @@ The field to check.
 This can name any field in the trace.
 If the field is not present, then the condition will not match.
 The comparison is case-sensitive.
+The field can also include a prefix that changes the span used for evaluation of the field.
+The only prefix currently supported is `root`, as in `root.http.status`.
+Specifying `root.`  causes the condition to be evaluated against the root span.
+For example, if the `Field` is `root.url`, then the condition will be processed using the url  field from the root span.
+The setting `Scope: span` for a rule does not change the meaning of this prefix -- the condition is still evaluated on the root span and is treated as if it were part of the   span being processed.
 
 Type: `string`
 
@@ -557,6 +562,9 @@ Type: `stringarray`
 
 The comparison operator to use.
 String comparisons are case-sensitive.
+For most cases, use negative operators (`!=`, `does-not-contain`, and `not-exists`) in a rule with a scope of "span".
+WARNING: Rules can have `Scope: trace` or `Scope: span`; a negative operator with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
+This is almost never desired behavior.
 
 Type: `string`
 
