@@ -97,6 +97,22 @@ Conditions:
     Datatype: int
 ```
 
+## Using a Prefix to Identify a Field in a Related Span
+
+Fields can contain a span selection prefix. Today, the only prefix supported is `root`.
+This prefix causes the root span to be searched for the specified field, rather than the span being evaluated.
+
+```yaml
+Rules:
+    - Name: limit by root span context
+      Conditions:
+        Field: "root.http.status"
+        Operator: =
+        Value: "500"
+        Datatype: string
+```
+
+
 ## `Operator`
 
 The `Operator` parameter controls how rules are evaluated.
