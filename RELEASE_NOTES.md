@@ -12,7 +12,7 @@ fixes, improvements, and dependency updates.
 Users can now specify rules that match only the root span of a trace (i.e. `root.http.status`). 
 
 ### Notable Fixes 
-* Previously, rules with a default of boolean `true` would be overridden when defaults were applied to the config. We have fixed this by using the `*bool` type for these values as well as adding helper functions to avoid strange behavior related to how booleans work in Go. 
+* Previously, rules with a default of boolean `true` that we set to `false` by configuration would be overridden back to `true` when defaults were applied to the config. We have fixed this by using the `*bool` type for these values as well as adding helper functions to avoid strange behavior related to how booleans work in Go. 
 * Use of a generics set to avoid complex map patterns. Behavior mostly borrowed from another Honeycomb repository.
 
 ## Version 2.3.0
