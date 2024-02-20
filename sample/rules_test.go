@@ -2170,8 +2170,6 @@ func TestRulesRootSpanContext(t *testing.T) {
 							{
 								Field:    "root.test",
 								Operator: config.Exists,
-								Value:    "foo",
-								Datatype: "string",
 							},
 						},
 					},
@@ -2215,11 +2213,8 @@ func TestRulesRootSpanContext(t *testing.T) {
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
-								Field: "root.test",
-								//Fields: []
+								Field:    "root.test",
 								Operator: config.Exists,
-								Value:    "foo",
-								Datatype: "string",
 							},
 							{
 								Field:    "anotherField",
@@ -2271,7 +2266,6 @@ func TestRulesRootSpanContext(t *testing.T) {
 							{
 								Field:    "root.test",
 								Operator: config.Exists,
-								Value:    "foo",
 							},
 							{
 								Field:    "anotherField",
@@ -2324,12 +2318,10 @@ func TestRulesRootSpanContext(t *testing.T) {
 							{
 								Field:    "root.test",
 								Operator: config.Exists,
-								Value:    "foo",
 							},
 							{
 								Field:    "root.nope",
 								Operator: config.Exists,
-								Value:    "nope",
 							},
 							{
 								Field:    "anotherField",
