@@ -1,5 +1,32 @@
 # Refinery Changelog
 
+## 2.4.0 2024-2-20
+
+## Features
+
+- Update refinery_rules.md | [fchikwekwe](https://github.com/fchikwekwe)
+- feat: allow user to sample on root span context (#981) | [fchikwekwe](https://github.com/fchikwekwe)
+
+## Fixes 
+
+- fix: flaky TestOriginalSampleRateIsNotedInMetaField (#991) | [Robb Kidd](https://github.com/robbkidd)
+- chore: consolidate routine dependency updates (#994) | [Robb Kidd](https://github.com/robbkidd)
+- chore: Revert "chore: fix license tracking (#989)" (#990) | [Robb Kidd](https://github.com/robbkidd)
+- chore: fix license tracking (#989) | [Robb Kidd](https://github.com/robbkidd)
+- fix: allow config bools to default to true (#969) | [Robb Kidd](https://github.com/robbkidd)
+
+## Maintenance
+
+- docs: update configMeta to remove spaces | [fchikwekwe](https://github.com/fchikwekwe)
+- docs: update refinery docs | [fchikwekwe](https://github.com/fchikwekwe)
+- docs: Add sampler default intervals to docs (#995) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- docs: include a warning about surprising not-exists behavior (#979) | [Robb Kidd](https://github.com/robbkidd)
+- maint: Refactor cuckoo cache for reusability (#975) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: create generic set and use it (#976) | [Kent Quirk](https://github.com/KentQuirk)
+- maint: bump deps for 2.4 (#968) | [fchikwekwe](https://github.com/fchikwekwe)
+- maint: bump Husky (#966) | [Kent Quirk](https://github.com/KentQuirk)
+
+
 ## 2.3.0 2023-12-20
 
 ## Features

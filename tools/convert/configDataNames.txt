@@ -1,0 +1,234 @@
+# Names of groups and fields in the new config file format.
+# Automatically generated on 2024-02-20 at 20:25:19 UTC.
+
+General:
+  - ConfigurationVersion
+
+  - MinRefineryVersion
+
+  - DatasetPrefix
+
+  - ConfigReloadInterval
+
+
+Network:
+  - ListenAddr
+
+  - PeerListenAddr
+
+  - HTTPIdleTimeout
+
+  - HoneycombAPI
+
+
+AccessKeys:
+  - ReceiveKeys (originally APIKeys)
+
+  - AcceptOnlyListedKeys
+
+
+RefineryTelemetry:
+  - AddRuleReasonToTrace
+
+  - AddSpanCountToRoot
+
+  - AddCountsToRoot
+
+  - AddHostMetadataToTrace
+
+
+Traces:
+  - SendDelay
+
+  - BatchTimeout
+
+  - TraceTimeout
+
+  - MaxBatchSize
+
+  - SendTicker
+
+
+Debugging:
+  - DebugServiceAddr
+
+  - QueryAuthToken
+
+  - AdditionalErrorFields
+
+  - DryRun
+
+
+Logger:
+  - Type
+
+  - Level
+
+
+HoneycombLogger:
+  - APIHost (originally HoneycombLogger.LoggerHoneycombAPI)
+
+  - APIKey (originally HoneycombLogger.LoggerAPIKey)
+
+  - Dataset (originally HoneycombLogger.LoggerDataset)
+
+  - SamplerEnabled (originally HoneycombLogger.LoggerSamplerEnabled)
+
+  - SamplerThroughput
+
+
+StdoutLogger:
+  - Structured
+
+  - SamplerEnabled
+
+  - SamplerThroughput
+
+
+PrometheusMetrics:
+  - Enabled
+
+  - ListenAddr (originally PrometheusMetrics.MetricsListenAddr)
+
+
+LegacyMetrics:
+  - Enabled
+
+  - APIHost (originally HoneycombMetrics.MetricsHoneycombAPI)
+
+  - APIKey (originally HoneycombMetrics.MetricsAPIKey)
+
+  - Dataset (originally HoneycombMetrics.MetricsDataset)
+
+  - ReportingInterval (originally HoneycombMetrics.MetricsReportingInterval)
+
+
+OTelMetrics:
+  - Enabled
+
+  - APIHost
+
+  - APIKey
+
+  - Dataset
+
+  - ReportingInterval
+
+  - Compression
+
+
+PeerManagement:
+  - Type (originally PeerManagement.Type)
+
+  - Identifier (originally PeerManagement.RedisIdentifier)
+
+  - IdentifierInterfaceName (originally PeerManagement.IdentifierInterfaceName)
+
+  - UseIPV6Identifier (originally PeerManagement.UseIPV6Identifier)
+
+  - Peers (originally PeerManagement.Peers)
+
+
+RedisPeerManagement:
+  - Host (originally PeerManagement.RedisHost)
+
+  - Username (originally PeerManagement.RedisUsername)
+
+  - Password (originally PeerManagement.Password)
+
+  - AuthCode (originally PeerManagement.AuthCode)
+
+  - Prefix (originally PeerManagement.Prefix)
+
+  - Database (originally PeerManagement.Database)
+
+  - UseTLS (originally PeerManagement.UseTLS)
+
+  - UseTLSInsecure (originally PeerManagement.UseTLSInsecure)
+
+  - Timeout (originally PeerManagement.Timeout)
+
+  - Strategy (originally PeerManagement.Strategy) (**removed in v2**)
+
+
+Collection:
+  - CacheCapacity (originally InMemCollector.CacheCapacity)
+
+  - PeerQueueSize
+
+  - IncomingQueueSize
+
+  - AvailableMemory
+
+  - MaxMemoryPercentage
+
+  - MaxAlloc (originally InMemCollector.MaxAlloc)
+
+
+BufferSizes:
+  - UpstreamBufferSize
+
+  - PeerBufferSize
+
+
+Specialized:
+  - EnvironmentCacheTTL
+
+  - CompressPeerCommunication
+
+  - Collector (originally Collector) (**removed in v2**)
+
+  - CacheOverrunStrategy (originally InMemCollector.CacheOverrunStrategy) (**removed in v2**)
+
+  - AdditionalAttributes
+
+
+IDFields:
+  - TraceNames
+
+  - ParentNames
+
+
+GRPCServerParameters:
+  - Enabled
+
+  - ListenAddr (originally GRPCListenAddr)
+
+  - MaxConnectionIdle (originally GRPCServerParameters.MaxConnectionIdle)
+
+  - MaxConnectionAge (originally GRPCServerParameters.MaxConnectionAge)
+
+  - MaxConnectionAgeGrace (originally GRPCServerParameters.MaxConnectionAgeGrace)
+
+  - KeepAlive (originally GRPCServerParameters.Time)
+
+  - KeepAliveTimeout (originally GRPCServerParameters.Timeout)
+
+  - MaxSendMsgSize
+
+  - MaxRecvMsgSize
+
+
+SampleCache:
+  - Type (originally SampleCacheConfig/SampleCache.Type) (**removed in v2**)
+
+  - KeptSize (originally SampleCacheConfig/SampleCache.KeptSize)
+
+  - DroppedSize (originally SampleCacheConfig/SampleCache.DroppedSize)
+
+  - SizeCheckInterval (originally SampleCacheConfig/SampleCache.SizeCheckInterval)
+
+
+StressRelief:
+  - Mode (originally StressRelief.Mode)
+
+  - ActivationLevel (originally StressRelief.ActivationLevel)
+
+  - DeactivationLevel (originally StressRelief.DeactivationLevel)
+
+  - SamplingRate (originally StressRelief.StressSamplingRate)
+
+  - MinimumActivationDuration (originally StressRelief.MinimumActivationDuration)
+
+  - MinimumStartupDuration (originally StressRelief.MinimumStartupDuration)
+
