@@ -1,6 +1,18 @@
 # Release Notes
 
-While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all of the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
+While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
+
+## Version 2.4.0
+
+This release includes an update to allow users to specify root span context in their rules. It also includes some bug 
+fixes, improvements, and dependency updates.
+
+### Root Span Context
+
+Users can now specify rules that match only the root span of a trace (i.e. `root.http.status`). 
+
+### Notable Fixes 
+* Previously, rules with a default of boolean `true` that we set to `false` by configuration would be overridden back to `true` when defaults were applied to the config. We have fixed this by using the `*bool` type for these values as well as adding helper functions to avoid strange behavior related to how booleans work in Go. 
 
 ## Version 2.3.0
 
