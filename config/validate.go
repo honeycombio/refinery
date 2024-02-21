@@ -184,6 +184,19 @@ func validateDatatype(k string, v any, typ string) string {
 		if u.Scheme != "http" && u.Scheme != "https" {
 			return fmt.Sprintf("field %s (%v) must use an http or https scheme", k, v)
 		}
+	case "defaulttrue":
+		switch val := v.(type) {
+		case bool:
+			return ""
+		case string:
+			switch strings.ToLower(val) {
+			case "t", "true", "f", "false":
+			default:
+				return fmt.Sprintf("field %s (%v) must be 'true', 'false', 't', or 'f'", k, v)
+			}
+		default:
+			return fmt.Sprintf("field %s (%v) must be a bool or string with value true/false or 'true'/'false'/'t'/'f'", k, v)
+		}
 	default:
 		panic("unknown data type " + typ)
 	}

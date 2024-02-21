@@ -663,7 +663,7 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 	assert.Equal(t, "localhost:4343", a)
 
 	grpcConfig := c.GetGRPCConfig()
-	assert.Equal(t, true, *grpcConfig.Enabled)
+	assert.Equal(t, DefaultTrue(true), *grpcConfig.Enabled)
 	assert.Equal(t, "localhost:4343", grpcConfig.ListenAddr)
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionIdle))
 	assert.Equal(t, 3*time.Minute, time.Duration(grpcConfig.MaxConnectionAge))

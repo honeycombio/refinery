@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -89,11 +90,35 @@ type AccessKeyConfig struct {
 	keymap               generics.Set[string]
 }
 
+type DefaultTrue bool
+
+func (dt *DefaultTrue) Get() (enabled bool) {
+	if dt == nil {
+		return true
+	}
+	return bool(*dt)
+}
+
+func (dt *DefaultTrue) MarshalText() ([]byte, error) {
+	return []byte(strconv.FormatBool(bool(*dt))), nil
+}
+
+func (dt *DefaultTrue) UnmarshalText(text []byte) error {
+	trueBool, err := strconv.ParseBool(string(text))
+	if err != nil {
+		return err
+	}
+
+	*dt = DefaultTrue(trueBool)
+
+	return nil
+}
+
 type RefineryTelemetryConfig struct {
-	AddRuleReasonToTrace   bool  `yaml:"AddRuleReasonToTrace"`
-	AddSpanCountToRoot     *bool `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
-	AddCountsToRoot        bool  `yaml:"AddCountsToRoot"`
-	AddHostMetadataToTrace *bool `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
+	AddRuleReasonToTrace   bool         `yaml:"AddRuleReasonToTrace"`
+	AddSpanCountToRoot     *DefaultTrue `yaml:"AddSpanCountToRoot" default:"true"` // Avoid pointer woe on access, use GetAddSpanCountToRoot() instead.
+	AddCountsToRoot        bool         `yaml:"AddCountsToRoot"`
+	AddHostMetadataToTrace *DefaultTrue `yaml:"AddHostMetadataToTrace" default:"true"` // Avoid pointer woe on access, use GetAddHostMetadataToTrace() instead.
 }
 
 type TracesConfig struct {
@@ -117,22 +142,17 @@ type LoggerConfig struct {
 }
 
 type HoneycombLoggerConfig struct {
-	APIHost           string `yaml:"APIHost" default:"https://api.honeycomb.io"`
-	APIKey            string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
-	Dataset           string `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    *bool  `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
-	SamplerThroughput int    `yaml:"SamplerThroughput" default:"10"`
+	APIHost           string       `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIKey            string       `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
+	Dataset           string       `yaml:"Dataset" default:"Refinery Logs"`
+	SamplerEnabled    *DefaultTrue `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
+	SamplerThroughput int          `yaml:"SamplerThroughput" default:"10"`
 }
 
 // GetSamplerEnabled returns whether configuration has enabled sampling of
 // Refinery's own logs destined for Honeycomb.
 func (c *HoneycombLoggerConfig) GetSamplerEnabled() (enabled bool) {
-	if c.SamplerEnabled == nil {
-		enabled = true
-	} else {
-		enabled = *c.SamplerEnabled
-	}
-	return enabled
+	return c.SamplerEnabled.Get()
 }
 
 type StdoutLoggerConfig struct {
@@ -229,7 +249,7 @@ type BufferSizeConfig struct {
 
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
-	CompressPeerCommunication *bool             `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
+	CompressPeerCommunication *DefaultTrue      `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
@@ -242,15 +262,15 @@ type IDFieldsConfig struct {
 // by refinery's own GRPC server:
 // https://pkg.go.dev/google.golang.org/grpc/keepalive#ServerParameters
 type GRPCServerParameters struct {
-	Enabled               *bool      `yaml:"Enabled" default:"true"` // Avoid pointer woe on access, use GetGRPCEnabled() instead.
-	ListenAddr            string     `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
-	MaxConnectionIdle     Duration   `yaml:"MaxConnectionIdle" default:"1m"`
-	MaxConnectionAge      Duration   `yaml:"MaxConnectionAge" default:"3m"`
-	MaxConnectionAgeGrace Duration   `yaml:"MaxConnectionAgeGrace" default:"1m"`
-	KeepAlive             Duration   `yaml:"KeepAlive" default:"1m"`
-	KeepAliveTimeout      Duration   `yaml:"KeepAliveTimeout" default:"20s"`
-	MaxSendMsgSize        MemorySize `yaml:"MaxSendMsgSize" default:"5MB"`
-	MaxRecvMsgSize        MemorySize `yaml:"MaxRecvMsgSize" default:"5MB"`
+	Enabled               *DefaultTrue `yaml:"Enabled" default:"true"` // Avoid pointer woe on access, use GetGRPCEnabled() instead.
+	ListenAddr            string       `yaml:"ListenAddr" cmdenv:"GRPCListenAddr"`
+	MaxConnectionIdle     Duration     `yaml:"MaxConnectionIdle" default:"1m"`
+	MaxConnectionAge      Duration     `yaml:"MaxConnectionAge" default:"3m"`
+	MaxConnectionAgeGrace Duration     `yaml:"MaxConnectionAgeGrace" default:"1m"`
+	KeepAlive             Duration     `yaml:"KeepAlive" default:"1m"`
+	KeepAliveTimeout      Duration     `yaml:"KeepAliveTimeout" default:"20s"`
+	MaxSendMsgSize        MemorySize   `yaml:"MaxSendMsgSize" default:"5MB"`
+	MaxRecvMsgSize        MemorySize   `yaml:"MaxRecvMsgSize" default:"5MB"`
 }
 
 type SampleCacheConfig struct {
@@ -489,28 +509,14 @@ func (f *fileConfig) GetCompressPeerCommunication() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var compressPeerCommunication bool
-	if f.mainConfig.Specialized.CompressPeerCommunication == nil {
-		compressPeerCommunication = true
-	} else {
-		compressPeerCommunication = *f.mainConfig.Specialized.CompressPeerCommunication
-	}
-
-	return compressPeerCommunication
+	return f.mainConfig.Specialized.CompressPeerCommunication.Get()
 }
 
 func (f *fileConfig) GetGRPCEnabled() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var enabled bool
-	if f.mainConfig.GRPCServerParameters.Enabled == nil {
-		enabled = true
-	} else {
-		enabled = *f.mainConfig.GRPCServerParameters.Enabled
-	}
-
-	return enabled
+	return f.mainConfig.GRPCServerParameters.Enabled.Get()
 }
 
 func (f *fileConfig) GetGRPCListenAddr() (string, error) {
@@ -808,15 +814,7 @@ func (f *fileConfig) GetAddHostMetadataToTrace() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var addHostMetadataToTrace bool
-
-	if f.mainConfig.Telemetry.AddHostMetadataToTrace == nil {
-		addHostMetadataToTrace = true // TODO: the default, but maybe look that up on the struct?
-	} else {
-		addHostMetadataToTrace = *f.mainConfig.Telemetry.AddHostMetadataToTrace
-	}
-
-	return addHostMetadataToTrace
+	return f.mainConfig.Telemetry.AddHostMetadataToTrace.Get()
 }
 
 func (f *fileConfig) GetAddRuleReasonToTrace() bool {
@@ -865,15 +863,7 @@ func (f *fileConfig) GetAddSpanCountToRoot() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	var addSpanCountToRoot bool
-
-	if f.mainConfig.Telemetry.AddSpanCountToRoot == nil {
-		addSpanCountToRoot = true // TODO: lookup default from struct
-	} else {
-		addSpanCountToRoot = *f.mainConfig.Telemetry.AddSpanCountToRoot
-	}
-
-	return addSpanCountToRoot
+	return f.mainConfig.Telemetry.AddSpanCountToRoot.Get()
 }
 
 func (f *fileConfig) GetAddCountsToRoot() bool {
