@@ -189,11 +189,13 @@ func validateDatatype(k string, v any, typ string) string {
 		case bool:
 			return ""
 		case string:
-			if val != "t" && val != "f" && val != "true" && val != "false" {
+			switch strings.ToLower(val) {
+			case "t", "true", "f", "false":
+			default:
 				return fmt.Sprintf("field %s (%v) must be 'true', 'false', 't', or 'f'", k, v)
 			}
 		default:
-			return fmt.Sprintf("field %s (%v) must be 'true', 'false', 't', or 'f'", k, v)
+			return fmt.Sprintf("field %s (%v) must be a bool or string with value true/false or 'true'/'false'/'t'/'f'", k, v)
 		}
 	default:
 		panic("unknown data type " + typ)
