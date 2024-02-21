@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -186,8 +185,15 @@ func validateDatatype(k string, v any, typ string) string {
 			return fmt.Sprintf("field %s (%v) must use an http or https scheme", k, v)
 		}
 	case "defaulttrue":
-		if _, err := strconv.ParseBool(v.(string)); err != nil {
-			return fmt.Sprint(err)
+		switch val := v.(type) {
+		case bool:
+			return ""
+		case string:
+			if val != "t" && val != "f" && val != "true" && val != "false" {
+				return fmt.Sprintf("field %s (%v) must be 'true', 'false', 't', or 'f'", k, v)
+			}
+		default:
+			return fmt.Sprintf("field %s (%v) must be 'true', 'false', 't', or 'f'", k, v)
 		}
 	default:
 		panic("unknown data type " + typ)
