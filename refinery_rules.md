@@ -504,6 +504,7 @@ The only prefix currently supported is `root`, as in `root.http.status`.
 Specifying `root.` causes the condition to be evaluated against the root span.
 For example, if the `Field` is `root.url`, then the condition will be processed using the url field from the root span.
 The setting `Scope: span` for a rule does not change the meaning of this prefix -- the condition is still evaluated on the root span and is treated as if it were part of the  span being processed.
+When using the `not-exists` operator to check a condition with a `root.` prefix, if the root span does not exist on the trace then the condition will evaluate to false.
 
 - Type: `string`
 
@@ -513,6 +514,7 @@ An array of field names to check.
 These can name any field in the trace.
 The fields are checked in the order defined here, and the first named field that contains a value will be used for the condition.
 Only the first populated field will be used, even if the condition fails.
+If a `root.` prefix is present on a field but the root span is not on the trace, that field will be skipped.
 If none of the fields are present, then the condition will not match.
 The comparison is case-sensitive.
 All fields are checked as individual fields before any of them are checked as nested fields (see `CheckNestedFields`).

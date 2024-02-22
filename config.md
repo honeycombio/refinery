@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-02-20 at 18:13:44 UTC.
+It was automatically generated on 2024-02-22 at 18:03:10 UTC.
 
 ## The Config file
 
@@ -200,7 +200,7 @@ This value is available to the rules-based sampler, making it possible to write 
 If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.span_count` to the root span.
 
 - Eligible for live reload.
-- Type: `bool`
+- Type: `defaulttrue`
 - Default: `true`
 
 ### `AddCountsToRoot`
@@ -223,7 +223,7 @@ AddHostMetadataToTrace specifies whether to add host metadata to traces.
 If `true`, then Refinery will add the following tag to all traces: - `meta.refinery.local_hostname`: the hostname of the Refinery node
 
 - Eligible for live reload.
-- Type: `bool`
+- Type: `defaulttrue`
 - Default: `true`
 
 ## Traces
@@ -420,7 +420,7 @@ The sample rate is controlled by the `SamplerThroughput` setting.
 The sampler used throttles the rate of logs sent to Honeycomb from any given source within Refinery -- it should effectively limit the rate of redundant messages.
 
 - Not eligible for live reload.
-- Type: `bool`
+- Type: `defaulttrue`
 - Default: `true`
 
 ### `SamplerThroughput`
@@ -917,7 +917,7 @@ If it costs money to transmit data between Refinery instances (for example, when
 The option to disable it is provided as an escape hatch for deployments that value lower CPU utilization over data transfer costs.
 
 - Not eligible for live reload.
-- Type: `bool`
+- Type: `defaulttrue`
 - Default: `true`
 
 ### `AdditionalAttributes`
@@ -969,7 +969,8 @@ Enabled specifies whether the gRPC server is enabled.
 If `false`, then the gRPC server is not started and no gRPC traffic is accepted.
 
 - Not eligible for live reload.
-- Type: `bool`
+- Type: `defaulttrue`
+- Default: `true`
 
 ### `ListenAddr`
 

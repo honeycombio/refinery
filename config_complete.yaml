@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-02-20 at 18:13:43 UTC from ../../config.yaml using a template generated on 2024-02-20 at 18:13:41 UTC
+# created on 2024-02-22 at 18:03:09 UTC from ../../config.yaml using a template generated on 2024-02-22 at 18:03:07 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1009,6 +1009,7 @@ GRPCServerParameters:
     ## If `false`, then the gRPC server is not started and no gRPC traffic is
     ## accepted.
     ##
+    ## default: true
     ## Not eligible for live reload.
     # Enabled: false
 

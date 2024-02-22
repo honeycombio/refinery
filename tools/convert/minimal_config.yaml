@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-02-20 at 20:25:19 UTC
+# automatically generated on 2024-02-22 at 18:03:08 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -111,7 +111,7 @@ IDFields:
     - parentId
 
 GRPCServerParameters:
-  Enabled: false
+  Enabled: true
   ListenAddr: ""
   MaxConnectionIdle: 1m
   MaxConnectionAge: 3m
