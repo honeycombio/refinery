@@ -2,6 +2,7 @@ package centralstore
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -147,6 +148,28 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	ts.removeExpiredTraces(redisClient.Client)
 	require.False(t, ts.exists(conn, WaitingToDecide, traceIDToBeRemoved))
 	require.True(t, ts.exists(conn, WaitingToDecide, traceIDToKeep))
+}
+
+func TestRedisBasicStore_normalizeCentralTraceStatusRedis(t *testing.T) {
+	getFields := func(i interface{}) []string {
+		val := reflect.ValueOf(i).Elem()
+		typeOfT := val.Type()
+
+		fields := make([]string, val.NumField())
+		for i := 0; i < val.NumField(); i++ {
+			fields[i] = typeOfT.Field(i).Name
+		}
+		return fields
+	}
+
+	statusInRedis := &centralTraceStatusRedis{}
+	status := normalizeCentralTraceStatusRedis(statusInRedis)
+
+	expected := getFields(&CentralTraceStatus{})
+	after := getFields(status)
+
+	require.EqualValues(t, expected, after)
+
 }
 
 type TestRedisClient struct {
