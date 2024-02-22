@@ -551,6 +551,11 @@ func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
 	if err != nil {
 		return err
 	}
+
+	if len(values) == 0 {
+		return redis.ErrNil
+	}
+
 	return redis.ScanStruct(values, val)
 }
 
