@@ -641,7 +641,7 @@ groups:
           named field that contains a value will be used for the condition. Only
           the first populated field will be used, even if the condition fails.
           
-          If a `root.` prefix is present on a field but the root span is not on
+          If a `root.` prefix is present on a field, but the root span is not on
           the trace, that field will be skipped.
 
           If none of the fields are present, then the condition will not match.
