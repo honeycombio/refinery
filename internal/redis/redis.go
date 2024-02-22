@@ -40,7 +40,7 @@ type Conn interface {
 	Close() error
 	Del(...string) (int64, error)
 	Exists(string) (bool, error)
-	Expire(string, int) error
+	Expire(string, time.Duration) error
 	GetInt64(string) (int64, error)
 	GetInt64NoDefault(string) (int64, error)
 	GetString(context.Context, string) (string, error)
@@ -72,10 +72,12 @@ type Conn interface {
 	RPush(string, any) error
 	RPushTTL(string, string, time.Duration) (bool, error)
 	LRange(string, int, int) ([]any, error)
+	LIndexString(string, int) (string, error)
 
 	ZAdd(string, []any) error
-	ZMove(string, string, []any) error
+	ZMove(string, string, []int64, []any) error
 	ZRange(string, int, int) ([]string, error)
+	ZRangeByScoreString(string, int64) ([]string, error)
 	ZScore(string, string) (int64, error)
 	ZMScore(string, []string) ([]int64, error)
 	ZCard(string) (int64, error)
@@ -85,6 +87,7 @@ type Conn interface {
 
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
+	Watch(string, func(Conn) error) (func() error, error)
 }
 
 type DefaultClient struct {
@@ -349,8 +352,8 @@ func (c *DefaultConn) ListKeys(prefix string) ([]string, error) {
 	return redis.Strings(c.conn.Do("KEYS", prefix))
 }
 
-func (c *DefaultConn) Expire(key string, ttlSeconds int) error {
-	_, err := c.conn.Do("EXPIRE", key, ttlSeconds)
+func (c *DefaultConn) Expire(key string, ttl time.Duration) error {
+	_, err := c.conn.Do("EXPIRE", key, ttl.Seconds())
 	return err
 }
 
@@ -436,6 +439,17 @@ func (c *DefaultConn) LRange(key string, start int, end int) ([]any, error) {
 	return redis.Values(c.conn.Do("LRANGE", key, start, end))
 }
 
+func (c *DefaultConn) LIndexString(key string, index int) (string, error) {
+	result, err := redis.String(c.conn.Do("LINDEX", key, index))
+	if err == redis.ErrNil {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return result, nil
+}
+
 // ZAdd adds a member to a sorted set at key with a score, only if the member does not already exist
 func (c *DefaultConn) ZAdd(key string, args []interface{}) error {
 	argsList := redis.Args{key, "NX"}.AddFlat(args)
@@ -450,13 +464,17 @@ func (c *DefaultConn) ZRange(key string, start, stop int) ([]string, error) {
 	return redis.Strings(c.conn.Do("ZRANGE", key, start, stop))
 }
 
+func (c *DefaultConn) ZRangeByScoreString(key string, stop int64) ([]string, error) {
+	return redis.Strings(c.conn.Do("ZRANGE", key, 0, stop, "BYSCORE"))
+}
+
 func (c *DefaultConn) ZScore(key string, member string) (int64, error) {
 	return redis.Int64(c.conn.Do("ZSCORE", key, member))
 }
 
 func (c *DefaultConn) ZMScore(key string, members []string) ([]int64, error) {
 	args := redis.Args{key}.AddFlat(members)
-	return redis.Int64s(c.conn.Do("ZMScore", args...))
+	return redis.Int64s(c.conn.Do("ZMSCORE", args...))
 }
 
 func (c *DefaultConn) ZCard(key string) (int64, error) {
@@ -464,15 +482,28 @@ func (c *DefaultConn) ZCard(key string) (int64, error) {
 }
 
 func (c *DefaultConn) ZExist(key string, member string) (bool, error) {
-	return redis.Bool(c.conn.Do("ZSCORE", key, member))
+	value, err := redis.Int64(c.conn.Do("ZSCORE", key, member))
+	if err != nil {
+		return false, err
+	}
+	return value != 0, nil
 }
 
-func (c *DefaultConn) ZMove(fromKey string, toKey string, members []any) error {
+func (c *DefaultConn) ZMove(fromKey string, toKey string, scores []int64, members []any) error {
 	if err := c.conn.Send("MULTI"); err != nil {
 		return err
 	}
 
-	argsList := redis.Args{toKey, "NX"}.AddFlat(members)
+	entries := make([]any, len(members)*2)
+	for i := range entries {
+		if i%2 == 0 {
+			entries[i] = scores[i/2]
+		} else {
+			entries[i] = members[i/2]
+		}
+
+	}
+	argsList := redis.Args{toKey, "NX"}.AddFlat(entries)
 	if err := c.conn.Send("ZADD", argsList...); err != nil && err != redis.ErrNil {
 		return err
 	}
@@ -481,10 +512,19 @@ func (c *DefaultConn) ZMove(fromKey string, toKey string, members []any) error {
 	if err := c.conn.Send("ZREM", argsList...); err != nil {
 		return err
 	}
-	_, err := redis.Values(c.conn.Do("EXEC"))
+	replies, err := redis.Int64s(c.conn.Do("EXEC"))
 	if err != nil {
 		return err
 	}
+
+	if len(replies) != 2 {
+		return errors.New("unexpected response format from redis")
+	}
+
+	if replies[0] == 0 {
+		err = fmt.Errorf("failed to add member to set %s", toKey)
+	}
+
 	return err
 }
 
@@ -676,10 +716,31 @@ func (c *DefaultConn) RPushTTL(key string, member string, expiration time.Durati
 }
 
 func (c *DefaultConn) SAdd(key string, members ...any) error {
-	args := redis.Args{}.Add(members...)
-	_, err := c.conn.Do("SADD", key, args)
+	args := redis.Args{key}.Add(members...)
+	_, err := c.conn.Do("SADD", args...)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (c *DefaultConn) Watch(key string, f func(Conn) error) (func() error, error) {
+	_, err := c.conn.Do("WATCH", key)
+	if err != nil {
+		return nil, err
+	}
+
+	err = f(c)
+	if err != nil {
+		return func() error {
+			_, err := c.conn.Do("UNWATCH")
+			return err
+		}, err
+	}
+
+	return func() error {
+		_, err := c.conn.Do("UNWATCH")
+		return err
+	}, nil
+
 }

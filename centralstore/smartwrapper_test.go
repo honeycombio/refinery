@@ -48,7 +48,7 @@ func makeRemoteStore() BasicStorer {
 
 func TestSingleSpanGetsCollected(t *testing.T) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisRemoteStoreOptions{Cache: config.SampleCacheConfig{
+	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
@@ -125,12 +125,12 @@ func TestSingleTraceOperation(t *testing.T) {
 
 func TestBasicStoreOperation(t *testing.T) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisRemoteStoreOptions{Cache: config.SampleCacheConfig{
+	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	defer cleanupRedisStore(redisStore)
+	//defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -241,7 +241,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisRemoteStoreOptions{Cache: config.SampleCacheConfig{
+	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
@@ -267,7 +267,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 
 func BenchmarkStoreGetStatus(b *testing.B) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisRemoteStoreOptions{Cache: config.SampleCacheConfig{
+	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
@@ -294,7 +294,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 
 func BenchmarkStoreGetTrace(b *testing.B) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisRemoteStoreOptions{Cache: config.SampleCacheConfig{
+	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
@@ -324,7 +324,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	sopts := standardOptions()
 	sopts.SendDelay = duration("100ms")
 	sopts.TraceTimeout = duration("100ms")
-	redisStore := NewRedisBasicStore(RedisRemoteStoreOptions{Cache: config.SampleCacheConfig{
+	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
