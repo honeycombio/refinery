@@ -2462,7 +2462,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "root doesnt match, next span doesnt match, third span matches",
+						Name:       "root doesn't match, next span doesn't match, third span matches",
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
@@ -2500,7 +2500,154 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			ExpectedKeep: false,
 			ExpectedRate: 10,
-			ExpectedName: "root doesnt match, next span doesnt match, third span matches",
+			ExpectedName: "root doesn't match, next span doesn't match, third span matches",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "no root span",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"root.http.status_code"},
+								Operator: config.EQ,
+								Value:    "500",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "500",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "no root span with multiple fields",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"root.foo", "foo"},
+								Operator: config.EQ,
+								Value:    100.01,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"foo": 100.01,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"foo": 99.1,
+							"bar": 100.10,
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+			ExpectedRate: 10,
+			ExpectedName: "no root span with multiple fields",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "no root span, checking other spans in trace",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"root.foo", "foo"},
+								Operator: config.EQ,
+								Value:    true,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"foo": true,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"foo": true,
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+			ExpectedRate: 10,
+			ExpectedName: "no root span, checking other spans in trace",
+		},
+		{ // practical test case where user is checking for existence of root span
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "no root span, checking that trace id does not exist",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"root.trace_id", "trace_id"},
+								Operator: config.NotExists,
+								Value:    "abc123",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace_id": "abc123",
+							"foo":      true,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"trace_id": "abc123",
+							"foo":      true,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
 		},
 	}
 
