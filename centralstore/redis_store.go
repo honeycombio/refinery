@@ -19,6 +19,7 @@ const (
 	expirationForTraceState  = 24 * time.Hour
 	// DefaultPendingWorkCapacity how many events to queue up for busy batches
 	defaultPendingWorkCapacity = 10000
+	redigoTimestamp            = "2006-01-02 15:04:05.999999 -0700 MST"
 )
 
 var validStateChangeEvents = map[string]struct{}{
@@ -93,10 +94,10 @@ type RedisBasicStore struct {
 	errs          chan error
 }
 
-func (r *RedisBasicStore) Close(ctx context.Context) error {
+func (r *RedisBasicStore) Stop() error {
 	r.cancel()
 	r.states.Stop()
-	if err := r.client.Stop(ctx); err != nil {
+	if err := r.client.Stop(context.TODO()); err != nil {
 		r.errs <- err
 	}
 	close(r.errs)
@@ -183,7 +184,7 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 				continue
 			}
 			statusesMap[id].State = state
-			statusesMap[id].timestamp = timestamp
+			statusesMap[id].Timestamp = timestamp
 		}
 
 		remaining = notExist
@@ -229,7 +230,33 @@ func (r *RedisBasicStore) GetTracesForState(state CentralTraceState) ([]string, 
 	conn := r.client.Get()
 	defer conn.Close()
 
-	return r.states.allTraceIDs(conn, state)
+	return r.states.allTraceIDs(conn, state, -1)
+}
+
+// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
+// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
+// atomically, so that no other refinery will be assigned the same trace.
+func (r *RedisBasicStore) GetTracesNeedingDecision(n int) ([]string, error) {
+	conn := r.client.Get()
+	defer conn.Close()
+
+	traceIDs, err := r.states.allTraceIDs(conn, ReadyForDecision, n)
+	if err != nil {
+		r.errs <- err
+		return nil, err
+	}
+
+	if len(traceIDs) == 0 {
+		return nil, nil
+	}
+	err = r.changeTraceStatus(conn, traceIDs, ReadyForDecision, AwaitingDecision)
+	if err != nil {
+		r.errs <- err
+		return nil, err
+	}
+
+	return traceIDs, nil
+
 }
 
 func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error {
@@ -339,10 +366,35 @@ func newTraceStatusStore(clock clockwork.Clock) *tracesStore {
 	}
 }
 
+type centralTraceStatusRedis struct {
+	TraceID     string
+	Rate        uint
+	KeepReason  string
+	reasonIndex uint   // this is the cache ID for the reason
+	Timestamp   string // this is the last time the trace state was changed
+	Count       uint32 // number of spans in the trace
+	EventCount  uint32 // number of span events in the trace
+	LinkCount   uint32 // number of span links in the trace
+}
+
+func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralTraceStatus {
+	t, _ := time.Parse(redigoTimestamp, status.Timestamp)
+	return &CentralTraceStatus{
+		TraceID:    status.TraceID,
+		State:      Unknown,
+		Rate:       status.Rate,
+		KeepReason: status.KeepReason,
+		Timestamp:  t,
+		Count:      status.Count,
+		EventCount: status.EventCount,
+		LinkCount:  status.LinkCount,
+	}
+}
+
 func (t *tracesStore) addStatus(conn redis.Conn, span *CentralSpan) error {
-	trace := &CentralTraceStatus{
+	trace := &centralTraceStatusRedis{
 		TraceID:   span.TraceID,
-		timestamp: t.clock.Now().UTC(),
+		Timestamp: t.clock.Now().UTC().Format(redigoTimestamp),
 	}
 
 	_, err := conn.SetHashTTL(t.traceStatusKey(span.TraceID), trace, expirationForTraceStatus)
@@ -370,13 +422,13 @@ func (t *tracesStore) getTrace(conn redis.Conn, traceID string) (*CentralTrace, 
 func (t *tracesStore) getTraceStatuses(conn redis.Conn, traceIDs []string) (map[string]*CentralTraceStatus, error) {
 	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, traceID := range traceIDs {
-		status := &CentralTraceStatus{}
+		status := &centralTraceStatusRedis{}
 		err := conn.GetStructHash(t.traceStatusKey(traceID), status)
 		if err != nil {
 			return nil, err
 		}
 
-		statuses[traceID] = status
+		statuses[traceID] = normalizeCentralTraceStatusRedis(status)
 	}
 
 	if len(statuses) == 0 {
@@ -557,8 +609,12 @@ func (t *testStateProcessor) traceStatesKey(traceID string) string {
 	return fmt.Sprintf("%s:states", traceID)
 }
 
-func (t *testStateProcessor) allTraceIDs(conn redis.Conn, state CentralTraceState) ([]string, error) {
-	results, err := conn.ZRange(t.stateByTraceIDsKey(state), 0, -1)
+func (t *testStateProcessor) allTraceIDs(conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
+	index := -1
+	if n > 0 {
+		index = n - 1
+	}
+	results, err := conn.ZRange(t.stateByTraceIDsKey(state), 0, index)
 	if err != nil {
 		return nil, err
 	}
