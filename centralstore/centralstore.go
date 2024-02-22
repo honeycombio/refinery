@@ -183,6 +183,10 @@ type SmartStorer interface {
 	// returned from this call should be used for making the trace decision;
 	// they should not be sent as telemetry unless AllFields is non-null. If the
 	// trace has a root span, it will be the first span in the list.
+	// GetTrace is intended to be used to make a trace decision, so
+	// it has the side effect of moving a trace from ReadyForDecision to
+	// AwaitingDecision. If the trace is not in the ReadyForDecision state,
+	// its state will not be changed.
 	GetTrace(traceID string) (*CentralTrace, error)
 
 	// GetStatusForTraces returns the current state for a list of traces,
@@ -197,6 +201,11 @@ type SmartStorer interface {
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
 	GetTracesForState(state CentralTraceState) ([]string, error)
+
+	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
+	// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
+	// atomically, so that no other refinery will be assigned the same trace.
+	GetTracesNeedingDecision(n int) ([]string, error)
 
 	// SetTraceStatuses sets the status of a set of traces in the central store.
 	// This is used to record the decision made by the trace decision engine. If
@@ -285,6 +294,11 @@ type BasicStorer interface {
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
 	GetTracesForState(state CentralTraceState) ([]string, error)
+
+	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
+	// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
+	// atomically, so that no other refinery will be assigned the same trace.
+	GetTracesNeedingDecision(n int) ([]string, error)
 
 	// ChangeTraceStatus changes the status of a set of traces from one state to another
 	// atomically. This can be used for all trace states except transition to Keep.

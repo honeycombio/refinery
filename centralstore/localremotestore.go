@@ -140,6 +140,7 @@ func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState
 	lrs.states[toState][traceID] = status
 	status.Timestamp = time.Now()
 	delete(lrs.states[fromState], traceID)
+	fmt.Println("changeTraceState complete", traceID, fromState, toState)
 	return true
 }
 
@@ -270,6 +271,26 @@ func (lrs *LocalRemoteStore) GetTracesForState(state CentralTraceState) ([]strin
 	traceids := make([]string, 0, len(lrs.states[state]))
 	for _, traceStatus := range lrs.states[state] {
 		traceids = append(traceids, traceStatus.TraceID)
+	}
+	return traceids, nil
+}
+
+// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
+// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
+// atomically, so that no other refinery will be assigned the same trace.
+func (lrs *LocalRemoteStore) GetTracesNeedingDecision(n int) ([]string, error) {
+	lrs.mutex.Lock()
+	defer lrs.mutex.Unlock()
+	// get the list of traces in the ReadyForDecision state
+	traceids := make([]string, 0, len(lrs.states[ReadyForDecision]))
+	fmt.Println("NeedDecision: traceids", traceids)
+	for _, traceStatus := range lrs.states[ReadyForDecision] {
+		traceids = append(traceids, traceStatus.TraceID)
+		lrs.changeTraceState(traceStatus.TraceID, ReadyForDecision, AwaitingDecision)
+		n--
+		if n == 0 {
+			break
+		}
 	}
 	return traceids, nil
 }

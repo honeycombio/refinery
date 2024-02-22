@@ -132,7 +132,8 @@ func (m *MySQLRemoteStore) SetupDatabase() {
 }
 
 func (m *MySQLRemoteStore) Stop() error {
-	return m.db.Close()
+	// return m.db.Close()
+	return nil
 }
 
 func (m *MySQLRemoteStore) DeleteAllData() {
@@ -155,15 +156,9 @@ func realerror(err error) bool {
 // AllFields is optional and is used during shutdown.
 // WriteSpan may be asynchronous and will only return an error if the span could not be written.
 func (m *MySQLRemoteStore) WriteSpan(span *CentralSpan) error {
-	// start a transaction
-	tx, err := m.db.Beginx()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
 	// Check the dropped table to see if we already dropped this one
 	var dropped bool
-	err = tx.Get(&dropped, "SELECT EXISTS(SELECT true FROM dropped WHERE trace_id = ?)", span.TraceID)
+	err := m.db.Get(&dropped, "SELECT EXISTS(SELECT true FROM dropped WHERE trace_id = ?)", span.TraceID)
 	if realerror(err) {
 		return err
 	}
@@ -174,11 +169,17 @@ func (m *MySQLRemoteStore) WriteSpan(span *CentralSpan) error {
 
 	// Fetch from the trace_status table to see if we already know about this one
 	mts := MysqlTraceStatus{}
-	err = tx.Get(&mts, "SELECT * FROM trace_status WHERE trace_id = ?", span.TraceID)
+	err = m.db.Get(&mts, "SELECT * FROM trace_status WHERE trace_id = ?", span.TraceID)
 	if realerror(err) {
 		return err
 	}
 	cts := mts.ToCTS()
+	// we need to write something, so we'll start a transaction
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 	// this trace is new to us, we need to create
 	// a new traces entry for it
 	if err != nil {
@@ -315,6 +316,35 @@ func (m *MySQLRemoteStore) GetTracesForState(state CentralTraceState) ([]string,
 	if realerror(err) {
 		return nil, err
 	}
+	return traceIDs, nil
+}
+
+// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
+// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
+// atomically, so that no other refinery will be assigned the same trace.
+func (m *MySQLRemoteStore) GetTracesNeedingDecision(n int) ([]string, error) {
+	// get the list of traces in the ReadyForDecision state
+	traceIDs := make([]string, 0)
+	tx, err := m.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	err = tx.Select(&traceIDs, "SELECT trace_id FROM trace_status WHERE state = ? LIMIT ?", ReadyForDecision, n)
+	if realerror(err) {
+		return nil, err
+	}
+
+	tids := strings.Join(traceIDs, ", ")
+	fmt.Printf("changing trace status from %s to %s for %s\n", ReadyForDecision, AwaitingDecision, tids)
+	_, err = tx.Exec(
+		"UPDATE trace_status SET state = ? WHERE state = ? AND trace_id IN "+generateInClause(traceIDs),
+		ReadyForDecision, AwaitingDecision)
+	if realerror(err) {
+		return nil, err
+	}
+
 	return traceIDs, nil
 }
 
