@@ -3,7 +3,6 @@ package centralstore
 import (
 	"fmt"
 	"math/rand"
-	"slices"
 	"testing"
 	"time"
 
@@ -27,9 +26,14 @@ func standardOptions() SmartWrapperOptions {
 	return sopts
 }
 
-var storeType = "local"
+type remoteStoreType string
 
-func makeRemoteStore() BasicStorer {
+var (
+	localStore remoteStoreType = "local"
+	redisStore remoteStoreType = "redis"
+)
+
+func makeRemoteStore(storeType remoteStoreType) BasicStorer {
 	switch storeType {
 	case "mysql":
 		// this connection string works if you don't have a root password on your local mysql
@@ -40,7 +44,13 @@ func makeRemoteStore() BasicStorer {
 	// 	s.DeleteAllData()
 	// 	s.SetupDatabase()
 	// 	return s
-	case "local":
+	case redisStore:
+		return NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       10000,
+			SizeCheckInterval: config.Duration(10 * time.Second),
+		}})
+	case localStore:
 		return NewLocalRemoteStore()
 	}
 	return nil
@@ -48,13 +58,9 @@ func makeRemoteStore() BasicStorer {
 
 func TestSingleSpanGetsCollected(t *testing.T) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}})
-	defer cleanupRedisStore(redisStore)
-	store := NewSmartWrapper(sopts, redisStore)
+	remoteStore := makeRemoteStore(redisStore)
+	defer cleanupRedisStore(remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore)
 	defer store.Stop()
 
 	randomNum := rand.Intn(500)
@@ -79,7 +85,9 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 
 func TestSingleTraceOperation(t *testing.T) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, makeRemoteStore())
+	remoteStore := makeRemoteStore(redisStore)
+	defer cleanupRedisStore(remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore)
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -130,7 +138,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		DroppedSize:       10000,
 		SizeCheckInterval: config.Duration(10 * time.Second),
 	}})
-	//defer cleanupRedisStore(redisStore)
+	defer cleanupRedisStore(redisStore)
 	store := NewSmartWrapper(sopts, redisStore)
 	defer store.Stop()
 
@@ -187,12 +195,15 @@ func TestBasicStoreOperation(t *testing.T) {
 
 func TestReadyForDecisionLoop(t *testing.T) {
 	sopts := standardOptions()
-	store := NewSmartWrapper(sopts, makeRemoteStore())
+	remoteStore := makeRemoteStore(redisStore)
+	defer cleanupRedisStore(remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore)
 	defer store.Stop()
 
+	numberOfTraces := 11
 	traceids := make([]string, 0)
 
-	for t := 0; t < 10; t++ {
+	for t := 0; t < numberOfTraces; t++ {
 		tid := fmt.Sprintf("trace%d", t)
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
@@ -212,31 +223,29 @@ func TestReadyForDecisionLoop(t *testing.T) {
 		store.WriteSpan(span)
 	}
 
-	assert.Equal(t, 10, len(traceids))
+	assert.Equal(t, numberOfTraces, len(traceids))
 	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(traceids)
 		fmt.Println(states, err)
-		return err == nil && len(states) == 10
+		return err == nil && len(states) == numberOfTraces
 	}, 1*time.Second, 100*time.Millisecond)
 
 	// wait for it to reach the Ready state
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		states, err := store.GetStatusForTraces(traceids)
 		assert.NoError(collect, err)
-		assert.Equal(collect, 10, len(states))
+		assert.Equal(collect, numberOfTraces, len(states))
 		for _, state := range states {
 			assert.Equal(collect, ReadyForDecision, state.State)
 		}
 	}, 3*time.Second, 100*time.Millisecond)
 
 	// get the traces in the Ready state
-	traceIDs, err := store.GetTracesNeedingDecision(10)
+	traceIDs, err := store.GetTracesNeedingDecision(numberOfTraces - 1)
 	assert.NoError(t, err)
-	assert.Equal(t, 10, len(traceIDs))
-	slices.Sort(traceIDs)
-	slices.Sort(traceids)
-	assert.Equal(t, traceids, traceIDs)
+	assert.Equal(t, numberOfTraces-1, len(traceIDs))
+	assert.EqualValues(t, traceids[:numberOfTraces-1], traceIDs)
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
@@ -350,13 +359,15 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	}
 }
 
-func cleanupRedisStore(store *RedisBasicStore) error {
-	conn := store.client.Get()
-	defer conn.Close()
+func cleanupRedisStore(store BasicStorer) error {
+	if r, ok := store.(*RedisBasicStore); ok {
+		conn := r.client.Get()
+		defer conn.Close()
 
-	_, err := conn.Do("FLUSHALL")
-	if err != nil {
-		return err
+		_, err := conn.Do("FLUSHALL")
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
