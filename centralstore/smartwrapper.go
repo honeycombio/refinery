@@ -13,11 +13,12 @@ type statusMap map[string]*CentralTraceStatus
 
 // This is an implementation of SmartStorer that stores spans in memory locally.
 type SmartWrapper struct {
-	basicStore BasicStorer
-	keyfields  []string
-	stopped    chan struct{}
-	spanChan   chan *CentralSpan
-	done       chan struct{}
+	basicStore     BasicStorer
+	keyfields      []string
+	stopped        chan struct{}
+	spanChan       chan *CentralSpan
+	done           chan struct{}
+	doneProcessing chan struct{}
 }
 
 // ensure that we implement SmartStorer
@@ -35,10 +36,11 @@ type SmartWrapperOptions struct {
 // NewSmartWrapper creates a new SmartWrapper.
 func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer) *SmartWrapper {
 	w := &SmartWrapper{
-		basicStore: basic,
-		stopped:    make(chan struct{}),
-		spanChan:   make(chan *CentralSpan, options.SpanChannelSize),
-		done:       make(chan struct{}),
+		basicStore:     basic,
+		stopped:        make(chan struct{}),
+		spanChan:       make(chan *CentralSpan, options.SpanChannelSize),
+		done:           make(chan struct{}),
+		doneProcessing: make(chan struct{}),
 	}
 	// start the span processor
 	go w.processSpans()
@@ -58,6 +60,7 @@ func (w *SmartWrapper) Stop() {
 	w.spanChan = nil
 	// stop the state manager
 	close(w.done)
+	<-w.doneProcessing
 	// stop the remote store
 	w.basicStore.Stop()
 }
@@ -103,6 +106,8 @@ func (w *SmartWrapper) WriteSpan(span *CentralSpan) error {
 
 	// otherwise, put the span in the channel but don't block
 	select {
+	case <-w.done:
+		return fmt.Errorf("span channel closed")
 	case w.spanChan <- span:
 		// fmt.Println("span written")
 	default:
@@ -121,6 +126,8 @@ func (w *SmartWrapper) processSpans() {
 			fmt.Println(err)
 		}
 	}
+
+	w.doneProcessing <- struct{}{}
 }
 
 // helper function for manageStates
