@@ -3,6 +3,7 @@ package centralstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,24 +11,40 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 )
 
 const (
 	expirationForTraceStatus = 24 * time.Hour
 	expirationForTraceState  = 24 * time.Hour
+	// DefaultPendingWorkCapacity how many events to queue up for busy batches
+	defaultPendingWorkCapacity = 10000
 )
 
-type RedisRemoteStoreOptions struct {
-	Host  string
-	Cache config.SampleCacheConfig
+var validStateChangeEvents = map[string]struct{}{
+	"unknown-collecting":                   {},
+	"collecting-waiting_to_decide":         {},
+	"waiting_to_decide-ready_for_decision": {},
+	"ready_for_decision-awaiting_decision": {},
+	"awaiting_decision-ready_for_decision": {},
+}
+
+type RedisBasicStoreOptions struct {
+	Host              string
+	Cache             config.SampleCacheConfig
+	MaxTraceRetention time.Duration
 }
 
 var _ BasicStorer = (*RedisBasicStore)(nil)
 
-func NewRedisBasicStore(opt RedisRemoteStoreOptions) *RedisBasicStore {
+func NewRedisBasicStore(opt RedisBasicStoreOptions) *RedisBasicStore {
 	var host string
 	if opt.Host == "" {
 		host = "localhost:6379"
+	}
+
+	if opt.MaxTraceRetention == 0 {
+		opt.MaxTraceRetention = 24 * time.Hour
 	}
 
 	redisClient := redis.NewClient(&redis.Config{
@@ -42,30 +59,48 @@ func NewRedisBasicStore(opt RedisRemoteStoreOptions) *RedisBasicStore {
 	if err != nil {
 		panic(err)
 	}
-	changeState := redisClient.NewScript(stateChangeKey, stateChangeScript)
+
+	stateProcessorCfg := traceStateProcessorConfig{
+		reaperRunInterval: 10 * time.Second,
+		maxTraceRetention: opt.MaxTraceRetention,
+		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
+	}
+
+	clock := clockwork.NewRealClock()
+	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock)
+
+	ctx := context.Background()
+	childCtx, cancle := context.WithCancel(ctx)
+	go stateProcessor.cleanupExpiredTraces(childCtx, redisClient)
+
 	return &RedisBasicStore{
+		cancel:        cancle,
 		client:        redisClient,
 		decisionCache: decisionCache,
-		traces:        newTraceStatusStore(),
-		states: map[CentralTraceState]*traceStateMap{
-			Collecting:       newTraceStateMap(changeState, Collecting),
-			WaitingToDecide:  newTraceStateMap(changeState, WaitingToDecide),
-			ReadyForDecision: newTraceStateMap(changeState, ReadyForDecision),
-			AwaitingDecision: newTraceStateMap(changeState, AwaitingDecision),
-		},
+		traces:        newTraceStatusStore(clock),
+		states:        stateProcessor,
+		errs:          make(chan error, defaultPendingWorkCapacity),
 	}
 }
 
 // RedisBasicStore is an implementation of BasicStorer that uses Redis as the backing store.
 type RedisBasicStore struct {
+	cancel        context.CancelFunc
 	client        redis.Client
 	decisionCache cache.TraceSentCache
 	traces        *tracesStore
-	states        map[CentralTraceState]*traceStateMap
+	states        *testStateProcessor
+	errs          chan error
 }
 
-func (r *RedisBasicStore) Close() error {
-	return r.client.Stop(context.TODO())
+func (r *RedisBasicStore) Close(ctx context.Context) error {
+	r.cancel()
+	r.states.Stop()
+	if err := r.client.Stop(ctx); err != nil {
+		r.errs <- err
+	}
+	close(r.errs)
+	return nil
 }
 
 func (r *RedisBasicStore) GetMetrics() (map[string]interface{}, error) {
@@ -85,32 +120,33 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 		_ = r.traces.incrementSpanCounts(conn, span.TraceID, span.Type)
 	case Collecting:
 		if span.ParentID == "" {
-			err := r.states[Collecting].move(conn, r.states[WaitingToDecide], span.TraceID)
+			err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, WaitingToDecide), span.TraceID)
 			if err != nil {
-				return err
+				r.errs <- err
 			}
 		}
 	case WaitingToDecide, ReadyForDecision:
 	case Unknown:
-		err := r.states[Collecting].newTrace(conn, span.TraceID)
+		err := r.states.addNewTrace(conn, span.TraceID)
 		if err != nil {
-			return err
+			r.errs <- err
 		}
 		err = r.traces.addStatus(conn, span)
 		if err != nil {
-			return err
+			r.errs <- err
 		}
 	}
 
 	err := r.traces.storeSpan(conn, span)
 	if err != nil {
-		return err
+		r.errs <- err
 	}
 
 	return nil
 }
 
 func (r *RedisBasicStore) GetTrace(traceID string) (*CentralTrace, error) {
+	// TODO: what if this trace is already in the decision cache?
 	conn := r.client.Get()
 	defer conn.Close()
 
@@ -127,12 +163,12 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 	}
 
 	remaining := traceIDs
-	for state, status := range r.states {
+	for _, state := range r.states.states {
 		if len(remaining) == 0 {
 			break
 		}
 
-		exist, err := status.getTraces(conn, remaining)
+		exist, err := r.states.traceIDsWithTimestamp(conn, state, remaining)
 		if err != nil {
 			return nil, err
 		}
@@ -193,7 +229,7 @@ func (r *RedisBasicStore) GetTracesForState(state CentralTraceState) ([]string, 
 	conn := r.client.Get()
 	defer conn.Close()
 
-	return r.states[state].getAllTraces(conn)
+	return r.states.allTraceIDs(conn, state)
 }
 
 func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error {
@@ -247,11 +283,19 @@ func (r *RedisBasicStore) findTraceStatus(conn redis.Conn, traceID string) (Cent
 		}
 	}
 
-	if r.states[WaitingToDecide].exists(conn, traceID) {
+	if r.states.exists(conn, AwaitingDecision, traceID) {
+		return AwaitingDecision, NewCentralTraceStatus(traceID, AwaitingDecision)
+	}
+
+	if r.states.exists(conn, ReadyForDecision, traceID) {
+		return ReadyForDecision, NewCentralTraceStatus(traceID, ReadyForDecision)
+	}
+
+	if r.states.exists(conn, WaitingToDecide, traceID) {
 		return WaitingToDecide, NewCentralTraceStatus(traceID, WaitingToDecide)
 	}
 
-	if r.states[Collecting].exists(conn, traceID) {
+	if r.states.exists(conn, Collecting, traceID) {
 		return Collecting, NewCentralTraceStatus(traceID, Collecting)
 	}
 
@@ -267,11 +311,11 @@ func (r *RedisBasicStore) removeTraces(traceIDs []string) error {
 		return err
 	}
 
-	return r.states[AwaitingDecision].remove(conn, traceIDs...)
+	return r.states.remove(conn, AwaitingDecision, traceIDs...)
 }
 
 func (r *RedisBasicStore) changeTraceStatus(conn redis.Conn, traceIDs []string, fromState, toState CentralTraceState) error {
-	err := r.states[fromState].move(conn, r.states[toState], traceIDs...)
+	err := r.states.toNextState(conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
 	if err != nil {
 		return err
 	}
@@ -285,16 +329,20 @@ func (r *RedisBasicStore) changeTraceStatus(conn redis.Conn, traceIDs []string, 
 // for example, an entry in the hash would be: "trace1:trace" -> "state:DecisionKeep, rate:100, reason:reason1"
 // spans are stored in a redis hash with the key being the trace ID and each field being a span ID and the value being the serialized CentralSpan.
 // for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
-type tracesStore struct{}
+type tracesStore struct {
+	clock clockwork.Clock
+}
 
-func newTraceStatusStore() *tracesStore {
-	return &tracesStore{}
+func newTraceStatusStore(clock clockwork.Clock) *tracesStore {
+	return &tracesStore{
+		clock: clock,
+	}
 }
 
 func (t *tracesStore) addStatus(conn redis.Conn, span *CentralSpan) error {
 	trace := &CentralTraceStatus{
 		TraceID:   span.TraceID,
-		timestamp: time.Now().UTC(),
+		timestamp: t.clock.Now().UTC(),
 	}
 
 	_, err := conn.SetHashTTL(t.traceStatusKey(span.TraceID), trace, expirationForTraceStatus)
@@ -442,57 +490,83 @@ func getAllSpans(conn redis.Conn, traceID string) ([]*CentralSpan, *CentralSpan,
 	return spans, rootSpan, nil
 }
 
-// traceStateMap is a map of trace IDs to their state.
+// TraceStateProcessor is a map of trace IDs to their state.
 // It's used to atomically move traces between states and to get all traces in a state.
 // In order to also record the time of the state change, we also store traceID:timestamp
 // in a hash using <state>:traces:time as the hash key.
 // By using a hash for the timestamps, we can easily get the timestamp for a trace based
 // on it's current state.
-type traceStateMap struct {
-	state       CentralTraceState
-	changeState redis.Script
+
+type traceStateProcessorConfig struct {
+	reaperRunInterval time.Duration
+	maxTraceRetention time.Duration
+	changeState       redis.Script
 }
 
-func newTraceStateMap(changeState redis.Script, state CentralTraceState) *traceStateMap {
-	s := &traceStateMap{
-		state:       state,
-		changeState: changeState,
+type testStateProcessor struct {
+	states       []CentralTraceState
+	config       traceStateProcessorConfig
+	clock        clockwork.Clock
+	reaperTicker clockwork.Ticker
+}
+
+func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock) *testStateProcessor {
+	if cfg.reaperRunInterval == 0 {
+		cfg.reaperRunInterval = 10 * time.Second
+	}
+	if cfg.maxTraceRetention == 0 {
+		cfg.maxTraceRetention = 24 * time.Hour
+	}
+	s := &testStateProcessor{
+		states: []CentralTraceState{
+			Collecting,
+			WaitingToDecide,
+			ReadyForDecision,
+			AwaitingDecision,
+		},
+		config:       cfg,
+		clock:        clock,
+		reaperTicker: clock.NewTicker(cfg.reaperRunInterval),
 	}
 
-	go s.cleanupExpiredTraces()
-
 	return s
+}
+
+func (t *testStateProcessor) Stop() {
+	if t.reaperTicker != nil {
+		t.reaperTicker.Stop()
+	}
 }
 
 // addTrace stores the traceID into a set and insert the current time into
 // a list. The list is used to keep track of the time the trace was added to
 // the state. The set is used to check if the trace is in the state.
-func (t *traceStateMap) newTrace(conn redis.Conn, traceID string) error {
-	if !t.isValidNextState(conn, Collecting, traceID) {
+func (t *testStateProcessor) addNewTrace(conn redis.Conn, traceID string) error {
+	if !t.isValidStateChange(conn, newTraceStateChangeEvent(Unknown, Collecting), traceID) {
 		return nil
 	}
 
-	return conn.ZAdd(t.stateByTraceIDsKey(), []any{time.Now().Unix(), traceID})
+	return conn.ZAdd(t.stateByTraceIDsKey(Collecting), []any{t.clock.Now().Unix(), traceID})
 }
 
-func (t *traceStateMap) stateByTraceIDsKey() string {
-	return fmt.Sprintf("%s:traces", t.state)
+func (t *testStateProcessor) stateByTraceIDsKey(state CentralTraceState) string {
+	return fmt.Sprintf("%s:traces", state)
 }
 
-func (t *traceStateMap) traceStatesKey(traceID string) string {
+func (t *testStateProcessor) traceStatesKey(traceID string) string {
 	return fmt.Sprintf("%s:states", traceID)
 }
 
-func (t *traceStateMap) getAllTraces(conn redis.Conn) ([]string, error) {
-	results, err := conn.ZRange(t.stateByTraceIDsKey(), 0, -1)
+func (t *testStateProcessor) allTraceIDs(conn redis.Conn, state CentralTraceState) ([]string, error) {
+	results, err := conn.ZRange(t.stateByTraceIDsKey(state), 0, -1)
 	if err != nil {
 		return nil, err
 	}
 	return results, nil
 }
 
-func (t *traceStateMap) getTraces(conn redis.Conn, traceIDs []string) (map[string]time.Time, error) {
-	timestamps, err := conn.ZMScore(t.stateByTraceIDsKey(), traceIDs)
+func (t *testStateProcessor) traceIDsWithTimestamp(conn redis.Conn, state CentralTraceState, traceIDs []string) (map[string]time.Time, error) {
+	timestamps, err := conn.ZMScore(t.stateByTraceIDsKey(state), traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -509,8 +583,8 @@ func (t *traceStateMap) getTraces(conn redis.Conn, traceIDs []string) (map[strin
 	return traces, nil
 }
 
-func (t *traceStateMap) exists(conn redis.Conn, traceID string) bool {
-	exist, err := conn.ZExist(t.stateByTraceIDsKey(), traceID)
+func (t *testStateProcessor) exists(conn redis.Conn, state CentralTraceState, traceID string) bool {
+	exist, err := conn.ZExist(t.stateByTraceIDsKey(state), traceID)
 	if err != nil {
 		return false
 	}
@@ -518,45 +592,96 @@ func (t *traceStateMap) exists(conn redis.Conn, traceID string) bool {
 	return exist
 }
 
-func (t *traceStateMap) remove(conn redis.Conn, traceIDs ...string) error {
-	return conn.ZRemove(t.stateByTraceIDsKey(), traceIDs)
+func (t *testStateProcessor) remove(conn redis.Conn, state CentralTraceState, traceIDs ...string) error {
+	return conn.ZRemove(t.stateByTraceIDsKey(state), traceIDs)
 }
 
-// in order to create a new sorted set, we need to call ZADD for each traceID
-// that operation takes O(N) time,	where N is the number of traceIDs
-// Instead, sorted set supports checking multiple members for existence in a
-// single command. Since we only have 6 states, that operation is constant.
-// However, if most of the requests are for less than 6 traceIDs, then it's
-// better to use the ZADD command.
-
-func (t *traceStateMap) move(conn redis.Conn, destination *traceStateMap, traceIDs ...string) error {
-
-	eligible := make([]string, 0, len(traceIDs))
+func (t *testStateProcessor) toNextState(conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) error {
+	eligible := make([]any, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
-		if t.isValidNextState(conn, destination.state, traceID) {
+		if t.isValidStateChangeThroughLua(conn, changeEvent, traceID) {
 			eligible = append(eligible, traceID)
 		}
+	}
+
+	if len(eligible) == 0 {
+		return errors.New("invalid state change event")
 	}
 
 	// store the timestamp as a part of the entry in the trace state set
 	// make it into a sorted set
 	// the timestamp should be a fixed length unix timestamp
-	entries := make([]any, len(eligible)*2)
-	for i := range entries {
-		if i%2 == 0 {
-			entries[i] = time.Now().Unix()
-			continue
-		}
-		entries[i] = eligible[i/2]
+	timestamps := make([]int64, len(eligible))
+	for i := range eligible {
+		timestamps[i] = t.clock.Now().Unix()
 	}
 
 	// only add traceIDs to the destination if they don't already exist
-	return conn.ZMove(t.stateByTraceIDsKey(), destination.stateByTraceIDsKey(), entries)
+	return conn.ZMove(t.stateByTraceIDsKey(changeEvent.current), t.stateByTraceIDsKey(changeEvent.next), timestamps, eligible)
+}
+
+func (t *testStateProcessor) isValidStateChange(conn redis.Conn, stateChange stateChangeEvent, traceID string) bool {
+	// We don't need to call unwatch here because `RPushTTL` is executed in a transaction
+	// Redis will automatically discard the watch after the transaction is executed
+	current := stateChange.current
+	_, err := conn.Watch(t.traceStatesKey(traceID), func(c redis.Conn) error {
+		currentStateRecorded, err := conn.LIndexString(t.traceStatesKey(traceID), -1)
+		if err != nil {
+			return err
+		}
+
+		if currentStateRecorded != "" {
+			current = CentralTraceState(currentStateRecorded)
+		}
+
+		stateChangeEvent := newTraceStateChangeEvent(current, stateChange.next)
+		if _, ok := validStateChangeEvents[stateChangeEvent.string()]; !ok {
+			return fmt.Errorf("invalid state change event")
+		}
+		if ok, err := conn.RPushTTL(t.traceStatesKey(traceID), stateChange.next.String(), expirationForTraceState); err != nil || !ok {
+			return err
+		}
+
+		return nil
+	})
+	return err == nil
 }
 
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
 // the configured time.
-func (t *traceStateMap) cleanupExpiredTraces() {
+func (t *testStateProcessor) cleanupExpiredTraces(ctx context.Context, redis redis.Client) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.reaperTicker.Chan():
+			t.removeExpiredTraces(redis)
+		}
+	}
+}
+
+func (t *testStateProcessor) removeExpiredTraces(client redis.Client) {
+	conn := client.Get()
+	defer conn.Close()
+
+	// get the traceIDs that have been in the state for longer than the expiration time
+	for _, state := range t.states {
+		traceIDs, err := conn.ZRangeByScoreString(t.stateByTraceIDsKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).Unix())
+		if err != nil {
+			return
+		}
+
+		if len(traceIDs) == 0 {
+			continue
+		}
+
+		// remove the traceIDs from the state map
+		err = t.remove(conn, state, traceIDs...)
+		if err != nil {
+			continue
+		}
+	}
+
 }
 
 // get the latest state from the state list
@@ -564,12 +689,8 @@ func (t *traceStateMap) cleanupExpiredTraces() {
 // if it is, then add the state to state list
 // and add the trace to the state set
 // if it's not, then don't add the state to the state list	and abort
-func (t *traceStateMap) isValidNextState(conn redis.Conn, next CentralTraceState, traceID string) bool {
-	current := t.state
-	if t.state == next {
-		current = Unknown
-	}
-	result, err := t.changeState.Do(context.TODO(), conn, t.traceStatesKey(traceID), validStateChangeEventsKey, current.String(), next.String(), expirationForTraceState.Seconds())
+func (t *testStateProcessor) isValidStateChangeThroughLua(conn redis.Conn, stateChange stateChangeEvent, traceID string) bool {
+	result, err := t.config.changeState.Do(context.TODO(), conn, t.traceStatesKey(traceID), validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(), expirationForTraceState.Seconds())
 	if err != nil {
 		return false
 	}
@@ -593,11 +714,13 @@ const stateChangeScript = `
   if (currentState == nil or currentState == false) then
 	currentState = previousState
   end
+
   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
-  if (not changeEventIsValid) then 
+  if (changeEventIsValid == 0) then 
     do return -1 end
   end
+
 
   redis.call('RPUSH', traceStateKey, nextState)
   redis.call('EXPIRE', traceStateKey, ttl)
@@ -634,3 +757,13 @@ func newTraceStateChangeEvent(current, next CentralTraceState) stateChangeEvent 
 func (s stateChangeEvent) string() string {
 	return fmt.Sprintf("%s-%s", s.current, s.next)
 }
+
+// isValidStateChange
+//BenchmarkStoreGetTrace-12    	    3793	    340487 ns/op	   15467 B/op	     108 allocs/op
+//PASS
+//ok  	github.com/honeycombio/refinery/centralstore	3.520s
+
+// isValidStateChangeThroughLua
+//BenchmarkStoreGetTrace-12    	    3916	    339635 ns/op	   15398 B/op	     107 allocs/op
+//PASS
+//ok  	github.com/honeycombio/refinery/centralstore	3.564s
