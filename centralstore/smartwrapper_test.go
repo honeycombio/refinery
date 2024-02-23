@@ -28,12 +28,9 @@ func standardOptions() SmartWrapperOptions {
 
 type remoteStoreType string
 
-var (
-	localStore remoteStoreType = "local"
-	redisStore remoteStoreType = "redis"
-)
+var storeType = "local"
 
-func makeRemoteStore(storeType remoteStoreType) BasicStorer {
+func makeRemoteStore() BasicStorer {
 	switch storeType {
 	case "mysql":
 		// this connection string works if you don't have a root password on your local mysql
@@ -44,13 +41,13 @@ func makeRemoteStore(storeType remoteStoreType) BasicStorer {
 	// 	s.DeleteAllData()
 	// 	s.SetupDatabase()
 	// 	return s
-	case redisStore:
+	case "redis":
 		return NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       10000,
 			SizeCheckInterval: config.Duration(10 * time.Second),
 		}})
-	case localStore:
+	case "local":
 		return NewLocalRemoteStore()
 	}
 	return nil
@@ -58,7 +55,7 @@ func makeRemoteStore(storeType remoteStoreType) BasicStorer {
 
 func TestSingleSpanGetsCollected(t *testing.T) {
 	sopts := standardOptions()
-	remoteStore := makeRemoteStore(redisStore)
+	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
 	store := NewSmartWrapper(sopts, remoteStore)
 	defer store.Stop()
