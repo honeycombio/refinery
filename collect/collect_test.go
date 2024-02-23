@@ -188,9 +188,11 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	}, 5*time.Second, conf.SendTickerVal*2, "should be at least two events transmitted")
 
 	transmission.Mux.RLock()
-	assert.Nil(t, transmission.Events[1].Data["meta.refinery.original_sample_rate"],
-		"metadata should not be populated when zero")
+	r0, ok0 := transmission.Events[0].Data["meta.refinery.original_sample_rate"]
+	r1, ok1 := transmission.Events[1].Data["meta.refinery.original_sample_rate"]
 	transmission.Mux.RUnlock()
+	assert.NotEqual(t, ok0, ok1, "original sample rate should be populated on one event but not the other")
+	assert.NotEqual(t, r0, r1, "original sample rate should be populated with the original sample rate")
 }
 
 // HoneyComb treats a missing or 0 SampleRate the same as 1, but
