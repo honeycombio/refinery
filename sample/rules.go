@@ -223,7 +223,10 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	return false
 }
 
-func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (interface{}, bool) {
+// extractValueFromSpan extracts the `value` found at the first of the given condition's fields found on the input `span`.
+// It returns the extracted `value` and an `exists` boolean indicating whether any of the condition's fields are present
+// on input the span.
+func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (value interface{}, exists bool) {
 	// If the condition is a descendant count, we extract the count from trace and return it.
 	if f, ok := condition.GetComputedField(); ok {
 		switch f {
@@ -233,13 +236,17 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 	}
 
 	// whether this condition is matched by this span.
-	var value any
-	var exists bool
 	for _, field := range condition.Fields {
 		// check if rule uses root span context
 		if strings.HasPrefix(field, RootPrefix) {
-			field = field[len(RootPrefix):]
-			span = trace.RootSpan
+			// make sure root span exists
+			if trace.RootSpan != nil {
+				field = field[len(RootPrefix):]
+				span = trace.RootSpan
+			} else {
+				// we wanted root span but this trace doesn't have one, so just skip it
+				continue
+			}
 		}
 
 		value, exists = span.Data[field]
@@ -258,7 +265,6 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 			}
 		}
 	}
-
 	return nil, false
 }
 
