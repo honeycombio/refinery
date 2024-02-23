@@ -625,7 +625,7 @@ groups:
           span being processed.
           
           When using the `not-exists` operator to check a condition with a `root.` prefix, if the root
-          span does not exist on the trace, then the condition will evaluate to false.
+          span does not exist on the trace, as in the case when a root span is taking a long time to complete and does not arrive before a sampling decision is being made, then the condition will evaluate to false.
 
       - name: Fields
         type: stringarray
