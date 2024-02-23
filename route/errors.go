@@ -2,6 +2,7 @@ package route
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"runtime/debug"
 
@@ -72,4 +73,26 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	jsonErrMsg := []byte(`{"source":"refinery","error":"` + errmsg + `"}`)
 
 	w.Write(jsonErrMsg)
+}
+
+func (r *Router) handleOTLPFailureResponse(w http.ResponseWriter, req *http.Request, otlpErr husky.OTLPError) {
+	r.Logger.Error().Logf(otlpErr.Error())
+
+	if otlpErr != husky.ErrInvalidContentType {
+		err := husky.WriteOtlpHttpFailureResponse(w, req, otlpErr)
+		if err != nil {
+			// If we made it here we had a problem writing an OTLP HTTP response
+			resp := fmt.Sprintf("failed to write otlp http response, %v", err.Error())
+			r.Logger.Error().Logf(resp)
+			w.Header().Set("Content-Type", "text/plain")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, resp)
+		}
+	} else {
+		// Since we have an invalid content type for an OTLP HTTP response we choose to use to text/plain
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(otlpErr.HTTPStatusCode)
+		_, _ = io.WriteString(w, otlpErr.Message)
+	}
+
 }

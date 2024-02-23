@@ -317,7 +317,7 @@ func TestOTLPHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.postOTLP(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
-		assert.Equal(t, "", w.Body.String())
+		assert.Equal(t, "{}", w.Body.String())
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
 		mockTransmission.Flush()
@@ -409,7 +409,7 @@ func TestOTLPHandler(t *testing.T) {
 
 		w := httptest.NewRecorder()
 		router.postOTLP(w, request)
-		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "not found in list of authorized keys")
 
 		assert.Equal(t, 0, len(mockTransmission.Events))
