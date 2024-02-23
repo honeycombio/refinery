@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2024-02-22 at 18:03:11 UTC.
+It was automatically generated on 2024-02-23 at 17:42:45 UTC.
 
 ## The Rules file
 
@@ -543,7 +543,9 @@ The only prefix currently supported is `root`, as in `root.http.status`.
 Specifying `root.` causes the condition to be evaluated against the root span.
 For example, if the `Field` is `root.url`, then the condition will be processed using the url field from the root span.
 The setting `Scope: span` for a rule does not change the meaning of this prefix -- the condition is still evaluated on the root span and is treated as if it were part of the  span being processed.
-When using the `exists` or `not-exists` operators to check a field containing a `root.` prefix, if the trace has no root span, it will be treated as if the field did not exist.
+When using the `root.` prefix on a field with a `not-exists` operator, include the `has-root-span: true` condition in the rule.
+The `not-exists` condition on a `root.`-prefixed field will evaluate to false if the existence of the root span is not checked and the root span does not exist.
+The primary reason a root span is not present on a trace when a sampling decision is being made is when the root span takes longer to complete than the configured TraceTimeout.
 
 Type: `string`
 
@@ -553,7 +555,7 @@ An array of field names to check.
 These can name any field in the trace.
 The fields are checked in the order defined here, and the first named field that contains a value will be used for the condition.
 Only the first populated field will be used, even if the condition fails.
-If a `root.` prefix is present on a field but the trace does not contain a root span, that field will be skipped.
+If a `root.` prefix is present on a field, but the root span is not on the trace, that field will be skipped.
 If none of the fields are present, then the condition will not match.
 The comparison is case-sensitive.
 All fields are checked as individual fields before any of them are checked as nested fields (see `CheckNestedFields`).
