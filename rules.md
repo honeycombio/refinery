@@ -553,7 +553,7 @@ An array of field names to check.
 These can name any field in the trace.
 The fields are checked in the order defined here, and the first named field that contains a value will be used for the condition.
 Only the first populated field will be used, even if the condition fails.
-If a `root.` prefix is present on a field but the root span is not on the trace, that field will be skipped.
+If a `root.` prefix is present on a field but the trace does not contain a root span, that field will be skipped.
 If none of the fields are present, then the condition will not match.
 The comparison is case-sensitive.
 All fields are checked as individual fields before any of them are checked as nested fields (see `CheckNestedFields`).
