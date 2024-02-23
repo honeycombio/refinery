@@ -243,6 +243,7 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 				field = field[len(RootPrefix):]
 				span = trace.RootSpan
 			} else {
+				// we wanted root span but this trace doesn't have one, so just skip it
 				continue
 			}
 		}
