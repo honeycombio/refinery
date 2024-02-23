@@ -2611,17 +2611,97 @@ func TestRulesRootSpanContext(t *testing.T) {
 			ExpectedRate: 10,
 			ExpectedName: "no root span, checking other spans in trace",
 		},
-		{ // practical test case where user is checking for existence of root span
+		{
 			Rules: &config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
-						Name:       "no root span, checking that trace id does not exist",
-						SampleRate: 10,
+						Name:       "NotExists🦶🔫/root span exists, rule uses has-root-span guard, field is missing",
+						SampleRate: 2,
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
-								Fields:   []string{"root.trace_id", "trace_id"},
+								Operator: config.HasRootSpan,
+								Value:    true,
+							},
+							{
+								Field:    "root.service.name",
 								Operator: config.NotExists,
-								Value:    "abc123",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "abc123",
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"name.of.service": "is not service.name!",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"foo": true,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 2,
+			ExpectedName: "NotExists🦶🔫/root span exists, rule uses has-root-span guard, field is missing",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "NotExists🦶🔫/root span exists, rule uses has-root-span guard, field is present",
+						SampleRate: 2,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Operator: config.HasRootSpan,
+								Value:    true,
+							},
+							{
+								Field:    "root.service.name",
+								Operator: config.NotExists,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "abc123",
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"service.name": "totally present",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"foo": true,
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "NotExists🦶🔫/no root span, no has-root-span guard (not recommended!)",
+						SampleRate: 2,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							// note: no HasRootSpan guard condition to confirm presence of a root span!
+							{
+								Field:    "root.service.name",
+								Operator: config.NotExists,
 							},
 						},
 					},
@@ -2631,23 +2711,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"trace_id": "abc123",
-							"foo":      true,
+							"service.name": "no trace id on this test span, so it's not root",
 						},
 					},
 				},
 				{
 					Event: types.Event{
 						Data: map[string]interface{}{
-							"trace_id": "abc123",
-							"foo":      true,
+							"foo": true,
 						},
 					},
 				},
 			},
 			ExpectedKeep: true,
-			ExpectedRate: 1,
-			ExpectedName: "no rule matched",
+			ExpectedRate: 2,
+			ExpectedName: "NotExists🦶🔫/no root span, no has-root-span guard (not recommended!)",
 		},
 	}
 
