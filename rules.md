@@ -543,7 +543,7 @@ The only prefix currently supported is `root`, as in `root.http.status`.
 Specifying `root.` causes the condition to be evaluated against the root span.
 For example, if the `Field` is `root.url`, then the condition will be processed using the url field from the root span.
 The setting `Scope: span` for a rule does not change the meaning of this prefix -- the condition is still evaluated on the root span and is treated as if it were part of the  span being processed.
-When using the `not-exists` operator to check a condition with a `root.` prefix, if the root span does not exist on the trace then the condition will evaluate to false.
+When using the `exists` or `not-exists` operators to check a field containing a `root.` prefix, if the trace has no root span, it will be treated as if the field did not exist.
 
 Type: `string`
 
