@@ -223,7 +223,8 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 	return false
 }
 
-// exists does it refer to valid cond field present
+// extractValueFromSpan extracts from a span the value found at the first of the given condition's fields found on a span.
+// It returns the extracted value and an exists boolean indicating whether any of the condition's fields are present on the span.
 func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (value interface{}, exists bool) {
 	// If the condition is a descendant count, we extract the count from trace and return it.
 	if f, ok := condition.GetComputedField(); ok {
