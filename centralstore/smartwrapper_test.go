@@ -9,6 +9,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func duration(s string) config.Duration {
@@ -196,7 +197,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	traceids := make([]string, 0)
 
 	for t := 0; t < numberOfTraces; t++ {
-		tid := fmt.Sprintf("trace%d", t)
+		tid := fmt.Sprintf("trace%02d", t)
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -234,10 +235,11 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	}, 3*time.Second, 100*time.Millisecond)
 
 	// get the traces in the Ready state
-	traceIDs, err := store.GetTracesNeedingDecision(numberOfTraces - 1)
-	assert.NoError(t, err)
-	assert.Equal(t, numberOfTraces-1, len(traceIDs))
-	assert.EqualValues(t, traceids[:numberOfTraces-1], traceIDs)
+	toDecide, err := store.GetTracesNeedingDecision(numberOfTraces)
+	require.NoError(t, err)
+	sort.Strings(toDecide)
+	assert.Equal(t, numberOfTraces, len(toDecide))
+	assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
 }
 
 func TestSetTraceStatuses(t *testing.T) {
