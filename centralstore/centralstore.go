@@ -36,8 +36,8 @@ type CentralTraceState string
 const (
 	Unknown          CentralTraceState = "unknown"
 	Collecting       CentralTraceState = "collecting"
-	WaitingToDecide  CentralTraceState = "waiting_to_decide"
-	ReadyForDecision CentralTraceState = "ready_for_decision"
+	DecisionDelay    CentralTraceState = "decision_delay"
+	ReadyToDecide    CentralTraceState = "ready_to_decide"
 	AwaitingDecision CentralTraceState = "awaiting_decision"
 	DecisionKeep     CentralTraceState = "decision_keep"
 	DecisionDrop     CentralTraceState = "decision_drop"

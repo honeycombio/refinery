@@ -234,11 +234,13 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool
 	return nil, "", false
 }
 
+// Test checks if a trace was kept or dropped, and returns the reason if it was kept.
+// The bool return value is true if the trace was found in the cache.
 func (c *cuckooSentCache) Test(traceID string) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(traceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
-		return &cuckooDroppedRecord{}, "", false
+		return &cuckooDroppedRecord{}, "", true
 	}
 	// was it kept?
 	c.keptMut.Lock()
