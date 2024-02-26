@@ -3,11 +3,13 @@ package centralstore
 import (
 	"fmt"
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func duration(s string) config.Duration {
@@ -25,8 +27,6 @@ func standardOptions() SmartWrapperOptions {
 	}
 	return sopts
 }
-
-type remoteStoreType string
 
 var storeType = "local"
 
@@ -112,7 +112,7 @@ func TestSingleTraceOperation(t *testing.T) {
 		assert.Equal(collect, 1, len(states))
 		if len(states) > 0 {
 			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, WaitingToDecide, states[0].State)
+			assert.Equal(collect, DecisionDelay, states[0].State)
 		}
 	}, 1*time.Second, 10*time.Millisecond)
 
@@ -123,7 +123,7 @@ func TestSingleTraceOperation(t *testing.T) {
 		assert.Equal(collect, 1, len(states))
 		if len(states) > 0 {
 			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, WaitingToDecide, states[0].State)
+			assert.Equal(collect, DecisionDelay, states[0].State)
 		}
 	}, 1*time.Second, 10*time.Millisecond)
 }
@@ -175,7 +175,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		assert.NoError(collect, err)
 		assert.Equal(collect, 10, len(states))
 		for _, state := range states {
-			assert.Equal(collect, ReadyForDecision, state.State)
+			assert.Equal(collect, ReadyToDecide, state.State)
 		}
 	}, 3*time.Second, 100*time.Millisecond)
 
@@ -201,7 +201,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	traceids := make([]string, 0)
 
 	for t := 0; t < numberOfTraces; t++ {
-		tid := fmt.Sprintf("trace%d", t)
+		tid := fmt.Sprintf("trace%02d", t)
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -234,15 +234,109 @@ func TestReadyForDecisionLoop(t *testing.T) {
 		assert.NoError(collect, err)
 		assert.Equal(collect, numberOfTraces, len(states))
 		for _, state := range states {
-			assert.Equal(collect, ReadyForDecision, state.State)
+			assert.Equal(collect, ReadyToDecide, state.State)
 		}
 	}, 3*time.Second, 100*time.Millisecond)
 
 	// get the traces in the Ready state
-	traceIDs, err := store.GetTracesNeedingDecision(numberOfTraces - 1)
+	toDecide, err := store.GetTracesNeedingDecision(numberOfTraces)
+	require.NoError(t, err)
+	sort.Strings(toDecide)
+	assert.Equal(t, numberOfTraces, len(toDecide))
+	assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
+}
+
+func TestSetTraceStatuses(t *testing.T) {
+	sopts := standardOptions()
+	remoteStore := makeRemoteStore()
+	defer cleanupRedisStore(remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore)
+	defer store.Stop()
+
+	numberOfTraces := 5
+	traceids := make([]string, 0)
+
+	for t := 0; t < numberOfTraces; t++ {
+		tid := fmt.Sprintf("trace%02d", t)
+		traceids = append(traceids, tid)
+		// write 9 child spans to the store
+		for s := 1; s < 10; s++ {
+			span := &CentralSpan{
+				TraceID:  tid,
+				SpanID:   fmt.Sprintf("span%d", s),
+				ParentID: fmt.Sprintf("span%d", s-1),
+			}
+			store.WriteSpan(span)
+		}
+		// now write the root span
+		span := &CentralSpan{
+			TraceID: tid,
+			SpanID:  "span0",
+		}
+		store.WriteSpan(span)
+	}
+
+	assert.Equal(t, numberOfTraces, len(traceids))
+	fmt.Println(traceids)
+	assert.Eventually(t, func() bool {
+		states, err := store.GetStatusForTraces(traceids)
+		fmt.Println(states, err)
+		return err == nil && len(states) == numberOfTraces
+	}, 1*time.Second, 100*time.Millisecond)
+
+	// wait for it to reach the Ready state
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		states, err := store.GetStatusForTraces(traceids)
+		assert.NoError(collect, err)
+		assert.Equal(collect, numberOfTraces, len(states))
+		for _, state := range states {
+			assert.Equal(collect, ReadyToDecide, state.State)
+		}
+	}, 3*time.Second, 100*time.Millisecond)
+
+	// get the traces in the Ready state
+	toDecide, err := store.GetTracesNeedingDecision(numberOfTraces)
 	assert.NoError(t, err)
-	assert.Equal(t, numberOfTraces-1, len(traceIDs))
-	assert.EqualValues(t, traceids[:numberOfTraces-1], traceIDs)
+	assert.Equal(t, numberOfTraces, len(toDecide))
+	sort.Strings(toDecide)
+	assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
+
+	statuses := make([]*CentralTraceStatus, 0)
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		statuses, err = store.GetStatusForTraces(traceids)
+		assert.NoError(collect, err)
+		assert.Equal(collect, numberOfTraces, len(statuses))
+		for _, state := range statuses {
+			assert.Equal(collect, AwaitingDecision, state.State)
+		}
+	}, 3*time.Second, 100*time.Millisecond)
+
+	for _, status := range statuses {
+		if status.TraceID == traceids[0] {
+			status.State = DecisionKeep
+			status.KeepReason = "because"
+		} else {
+			status.State = DecisionDrop
+		}
+	}
+	err = store.SetTraceStatuses(statuses)
+	assert.NoError(t, err)
+
+	// we need to give the dropped traces cache a chance to run or it might not process everything
+	time.Sleep(50 * time.Millisecond)
+	statuses, err = store.GetStatusForTraces(traceids)
+	assert.NoError(t, err)
+	assert.Equal(t, numberOfTraces, len(statuses))
+	for _, status := range statuses {
+		if status.TraceID == traceids[0] {
+			assert.Equal(t, DecisionKeep, status.State)
+			// TODO: save the reason in the reason cache correctly
+			// assert.Equal(t, "because", status.KeepReason)
+		} else {
+			assert.Equal(t, DecisionDrop, status.State)
+		}
+	}
+
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
@@ -352,7 +446,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetTracesForState(ReadyForDecision)
+		store.GetTracesForState(ReadyToDecide)
 	}
 }
 
