@@ -39,13 +39,25 @@ type RedisBasicStoreOptions struct {
 var _ BasicStorer = (*RedisBasicStore)(nil)
 
 func NewRedisBasicStore(opt RedisBasicStoreOptions) *RedisBasicStore {
-	var host string
+	host := "localhost:6379"
 	if opt.Host == "" {
-		host = "localhost:6379"
+		host = opt.Host
 	}
 
 	if opt.MaxTraceRetention == 0 {
 		opt.MaxTraceRetention = 24 * time.Hour
+	}
+
+	if opt.Cache.DroppedSize == 0 {
+		opt.Cache.DroppedSize = 10000
+	}
+
+	if opt.Cache.KeptSize == 0 {
+		opt.Cache.KeptSize = 100
+	}
+
+	if opt.Cache.SizeCheckInterval == 0 {
+		opt.Cache.SizeCheckInterval = config.Duration(10 * time.Second)
 	}
 
 	redisClient := redis.NewClient(&redis.Config{
@@ -113,7 +125,10 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 	case DecisionDrop:
 		return nil
 	case DecisionKeep, AwaitingDecision:
-		_ = r.traces.incrementSpanCounts(conn, span.TraceID, span.Type)
+		err := r.traces.incrementSpanCounts(conn, span.TraceID, span.Type)
+		if err != nil {
+			r.errs <- err
+		}
 	case Collecting:
 		if span.ParentID == "" {
 			err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
@@ -261,6 +276,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toStat
 	if toState == DecisionDrop {
 		traces, err := r.traces.getTraceStatuses(conn, traceIDs)
 		if err != nil {
+			r.errs <- err
 			return err
 		}
 
@@ -273,6 +289,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toStat
 
 	err := r.changeTraceStatus(conn, traceIDs, fromState, toState)
 	if err != nil {
+		r.errs <- err
 		return err
 	}
 
@@ -289,7 +306,7 @@ func (r *RedisBasicStore) KeepTraces(statuses []*CentralTraceStatus) error {
 	}
 	err := r.changeTraceStatus(conn, traceIDs, AwaitingDecision, DecisionKeep)
 	if err != nil {
-		return err
+		r.errs <- err
 	}
 
 	return nil
@@ -474,11 +491,11 @@ func (t *tracesStore) incrementSpanCountsCMD(traceID string, spanType SpanType) 
 	var field string
 	switch spanType {
 	case SpanTypeEvent:
-		field = "span_count_event"
+		field = "EventCount"
 	case SpanTypeLink:
-		field = "span_count_link"
+		field = "LinkCount"
 	default:
-		field = "span_count"
+		field = "Count"
 	}
 
 	return redis.NewIncrByHashCommand(t.traceStatusKey(traceID), field, 1), nil
@@ -611,7 +628,7 @@ func (t *traceStateProcessor) addNewTrace(conn redis.Conn, traceID string) error
 		return nil
 	}
 
-	return conn.ZAdd(t.stateByTraceIDsKey(Collecting), []any{t.clock.Now().Unix(), traceID})
+	return conn.ZAdd(t.stateByTraceIDsKey(Collecting), []any{t.clock.Now().UnixNano(), traceID})
 }
 
 func (t *traceStateProcessor) stateByTraceIDsKey(state CentralTraceState) string {
@@ -646,7 +663,7 @@ func (t *traceStateProcessor) traceIDsWithTimestamp(conn redis.Conn, state Centr
 			traces[traceIDs[i]] = time.Time{}
 			continue
 		}
-		traces[traceIDs[i]] = time.Unix(value, 0)
+		traces[traceIDs[i]] = time.Unix(0, value)
 	}
 
 	return traces, nil
@@ -682,7 +699,7 @@ func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChan
 	// the timestamp should be a fixed length unix timestamp
 	timestamps := make([]int64, len(eligible))
 	for i := range eligible {
-		timestamps[i] = t.clock.Now().Unix()
+		timestamps[i] = t.clock.Now().UnixNano()
 	}
 
 	// only add traceIDs to the destination if they don't already exist

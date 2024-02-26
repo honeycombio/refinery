@@ -155,7 +155,8 @@ func (c *DefaultConn) Close() error {
 }
 
 func (c *DefaultConn) Del(keys ...string) (int64, error) {
-	return redis.Int64(c.conn.Do("DEL", keys))
+	args := redis.Args{}.AddFlat(keys)
+	return redis.Int64(c.conn.Do("DEL", args...))
 }
 
 func (c *DefaultConn) Exists(key string) (bool, error) {
@@ -619,7 +620,7 @@ func (c *DefaultConn) Exec(commands ...Command) error {
 		}
 	}
 
-	_, err = c.conn.Do("EXEC")
+	_, err = redis.Values(c.conn.Do("EXEC"))
 	if err != nil {
 		return err
 	}
