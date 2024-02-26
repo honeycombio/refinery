@@ -116,12 +116,12 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 		_ = r.traces.incrementSpanCounts(conn, span.TraceID, span.Type)
 	case Collecting:
 		if span.ParentID == "" {
-			err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, WaitingToDecide), span.TraceID)
+			err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
 			if err != nil {
 				r.errs <- err
 			}
 		}
-	case WaitingToDecide, ReadyForDecision:
+	case DecisionDelay, ReadyToDecide:
 	case Unknown:
 		err := r.states.addNewTrace(conn, span.TraceID)
 		if err != nil {
@@ -235,7 +235,7 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(n int) ([]string, error) {
 	conn := r.client.Get()
 	defer conn.Close()
 
-	traceIDs, err := r.states.allTraceIDs(conn, ReadyForDecision, n)
+	traceIDs, err := r.states.allTraceIDs(conn, ReadyToDecide, n)
 	if err != nil {
 		r.errs <- err
 		return nil, err
@@ -244,7 +244,7 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(n int) ([]string, error) {
 	if len(traceIDs) == 0 {
 		return nil, nil
 	}
-	err = r.changeTraceStatus(conn, traceIDs, ReadyForDecision, AwaitingDecision)
+	err = r.changeTraceStatus(conn, traceIDs, ReadyToDecide, AwaitingDecision)
 	if err != nil {
 		r.errs <- err
 		return nil, err
@@ -309,12 +309,12 @@ func (r *RedisBasicStore) findTraceStatus(conn redis.Conn, traceID string) (Cent
 		return AwaitingDecision, NewCentralTraceStatus(traceID, AwaitingDecision)
 	}
 
-	if r.states.exists(conn, ReadyForDecision, traceID) {
-		return ReadyForDecision, NewCentralTraceStatus(traceID, ReadyForDecision)
+	if r.states.exists(conn, ReadyToDecide, traceID) {
+		return ReadyToDecide, NewCentralTraceStatus(traceID, ReadyToDecide)
 	}
 
-	if r.states.exists(conn, WaitingToDecide, traceID) {
-		return WaitingToDecide, NewCentralTraceStatus(traceID, WaitingToDecide)
+	if r.states.exists(conn, DecisionDelay, traceID) {
+		return DecisionDelay, NewCentralTraceStatus(traceID, DecisionDelay)
 	}
 
 	if r.states.exists(conn, Collecting, traceID) {
@@ -568,8 +568,8 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 	s := &traceStateProcessor{
 		states: []CentralTraceState{
 			Collecting,
-			WaitingToDecide,
-			ReadyForDecision,
+			DecisionDelay,
+			ReadyToDecide,
 			AwaitingDecision,
 		},
 		config:       cfg,
@@ -786,7 +786,7 @@ const stateChangeScript = `
 
   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
-  if (changeEventIsValid == 0) then 
+  if (changeEventIsValid == 0) then
     do return -1 end
   end
 
@@ -804,10 +804,10 @@ func ensureValidStateChangeEvents(client redis.Client) error {
 
 	return conn.SAdd(validStateChangeEventsKey,
 		newTraceStateChangeEvent(Unknown, Collecting).string(),
-		newTraceStateChangeEvent(Collecting, WaitingToDecide).string(),
-		newTraceStateChangeEvent(WaitingToDecide, ReadyForDecision).string(),
-		newTraceStateChangeEvent(ReadyForDecision, AwaitingDecision).string(),
-		newTraceStateChangeEvent(AwaitingDecision, ReadyForDecision).string(),
+		newTraceStateChangeEvent(Collecting, DecisionDelay).string(),
+		newTraceStateChangeEvent(DecisionDelay, ReadyToDecide).string(),
+		newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision).string(),
+		newTraceStateChangeEvent(AwaitingDecision, ReadyToDecide).string(),
 	)
 }
 
