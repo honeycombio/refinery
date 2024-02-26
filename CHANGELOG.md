@@ -1,5 +1,21 @@
 # Refinery Changelog
 
+## 2.4.1 2024-02-26
+
+This is a bug fix release for matching fields in the root span context.
+
+### Fixes
+
+The implementation in v2.4.0 can crash if the trace's root span is not present at the time a sampling decision is being made.
+Root spans are often not present when the root span is taking longer to complete than the time configured for Refinery to wait for a trace's spans to arrive (`TraceTimeout`).
+This release contains a fix for this crash and is a recommended upgrade for anyone using this new feature.
+
+- fix: handle root prefix when no root span on trace (#1006) | [fchikwekwe](https://github.com/fchikwekwe)
+
+### Maintenance
+
+- refactor: add default true type (#998) | [fchikwekwe](https://github.com/fchikwekwe)
+
 ## 2.4.0 2024-2-20
 
 ## Features
@@ -7,7 +23,7 @@
 - Update refinery_rules.md | [fchikwekwe](https://github.com/fchikwekwe)
 - feat: allow user to sample on root span context (#981) | [fchikwekwe](https://github.com/fchikwekwe)
 
-## Fixes 
+## Fixes
 
 - fix: flaky TestOriginalSampleRateIsNotedInMetaField (#991) | [Robb Kidd](https://github.com/robbkidd)
 - chore: consolidate routine dependency updates (#994) | [Robb Kidd](https://github.com/robbkidd)

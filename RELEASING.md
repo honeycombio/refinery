@@ -16,13 +16,13 @@ been changes to `rules.md`, you may need to manually modify the `rules_complete.
     (the `git log` command can't do this automatically)
     - organize each commit based on their prefix into below three categories:
     ```
-        ## Features
+        ### Features
          - <a-commit-with-feat-prefix>
 
-        ## Fixes
+        ### Fixes
          - <a-commit-with-fix-prefix>
 
-        ## Maintenance
+        ### Maintenance
          - <a-commit-with-maintenance-prefix>
     ```
 5. Add a summary of release changes to [release notes](./RELEASE_NOTES.md)

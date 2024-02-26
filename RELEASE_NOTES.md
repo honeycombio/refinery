@@ -2,17 +2,25 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.4.1
+
+This is a bug fix release for matching fields in the root span context.
+
+The implementation in v2.4.0 can crash if the trace's root span is not present at the time a sampling decision is being made.
+Root spans are often not present when the root span is taking longer to complete than the time configured for Refinery to wait for a trace's spans to arrive (`TraceTimeout`).
+This release contains a fix for this crash and is a recommended upgrade for anyone using this new feature.
+
 ## Version 2.4.0
 
-This release includes an update to allow users to specify root span context in their rules. It also includes some bug 
+This release includes an update to allow users to specify root span context in their rules. It also includes some bug
 fixes, improvements, and dependency updates.
 
 ### Root Span Context
 
-Users can now specify rules that match only the root span of a trace (i.e. `root.http.status`). 
+Users can now specify rules that match only the root span of a trace (i.e. `root.http.status`).
 
-### Notable Fixes 
-* Previously, rules with a default of boolean `true` that we set to `false` by configuration would be overridden back to `true` when defaults were applied to the config. We have fixed this by using the `*bool` type for these values as well as adding helper functions to avoid strange behavior related to how booleans work in Go. 
+### Notable Fixes
+* Previously, rules with a default of boolean `true` that we set to `false` by configuration would be overridden back to `true` when defaults were applied to the config. We have fixed this by using the `*bool` type for these values as well as adding helper functions to avoid strange behavior related to how booleans work in Go.
 
 ## Version 2.3.0
 
