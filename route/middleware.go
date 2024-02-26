@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	husky "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -56,26 +55,6 @@ func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
 		}
 		err := fmt.Errorf("api key %s not found in list of authorized keys", apiKey)
 		r.handlerReturnWithError(w, ErrAuthNeeded, err)
-	})
-}
-
-func (r *Router) apiKeyCheckerOTLP(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		apiKey := req.Header.Get(types.APIKeyHeader)
-		if apiKey == "" {
-			apiKey = req.Header.Get(types.APIKeyHeaderShort)
-		}
-		if apiKey == "" {
-			err := errors.New("no " + types.APIKeyHeader + " header found from within authing middleware")
-			r.handleOTLPFailureResponse(w, req, husky.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
-			return
-		}
-		if r.Config.IsAPIKeyValid(apiKey) {
-			next.ServeHTTP(w, req)
-			return
-		}
-		err := fmt.Errorf("api key %s not found in list of authorized keys", apiKey)
-		r.handleOTLPFailureResponse(w, req, husky.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 	})
 }
 
