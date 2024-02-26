@@ -78,8 +78,8 @@ func NewLocalRemoteStore(options ...LRSOption) *LocalRemoteStore {
 	mapStates := []CentralTraceState{
 		// Unknown, // not a valid state for a trace
 		Collecting,
-		WaitingToDecide,
-		ReadyForDecision,
+		DecisionDelay,
+		ReadyToDecide,
 		AwaitingDecision,
 		// DecisionKeep, // these are in the decision cache
 		// DecisionDrop, // these are in the decision cache
@@ -182,7 +182,7 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 		// The decision hasn't been received yet but it has been sent to a refinery for a decision
 		// We can't affect the decision but we can append it and mark it late.
 		// i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
-	case Collecting, WaitingToDecide, ReadyForDecision:
+	case Collecting, DecisionDelay, ReadyToDecide:
 		// we're in a state where we can just add the span
 	case Unknown:
 		// we don't have a state for this trace, so we create it
@@ -205,7 +205,7 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 		lrs.traces[span.TraceID].Root = span
 		switch state {
 		case Collecting:
-			lrs.changeTraceState(span.TraceID, Collecting, WaitingToDecide)
+			lrs.changeTraceState(span.TraceID, Collecting, DecisionDelay)
 		default:
 			// for all other states, we don't need to do anything
 		}
@@ -282,11 +282,11 @@ func (lrs *LocalRemoteStore) GetTracesNeedingDecision(n int) ([]string, error) {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	// get the list of traces in the ReadyForDecision state
-	traceids := make([]string, 0, len(lrs.states[ReadyForDecision]))
+	traceids := make([]string, 0, len(lrs.states[ReadyToDecide]))
 	fmt.Println("NeedDecision: traceids", traceids)
-	for _, traceStatus := range lrs.states[ReadyForDecision] {
+	for _, traceStatus := range lrs.states[ReadyToDecide] {
 		traceids = append(traceids, traceStatus.TraceID)
-		lrs.changeTraceState(traceStatus.TraceID, ReadyForDecision, AwaitingDecision)
+		lrs.changeTraceState(traceStatus.TraceID, ReadyToDecide, AwaitingDecision)
 		n--
 		if n == 0 {
 			break
