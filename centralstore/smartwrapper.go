@@ -174,14 +174,14 @@ func (w *SmartWrapper) manageStates(options SmartWrapperOptions) {
 			// the order of these is important!
 
 			// see if AwaitDecision traces have been waiting too long
-			w.manageTimeouts(time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyForDecision)
+			w.manageTimeouts(time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyToDecide)
 
 			// traces that are past SendDelay should be moved to ready for decision
 			// the only errors can be syntax errors, so won't happen at runtime
-			w.manageTimeouts(time.Duration(options.SendDelay), WaitingToDecide, ReadyForDecision)
+			w.manageTimeouts(time.Duration(options.SendDelay), DecisionDelay, ReadyToDecide)
 
 			// trace that are past TraceTimeout should be moved to waiting to decide
-			w.manageTimeouts(time.Duration(options.TraceTimeout), Collecting, WaitingToDecide)
+			w.manageTimeouts(time.Duration(options.TraceTimeout), Collecting, DecisionDelay)
 		}
 	}
 }
@@ -196,7 +196,7 @@ func (w *SmartWrapper) manageStates(options SmartWrapperOptions) {
 // ReadyForDecision to AwaitingDecision. If the trace is not in the
 // ReadyForDecision state, its state will not be changed.
 func (w *SmartWrapper) GetTrace(traceID string) (*CentralTrace, error) {
-	w.basicStore.ChangeTraceStatus([]string{traceID}, ReadyForDecision, AwaitingDecision)
+	w.basicStore.ChangeTraceStatus([]string{traceID}, ReadyToDecide, AwaitingDecision)
 	return w.basicStore.GetTrace(traceID)
 }
 
@@ -244,13 +244,14 @@ func (w *SmartWrapper) SetTraceStatuses(statuses []*CentralTraceStatus) error {
 			// ignore all other states
 		}
 	}
+	// fmt.Println("keeping", len(keeps), "dropping", len(drops))
 
 	var err error
 	if len(keeps) > 0 {
 		err = w.basicStore.KeepTraces(keeps)
 	}
 	if len(drops) > 0 {
-		err2 := w.basicStore.ChangeTraceStatus(drops, WaitingToDecide, DecisionDrop)
+		err2 := w.basicStore.ChangeTraceStatus(drops, AwaitingDecision, DecisionDrop)
 		if err2 != nil {
 			if err != nil {
 				err = errors.Join(err, err2)

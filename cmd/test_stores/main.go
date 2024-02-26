@@ -12,6 +12,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/jessevdk/go-flags"
 )
 
@@ -182,9 +183,10 @@ func (t *traceGenerator) Uint64() uint64 {
 // spans spread out for the given duration. It puts the spans into a channel and
 // expects to be run as a goroutine; it terminates when it sends the root span.
 // MinDuration of the trace is always the granularity.
-func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop <-chan struct{}) {
+func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop <-chan struct{}, traceIDchan chan string) {
 	// create a new traceID which also seeds the random number generator
 	traceid := t.getTraceID()
+	traceIDchan <- traceid
 
 	spanCount := t.Intn(t.MaxTraceLength-t.MinTraceLength) + t.MinTraceLength
 
@@ -271,11 +273,15 @@ func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop 
 }
 
 type FakeRefineryInstance struct {
-	store centralstore.SmartStorer
+	store       centralstore.SmartStorer
+	traceIDchan chan string
 }
 
 func NewFakeRefineryInstance(store centralstore.SmartStorer) *FakeRefineryInstance {
-	return &FakeRefineryInstance{store: store}
+	return &FakeRefineryInstance{
+		store:       store,
+		traceIDchan: make(chan string, 10),
+	}
 }
 
 func (fri *FakeRefineryInstance) Stop() {
@@ -307,14 +313,15 @@ func (fri *FakeRefineryInstance) runSender(opts CmdLineOptions, nodeIndex int, s
 		case <-traceTicker.C:
 			// generate traces until we're done
 			tg := NewTraceGenerator(opts, nodeIndex)
-			go tg.generateTrace(out, stopch)
+			go tg.generateTrace(out, stopch, fri.traceIDchan)
 		}
 	}
 }
 
 func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, stopch chan struct{}) {
 	// start a ticker to check the status of traces
-	statusTicker := time.NewTicker(1 * time.Second)
+	// We randomize the interval a bit so that we don't all run at the same time
+	statusTicker := time.NewTicker(time.Duration(500+rand.Int63n(1000)) * time.Millisecond)
 	defer statusTicker.Stop()
 
 	// calculate when we should stop
@@ -333,7 +340,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 			if len(traceIDs) == 0 {
 				continue
 			}
-			fmt.Println("decider: got", len(traceIDs), "traces needing decision")
+			fmt.Printf("decider %d: got %v traces needing decision\n", nodeIndex, traceIDs)
 			statuses, err := fri.store.GetStatusForTraces(traceIDs)
 			if err != nil {
 				fmt.Println(err)
@@ -358,9 +365,11 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				for _, span := range trace.Spans {
 					if span.KeyFields["status"].(int) >= 500 {
 						keep = true
+						break
 					}
 					if span.KeyFields["status"].(int) >= 400 && span.KeyFields["status"].(int) <= 403 && span.KeyFields["operation"].(string) == "POST" {
 						keep = true
+						break
 					}
 				}
 
@@ -375,6 +384,52 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 			err = fri.store.SetTraceStatuses(statuses)
 			if err != nil {
 				fmt.Println(err)
+			}
+		}
+	}
+}
+
+// runProcessor periodically checks the status of traces and drops or sends them
+func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int, stopch chan struct{}) {
+	// start a ticker to check the status of traces
+	// We randomize the interval a bit so that we don't all run at the same time
+	statusTicker := time.NewTicker(time.Duration(500+rand.Int63n(1000)) * time.Millisecond)
+	defer statusTicker.Stop()
+
+	traceIDs := generics.NewSet[string]()
+
+	// calculate when we should stop
+	stopTime := time.Now().Add(time.Duration(opts.Runtime))
+	for time.Now().Before(stopTime) {
+		select {
+		case <-stopch:
+			return
+		case tid := <-fri.traceIDchan:
+			fmt.Printf("processor %d: got trace %s\n", nodeIndex, tid)
+			traceIDs.Add(tid)
+		case <-statusTicker.C:
+			tids := traceIDs.Members()
+			if len(tids) == 0 {
+				continue
+			}
+			statuses, err := fri.store.GetStatusForTraces(tids)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			for _, status := range statuses {
+				if status.State == centralstore.DecisionKeep {
+					fmt.Printf("processor %d: keeping trace %s\n", nodeIndex, status.TraceID)
+					if err != nil {
+						fmt.Println(err)
+					}
+					traceIDs.Remove(status.TraceID)
+				} else if status.State == centralstore.DecisionDrop {
+					fmt.Printf("processor %d: dropping trace %s\n", nodeIndex, status.TraceID)
+					traceIDs.Remove(status.TraceID)
+				} else {
+					fmt.Printf("processor %d: trace %s not ready (%v)\n", nodeIndex, status.TraceID, status.State)
+				}
 			}
 		}
 	}
@@ -430,6 +485,10 @@ func main() {
 		wg.Add(1)
 		go func(i int) {
 			inst.runDecider(opts, opts.NodeIndex+i, stopch)
+			wg.Done()
+		}(i)
+		go func(i int) {
+			inst.runProcessor(opts, opts.NodeIndex+i, stopch)
 			wg.Done()
 		}(i)
 	}

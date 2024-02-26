@@ -40,26 +40,26 @@ func TestRedisBasicStore_TraceStateProcessor(t *testing.T) {
 	}{
 		{Collecting, []stateChange{
 			{Collecting, false},
-			{WaitingToDecide, true},
-			{ReadyForDecision, false},
+			{DecisionDelay, true},
+			{ReadyToDecide, false},
 			{AwaitingDecision, false},
 		}},
-		{WaitingToDecide, []stateChange{
+		{DecisionDelay, []stateChange{
 			{Collecting, false},
-			{WaitingToDecide, false},
-			{ReadyForDecision, true},
+			{DecisionDelay, false},
+			{ReadyToDecide, true},
 			{AwaitingDecision, false},
 		}},
-		{ReadyForDecision, []stateChange{
+		{ReadyToDecide, []stateChange{
 			{Collecting, false},
-			{WaitingToDecide, false},
-			{ReadyForDecision, false},
+			{DecisionDelay, false},
+			{ReadyToDecide, false},
 			{AwaitingDecision, true},
 		}},
 		{AwaitingDecision, []stateChange{
 			{Collecting, false},
-			{WaitingToDecide, false},
-			{ReadyForDecision, true},
+			{DecisionDelay, false},
+			{ReadyToDecide, true},
 			{AwaitingDecision, false},
 		}},
 	} {
@@ -110,8 +110,8 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = store.ChangeTraceStatus([]string{traceID}, Collecting, WaitingToDecide)
-			_ = store.ChangeTraceStatus([]string{traceID}, WaitingToDecide, ReadyForDecision)
+			_ = store.ChangeTraceStatus([]string{traceID}, Collecting, DecisionDelay)
+			_ = store.ChangeTraceStatus([]string{traceID}, DecisionDelay, ReadyToDecide)
 		}()
 	}
 
@@ -121,9 +121,9 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 		conn := redisClient.Get()
 		defer conn.Close()
 
-		_ = store.ChangeTraceStatus([]string{traceID}, Collecting, WaitingToDecide)
-		_ = store.ChangeTraceStatus([]string{traceID}, WaitingToDecide, ReadyForDecision)
-		_ = store.ChangeTraceStatus([]string{traceID}, ReadyForDecision, AwaitingDecision)
+		_ = store.ChangeTraceStatus([]string{traceID}, Collecting, DecisionDelay)
+		_ = store.ChangeTraceStatus([]string{traceID}, DecisionDelay, ReadyToDecide)
+		_ = store.ChangeTraceStatus([]string{traceID}, ReadyToDecide, AwaitingDecision)
 	}()
 
 	wg.Wait()
@@ -132,8 +132,8 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	defer conn.Close()
 
 	require.False(t, store.states.exists(conn, Collecting, traceID))
-	require.False(t, store.states.exists(conn, WaitingToDecide, traceID))
-	require.False(t, store.states.exists(conn, ReadyForDecision, traceID))
+	require.False(t, store.states.exists(conn, DecisionDelay, traceID))
+	require.False(t, store.states.exists(conn, ReadyToDecide, traceID))
 	require.True(t, store.states.exists(conn, AwaitingDecision, traceID))
 	//TODO: make sure the timestamp is updated
 
@@ -159,21 +159,21 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	traceIDToBeRemoved := "traceID0"
 	err := ts.addNewTrace(conn, traceIDToBeRemoved)
 	require.NoError(t, err)
-	err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, WaitingToDecide), traceIDToBeRemoved)
+	err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceIDToBeRemoved)
 	require.NoError(t, err)
-	require.True(t, ts.exists(conn, WaitingToDecide, traceIDToBeRemoved))
+	require.True(t, ts.exists(conn, DecisionDelay, traceIDToBeRemoved))
 
 	ts.clock.Advance(time.Duration(10 * time.Minute))
 	traceIDToKeep := "traceID1"
 	err = ts.addNewTrace(conn, traceIDToKeep)
 	require.NoError(t, err)
-	err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, WaitingToDecide), traceIDToKeep)
+	err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceIDToKeep)
 	require.NoError(t, err)
-	require.True(t, ts.exists(conn, WaitingToDecide, traceIDToKeep))
+	require.True(t, ts.exists(conn, DecisionDelay, traceIDToKeep))
 
 	ts.removeExpiredTraces(redisClient.Client)
-	require.False(t, ts.exists(conn, WaitingToDecide, traceIDToBeRemoved))
-	require.True(t, ts.exists(conn, WaitingToDecide, traceIDToKeep))
+	require.False(t, ts.exists(conn, DecisionDelay, traceIDToBeRemoved))
+	require.True(t, ts.exists(conn, DecisionDelay, traceIDToKeep))
 }
 
 func TestRedisBasicStore_normalizeCentralTraceStatusRedis(t *testing.T) {
