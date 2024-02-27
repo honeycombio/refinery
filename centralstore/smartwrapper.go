@@ -23,6 +23,7 @@ type SmartWrapper struct {
 	stopped        chan struct{}
 	done           chan struct{}
 	doneProcessing chan struct{}
+	tracer         trace.Tracer
 }
 
 // ensure that we implement SmartStorer

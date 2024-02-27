@@ -27,6 +27,22 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
+func standardOptions() SmartWrapperOptions {
+	sopts := SmartWrapperOptions{
+		SpanChannelSize: 100,
+		StateTicker:     duration("50ms"),
+		SendDelay:       duration("200ms"),
+		TraceTimeout:    duration("500ms"),
+		DecisionTimeout: duration("500ms"),
+	}
+	return sopts
+}
+
+func noopTracer() trace.Tracer {
+	pr := noop.NewTracerProvider()
+	return pr.Tracer("test")
+}
+
 var storeType = "local"
 
 type dummyLogger struct{}
