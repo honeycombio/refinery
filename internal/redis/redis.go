@@ -75,7 +75,7 @@ type Conn interface {
 	LIndexString(string, int) (string, error)
 
 	ZAdd(string, []any) error
-	ZMove(string, string, []int64, []any) error
+	ZMove(string, string, []int64, []string) error
 	ZRange(string, int, int) ([]string, error)
 	ZRangeByScoreString(string, int64) ([]string, error)
 	ZScore(string, string) (int64, error)
@@ -490,7 +490,7 @@ func (c *DefaultConn) ZExist(key string, member string) (bool, error) {
 	return value != 0, nil
 }
 
-func (c *DefaultConn) ZMove(fromKey string, toKey string, scores []int64, members []any) error {
+func (c *DefaultConn) ZMove(fromKey string, toKey string, scores []int64, members []string) error {
 	if err := c.conn.Send("MULTI"); err != nil {
 		return err
 	}
@@ -551,10 +551,6 @@ func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
 	values, err := redis.Values(c.conn.Do("HGETALL", key))
 	if err != nil {
 		return err
-	}
-
-	if len(values) == 0 {
-		return redis.ErrNil
 	}
 
 	return redis.ScanStruct(values, val)

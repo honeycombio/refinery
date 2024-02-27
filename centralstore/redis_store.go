@@ -131,7 +131,7 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 		}
 	case Collecting:
 		if span.ParentID == "" {
-			err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
+			_, err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
 			if err != nil {
 				r.errs <- err
 			}
@@ -156,8 +156,10 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 	return nil
 }
 
+// GetTrace returns a CentralTrace with the given traceID.
+// if a decision has been made about the trace, the returned value
+// will not contain span data.
 func (r *RedisBasicStore) GetTrace(traceID string) (*CentralTrace, error) {
-	// TODO: what if this trace is already in the decision cache?
 	conn := r.client.Get()
 	defer conn.Close()
 
@@ -259,13 +261,14 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(n int) ([]string, error) {
 	if len(traceIDs) == 0 {
 		return nil, nil
 	}
-	err = r.changeTraceStatus(conn, traceIDs, ReadyToDecide, AwaitingDecision)
+
+	succeed, err := r.states.toNextState(conn, newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision), traceIDs...)
 	if err != nil {
 		r.errs <- err
 		return nil, err
 	}
 
-	return traceIDs, nil
+	return succeed, nil
 
 }
 
@@ -287,7 +290,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toStat
 		return r.removeTraces(traceIDs)
 	}
 
-	err := r.changeTraceStatus(conn, traceIDs, fromState, toState)
+	_, err := r.states.toNextState(conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
 	if err != nil {
 		r.errs <- err
 		return err
@@ -303,8 +306,22 @@ func (r *RedisBasicStore) KeepTraces(statuses []*CentralTraceStatus) error {
 	traceIDs := make([]string, 0, len(statuses))
 	for _, status := range statuses {
 		traceIDs = append(traceIDs, status.TraceID)
+		r.decisionCache.Record(status, true, status.KeepReason)
 	}
-	err := r.changeTraceStatus(conn, traceIDs, AwaitingDecision, DecisionKeep)
+
+	_, err := r.states.toNextState(conn, newTraceStateChangeEvent(AwaitingDecision, DecisionKeep), traceIDs...)
+	if err != nil {
+		r.errs <- err
+		return err
+	}
+
+	// remove span list
+	spanListKeys := make([]string, 0, len(traceIDs))
+	for _, traceID := range traceIDs {
+		spanListKeys = append(spanListKeys, spansHashByTraceIDKey(traceID))
+	}
+
+	_, err = conn.Del(spanListKeys...)
 	if err != nil {
 		r.errs <- err
 	}
@@ -351,15 +368,6 @@ func (r *RedisBasicStore) removeTraces(traceIDs []string) error {
 	}
 
 	return r.states.remove(conn, AwaitingDecision, traceIDs...)
-}
-
-func (r *RedisBasicStore) changeTraceStatus(conn redis.Conn, traceIDs []string, fromState, toState CentralTraceState) error {
-	err := r.states.toNextState(conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // TraceStore stores trace state status and spans.
@@ -588,6 +596,7 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 			DecisionDelay,
 			ReadyToDecide,
 			AwaitingDecision,
+			DecisionKeep,
 		},
 		config:       cfg,
 		clock:        clock,
@@ -682,8 +691,8 @@ func (t *traceStateProcessor) remove(conn redis.Conn, state CentralTraceState, t
 	return conn.ZRemove(t.stateByTraceIDsKey(state), traceIDs)
 }
 
-func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) error {
-	eligible := make([]any, 0, len(traceIDs))
+func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) ([]string, error) {
+	eligible := make([]string, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
 		if t.isValidStateChangeThroughLua(conn, changeEvent, traceID) {
 			eligible = append(eligible, traceID)
@@ -691,7 +700,7 @@ func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChan
 	}
 
 	if len(eligible) == 0 {
-		return errors.New("invalid state change event")
+		return nil, errors.New("invalid state change event")
 	}
 
 	// store the timestamp as a part of the entry in the trace state set
@@ -703,7 +712,16 @@ func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChan
 	}
 
 	// only add traceIDs to the destination if they don't already exist
-	return conn.ZMove(t.stateByTraceIDsKey(changeEvent.current), t.stateByTraceIDsKey(changeEvent.next), timestamps, eligible)
+	err := conn.ZMove(t.stateByTraceIDsKey(changeEvent.current), t.stateByTraceIDsKey(changeEvent.next), timestamps, eligible)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(eligible) != len(traceIDs) {
+		return eligible, fmt.Errorf("some traceIDs were not moved to the next state")
+	}
+
+	return eligible, nil
 }
 
 func (t *traceStateProcessor) isValidStateChange(conn redis.Conn, stateChange stateChangeEvent, traceID string) bool {
@@ -752,7 +770,7 @@ func (t *traceStateProcessor) removeExpiredTraces(client redis.Client) {
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
-		traceIDs, err := conn.ZRangeByScoreString(t.stateByTraceIDsKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).Unix())
+		traceIDs, err := conn.ZRangeByScoreString(t.stateByTraceIDsKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).UnixNano())
 		if err != nil {
 			return
 		}
@@ -825,6 +843,7 @@ func ensureValidStateChangeEvents(client redis.Client) error {
 		newTraceStateChangeEvent(DecisionDelay, ReadyToDecide).string(),
 		newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision).string(),
 		newTraceStateChangeEvent(AwaitingDecision, ReadyToDecide).string(),
+		newTraceStateChangeEvent(AwaitingDecision, DecisionKeep).string(),
 	)
 }
 
