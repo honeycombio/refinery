@@ -1,19 +1,27 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
+	"github.com/honeycombio/otel-config-go/otelconfig"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/jessevdk/go-flags"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // This is a test program for the CentralStore. It is designed to generate load
@@ -47,6 +55,11 @@ import (
 // of statuses.
 //
 // Other than that, the spans are simple and don't contain any other fields.
+//
+// We accept Honeycomb API key and dataset as command line arguments. If these
+// are provided, we will send the spans to Honeycomb; if they're missing, then
+// we dump them to the console.
+// Each of the major tasks will decorate its spans with a "task" field.
 
 type Duration time.Duration
 
@@ -69,6 +82,41 @@ var _ flags.Marshaler = Duration(0)
 func dur(s string) config.Duration {
 	d, _ := time.ParseDuration(s)
 	return config.Duration(d)
+}
+
+// telemetry helpers
+
+func (fri *FakeRefineryInstance) addException(span trace.Span, err error) {
+	span.AddEvent("exception", trace.WithAttributes(
+		attribute.KeyValue{Key: "exception.type", Value: attribute.StringValue("error")},
+		attribute.KeyValue{Key: "exception.message", Value: attribute.StringValue(err.Error())},
+		attribute.KeyValue{Key: "exception.stacktrace", Value: attribute.StringValue("stacktrace")},
+		attribute.KeyValue{Key: "exception.escaped", Value: attribute.BoolValue(false)},
+	))
+}
+
+func addSpanField(span trace.Span, key string, value interface{}) {
+	k := attribute.Key(key)
+	switch v := value.(type) {
+	case string:
+		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.StringValue(v)})
+	case int:
+		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.IntValue(v)})
+	case bool:
+		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.BoolValue(v)})
+	case int64:
+		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.Int64Value(v)})
+	case float64:
+		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.Float64Value(v)})
+	case time.Duration:
+		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.Int64Value(int64(v))})
+	}
+}
+
+func addSpanFields(span trace.Span, fields map[string]interface{}) {
+	for k, v := range fields {
+		addSpanField(span, k, v)
+	}
 }
 
 // StateTicker should be comfortably more than the ticker in EventuallyWithT
@@ -103,6 +151,8 @@ type CmdLineOptions struct {
 	NodeCount          int      `long:"node-count" description:"Number of nodes in this instance (<= Total)" default:"1"`
 	NodeIndex          int      `long:"node-number" description:"Index of this node if Total > 1" default:"0"`
 	DecisionReqSize    int      `long:"decision-req-size" description:"Number of traces to request for decision" default:"10"`
+	HnyAPIKey          string   `long:"hny-api-key" description:"API key for traces in Honeycomb" default:"" env:"HONEYCOMB_API_KEY"`
+	HnyDataset         string   `long:"hny-dataset" description:"Dataset/service name for traces in Honeycomb" default:"refinery-store-test" env:"HONEYCOMB_DATASET"`
 }
 
 type traceGenerator struct {
@@ -113,9 +163,10 @@ type traceGenerator struct {
 	TotalNodeCount   int
 	NodeIndex        int
 	hashseed         uint64
+	tracer           trace.Tracer
 }
 
-func NewTraceGenerator(opts CmdLineOptions, index int) *traceGenerator {
+func NewTraceGenerator(opts CmdLineOptions, index int, tracer trace.Tracer) *traceGenerator {
 	return &traceGenerator{
 		Granularity:      opts.TraceIDGranularity,
 		MinTraceLength:   opts.MinTraceLength,
@@ -123,6 +174,7 @@ func NewTraceGenerator(opts CmdLineOptions, index int) *traceGenerator {
 		MaxTraceDuration: opts.MaxTraceDuration,
 		TotalNodeCount:   opts.TotalNodeCount,
 		NodeIndex:        index,
+		tracer:           tracer,
 	}
 }
 
@@ -184,6 +236,10 @@ func (t *traceGenerator) Uint64() uint64 {
 // expects to be run as a goroutine; it terminates when it sends the root span.
 // MinDuration of the trace is always the granularity.
 func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop <-chan struct{}, traceIDchan chan string) {
+	// create a span for our generator
+	ctx, root := t.tracer.Start(context.Background(), "sender")
+	defer root.End()
+
 	// create a new traceID which also seeds the random number generator
 	traceid := t.getTraceID()
 	traceIDchan <- traceid
@@ -215,6 +271,15 @@ func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop 
 		TraceID: traceid,
 		Spans:   make([]*centralstore.CentralSpan, 0, spanCount),
 	}
+
+	addSpanFields(root, map[string]interface{}{
+		"trace_id":         traceid,
+		"span_count":       spanCount,
+		"node_index":       t.NodeIndex,
+		"span_event_count": spanEventCount,
+		"span_link_count":  spanLinkCount,
+		"duration_ms":      dur / time.Millisecond,
+	})
 
 	// generate the root span
 	rootFields := t.getKeyFields()
@@ -261,13 +326,20 @@ func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop 
 		case <-stop:
 			return
 		case <-ticker.C:
+			_, span := t.tracer.Start(ctx, "send_span")
+			addSpanFields(span, map[string]interface{}{
+				"trace_id": traceid,
+				"span_id":  trace.Spans[counter-1].SpanID,
+				"index":    counter - 1,
+			})
 			// only send the span if it's ours
 			if t.mySpan(traceid, trace.Spans[counter-1].SpanID) {
-				fmt.Printf(" sending %d tid: %s spid: %s\n", counter-1, trace.TraceID, trace.Spans[counter-1].SpanID)
+				addSpanField(span, "sent", true)
 				out <- trace.Spans[counter-1]
 			} else {
-				fmt.Printf("skipping %d tid: %s spid: %s\n", counter-1, trace.TraceID, trace.Spans[counter-1].SpanID)
+				addSpanField(span, "sent", false)
 			}
+			span.End()
 		}
 	}
 }
@@ -275,12 +347,14 @@ func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop 
 type FakeRefineryInstance struct {
 	store       centralstore.SmartStorer
 	traceIDchan chan string
+	tracer      trace.Tracer
 }
 
-func NewFakeRefineryInstance(store centralstore.SmartStorer) *FakeRefineryInstance {
+func NewFakeRefineryInstance(store centralstore.SmartStorer, tracer trace.Tracer) *FakeRefineryInstance {
 	return &FakeRefineryInstance{
 		store:       store,
 		traceIDchan: make(chan string, 10),
+		tracer:      tracer,
 	}
 }
 
@@ -312,7 +386,7 @@ func (fri *FakeRefineryInstance) runSender(opts CmdLineOptions, nodeIndex int, s
 			return
 		case <-traceTicker.C:
 			// generate traces until we're done
-			tg := NewTraceGenerator(opts, nodeIndex)
+			tg := NewTraceGenerator(opts, nodeIndex, fri.tracer)
 			go tg.generateTrace(out, stopch, fri.traceIDchan)
 		}
 	}
@@ -323,6 +397,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 	// We randomize the interval a bit so that we don't all run at the same time
 	statusTicker := time.NewTicker(time.Duration(500+rand.Int63n(1000)) * time.Millisecond)
 	defer statusTicker.Stop()
+	ctx := context.Background()
 
 	// calculate when we should stop
 	stopTime := time.Now().Add(time.Duration(opts.Runtime))
@@ -331,31 +406,48 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 		case <-stopch:
 			return
 		case <-statusTicker.C:
+			ctx, root := fri.tracer.Start(ctx, "decider")
+			addSpanField(root, "nodeIndex", nodeIndex)
 			// get the current list of trace IDs in the ReadyForDecision state
 			// note that this request also changes the state for the traces it returns to AwaitingDecision
+			_, span1 := fri.tracer.Start(ctx, "get_traces_needing_decision")
 			traceIDs, err := fri.store.GetTracesNeedingDecision(opts.DecisionReqSize)
 			if err != nil {
-				fmt.Println(err)
+				fri.addException(span1, err)
 			}
+			addSpanFields(span1, map[string]interface{}{
+				"decision_request_size": opts.DecisionReqSize,
+				"trace_ids":             strings.Join(traceIDs, ","),
+				"num_trace_ids":         len(traceIDs),
+			})
+			span1.End()
 			if len(traceIDs) == 0 {
 				continue
 			}
-			fmt.Printf("decider %d: got %v traces needing decision\n", nodeIndex, traceIDs)
+
+			statCtx, span2 := fri.tracer.Start(ctx, "get_status_for_traces")
 			statuses, err := fri.store.GetStatusForTraces(traceIDs)
 			if err != nil {
 				fmt.Println(err)
 			}
+			addSpanField(span2, "num_statuses", len(statuses))
 
 			for _, status := range statuses {
+				_, span3 := fri.tracer.Start(statCtx, "make_decision")
+				addSpanFields(span3, map[string]interface{}{
+					"trace_id": status.TraceID,
+					"state":    status.State.String(),
+				})
 				// make a decision on each trace
 				if status.State != centralstore.AwaitingDecision {
 					// someone else got to it first
-					fmt.Printf("decider: trace %s not ready (%v)\n", status.TraceID, status.State)
+					addSpanField(span3, "decision", "not ready")
+					span3.End()
 					continue
 				}
 				trace, err := fri.store.GetTrace(status.TraceID)
 				if err != nil {
-					fmt.Println(err)
+					fri.addException(span3, err)
 				}
 				// decision criteria:
 				// we're going to keep:
@@ -380,11 +472,18 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 					fmt.Printf("decider %d: dropping trace %s\n", nodeIndex, status.TraceID)
 					status.State = centralstore.DecisionDrop
 				}
+				addSpanField(span3, "decision", status.State.String())
+				span3.End()
 			}
+			span2.End()
+
+			_, span4 := fri.tracer.Start(ctx, "set_trace_statuses")
 			err = fri.store.SetTraceStatuses(statuses)
 			if err != nil {
-				fmt.Println(err)
+				fri.addException(span4, err)
 			}
+			span4.End()
+			root.End()
 		}
 	}
 }
@@ -393,7 +492,8 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int, stopch chan struct{}) {
 	// start a ticker to check the status of traces
 	// We randomize the interval a bit so that we don't all run at the same time
-	statusTicker := time.NewTicker(time.Duration(500+rand.Int63n(1000)) * time.Millisecond)
+	interval := time.Duration(500+rand.Int63n(1000)) * time.Millisecond
+	statusTicker := time.NewTicker(interval)
 	defer statusTicker.Stop()
 
 	traceIDs := generics.NewSet[string]()
@@ -408,15 +508,26 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 			fmt.Printf("processor %d: got trace %s\n", nodeIndex, tid)
 			traceIDs.Add(tid)
 		case <-statusTicker.C:
+			ctx, root := fri.tracer.Start(context.Background(), "processor")
+			addSpanFields(root, map[string]interface{}{
+				"nodeIndex":     nodeIndex,
+				"interval":      interval,
+				"num_trace_ids": len(traceIDs.Members()),
+			})
 			tids := traceIDs.Members()
 			if len(tids) == 0 {
 				continue
 			}
+			_, span := fri.tracer.Start(ctx, "get_status_for_traces")
+			addSpanField(span, "num_trace_ids", len(tids))
 			statuses, err := fri.store.GetStatusForTraces(tids)
 			if err != nil {
-				fmt.Println(err)
+				fri.addException(span, err)
+				span.End()
 				continue
 			}
+			span.End()
+
 			for _, status := range statuses {
 				if status.State == centralstore.DecisionKeep {
 					fmt.Printf("processor %d: keeping trace %s\n", nodeIndex, status.TraceID)
@@ -431,8 +542,35 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 					fmt.Printf("processor %d: trace %s not ready (%v)\n", nodeIndex, status.TraceID, status.State)
 				}
 			}
+			root.End()
 		}
 	}
+}
+
+var ResourceLibrary = "test_stores"
+var ResourceVersion = "dev"
+
+func setupTracing(opts CmdLineOptions) (tracer trace.Tracer, shutdown func()) {
+	if opts.HnyAPIKey != "" {
+		var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
+
+		otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
+			otelconfig.WithExporterProtocol(protocol),
+			otelconfig.WithServiceName(opts.HnyDataset),
+			otelconfig.WithTracesExporterEndpoint("https://api-dogfood.honeycomb.io:443"),
+			otelconfig.WithMetricsEnabled(false),
+			otelconfig.WithTracesEnabled(true),
+			otelconfig.WithHeaders(map[string]string{
+				"x-honeycomb-team": opts.HnyAPIKey,
+			}),
+		)
+		if err != nil {
+			log.Fatalf("failure configuring otel: %v", err)
+		}
+		return otel.Tracer(ResourceLibrary, trace.WithInstrumentationVersion(ResourceVersion)), otelshutdown
+	}
+	pr := noop.NewTracerProvider()
+	return pr.Tracer(ResourceLibrary, trace.WithInstrumentationVersion(ResourceVersion)), func() {}
 }
 
 func main() {
@@ -472,21 +610,29 @@ func main() {
 		close(stopch)
 	}()
 
+	// let's set up some OTel tracing
+	tracer, shutdown := setupTracing(opts)
+	defer shutdown()
+
 	wg := &sync.WaitGroup{}
 	sopts := standardStoreOptions()
-	store := centralstore.NewSmartWrapper(sopts, makeRemoteStore(opts.StoreType))
+	store := centralstore.NewSmartWrapper(sopts, makeRemoteStore(opts.StoreType), tracer)
 	for i := 0; i < opts.NodeCount; i++ {
-		inst := NewFakeRefineryInstance(store)
+		inst := NewFakeRefineryInstance(store, tracer)
+
 		wg.Add(1)
 		go func(i int) {
 			inst.runSender(opts, opts.NodeIndex+i, stopch)
 			wg.Done()
 		}(i)
+
 		wg.Add(1)
 		go func(i int) {
 			inst.runDecider(opts, opts.NodeIndex+i, stopch)
 			wg.Done()
 		}(i)
+
+		wg.Add(1)
 		go func(i int) {
 			inst.runProcessor(opts, opts.NodeIndex+i, stopch)
 			wg.Done()
