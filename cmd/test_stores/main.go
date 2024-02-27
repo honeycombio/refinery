@@ -529,6 +529,11 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 			span.End()
 
 			for _, status := range statuses {
+				_, span := fri.tracer.Start(ctx, "act_on_decision")
+				addSpanFields(span, map[string]interface{}{
+					"trace_id": status.TraceID,
+					"state":    status.State.String(),
+				})
 				if status.State == centralstore.DecisionKeep {
 					fmt.Printf("processor %d: keeping trace %s\n", nodeIndex, status.TraceID)
 					if err != nil {
@@ -541,6 +546,7 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 				} else {
 					fmt.Printf("processor %d: trace %s not ready (%v)\n", nodeIndex, status.TraceID, status.State)
 				}
+				span.End()
 			}
 			root.End()
 		}
