@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type statusMap map[string]*CentralTraceStatus
@@ -19,6 +20,7 @@ type SmartWrapper struct {
 	spanChan       chan *CentralSpan
 	done           chan struct{}
 	doneProcessing chan struct{}
+	tracer         trace.Tracer
 }
 
 // ensure that we implement SmartStorer
@@ -34,13 +36,14 @@ type SmartWrapperOptions struct {
 }
 
 // NewSmartWrapper creates a new SmartWrapper.
-func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer) *SmartWrapper {
+func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer, tracer trace.Tracer) *SmartWrapper {
 	w := &SmartWrapper{
 		basicStore:     basic,
 		stopped:        make(chan struct{}),
 		spanChan:       make(chan *CentralSpan, options.SpanChannelSize),
 		done:           make(chan struct{}),
 		doneProcessing: make(chan struct{}),
+		tracer:         tracer,
 	}
 	// start the span processor
 	go w.processSpans()

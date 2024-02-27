@@ -10,6 +10,8 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func duration(s string) config.Duration {
@@ -26,6 +28,11 @@ func standardOptions() SmartWrapperOptions {
 		DecisionTimeout: duration("500ms"),
 	}
 	return sopts
+}
+
+func noopTracer() trace.Tracer {
+	pr := noop.NewTracerProvider()
+	return pr.Tracer("test")
 }
 
 var storeType = "local"
@@ -57,7 +64,7 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	randomNum := rand.Intn(500)
@@ -82,9 +89,9 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 
 func TestSingleTraceOperation(t *testing.T) {
 	sopts := standardOptions()
-	remoteStore := makeRemoteStore(redisStore)
+	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -130,13 +137,9 @@ func TestSingleTraceOperation(t *testing.T) {
 
 func TestBasicStoreOperation(t *testing.T) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}})
-	defer cleanupRedisStore(redisStore)
-	store := NewSmartWrapper(sopts, redisStore)
+	rs := makeRemoteStore()
+	defer cleanupRedisStore(rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	traceids := make([]string, 0)
@@ -192,9 +195,9 @@ func TestBasicStoreOperation(t *testing.T) {
 
 func TestReadyForDecisionLoop(t *testing.T) {
 	sopts := standardOptions()
-	remoteStore := makeRemoteStore(redisStore)
+	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	numberOfTraces := 11
@@ -250,7 +253,7 @@ func TestSetTraceStatuses(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	numberOfTraces := 5
@@ -341,13 +344,9 @@ func TestSetTraceStatuses(t *testing.T) {
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}})
-	defer cleanupRedisStore(redisStore)
-	store := NewSmartWrapper(sopts, redisStore)
+	rs := makeRemoteStore()
+	defer cleanupRedisStore(rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
@@ -367,13 +366,9 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 
 func BenchmarkStoreGetStatus(b *testing.B) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}})
-	defer cleanupRedisStore(redisStore)
-	store := NewSmartWrapper(sopts, redisStore)
+	rs := makeRemoteStore()
+	defer cleanupRedisStore(rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
@@ -394,13 +389,9 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 
 func BenchmarkStoreGetTrace(b *testing.B) {
 	sopts := standardOptions()
-	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}})
-	defer cleanupRedisStore(redisStore)
-	store := NewSmartWrapper(sopts, redisStore)
+	rs := makeRemoteStore()
+	defer cleanupRedisStore(rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
@@ -424,13 +415,9 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	sopts := standardOptions()
 	sopts.SendDelay = duration("100ms")
 	sopts.TraceTimeout = duration("100ms")
-	redisStore := NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}})
-	defer cleanupRedisStore(redisStore)
-	store := NewSmartWrapper(sopts, redisStore)
+	rs := makeRemoteStore()
+	defer cleanupRedisStore(rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
