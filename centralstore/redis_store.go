@@ -40,7 +40,7 @@ var _ BasicStorer = (*RedisBasicStore)(nil)
 
 func NewRedisBasicStore(opt RedisBasicStoreOptions) *RedisBasicStore {
 	host := "localhost:6379"
-	if opt.Host == "" {
+	if opt.Host != "" {
 		host = opt.Host
 	}
 
