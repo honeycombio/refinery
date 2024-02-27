@@ -819,6 +819,10 @@ const stateChangeScript = `
 	currentState = previousState
   end
 
+  if (currentState ~= previousState) then
+	do return -1 end
+  end
+
   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
   if (changeEventIsValid == 0) then

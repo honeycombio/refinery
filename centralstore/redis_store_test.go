@@ -324,6 +324,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	status, err := store.GetStatusForTraces([]string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
+	require.Equal(t, Collecting, status[0].State)
 	initialTimestamp := status[0].Timestamp
 
 	store.clock.Advance(1 * time.Second)
@@ -340,8 +341,6 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		conn := redisClient.Get()
-		defer conn.Close()
 
 		_ = store.ChangeTraceStatus([]string{traceID}, Collecting, DecisionDelay)
 		_ = store.ChangeTraceStatus([]string{traceID}, DecisionDelay, ReadyToDecide)
