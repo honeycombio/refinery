@@ -10,6 +10,8 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func duration(s string) config.Duration {
@@ -26,6 +28,11 @@ func standardOptions() SmartWrapperOptions {
 		DecisionTimeout: duration("500ms"),
 	}
 	return sopts
+}
+
+func noopTracer() trace.Tracer {
+	pr := noop.NewTracerProvider()
+	return pr.Tracer("test")
 }
 
 var storeType = "local"
@@ -57,7 +64,7 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	randomNum := rand.Intn(500)
@@ -84,7 +91,7 @@ func TestSingleTraceOperation(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	span := &CentralSpan{
@@ -132,7 +139,7 @@ func TestBasicStoreOperation(t *testing.T) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
 	defer cleanupRedisStore(rs)
-	store := NewSmartWrapper(sopts, rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	traceids := make([]string, 0)
@@ -190,7 +197,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	numberOfTraces := 11
@@ -246,7 +253,7 @@ func TestSetTraceStatuses(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
 	defer cleanupRedisStore(remoteStore)
-	store := NewSmartWrapper(sopts, remoteStore)
+	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
 
 	numberOfTraces := 5
@@ -339,7 +346,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
 	defer cleanupRedisStore(rs)
-	store := NewSmartWrapper(sopts, rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
@@ -361,7 +368,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
 	defer cleanupRedisStore(rs)
-	store := NewSmartWrapper(sopts, rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
@@ -384,7 +391,7 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
 	defer cleanupRedisStore(rs)
-	store := NewSmartWrapper(sopts, rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
@@ -410,7 +417,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	sopts.TraceTimeout = duration("100ms")
 	rs := makeRemoteStore()
 	defer cleanupRedisStore(rs)
-	store := NewSmartWrapper(sopts, rs)
+	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
 
 	spans := make([]*CentralSpan, 0)
