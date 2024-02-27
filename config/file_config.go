@@ -49,6 +49,7 @@ type fileConfig struct {
 type configContents struct {
 	General              GeneralConfig             `yaml:"General"`
 	Network              NetworkConfig             `yaml:"Network"`
+	KafkaReceiver        KafkaReceiverConfig       `yaml:"KafkaReceiver"`
 	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
 	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
 	Traces               TracesConfig              `yaml:"Traces"`
@@ -82,6 +83,12 @@ type NetworkConfig struct {
 	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
 	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
 	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
+}
+
+type KafkaReceiverConfig struct {
+	BootstrapAddr     string `yaml:"BootstrapAddr" cmdenv:"KafkaBootstrapAddr"`
+	Topic             string `yaml:"Topic" cmdenv:"KafkaTopic"`
+	ConsumerGroupName string `yaml:"ConsumerGroupName" cmdenv:"KafkaConsumerGroupName"`
 }
 
 type AccessKeyConfig struct {
@@ -503,6 +510,32 @@ func (f *fileConfig) GetHTTPIdleTimeout() time.Duration {
 	defer f.mux.RUnlock()
 
 	return time.Duration(f.mainConfig.Network.HTTPIdleTimeout)
+}
+
+func (f *fileConfig) GetKafkaBootstrapAddr() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	addr := f.mainConfig.KafkaReceiver.BootstrapAddr
+	_, _, err := net.SplitHostPort(addr)
+	if addr != "" && err != nil {
+		return "", err
+	}
+	return f.mainConfig.KafkaReceiver.BootstrapAddr, nil
+}
+
+func (f *fileConfig) GetKafkaTopic() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.KafkaReceiver.Topic, nil
+}
+
+func (f *fileConfig) GetKafkaConsumerGroupName() (string, error) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.KafkaReceiver.ConsumerGroupName, nil
 }
 
 func (f *fileConfig) GetCompressPeerCommunication() bool {

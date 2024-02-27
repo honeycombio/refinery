@@ -125,6 +125,43 @@ This setting is the destination to which Refinery sends all events that it decid
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
 
+## Kafka Receiver Configuration
+
+`KafkaReceiver` contains configuration options for the Kafka receiver.
+
+### `BootstrapAddr`
+
+`BootstrapAddr` is the IP and port on which to connect to a Kafka bootstrap server.
+
+This is how we determine the Kafka broker we are using.
+
+- Not eligible for live reload.
+- Type: `hostport`
+- Environment variable: `REFINERY_KAFKA_BOOTSTRAP_ADDRESS`
+- Command line switch: `--kafka-bootstrap-address`
+
+### `Topic`
+
+`Topic` is the Kafka topic to consume.
+
+This is how we determine the Kafka topic we are using.
+
+- Not eligible for live reload.
+- Type: `string`
+- Environment variable: `REFINERY_KAFKA_TOPIC`
+- Command line switch: `--kafka-topic`
+
+### `ConsumerGroupName`
+
+`ConsumerGroupName` is the name of the Kafka consumer group to join.
+
+This is how we determine the Kafka consumer group we are using.
+
+- Not eligible for live reload.
+- Type: `string`
+- Environment variable: `REFINERY_KAFKA_CONSUMER_GROUP_NAME`
+- Command line switch: `--kafka-consumer-group-name`
+
 ## Access Key Configuration
 
 `AccessKeys` contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.

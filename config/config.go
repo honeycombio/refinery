@@ -34,6 +34,16 @@ type Config interface {
 	// GetHTTPIdleTimeout returns the idle timeout for refinery's HTTP server
 	GetHTTPIdleTimeout() time.Duration
 
+	// GetKafkaBootstrapAddr returns the address and port on which to connect
+	// to become a Kafka consumer.
+	GetKafkaBootstrapAddr() (string, error)
+
+	// GetKafkaTopic returns the topic to consume.
+	GetKafkaTopic() (string, error)
+
+	// GetKafkaConsumerGroupsName returns the Kafka consumer group to join.
+	GetKafkaConsumerGroupName() (string, error)
+
 	// GetCompressPeerCommunication will be true if refinery should compress
 	// data before forwarding it to a peer.
 	GetCompressPeerCommunication() bool

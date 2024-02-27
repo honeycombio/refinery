@@ -91,6 +91,10 @@ type MockConfig struct {
 	ParentIdFieldNames               []string
 	CfgMetadata                      []ConfigMetadata
 
+	KafkaBootstrapAddr     string
+	KafkaTopic             string
+	KafkaConsumerGroupName string
+
 	Mux sync.RWMutex
 }
 
@@ -161,6 +165,27 @@ func (m *MockConfig) GetHTTPIdleTimeout() time.Duration {
 	defer m.Mux.RUnlock()
 
 	return m.GetHTTPIdleTimeoutVal
+}
+
+func (m *MockConfig) GetKafkaBootstrapAddr() (string, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.KafkaBootstrapAddr, nil
+}
+
+func (m *MockConfig) GetKafkaTopic() (string, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.KafkaTopic, nil
+}
+
+func (m *MockConfig) GetKafkaConsumerGroupName() (string, error) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.KafkaConsumerGroupName, nil
 }
 
 func (m *MockConfig) GetCompressPeerCommunication() bool {
