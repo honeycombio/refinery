@@ -49,11 +49,7 @@ func makeRemoteStore() BasicStorer {
 	// 	s.SetupDatabase()
 	// 	return s
 	case "redis":
-		return NewRedisBasicStore(RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-			KeptSize:          100,
-			DroppedSize:       10000,
-			SizeCheckInterval: config.Duration(10 * time.Second),
-		}})
+		return NewRedisBasicStore(&RedisBasicStoreOptions{})
 	case "local":
 		return NewLocalRemoteStore()
 	}

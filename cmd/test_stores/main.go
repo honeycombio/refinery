@@ -135,6 +135,10 @@ func makeRemoteStore(storeType string) centralstore.BasicStorer {
 	switch storeType {
 	case "local":
 		return centralstore.NewLocalRemoteStore()
+	case "redis":
+		return centralstore.NewRedisBasicStore(centralstore.RedisBasicStoreOptions{
+			Host: "localhost:6379",
+		})
 	default:
 		panic("unknown store type " + storeType)
 	}
