@@ -36,12 +36,12 @@ type RedisBasicStoreOptions struct {
 	MaxTraceRetention time.Duration
 }
 
-var _ BasicStorer = (*RedisBasicStore)(nil)
-
-func NewRedisBasicStore(opt RedisBasicStoreOptions) *RedisBasicStore {
-	host := "localhost:6379"
-	if opt.Host != "" {
-		host = opt.Host
+func EnsureRedisBasicStoreOptions(opt *RedisBasicStoreOptions) {
+	if opt == nil {
+		opt = &RedisBasicStoreOptions{}
+	}
+	if opt.Host == "" {
+		opt.Host = "localhost:6379"
 	}
 
 	if opt.MaxTraceRetention == 0 {
@@ -60,8 +60,15 @@ func NewRedisBasicStore(opt RedisBasicStoreOptions) *RedisBasicStore {
 		opt.Cache.SizeCheckInterval = config.Duration(10 * time.Second)
 	}
 
+}
+
+var _ BasicStorer = (*RedisBasicStore)(nil)
+
+func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
+	EnsureRedisBasicStoreOptions(opt)
+
 	redisClient := redis.NewClient(&redis.Config{
-		Addr: host,
+		Addr: opt.Host,
 	})
 
 	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
@@ -89,7 +96,6 @@ func NewRedisBasicStore(opt RedisBasicStoreOptions) *RedisBasicStore {
 		decisionCache: decisionCache,
 		traces:        newTraceStatusStore(clock),
 		states:        stateProcessor,
-		errs:          make(chan error, defaultPendingWorkCapacity),
 	}
 }
 
@@ -99,15 +105,13 @@ type RedisBasicStore struct {
 	decisionCache cache.TraceSentCache
 	traces        *tracesStore
 	states        *traceStateProcessor
-	errs          chan error
 }
 
 func (r *RedisBasicStore) Stop() error {
 	r.states.Stop()
 	if err := r.client.Stop(context.TODO()); err != nil {
-		r.errs <- err
+		return err
 	}
-	close(r.errs)
 	return nil
 }
 
@@ -127,30 +131,30 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 	case DecisionKeep, AwaitingDecision:
 		err := r.traces.incrementSpanCounts(conn, span.TraceID, span.Type)
 		if err != nil {
-			r.errs <- err
+			return err
 		}
 	case Collecting:
 		if span.ParentID == "" {
 			_, err := r.states.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
 			if err != nil {
-				r.errs <- err
+				return err
 			}
 		}
 	case DecisionDelay, ReadyToDecide:
 	case Unknown:
 		err := r.states.addNewTrace(conn, span.TraceID)
 		if err != nil {
-			r.errs <- err
+			return err
 		}
 		err = r.traces.addStatus(conn, span)
 		if err != nil {
-			r.errs <- err
+			return err
 		}
 	}
 
 	err := r.traces.storeSpan(conn, span)
 	if err != nil {
-		r.errs <- err
+		return err
 	}
 
 	return nil
@@ -254,7 +258,6 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(n int) ([]string, error) {
 
 	traceIDs, err := r.states.allTraceIDs(conn, ReadyToDecide, n)
 	if err != nil {
-		r.errs <- err
 		return nil, err
 	}
 
@@ -264,7 +267,6 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(n int) ([]string, error) {
 
 	succeed, err := r.states.toNextState(conn, newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision), traceIDs...)
 	if err != nil {
-		r.errs <- err
 		return nil, err
 	}
 
@@ -279,7 +281,6 @@ func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toStat
 	if toState == DecisionDrop {
 		traces, err := r.traces.getTraceStatuses(conn, traceIDs)
 		if err != nil {
-			r.errs <- err
 			return err
 		}
 
@@ -292,7 +293,6 @@ func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toStat
 
 	_, err := r.states.toNextState(conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
 	if err != nil {
-		r.errs <- err
 		return err
 	}
 
@@ -311,7 +311,6 @@ func (r *RedisBasicStore) KeepTraces(statuses []*CentralTraceStatus) error {
 
 	_, err := r.states.toNextState(conn, newTraceStateChangeEvent(AwaitingDecision, DecisionKeep), traceIDs...)
 	if err != nil {
-		r.errs <- err
 		return err
 	}
 
@@ -323,7 +322,7 @@ func (r *RedisBasicStore) KeepTraces(statuses []*CentralTraceStatus) error {
 
 	_, err = conn.Del(spanListKeys...)
 	if err != nil {
-		r.errs <- err
+		return err
 	}
 
 	return nil

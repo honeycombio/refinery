@@ -490,7 +490,6 @@ func NewTestRedisBasicStore(t *testing.T, redisClient *TestRedisClient) *TestRed
 			states:        ts.traceStateProcessor,
 			traces:        newTraceStatusStore(clock),
 			decisionCache: decisionCache,
-			errs:          make(chan error, defaultPendingWorkCapacity),
 		},
 		testStateProcessor: ts,
 		clock:              clock,
