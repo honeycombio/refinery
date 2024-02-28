@@ -317,7 +317,7 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 
 	resp, err := http.DefaultTransport.RoundTrip(req)
 	assert.NoError(t, err)
-	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, 401, resp.StatusCode)
 	data, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	assert.NoError(t, err)

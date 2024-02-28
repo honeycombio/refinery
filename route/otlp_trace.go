@@ -16,29 +16,31 @@ func (r *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 
 	if !r.Config.IsAPIKeyValid(ri.ApiKey) {
-		err := fmt.Errorf("api key %s not found in list of authorized keys", ri.ApiKey)
-		r.handlerReturnWithError(w, ErrAuthNeeded, err)
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
 
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
-			r.handlerReturnWithError(w, ErrInvalidContentType, err)
+			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
 		} else {
-			r.handlerReturnWithError(w, ErrAuthNeeded, err)
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		}
 		return
 	}
 
 	result, err := huskyotlp.TranslateTraceRequestFromReader(req.Body, ri)
 	if err != nil {
-		r.handlerReturnWithError(w, ErrUpstreamFailed, err)
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
 
 	if err := processTraceRequest(req.Context(), r, result.Batches, ri.ApiKey); err != nil {
-		r.handlerReturnWithError(w, ErrUpstreamFailed, err)
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+		return
 	}
+
+	_ = huskyotlp.WriteOtlpHttpTraceSuccessResponse(w, req)
 }
 
 type TraceServer struct {
