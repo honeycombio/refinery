@@ -1,5 +1,15 @@
 # Refinery Changelog
 
+## 2.4.2 2024-02-28
+
+This is a bug fix release for returning a improperly formatted OTLP error responses.
+OTLP clients receiving the improper response would show errors about parsing the response, masking the error message within the response which complicated solving data send issues.
+This release is a recommended upgrade for anyone sending OTLP data to Refinery.
+
+### Fixes
+
+- fix: Bring OTLP HTTP error responses in line with spec. (#1010) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
 ## 2.4.1 2024-02-26
 
 This is a bug fix release for matching fields in the root span context.

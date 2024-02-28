@@ -2,6 +2,12 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.4.2
+
+This is a bug fix release for returning a improperly formatted OTLP error responses.
+OTLP clients receiving the improper response would show errors about parsing the response, masking the error message within the response which complicated solving data send issues.
+This release is a recommended upgrade for anyone sending OTLP data to Refinery.
+
 ## Version 2.4.1
 
 This is a bug fix release for matching fields in the root span context.
