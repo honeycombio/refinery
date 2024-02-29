@@ -219,7 +219,7 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 
 		status, ok := statusesMap[id]
 		if !ok {
-			status = NewCentralTraceStatus(id, state)
+			status = NewCentralTraceStatus(id, state, r.traces.clock.Now())
 			statusesMap[id] = status
 			continue
 		}
