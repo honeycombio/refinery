@@ -330,7 +330,6 @@ func TestSetTraceStatuses(t *testing.T) {
 	for _, status := range statuses {
 		if status.TraceID == traceids[0] {
 			assert.Equal(t, DecisionKeep, status.State)
-			// TODO: save the reason in the reason cache correctly
 			assert.Equal(t, "because", status.KeepReason)
 		} else {
 			assert.Equal(t, DecisionDrop, status.State)
@@ -434,7 +433,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	}
 }
 
-func cleanupRedisStore(t testing.TB, store BasicStorer) error {
+func cleanupRedisStore(t testing.TB, store BasicStorer) {
 	if r, ok := store.(*RedisBasicStore); ok {
 		conn := r.client.Get()
 		defer conn.Close()
@@ -444,5 +443,4 @@ func cleanupRedisStore(t testing.TB, store BasicStorer) error {
 			t.Logf("failed to flush redis: %s", err)
 		}
 	}
-	return nil
 }

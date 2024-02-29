@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	expirationForTraceStatus = 24 * time.Hour
-	expirationForTraceState  = 24 * time.Hour
-	// DefaultPendingWorkCapacity how many events to queue up for busy batches
+	expirationForTraceStatus   = 24 * time.Hour
+	expirationForTraceState    = 24 * time.Hour
 	defaultPendingWorkCapacity = 10000
 	redigoTimestamp            = "2006-01-02 15:04:05.999999 -0700 MST"
 )
@@ -63,6 +62,8 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 	redisClient := redis.NewClient(&redis.Config{
 		Addr: opt.Host,
 	})
+
+	// TODO: a redis version check and return an error if the version is supported
 
 	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
 	if err != nil {
@@ -906,13 +907,3 @@ func newTraceStateChangeEvent(current, next CentralTraceState) stateChangeEvent 
 func (s stateChangeEvent) string() string {
 	return fmt.Sprintf("%s-%s", s.current, s.next)
 }
-
-// isValidStateChange
-//BenchmarkStoreGetTrace-12    	    3793	    340487 ns/op	   15467 B/op	     108 allocs/op
-//PASS
-//ok  	github.com/honeycombio/refinery/centralstore	3.520s
-
-// isValidStateChangeThroughLua
-//BenchmarkStoreGetTrace-12    	    3916	    339635 ns/op	   15398 B/op	     107 allocs/op
-//PASS
-//ok  	github.com/honeycombio/refinery/centralstore	3.564s

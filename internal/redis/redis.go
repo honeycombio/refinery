@@ -587,8 +587,9 @@ func (c *DefaultConn) SetNXHash(key string, val interface{}) (any, error) {
 		}
 	}
 
-	// TODO: values is always "OK", but we should be able to get the values
-	// for the items in the batch
+	// TODO: How to handle the case of partial success?
+	// redis will only return 1 if the key was set, 0 if it was not
+	// should we return a map of the results?
 	values, err := redis.Values(c.conn.Do("EXEC"))
 	if err != nil {
 		return nil, err
