@@ -125,13 +125,35 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				// * traces with POST spans having status >= 400 && <= 403
 				keep := false
 				for _, span := range trace.Spans {
-					if span.KeyFields["status"].(int) >= 500 {
-						keep = true
-						break
+					operationField, ok := span.KeyFields["operation"]
+					if !ok {
+						addException(span3, fmt.Errorf("missing operation field in span"))
+						continue
 					}
-					if span.KeyFields["status"].(int) >= 400 && span.KeyFields["status"].(int) <= 403 && span.KeyFields["operation"].(string) == "POST" {
-						keep = true
-						break
+					operationValue := operationField.(string)
+					statusField := span.KeyFields["status"]
+					switch value := statusField.(type) {
+					case int:
+						if value >= 500 {
+							keep = true
+							break
+						}
+						if value >= 400 && value <= 403 && operationValue == "POST" {
+							keep = true
+							break
+						}
+					case float64:
+						if value >= 500 {
+							keep = true
+							break
+						}
+						if value >= 400 && value <= 403 && operationValue == "POST" {
+							keep = true
+							break
+						}
+
+					default:
+						addException(span3, fmt.Errorf("unexpected type for status field: %T", value))
 					}
 				}
 
