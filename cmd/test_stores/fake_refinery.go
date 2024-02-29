@@ -98,7 +98,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 			statCtx, span2 := fri.tracer.Start(ctx, "get_status_for_traces")
 			statuses, err := fri.store.GetStatusForTraces(traceIDs)
 			if err != nil {
-				fmt.Println(err)
+				addException(span2, err)
 			}
 			addSpanField(span2, "num_statuses", len(statuses))
 
@@ -206,9 +206,6 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 				})
 				if status.State == centralstore.DecisionKeep {
 					fmt.Printf("processor %d: keeping trace %s\n", nodeIndex, status.TraceID)
-					if err != nil {
-						fmt.Println(err)
-					}
 					traceIDs.Remove(status.TraceID)
 				} else if status.State == centralstore.DecisionDrop {
 					fmt.Printf("processor %d: dropping trace %s\n", nodeIndex, status.TraceID)
