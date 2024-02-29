@@ -326,12 +326,39 @@ func (r *RedisBasicStore) KeepTraces(statuses []*CentralTraceStatus) error {
 	traceIDs := make([]string, 0, len(statuses))
 	for _, status := range statuses {
 		traceIDs = append(traceIDs, status.TraceID)
-		r.decisionCache.Record(status, true, status.KeepReason)
 	}
 
-	_, err := r.states.toNextState(conn, newTraceStateChangeEvent(AwaitingDecision, DecisionKeep), traceIDs...)
+	if len(traceIDs) == 0 {
+		return nil
+	}
+
+	succeed, err := r.states.toNextState(conn, newTraceStateChangeEvent(AwaitingDecision, DecisionKeep), traceIDs...)
 	if err != nil {
 		return err
+	}
+
+	var successMap map[string]struct{}
+	if len(succeed) != len(traceIDs) {
+		successMap = make(map[string]struct{}, len(succeed))
+		for _, id := range succeed {
+			successMap[id] = struct{}{}
+		}
+	}
+
+	for _, status := range statuses {
+		if successMap != nil {
+			if _, ok := successMap[status.TraceID]; !ok {
+				continue
+			}
+
+		}
+
+		// store keep reason in status
+		err := r.traces.keepTrace(conn, status)
+		if err != nil {
+			continue
+		}
+		r.decisionCache.Record(status, true, status.KeepReason)
 	}
 
 	// remove span list
@@ -401,35 +428,49 @@ func newTraceStatusStore(clock clockwork.Clock) *tracesStore {
 	}
 }
 
+type centralTraceStatusInit struct {
+	TraceID    string
+	Rate       uint
+	Count      uint32 // number of spans in the trace
+	EventCount uint32 // number of span events in the trace
+	LinkCount  uint32 // number of span links in the trace
+}
+
+type centralTraceStatusReason struct {
+	KeepReason  string
+	reasonIndex uint // this is the cache ID for the reason
+}
+
 type centralTraceStatusRedis struct {
 	TraceID     string
+	State       string
 	Rate        uint
+	Count       uint32
+	EventCount  uint32
+	LinkCount   uint32
 	KeepReason  string
-	reasonIndex uint   // this is the cache ID for the reason
-	Timestamp   string // this is the last time the trace state was changed
-	Count       uint32 // number of spans in the trace
-	EventCount  uint32 // number of span events in the trace
-	LinkCount   uint32 // number of span links in the trace
+	reasonIndex uint
+	Timestamp   string
 }
 
 func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralTraceStatus {
 	t, _ := time.Parse(redigoTimestamp, status.Timestamp)
 	return &CentralTraceStatus{
-		TraceID:    status.TraceID,
-		State:      Unknown,
-		Rate:       status.Rate,
-		KeepReason: status.KeepReason,
-		Timestamp:  t,
-		Count:      status.Count,
-		EventCount: status.EventCount,
-		LinkCount:  status.LinkCount,
+		TraceID:     status.TraceID,
+		State:       Unknown,
+		Rate:        status.Rate,
+		reasonIndex: status.reasonIndex,
+		KeepReason:  status.KeepReason,
+		Timestamp:   t,
+		Count:       status.Count,
+		EventCount:  status.EventCount,
+		LinkCount:   status.LinkCount,
 	}
 }
 
 func (t *tracesStore) addStatus(conn redis.Conn, span *CentralSpan) error {
-	trace := &centralTraceStatusRedis{
-		TraceID:   span.TraceID,
-		Timestamp: t.clock.Now().UTC().Format(redigoTimestamp),
+	trace := &centralTraceStatusInit{
+		TraceID: span.TraceID,
 	}
 
 	_, err := conn.SetHashTTL(t.traceStatusKey(span.TraceID), trace, expirationForTraceStatus)
@@ -438,7 +479,19 @@ func (t *tracesStore) addStatus(conn redis.Conn, span *CentralSpan) error {
 	}
 
 	return nil
+}
 
+func (t *tracesStore) keepTrace(conn redis.Conn, status *CentralTraceStatus) error {
+	trace := &centralTraceStatusReason{
+		KeepReason: status.KeepReason,
+	}
+
+	_, err := conn.SetNXHash(t.traceStatusKey(status.TraceID), trace)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (t *tracesStore) getTrace(conn redis.Conn, traceID string) (*CentralTrace, error) {
