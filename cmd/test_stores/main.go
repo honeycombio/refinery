@@ -91,9 +91,7 @@ func makeRemoteStore(storeType string) centralstore.BasicStorer {
 	case "local":
 		return centralstore.NewLocalRemoteStore()
 	case "redis":
-		return centralstore.NewRedisBasicStore(&centralstore.RedisBasicStoreOptions{
-			Host: "localhost:6379",
-		})
+		return centralstore.NewRedisBasicStore(&centralstore.RedisBasicStoreOptions{})
 	default:
 		panic("unknown store type " + storeType)
 	}
@@ -111,6 +109,7 @@ type CmdLineOptions struct {
 	NodeIndex          int      `long:"node-number" description:"Index of this node if Total > 1" default:"0"`
 	DecisionReqSize    int      `long:"decision-req-size" description:"Number of traces to request for decision" default:"10"`
 	HnyAPIKey          string   `long:"hny-api-key" description:"API key for traces in Honeycomb" default:"" env:"HONEYCOMB_API_KEY"`
+	HnyEndpoint        string   `long:"hny-endpoint" description:"Endpoint for traces in Honeycomb" default:"https://api.honeycomb.io" env:"HONEYCOMB_ENDPOINT"`
 	HnyDataset         string   `long:"hny-dataset" description:"Dataset/service name for traces in Honeycomb" default:"refinery-store-test" env:"HONEYCOMB_DATASET"`
 }
 
