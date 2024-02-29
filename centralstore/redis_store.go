@@ -123,7 +123,7 @@ func (r *RedisBasicStore) WriteSpan(span *CentralSpan) error {
 	conn := r.client.Get()
 	defer conn.Close()
 
-	state, _ := r.findTraceStatus(conn, span.TraceID)
+	state := r.getTraceState(conn, span.TraceID)
 
 	switch state {
 	case DecisionDrop:
@@ -288,7 +288,27 @@ func (r *RedisBasicStore) ChangeTraceStatus(traceIDs []string, fromState, toStat
 			r.decisionCache.Record(trace, false, "")
 		}
 
-		return r.removeTraces(traceIDs)
+		if len(traceIDs) == 0 {
+			return nil
+		}
+
+		succeed, err := r.states.toNextState(conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
+		if err != nil {
+			return err
+		}
+
+		// remove span list
+		spanListKeys := make([]string, 0, len(traceIDs))
+		for _, traceID := range succeed {
+			spanListKeys = append(spanListKeys, spansHashByTraceIDKey(traceID))
+		}
+
+		_, err = conn.Del(spanListKeys...)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	_, err := r.states.toNextState(conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
@@ -328,45 +348,41 @@ func (r *RedisBasicStore) KeepTraces(statuses []*CentralTraceStatus) error {
 	return nil
 }
 
-func (r *RedisBasicStore) findTraceStatus(conn redis.Conn, traceID string) (CentralTraceState, *CentralTraceStatus) {
+func (r *RedisBasicStore) getTraceState(conn redis.Conn, traceID string) CentralTraceState {
 	if tracerec, _, found := r.decisionCache.Test(traceID); found {
 		// it was in the decision cache, so we can return the right thing
 		if tracerec.Kept() {
-			return DecisionKeep, NewCentralTraceStatus(traceID, DecisionKeep)
+			return DecisionKeep
 		} else {
-			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop)
+			return DecisionDrop
 		}
 	}
 
+	if r.states.exists(conn, DecisionDrop, traceID) {
+		return DecisionDrop
+	}
+
+	if r.states.exists(conn, DecisionKeep, traceID) {
+		return DecisionKeep
+	}
+
 	if r.states.exists(conn, AwaitingDecision, traceID) {
-		return AwaitingDecision, NewCentralTraceStatus(traceID, AwaitingDecision)
+		return AwaitingDecision
 	}
 
 	if r.states.exists(conn, ReadyToDecide, traceID) {
-		return ReadyToDecide, NewCentralTraceStatus(traceID, ReadyToDecide)
+		return ReadyToDecide
 	}
 
 	if r.states.exists(conn, DecisionDelay, traceID) {
-		return DecisionDelay, NewCentralTraceStatus(traceID, DecisionDelay)
+		return DecisionDelay
 	}
 
 	if r.states.exists(conn, Collecting, traceID) {
-		return Collecting, NewCentralTraceStatus(traceID, Collecting)
+		return Collecting
 	}
 
-	return Unknown, nil
-}
-
-func (r *RedisBasicStore) removeTraces(traceIDs []string) error {
-	conn := r.client.Get()
-	defer conn.Close()
-
-	err := r.traces.remove(conn, traceIDs)
-	if err != nil {
-		return err
-	}
-
-	return r.states.remove(conn, AwaitingDecision, traceIDs...)
+	return Unknown
 }
 
 // TraceStore stores trace state status and spans.
@@ -596,6 +612,7 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 			ReadyToDecide,
 			AwaitingDecision,
 			DecisionKeep,
+			DecisionDrop,
 		},
 		config:       cfg,
 		clock:        clock,
@@ -847,6 +864,7 @@ func ensureValidStateChangeEvents(client redis.Client) error {
 		newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision).string(),
 		newTraceStateChangeEvent(AwaitingDecision, ReadyToDecide).string(),
 		newTraceStateChangeEvent(AwaitingDecision, DecisionKeep).string(),
+		newTraceStateChangeEvent(AwaitingDecision, DecisionDrop).string(),
 	)
 }
 
