@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/honeycombio/otel-config-go/otelconfig"
@@ -61,10 +62,13 @@ func setupTracing(opts CmdLineOptions) (tracer trace.Tracer, shutdown func()) {
 	if opts.HnyAPIKey != "" {
 		var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
 
+		opts.HnyEndpoint = strings.TrimSuffix(opts.HnyEndpoint, "/")
+		endpoint := fmt.Sprintf("%s:443", opts.HnyEndpoint)
+
 		otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
 			otelconfig.WithExporterProtocol(protocol),
 			otelconfig.WithServiceName(opts.HnyDataset),
-			otelconfig.WithTracesExporterEndpoint("https://api-dogfood.honeycomb.io:443"),
+			otelconfig.WithTracesExporterEndpoint(endpoint),
 			otelconfig.WithMetricsEnabled(false),
 			otelconfig.WithTracesEnabled(true),
 			otelconfig.WithHeaders(map[string]string{
