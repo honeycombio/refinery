@@ -238,6 +238,9 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 		statuses = append(statuses, status)
 	}
 	sort.SliceStable(statuses, func(i, j int) bool {
+		if statuses[i].Timestamp.IsZero() {
+			return false
+		}
 		return statuses[i].Timestamp.Before(statuses[j].Timestamp)
 	})
 
@@ -447,7 +450,7 @@ type centralTraceStatusInit struct {
 
 type centralTraceStatusReason struct {
 	KeepReason  string
-	reasonIndex uint // this is the cache ID for the reason
+	ReasonIndex uint // this is the cache ID for the reason
 }
 
 type centralTraceStatusRedis struct {
@@ -458,19 +461,16 @@ type centralTraceStatusRedis struct {
 	EventCount  uint32
 	LinkCount   uint32
 	KeepReason  string
-	reasonIndex uint
-	Timestamp   string
+	ReasonIndex uint
 }
 
 func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralTraceStatus {
-	t, _ := time.Parse(redigoTimestamp, status.Timestamp)
 	return &CentralTraceStatus{
 		TraceID:     status.TraceID,
 		State:       Unknown,
 		Rate:        status.Rate,
-		reasonIndex: status.reasonIndex,
+		reasonIndex: status.ReasonIndex,
 		KeepReason:  status.KeepReason,
-		Timestamp:   t,
 		Count:       status.Count,
 		EventCount:  status.EventCount,
 		LinkCount:   status.LinkCount,
@@ -526,7 +526,7 @@ func (t *tracesStore) getTraceStatuses(conn redis.Conn, traceIDs []string) (map[
 		status := &centralTraceStatusRedis{}
 		err := conn.GetStructHash(t.traceStatusKey(traceID), status)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to retrieve trace status for trace ID %s with error %s", traceID, err)
 		}
 
 		statuses[traceID] = normalizeCentralTraceStatusRedis(status)
@@ -704,7 +704,7 @@ func (t *traceStateProcessor) addNewTrace(conn redis.Conn, traceID string) error
 		return nil
 	}
 
-	return conn.ZAdd(t.stateByTraceIDsKey(Collecting), []any{t.clock.Now().UnixNano(), traceID})
+	return conn.ZAdd(t.stateByTraceIDsKey(Collecting), []any{t.clock.Now().UnixMicro(), traceID})
 }
 
 func (t *traceStateProcessor) stateByTraceIDsKey(state CentralTraceState) string {
@@ -775,7 +775,7 @@ func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChan
 	// the timestamp should be a fixed length unix timestamp
 	timestamps := make([]int64, len(eligible))
 	for i := range eligible {
-		timestamps[i] = t.clock.Now().UnixNano()
+		timestamps[i] = t.clock.Now().UnixMicro()
 	}
 
 	// only add traceIDs to the destination if they don't already exist
@@ -810,7 +810,7 @@ func (t *traceStateProcessor) removeExpiredTraces(client redis.Client) {
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
-		traceIDs, err := conn.ZRangeByScoreString(t.stateByTraceIDsKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).UnixNano())
+		traceIDs, err := conn.ZRangeByScoreString(t.stateByTraceIDsKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro())
 		if err != nil {
 			return
 		}
