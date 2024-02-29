@@ -176,7 +176,6 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 					matched++
 					break span
 				}
-				continue
 			} else if condition.Matches(value, exists) {
 				matched++
 				break span
@@ -270,13 +269,19 @@ func extractValueFromSpan(
 		}
 	}
 
+	// we need to preserve which span we're actually using, since
+	// we might need to use the root span instead of the current span.
+	original := span
 	// whether this condition is matched by this span.
 	for _, field := range condition.Fields {
+		// always start with the original span
+		span = original
 		// check if rule uses root span context
 		if strings.HasPrefix(field, RootPrefix) {
 			// make sure root span exists
 			if trace.RootSpan != nil {
 				field = field[len(RootPrefix):]
+				// now we're using the root span
 				span = trace.RootSpan
 			} else {
 				// we wanted root span but this trace doesn't have one, so just skip it
