@@ -16,7 +16,7 @@ require (
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.0
-	github.com/honeycombio/husky v0.24.0
+	github.com/honeycombio/husky v0.25.1-0.20240229103413-71c269e7a175
 	github.com/honeycombio/libhoney-go v1.20.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/json-iterator/go v1.1.12
