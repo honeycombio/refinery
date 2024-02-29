@@ -23,14 +23,6 @@ const (
 	redigoTimestamp            = "2006-01-02 15:04:05.999999 -0700 MST"
 )
 
-var validStateChangeEvents = map[string]struct{}{
-	"unknown-collecting":                   {},
-	"collecting-waiting_to_decide":         {},
-	"waiting_to_decide-ready_for_decision": {},
-	"ready_for_decision-awaiting_decision": {},
-	"awaiting_decision-ready_for_decision": {},
-}
-
 type RedisBasicStoreOptions struct {
 	Host              string
 	Cache             config.SampleCacheConfig
@@ -593,16 +585,6 @@ func (t *tracesStore) incrementSpanCountsCMD(traceID string, spanType SpanType) 
 	return redis.NewIncrByHashCommand(t.traceStatusKey(traceID), field, 1), nil
 }
 
-func (t *tracesStore) remove(conn redis.Conn, traceIDs []string) error {
-	keys := make([]string, 0, len(traceIDs))
-	for _, traceID := range traceIDs {
-		keys = append(keys, t.traceStatusKey(traceID), spansHashByTraceIDKey(traceID))
-	}
-
-	_, err := conn.Del(keys...)
-	return err
-}
-
 func spansHashByTraceIDKey(traceID string) string {
 	return fmt.Sprintf("%s:spans", traceID)
 }
@@ -807,33 +789,6 @@ func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChan
 	}
 
 	return eligible, nil
-}
-
-func (t *traceStateProcessor) isValidStateChange(conn redis.Conn, stateChange stateChangeEvent, traceID string) bool {
-	// We don't need to call unwatch here because `RPushTTL` is executed in a transaction
-	// Redis will automatically discard the watch after the transaction is executed
-	current := stateChange.current
-	_, err := conn.Watch(t.traceStatesKey(traceID), func(c redis.Conn) error {
-		currentStateRecorded, err := conn.LIndexString(t.traceStatesKey(traceID), -1)
-		if err != nil {
-			return err
-		}
-
-		if currentStateRecorded != "" {
-			current = CentralTraceState(currentStateRecorded)
-		}
-
-		stateChangeEvent := newTraceStateChangeEvent(current, stateChange.next)
-		if _, ok := validStateChangeEvents[stateChangeEvent.string()]; !ok {
-			return fmt.Errorf("invalid state change event")
-		}
-		if ok, err := conn.RPushTTL(t.traceStatesKey(traceID), stateChange.next.String(), expirationForTraceState); err != nil || !ok {
-			return err
-		}
-
-		return nil
-	})
-	return err == nil
 }
 
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than

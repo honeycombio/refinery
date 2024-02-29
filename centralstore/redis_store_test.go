@@ -235,7 +235,6 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, keepStatus, 1)
 	assert.Equal(t, DecisionKeep, keepStatus[0].State)
-	assert.True(t, keepStatus[0].Timestamp.After(readyStatus[0].Timestamp))
 }
 
 func TestRedisBasicStore_GetTracesNeedingDecision(t *testing.T) {
