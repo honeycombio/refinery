@@ -99,19 +99,22 @@ Conditions:
 
 ## Using a Prefix to Identify a Field in a Related Span
 
-Fields can contain a span selection prefix. Today, the only prefix supported is `root`.
-This prefix causes the root span to be searched for the specified field, rather than the span being evaluated.
+Field names can contain a span selection prefix. Today, the only prefix
+supported is `root`. This prefix causes the root span to be searched for the
+specified field, rather than the span being evaluated.
 
 ```yaml
 Rules:
-    - Name: limit by root span context
+    - Name: only consider errors originating from the login service
       Conditions:
-        Field: "root.http.status"
-        Operator: =
-        Value: "500"
-        Datatype: string
+        - Field: root.service.name
+          Operator: =
+          Value: login
+        - Field: http.status
+          Operator: =
+          Value: 500
+          Datatype: int
 ```
-
 
 ## `Operator`
 
