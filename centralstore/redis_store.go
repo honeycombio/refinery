@@ -167,12 +167,12 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 	conn := r.client.Get()
 	defer conn.Close()
 
-	notInCache := make([]string, 0, len(traceIDs))
+	pendingTraceIDs := make([]string, 0, len(traceIDs))
 	statusMap := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, id := range traceIDs {
 		tracerec, reason, found := r.decisionCache.Test(id)
 		if !found {
-			notInCache = append(notInCache, id)
+			pendingTraceIDs = append(pendingTraceIDs, id)
 			continue
 		}
 		// it was in the decision cache, so we can return the right thing
@@ -193,28 +193,27 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 		}
 	}
 
-	data, err := r.traces.getTraceStatuses(conn, notInCache)
+	statusMapFromRedis, err := r.traces.getTraceStatuses(conn, pendingTraceIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	remaining := notInCache
 	for _, state := range r.states.states {
-		if len(remaining) == 0 {
+		if len(pendingTraceIDs) == 0 {
 			break
 		}
 
-		exist, err := r.states.traceIDsWithTimestamp(conn, state, remaining)
+		timestampsByTraceIDs, err := r.states.traceIDsWithTimestamp(conn, state, pendingTraceIDs)
 		if err != nil {
 			return nil, err
 		}
-		notExist := make([]string, 0, len(remaining))
-		for id, timestamp := range exist {
+		notExist := make([]string, 0, len(pendingTraceIDs))
+		for id, timestamp := range timestampsByTraceIDs {
 			if timestamp.IsZero() {
 				notExist = append(notExist, id)
 				continue
 			}
-			status, ok := data[id]
+			status, ok := statusMapFromRedis[id]
 			if !ok {
 				continue
 			}
@@ -223,10 +222,10 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 			statusMap[id] = status
 		}
 
-		remaining = notExist
+		pendingTraceIDs = notExist
 	}
 
-	for _, id := range remaining {
+	for _, id := range pendingTraceIDs {
 		statusMap[id] = &CentralTraceStatus{
 			TraceID: id,
 			State:   Unknown,
