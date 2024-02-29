@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -174,12 +175,38 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 	conn := r.client.Get()
 	defer conn.Close()
 
-	statusesMap, err := r.traces.getTraceStatuses(conn, traceIDs)
+	notInCache := make([]string, 0, len(traceIDs))
+	statusMap := make(map[string]*CentralTraceStatus, len(traceIDs))
+	for _, id := range traceIDs {
+		tracerec, reason, found := r.decisionCache.Test(id)
+		if !found {
+			notInCache = append(notInCache, id)
+			continue
+		}
+		// it was in the decision cache, so we can return the right thing
+		var state CentralTraceState
+		if tracerec.Kept() {
+			state = DecisionKeep
+		} else {
+			state = DecisionDrop
+		}
+		statusMap[id] = &CentralTraceStatus{
+			TraceID:    id,
+			State:      state,
+			KeepReason: reason,
+			Rate:       tracerec.Rate(),
+			Count:      uint32(tracerec.SpanCount()),
+			EventCount: uint32(tracerec.SpanEventCount()),
+			LinkCount:  uint32(tracerec.SpanLinkCount()),
+		}
+	}
+
+	data, err := r.traces.getTraceStatuses(conn, notInCache)
 	if err != nil {
 		return nil, err
 	}
 
-	remaining := traceIDs
+	remaining := notInCache
 	for _, state := range r.states.states {
 		if len(remaining) == 0 {
 			break
@@ -195,42 +222,32 @@ func (r *RedisBasicStore) GetStatusForTraces(traceIDs []string) ([]*CentralTrace
 				notExist = append(notExist, id)
 				continue
 			}
-			_, ok := statusesMap[id]
+			status, ok := data[id]
 			if !ok {
 				continue
 			}
-			statusesMap[id].State = state
-			statusesMap[id].Timestamp = timestamp
+			status.State = state
+			status.Timestamp = timestamp
+			statusMap[id] = status
 		}
 
 		remaining = notExist
 	}
 
 	for _, id := range remaining {
-		state := Unknown
-		if tracerec, _, found := r.decisionCache.Test(id); found {
-			// it was in the decision cache, so we can return the right thing
-			if tracerec.Kept() {
-				state = DecisionKeep
-			} else {
-				state = DecisionDrop
-			}
+		statusMap[id] = &CentralTraceStatus{
+			TraceID: id,
+			State:   Unknown,
 		}
-
-		status, ok := statusesMap[id]
-		if !ok {
-			status = NewCentralTraceStatus(id, state, r.traces.clock.Now())
-			statusesMap[id] = status
-			continue
-		}
-
-		status.State = state
 	}
 
-	statuses := make([]*CentralTraceStatus, 0, len(statusesMap))
-	for _, status := range statusesMap {
+	statuses := make([]*CentralTraceStatus, 0, len(statusMap))
+	for _, status := range statusMap {
 		statuses = append(statuses, status)
 	}
+	sort.SliceStable(statuses, func(i, j int) bool {
+		return statuses[i].Timestamp.Before(statuses[j].Timestamp)
+	})
 
 	return statuses, nil
 
@@ -508,6 +525,10 @@ func (t *tracesStore) getTrace(conn redis.Conn, traceID string) (*CentralTrace, 
 }
 
 func (t *tracesStore) getTraceStatuses(conn redis.Conn, traceIDs []string) (map[string]*CentralTraceStatus, error) {
+	if len(traceIDs) == 0 {
+		return nil, nil
+	}
+
 	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, traceID := range traceIDs {
 		status := &centralTraceStatusRedis{}
@@ -517,11 +538,6 @@ func (t *tracesStore) getTraceStatuses(conn redis.Conn, traceIDs []string) (map[
 		}
 
 		statuses[traceID] = normalizeCentralTraceStatusRedis(status)
-	}
-
-	if len(statuses) == 0 {
-		return nil, fmt.Errorf("no trace found")
-
 	}
 
 	return statuses, nil
