@@ -35,7 +35,7 @@ func noopTracer() trace.Tracer {
 	return pr.Tracer("test")
 }
 
-var storeType = "local"
+var storeType = "redis"
 
 func makeRemoteStore() BasicStorer {
 	switch storeType {
@@ -59,9 +59,9 @@ func makeRemoteStore() BasicStorer {
 func TestSingleSpanGetsCollected(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
-	defer cleanupRedisStore(remoteStore)
 	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(t, remoteStore)
 
 	randomNum := rand.Intn(500)
 	span := &CentralSpan{
@@ -86,9 +86,9 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 func TestSingleTraceOperation(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
-	defer cleanupRedisStore(remoteStore)
 	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(t, remoteStore)
 
 	span := &CentralSpan{
 		TraceID:  "trace1",
@@ -134,9 +134,9 @@ func TestSingleTraceOperation(t *testing.T) {
 func TestBasicStoreOperation(t *testing.T) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
-	defer cleanupRedisStore(rs)
 	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(t, rs)
 
 	traceids := make([]string, 0)
 
@@ -184,7 +184,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		assert.NoError(t, err)
 		if err == nil {
 			assert.Equal(t, 10, len(trace.Spans))
-			// assert.NotNil(t, trace.Root)
+			assert.NotNil(t, trace.Root)
 		}
 	}
 }
@@ -192,9 +192,9 @@ func TestBasicStoreOperation(t *testing.T) {
 func TestReadyForDecisionLoop(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
-	defer cleanupRedisStore(remoteStore)
 	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(t, remoteStore)
 
 	numberOfTraces := 11
 	traceids := make([]string, 0)
@@ -248,9 +248,9 @@ func TestReadyForDecisionLoop(t *testing.T) {
 func TestSetTraceStatuses(t *testing.T) {
 	sopts := standardOptions()
 	remoteStore := makeRemoteStore()
-	defer cleanupRedisStore(remoteStore)
 	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(t, remoteStore)
 
 	numberOfTraces := 5
 	traceids := make([]string, 0)
@@ -318,6 +318,7 @@ func TestSetTraceStatuses(t *testing.T) {
 			status.State = DecisionDrop
 		}
 	}
+	require.NotEmpty(t, statuses)
 	err = store.SetTraceStatuses(statuses)
 	assert.NoError(t, err)
 
@@ -330,7 +331,7 @@ func TestSetTraceStatuses(t *testing.T) {
 		if status.TraceID == traceids[0] {
 			assert.Equal(t, DecisionKeep, status.State)
 			// TODO: save the reason in the reason cache correctly
-			// assert.Equal(t, "because", status.KeepReason)
+			assert.Equal(t, "because", status.KeepReason)
 		} else {
 			assert.Equal(t, DecisionDrop, status.State)
 		}
@@ -341,9 +342,9 @@ func TestSetTraceStatuses(t *testing.T) {
 func BenchmarkStoreWriteSpan(b *testing.B) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
-	defer cleanupRedisStore(rs)
 	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(b, rs)
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -363,9 +364,9 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 func BenchmarkStoreGetStatus(b *testing.B) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
-	defer cleanupRedisStore(rs)
 	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(b, rs)
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -386,9 +387,9 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 func BenchmarkStoreGetTrace(b *testing.B) {
 	sopts := standardOptions()
 	rs := makeRemoteStore()
-	defer cleanupRedisStore(rs)
 	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(b, rs)
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -412,9 +413,9 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	sopts.SendDelay = duration("100ms")
 	sopts.TraceTimeout = duration("100ms")
 	rs := makeRemoteStore()
-	defer cleanupRedisStore(rs)
 	store := NewSmartWrapper(sopts, rs, noopTracer())
 	defer store.Stop()
+	defer cleanupRedisStore(b, rs)
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -433,14 +434,14 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	}
 }
 
-func cleanupRedisStore(store BasicStorer) error {
+func cleanupRedisStore(t testing.TB, store BasicStorer) error {
 	if r, ok := store.(*RedisBasicStore); ok {
 		conn := r.client.Get()
 		defer conn.Close()
 
 		_, err := conn.Do("FLUSHALL")
 		if err != nil {
-			return err
+			t.Logf("failed to flush redis: %s", err)
 		}
 	}
 	return nil
