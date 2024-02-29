@@ -65,6 +65,7 @@ type Conn interface {
 	ListFields(string) ([]string, error)
 	IncrementByHash(string, string, int64) (int64, error)
 	SetHash(string, any) error
+	SetNXHash(string, any) (any, error)
 	SetHashTTL(string, any, time.Duration) (any, error)
 
 	SAdd(string, ...any) error
@@ -574,6 +575,28 @@ func (c *DefaultConn) SetHash(key string, val interface{}) error {
 	return err
 }
 
+func (c *DefaultConn) SetNXHash(key string, val interface{}) (any, error) {
+	if err := c.conn.Send("MULTI"); err != nil {
+		return nil, err
+	}
+
+	args := redis.Args{key}.AddFlat(val)
+	for i := 1; i < len(args); i += 2 {
+		if err := c.conn.Send("HSETNX", key, args[i], args[i+1]); err != nil {
+			return nil, err
+		}
+	}
+
+	// TODO: values is always "OK", but we should be able to get the values
+	// for the items in the batch
+	values, err := redis.Values(c.conn.Do("EXEC"))
+	if err != nil {
+		return nil, err
+	}
+
+	return values, nil
+}
+
 func (c *DefaultConn) SetHashTTL(key string, val interface{}, expiration time.Duration) (any, error) {
 	if err := c.conn.Send("MULTI"); err != nil {
 		return nil, err
@@ -584,7 +607,7 @@ func (c *DefaultConn) SetHashTTL(key string, val interface{}, expiration time.Du
 		return nil, err
 	}
 
-	err = c.conn.Send("EXPIRE", key, expiration.Seconds())
+	err = c.conn.Send("EXPIRE", key, expiration.Seconds(), "NX")
 	if err != nil {
 		return nil, err
 	}
