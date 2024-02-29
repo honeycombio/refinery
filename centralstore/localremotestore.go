@@ -140,7 +140,6 @@ func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState
 	lrs.states[toState][traceID] = status
 	status.Timestamp = time.Now()
 	delete(lrs.states[fromState], traceID)
-	fmt.Println("changeTraceState complete", traceID, fromState, toState)
 	return true
 }
 
@@ -283,7 +282,6 @@ func (lrs *LocalRemoteStore) GetTracesNeedingDecision(n int) ([]string, error) {
 	defer lrs.mutex.Unlock()
 	// get the list of traces in the ReadyForDecision state
 	traceids := make([]string, 0, len(lrs.states[ReadyToDecide]))
-	fmt.Println("NeedDecision: traceids", traceids)
 	for _, traceStatus := range lrs.states[ReadyToDecide] {
 		traceids = append(traceids, traceStatus.TraceID)
 		lrs.changeTraceState(traceStatus.TraceID, ReadyToDecide, AwaitingDecision)
