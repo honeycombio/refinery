@@ -193,6 +193,30 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
+	t.Run("invalid headers", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{}
+		body, err := proto.Marshal(req)
+		assert.NoError(t, err)
+		anEmptyRequestBody := bytes.NewReader(body) // Empty because we're testing headers, not the body.
+
+		t.Run("no api key header & bad content-type", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", anEmptyRequestBody)
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/nope")
+			response := httptest.NewRecorder()
+			router.postOTLP(response, request)
+			assert.Equal(t, http.StatusUnsupportedMediaType, response.Code, "Prioritize erroring on unsupported content type over other header issues.")
+		})
+		t.Run("no api key header", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", anEmptyRequestBody)
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			response := httptest.NewRecorder()
+			router.postOTLP(response, request)
+			assert.Equal(t, http.StatusUnauthorized, response.Code)
+		})
+	})
+
 	t.Run("can receive OTLP over HTTP/protobuf", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
