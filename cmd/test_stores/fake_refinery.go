@@ -66,7 +66,7 @@ func (fri *FakeRefineryInstance) runSender(opts CmdLineOptions, nodeIndex int, s
 func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, stopch chan struct{}) {
 	// start a ticker to check the status of traces
 	// We randomize the interval a bit so that we don't all run at the same time
-	statusTicker := time.NewTicker(time.Duration(500+rand.Int63n(1000)) * time.Millisecond)
+	statusTicker := time.NewTicker(time.Duration(1500+rand.Int63n(1000)) * time.Millisecond)
 	defer statusTicker.Stop()
 	ctx := context.Background()
 
@@ -101,99 +101,174 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 			if err != nil {
 				addException(span2, err)
 			}
-			addSpanField(span2, "num_statuses", len(statuses))
-			traces := make([]*centralstore.CentralTrace, 0, len(statuses))
-			var wg sync.WaitGroup
-			for _, status := range statuses {
-				_, span3 := fri.tracer.Start(statCtx, "get_trace")
-				addSpanFields(span3, map[string]interface{}{
-					"trace_id": status.TraceID,
-					"state":    status.State.String(),
-				})
-				// make a decision on each trace
-				if status.State != centralstore.AwaitingDecision {
-					// someone else got to it first
-					addSpanField(span3, "decision", "not ready")
-					span3.End()
-					continue
+			addSpanFields(span2, map[string]interface{}{
+				"num_statuses": len(statuses),
+				"is_parallel":  opts.ParallelDecider,
+			})
+
+			if opts.ParallelDecider {
+
+				traces := make([]*centralstore.CentralTrace, 0, len(statuses))
+				var wg sync.WaitGroup
+				for _, status := range statuses {
+					_, span3 := fri.tracer.Start(statCtx, "get_trace")
+					addSpanFields(span3, map[string]interface{}{
+						"trace_id": status.TraceID,
+						"state":    status.State.String(),
+					})
+					// make a decision on each trace
+					if status.State != centralstore.AwaitingDecision {
+						// someone else got to it first
+						addSpanField(span3, "decision", "not ready")
+						span3.End()
+						continue
+					}
+
+					wg.Add(1)
+					go func(status *centralstore.CentralTraceStatus, span3 trace.Span) {
+						defer wg.Done()
+
+						trace, err := fri.store.GetTrace(status.TraceID)
+						if err != nil {
+							addException(span3, err)
+						}
+						addSpanField(span3, "span_count", len(trace.Spans))
+						traces = append(traces, trace)
+						span3.End()
+					}(status, span3)
 				}
+				wg.Wait()
 
-				wg.Add(1)
-				go func(status *centralstore.CentralTraceStatus, span3 trace.Span) {
-					defer wg.Done()
-					defer span3.End()
+				stateMap := make(map[string]centralstore.CentralTraceState, len(traces))
+				for _, trace := range traces {
+					// decision criteria:
+					// we're going to keep:
+					// * traces having status > 500
+					// * traces with POST spans having status >= 400 && <= 403
+					_, decisionSpan := fri.tracer.Start(statCtx, "make_decision")
+					addSpanFields(decisionSpan, map[string]interface{}{
+						"trace_id": trace.TraceID,
+					})
+					keep := false
+					for _, span := range trace.Spans {
+						operationField, ok := span.KeyFields["operation"]
+						if !ok {
+							addException(decisionSpan, fmt.Errorf("missing operation field in span"))
+							continue
+						}
+						operationValue := operationField.(string)
+						statusField := span.KeyFields["status"]
+						switch value := statusField.(type) {
+						case int:
+							if value >= 500 {
+								keep = true
+								break
+							}
+							if value >= 400 && value <= 403 && operationValue == "POST" {
+								keep = true
+								break
+							}
+						case float64:
+							if value >= 500 {
+								keep = true
+								break
+							}
+							if value >= 400 && value <= 403 && operationValue == "POST" {
+								keep = true
+								break
+							}
 
+						default:
+							addException(decisionSpan, fmt.Errorf("unexpected type for status field: %T", value))
+						}
+					}
+
+					var state centralstore.CentralTraceState
+					if keep {
+						fmt.Printf("decider %d:  keeping trace %s\n", nodeIndex, trace.TraceID)
+						state = centralstore.DecisionKeep
+					} else {
+						fmt.Printf("decider %d: dropping trace %s\n", nodeIndex, trace.TraceID)
+						state = centralstore.DecisionDrop
+					}
+
+					stateMap[trace.TraceID] = state
+					addSpanField(decisionSpan, "decision", state.String())
+					decisionSpan.End()
+				}
+				span2.End()
+
+				for _, status := range statuses {
+					status.State = stateMap[status.TraceID]
+				}
+			} else {
+
+				for _, status := range statuses {
+					_, span3 := fri.tracer.Start(statCtx, "get_trace")
+					addSpanFields(span3, map[string]interface{}{
+						"trace_id": status.TraceID,
+						"state":    status.State.String(),
+					})
+					// make a decision on each trace
+					if status.State != centralstore.AwaitingDecision {
+						// someone else got to it first
+						addSpanField(span3, "decision", "not ready")
+						span3.End()
+						continue
+					}
 					trace, err := fri.store.GetTrace(status.TraceID)
 					if err != nil {
 						addException(span3, err)
 					}
-					addSpanField(span3, "span_count", len(trace.Spans))
-					traces = append(traces, trace)
-				}(status, span3)
-			}
-			wg.Wait()
+					// decision criteria:
+					// we're going to keep:
+					// * traces having status > 500
+					// * traces with POST spans having status >= 400 && <= 403
+					keep := false
+					for _, span := range trace.Spans {
+						operationField, ok := span.KeyFields["operation"]
+						if !ok {
+							addException(span3, fmt.Errorf("missing operation field in span"))
+							continue
+						}
+						operationValue := operationField.(string)
+						statusField := span.KeyFields["status"]
+						switch value := statusField.(type) {
+						case int:
+							if value >= 500 {
+								keep = true
+								break
+							}
+							if value >= 400 && value <= 403 && operationValue == "POST" {
+								keep = true
+								break
+							}
+						case float64:
+							if value >= 500 {
+								keep = true
+								break
+							}
+							if value >= 400 && value <= 403 && operationValue == "POST" {
+								keep = true
+								break
+							}
 
-			stateMap := make(map[string]centralstore.CentralTraceState, len(traces))
-			for _, trace := range traces {
-				// decision criteria:
-				// we're going to keep:
-				// * traces having status > 500
-				// * traces with POST spans having status >= 400 && <= 403
-				_, decisionSpan := fri.tracer.Start(statCtx, "make_decision")
-				addSpanFields(decisionSpan, map[string]interface{}{
-					"trace_id": trace.TraceID,
-				})
-				keep := false
-				for _, span := range trace.Spans {
-					operationField, ok := span.KeyFields["operation"]
-					if !ok {
-						addException(decisionSpan, fmt.Errorf("missing operation field in span"))
-						continue
+						default:
+							addException(span3, fmt.Errorf("unexpected type for status field: %T", value))
+						}
 					}
-					operationValue := operationField.(string)
-					statusField := span.KeyFields["status"]
-					switch value := statusField.(type) {
-					case int:
-						if value >= 500 {
-							keep = true
-							break
-						}
-						if value >= 400 && value <= 403 && operationValue == "POST" {
-							keep = true
-							break
-						}
-					case float64:
-						if value >= 500 {
-							keep = true
-							break
-						}
-						if value >= 400 && value <= 403 && operationValue == "POST" {
-							keep = true
-							break
-						}
 
-					default:
-						addException(decisionSpan, fmt.Errorf("unexpected type for status field: %T", value))
+					if keep {
+						fmt.Printf("decider %d:  keeping trace %s\n", nodeIndex, status.TraceID)
+						status.State = centralstore.DecisionKeep
+					} else {
+						fmt.Printf("decider %d: dropping trace %s\n", nodeIndex, status.TraceID)
+						status.State = centralstore.DecisionDrop
 					}
+					addSpanField(span3, "decision", status.State.String())
+					span3.End()
 				}
-
-				var state centralstore.CentralTraceState
-				if keep {
-					fmt.Printf("decider %d:  keeping trace %s\n", nodeIndex, trace.TraceID)
-					state = centralstore.DecisionKeep
-				} else {
-					fmt.Printf("decider %d: dropping trace %s\n", nodeIndex, trace.TraceID)
-					state = centralstore.DecisionDrop
-				}
-
-				stateMap[trace.TraceID] = state
-				addSpanField(decisionSpan, "decision", state.String())
-				decisionSpan.End()
-			}
-			span2.End()
-
-			for _, status := range statuses {
-				status.State = stateMap[status.TraceID]
+				span2.End()
 			}
 
 			_, span4 := fri.tracer.Start(ctx, "set_trace_statuses")
