@@ -268,5 +268,5 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 // GetMetrics returns a map of metrics from the central store, accumulated
 // since the previous time this method was called.
 func (w *SmartWrapper) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
-	return nil, nil
+	return w.basicStore.GetMetrics(ctx)
 }

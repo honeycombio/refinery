@@ -185,5 +185,12 @@ func main() {
 			wg.Done()
 		}(i)
 	}
+	time.Sleep(10 * time.Second)
+	mets, err := store.GetMetrics()
+	if err != nil {
+		fmt.Println("Error getting metrics:", err)
+	} else {
+		fmt.Println("Metrics:", mets)
+	}
 	wg.Wait()
 }
