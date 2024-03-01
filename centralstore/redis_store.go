@@ -704,11 +704,7 @@ func (t *traceStateProcessor) Stop() {
 // a list. The list is used to keep track of the time the trace was added to
 // the state. The set is used to check if the trace is in the state.
 func (t *traceStateProcessor) addNewTrace(conn redis.Conn, traceID string) error {
-	if !t.isValidStateChangeThroughLua(conn, newTraceStateChangeEvent(Unknown, Collecting), traceID) {
-		return nil
-	}
-
-	return conn.ZAdd(t.stateByTraceIDsKey(Collecting), []any{t.clock.Now().UnixMicro(), traceID})
+	return t.applyStateChange(conn, newTraceStateChangeEvent(Unknown, Collecting), traceID)
 }
 
 func (t *traceStateProcessor) stateByTraceIDsKey(state CentralTraceState) string {
@@ -763,36 +759,20 @@ func (t *traceStateProcessor) remove(conn redis.Conn, state CentralTraceState, t
 }
 
 func (t *traceStateProcessor) toNextState(conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) ([]string, error) {
-	eligible := make([]string, 0, len(traceIDs))
+	succeed := make([]string, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
-		if t.isValidStateChangeThroughLua(conn, changeEvent, traceID) {
-			eligible = append(eligible, traceID)
+		err := t.applyStateChange(conn, changeEvent, traceID)
+		if err != nil {
+			continue
 		}
+		succeed = append(succeed, traceID)
 	}
 
-	if len(eligible) == 0 {
-		return nil, errors.New("invalid state change event")
+	if len(succeed) == 0 {
+		return nil, errors.New("failed to apply state change to any trace")
 	}
 
-	// store the timestamp as a part of the entry in the trace state set
-	// make it into a sorted set
-	// the timestamp should be a fixed length unix timestamp
-	timestamps := make([]int64, len(eligible))
-	for i := range eligible {
-		timestamps[i] = t.clock.Now().UnixMicro()
-	}
-
-	// only add traceIDs to the destination if they don't already exist
-	err := conn.ZMove(t.stateByTraceIDsKey(changeEvent.current), t.stateByTraceIDsKey(changeEvent.next), timestamps, eligible)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(eligible) != len(traceIDs) {
-		return eligible, fmt.Errorf("some traceIDs were not moved to the next state")
-	}
-
-	return eligible, nil
+	return succeed, nil
 }
 
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
@@ -837,17 +817,20 @@ func (t *traceStateProcessor) removeExpiredTraces(client redis.Client) {
 // if it is, then add the state to state list
 // and add the trace to the state set
 // if it's not, then don't add the state to the state list	and abort
-func (t *traceStateProcessor) isValidStateChangeThroughLua(conn redis.Conn, stateChange stateChangeEvent, traceID string) bool {
-	result, err := t.config.changeState.Do(context.TODO(), conn, t.traceStatesKey(traceID), validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(), expirationForTraceState.Seconds())
+func (t *traceStateProcessor) applyStateChange(conn redis.Conn, stateChange stateChangeEvent, traceID string) error {
+	result, err := t.config.changeState.Do(context.TODO(),
+		conn, t.traceStatesKey(traceID), validStateChangeEventsKey,
+		stateChange.current.String(), stateChange.next.String(),
+		expirationForTraceState.Seconds(), traceID, t.clock.Now().UnixMicro())
 	if err != nil {
-		return false
+		return err
 	}
 	val, ok := result.(int64)
-	if !ok {
-		return false
+	if !ok || val != 1 {
+		return errors.New("failed to apply state change")
 	}
 
-	return val == 1
+	return nil
 }
 
 const stateChangeKey = 2
@@ -857,6 +840,8 @@ const stateChangeScript = `
   local previousState = ARGV[1]
   local nextState = ARGV[2]
   local ttl = ARGV[3]
+  local traceID = ARGV[4]
+  local timestamp = ARGV[5]
 
   local currentState = redis.call('LINDEX', traceStateKey, -1)
   if (currentState == nil or currentState == false) then
@@ -873,9 +858,15 @@ const stateChangeScript = `
     do return -1 end
   end
 
-
   redis.call('RPUSH', traceStateKey, nextState)
   redis.call('EXPIRE', traceStateKey, ttl)
+
+  local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
+  if (added == 0) then
+	do return -1 end
+  end
+
+  local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
   return 1
 `
 

@@ -132,6 +132,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				}(status, span3)
 			}
 			wg.Wait()
+
 			stateMap := make(map[string]centralstore.CentralTraceState, len(traces))
 			for _, trace := range traces {
 				// decision criteria:

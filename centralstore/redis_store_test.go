@@ -353,7 +353,12 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	defer conn.Close()
 
 	require.False(t, store.states.exists(conn, Collecting, traceID))
-	require.False(t, store.states.exists(conn, DecisionDelay, traceID))
+	decisionDelay := store.states.exists(conn, DecisionDelay, traceID)
+	status, err = store.GetStatusForTraces([]string{traceID})
+	require.NoError(t, err)
+	require.Len(t, status, 1)
+	fmt.Println("state: ", status[0].State)
+	require.False(t, decisionDelay)
 	require.False(t, store.states.exists(conn, ReadyToDecide, traceID))
 	require.True(t, store.states.exists(conn, AwaitingDecision, traceID))
 
@@ -438,8 +443,12 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 
 			ts.ensureInitialState(t, conn, traceID, tc.state)
 
-			result := ts.isValidStateChangeThroughLua(conn, newTraceStateChangeEvent(tc.state, tc.change.to), traceID)
-			require.Equal(t, tc.change.isValid, result)
+			err := ts.applyStateChange(conn, newTraceStateChangeEvent(tc.state, tc.change.to), traceID)
+			if tc.change.isValid {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
 
 		})
 	}
@@ -519,7 +528,13 @@ func NewTestRedis() *TestRedisClient {
 	}
 	return &TestRedisClient{
 		Server: s,
-		Client: redis.NewClient(&redis.Config{Addr: s.Addr()}),
+		Client: redis.NewClient(&redis.Config{
+			Addr:           s.Addr(),
+			MaxActive:      100,
+			MaxIdle:        100,
+			ConnectTimeout: 500 * time.Millisecond,
+			ReadTimeout:    500 * time.Millisecond,
+		}),
 	}
 }
 

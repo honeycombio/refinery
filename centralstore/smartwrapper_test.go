@@ -61,7 +61,7 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 	remoteStore := makeRemoteStore()
 	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
 	defer store.Stop()
-	defer cleanupRedisStore(t, remoteStore)
+	//defer cleanupRedisStore(t, remoteStore)
 
 	randomNum := rand.Intn(500)
 	span := &CentralSpan{
