@@ -8,6 +8,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 )
 
 // LocalRemoteStore (yes, a contradiction in terms, deal with it) is a remote
@@ -23,6 +24,7 @@ type LocalRemoteStore struct {
 	keptSize          uint
 	droppedSize       uint
 	sizeCheckInterval config.Duration
+	clock             clockwork.Clock
 }
 
 type LRSOption func(*LocalRemoteStore)
@@ -54,6 +56,7 @@ func NewLocalRemoteStore(options ...LRSOption) *LocalRemoteStore {
 		keptSize:          100,
 		droppedSize:       10000,
 		sizeCheckInterval: config.Duration(10 * time.Second),
+		clock:             clockwork.NewRealClock(),
 	}
 	// apply options which might override the defaults
 	for _, f := range options {
@@ -105,9 +108,9 @@ func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState,
 	if tracerec, _, found := lrs.decisionCache.Test(traceID); found {
 		// it was in the decision cache, so we can return the right thing
 		if tracerec.Kept() {
-			return DecisionKeep, NewCentralTraceStatus(traceID, DecisionKeep)
+			return DecisionKeep, NewCentralTraceStatus(traceID, DecisionKeep, lrs.clock.Now())
 		} else {
-			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop)
+			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop, lrs.clock.Now())
 		}
 	}
 	// wasn't in the cache, look in all the other states
@@ -186,7 +189,7 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 	case Unknown:
 		// we don't have a state for this trace, so we create it
 		state = Collecting
-		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting)
+		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.clock.Now())
 		lrs.traces[span.TraceID] = &CentralTrace{}
 	}
 
@@ -248,7 +251,7 @@ func (lrs *LocalRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTr
 		if state, status := lrs.findTraceStatus(traceID); state != Unknown {
 			statuses = append(statuses, status.Clone())
 		} else {
-			statuses = append(statuses, NewCentralTraceStatus(traceID, state))
+			statuses = append(statuses, NewCentralTraceStatus(traceID, state, lrs.clock.Now()))
 		}
 	}
 	return statuses, nil
