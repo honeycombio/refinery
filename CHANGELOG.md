@@ -1,5 +1,14 @@
 # Refinery Changelog
 
+## 2.4.3 2024-03-01
+
+A bug fix release for a regression introduced in the 2.4.2 bug fix release.
+It was possible to trigger 500 errors in Refinery's OTLP error responses when sending traces in an unsupported content-type.
+
+### Fixes
+
+- fix: upgrade husky to handle and add tests for invalid content type errors (#1019) | [Mike Goldsmith](https://github.com/MikeGoldsmith) & [Robb Kidd](https://github.com/robbkidd)
+
 ## 2.4.2 2024-02-28
 
 This is a bug fix release for returning a improperly formatted OTLP error responses.
