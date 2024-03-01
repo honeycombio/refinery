@@ -302,7 +302,7 @@ func TestSetTraceStatuses(t *testing.T) {
 
 	statuses := make([]*CentralTraceStatus, 0)
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		statuses, err = store.GetStatusForTraces(traceids)
+		statuses, err = store.GetStatusForTraces(toDecide)
 		assert.NoError(collect, err)
 		assert.Equal(collect, numberOfTraces, len(statuses))
 		for _, state := range statuses {

@@ -658,12 +658,12 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 	}
 	s := &traceStateProcessor{
 		states: []CentralTraceState{
-			Collecting,
-			DecisionDelay,
-			ReadyToDecide,
-			AwaitingDecision,
 			DecisionKeep,
 			DecisionDrop,
+			AwaitingDecision,
+			ReadyToDecide,
+			DecisionDelay,
+			Collecting,
 		},
 		config:       cfg,
 		clock:        clock,
@@ -739,7 +739,7 @@ func (t *traceStateProcessor) traceIDsWithTimestamp(conn redis.Conn, state Centr
 			traces[traceIDs[i]] = time.Time{}
 			continue
 		}
-		traces[traceIDs[i]] = time.Unix(0, value)
+		traces[traceIDs[i]] = time.UnixMicro(value)
 	}
 
 	return traces, nil
