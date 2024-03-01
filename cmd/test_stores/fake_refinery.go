@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/centralstore"
@@ -101,9 +102,10 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				addException(span2, err)
 			}
 			addSpanField(span2, "num_statuses", len(statuses))
-
+			traces := make([]*centralstore.CentralTrace, 0, len(statuses))
+			var wg sync.WaitGroup
 			for _, status := range statuses {
-				_, span3 := fri.tracer.Start(statCtx, "make_decision")
+				_, span3 := fri.tracer.Start(statCtx, "get_trace")
 				addSpanFields(span3, map[string]interface{}{
 					"trace_id": status.TraceID,
 					"state":    status.State.String(),
@@ -115,19 +117,36 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 					span3.End()
 					continue
 				}
-				trace, err := fri.store.GetTrace(status.TraceID)
-				if err != nil {
-					addException(span3, err)
-				}
+
+				wg.Add(1)
+				go func(status *centralstore.CentralTraceStatus, span3 trace.Span) {
+					defer wg.Done()
+					defer span3.End()
+
+					trace, err := fri.store.GetTrace(status.TraceID)
+					if err != nil {
+						addException(span3, err)
+					}
+					addSpanField(span3, "span_count", len(trace.Spans))
+					traces = append(traces, trace)
+				}(status, span3)
+			}
+			wg.Wait()
+			stateMap := make(map[string]centralstore.CentralTraceState, len(traces))
+			for _, trace := range traces {
 				// decision criteria:
 				// we're going to keep:
 				// * traces having status > 500
 				// * traces with POST spans having status >= 400 && <= 403
+				_, decisionSpan := fri.tracer.Start(statCtx, "make_decision")
+				addSpanFields(decisionSpan, map[string]interface{}{
+					"trace_id": trace.TraceID,
+				})
 				keep := false
 				for _, span := range trace.Spans {
 					operationField, ok := span.KeyFields["operation"]
 					if !ok {
-						addException(span3, fmt.Errorf("missing operation field in span"))
+						addException(decisionSpan, fmt.Errorf("missing operation field in span"))
 						continue
 					}
 					operationValue := operationField.(string)
@@ -153,21 +172,28 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 						}
 
 					default:
-						addException(span3, fmt.Errorf("unexpected type for status field: %T", value))
+						addException(decisionSpan, fmt.Errorf("unexpected type for status field: %T", value))
 					}
 				}
 
+				var state centralstore.CentralTraceState
 				if keep {
-					fmt.Printf("decider %d:  keeping trace %s\n", nodeIndex, status.TraceID)
-					status.State = centralstore.DecisionKeep
+					fmt.Printf("decider %d:  keeping trace %s\n", nodeIndex, trace.TraceID)
+					state = centralstore.DecisionKeep
 				} else {
-					fmt.Printf("decider %d: dropping trace %s\n", nodeIndex, status.TraceID)
-					status.State = centralstore.DecisionDrop
+					fmt.Printf("decider %d: dropping trace %s\n", nodeIndex, trace.TraceID)
+					state = centralstore.DecisionDrop
 				}
-				addSpanField(span3, "decision", status.State.String())
-				span3.End()
+
+				stateMap[trace.TraceID] = state
+				addSpanField(decisionSpan, "decision", state.String())
+				decisionSpan.End()
 			}
 			span2.End()
+
+			for _, status := range statuses {
+				status.State = stateMap[status.TraceID]
+			}
 
 			_, span4 := fri.tracer.Start(ctx, "set_trace_statuses")
 			err = fri.store.SetTraceStatuses(statuses)

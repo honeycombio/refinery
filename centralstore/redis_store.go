@@ -60,7 +60,11 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 	EnsureRedisBasicStoreOptions(opt)
 
 	redisClient := redis.NewClient(&redis.Config{
-		Addr: opt.Host,
+		Addr:           opt.Host,
+		MaxIdle:        100,
+		MaxActive:      100,
+		ConnectTimeout: 500 * time.Millisecond,
+		ReadTimeout:    500 * time.Millisecond,
 	})
 
 	// TODO: a redis version check and return an error if the version is supported
