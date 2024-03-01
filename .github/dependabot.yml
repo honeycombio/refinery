@@ -13,6 +13,11 @@ updates:
       - "type: dependencies"
     reviewers:
       - "honeycombio/collection-team"
+    groups:
+      minor-patch:
+        update-types:
+        - "minor"
+        - "patch"
     commit-message:
       prefix: "maint"
       include: "scope"
