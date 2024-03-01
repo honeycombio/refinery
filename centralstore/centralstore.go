@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
-	"github.com/honeycombio/refinery/types"
 )
 
 type SpanType string
@@ -121,32 +120,6 @@ func (t *CentralTraceStatus) SetSentReason(reason uint) {
 
 func (t *CentralTraceStatus) SentReason() uint {
 	return t.reasonIndex
-}
-
-// The trace decision engine is responsible for managing trace decisions. It
-// presents a simple interface for adding spans to traces, and periodically
-
-// CentralTraceDecider is the interface that a trace decision engine must implement.
-type CentralTraceDecider interface {
-
-	// AddSpan adds a span to the trace decision engine. It immediately returns
-	// after placing the span on its processing queue. The only error that can
-	// be returned is if the queue is full. This method is non-blocking.
-	// Internally, as the queue is processed, if a trace has not been seen
-	// before, it will be created. If a trace has been seen before and the trace
-	// is still active, the span will be added to an existing trace. If the
-	// trace decision has already been made, this will queue the span to be
-	// sent.
-	AddSpan(span *types.Span) error
-
-	// This method should be called periodically to let the decision engine look for
-	// work. It will:
-	// - Send any spans that have been queued
-	// - Check for traces that it is responsible for deciding on, and make decisions
-	// - Look for traces that other refineries have decided on, and send or drop them appropriately
-	//
-	// WE PROBABLY WANT THE DECIDER TO RUN ITS OWN GOROUTINES AND WILL DROP THIS METHOD
-	Process() error
 }
 
 // SmartStorer is the interface that an intelligent central store must implement.
