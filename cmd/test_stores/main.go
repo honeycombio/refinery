@@ -93,7 +93,7 @@ func makeRemoteStore(storeType string, tracer trace.Tracer) centralstore.BasicSt
 	case "local":
 		return centralstore.NewLocalRemoteStore()
 	case "redis":
-		return centralstore.NewRedisBasicStore(&centralstore.RedisBasicStoreOptions{}, tracer)
+		return centralstore.NewRedisBasicStore(&centralstore.RedisBasicStoreOptions{})
 	default:
 		panic("unknown store type " + storeType)
 	}

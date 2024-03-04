@@ -14,6 +14,7 @@ import (
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -83,8 +84,9 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
 	}
 
+	tracer := otel.Tracer("redis_store")
 	clock := clockwork.NewRealClock()
-	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock)
+	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
 
 	ctx := context.Background()
 	err = stateProcessor.Start(ctx, redisClient)
@@ -95,8 +97,9 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 	return &RedisBasicStore{
 		client:        redisClient,
 		decisionCache: decisionCache,
-		traces:        newTraceStatusStore(clock),
+		traces:        newTraceStatusStore(clock, tracer),
 		states:        stateProcessor,
+		tracer:        tracer,
 	}
 }
 
@@ -106,6 +109,7 @@ type RedisBasicStore struct {
 	decisionCache cache.TraceSentCache
 	traces        *tracesStore
 	states        *traceStateProcessor
+	tracer        trace.Tracer
 }
 
 func (r *RedisBasicStore) Stop() error {
@@ -175,9 +179,10 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 // if a decision has been made about the trace, the returned value
 // will not contain span data.
 func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
-	ctx, span := r.tracer.Start(ctx, "GetConn")
+	_, span := r.tracer.Start(ctx, "GetTrace")
+	defer span.End()
+
 	conn := r.client.Get()
-	span.End()
 	defer conn.Close()
 
 	spans := make([]*CentralSpan, 0)
@@ -186,12 +191,10 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 		Span   []byte
 	}
 
-	_, span = r.tracer.Start(ctx, "redisGetSpans")
 	err := conn.GetSliceOfStructsHash(spansHashByTraceIDKey(traceID), &tmpSpan)
 	if err != nil {
 		return nil, err
 	}
-	span.End()
 
 	var rootSpan *CentralSpan
 	for _, d := range tmpSpan {
@@ -522,12 +525,14 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 // spans are stored in a redis hash with the key being the trace ID and each field being a span ID and the value being the serialized CentralSpan.
 // for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
 type tracesStore struct {
-	clock clockwork.Clock
+	clock  clockwork.Clock
+	tracer trace.Tracer
 }
 
-func newTraceStatusStore(clock clockwork.Clock) *tracesStore {
+func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer) *tracesStore {
 	return &tracesStore{
-		clock: clock,
+		clock:  clock,
+		tracer: tracer,
 	}
 }
 
@@ -585,7 +590,7 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, span *Cent
 }
 
 func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status *CentralTraceStatus) error {
-	ctx, span := t.tracer.Start(ctx, "keepTrace")
+	_, span := t.tracer.Start(ctx, "keepTrace")
 	defer span.End()
 
 	otelutil.AddSpanField(span, "trace_id", status.TraceID)
@@ -601,21 +606,8 @@ func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status *Ce
 	return nil
 }
 
-func (t *tracesStore) getTrace(conn redis.Conn, traceID string) (*CentralTrace, error) {
-	spans, rootSpan, err := t.getSpansByTraceID(conn, traceID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &CentralTrace{
-		TraceID: traceID,
-		Root:    rootSpan,
-		Spans:   spans,
-	}, nil
-}
-
 func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, traceIDs []string) (map[string]*CentralTraceStatus, error) {
-	ctx, span := t.tracer.Start(ctx, "getTraceStatuses")
+	_, span := t.tracer.Start(ctx, "getTraceStatuses")
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_of_traces", len(traceIDs))
@@ -635,10 +627,6 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, tra
 	}
 
 	return statuses, nil
-}
-
-func (t *tracesStore) getSpansByTraceID(conn redis.Conn, traceID string) ([]*CentralSpan, *CentralSpan, error) {
-	return getAllSpans(conn, traceID)
 }
 
 func (t *tracesStore) traceStatusKey(traceID string) string {
@@ -666,7 +654,7 @@ func (t *tracesStore) storeSpan(ctx context.Context, conn redis.Conn, span *Cent
 }
 
 func (t *tracesStore) incrementSpanCounts(ctx context.Context, conn redis.Conn, traceID string, spanType SpanType) error {
-	ctx, span := t.tracer.Start(ctx, "incrementSpanCounts")
+	_, span := t.tracer.Start(ctx, "incrementSpanCounts")
 	defer span.End()
 
 	cmd, err := t.incrementSpanCountsCMD(traceID, spanType)
@@ -708,34 +696,6 @@ func addToSpanHash(span *CentralSpan) (redis.Command, error) {
 	return redis.NewSetHashCommand(spansHashByTraceIDKey(span.TraceID), map[string]any{span.SpanID: data}), nil
 }
 
-func getAllSpans(conn redis.Conn, traceID string) ([]*CentralSpan, *CentralSpan, error) {
-	spans := make([]*CentralSpan, 0)
-	var tmpSpan []struct {
-		SpanID string
-		Span   []byte
-	}
-
-	err := conn.GetSliceOfStructsHash(spansHashByTraceIDKey(traceID), &tmpSpan)
-	if err != nil {
-		return spans, nil, err
-	}
-
-	var rootSpan *CentralSpan
-	for _, d := range tmpSpan {
-		span := &CentralSpan{}
-		err := json.Unmarshal(d.Span, span)
-		if err != nil {
-			continue
-		}
-		spans = append(spans, span)
-
-		if span.ParentID == "" {
-			rootSpan = span
-		}
-	}
-	return spans, rootSpan, nil
-}
-
 // TraceStateProcessor is a map of trace IDs to their state.
 // It's used to atomically move traces between states and to get all traces in a state.
 // In order to also record the time of the state change, we also store traceID:timestamp
@@ -755,9 +715,11 @@ type traceStateProcessor struct {
 	clock        clockwork.Clock
 	reaperTicker clockwork.Ticker
 	cancel       context.CancelFunc
+
+	tracer trace.Tracer
 }
 
-func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock) *traceStateProcessor {
+func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer trace.Tracer) *traceStateProcessor {
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
 	}
@@ -776,6 +738,7 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 		config:       cfg,
 		clock:        clock,
 		reaperTicker: clock.NewTicker(cfg.reaperRunInterval),
+		tracer:       tracer,
 	}
 
 	return s
@@ -822,7 +785,7 @@ func (t *traceStateProcessor) traceStatesKey(traceID string) string {
 }
 
 func (t *traceStateProcessor) allTraceIDs(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
-	ctx, span := t.tracer.Start(ctx, "allTraceIDs")
+	_, span := t.tracer.Start(ctx, "allTraceIDs")
 	defer span.End()
 
 	index := -1
@@ -837,7 +800,7 @@ func (t *traceStateProcessor) allTraceIDs(ctx context.Context, conn redis.Conn, 
 }
 
 func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs []string) (map[string]time.Time, error) {
-	ctx, span := t.tracer.Start(ctx, "traceIDsWithTimestamp")
+	_, span := t.tracer.Start(ctx, "traceIDsWithTimestamp")
 	defer span.End()
 
 	timestamps, err := conn.ZMScore(t.stateByTraceIDsKey(state), traceIDs)

@@ -50,7 +50,7 @@ func makeRemoteStore() BasicStorer {
 	// 	s.SetupDatabase()
 	// 	return s
 	case "redis":
-		return NewRedisBasicStore(&RedisBasicStoreOptions{}, noopTracer())
+		return NewRedisBasicStore(&RedisBasicStoreOptions{})
 	case "local":
 		return NewLocalRemoteStore()
 	}
