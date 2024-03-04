@@ -15,17 +15,17 @@ import (
 func (r *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 
-	if !r.Config.IsAPIKeyValid(ri.ApiKey) {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey), HTTPStatusCode: http.StatusUnauthorized})
-		return
-	}
-
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
 		} else {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		}
+		return
+	}
+
+	if !r.Config.IsAPIKeyValid(ri.ApiKey) {
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
 

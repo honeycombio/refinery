@@ -2,6 +2,12 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.4.3
+
+A bug fix release for a regression introduced in the 2.4.2 bug fix release.
+It was possible to trigger 500 errors in Refinery's OTLP error responses when sending traces in an unsupported content-type.
+This release is a recommended upgrade for anyone sending OTLP data to Refinery.
+
 ## Version 2.4.2
 
 This is a bug fix release for returning a improperly formatted OTLP error responses.
