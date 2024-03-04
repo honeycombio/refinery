@@ -8,6 +8,7 @@ import (
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/centralstore"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -91,9 +92,8 @@ func (t *traceGenerator) Uint64() uint64 {
 // spans spread out for the given duration. It puts the spans into a channel and
 // expects to be run as a goroutine; it terminates when it sends the root span.
 // MinDuration of the trace is always the granularity.
-func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop <-chan struct{}, traceIDchan chan string) {
-	// create a span for our generator
-	ctx, root := t.tracer.Start(context.Background(), "sender")
+func (t *traceGenerator) generateTrace(ctx context.Context, out chan *centralstore.CentralSpan, stop <-chan struct{}, traceIDchan chan string) {
+	_, root := t.tracer.Start(ctx, "generate_trace")
 	defer root.End()
 
 	// create a new traceID which also seeds the random number generator
@@ -128,7 +128,7 @@ func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop 
 		Spans:   make([]*centralstore.CentralSpan, 0, spanCount),
 	}
 
-	addSpanFields(root, map[string]interface{}{
+	otelutil.AddSpanFields(root, map[string]interface{}{
 		"trace_id":         traceid,
 		"span_count":       spanCount,
 		"node_index":       t.NodeIndex,
@@ -183,17 +183,17 @@ func (t *traceGenerator) generateTrace(out chan *centralstore.CentralSpan, stop 
 			return
 		case <-ticker.C:
 			_, span := t.tracer.Start(ctx, "send_span")
-			addSpanFields(span, map[string]interface{}{
+			otelutil.AddSpanFields(span, map[string]interface{}{
 				"trace_id": traceid,
 				"span_id":  trace.Spans[counter-1].SpanID,
 				"index":    counter - 1,
 			})
 			// only send the span if it's ours
 			if t.mySpan(traceid, trace.Spans[counter-1].SpanID) {
-				addSpanField(span, "sent", true)
+				otelutil.AddSpanField(span, "sent", true)
 				out <- trace.Spans[counter-1]
 			} else {
-				addSpanField(span, "sent", false)
+				otelutil.AddSpanField(span, "sent", false)
 			}
 			span.End()
 		}

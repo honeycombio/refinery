@@ -1,6 +1,7 @@
 package centralstore
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -154,7 +155,7 @@ func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState
 // SpanID, and have the IsRoot flag set. AllFields is optional and is used
 // during shutdown. WriteSpan is expecting to be called from an asynchronous
 // process and will only return an error if the span could not be written.
-func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
+func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 
@@ -224,7 +225,7 @@ func (lrs *LocalRemoteStore) WriteSpan(span *CentralSpan) error {
 // is Keep. If the trace has a root span, the Root property will be
 // populated. Normally this call will be made after Refinery has been asked
 // to make a trace decision.
-func (lrs *LocalRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
+func (lrs *LocalRemoteStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	if trace, ok := lrs.traces[traceID]; ok {
@@ -243,7 +244,7 @@ func (lrs *LocalRemoteStore) GetTrace(traceID string) (*CentralTrace, error) {
 // of; the central store will not change the decision state of these traces
 // after this call (although kept spans will have counts updated when late
 // spans arrive).
-func (lrs *LocalRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
+func (lrs *LocalRemoteStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
@@ -258,7 +259,7 @@ func (lrs *LocalRemoteStore) GetStatusForTraces(traceIDs []string) ([]*CentralTr
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
-func (lrs *LocalRemoteStore) GetTracesForState(state CentralTraceState) ([]string, error) {
+func (lrs *LocalRemoteStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	switch state {
@@ -280,7 +281,7 @@ func (lrs *LocalRemoteStore) GetTracesForState(state CentralTraceState) ([]strin
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 // ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 // atomically, so that no other refinery will be assigned the same trace.
-func (lrs *LocalRemoteStore) GetTracesNeedingDecision(n int) ([]string, error) {
+func (lrs *LocalRemoteStore) GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error) {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	// get the list of traces in the ReadyForDecision state
@@ -299,7 +300,7 @@ func (lrs *LocalRemoteStore) GetTracesNeedingDecision(n int) ([]string, error) {
 // ChangeTraceStatus changes the status of a set of traces from one state to another
 // atomically. This can be used for all trace states except transition to Keep.
 // If a traceID is not found in the fromState, this is not considered to be an error.
-func (lrs *LocalRemoteStore) ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error {
+func (lrs *LocalRemoteStore) ChangeTraceStatus(ctx context.Context, traceIDs []string, fromState, toState CentralTraceState) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, traceID := range traceIDs {
@@ -322,7 +323,7 @@ func (lrs *LocalRemoteStore) ChangeTraceStatus(traceIDs []string, fromState, toS
 // it is used to record the keep decisions made by the trace decision engine.
 // Statuses should include Reason and Rate; do not include State as it will be ignored.
 // If a trace is not in the AwaitingDecision state, it will be ignored.
-func (lrs *LocalRemoteStore) KeepTraces(statuses []*CentralTraceStatus) error {
+func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
@@ -337,6 +338,6 @@ func (lrs *LocalRemoteStore) KeepTraces(statuses []*CentralTraceStatus) error {
 
 // GetMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
-func (lrs *LocalRemoteStore) GetMetrics() (map[string]interface{}, error) {
+func (lrs *LocalRemoteStore) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
 	return nil, nil
 }
