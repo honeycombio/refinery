@@ -10,9 +10,12 @@ import (
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -60,7 +63,11 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions, tracer trace.Tracer) *Redis
 	EnsureRedisBasicStoreOptions(opt)
 
 	redisClient := redis.NewClient(&redis.Config{
-		Addr: opt.Host,
+		Addr:           opt.Host,
+		MaxIdle:        10,
+		MaxActive:      50,
+		ConnectTimeout: 500 * time.Second,
+		ReadTimeout:    500 * time.Second,
 	})
 
 	// TODO: a redis version check and return an error if the version is supported
@@ -981,6 +988,8 @@ const stateChangeScript = `
   local previousState = ARGV[1]
   local nextState = ARGV[2]
   local ttl = ARGV[3]
+  local traceID = ARGV[4]
+  local timestamp = ARGV[5]
 
   local currentState = redis.call('LINDEX', traceStateKey, -1)
   if (currentState == nil or currentState == false) then
@@ -994,12 +1003,18 @@ const stateChangeScript = `
   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
   if (changeEventIsValid == 0) then
-    do return -1 end
+    do return -2 end
   end
-
 
   redis.call('RPUSH', traceStateKey, nextState)
   redis.call('EXPIRE', traceStateKey, ttl)
+
+  local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
+  if (added == 0) then
+	do return -3 end
+  end
+
+  local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
   return 1
 `
 
