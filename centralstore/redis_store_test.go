@@ -16,6 +16,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestRedisBasicStore_TraceStatus(t *testing.T) {
@@ -27,7 +28,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	store := NewTestRedisBasicStore(t, redisClient)
 	defer store.Stop()
 
-	status, err := store.GetStatusForTraces([]string{"traceID0"})
+	status, err := store.GetStatusForTraces(ctx, []string{"traceID0"})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.NotNil(t, status[0])
@@ -101,8 +102,8 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	var initialTimestamp time.Time
 	for i, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			require.NoError(t, store.WriteSpan(tc.span))
-			status, err := store.GetStatusForTraces([]string{tc.span.TraceID})
+			require.NoError(t, store.WriteSpan(ctx, tc.span))
+			status, err := store.GetStatusForTraces(ctx, []string{tc.span.TraceID})
 			require.NoError(t, err)
 			require.Len(t, status, 1)
 			require.NotNil(t, status[0])
@@ -131,7 +132,6 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 	traceID := "traceID0"
 	store := NewTestRedisBasicStore(t, redisClient)
 	defer store.Stop()
-
 	testSpans := []*CentralSpan{
 		{
 			TraceID:   traceID,
@@ -150,10 +150,10 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 	}
 
 	for _, span := range testSpans {
-		require.NoError(t, store.WriteSpan(span))
+		require.NoError(t, store.WriteSpan(ctx, span))
 	}
 
-	trace, err := store.GetTrace(traceID)
+	trace, err := store.GetTrace(ctx, traceID)
 	require.NoError(t, err)
 	require.NotNil(t, trace)
 	require.Equal(t, traceID, trace.TraceID)
@@ -180,58 +180,58 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 		KeyFields: map[string]interface{}{"foo": "bar"},
 	}
 
-	require.NoError(t, store.WriteSpan(span))
+	require.NoError(t, store.WriteSpan(ctx, span))
 
-	collectingStatus, err := store.GetStatusForTraces([]string{span.TraceID})
+	collectingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 	require.Len(t, collectingStatus, 1)
 	assert.Equal(t, Collecting, collectingStatus[0].State)
 
 	store.clock.Advance(time.Duration(1 * time.Second))
 
-	require.NoError(t, store.ChangeTraceStatus([]string{span.TraceID}, Collecting, DecisionDelay))
+	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, Collecting, DecisionDelay))
 
-	waitingStatus, err := store.GetStatusForTraces([]string{span.TraceID})
+	waitingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 	require.Len(t, waitingStatus, 1)
 	assert.Equal(t, DecisionDelay, waitingStatus[0].State)
 	assert.True(t, waitingStatus[0].Timestamp.After(collectingStatus[0].Timestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
-	require.NoError(t, store.ChangeTraceStatus([]string{span.TraceID}, DecisionDelay, ReadyToDecide))
+	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, DecisionDelay, ReadyToDecide))
 
-	readyStatus, err := store.GetStatusForTraces([]string{span.TraceID})
+	readyStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 	require.Len(t, readyStatus, 1)
 	assert.Equal(t, ReadyToDecide, readyStatus[0].State)
 	assert.True(t, readyStatus[0].Timestamp.After(waitingStatus[0].Timestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
-	require.NoError(t, store.ChangeTraceStatus([]string{span.TraceID}, ReadyToDecide, AwaitingDecision))
+	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, ReadyToDecide, AwaitingDecision))
 
-	awaitingStatus, err := store.GetStatusForTraces([]string{span.TraceID})
+	awaitingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 	require.Len(t, awaitingStatus, 1)
 	assert.Equal(t, AwaitingDecision, awaitingStatus[0].State)
 	assert.True(t, awaitingStatus[0].Timestamp.After(readyStatus[0].Timestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
-	require.NoError(t, store.ChangeTraceStatus([]string{span.TraceID}, AwaitingDecision, ReadyToDecide))
+	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, AwaitingDecision, ReadyToDecide))
 
-	readyStatus, err = store.GetStatusForTraces([]string{span.TraceID})
+	readyStatus, err = store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 	require.Len(t, readyStatus, 1)
 	assert.Equal(t, ReadyToDecide, readyStatus[0].State)
 	assert.True(t, readyStatus[0].Timestamp.After(awaitingStatus[0].Timestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
-	require.NoError(t, store.ChangeTraceStatus([]string{span.TraceID}, ReadyToDecide, AwaitingDecision))
-	awaitingStatus, err = store.GetStatusForTraces([]string{span.TraceID})
+	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, ReadyToDecide, AwaitingDecision))
+	awaitingStatus, err = store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 
-	require.NoError(t, store.KeepTraces(awaitingStatus))
+	require.NoError(t, store.KeepTraces(ctx, awaitingStatus))
 
-	keepStatus, err := store.GetStatusForTraces([]string{span.TraceID})
+	keepStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
 	require.NoError(t, err)
 	require.Len(t, keepStatus, 1)
 	assert.Equal(t, DecisionKeep, keepStatus[0].State)
@@ -250,22 +250,22 @@ func TestRedisBasicStore_GetTracesNeedingDecision(t *testing.T) {
 
 	traces := []string{"traceID0", "traceID1", "traceID2"}
 	for _, id := range traces {
-		store.ensureInitialState(t, conn, id, ReadyToDecide)
+		store.ensureInitialState(t, ctx, conn, id, ReadyToDecide)
 	}
 
-	decisionTraces, err := store.GetTracesNeedingDecision(1)
+	decisionTraces, err := store.GetTracesNeedingDecision(ctx, 1)
 	require.NoError(t, err)
 	require.Len(t, decisionTraces, 1)
-	require.False(t, store.states.exists(conn, ReadyToDecide, decisionTraces[0]))
-	require.False(t, store.states.exists(conn, ReadyToDecide, decisionTraces[0]))
+	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, decisionTraces[0]))
+	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, decisionTraces[0]))
 
-	decisionTraces, err = store.GetTracesNeedingDecision(2)
+	decisionTraces, err = store.GetTracesNeedingDecision(ctx, 2)
 	require.NoError(t, err)
 	require.Len(t, decisionTraces, 2)
 
 	for _, id := range traces {
-		require.False(t, store.states.exists(conn, ReadyToDecide, id))
-		require.True(t, store.states.exists(conn, AwaitingDecision, id))
+		require.False(t, store.states.exists(ctx, conn, ReadyToDecide, id))
+		require.True(t, store.states.exists(ctx, conn, AwaitingDecision, id))
 	}
 }
 
@@ -281,10 +281,10 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	conn := redisClient.Get()
 	defer conn.Close()
 
-	store.ensureInitialState(t, conn, traceID, AwaitingDecision)
-	status, err := store.GetStatusForTraces([]string{traceID})
+	store.ensureInitialState(t, ctx, conn, traceID, AwaitingDecision)
+	status, err := store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
-	require.NoError(t, store.KeepTraces(status))
+	require.NoError(t, store.KeepTraces(ctx, status))
 
 	// make sure it's stored in the decision cache
 	record, _, exist := store.decisionCache.Test(traceID)
@@ -292,13 +292,13 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	require.Equal(t, uint(1), record.DescendantCount())
 
 	// make sure it's state is updated to keep
-	status, err = store.GetStatusForTraces([]string{traceID})
+	status, err = store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.Equal(t, DecisionKeep, status[0].State)
 
 	// remove spans linked to trace
-	trace, err := store.GetTrace(traceID)
+	trace, err := store.GetTrace(ctx, traceID)
 	require.NoError(t, err)
 	require.Empty(t, trace.Spans)
 	require.Nil(t, trace.Root)
@@ -313,7 +313,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	store := NewTestRedisBasicStore(t, redisClient)
 	defer store.Stop()
 
-	require.NoError(t, store.WriteSpan(&CentralSpan{
+	require.NoError(t, store.WriteSpan(ctx, &CentralSpan{
 		TraceID:   traceID,
 		SpanID:    "spanID0",
 		ParentID:  traceID,
@@ -321,7 +321,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 		IsRoot:    false,
 	}))
 
-	status, err := store.GetStatusForTraces([]string{traceID})
+	status, err := store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.Equal(t, Collecting, status[0].State)
@@ -333,8 +333,8 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = store.ChangeTraceStatus([]string{traceID}, Collecting, DecisionDelay)
-			_ = store.ChangeTraceStatus([]string{traceID}, DecisionDelay, ReadyToDecide)
+			_ = store.ChangeTraceStatus(ctx, []string{traceID}, Collecting, DecisionDelay)
+			_ = store.ChangeTraceStatus(ctx, []string{traceID}, DecisionDelay, ReadyToDecide)
 		}()
 	}
 
@@ -342,9 +342,9 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	go func() {
 		defer wg.Done()
 
-		_ = store.ChangeTraceStatus([]string{traceID}, Collecting, DecisionDelay)
-		_ = store.ChangeTraceStatus([]string{traceID}, DecisionDelay, ReadyToDecide)
-		_ = store.ChangeTraceStatus([]string{traceID}, ReadyToDecide, AwaitingDecision)
+		_ = store.ChangeTraceStatus(ctx, []string{traceID}, Collecting, DecisionDelay)
+		_ = store.ChangeTraceStatus(ctx, []string{traceID}, DecisionDelay, ReadyToDecide)
+		_ = store.ChangeTraceStatus(ctx, []string{traceID}, ReadyToDecide, AwaitingDecision)
 	}()
 
 	wg.Wait()
@@ -352,12 +352,17 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	conn := redisClient.Get()
 	defer conn.Close()
 
-	require.False(t, store.states.exists(conn, Collecting, traceID))
-	require.False(t, store.states.exists(conn, DecisionDelay, traceID))
-	require.False(t, store.states.exists(conn, ReadyToDecide, traceID))
-	require.True(t, store.states.exists(conn, AwaitingDecision, traceID))
+	require.False(t, store.states.exists(ctx, conn, Collecting, traceID))
+	decisionDelay := store.states.exists(ctx, conn, DecisionDelay, traceID)
+	status, err = store.GetStatusForTraces(ctx, []string{traceID})
+	require.NoError(t, err)
+	require.Len(t, status, 1)
+	fmt.Println("state: ", status[0].State)
+	require.False(t, decisionDelay)
+	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, traceID))
+	require.True(t, store.states.exists(ctx, conn, AwaitingDecision, traceID))
 
-	status, err = store.GetStatusForTraces([]string{traceID})
+	status, err = store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	assert.Equal(t, AwaitingDecision, status[0].State)
@@ -369,30 +374,30 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	redisClient := NewTestRedis()
 	defer redisClient.Stop(ctx)
 
-	ts := newTestTraceStateProcessor(t, redisClient, nil)
+	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
 	ts.config.maxTraceRetention = 1 * time.Minute
 
 	conn := redisClient.Get()
 	defer conn.Close()
 
 	traceIDToBeRemoved := "traceID0"
-	err := ts.addNewTrace(conn, traceIDToBeRemoved)
+	err := ts.addNewTrace(ctx, conn, traceIDToBeRemoved)
 	require.NoError(t, err)
-	_, err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceIDToBeRemoved)
+	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceIDToBeRemoved)
 	require.NoError(t, err)
-	require.True(t, ts.exists(conn, DecisionDelay, traceIDToBeRemoved))
+	require.True(t, ts.exists(ctx, conn, DecisionDelay, traceIDToBeRemoved))
 
 	ts.clock.Advance(time.Duration(10 * time.Minute))
 	traceIDToKeep := "traceID1"
-	err = ts.addNewTrace(conn, traceIDToKeep)
+	err = ts.addNewTrace(ctx, conn, traceIDToKeep)
 	require.NoError(t, err)
-	_, err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceIDToKeep)
+	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceIDToKeep)
 	require.NoError(t, err)
-	require.True(t, ts.exists(conn, DecisionDelay, traceIDToKeep))
+	require.True(t, ts.exists(ctx, conn, DecisionDelay, traceIDToKeep))
 
 	ts.removeExpiredTraces(redisClient.Client)
-	require.False(t, ts.exists(conn, DecisionDelay, traceIDToBeRemoved))
-	require.True(t, ts.exists(conn, DecisionDelay, traceIDToKeep))
+	require.False(t, ts.exists(ctx, conn, DecisionDelay, traceIDToBeRemoved))
+	require.True(t, ts.exists(ctx, conn, DecisionDelay, traceIDToKeep))
 }
 
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
@@ -401,7 +406,7 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	defer redisClient.Stop(ctx)
 
 	traceID := "traceID0"
-	ts := newTestTraceStateProcessor(t, redisClient, nil)
+	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
 	defer ts.Stop()
 
 	type stateChange struct {
@@ -436,10 +441,14 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 			conn := redisClient.Get()
 			defer conn.Close()
 
-			ts.ensureInitialState(t, conn, traceID, tc.state)
+			ts.ensureInitialState(t, ctx, conn, traceID, tc.state)
 
-			result := ts.isValidStateChangeThroughLua(conn, newTraceStateChangeEvent(tc.state, tc.change.to), traceID)
-			require.Equal(t, tc.change.isValid, result)
+			err := ts.applyStateChange(ctx, conn, newTraceStateChangeEvent(tc.state, tc.change.to), traceID)
+			if tc.change.isValid {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
 
 		})
 	}
@@ -482,29 +491,30 @@ func NewTestRedisBasicStore(t *testing.T, redisClient *TestRedisClient) *TestRed
 	}}
 	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
 	require.NoError(t, err)
-
-	ts := newTestTraceStateProcessor(t, redisClient, clock)
+	tracer := noopTracer()
+	ts := newTestTraceStateProcessor(t, redisClient, clock, tracer)
 	return &TestRedisBasicStore{
 		RedisBasicStore: &RedisBasicStore{
 			client:        redisClient,
 			states:        ts.traceStateProcessor,
-			traces:        newTraceStatusStore(clock),
+			traces:        newTraceStatusStore(clock, tracer),
 			decisionCache: decisionCache,
+			tracer:        tracer,
 		},
 		testStateProcessor: ts,
 		clock:              clock,
 	}
 }
 
-func (store *TestRedisBasicStore) ensureInitialState(t *testing.T, conn redis.Conn, traceID string, state CentralTraceState) {
-	store.WriteSpan(&CentralSpan{
+func (store *TestRedisBasicStore) ensureInitialState(t *testing.T, ctx context.Context, conn redis.Conn, traceID string, state CentralTraceState) {
+	store.WriteSpan(context.Background(), &CentralSpan{
 		TraceID:   traceID,
 		SpanID:    "spanID0",
 		ParentID:  "parentID0",
 		KeyFields: map[string]interface{}{"foo": "bar"},
 		IsRoot:    false,
 	})
-	store.testStateProcessor.ensureInitialState(t, conn, traceID, state)
+	store.testStateProcessor.ensureInitialState(t, ctx, conn, traceID, state)
 }
 
 type TestRedisClient struct {
@@ -519,7 +529,13 @@ func NewTestRedis() *TestRedisClient {
 	}
 	return &TestRedisClient{
 		Server: s,
-		Client: redis.NewClient(&redis.Config{Addr: s.Addr()}),
+		Client: redis.NewClient(&redis.Config{
+			Addr:           s.Addr(),
+			MaxActive:      10,
+			MaxIdle:        10,
+			ConnectTimeout: 500 * time.Millisecond,
+			ReadTimeout:    500 * time.Millisecond,
+		}),
 	}
 }
 
@@ -534,44 +550,44 @@ type testTraceStateProcessor struct {
 	clock clockwork.FakeClock
 }
 
-func newTestTraceStateProcessor(t *testing.T, redisClient *TestRedisClient, clock clockwork.FakeClock) *testTraceStateProcessor {
+func newTestTraceStateProcessor(t *testing.T, redisClient *TestRedisClient, clock clockwork.FakeClock, tracer trace.Tracer) *testTraceStateProcessor {
 	if clock == nil {
 		clock = clockwork.NewFakeClock()
 	}
 	ts := &testTraceStateProcessor{
 		traceStateProcessor: newTraceStateProcessor(traceStateProcessorConfig{
 			changeState: redisClient.NewScript(stateChangeKey, stateChangeScript),
-		}, clock),
+		}, clock, tracer),
 		clock: clock,
 	}
 	require.NoError(t, ts.Start(context.TODO(), redisClient))
 	return ts
 }
 
-func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, conn redis.Conn, traceID string, state CentralTraceState) {
+func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, ctx context.Context, conn redis.Conn, traceID string, state CentralTraceState) {
 	for _, state := range ts.states {
 		require.NoError(t, ts.remove(conn, state, traceID))
 	}
 	_, err := conn.Del(ts.traceStatesKey(traceID))
 	require.NoError(t, err)
 
-	require.NoError(t, ts.addNewTrace(conn, traceID))
+	require.NoError(t, ts.addNewTrace(ctx, conn, traceID))
 	if state == Collecting {
 		return
 	}
 
-	_, err = ts.toNextState(conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceID)
+	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceID)
 	require.NoError(t, err)
 	if state == DecisionDelay {
 		return
 	}
 
-	_, err = ts.toNextState(conn, newTraceStateChangeEvent(DecisionDelay, ReadyToDecide), traceID)
+	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(DecisionDelay, ReadyToDecide), traceID)
 	require.NoError(t, err)
 	if state == ReadyToDecide {
 		return
 	}
 
-	_, err = ts.toNextState(conn, newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision), traceID)
+	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision), traceID)
 	require.NoError(t, err)
 }
