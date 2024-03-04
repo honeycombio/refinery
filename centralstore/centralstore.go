@@ -1,6 +1,7 @@
 package centralstore
 
 import (
+	"context"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -130,25 +131,25 @@ type SmartStorer interface {
 	// with the central store. This is used to ensure that the central store
 	// knows about all the refineries that are running, and can make decisions
 	// about which refinery is responsible for which trace.
-	Register() error
+	Register(context.Context) error
 
 	// Unregister should be called once at Refinery shutdown to unregister itself
 	// with the central store. Once it has been unregistered, the central store
 	// will no longer ask it to make decisions on any new traces. (Calls to
 	// GetTracesNeedingDecision will return an empty list.)
-	Unregister() error
+	Unregister(context.Context) error
 
 	// SetKeyFields sets the fields that will be recorded in the central store;
 	// if they are changed live, inflight trace decisions may be affected.
 	// Certain fields are always recorded, such as the trace ID, span ID, and
 	// parent ID; listing them in keyFields is not necessary (but won't hurt).
-	SetKeyFields(keyFields []string) error
+	SetKeyFields(ctx context.Context, keyFields []string) error
 
 	// WriteSpan writes one or more CentralSpans to the CentralStore.
 	// It is valid to write a span that has already been written; this can happen
 	// on shutdown, when a refinery forwards all its remaining spans to the central store.
 	// The only error that can be returned is if the queue is full. This method is non-blocking.
-	WriteSpan(span *CentralSpan) error
+	WriteSpan(ctx context.Context, span *CentralSpan) error
 
 	// GetTrace fetches the current state of a trace (including all its spans)
 	// from the central store. The trace contains a list of CentralSpans, but
@@ -160,7 +161,7 @@ type SmartStorer interface {
 	// it has the side effect of moving a trace from ReadyForDecision to
 	// AwaitingDecision. If the trace is not in the ReadyForDecision state,
 	// its state will not be changed.
-	GetTrace(traceID string) (*CentralTrace, error)
+	GetTrace(ctx context.Context, traceID string) (*CentralTrace, error)
 
 	// GetStatusForTraces returns the current state for a list of traces,
 	// including any reason information if the trace decision has been made and
@@ -170,15 +171,15 @@ type SmartStorer interface {
 	// added. Any traces with a state of DecisionKeep or DecisionDrop should be
 	// considered to be final and appropriately disposed of; the central store
 	// will not change the state of these traces after this call.
-	GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error)
+	GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
-	GetTracesForState(state CentralTraceState) ([]string, error)
+	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)
 
 	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 	// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 	// atomically, so that no other refinery will be assigned the same trace.
-	GetTracesNeedingDecision(n int) ([]string, error)
+	GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error)
 
 	// SetTraceStatuses sets the status of a set of traces in the central store.
 	// This is used to record the decision made by the trace decision engine. If
@@ -187,11 +188,11 @@ type SmartStorer interface {
 	// the SmartStorer is permitted to manipulate the state of the trace after
 	// this call, so the caller should not assume that the state persists as
 	// set.
-	SetTraceStatuses(statuses []*CentralTraceStatus) error
+	SetTraceStatuses(ctx context.Context, statuses []*CentralTraceStatus) error
 
 	// GetMetrics returns a map of metrics from the central store, accumulated
 	// since the previous time this method was called.
-	GetMetrics() (map[string]interface{}, error)
+	GetMetrics(ctx context.Context) (map[string]interface{}, error)
 }
 
 // Spec for the central store's internal behavior:
@@ -241,7 +242,7 @@ type BasicStorer interface {
 	// Root spans should always be sent and must contain at least SpanID, and have the IsRoot flag set.
 	// AllFields is optional and is used during shutdown.
 	// WriteSpan may be asynchronous and will only return an error if the span could not be written.
-	WriteSpan(span *CentralSpan) error
+	WriteSpan(ctx context.Context, span *CentralSpan) error
 
 	// GetTrace fetches the current state of a trace (including all of its
 	// spans) from the central store. The trace contains a list of CentralSpans,
@@ -252,7 +253,7 @@ type BasicStorer interface {
 	// is Keep. If the trace has a root span, the Root property will be
 	// populated. Normally this call will be made after Refinery has been asked
 	// to make a trace decision.
-	GetTrace(traceID string) (*CentralTrace, error)
+	GetTrace(ctx context.Context, traceID string) (*CentralTrace, error)
 
 	// GetStatusForTraces returns the current state for a list of trace IDs,
 	// including any reason information and trace counts if the trace decision
@@ -264,27 +265,27 @@ type BasicStorer interface {
 	// of; the central store will not change the decision state of these traces
 	// after this call (although kept spans will have counts updated when late
 	// spans arrive).
-	GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error)
+	GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
-	GetTracesForState(state CentralTraceState) ([]string, error)
+	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)
 
 	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 	// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 	// atomically, so that no other refinery will be assigned the same trace.
-	GetTracesNeedingDecision(n int) ([]string, error)
+	GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error)
 
 	// ChangeTraceStatus changes the status of a set of traces from one state to another
 	// atomically. This can be used for all trace states except transition to Keep.
 	// This call updates the timestamps in the trace status.
-	ChangeTraceStatus(traceIDs []string, fromState, toState CentralTraceState) error
+	ChangeTraceStatus(ctx context.Context, traceIDs []string, fromState, toState CentralTraceState) error
 
 	// KeepTraces changes the status of a set of traces from AwaitingDecision to Keep;
 	// it is used to record the keep decisions made by the trace decision engine.
 	// Statuses should include Reason and Rate; do not include State as it will be ignored.
-	KeepTraces(statuses []*CentralTraceStatus) error
+	KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error
 
 	// GetMetrics returns a map of metrics from the remote store, accumulated
 	// since the previous time this method was called.
-	GetMetrics() (map[string]interface{}, error)
+	GetMetrics(ctx context.Context) (map[string]interface{}, error)
 }

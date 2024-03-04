@@ -32,6 +32,7 @@ type Client interface {
 	Get() Conn
 	NewScript(keyCount int, src string) Script
 	Stop(context.Context) error
+	Stats() redis.PoolStats
 }
 
 type Conn interface {
@@ -76,7 +77,6 @@ type Conn interface {
 	LIndexString(string, int) (string, error)
 
 	ZAdd(string, []any) error
-	ZMove(string, string, []int64, []string) error
 	ZRange(string, int, int) ([]string, error)
 	ZRangeByScoreString(string, int64) ([]string, error)
 	ZScore(string, string) (int64, error)
@@ -132,6 +132,10 @@ func NewClient(cfg *Config) Client {
 
 func (d *DefaultClient) Stop(ctx context.Context) error {
 	return d.pool.Close()
+}
+
+func (d *DefaultClient) Stats() redis.PoolStats {
+	return d.pool.Stats()
 }
 
 // Get returns a connection from the underlying pool. Return this connection to
@@ -489,45 +493,6 @@ func (c *DefaultConn) ZExist(key string, member string) (bool, error) {
 		return false, err
 	}
 	return value != 0, nil
-}
-
-func (c *DefaultConn) ZMove(fromKey string, toKey string, scores []int64, members []string) error {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return err
-	}
-
-	entries := make([]any, len(members)*2)
-	for i := range entries {
-		if i%2 == 0 {
-			entries[i] = scores[i/2]
-		} else {
-			entries[i] = members[i/2]
-		}
-
-	}
-	argsList := redis.Args{toKey, "NX"}.AddFlat(entries)
-	if err := c.conn.Send("ZADD", argsList...); err != nil && err != redis.ErrNil {
-		return err
-	}
-
-	argsList = redis.Args{fromKey}.AddFlat(members)
-	if err := c.conn.Send("ZREM", argsList...); err != nil {
-		return err
-	}
-	replies, err := redis.Int64s(c.conn.Do("EXEC"))
-	if err != nil {
-		return err
-	}
-
-	if len(replies) != 2 {
-		return errors.New("unexpected response format from redis")
-	}
-
-	if replies[0] == 0 {
-		err = fmt.Errorf("failed to add member to set %s", toKey)
-	}
-
-	return err
 }
 
 func (c *DefaultConn) ZRemove(key string, members []string) error {

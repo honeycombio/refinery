@@ -1,6 +1,7 @@
 package centralstore
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -46,10 +47,10 @@ func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer, tracer trac
 		tracer:         tracer,
 	}
 	// start the span processor
-	go w.processSpans()
+	go w.processSpans(context.Background())
 
 	// start the state manager
-	go w.manageStates(options)
+	go w.manageStates(context.Background(), options)
 
 	return w
 }
@@ -73,7 +74,7 @@ func (w *SmartWrapper) Stop() {
 // knows about all the refineries that are running, and can make decisions
 // about which refinery is responsible for which trace.
 // For an in-memory store, this is a no-op.
-func (w *SmartWrapper) Register() error {
+func (w *SmartWrapper) Register(ctx context.Context) error {
 	return nil
 }
 
@@ -82,7 +83,7 @@ func (w *SmartWrapper) Register() error {
 // will no longer ask it to make decisions on any new traces. (Calls to
 // GetTracesNeedingDecision will return an empty list.)
 // For an in-memory store, this is a no-op.
-func (w *SmartWrapper) Unregister() error {
+func (w *SmartWrapper) Unregister(ctx context.Context) error {
 	return nil
 }
 
@@ -90,7 +91,7 @@ func (w *SmartWrapper) Unregister() error {
 // if they are changed live, inflight trace decisions may be affected.
 // Certain fields are always recorded, such as the trace ID, span ID, and
 // parent ID; listing them in keyFields is not necessary (but won't hurt).
-func (w *SmartWrapper) SetKeyFields(keyFields []string) error {
+func (w *SmartWrapper) SetKeyFields(ctx context.Context, keyFields []string) error {
 	// someday maybe we compare new keyFields to old keyFields and do something
 	w.keyfields = keyFields
 	return nil
@@ -101,7 +102,7 @@ func (w *SmartWrapper) SetKeyFields(keyFields []string) error {
 // on shutdown, when a refinery forwards all its remaining spans to the central store.
 // The latest value for a span should be retained, because during shutdown, the
 // span will contain more fields.
-func (w *SmartWrapper) WriteSpan(span *CentralSpan) error {
+func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 	// if the span channel doesn't exist, we're shutting down and we can't accept any more spans
 	if w.spanChan == nil {
 		return fmt.Errorf("span channel closed")
@@ -121,10 +122,9 @@ func (w *SmartWrapper) WriteSpan(span *CentralSpan) error {
 
 // processSpans processes spans from the span channel. This is run in a
 // goroutine and runs indefinitely until cancelled by calling Stop().
-func (w *SmartWrapper) processSpans() {
+func (w *SmartWrapper) processSpans(ctx context.Context) {
 	for span := range w.spanChan {
-		// fmt.Println("span read")
-		err := w.basicStore.WriteSpan(span)
+		err := w.basicStore.WriteSpan(ctx, span)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -134,11 +134,11 @@ func (w *SmartWrapper) processSpans() {
 }
 
 // helper function for manageStates
-func (w *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState CentralTraceState) error {
+func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration, fromState, toState CentralTraceState) error {
 	if w.basicStore == nil {
 		fmt.Println("basicStore is nil")
 	}
-	st, err := w.basicStore.GetTracesForState(fromState)
+	st, err := w.basicStore.GetTracesForState(ctx, fromState)
 	if err != nil {
 		return err
 	}
@@ -146,7 +146,7 @@ func (w *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState 
 		return nil
 	}
 	// TODO: This is inefficent, this call searches all statuses but we know that they can only be in fromState
-	statuses, err := w.basicStore.GetStatusForTraces(st)
+	statuses, err := w.basicStore.GetStatusForTraces(ctx, st)
 	if err != nil {
 		return err
 	}
@@ -158,7 +158,7 @@ func (w *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState 
 	}
 	if len(traceIDsToChange) > 0 {
 		fmt.Println("changing", traceIDsToChange, "traces from", fromState, "to", toState)
-		err = w.basicStore.ChangeTraceStatus(traceIDsToChange, fromState, toState)
+		err = w.basicStore.ChangeTraceStatus(ctx, traceIDsToChange, fromState, toState)
 	}
 	return err
 }
@@ -166,7 +166,7 @@ func (w *SmartWrapper) manageTimeouts(timeout time.Duration, fromState, toState 
 // manageStates is a goroutine that manages the time-based transitions between
 // states. It runs once each tick of the stateTicker (plus up to 10% so we don't
 // all run at the same rate) and looks for several different transitions.
-func (w *SmartWrapper) manageStates(options SmartWrapperOptions) {
+func (w *SmartWrapper) manageStates(ctx context.Context, options SmartWrapperOptions) {
 	ticker := time.NewTicker(time.Duration(options.StateTicker + config.Duration(rand.Int63n(int64(options.StateTicker)/10))))
 	for {
 		select {
@@ -177,14 +177,14 @@ func (w *SmartWrapper) manageStates(options SmartWrapperOptions) {
 			// the order of these is important!
 
 			// see if AwaitDecision traces have been waiting too long
-			w.manageTimeouts(time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyToDecide)
+			w.manageTimeouts(ctx, time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyToDecide)
 
 			// traces that are past SendDelay should be moved to ready for decision
 			// the only errors can be syntax errors, so won't happen at runtime
-			w.manageTimeouts(time.Duration(options.SendDelay), DecisionDelay, ReadyToDecide)
+			w.manageTimeouts(ctx, time.Duration(options.SendDelay), DecisionDelay, ReadyToDecide)
 
 			// trace that are past TraceTimeout should be moved to waiting to decide
-			w.manageTimeouts(time.Duration(options.TraceTimeout), Collecting, DecisionDelay)
+			w.manageTimeouts(ctx, time.Duration(options.TraceTimeout), Collecting, DecisionDelay)
 		}
 	}
 }
@@ -198,9 +198,8 @@ func (w *SmartWrapper) manageStates(options SmartWrapperOptions) {
 // make a trace decision, so it has the side effect of moving a trace from
 // ReadyForDecision to AwaitingDecision. If the trace is not in the
 // ReadyForDecision state, its state will not be changed.
-func (w *SmartWrapper) GetTrace(traceID string) (*CentralTrace, error) {
-	w.basicStore.ChangeTraceStatus([]string{traceID}, ReadyToDecide, AwaitingDecision)
-	return w.basicStore.GetTrace(traceID)
+func (w *SmartWrapper) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
+	return w.basicStore.GetTrace(ctx, traceID)
 }
 
 // GetStatusForTraces returns the current state for a list of traces,
@@ -211,20 +210,20 @@ func (w *SmartWrapper) GetTrace(traceID string) (*CentralTrace, error) {
 // added. Any traces with a state of DecisionKeep or DecisionDrop should be
 // considered to be final and appropriately disposed of; the central store
 // will not change the state of these traces after this call.
-func (w *SmartWrapper) GetStatusForTraces(traceIDs []string) ([]*CentralTraceStatus, error) {
-	return w.basicStore.GetStatusForTraces(traceIDs)
+func (w *SmartWrapper) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
+	return w.basicStore.GetStatusForTraces(ctx, traceIDs)
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
-func (w *SmartWrapper) GetTracesForState(state CentralTraceState) ([]string, error) {
-	return w.basicStore.GetTracesForState(state)
+func (w *SmartWrapper) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
+	return w.basicStore.GetTracesForState(ctx, state)
 }
 
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 // ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 // atomically, so that no other refinery will be assigned the same trace.
-func (w *SmartWrapper) GetTracesNeedingDecision(n int) ([]string, error) {
-	return w.basicStore.GetTracesNeedingDecision(n)
+func (w *SmartWrapper) GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error) {
+	return w.basicStore.GetTracesNeedingDecision(ctx, n)
 }
 
 // SetTraceStatuses sets the status of a set of traces in the central store.
@@ -234,7 +233,7 @@ func (w *SmartWrapper) GetTracesNeedingDecision(n int) ([]string, error) {
 // the SmartWrapper is permitted to manipulate the state of the trace after
 // this call, so the caller should not assume that the state persists as
 // set.
-func (w *SmartWrapper) SetTraceStatuses(statuses []*CentralTraceStatus) error {
+func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*CentralTraceStatus) error {
 	keeps := make([]*CentralTraceStatus, 0)
 	drops := make([]string, 0)
 	for _, status := range statuses {
@@ -251,10 +250,10 @@ func (w *SmartWrapper) SetTraceStatuses(statuses []*CentralTraceStatus) error {
 
 	var err error
 	if len(keeps) > 0 {
-		err = w.basicStore.KeepTraces(keeps)
+		err = w.basicStore.KeepTraces(ctx, keeps)
 	}
 	if len(drops) > 0 {
-		err2 := w.basicStore.ChangeTraceStatus(drops, AwaitingDecision, DecisionDrop)
+		err2 := w.basicStore.ChangeTraceStatus(ctx, drops, AwaitingDecision, DecisionDrop)
 		if err2 != nil {
 			if err != nil {
 				err = errors.Join(err, err2)
@@ -268,6 +267,6 @@ func (w *SmartWrapper) SetTraceStatuses(statuses []*CentralTraceStatus) error {
 
 // GetMetrics returns a map of metrics from the central store, accumulated
 // since the previous time this method was called.
-func (w *SmartWrapper) GetMetrics() (map[string]interface{}, error) {
+func (w *SmartWrapper) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
 	return nil, nil
 }
