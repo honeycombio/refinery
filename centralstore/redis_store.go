@@ -59,7 +59,7 @@ func EnsureRedisBasicStoreOptions(opt *RedisBasicStoreOptions) {
 
 var _ BasicStorer = (*RedisBasicStore)(nil)
 
-func NewRedisBasicStore(opt *RedisBasicStoreOptions, tracer trace.Tracer) *RedisBasicStore {
+func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 	EnsureRedisBasicStoreOptions(opt)
 
 	redisClient := redis.NewClient(&redis.Config{
@@ -84,7 +84,7 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions, tracer trace.Tracer) *Redis
 	}
 
 	clock := clockwork.NewRealClock()
-	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
+	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock)
 
 	ctx := context.Background()
 	err = stateProcessor.Start(ctx, redisClient)
@@ -95,9 +95,8 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions, tracer trace.Tracer) *Redis
 	return &RedisBasicStore{
 		client:        redisClient,
 		decisionCache: decisionCache,
-		traces:        newTraceStatusStore(clock, tracer),
+		traces:        newTraceStatusStore(clock),
 		states:        stateProcessor,
-		tracer:        tracer,
 	}
 }
 
@@ -107,7 +106,6 @@ type RedisBasicStore struct {
 	decisionCache cache.TraceSentCache
 	traces        *tracesStore
 	states        *traceStateProcessor
-	tracer        trace.Tracer
 }
 
 func (r *RedisBasicStore) Stop() error {
@@ -123,8 +121,7 @@ func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{
 }
 
 func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
-	_, writeSpan := r.tracer.Start(ctx, "WriteSpan")
-	defer writeSpan.End()
+	writeSpan := trace.SpanFromContext(ctx)
 
 	conn := r.client.Get()
 	defer conn.Close()
@@ -525,14 +522,12 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 // spans are stored in a redis hash with the key being the trace ID and each field being a span ID and the value being the serialized CentralSpan.
 // for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
 type tracesStore struct {
-	clock  clockwork.Clock
-	tracer trace.Tracer
+	clock clockwork.Clock
 }
 
-func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer) *tracesStore {
+func newTraceStatusStore(clock clockwork.Clock) *tracesStore {
 	return &tracesStore{
-		clock:  clock,
-		tracer: tracer,
+		clock: clock,
 	}
 }
 
@@ -760,11 +755,9 @@ type traceStateProcessor struct {
 	clock        clockwork.Clock
 	reaperTicker clockwork.Ticker
 	cancel       context.CancelFunc
-
-	tracer trace.Tracer
 }
 
-func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer trace.Tracer) *traceStateProcessor {
+func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock) *traceStateProcessor {
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
 	}
@@ -783,7 +776,6 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 		config:       cfg,
 		clock:        clock,
 		reaperTicker: clock.NewTicker(cfg.reaperRunInterval),
-		tracer:       tracer,
 	}
 
 	return s
