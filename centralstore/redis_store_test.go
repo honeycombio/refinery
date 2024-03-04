@@ -443,8 +443,10 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 
 			ts.ensureInitialState(t, ctx, conn, traceID, tc.state)
 
-			err := ts.applyStateChange(ctx, conn, newTraceStateChangeEvent(tc.state, tc.change.to), traceID)
+			result, err := ts.applyStateChange(ctx, conn, newTraceStateChangeEvent(tc.state, tc.change.to), []string{traceID})
 			if tc.change.isValid {
+				require.Len(t, result, 1)
+				require.Equal(t, traceID, result[0])
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)
