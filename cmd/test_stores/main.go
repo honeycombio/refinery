@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -186,7 +187,7 @@ func main() {
 		}(i)
 	}
 	time.Sleep(10 * time.Second)
-	mets, err := store.GetMetrics()
+	mets, err := store.GetMetrics(context.Background())
 	if err != nil {
 		fmt.Println("Error getting metrics:", err)
 	} else {
