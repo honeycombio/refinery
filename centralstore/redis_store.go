@@ -631,7 +631,7 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, tra
 }
 
 func (t *tracesStore) traceStatusKey(traceID string) string {
-	return fmt.Sprintf("%s:status", traceID)
+	return traceID + ":status"
 }
 
 // storeSpan stores the span in the spans hash and increments the span count for the trace.
@@ -683,7 +683,7 @@ func (t *tracesStore) incrementSpanCountsCMD(traceID string, spanType SpanType) 
 }
 
 func spansHashByTraceIDKey(traceID string) string {
-	return fmt.Sprintf("%s:spans", traceID)
+	return traceID + ":spans"
 }
 
 // central span -> blobs
@@ -919,7 +919,6 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 
 	args := redis.Args(validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(),
 		expirationForTraceState.Seconds(), t.clock.Now().UnixMicro()).AddFlat(traceIDs)
-	fmt.Println(args...)
 
 	result, err := t.config.changeState.DoStrings(ctx,
 		conn, args...)
