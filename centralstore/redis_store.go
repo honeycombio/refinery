@@ -8,7 +8,6 @@ import (
 	"sort"
 	"time"
 
-	redigo "github.com/gomodule/redigo/redis"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
@@ -712,11 +711,10 @@ type traceStateProcessorConfig struct {
 }
 
 type traceStateProcessor struct {
-	states       []CentralTraceState
-	config       traceStateProcessorConfig
-	clock        clockwork.Clock
-	reaperTicker clockwork.Ticker
-	cancel       context.CancelFunc
+	states []CentralTraceState
+	config traceStateProcessorConfig
+	clock  clockwork.Clock
+	cancel context.CancelFunc
 
 	tracer trace.Tracer
 }
@@ -737,10 +735,9 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 			DecisionDelay,
 			Collecting,
 		},
-		config:       cfg,
-		clock:        clock,
-		reaperTicker: clock.NewTicker(cfg.reaperRunInterval),
-		tracer:       tracer,
+		config: cfg,
+		clock:  clock,
+		tracer: tracer,
 	}
 
 	return s
@@ -763,10 +760,6 @@ func (t *traceStateProcessor) Stop() {
 	if t.cancel != nil {
 		t.cancel()
 	}
-
-	if t.reaperTicker != nil {
-		t.reaperTicker.Stop()
-	}
 }
 
 // addTrace stores the traceID into a set and insert the current time into
@@ -776,13 +769,10 @@ func (t *traceStateProcessor) addNewTrace(ctx context.Context, conn redis.Conn, 
 	ctx, span := t.tracer.Start(ctx, "addNewTrace", trace.WithAttributes(attribute.KeyValue{Key: "trace_id", Value: attribute.StringValue(traceID)}))
 	defer span.End()
 	_, err := t.applyStateChange(ctx, conn, newTraceStateChangeEvent(Unknown, Collecting), []string{traceID})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
-func (t *traceStateProcessor) stateByTraceIDsKey(state CentralTraceState) string {
+func (t *traceStateProcessor) stateNameKey(state CentralTraceState) string {
 	return fmt.Sprintf("%s:traces", state)
 }
 
@@ -798,7 +788,7 @@ func (t *traceStateProcessor) allTraceIDs(ctx context.Context, conn redis.Conn, 
 	if n > 0 {
 		index = n - 1
 	}
-	results, err := conn.ZRange(t.stateByTraceIDsKey(state), 0, index)
+	results, err := conn.ZRange(t.stateNameKey(state), 0, index)
 	if err != nil {
 		return nil, err
 	}
@@ -809,7 +799,7 @@ func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn re
 	_, span := t.tracer.Start(ctx, "traceIDsWithTimestamp")
 	defer span.End()
 
-	timestamps, err := conn.ZMScore(t.stateByTraceIDsKey(state), traceIDs)
+	timestamps, err := conn.ZMScore(t.stateNameKey(state), traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -827,16 +817,38 @@ func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn re
 }
 
 func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state CentralTraceState, traceID string) bool {
-	exist, err := conn.ZExist(t.stateByTraceIDsKey(state), traceID)
+	_, span := t.tracer.Start(ctx, "exists")
+	defer span.End()
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"trace_id": traceID,
+		"state":    state,
+		"exists":   false,
+	})
+
+	exist, err := conn.ZExist(t.stateNameKey(state), traceID)
 	if err != nil {
 		return false
 	}
 
+	otelutil.AddSpanField(span, "exists", exist)
+
 	return exist
 }
 
-func (t *traceStateProcessor) remove(conn redis.Conn, state CentralTraceState, traceIDs ...string) error {
-	return conn.ZRemove(t.stateByTraceIDsKey(state), traceIDs)
+func (t *traceStateProcessor) remove(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs ...string) error {
+	_, span := t.tracer.Start(ctx, "remove")
+	defer span.End()
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"state":         state,
+		"num_of_traces": len(traceIDs),
+	})
+	if len(traceIDs) == 0 {
+		return nil
+	}
+
+	return conn.ZRemove(t.stateNameKey(state), traceIDs)
 }
 
 func (t *traceStateProcessor) toNextState(ctx context.Context, conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) ([]string, error) {
@@ -849,44 +861,48 @@ func (t *traceStateProcessor) toNextState(ctx context.Context, conn redis.Conn, 
 		"to_state":      changeEvent.next,
 	})
 
-	result, err := t.applyStateChange(ctx, conn, changeEvent, traceIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, err
+	return t.applyStateChange(ctx, conn, changeEvent, traceIDs)
 }
 
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
 // the configured time.
 func (t *traceStateProcessor) cleanupExpiredTraces(ctx context.Context, redis redis.Client) {
+	ticker := t.clock.NewTicker(t.config.reaperRunInterval)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.reaperTicker.Chan():
-			t.removeExpiredTraces(redis)
+		case <-ticker.Chan():
+			ctx, span := t.tracer.Start(ctx, "cleanupExpiredTraces")
+			defer span.End()
+
+			t.removeExpiredTraces(ctx, redis)
 		}
 	}
 }
 
-func (t *traceStateProcessor) removeExpiredTraces(client redis.Client) {
+func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client redis.Client) {
+	ctx, span := t.tracer.Start(ctx, "removeExpiredTraces")
+	defer span.End()
+
 	conn := client.Get()
 	defer conn.Close()
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
-		traceIDs, err := conn.ZRangeByScoreString(t.stateByTraceIDsKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro())
+		traceIDs, err := conn.ZRangeByScoreString(t.stateNameKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro())
 		if err != nil {
+			otelutil.AddSpanFields(span, map[string]interface{}{
+				"state": state,
+				"error": err.Error(),
+			})
 			return
 		}
 
-		if len(traceIDs) == 0 {
-			continue
-		}
-
 		// remove the traceIDs from the state map
-		err = t.remove(conn, state, traceIDs...)
+		err = t.remove(ctx, conn, state, traceIDs...)
 		if err != nil {
 			continue
 		}
@@ -901,28 +917,25 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 
 	otelutil.AddSpanField(span, "num_traces", len(traceIDs))
 
-	args := redigo.Args{validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(),
-		expirationForTraceState.Seconds(), t.clock.Now().UnixMicro()}.AddFlat(traceIDs)
+	args := redis.Args(validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(),
+		expirationForTraceState.Seconds(), t.clock.Now().UnixMicro()).AddFlat(traceIDs)
+	fmt.Println(args...)
 
-	result, err := t.config.changeState.Do(ctx,
+	result, err := t.config.changeState.DoStrings(ctx,
 		conn, args...)
 
 	if err != nil {
 		otelutil.AddSpanField(span, "error", err.Error())
 		return nil, err
 	}
-	val, err := redigo.Strings(result, err)
-	if err != nil {
-		return nil, err
-	}
-	if len(val) == 0 {
+	if len(result) == 0 {
 		return nil, errors.New("failed to apply state changes")
 	}
 	otelutil.AddSpanFields(span, map[string]interface{}{
-		"result": val,
+		"result": result,
 	})
 
-	return val, nil
+	return result, nil
 }
 
 // stateChangeScript is a lua script that atomically moves traces between states and returns
@@ -955,7 +968,9 @@ const stateChangeScript = `
     -- unfortunately, Lua doesn't support "continue" statement in for loops.
 	-- even though, Lua 5.2+ supports "goto" statement, we can't use it here because
 	-- Redis only supports Lua 5.1. 
-	-- using "repeat" and "do break end" is a common pattern to simulate "continue" in Lua
+	-- The interior "repeat ... until true" is a way of creating a do-once loop, and "do break end" is a way to
+	-- spell "break" that indicates it's not just a normal break. 
+	-- This is a common pattern to simulate "continue" in Lua versions before 5.2.
   	repeat
 		-- the first 4 arguments are not traceIDs, so skip them
 	    if i < 5 then
@@ -963,6 +978,7 @@ const stateChangeScript = `
 		end
 
 		--  get current state for the trace. If it doesn't exist yet, use the previous state
+		-- this formatting logic should match with the traceStatesKey function in the traceStateProcessor struct
 		local traceStateKey = string.format("%s:states", traceID)
 	    local currentState = redis.call('LINDEX', traceStateKey, -1)
 	    if (currentState == nil or currentState == false) then
@@ -976,6 +992,7 @@ const stateChangeScript = `
 	   end
 	
 	   -- check if the state change event is valid 
+	   -- this formatting logic should match with the formatting for the stateChangeEvent struct
 	   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
 	   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
 	   if (changeEventIsValid == 0) then
@@ -985,6 +1002,8 @@ const stateChangeScript = `
 	   redis.call('RPUSH', traceStateKey, nextState)
 	   redis.call('EXPIRE', traceStateKey, ttl)
 	
+	   -- the construction of the key for the sorted set should match with the stateNameKey function
+	   -- in the traceStateProcessor struct
 	   local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
 	
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
@@ -1030,5 +1049,5 @@ func newTraceStateChangeEvent(current, next CentralTraceState) stateChangeEvent 
 // string returns a string representation of the state change event
 // this formatting logic should match the one in the stateChange lua script
 func (s stateChangeEvent) string() string {
-	return fmt.Sprintf("%s-%s", s.current, s.next)
+	return s.current.String() + "-" + s.next.String()
 }
