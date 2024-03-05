@@ -376,6 +376,8 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 
 	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
 	ts.config.maxTraceRetention = 1 * time.Minute
+	ts.config.reaperRunInterval = 500 * time.Millisecond
+	require.NoError(t, ts.Start(ctx, redisClient))
 
 	conn := redisClient.Get()
 	defer conn.Close()
@@ -395,9 +397,10 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ts.exists(ctx, conn, DecisionDelay, traceIDToKeep))
 
-	ts.removeExpiredTraces(redisClient.Client)
-	require.False(t, ts.exists(ctx, conn, DecisionDelay, traceIDToBeRemoved))
-	require.True(t, ts.exists(ctx, conn, DecisionDelay, traceIDToKeep))
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		require.False(collect, ts.exists(ctx, conn, DecisionDelay, traceIDToBeRemoved))
+		require.True(collect, ts.exists(ctx, conn, DecisionDelay, traceIDToKeep))
+	}, 1*time.Second, 200*time.Millisecond)
 }
 
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
@@ -407,6 +410,7 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 
 	traceID := "traceID0"
 	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
+	require.NoError(t, ts.Start(ctx, redisClient))
 	defer ts.Stop()
 
 	type stateChange struct {
@@ -443,8 +447,10 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 
 			ts.ensureInitialState(t, ctx, conn, traceID, tc.state)
 
-			err := ts.applyStateChange(ctx, conn, newTraceStateChangeEvent(tc.state, tc.change.to), traceID)
+			result, err := ts.applyStateChange(ctx, conn, newTraceStateChangeEvent(tc.state, tc.change.to), []string{traceID})
 			if tc.change.isValid {
+				require.Len(t, result, 1)
+				require.Equal(t, traceID, result[0])
 				require.NoError(t, err)
 			} else {
 				require.Error(t, err)
@@ -493,6 +499,7 @@ func NewTestRedisBasicStore(t *testing.T, redisClient *TestRedisClient) *TestRed
 	require.NoError(t, err)
 	tracer := noopTracer()
 	ts := newTestTraceStateProcessor(t, redisClient, clock, tracer)
+	require.NoError(t, ts.Start(context.TODO(), redisClient))
 	return &TestRedisBasicStore{
 		RedisBasicStore: &RedisBasicStore{
 			client:        redisClient,
@@ -560,13 +567,12 @@ func newTestTraceStateProcessor(t *testing.T, redisClient *TestRedisClient, cloc
 		}, clock, tracer),
 		clock: clock,
 	}
-	require.NoError(t, ts.Start(context.TODO(), redisClient))
 	return ts
 }
 
 func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, ctx context.Context, conn redis.Conn, traceID string, state CentralTraceState) {
 	for _, state := range ts.states {
-		require.NoError(t, ts.remove(conn, state, traceID))
+		require.NoError(t, ts.remove(ctx, conn, state, traceID))
 	}
 	_, err := conn.Del(ts.traceStatesKey(traceID))
 	require.NoError(t, err)
