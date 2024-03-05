@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -185,13 +184,6 @@ func main() {
 			inst.runProcessor(opts, opts.NodeIndex+i, stopch)
 			wg.Done()
 		}(i)
-	}
-	time.Sleep(10 * time.Second)
-	mets, err := store.GetMetrics(context.Background())
-	if err != nil {
-		fmt.Println("Error getting metrics:", err)
-	} else {
-		fmt.Println("Metrics:", mets)
 	}
 	wg.Wait()
 }
