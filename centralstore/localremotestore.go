@@ -338,6 +338,23 @@ func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*Central
 
 // GetMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
-func (lrs *LocalRemoteStore) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
-	return nil, nil
+func (lrs *LocalRemoteStore) GetMetrics(ctx context.Context) (map[string]any, error) {
+	m, err := lrs.decisionCache.GetMetrics()
+	if err != nil {
+		return nil, err
+	}
+	// add the state counts and trace count
+	m2 := map[string]any{
+		"localstore_count_" + string(Collecting):       len(lrs.states[Collecting]),
+		"localstore_count_" + string(DecisionDelay):    len(lrs.states[DecisionDelay]),
+		"localstore_count_" + string(ReadyToDecide):    len(lrs.states[ReadyToDecide]),
+		"localstore_count_" + string(AwaitingDecision): len(lrs.states[AwaitingDecision]),
+		"localstore_count_" + string(DecisionKeep):     len(lrs.states[DecisionKeep]),
+		"localstore_count_" + string(DecisionDrop):     len(lrs.states[DecisionDrop]),
+		"localstore_ntraces":                           len(lrs.traces),
+	}
+	for k, v := range m {
+		m2["localstore_"+k] = v
+	}
+	return m2, nil
 }
