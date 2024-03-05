@@ -24,6 +24,7 @@ type Config struct {
 type Script interface {
 	Load(conn Conn) error
 	Do(ctx context.Context, conn Conn, keysAndArgs ...any) (any, error)
+	DoStrings(ctx context.Context, conn Conn, keysAndArgs ...any) ([]string, error)
 	SendHash(ctx context.Context, conn Conn, keysAndArgs ...any) error
 	Send(ctx context.Context, conn Conn, keysAndArgs ...any) error
 }
@@ -622,6 +623,11 @@ func (s *DefaultScript) Load(conn Conn) error {
 	return s.script.Load(defaultConn.conn)
 }
 
+func (s *DefaultScript) DoStrings(ctx context.Context, conn Conn, keysAndArgs ...any) ([]string, error) {
+	defaultConn := conn.(*DefaultConn)
+	return redis.Strings(s.script.Do(defaultConn.conn, keysAndArgs...))
+}
+
 func (s *DefaultScript) Do(ctx context.Context, conn Conn, keysAndArgs ...any) (any, error) {
 	defaultConn := conn.(*DefaultConn)
 	return s.script.DoContext(ctx, defaultConn.conn, keysAndArgs...)
@@ -734,4 +740,10 @@ func (c *DefaultConn) Watch(key string, f func(Conn) error) (func() error, error
 		return err
 	}, nil
 
+}
+
+// Args is a helper function to convert a list of arguments to a redis.Args
+// It returns the result the flattened value of args.
+func Args(args ...any) redis.Args {
+	return redis.Args{}.AddFlat(args)
 }
