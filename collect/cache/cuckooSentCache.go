@@ -285,3 +285,14 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	go c.monitor()
 	return nil
 }
+
+func (c *cuckooSentCache) GetMetrics() (map[string]interface{}, error) {
+	metrics := map[string]interface{}{
+		"sent_cache_kept":             c.kept.Len(),
+		"sent_cache_kept_capacity":    c.cfg.KeptSize,
+		"sent_cache_dropped":          c.dropped.current.Count(),
+		"sent_cache_dropped_load":     c.dropped.current.LoadFactor(),
+		"sent_cache_dropped_capacity": c.cfg.DroppedSize,
+	}
+	return metrics, nil
+}
