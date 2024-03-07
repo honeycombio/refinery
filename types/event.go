@@ -3,6 +3,8 @@ package types
 import (
 	"context"
 	"time"
+
+	huskyotlp "github.com/honeycombio/husky/otlp"
 )
 
 const (
@@ -253,5 +255,5 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 }
 
 func IsLegacyAPIKey(apiKey string) bool {
-	return len(apiKey) == 32
+	return huskyotlp.IsClassicApiKey(apiKey)
 }
