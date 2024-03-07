@@ -22,8 +22,6 @@ type TestRulesData struct {
 	ExpectedName string
 }
 
-const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
-
 func TestRules(t *testing.T) {
 	data := []TestRulesData{
 		{
@@ -2368,6 +2366,62 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Rules: &config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
+						Name:       "two root conditions, only one matches, reversed",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "anotherField",
+								Operator: config.LT,
+								Value:    100,
+							},
+							{
+								Field:    "root.test",
+								Operator: config.Exists,
+							},
+							{
+								Field:    "root.nope",
+								Operator: config.Exists,
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test":         "foo",
+							"anotherField": 50,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+							"anotherField":     10,
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test1": 1,
+							"test2": 2.2,
+							"test3": "foo",
+						},
+					},
+				},
+			},
+			ExpectedKeep: true,
+			ExpectedRate: 1,
+			ExpectedName: "no rule matched",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
 						Name:       "span matches, root does not match",
 						SampleRate: 10,
 						Conditions: []*config.RulesBasedSamplerCondition{
@@ -2501,6 +2555,50 @@ func TestRulesRootSpanContext(t *testing.T) {
 			ExpectedKeep: false,
 			ExpectedRate: 10,
 			ExpectedName: "root doesn't match, next span doesn't match, third span matches",
+		},
+		{
+			Rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "root doesn't match, next span doesn't match, third span matches, reversed",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   []string{"root.http.status_code", "http.status_code"},
+								Operator: config.EQ,
+								Value:    "500",
+							},
+						},
+					},
+				},
+			},
+			Spans: []*types.Span{
+				{
+					TraceID: "123testABC", // I am root.
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"test": "nope",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "200",
+						},
+					},
+				},
+				{
+					Event: types.Event{
+						Data: map[string]interface{}{
+							"http.status_code": "500",
+						},
+					},
+				},
+			},
+			ExpectedKeep: false,
+			ExpectedRate: 10,
+			ExpectedName: "root doesn't match, next span doesn't match, third span matches, reversed",
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{

@@ -170,18 +170,22 @@ func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkN
 
 	span:
 		for _, span := range t.GetSpans() {
-			value, exists := extractValueFromSpan(t, span, condition, checkNestedFields)
+			value, exists, checkedOnlyRoot := extractValueFromSpan(t, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if conditionMatchesValue(condition, value, exists) {
 					matched++
 					break span
 				}
-				continue
 			} else if condition.Matches(value, exists) {
 				matched++
 				break span
 			}
-
+			if checkedOnlyRoot {
+				// if we only checked the root span and it didn't match,
+				// there's no need to check the rest of the spans;
+				// they can't possibly match and we can end early.
+				break span
+			}
 		}
 	}
 	return matched == len(rule.Conditions)
@@ -197,18 +201,34 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 		ruleMatched := true
 		for _, condition := range rule.Conditions {
 			// whether this condition is matched by this span.
-			value, exists := extractValueFromSpan(trace, span, condition, checkNestedFields)
+			value, exists, checkedOnlyRoot := extractValueFromSpan(trace, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if !conditionMatchesValue(condition, value, exists) {
 					ruleMatched = false
-					break // if any condition fails, we can't possibly succeed, so exit inner loop early
+					if checkedOnlyRoot {
+						// if we only checked the root span and it didn't match,
+						// there's no need to check the rest of the spans;
+						// they can't possibly match and we can end early.
+						return false
+					}
+					// if any condition fails, we can't possibly succeed,
+					// so exit inner loop early
+					break
 				}
 			}
 
 			if condition.Matches != nil {
 				if !condition.Matches(value, exists) {
 					ruleMatched = false
-					break // if any condition fails, we can't possibly succeed, so exit inner loop early
+					if checkedOnlyRoot {
+						// if we only checked the root span and it didn't match,
+						// there's no need to check the rest of the spans;
+						// they can't possibly match and we can end early.
+						return false
+					}
+					// if any condition fails, we can't possibly succeed,
+					// so exit inner loop early
+					break
 				}
 			}
 		}
@@ -226,32 +246,54 @@ func ruleMatchesSpanInTrace(trace *types.Trace, rule *config.RulesBasedSamplerRu
 // extractValueFromSpan extracts the `value` found at the first of the given condition's fields found on the input `span`.
 // It returns the extracted `value` and an `exists` boolean indicating whether any of the condition's fields are present
 // on the input span.
-func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *config.RulesBasedSamplerCondition, checkNestedFields bool) (value interface{}, exists bool) {
+//
+// We need to check the fields in order; if we find a match using 'root.' we
+// can short-circuit the rest of the spans because they'll all return the same
+// value. But if we check a non-root value first, we need to keep checking all
+// the spans to see if any of them match.
+func extractValueFromSpan(
+	trace *types.Trace,
+	span *types.Span,
+	condition *config.RulesBasedSamplerCondition,
+	checkNestedFields bool) (value interface{}, exists bool, checkedOnlyRoot bool) {
+	// start with the assumption that we only checked the root span
+	checkedOnlyRoot = true
+
 	// If the condition is a descendant count, we extract the count from trace and return it.
+	// Note that this is the equivalent of checking the root span's descendant count, so
+	// we don't need to check the other spans.
 	if f, ok := condition.GetComputedField(); ok {
 		switch f {
 		case config.NUM_DESCENDANTS:
-			return int64(trace.DescendantCount()), true
+			return int64(trace.DescendantCount()), true, true
 		}
 	}
 
+	// we need to preserve which span we're actually using, since
+	// we might need to use the root span instead of the current span.
+	original := span
 	// whether this condition is matched by this span.
 	for _, field := range condition.Fields {
+		// always start with the original span
+		span = original
 		// check if rule uses root span context
 		if strings.HasPrefix(field, RootPrefix) {
 			// make sure root span exists
 			if trace.RootSpan != nil {
 				field = field[len(RootPrefix):]
+				// now we're using the root span
 				span = trace.RootSpan
 			} else {
 				// we wanted root span but this trace doesn't have one, so just skip it
 				continue
 			}
+		} else {
+			checkedOnlyRoot = false
 		}
 
 		value, exists = span.Data[field]
 		if exists {
-			return value, exists
+			return value, exists, checkedOnlyRoot
 		}
 	}
 	if !exists && checkNestedFields {
@@ -260,12 +302,12 @@ func extractValueFromSpan(trace *types.Trace, span *types.Span, condition *confi
 			for _, field := range condition.Fields {
 				result := gjson.Get(string(jsonStr), field)
 				if result.Exists() {
-					return result.String(), true
+					return result.String(), true, false
 				}
 			}
 		}
 	}
-	return nil, false
+	return nil, false, false
 }
 
 // This only gets called when we're using one of the basic operators, and
