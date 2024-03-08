@@ -143,6 +143,14 @@ groups:
         validations:
             - type: notempty
 
+  - name: PeerManagement
+    fields:
+      - name: Peers
+        type: stringarray
+        validations:
+          - type: elementType
+            arg: url
+
   - name: RequireTest
     fields:
       - name: FieldA
@@ -305,6 +313,8 @@ func Test_validate(t *testing.T) {
 		{"bad slice elementType", mm("Traces.AStringArray", []any{"0.0.0.0"}), "field Traces.AStringArray[0] (0.0.0.0) must be a hostport: address 0.0.0.0: missing port in address"},
 		{"good map elementType", mm("Traces.AStringMap", map[string]any{"k": "v"}), ""},
 		{"bad map elementType", mm("Traces.AStringMap", map[string]any{"k": 1}), "field Traces.AStringMap[k] must be a string"},
+		{"bad peer url", mm("PeerManagement.Peers", []any{"0.0.0.0:8082", "http://192.168.1.1:8088"}), "must be a valid UR"},
+		{"good peer url", mm("PeerManagement.Peers", []any{"http://0.0.0.0:8082", "http://192.168.1.1:8088"}), ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

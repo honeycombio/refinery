@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-02-23 at 22:23:27 UTC
+# automatically generated on 2024-03-08 at 14:51:11 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -68,8 +68,8 @@ PeerManagement:
   IdentifierInterfaceName: eth0
   UseIPV6Identifier: false
   Peers: 
-    - "192.168.1.11:8081"
-    - "192.168.1.12:8081"
+    - "http://192.168.1.11:8081"
+    - "http://192.168.1.12:8081"
 
 RedisPeerManagement:
   Host: "localhost:6379"
