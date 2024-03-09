@@ -28,6 +28,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.prefix = "rulesbased_"
 
 	s.Metrics.Register(s.prefix+"num_dropped", "counter")
+	s.Metrics.Register(s.prefix+"num_dropped_by_drop_rule", "counter")
 	s.Metrics.Register(s.prefix+"num_kept", "counter")
 	s.Metrics.Register(s.prefix+"sample_rate", "histogram")
 
@@ -125,6 +126,10 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 				reason += rule.Name
 				s.Metrics.Histogram(s.prefix+"sample_rate", float64(rate))
+				if rule.Drop {
+					// If we dropped because of an explicit drop rule, then increment that counter.
+					s.Metrics.Increment(s.prefix + "num_dropped_by_drop_rule")
+				}
 			}
 
 			if keep {
