@@ -62,7 +62,12 @@ The remainder of this document describes the sections within the file and the fi
 {{ $field.Description | wrapForDocs -}}
 {{- println -}}
 - {{ if $field.Reload }}E{{else}}Not e{{end}}ligible for live reload.
+{{- println -}}
+{{- if eq $field.Type "defaulttrue" -}}
+- Type: `bool`
+{{- else -}}
 - Type: `{{ $field.Type }}`
+{{- end -}}
 {{- println -}}
 {{- if $field.Default -}}
 - Default: `{{ $field.Default }}`
