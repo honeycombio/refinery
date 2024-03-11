@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-02-23 at 22:23:27 UTC from ../../config.yaml using a template generated on 2024-02-23 at 22:23:25 UTC
+# created on 2024-03-11 at 06:48:04 UTC from ../../config.yaml using a template generated on 2024-03-11 at 06:48:03 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -124,6 +124,35 @@ Network:
     ## default: https://api.honeycomb.io
     ## Eligible for live reload.
     # HoneycombAPI: "https://api.honeycomb.io"
+
+##################################
+## Kafka Receiver Configuration ##
+##################################
+KafkaReceiver:
+  ## KafkaReceiver contains configuration options for the Kafka receiver.
+  ####
+    ## BootstrapAddr is the IP and port on which to connect to a Kafka
+    ## bootstrap server.
+    ##
+    ## This is how we determine the Kafka broker we are using.
+    ##
+    ## Should be an ip:port like "".
+    ## Not eligible for live reload.
+    # BootstrapAddr: ""
+
+    ## Topic is the Kafka topic to consume.
+    ##
+    ## This is how we determine the Kafka topic we are using.
+    ##
+    ## Not eligible for live reload.
+    # Topic: ""
+
+    ## ConsumerGroupName is the name of the Kafka consumer group to join.
+    ##
+    ## This is how we determine the Kafka consumer group we are using.
+    ##
+    ## Not eligible for live reload.
+    # ConsumerGroupName: ""
 
 ##############################
 ## Access Key Configuration ##

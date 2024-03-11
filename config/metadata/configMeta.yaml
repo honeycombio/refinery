@@ -140,6 +140,43 @@ groups:
           This setting is the destination to which Refinery sends all events
           that it decides to keep.
 
+  - name: KafkaReceiver
+    title: "Kafka Receiver Configuration"
+    description: contains configuration options for the Kafka receiver.
+    fields:
+      - name: BootstrapAddr
+        type: hostport
+        valuetype: nondefault
+        reload: false
+        default: ""
+        envvar: REFINERY_KAFKA_BOOTSTRAP_ADDRESS
+        commandLine: kafka-bootstrap-address
+        summary: is the IP and port on which to connect to a Kafka bootstrap server.
+        description: >
+          This is how we determine the Kafka broker we are using.
+
+      - name: Topic
+        type: string
+        valuetype: nondefault
+        reload: false
+        default: ""
+        envvar: REFINERY_KAFKA_TOPIC
+        commandLine: kafka-topic
+        summary: is the Kafka topic to consume.
+        description: >
+          This is how we determine the Kafka topic we are using.
+
+      - name: ConsumerGroupName
+        type: string
+        valuetype: nondefault
+        reload: false
+        default: ""
+        envvar: REFINERY_KAFKA_CONSUMER_GROUP_NAME
+        commandLine: kafka-consumer-group-name
+        summary: is the name of the Kafka consumer group to join.
+        description: >
+          This is how we determine the Kafka consumer group we are using.
+
   - name: AccessKeys
     title: "Access Key Configuration"
     description: >

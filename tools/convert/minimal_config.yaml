@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-02-23 at 22:23:27 UTC
+# automatically generated on 2024-03-11 at 06:48:04 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -10,6 +10,10 @@ Network:
   PeerListenAddr: "0.0.0.0:8081"
   HTTPIdleTimeout: 0s
   HoneycombAPI: "https://api.honeycomb.io"
+KafkaReceiver:
+  BootstrapAddr: ""
+  Topic: ""
+  ConsumerGroupName: ""
 AccessKeys:
   ReceiveKeys: 
     - "your-key-goes-here"
