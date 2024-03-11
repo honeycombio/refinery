@@ -749,7 +749,7 @@ groups:
         v1name: Type
         type: string
         valuetype: choice
-        choices: ["redis", "file"]
+        choices: ["redis", "file", "fly-dns"]
         default: "file"
         reload: false
         validations:
@@ -763,6 +763,8 @@ groups:
 
           `redis` means that Refinery self-registers with a Redis instance and
           gets its peer list from there.
+
+          `fly-dns` means that Refinery uses Fly internal DNS to find its peers
 
       - name: Identifier
         v1group: PeerManagement
