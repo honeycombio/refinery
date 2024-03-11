@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-02-23 at 22:23:27 UTC from ../../config.yaml using a template generated on 2024-02-23 at 22:23:25 UTC
+# created on 2024-03-11 at 14:44:29 UTC from ../../config.yaml using a template generated on 2024-03-11 at 14:44:15 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -695,12 +695,12 @@ PeerManagement:
     ## Peers is the list of peers to use when Type is "file", excluding self.
     ##
     ## This list is ignored when Type is "redis". The format is a list of
-    ## strings of the form "host:port".
+    ## strings of the form "scheme://host:port".
     ##
     ## Not eligible for live reload.
     # Peers:
-      # - 192.168.1.11:8081
-      # - 192.168.1.12:8081
+      # - http://192.168.1.11:8081
+      # - http://192.168.1.12:8081
 
 ###########################
 ## Redis Peer Management ##
