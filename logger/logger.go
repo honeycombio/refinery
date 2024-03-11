@@ -39,6 +39,8 @@ func GetLoggerImplementation(c config.Config) Logger {
 		logger = &HoneycombLogger{}
 	case "stdout":
 		logger = &StdoutLogger{}
+	case "none":
+		logger = &NullLogger{}
 	default:
 		fmt.Printf("unknown logger type %s. Exiting.\n", loggerType)
 		os.Exit(1)
