@@ -28,6 +28,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.prefix = "rulesbased_"
 
 	s.Metrics.Register(s.prefix+"num_dropped", "counter")
+	s.Metrics.Register(s.prefix+"num_dropped_by_drop_rule", "counter")
 	s.Metrics.Register(s.prefix+"num_kept", "counter")
 	s.Metrics.Register(s.prefix+"sample_rate", "histogram")
 
@@ -131,6 +132,10 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				s.Metrics.Increment(s.prefix + "num_kept")
 			} else {
 				s.Metrics.Increment(s.prefix + "num_dropped")
+				if rule.Drop {
+					// If we dropped because of an explicit drop rule, then increment that too.
+					s.Metrics.Increment(s.prefix + "num_dropped_by_drop_rule")
+				}
 			}
 			logger.WithFields(map[string]interface{}{
 				"rate":      rate,
