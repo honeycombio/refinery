@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-08 at 20:13:38 UTC.
+It was automatically generated on 2024-03-11 at 14:44:30 UTC.
 
 ## The Config file
 
@@ -676,7 +676,7 @@ If this value is specified, then Refinery will use the first IPV6 unicast addres
 Peers is the list of peers to use when Type is "file", excluding self.
 
 This list is ignored when Type is "redis".
-The format is a list of strings of the form "schema://host:port".
+The format is a list of strings of the form "scheme://host:port".
 
 - Not eligible for live reload.
 - Type: `stringarray`

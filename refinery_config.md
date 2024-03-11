@@ -661,7 +661,7 @@ If this value is specified, then Refinery will use the first IPV6 unicast addres
 `Peers` is the list of peers to use when Type is "file", excluding self.
 
 This list is ignored when Type is "redis".
-The format is a list of strings of the form "schema://host:port".
+The format is a list of strings of the form "scheme://host:port".
 
 - Not eligible for live reload.
 - Type: `stringarray`

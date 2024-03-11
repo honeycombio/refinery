@@ -824,7 +824,7 @@ groups:
         summary: is the list of peers to use when Type is "file", excluding self.
         description: >
           This list is ignored when Type is "redis". The format is a list of
-          strings of the form "schema://host:port".
+          strings of the form "scheme://host:port".
 
   - name: RedisPeerManagement
     title: "Redis Peer Management"
