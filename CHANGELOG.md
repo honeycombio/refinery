@@ -1,5 +1,29 @@
 # Refinery Changelog
 
+## 2.5.0 2024-03-12
+
+The main feature is support of Honeycomb Classic ingest keys; there is also a performance improvement for the new
+`root.` rule feature, and a new metric to track traces dropped by rules.
+
+### Features
+
+- feat: new metric for drops caused by rules (#1047) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Shortcut evaluation of rules containing 'root.' (#1018) | [Kent Quirk](https://github.com/kentquirk)
+- feat: support Classic Ingest Keys (#1043) | [Jason Harley](https://github.com/jharley)
+
+### Fixes
+
+- fix: change validation type for PeerManagement.Peers to be url (#1046) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: `defaulttrue` now shows up in docs as `bool` (#1045) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Support 'none' as a logger type (#1034) | [Kent Quirk](https://github.com/kentquirk)
+
+### Maintenance
+
+- maint: add labels to release.yml for auto-generated grouping (#1042) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint(deps): bump the minor-patch group with 12 updates (#1030) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint: group minor/patch dep updates (#1028) | [Alex Boten](https://github.com/Alex Boten)
+
+
 ## 2.4.3 2024-03-01
 
 A bug fix release for a regression introduced in the 2.4.2 bug fix release.

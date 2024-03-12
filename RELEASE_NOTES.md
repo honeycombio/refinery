@@ -2,6 +2,12 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.5
+
+This release's main new feature adds support of Honeycomb Classic ingest keys.
+There is also a performance improvement for the new `root.` rule feature, and a new metric to track traces dropped by rules.
+This release is a recommended upgrade for anyone wishing to use ingest keys within a Honeycomb Classic environment.
+
 ## Version 2.4.3
 
 A bug fix release for a regression introduced in the 2.4.2 bug fix release.
