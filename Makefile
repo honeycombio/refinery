@@ -68,16 +68,16 @@ clean:
 
 .PHONY: install-tools
 install-tools:
-	go install github.com/google/go-licenses@latest
+	go install github.com/google/go-licenses@v1.0.0
 
 .PHONY: update-licenses
 update-licenses: install-tools
 	rm -rf LICENSES; \
-	go-licenses save ./cmd/refinery --save_path LICENSES;
+	go-licenses save --save_path LICENSES ./cmd/refinery;
 
 .PHONY: verify-licenses
 verify-licenses: install-tools
-	go-licenses save ./cmd/refinery --save_path temp; \
+	go-licenses save --save_path temp ./cmd/refinery; \
     if diff temp LICENSES > /dev/null; then \
       echo "Passed"; \
       rm -rf temp; \
