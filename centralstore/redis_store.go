@@ -13,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -84,7 +85,7 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
 	}
 
-	tracer := otel.Tracer("redis_store")
+	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
 	clock := clockwork.NewRealClock()
 	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
 
@@ -109,7 +110,7 @@ type RedisBasicStore struct {
 	decisionCache cache.TraceSentCache
 	traces        *tracesStore
 	states        *traceStateProcessor
-	tracer        trace.Tracer
+	tracer        refinerytrace.Tracer
 }
 
 func (r *RedisBasicStore) Start() error {
@@ -532,10 +533,10 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 // for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
 type tracesStore struct {
 	clock  clockwork.Clock
-	tracer trace.Tracer
+	tracer refinerytrace.Tracer
 }
 
-func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer) *tracesStore {
+func newTraceStatusStore(clock clockwork.Clock, tracer refinerytrace.Tracer) *tracesStore {
 	return &tracesStore{
 		clock:  clock,
 		tracer: tracer,
@@ -721,10 +722,10 @@ type traceStateProcessor struct {
 	clock  clockwork.Clock
 	cancel context.CancelFunc
 
-	tracer trace.Tracer
+	tracer refinerytrace.Tracer
 }
 
-func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer trace.Tracer) *traceStateProcessor {
+func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer refinerytrace.Tracer) *traceStateProcessor {
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
 	}
