@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
-	"go.opentelemetry.io/otel/trace"
+	"go.opencensus.io/trace"
 )
 
 type statusMap map[string]*CentralTraceStatus
@@ -23,7 +23,6 @@ type SmartWrapper struct {
 	stopped        chan struct{}
 	done           chan struct{}
 	doneProcessing chan struct{}
-	tracer         trace.Tracer
 }
 
 // ensure that we implement SmartStorer
