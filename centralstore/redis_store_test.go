@@ -13,10 +13,10 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func TestRedisBasicStore_TraceStatus(t *testing.T) {
@@ -374,7 +374,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	redisClient := NewTestRedis()
 	defer redisClient.Stop(ctx)
 
-	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
+	ts := newTestTraceStateProcessor(t, redisClient, nil, refinerytrace.NewTracer(nil))
 	ts.config.maxTraceRetention = 1 * time.Minute
 	ts.config.reaperRunInterval = 500 * time.Millisecond
 	require.NoError(t, ts.Start(ctx, redisClient))
@@ -409,7 +409,7 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	defer redisClient.Stop(ctx)
 
 	traceID := "traceID0"
-	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
+	ts := newTestTraceStateProcessor(t, redisClient, nil, refinerytrace.NewTracer(nil))
 	require.NoError(t, ts.Start(ctx, redisClient))
 	defer ts.Stop()
 
@@ -497,7 +497,7 @@ func NewTestRedisBasicStore(t *testing.T, redisClient *TestRedisClient) *TestRed
 	}}
 	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
 	require.NoError(t, err)
-	tracer := noopTracer()
+	tracer := refinerytrace.NewTracer(nil)
 	ts := newTestTraceStateProcessor(t, redisClient, clock, tracer)
 	require.NoError(t, ts.Start(context.TODO(), redisClient))
 	return &TestRedisBasicStore{
@@ -557,7 +557,7 @@ type testTraceStateProcessor struct {
 	clock clockwork.FakeClock
 }
 
-func newTestTraceStateProcessor(t *testing.T, redisClient *TestRedisClient, clock clockwork.FakeClock, tracer trace.Tracer) *testTraceStateProcessor {
+func newTestTraceStateProcessor(t *testing.T, redisClient *TestRedisClient, clock clockwork.FakeClock, tracer refinerytrace.Tracer) *testTraceStateProcessor {
 	if clock == nil {
 		clock = clockwork.NewFakeClock()
 	}

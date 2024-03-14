@@ -15,7 +15,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/refinerytrace"
+	"github.com/honeycombio/refinery/refinerytraces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,7 +50,7 @@ func (d dummyLogger) Errorf(format string, v ...interface{}) {
 	fmt.Println()
 }
 
-func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
+func getAndStartSmartWrapper(storetype string) (*SmartWrapper, error) {
 	var store BasicStorer
 	switch storetype {
 	case "local":
@@ -58,7 +58,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	case "redis":
 		store = &RedisBasicStore{}
 	default:
-		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
+		return nil, fmt.Errorf("unknown store type %s", storetype)
 	}
 
 	cfg := config.MockConfig{
@@ -78,7 +78,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 
 	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	sw := &SmartWrapper{}
@@ -87,7 +87,8 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: &cfg},
 		{Value: &logger.NullLogger{}},
 		{Value: &metrics.NullMetrics{}},
-		{Value: refinerytrace.NewTracer(nil)},
+		{Value: refinerytraces.NewRefineryTracer(nil)},
+		{Value: &RedisBasicStore{}},
 		{Value: decisionCache},
 		{Value: store},
 		{Value: sw},
@@ -95,12 +96,12 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	g := inject.Graph{Logger: dummyLogger{}}
 	err = g.Provide(objects...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if err := g.Populate(); err != nil {
 		fmt.Printf("failed to populate injection graph. error: %+v\n", err)
-		return nil, nil, err
+		return nil, err
 	}
 
 	fmt.Println("starting injected dependencies")
@@ -108,22 +109,19 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 
 	fmt.Println(g.Objects())
 
+	defer startstop.Stop(g.Objects(), ststLogger)
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
 	}
 
-	stopper := func() {
-		startstop.Stop(g.Objects(), ststLogger)
-	}
-
-	return sw, stopper, err
+	return sw, err
 }
 
 func TestSingleSpanGetsCollected(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(t, store)
 
 	randomNum := rand.Intn(500)
@@ -144,13 +142,13 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 			assert.Equal(collect, span.TraceID, states[0].TraceID)
 			assert.Equal(collect, Collecting, states[0].State)
 		}
-	}, 100*time.Second, 100*time.Millisecond)
+	}, 1*time.Second, 10*time.Millisecond)
 }
 
 func TestSingleTraceOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(t, store)
 
 	span := &CentralSpan{
@@ -196,9 +194,9 @@ func TestSingleTraceOperation(t *testing.T) {
 }
 
 func TestBasicStoreOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
@@ -254,9 +252,9 @@ func TestBasicStoreOperation(t *testing.T) {
 }
 
 func TestReadyForDecisionLoop(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
@@ -310,9 +308,9 @@ func TestReadyForDecisionLoop(t *testing.T) {
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
@@ -403,9 +401,9 @@ func TestSetTraceStatuses(t *testing.T) {
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(b, store)
 
 	spans := make([]*CentralSpan, 0)
@@ -424,9 +422,9 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 }
 
 func BenchmarkStoreGetStatus(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
@@ -447,9 +445,9 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 }
 
 func BenchmarkStoreGetTrace(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
@@ -473,9 +471,9 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	// we want things to happen fast, so we'll set the timeouts low
 	// sopts.SendDelay = duration("100ms")
 	// sopts.TraceTimeout = duration("100ms")
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
-	defer stopper()
+	defer store.Stop()
 	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()

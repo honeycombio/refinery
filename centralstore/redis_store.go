@@ -13,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -84,7 +85,7 @@ func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
 		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
 	}
 
-	tracer := otel.Tracer("redis_store")
+	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
 	clock := clockwork.NewRealClock()
 	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
 
@@ -109,7 +110,7 @@ type RedisBasicStore struct {
 	decisionCache cache.TraceSentCache
 	traces        *tracesStore
 	states        *traceStateProcessor
-	tracer        trace.Tracer
+	tracer        refinerytrace.Tracer
 }
 
 func (r *RedisBasicStore) Stop() error {
@@ -527,10 +528,10 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 // for example, an entry in the hash would be: "trace1:spans" -> "span1:{spanID:span1, KeyFields: []}, span2:{spanID:span2, KeyFields: []}"
 type tracesStore struct {
 	clock  clockwork.Clock
-	tracer trace.Tracer
+	tracer refinerytrace.Tracer
 }
 
-func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer) *tracesStore {
+func newTraceStatusStore(clock clockwork.Clock, tracer refinerytrace.Tracer) *tracesStore {
 	return &tracesStore{
 		clock:  clock,
 		tracer: tracer,
@@ -716,10 +717,10 @@ type traceStateProcessor struct {
 	clock  clockwork.Clock
 	cancel context.CancelFunc
 
-	tracer trace.Tracer
+	tracer refinerytrace.Tracer
 }
 
-func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer trace.Tracer) *traceStateProcessor {
+func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer refinerytrace.Tracer) *traceStateProcessor {
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
 	}
@@ -966,9 +967,9 @@ const stateChangeScript = `
   for i, traceID in ipairs(ARGV) do
     -- unfortunately, Lua doesn't support "continue" statement in for loops.
 	-- even though, Lua 5.2+ supports "goto" statement, we can't use it here because
-	-- Redis only supports Lua 5.1. 
+	-- Redis only supports Lua 5.1.
 	-- The interior "repeat ... until true" is a way of creating a do-once loop, and "do break end" is a way to
-	-- spell "break" that indicates it's not just a normal break. 
+	-- spell "break" that indicates it's not just a normal break.
 	-- This is a common pattern to simulate "continue" in Lua versions before 5.2.
   	repeat
 		-- the first 4 arguments are not traceIDs, so skip them
@@ -983,31 +984,31 @@ const stateChangeScript = `
 	    if (currentState == nil or currentState == false) then
 	 	  currentState = previousState
 	    end
-	
+
 	   -- if the current state doesn't match with the previous state, that means the state change is
 	   --  no longer valid, so we should abort
 	   if (currentState ~= previousState) then
 	 	  do break end
 	   end
-	
-	   -- check if the state change event is valid 
+
+	   -- check if the state change event is valid
 	   -- this formatting logic should match with the formatting for the stateChangeEvent struct
 	   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
 	   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
 	   if (changeEventIsValid == 0) then
 	     do break end
 	   end
-	
+
 	   redis.call('RPUSH', traceStateKey, nextState)
 	   redis.call('EXPIRE', traceStateKey, ttl)
-	
+
 	   -- the construction of the key for the sorted set should match with the stateNameKey function
 	   -- in the traceStateProcessor struct
 	   local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
-	
+
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
-	   -- add it to the result list 
+	   -- add it to the result list
 	   table.insert(result, traceID)
 	until true
   end

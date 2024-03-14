@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -16,67 +16,29 @@ import (
 // store that is local to the Refinery process. This is used when there is only one
 // refinery in the system, and for testing and benchmarking.
 type LocalRemoteStore struct {
+	Config        config.Config        `inject:""`
+	DecisionCache cache.TraceSentCache `inject:""`
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
-	states            map[CentralTraceState]statusMap
-	traces            map[string]*CentralTrace
-	decisionCache     cache.TraceSentCache
-	mutex             sync.RWMutex
-	keptSize          uint
-	droppedSize       uint
-	sizeCheckInterval config.Duration
-	clock             clockwork.Clock
+	states map[CentralTraceState]statusMap
+	traces map[string]*CentralTrace
+	mutex  sync.RWMutex
+	clock  clockwork.Clock
 }
 
-type LRSOption func(*LocalRemoteStore)
+// ensure that LocalRemoteStore implements RemoteStore
+var _ BasicStorer = (*LocalRemoteStore)(nil)
 
-func WithKeptSize(size uint) LRSOption {
-	return func(lrs *LocalRemoteStore) {
-		lrs.keptSize = size
-	}
-}
+// ensure that LocalRemoteStore implements startstop.Starter
+var _ startstop.Starter = (*LocalRemoteStore)(nil)
 
-func WithDroppedSize(size uint) LRSOption {
-	return func(lrs *LocalRemoteStore) {
-		lrs.droppedSize = size
-	}
-}
+// ensure that LocalRemoteStore implements startstop.Stopper
+var _ startstop.Stopper = (*LocalRemoteStore)(nil)
 
-func WithSizeCheckInterval(interval config.Duration) LRSOption {
-	return func(lrs *LocalRemoteStore) {
-		lrs.sizeCheckInterval = interval
-	}
-}
-
-// NewLocalRemoteStore returns a new LocalRemoteStore.
-func NewLocalRemoteStore(options ...LRSOption) *LocalRemoteStore {
-	// create with some defaults
-	lrs := &LocalRemoteStore{
-		states:            make(map[CentralTraceState]statusMap),
-		traces:            make(map[string]*CentralTrace),
-		keptSize:          100,
-		droppedSize:       10000,
-		sizeCheckInterval: config.Duration(10 * time.Second),
-		clock:             clockwork.NewRealClock(),
-	}
-	// apply options which might override the defaults
-	for _, f := range options {
-		f(lrs)
-	}
-
-	cfg := config.SampleCacheConfig{
-		KeptSize:          lrs.keptSize,
-		DroppedSize:       lrs.droppedSize,
-		SizeCheckInterval: lrs.sizeCheckInterval,
-	}
-
-	decisionCache, err := cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
-
-	if err != nil {
-		// TODO: handle this better
-		panic(err)
-	}
-	lrs.decisionCache = decisionCache
+func (lrs *LocalRemoteStore) Start() error {
+	lrs.states = make(map[CentralTraceState]statusMap)
+	lrs.traces = make(map[string]*CentralTrace)
+	lrs.clock = clockwork.NewRealClock()
 
 	// these states are the ones we need to maintain as separate maps
 	mapStates := []CentralTraceState{
@@ -92,11 +54,8 @@ func NewLocalRemoteStore(options ...LRSOption) *LocalRemoteStore {
 		// initialize the map for each state
 		lrs.states[state] = make(statusMap)
 	}
-	return lrs
+	return nil
 }
-
-// ensure that LocalRemoteStore implements RemoteStore
-var _ BasicStorer = (*LocalRemoteStore)(nil)
 
 func (lrs *LocalRemoteStore) Stop() error {
 	return nil
@@ -106,10 +65,12 @@ func (lrs *LocalRemoteStore) Stop() error {
 // wasn't found in any state. If the trace is found, the status will be non-nil.
 // Only call this if you're holding a Lock.
 func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
-	if tracerec, _, found := lrs.decisionCache.Test(traceID); found {
+	if tracerec, reason, found := lrs.DecisionCache.Test(traceID); found {
 		// it was in the decision cache, so we can return the right thing
 		if tracerec.Kept() {
-			return DecisionKeep, NewCentralTraceStatus(traceID, DecisionKeep, lrs.clock.Now())
+			status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.clock.Now())
+			status.KeepReason = reason
+			return DecisionKeep, status
 		} else {
 			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop, lrs.clock.Now())
 		}
@@ -161,7 +122,7 @@ func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) e
 
 	// first let's check if we've already processed and dropped this trace; if so, we're done and
 	// can just ignore the span.
-	if lrs.decisionCache.Dropped(span.TraceID) {
+	if lrs.DecisionCache.Dropped(span.TraceID) {
 		return nil
 	}
 
@@ -307,7 +268,7 @@ func (lrs *LocalRemoteStore) ChangeTraceStatus(ctx context.Context, traceIDs []s
 		if toState == DecisionDrop {
 			// if we're dropping, record it in the decision cache
 			if trace, ok := lrs.states[fromState][traceID]; ok {
-				lrs.decisionCache.Record(trace, false, "")
+				lrs.DecisionCache.Record(trace, false, "")
 				// and remove it from the states map
 				delete(lrs.states[fromState], traceID)
 				delete(lrs.traces, traceID)
@@ -328,7 +289,7 @@ func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*Central
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
 		if _, ok := lrs.states[AwaitingDecision][status.TraceID]; ok {
-			lrs.decisionCache.Record(status, true, status.KeepReason)
+			lrs.DecisionCache.Record(status, true, status.KeepReason)
 			delete(lrs.states[AwaitingDecision], status.TraceID)
 			delete(lrs.traces, status.TraceID)
 		}
@@ -339,7 +300,7 @@ func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*Central
 // GetMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
 func (lrs *LocalRemoteStore) GetMetrics(ctx context.Context) (map[string]any, error) {
-	m, err := lrs.decisionCache.GetMetrics()
+	m, err := lrs.DecisionCache.GetMetrics()
 	if err != nil {
 		return nil, err
 	}
