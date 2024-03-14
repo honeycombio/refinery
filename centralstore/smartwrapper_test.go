@@ -338,7 +338,6 @@ func TestSetTraceStatuses(t *testing.T) {
 	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
-		fmt.Println(states, err)
 		return err == nil && len(states) == numberOfTraces
 	}, 1*time.Second, 100*time.Millisecond)
 
@@ -367,6 +366,10 @@ func TestSetTraceStatuses(t *testing.T) {
 		for _, state := range statuses {
 			assert.Equal(collect, AwaitingDecision, state.State)
 		}
+
+		metrics, err := store.GetMetrics(ctx)
+		require.NoError(t, err)
+		require.Equal(t, numberOfTraces, metrics["redisstore_count_awaiting_decision"])
 	}, 3*time.Second, 100*time.Millisecond)
 
 	for _, status := range statuses {

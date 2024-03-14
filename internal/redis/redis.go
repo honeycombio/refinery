@@ -84,6 +84,7 @@ type Conn interface {
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
 	Watch(string, func(Conn) error) (func() error, error)
+	MemoryStats() (map[string]any, error)
 }
 
 var _ Client = &DefaultClient{}
@@ -677,6 +678,34 @@ func (c *DefaultConn) Exec(commands ...Command) error {
 	}
 
 	return nil
+}
+
+// MemoryStats returns the memory statistics reported by the redis server
+// for full list of stats see https://redis.io/commands/memory-stats
+func (c *DefaultConn) MemoryStats() (map[string]any, error) {
+	values, err := redis.Values(c.conn.Do("MEMORY", "STATS"))
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]any, len(values)/2)
+	for i, v := range values {
+		if i == len(values)-1 {
+			break
+		}
+		var key []byte
+		var ok bool
+		if i%2 == 0 {
+			key, ok = v.([]byte)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type from redis while parsing memory stats")
+			}
+		}
+
+		result[string(key)] = values[i+1]
+	}
+
+	return result, nil
 }
 
 func (c *DefaultConn) Do(commandString string, args ...any) (any, error) {

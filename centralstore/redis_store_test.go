@@ -27,7 +27,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
-	status, err := store.GetStatusForTraces(ctx, []string{"traceID0"})
+	status, err := store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.NotNil(t, status[0])
