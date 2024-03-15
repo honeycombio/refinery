@@ -57,6 +57,10 @@ import (
 // we dump them to the console.
 // Each of the major tasks will decorate its spans with a "task" field.
 
+// some OTel constants
+var ResourceLibrary = "test_stores"
+var ResourceVersion = "dev"
+
 // we need a local duration type so we can marshal it from config
 type Duration time.Duration
 
@@ -204,7 +208,8 @@ func main() {
 	}
 
 	objects := []*inject.Object{
-		{Value: "version", Name: "version"},
+		{Value: ResourceVersion, Name: "version"},
+		{Value: ResourceLibrary, Name: "library"},
 		{Value: &cfg},
 		{Value: &logger.NullLogger{}},
 		{Value: &metrics.NullMetrics{}},
@@ -233,6 +238,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	// We don't run these on start because we want to be able to multiple instances
+	// and that gets complicated with the stopstart library (not sure it's even possible).
 	wg := &sync.WaitGroup{}
 	for i := 0; i < opts.NodeCount; i++ {
 		inst := NewFakeRefineryInstance(sw, tracer)
