@@ -208,7 +208,7 @@ func main() {
 		{Value: &cfg},
 		{Value: &logger.NullLogger{}},
 		{Value: &metrics.NullMetrics{}},
-		{Value: tracer},
+		{Value: tracer, Name: "tracer"},
 		{Value: decisionCache},
 		{Value: store},
 		{Value: sw},

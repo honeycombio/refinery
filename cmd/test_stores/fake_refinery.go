@@ -11,7 +11,6 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
-	"github.com/honeycombio/refinery/refinerytrace"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -20,11 +19,11 @@ import (
 // It is not a stopstartable service because we may need to make more than one of them.
 type FakeRefineryInstance struct {
 	Store       centralstore.SmartStorer
-	Tracer      refinerytrace.Tracer
+	Tracer      trace.Tracer
 	traceIDchan chan string
 }
 
-func NewFakeRefineryInstance(store centralstore.SmartStorer, tracer refinerytrace.Tracer) *FakeRefineryInstance {
+func NewFakeRefineryInstance(store centralstore.SmartStorer, tracer trace.Tracer) *FakeRefineryInstance {
 	return &FakeRefineryInstance{
 		Store:       store,
 		Tracer:      tracer,

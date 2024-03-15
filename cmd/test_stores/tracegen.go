@@ -9,7 +9,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/internal/otelutil"
-	"github.com/honeycombio/refinery/refinerytrace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type traceGenerator struct {
@@ -20,10 +20,10 @@ type traceGenerator struct {
 	TotalNodeCount   int
 	NodeIndex        int
 	hashseed         uint64
-	tracer           refinerytrace.Tracer
+	tracer           trace.Tracer
 }
 
-func NewTraceGenerator(opts CmdLineOptions, index int, tracer refinerytrace.Tracer) *traceGenerator {
+func NewTraceGenerator(opts CmdLineOptions, index int, tracer trace.Tracer) *traceGenerator {
 	return &traceGenerator{
 		Granularity:      opts.TraceIDGranularity,
 		MinTraceLength:   opts.MinTraceLength,

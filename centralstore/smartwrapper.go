@@ -9,16 +9,16 @@ import (
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/refinerytrace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type statusMap map[string]*CentralTraceStatus
 
 // This is an implementation of SmartStorer that stores spans in memory locally.
 type SmartWrapper struct {
-	Config         config.Config        `inject:""`
-	Tracer         refinerytrace.Tracer `inject:""`
-	BasicStore     BasicStorer          `inject:""`
+	Config         config.Config `inject:""`
+	BasicStore     BasicStorer   `inject:""`
+	Tracer         trace.Tracer  `inject:"tracer"`
 	keyfields      []string
 	closing        bool
 	spanChan       chan *CentralSpan

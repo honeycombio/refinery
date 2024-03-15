@@ -15,10 +15,11 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func duration(s string) config.Duration {
@@ -77,7 +78,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: &cfg},
 		{Value: &logger.NullLogger{}},
 		{Value: &metrics.NullMetrics{}},
-		{Value: refinerytrace.NewTracer(nil)},
+		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
 		{Value: store},
 		{Value: sw},
