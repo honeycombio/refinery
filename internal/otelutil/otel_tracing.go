@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/otel-config-go/otelconfig"
+	"github.com/honeycombio/refinery/refinerytrace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -61,7 +62,7 @@ type TracingConfig struct {
 	HnyEndpoint string
 }
 
-func SetupTracing(cfg TracingConfig, resourceLibrary string, resourceVersion string) (tracer trace.Tracer, shutdown func()) {
+func SetupTracing(cfg TracingConfig, resourceLibrary string, resourceVersion string) (tracer refinerytrace.Tracer, shutdown func()) {
 	if cfg.HnyAPIKey != "" {
 		var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
 
@@ -81,8 +82,8 @@ func SetupTracing(cfg TracingConfig, resourceLibrary string, resourceVersion str
 		if err != nil {
 			log.Fatalf("failure configuring otel: %v", err)
 		}
-		return otel.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), otelshutdown
+		return refinerytrace.NewTracer(otel.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion))), otelshutdown
 	}
 	pr := noop.NewTracerProvider()
-	return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
+	return refinerytrace.NewTracer(pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion))), func() {}
 }

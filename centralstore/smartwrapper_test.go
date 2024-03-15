@@ -16,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/refinerytrace"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,17 +25,6 @@ func duration(s string) config.Duration {
 	d, _ := time.ParseDuration(s)
 	return config.Duration(d)
 }
-
-// func standardOptions() SmartWrapperOptions {
-// 	sopts := SmartWrapperOptions{
-// 		SpanChannelSize: 100,
-// 		StateTicker:     duration("50ms"),
-// 		SendDelay:       duration("200ms"),
-// 		TraceTimeout:    duration("500ms"),
-// 		DecisionTimeout: duration("500ms"),
-// 	}
-// 	return sopts
-// }
 
 var storeType = "local"
 
@@ -91,6 +81,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: decisionCache},
 		{Value: store},
 		{Value: sw},
+		{Value: clockwork.NewFakeClock()},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err = g.Provide(objects...)

@@ -18,12 +18,12 @@ import (
 type LocalRemoteStore struct {
 	Config        config.Config        `inject:""`
 	DecisionCache cache.TraceSentCache `inject:""`
+	Clock         clockwork.Clock      `inject:""`
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
 	states map[CentralTraceState]statusMap
 	traces map[string]*CentralTrace
 	mutex  sync.RWMutex
-	clock  clockwork.Clock
 }
 
 // ensure that LocalRemoteStore implements RemoteStore
@@ -38,7 +38,7 @@ var _ startstop.Stopper = (*LocalRemoteStore)(nil)
 func (lrs *LocalRemoteStore) Start() error {
 	lrs.states = make(map[CentralTraceState]statusMap)
 	lrs.traces = make(map[string]*CentralTrace)
-	lrs.clock = clockwork.NewRealClock()
+	lrs.Clock = clockwork.NewRealClock()
 
 	// these states are the ones we need to maintain as separate maps
 	mapStates := []CentralTraceState{
@@ -68,11 +68,11 @@ func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState,
 	if tracerec, reason, found := lrs.DecisionCache.Test(traceID); found {
 		// it was in the decision cache, so we can return the right thing
 		if tracerec.Kept() {
-			status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.clock.Now())
+			status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.Clock.Now())
 			status.KeepReason = reason
 			return DecisionKeep, status
 		} else {
-			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop, lrs.clock.Now())
+			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop, lrs.Clock.Now())
 		}
 	}
 	// wasn't in the cache, look in all the other states
@@ -151,7 +151,7 @@ func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) e
 	case Unknown:
 		// we don't have a state for this trace, so we create it
 		state = Collecting
-		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.clock.Now())
+		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.Clock.Now())
 		lrs.traces[span.TraceID] = &CentralTrace{}
 	}
 
@@ -213,7 +213,7 @@ func (lrs *LocalRemoteStore) GetStatusForTraces(ctx context.Context, traceIDs []
 		if state, status := lrs.findTraceStatus(traceID); state != Unknown {
 			statuses = append(statuses, status.Clone())
 		} else {
-			statuses = append(statuses, NewCentralTraceStatus(traceID, state, lrs.clock.Now()))
+			statuses = append(statuses, NewCentralTraceStatus(traceID, state, lrs.Clock.Now()))
 		}
 	}
 	return statuses, nil
