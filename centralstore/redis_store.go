@@ -112,6 +112,11 @@ type RedisBasicStore struct {
 	tracer        trace.Tracer
 }
 
+func (r *RedisBasicStore) Start() error {
+	// TODO: implement
+	return nil
+}
+
 func (r *RedisBasicStore) Stop() error {
 	r.states.Stop()
 	if err := r.client.Stop(context.TODO()); err != nil {
