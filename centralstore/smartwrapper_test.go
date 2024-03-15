@@ -13,6 +13,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
@@ -38,21 +39,7 @@ func duration(s string) config.Duration {
 // 	return sopts
 // }
 
-var storeType = "local"
-
-type dummyLogger struct{}
-
-func (d dummyLogger) Debugf(format string, v ...interface{}) {
-	fmt.Printf(format, v...)
-	fmt.Println()
-}
-
-func (d dummyLogger) Errorf(format string, v ...interface{}) {
-	fmt.Printf(format, v...)
-	fmt.Println()
-}
-
-var storeType = "local"
+var storeType = "redis"
 
 type dummyLogger struct{}
 
@@ -98,6 +85,8 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	}
 
 	sw := &SmartWrapper{}
+	redis := &redis.TestService{}
+	clock := clockwork.NewFakeClock()
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
 		{Value: &cfg},
@@ -105,6 +94,8 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: &metrics.NullMetrics{}},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
+		{Value: redis, Name: "redis"},
+		{Value: clock},
 		{Value: store},
 		{Value: sw},
 		{Value: clockwork.NewFakeClock()},

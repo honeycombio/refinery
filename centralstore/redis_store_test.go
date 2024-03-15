@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
+	"github.com/facebookgo/inject"
+	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redis"
@@ -23,11 +24,8 @@ import (
 
 func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
-
 	traceID := "traceID0"
-	store := NewTestRedisBasicStore(t, redisClient)
+	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
 	status, err := store.GetStatusForTraces(ctx, []string{"traceID0"})
@@ -128,11 +126,8 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 
 func TestRedisBasicStore_GetTrace(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
-
 	traceID := "traceID0"
-	store := NewTestRedisBasicStore(t, redisClient)
+	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 	testSpans := []*CentralSpan{
 		{
@@ -166,10 +161,8 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 
 func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
 
-	store := NewTestRedisBasicStore(t, redisClient)
+	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
 	// write a span to create a trace
@@ -241,13 +234,10 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 
 func TestRedisBasicStore_GetTracesNeedingDecision(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
-
-	store := NewTestRedisBasicStore(t, redisClient)
+	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
-	conn := redisClient.Get()
+	conn := store.RedisClient.Get()
 	defer conn.Close()
 
 	traces := []string{"traceID0", "traceID1", "traceID2"}
@@ -273,14 +263,11 @@ func TestRedisBasicStore_GetTracesNeedingDecision(t *testing.T) {
 
 func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
-
 	traceID := "traceID0"
-	store := NewTestRedisBasicStore(t, redisClient)
+	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
-	conn := redisClient.Get()
+	conn := store.RedisClient.Get()
 	defer conn.Close()
 
 	store.ensureInitialState(t, ctx, conn, traceID, AwaitingDecision)
@@ -289,7 +276,7 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	require.NoError(t, store.KeepTraces(ctx, status))
 
 	// make sure it's stored in the decision cache
-	record, _, exist := store.decisionCache.Test(traceID)
+	record, _, exist := store.DecisionCache.Test(traceID)
 	require.True(t, exist)
 	require.Equal(t, uint(1), record.DescendantCount())
 
@@ -308,11 +295,9 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 
 func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
 
 	traceID := "traceID0"
-	store := NewTestRedisBasicStore(t, redisClient)
+	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
 	require.NoError(t, store.WriteSpan(ctx, &CentralSpan{
@@ -351,7 +336,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 
 	wg.Wait()
 
-	conn := redisClient.Get()
+	conn := store.RedisClient.Get()
 	defer conn.Close()
 
 	require.False(t, store.states.exists(ctx, conn, Collecting, traceID))
@@ -373,15 +358,16 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 
 func TestRedisBasicStore_Cleanup(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
+	testRedis := &redis.TestService{}
+	testRedis.Start()
+	defer testRedis.Stop()
 
-	ts := newTestTraceStateProcessor(t, redisClient, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
+	ts := newTestTraceStateProcessor(t, testRedis, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
 	ts.config.maxTraceRetention = 1 * time.Minute
 	ts.config.reaperRunInterval = 500 * time.Millisecond
-	require.NoError(t, ts.Start(ctx, redisClient))
+	require.NoError(t, ts.Start(testRedis))
 
-	conn := redisClient.Get()
+	conn := testRedis.Get()
 	defer conn.Close()
 
 	traceIDToBeRemoved := "traceID0"
@@ -407,12 +393,13 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	ctx := context.Background()
-	redisClient := NewTestRedis()
-	defer redisClient.Stop(ctx)
+	testRedis := &redis.TestService{}
+	testRedis.Start()
+	defer testRedis.Stop()
 
 	traceID := "traceID0"
-	ts := newTestTraceStateProcessor(t, redisClient, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
-	require.NoError(t, ts.Start(ctx, redisClient))
+	ts := newTestTraceStateProcessor(t, testRedis, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
+	require.NoError(t, ts.Start(testRedis))
 	defer ts.Stop()
 
 	type stateChange struct {
@@ -444,7 +431,7 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 		t.Run(fmt.Sprintf("%s-%s", tc.state.String(), tc.change.to.String()), func(t *testing.T) {
 			tc := tc
 
-			conn := redisClient.Get()
+			conn := testRedis.Get()
 			defer conn.Close()
 
 			ts.ensureInitialState(t, ctx, conn, traceID, tc.state)
@@ -488,30 +475,62 @@ type TestRedisBasicStore struct {
 	*RedisBasicStore
 	clock              clockwork.FakeClock
 	testStateProcessor *testTraceStateProcessor
+	Stop               func()
 }
 
-func NewTestRedisBasicStore(t *testing.T, redisClient *TestRedisClient) *TestRedisBasicStore {
-	clock := clockwork.NewFakeClock()
-	opt := RedisBasicStoreOptions{Cache: config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       10000,
-		SizeCheckInterval: config.Duration(10 * time.Second),
-	}}
-	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
-	require.NoError(t, err)
-	tracer := trace.Tracer(noop.NewTracerProvider().Tracer("test"))
-	ts := newTestTraceStateProcessor(t, redisClient, clock, tracer)
-	require.NoError(t, ts.Start(context.TODO(), redisClient))
-	return &TestRedisBasicStore{
-		RedisBasicStore: &RedisBasicStore{
-			client:        redisClient,
-			states:        ts.traceStateProcessor,
-			traces:        newTraceStatusStore(clock, tracer),
-			decisionCache: decisionCache,
-			tracer:        tracer,
+func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicStore {
+	cfg := config.MockConfig{
+		StoreOptions: config.SmartWrapperOptions{
+			MaxTraceRetention: duration("1m"),
+			ReaperRunInterval: duration("1m"),
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          1000,
+			DroppedSize:       1000,
+			SizeCheckInterval: duration("1s"),
+		},
+	}
+	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
+	require.NoError(t, err)
+	clock := clockwork.NewFakeClock()
+	tracer := refinerytrace.NewTracer(nil)
+	redis := &redis.TestService{}
+	store := &RedisBasicStore{}
+	redis.Start()
+
+	objects := []*inject.Object{
+		{Value: &cfg},
+		{Value: tracer},
+		{Value: decisionCache},
+		{Value: clock},
+		{Value: redis, Name: "redis"},
+		{Value: store},
+	}
+	g := inject.Graph{Logger: dummyLogger{}}
+	err = g.Provide(objects...)
+	require.NoError(t, err)
+
+	err = g.Populate()
+	require.NoError(t, err)
+
+	ststLogger := dummyLogger{}
+
+	fmt.Println(g.Objects())
+
+	err = startstop.Start(g.Objects(), ststLogger)
+	require.NoError(t, err)
+
+	stopper := func() {
+		startstop.Stop(g.Objects(), ststLogger)
+	}
+
+	ts := newTestTraceStateProcessor(t, redis, clock, tracer)
+	require.NoError(t, ts.Start(redis))
+	return &TestRedisBasicStore{
+		RedisBasicStore:    store,
 		testStateProcessor: ts,
 		clock:              clock,
+		Stop:               stopper,
 	}
 }
 
@@ -526,40 +545,12 @@ func (store *TestRedisBasicStore) ensureInitialState(t *testing.T, ctx context.C
 	store.testStateProcessor.ensureInitialState(t, ctx, conn, traceID, state)
 }
 
-type TestRedisClient struct {
-	Server *miniredis.Miniredis
-	redis.Client
-}
-
-func NewTestRedis() *TestRedisClient {
-	s, err := miniredis.Run()
-	if err != nil {
-		panic(err)
-	}
-	return &TestRedisClient{
-		Server: s,
-		Client: redis.NewClient(&redis.Config{
-			Addr:           s.Addr(),
-			MaxActive:      10,
-			MaxIdle:        10,
-			ConnectTimeout: 500 * time.Millisecond,
-			ReadTimeout:    500 * time.Millisecond,
-		}),
-	}
-}
-
-func (tr *TestRedisClient) Stop(ctx context.Context) error {
-	tr.Client.Stop(ctx)
-	tr.Server.Close()
-	return nil
-}
-
 type testTraceStateProcessor struct {
 	*traceStateProcessor
 	clock clockwork.FakeClock
 }
 
-func newTestTraceStateProcessor(t *testing.T, redisClient *TestRedisClient, clock clockwork.FakeClock, tracer refinerytrace.Tracer) *testTraceStateProcessor {
+func newTestTraceStateProcessor(t *testing.T, redisClient redis.Client, clock clockwork.FakeClock, tracer refinerytrace.Tracer) *testTraceStateProcessor {
 	if clock == nil {
 		clock = clockwork.NewFakeClock()
 	}

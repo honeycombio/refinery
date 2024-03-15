@@ -8,11 +8,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
-	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel"
@@ -61,56 +61,84 @@ func EnsureRedisBasicStoreOptions(opt *RedisBasicStoreOptions) {
 
 var _ BasicStorer = (*RedisBasicStore)(nil)
 
-func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
-	EnsureRedisBasicStoreOptions(opt)
+var _ startstop.Starter = (*RedisBasicStore)(nil)
+var _ startstop.Stopper = (*RedisBasicStore)(nil)
 
-	redisClient := redis.NewClient(&redis.Config{
-		Addr:           opt.Host,
-		MaxIdle:        10,
-		MaxActive:      50,
-		ConnectTimeout: 500 * time.Second,
-		ReadTimeout:    500 * time.Second,
-	})
-
-	// TODO: a redis version check and return an error if the version is supported
-
-	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
-	if err != nil {
-		panic(err)
-	}
-
-	stateProcessorCfg := traceStateProcessorConfig{
-		reaperRunInterval: 10 * time.Second,
-		maxTraceRetention: opt.MaxTraceRetention,
-		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
-	}
-
-	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
-	clock := clockwork.NewRealClock()
-	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
-
-	ctx := context.Background()
-	err = stateProcessor.Start(ctx, redisClient)
-	if err != nil {
-		panic(err)
-	}
-
-	return &RedisBasicStore{
-		client:        redisClient,
-		decisionCache: decisionCache,
-		traces:        newTraceStatusStore(clock, tracer),
-		states:        stateProcessor,
-		tracer:        tracer,
-	}
-}
+//func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
+//	EnsureRedisBasicStoreOptions(opt)
+//
+//	redisClient := redis.NewClient(&redis.Config{
+//		Addr:           opt.Host,
+//		MaxIdle:        10,
+//		MaxActive:      50,
+//		ConnectTimeout: 500 * time.Second,
+//		ReadTimeout:    500 * time.Second,
+//	})
+//
+//	// TODO: a redis version check and return an error if the version is supported
+//
+//	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	stateProcessorCfg := traceStateProcessorConfig{
+//		reaperRunInterval: 10 * time.Second,
+//		maxTraceRetention: opt.MaxTraceRetention,
+//		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
+//	}
+//
+//	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
+//	clock := clockwork.NewRealClock()
+//	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
+//
+//	err = stateProcessor.Start(redisClient)
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	return &RedisBasicStore{
+//		RedisClient:   redisClient,
+//		DecisionCache: decisionCache,
+//		traces:        newTraceStatusStore(clock, tracer),
+//		states:        stateProcessor,
+//		Tracer:        tracer,
+//	}
+//}
 
 // RedisBasicStore is an implementation of BasicStorer that uses Redis as the backing store.
 type RedisBasicStore struct {
-	client        redis.Client
-	decisionCache cache.TraceSentCache
-	traces        *tracesStore
-	states        *traceStateProcessor
-	tracer        refinerytrace.Tracer
+	Config        config.Config        `inject:""`
+	DecisionCache cache.TraceSentCache `inject:""`
+	RedisClient   redis.Client         `inject:"redis"`
+	Tracer        refinerytrace.Tracer `inject:""`
+	Clock         clockwork.Clock      `inject:""`
+
+	traces *tracesStore
+	states *traceStateProcessor
+}
+
+func (r *RedisBasicStore) Start() error {
+	opt := r.Config.GetCentralStoreOptions()
+
+	stateProcessorCfg := traceStateProcessorConfig{
+		reaperRunInterval: time.Duration(opt.ReaperRunInterval),
+		maxTraceRetention: time.Duration(opt.MaxTraceRetention),
+		changeState:       r.RedisClient.NewScript(stateChangeKey, stateChangeScript),
+	}
+
+	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
+	stateProcessor := newTraceStateProcessor(stateProcessorCfg, r.Clock, tracer)
+
+	err := stateProcessor.Start(r.RedisClient)
+	if err != nil {
+		return err
+	}
+
+	r.traces = newTraceStatusStore(r.Clock, tracer)
+	r.states = stateProcessor
+
+	return nil
 }
 
 func (r *RedisBasicStore) Start() error {
@@ -120,9 +148,6 @@ func (r *RedisBasicStore) Start() error {
 
 func (r *RedisBasicStore) Stop() error {
 	r.states.Stop()
-	if err := r.client.Stop(context.TODO()); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -131,10 +156,10 @@ func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{
 }
 
 func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
-	_, writeSpan := r.tracer.Start(ctx, "WriteSpan")
+	_, writeSpan := r.Tracer.Start(ctx, "WriteSpan")
 	defer writeSpan.End()
 
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	state := r.getTraceState(ctx, conn, span.TraceID)
@@ -186,10 +211,10 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 // if a decision has been made about the trace, the returned value
 // will not contain span data.
 func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
-	_, span := r.tracer.Start(ctx, "GetTrace")
+	_, span := r.Tracer.Start(ctx, "GetTrace")
 	defer span.End()
 
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	spans := make([]*CentralSpan, 0)
@@ -225,16 +250,16 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 }
 
 func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
-	ctx, span := r.tracer.Start(ctx, "GetStatusForTraces")
+	ctx, span := r.Tracer.Start(ctx, "GetStatusForTraces")
 	defer span.End()
 
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	pendingTraceIDs := make([]string, 0, len(traceIDs))
 	statusMap := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, id := range traceIDs {
-		tracerec, reason, found := r.decisionCache.Test(id)
+		tracerec, reason, found := r.DecisionCache.Test(id)
 		if !found {
 			pendingTraceIDs = append(pendingTraceIDs, id)
 			continue
@@ -319,7 +344,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 }
 
 func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
-	ctx, span := r.tracer.Start(ctx, "GetTracesForState")
+	ctx, span := r.Tracer.Start(ctx, "GetTracesForState")
 	defer span.End()
 
 	switch state {
@@ -328,7 +353,7 @@ func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTr
 		return nil, nil
 	}
 
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	return r.states.allTraceIDs(ctx, conn, state, -1)
@@ -338,11 +363,11 @@ func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTr
 // ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 // atomically, so that no other refinery will be assigned the same trace.
 func (r *RedisBasicStore) GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error) {
-	ctx, span := r.tracer.Start(ctx, "GetTracesNeedingDecision")
+	ctx, span := r.Tracer.Start(ctx, "GetTracesNeedingDecision")
 	defer span.End()
 	otelutil.AddSpanField(span, "batch_size", n)
 
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	traceIDs, err := r.states.allTraceIDs(ctx, conn, ReadyToDecide, n)
@@ -364,7 +389,7 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(ctx context.Context, n int) (
 }
 
 func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []string, fromState, toState CentralTraceState) error {
-	ctx, span := r.tracer.Start(ctx, "ChangeTraceStatus")
+	ctx, span := r.Tracer.Start(ctx, "ChangeTraceStatus")
 	defer span.End()
 
 	otelutil.AddSpanFields(span, map[string]interface{}{
@@ -373,7 +398,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 		"to_state":      toState,
 	})
 
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	if toState == DecisionDrop {
@@ -383,7 +408,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 		}
 
 		for _, trace := range traces {
-			r.decisionCache.Record(trace, false, "")
+			r.DecisionCache.Record(trace, false, "")
 		}
 
 		if len(traceIDs) == 0 {
@@ -418,11 +443,11 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 }
 
 func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error {
-	ctx, span := r.tracer.Start(ctx, "KeepTraces")
+	ctx, span := r.Tracer.Start(ctx, "KeepTraces")
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_of_traces", len(statuses))
-	conn := r.client.Get()
+	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	traceIDs := make([]string, 0, len(statuses))
@@ -460,7 +485,7 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 		if err != nil {
 			continue
 		}
-		r.decisionCache.Record(status, true, status.KeepReason)
+		r.DecisionCache.Record(status, true, status.KeepReason)
 	}
 
 	// remove span list
@@ -478,12 +503,12 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 }
 
 func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, traceID string) (state CentralTraceState) {
-	ctx, span := r.tracer.Start(ctx, "getTraceState")
+	ctx, span := r.Tracer.Start(ctx, "getTraceState")
 	defer span.End()
 	defer otelutil.AddSpanField(span, "state", state)
 
 	otelutil.AddSpanField(span, "trace_id", traceID)
-	if tracerec, _, found := r.decisionCache.Test(traceID); found {
+	if tracerec, _, found := r.DecisionCache.Test(traceID); found {
 		// it was in the decision cache, so we can return the right thing
 		if tracerec.Kept() {
 			state = DecisionKeep
@@ -720,7 +745,7 @@ type traceStateProcessor struct {
 	states []CentralTraceState
 	config traceStateProcessorConfig
 	clock  clockwork.Clock
-	cancel context.CancelFunc
+	done   chan struct{}
 
 	tracer refinerytrace.Tracer
 }
@@ -743,28 +768,31 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 		},
 		config: cfg,
 		clock:  clock,
+		done:   make(chan struct{}),
 		tracer: tracer,
 	}
 
 	return s
 }
 
-func (t *traceStateProcessor) Start(ctx context.Context, redis redis.Client) error {
+func (t *traceStateProcessor) Start(redis redis.Client) error {
 	if err := ensureValidStateChangeEvents(redis); err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithCancel(ctx)
-	t.cancel = cancel
-
-	go t.cleanupExpiredTraces(ctx, redis)
+	go t.cleanupExpiredTraces(redis)
 
 	return nil
 }
 
 func (t *traceStateProcessor) Stop() {
-	if t.cancel != nil {
-		t.cancel()
+	if t.done != nil {
+		select {
+		case <-t.done:
+			return
+		default:
+			close(t.done)
+		}
 	}
 }
 
@@ -872,16 +900,16 @@ func (t *traceStateProcessor) toNextState(ctx context.Context, conn redis.Conn, 
 
 // cleanupExpiredTraces removes traces from the state map if they have been in the state for longer than
 // the configured time.
-func (t *traceStateProcessor) cleanupExpiredTraces(ctx context.Context, redis redis.Client) {
+func (t *traceStateProcessor) cleanupExpiredTraces(redis redis.Client) {
 	ticker := t.clock.NewTicker(t.config.reaperRunInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-t.done:
 			return
 		case <-ticker.Chan():
-			ctx, span := t.tracer.Start(ctx, "cleanupExpiredTraces")
+			ctx, span := t.tracer.Start(context.Background(), "cleanupExpiredTraces")
 			defer span.End()
 
 			t.removeExpiredTraces(ctx, redis)

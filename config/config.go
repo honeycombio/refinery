@@ -86,6 +86,10 @@ type Config interface {
 	// UseTLSInsecure returns true when certificate checks are disabled
 	GetUseTLSInsecure() (bool, error)
 
+	GetRedisMaxIdle() int
+
+	GetRedisMaxActive() int
+
 	// GetHoneycombAPI returns the base URL (protocol, hostname, and port) of
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() (string, error)
