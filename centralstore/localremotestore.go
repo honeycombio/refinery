@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/jonboulle/clockwork"
@@ -29,16 +28,19 @@ type LocalRemoteStore struct {
 // ensure that LocalRemoteStore implements RemoteStore
 var _ BasicStorer = (*LocalRemoteStore)(nil)
 
-// ensure that LocalRemoteStore implements startstop.Starter
-var _ startstop.Starter = (*LocalRemoteStore)(nil)
-
-// ensure that LocalRemoteStore implements startstop.Stopper
-var _ startstop.Stopper = (*LocalRemoteStore)(nil)
-
 func (lrs *LocalRemoteStore) Start() error {
+	if lrs.DecisionCache == nil {
+		return fmt.Errorf("LocalRemoteStore requires a DecisionCache")
+	}
+	if lrs.Clock == nil {
+		return fmt.Errorf("LocalRemoteStore requires a Clock")
+	}
+	if lrs.Config == nil {
+		return fmt.Errorf("LocalRemoteStore requires a Config")
+	}
+
 	lrs.states = make(map[CentralTraceState]statusMap)
 	lrs.traces = make(map[string]*CentralTrace)
-	lrs.Clock = clockwork.NewRealClock()
 
 	// these states are the ones we need to maintain as separate maps
 	mapStates := []CentralTraceState{

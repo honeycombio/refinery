@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -30,32 +29,7 @@ type SmartWrapper struct {
 // ensure that we implement SmartStorer
 var _ SmartStorer = (*SmartWrapper)(nil)
 
-// ensure that we implement startstop.Starter
-var _ startstop.Starter = (*SmartWrapper)(nil)
-
-// ensure that we implement startstop.Stopper
-var _ startstop.Stopper = (*SmartWrapper)(nil)
-
-// NewSmartWrapper creates a new SmartWrapper.
-// func NewSmartWrapper(options SmartWrapperOptions, basic BasicStorer, tracer trace.Tracer) *SmartWrapper {
-// 	w := &SmartWrapper{
-// 		BasicStore:     basic,
-// 		stopped:        make(chan struct{}),
-// 		spanChan:       make(chan *CentralSpan, options.SpanChannelSize),
-// 		done:           make(chan struct{}),
-// 		doneProcessing: make(chan struct{}),
-// 		Tracer:         tracer,
-// 	}
-// 	// start the span processor
-// 	go w.processSpans(context.Background())
-
-// 	// start the state manager
-// 	go w.manageStates(context.Background(), options)
-
-// 	return w
-// }
-
-// Start starts the SmartWrapper.
+// Start validates and starts the SmartWrapper.
 func (w *SmartWrapper) Start() error {
 	// check that the injection is doing its job
 	if w.Config == nil {
