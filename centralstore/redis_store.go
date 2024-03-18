@@ -12,7 +12,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
-	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -681,10 +680,10 @@ type traceStateProcessor struct {
 	clock  clockwork.Clock
 	done   chan struct{}
 
-	tracer refinerytrace.Tracer
+	tracer trace.Tracer
 }
 
-func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer refinerytrace.Tracer) *traceStateProcessor {
+func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer trace.Tracer) *traceStateProcessor {
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
 	}
