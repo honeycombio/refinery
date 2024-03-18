@@ -493,14 +493,14 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
 	require.NoError(t, err)
 	clock := clockwork.NewFakeClock()
-	tracer := refinerytrace.NewTracer(nil)
+	tracer := noop.NewTracerProvider().Tracer("redis_test")
 	redis := &redis.TestService{}
 	store := &RedisBasicStore{}
 	redis.Start()
 
 	objects := []*inject.Object{
 		{Value: &cfg},
-		{Value: tracer},
+		{Value: tracer, Name: "tracer"},
 		{Value: decisionCache},
 		{Value: clock},
 		{Value: redis, Name: "redis"},

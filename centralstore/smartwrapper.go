@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type statusMap map[string]*CentralTraceStatus
@@ -63,8 +63,7 @@ func (w *SmartWrapper) Stop() error {
 	close(w.done)
 	// wait for the span processor to finish
 	<-w.doneProcessing
-	// stop the remote store
-	return w.BasicStore.Stop()
+	return nil
 }
 
 // Register should be called once at Refinery startup to register itself

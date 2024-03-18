@@ -28,17 +28,6 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-// func standardOptions() SmartWrapperOptions {
-// 	sopts := SmartWrapperOptions{
-// 		SpanChannelSize: 100,
-// 		StateTicker:     duration("50ms"),
-// 		SendDelay:       duration("200ms"),
-// 		TraceTimeout:    duration("500ms"),
-// 		DecisionTimeout: duration("500ms"),
-// 	}
-// 	return sopts
-// }
-
 var storeType = "redis"
 
 type dummyLogger struct{}
@@ -98,7 +87,6 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: clock},
 		{Value: store},
 		{Value: sw},
-		{Value: clockwork.NewFakeClock()},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err = g.Provide(objects...)

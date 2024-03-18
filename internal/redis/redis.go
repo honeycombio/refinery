@@ -90,7 +90,10 @@ var _ Client = &DefaultClient{}
 
 type DefaultClient struct {
 	pool   *redis.Pool
-	Config config.Config
+	Config config.Config `inject:""`
+
+	// An overwritable clockwork.Clock for test injection
+	Clock clockwork.Clock
 }
 
 type DefaultConn struct {

@@ -8,14 +8,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -27,91 +25,14 @@ const (
 	redigoTimestamp            = "2006-01-02 15:04:05.999999 -0700 MST"
 )
 
-type RedisBasicStoreOptions struct {
-	Host              string
-	Cache             config.SampleCacheConfig
-	MaxTraceRetention time.Duration
-}
-
-func EnsureRedisBasicStoreOptions(opt *RedisBasicStoreOptions) {
-	if opt == nil {
-		opt = &RedisBasicStoreOptions{}
-	}
-	if opt.Host == "" {
-		opt.Host = "localhost:6379"
-	}
-
-	if opt.MaxTraceRetention == 0 {
-		opt.MaxTraceRetention = 24 * time.Hour
-	}
-
-	if opt.Cache.DroppedSize == 0 {
-		opt.Cache.DroppedSize = 10000
-	}
-
-	if opt.Cache.KeptSize == 0 {
-		opt.Cache.KeptSize = 100
-	}
-
-	if opt.Cache.SizeCheckInterval == 0 {
-		opt.Cache.SizeCheckInterval = config.Duration(10 * time.Second)
-	}
-
-}
-
 var _ BasicStorer = (*RedisBasicStore)(nil)
-
-var _ startstop.Starter = (*RedisBasicStore)(nil)
-var _ startstop.Stopper = (*RedisBasicStore)(nil)
-
-//func NewRedisBasicStore(opt *RedisBasicStoreOptions) *RedisBasicStore {
-//	EnsureRedisBasicStoreOptions(opt)
-//
-//	redisClient := redis.NewClient(&redis.Config{
-//		Addr:           opt.Host,
-//		MaxIdle:        10,
-//		MaxActive:      50,
-//		ConnectTimeout: 500 * time.Second,
-//		ReadTimeout:    500 * time.Second,
-//	})
-//
-//	// TODO: a redis version check and return an error if the version is supported
-//
-//	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	stateProcessorCfg := traceStateProcessorConfig{
-//		reaperRunInterval: 10 * time.Second,
-//		maxTraceRetention: opt.MaxTraceRetention,
-//		changeState:       redisClient.NewScript(stateChangeKey, stateChangeScript),
-//	}
-//
-//	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
-//	clock := clockwork.NewRealClock()
-//	stateProcessor := newTraceStateProcessor(stateProcessorCfg, clock, tracer)
-//
-//	err = stateProcessor.Start(redisClient)
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	return &RedisBasicStore{
-//		RedisClient:   redisClient,
-//		DecisionCache: decisionCache,
-//		traces:        newTraceStatusStore(clock, tracer),
-//		states:        stateProcessor,
-//		Tracer:        tracer,
-//	}
-//}
 
 // RedisBasicStore is an implementation of BasicStorer that uses Redis as the backing store.
 type RedisBasicStore struct {
 	Config        config.Config        `inject:""`
 	DecisionCache cache.TraceSentCache `inject:""`
 	RedisClient   redis.Client         `inject:"redis"`
-	Tracer        refinerytrace.Tracer `inject:""`
+	Tracer        trace.Tracer         `inject:"tracer"`
 	Clock         clockwork.Clock      `inject:""`
 
 	traces *tracesStore
@@ -119,6 +40,25 @@ type RedisBasicStore struct {
 }
 
 func (r *RedisBasicStore) Start() error {
+	if r.Config == nil {
+		return errors.New("missing Config injection in RedisBasicStore")
+	}
+
+	if r.DecisionCache == nil {
+		return errors.New("missing DecisionCache injection in RedisBasicStore")
+	}
+
+	if r.RedisClient == nil {
+		return errors.New("missing RedisClient injection in RedisBasicStore")
+	}
+
+	if r.Tracer == nil {
+		return errors.New("missing Tracer injection in RedisBasicStore")
+	}
+
+	if r.Clock == nil {
+		return errors.New("missing Clock injection in RedisBasicStore")
+	}
 	opt := r.Config.GetCentralStoreOptions()
 
 	stateProcessorCfg := traceStateProcessorConfig{
@@ -127,22 +67,16 @@ func (r *RedisBasicStore) Start() error {
 		changeState:       r.RedisClient.NewScript(stateChangeKey, stateChangeScript),
 	}
 
-	tracer := refinerytrace.NewTracer(otel.Tracer("redis_store"))
-	stateProcessor := newTraceStateProcessor(stateProcessorCfg, r.Clock, tracer)
+	stateProcessor := newTraceStateProcessor(stateProcessorCfg, r.Clock, r.Tracer)
 
 	err := stateProcessor.Start(r.RedisClient)
 	if err != nil {
 		return err
 	}
 
-	r.traces = newTraceStatusStore(r.Clock, tracer)
+	r.traces = newTraceStatusStore(r.Clock, r.Tracer)
 	r.states = stateProcessor
 
-	return nil
-}
-
-func (r *RedisBasicStore) Start() error {
-	// TODO: implement
 	return nil
 }
 
@@ -787,12 +721,7 @@ func (t *traceStateProcessor) Start(redis redis.Client) error {
 
 func (t *traceStateProcessor) Stop() {
 	if t.done != nil {
-		select {
-		case <-t.done:
-			return
-		default:
-			close(t.done)
-		}
+		close(t.done)
 	}
 }
 
