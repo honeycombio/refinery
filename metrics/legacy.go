@@ -65,6 +65,9 @@ type updown struct {
 }
 
 func (h *LegacyMetrics) Start() error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	h.Logger.Debug().Logf("Starting LegacyMetrics")
 	defer func() { h.Logger.Debug().Logf("Finished starting LegacyMetrics") }()
 	mc := h.Config.GetLegacyMetricsConfig()

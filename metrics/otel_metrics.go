@@ -47,6 +47,9 @@ type OTelMetrics struct {
 func (o *OTelMetrics) Start() error {
 	cfg := o.Config.GetOTelMetricsConfig()
 
+	o.lock.Lock()
+	defer o.lock.Unlock()
+
 	o.counters = make(map[string]metric.Int64Counter)
 	o.gauges = make(map[string]metric.Float64ObservableGauge)
 	o.histograms = make(map[string]metric.Int64Histogram)
@@ -179,6 +182,9 @@ func (o *OTelMetrics) Start() error {
 }
 
 func (o *OTelMetrics) Register(name string, metricType string) {
+	o.lock.Lock()
+	defer o.lock.Unlock()
+
 	switch metricType {
 	case "counter":
 		ctr, err := o.meter.Int64Counter(name)
@@ -189,8 +195,6 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 		o.counters[name] = ctr
 	case "gauge":
 		var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-			o.lock.RLock()
-			defer o.lock.RUnlock()
 			result.Observe(o.values[name])
 			return nil
 		}

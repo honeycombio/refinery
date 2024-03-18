@@ -30,6 +30,9 @@ func (p *PromMetrics) Start() error {
 	defer func() { p.Logger.Debug().Logf("Finished starting PromMetrics") }()
 	pc := p.Config.GetPrometheusMetricsConfig()
 
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	p.metrics = make(map[string]interface{})
 	p.values = make(map[string]float64)
 
