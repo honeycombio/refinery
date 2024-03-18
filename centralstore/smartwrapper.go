@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
-	"go.opencensus.io/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type statusMap map[string]*CentralTraceStatus
