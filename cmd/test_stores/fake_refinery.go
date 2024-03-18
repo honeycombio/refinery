@@ -16,22 +16,23 @@ import (
 
 // FakeRefineryInstance tries to do the same things to a store that Refinery is going to do.
 // That means it generates traces and sends them to the central store in the same general way.
+// It is not a stopstartable service because we may need to make more than one of them.
 type FakeRefineryInstance struct {
-	store       centralstore.SmartStorer
+	Store       centralstore.SmartStorer
+	Tracer      trace.Tracer
 	traceIDchan chan string
-	tracer      trace.Tracer
 }
 
 func NewFakeRefineryInstance(store centralstore.SmartStorer, tracer trace.Tracer) *FakeRefineryInstance {
 	return &FakeRefineryInstance{
-		store:       store,
+		Store:       store,
+		Tracer:      tracer,
 		traceIDchan: make(chan string, 10),
-		tracer:      tracer,
 	}
 }
 
 func (fri *FakeRefineryInstance) Stop() {
-	fri.store.(*centralstore.SmartWrapper).Stop()
+	fri.Store.(*centralstore.SmartWrapper).Stop()
 }
 
 // runSender runs a node that generates traces and sends them to the central store through
@@ -39,12 +40,12 @@ func (fri *FakeRefineryInstance) Stop() {
 // stop.
 func (fri *FakeRefineryInstance) runSender(opts CmdLineOptions, nodeIndex int, stopch chan struct{}) {
 	out := make(chan *centralstore.CentralSpan)
-	ctx, root := fri.tracer.Start(context.Background(), "sender")
+	ctx, root := fri.Tracer.Start(context.Background(), "sender")
 	defer root.End()
 	// start a goroutine to collect traces from the output channel and send them to the store
 	go func() {
 		for span := range out {
-			fri.store.WriteSpan(ctx, span)
+			fri.Store.WriteSpan(ctx, span)
 		}
 	}()
 
@@ -60,7 +61,7 @@ func (fri *FakeRefineryInstance) runSender(opts CmdLineOptions, nodeIndex int, s
 			return
 		case <-traceTicker.C:
 			// generate traces until we're done
-			tg := NewTraceGenerator(opts, nodeIndex, fri.tracer)
+			tg := NewTraceGenerator(opts, nodeIndex, fri.Tracer)
 			go tg.generateTrace(ctx, out, stopch, fri.traceIDchan)
 		}
 	}
@@ -80,12 +81,12 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 		case <-stopch:
 			return
 		case <-statusTicker.C:
-			ctx, root := fri.tracer.Start(ctx, "decider")
+			ctx, root := fri.Tracer.Start(ctx, "decider")
 			otelutil.AddSpanField(root, "nodeIndex", nodeIndex)
 			// get the current list of trace IDs in the ReadyForDecision state
 			// note that this request also changes the state for the traces it returns to AwaitingDecision
-			ctx, span1 := fri.tracer.Start(ctx, "get_traces_needing_decision")
-			traceIDs, err := fri.store.GetTracesNeedingDecision(ctx, opts.DecisionReqSize)
+			ctx, span1 := fri.Tracer.Start(ctx, "get_traces_needing_decision")
+			traceIDs, err := fri.Store.GetTracesNeedingDecision(ctx, opts.DecisionReqSize)
 			if err != nil {
 				otelutil.AddException(span1, err)
 			}
@@ -99,8 +100,8 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				continue
 			}
 
-			statCtx, span2 := fri.tracer.Start(ctx, "get_status_for_traces")
-			statuses, err := fri.store.GetStatusForTraces(statCtx, traceIDs)
+			statCtx, span2 := fri.Tracer.Start(ctx, "get_status_for_traces")
+			statuses, err := fri.Store.GetStatusForTraces(statCtx, traceIDs)
 			if err != nil {
 				otelutil.AddException(span2, err)
 			}
@@ -114,7 +115,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				traces := make([]*centralstore.CentralTrace, 0, len(statuses))
 				var wg sync.WaitGroup
 				for _, status := range statuses {
-					getCtx, span3 := fri.tracer.Start(statCtx, "get_trace")
+					getCtx, span3 := fri.Tracer.Start(statCtx, "get_trace")
 					otelutil.AddSpanFields(span3, map[string]interface{}{
 						"trace_id": status.TraceID,
 						"state":    status.State.String(),
@@ -131,7 +132,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 					go func(status *centralstore.CentralTraceStatus, span3 trace.Span) {
 						defer wg.Done()
 
-						trace, err := fri.store.GetTrace(getCtx, status.TraceID)
+						trace, err := fri.Store.GetTrace(getCtx, status.TraceID)
 						if err != nil {
 							otelutil.AddException(span3, err)
 						}
@@ -148,7 +149,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 					// we're going to keep:
 					// * traces having status > 500
 					// * traces with POST spans having status >= 400 && <= 403
-					_, decisionSpan := fri.tracer.Start(statCtx, "make_decision")
+					_, decisionSpan := fri.Tracer.Start(statCtx, "make_decision")
 					otelutil.AddSpanFields(decisionSpan, map[string]interface{}{
 						"trace_id": trace.TraceID,
 					})
@@ -207,7 +208,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 			} else {
 
 				for _, status := range statuses {
-					getCtx, span3 := fri.tracer.Start(statCtx, "get_trace")
+					getCtx, span3 := fri.Tracer.Start(statCtx, "get_trace")
 					otelutil.AddSpanFields(span3, map[string]interface{}{
 						"trace_id": status.TraceID,
 						"state":    status.State.String(),
@@ -219,7 +220,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 						span3.End()
 						continue
 					}
-					trace, err := fri.store.GetTrace(getCtx, status.TraceID)
+					trace, err := fri.Store.GetTrace(getCtx, status.TraceID)
 					if err != nil {
 						otelutil.AddException(span3, err)
 					}
@@ -274,8 +275,8 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 				span2.End()
 			}
 
-			_, span4 := fri.tracer.Start(ctx, "set_trace_statuses")
-			err = fri.store.SetTraceStatuses(ctx, statuses)
+			_, span4 := fri.Tracer.Start(ctx, "set_trace_statuses")
+			err = fri.Store.SetTraceStatuses(ctx, statuses)
 			if err != nil {
 				otelutil.AddException(span4, err)
 			}
@@ -305,7 +306,7 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 			fmt.Printf("processor %d: got trace %s\n", nodeIndex, tid)
 			traceIDs.Add(tid)
 		case <-statusTicker.C:
-			ctx, root := fri.tracer.Start(context.Background(), "processor")
+			ctx, root := fri.Tracer.Start(context.Background(), "processor")
 			otelutil.AddSpanFields(root, map[string]interface{}{
 				"nodeIndex":     nodeIndex,
 				"interval":      interval,
@@ -315,9 +316,9 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 			if len(tids) == 0 {
 				continue
 			}
-			statusCtx, span := fri.tracer.Start(ctx, "get_status_for_traces")
+			statusCtx, span := fri.Tracer.Start(ctx, "get_status_for_traces")
 			otelutil.AddSpanField(span, "num_trace_ids", len(tids))
-			statuses, err := fri.store.GetStatusForTraces(statusCtx, tids)
+			statuses, err := fri.Store.GetStatusForTraces(statusCtx, tids)
 			if err != nil {
 				otelutil.AddException(span, err)
 				span.End()
@@ -326,7 +327,7 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 			span.End()
 
 			for _, status := range statuses {
-				_, span := fri.tracer.Start(ctx, "act_on_decision")
+				_, span := fri.Tracer.Start(ctx, "act_on_decision")
 				otelutil.AddSpanFields(span, map[string]interface{}{
 					"trace_id": status.TraceID,
 					"state":    status.State.String(),

@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func TestRedisBasicStore_TraceStatus(t *testing.T) {
@@ -374,7 +375,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	redisClient := NewTestRedis()
 	defer redisClient.Stop(ctx)
 
-	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
+	ts := newTestTraceStateProcessor(t, redisClient, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
 	ts.config.maxTraceRetention = 1 * time.Minute
 	ts.config.reaperRunInterval = 500 * time.Millisecond
 	require.NoError(t, ts.Start(ctx, redisClient))
@@ -409,7 +410,7 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	defer redisClient.Stop(ctx)
 
 	traceID := "traceID0"
-	ts := newTestTraceStateProcessor(t, redisClient, nil, noopTracer())
+	ts := newTestTraceStateProcessor(t, redisClient, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
 	require.NoError(t, ts.Start(ctx, redisClient))
 	defer ts.Stop()
 
@@ -497,7 +498,7 @@ func NewTestRedisBasicStore(t *testing.T, redisClient *TestRedisClient) *TestRed
 	}}
 	decisionCache, err := cache.NewCuckooSentCache(opt.Cache, &metrics.NullMetrics{})
 	require.NoError(t, err)
-	tracer := noopTracer()
+	tracer := trace.Tracer(noop.NewTracerProvider().Tracer("test"))
 	ts := newTestTraceStateProcessor(t, redisClient, clock, tracer)
 	require.NoError(t, ts.Start(context.TODO(), redisClient))
 	return &TestRedisBasicStore{
