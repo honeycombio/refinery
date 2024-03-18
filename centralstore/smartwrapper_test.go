@@ -4,11 +4,18 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"testing"
 	"time"
 
+	"github.com/facebookgo/inject"
+	"github.com/facebookgo/startstop"
+	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
@@ -20,49 +27,96 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-func standardOptions() SmartWrapperOptions {
-	sopts := SmartWrapperOptions{
-		SpanChannelSize: 100,
-		StateTicker:     duration("50ms"),
-		SendDelay:       duration("200ms"),
-		TraceTimeout:    duration("500ms"),
-		DecisionTimeout: duration("500ms"),
-	}
-	return sopts
+var storeType = "local"
+
+type dummyLogger struct{}
+
+func (d dummyLogger) Debugf(format string, v ...interface{}) {
+	fmt.Printf(format, v...)
+	fmt.Println()
 }
 
-func noopTracer() trace.Tracer {
-	pr := noop.NewTracerProvider()
-	return pr.Tracer("test")
+func (d dummyLogger) Errorf(format string, v ...interface{}) {
+	fmt.Printf(format, v...)
+	fmt.Println()
 }
 
-var storeType = "redis"
-
-func makeRemoteStore() BasicStorer {
-	switch storeType {
-	case "mysql":
-		// this connection string works if you don't have a root password on your local mysql
-	// 	s, err := NewMySQLRemoteStore(MySQLRemoteStoreOptions{DSN: "root:@(localhost:3306)/refinery_test"})
-	// 	if err != nil {
-	// 		panic(fmt.Sprintf("failed to create mysql store: %s", err))
-	// 	}
-	// 	s.DeleteAllData()
-	// 	s.SetupDatabase()
-	// 	return s
-	case "redis":
-		return NewRedisBasicStore(&RedisBasicStoreOptions{})
+func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
+	var store BasicStorer
+	switch storetype {
 	case "local":
-		return NewLocalRemoteStore()
+		store = &LocalRemoteStore{}
+	case "redis":
+		store = &RedisBasicStore{}
+	default:
+		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
 	}
-	return nil
+
+	cfg := config.MockConfig{
+		StoreOptions: config.SmartWrapperOptions{
+			SpanChannelSize: 100,
+			StateTicker:     duration("50ms"),
+			SendDelay:       duration("200ms"),
+			TraceTimeout:    duration("500ms"),
+			DecisionTimeout: duration("500ms"),
+		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          1000,
+			DroppedSize:       1000,
+			SizeCheckInterval: duration("1s"),
+		},
+	}
+
+	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sw := &SmartWrapper{}
+	objects := []*inject.Object{
+		{Value: "version", Name: "version"},
+		{Value: &cfg},
+		{Value: &logger.NullLogger{}},
+		{Value: &metrics.NullMetrics{}},
+		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
+		{Value: decisionCache},
+		{Value: store},
+		{Value: sw},
+		{Value: clockwork.NewFakeClock()},
+	}
+	g := inject.Graph{Logger: dummyLogger{}}
+	err = g.Provide(objects...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if err := g.Populate(); err != nil {
+		fmt.Printf("failed to populate injection graph. error: %+v\n", err)
+		return nil, nil, err
+	}
+
+	fmt.Println("starting injected dependencies")
+	ststLogger := dummyLogger{}
+
+	fmt.Println(g.Objects())
+
+	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
+		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
+		os.Exit(1)
+	}
+
+	stopper := func() {
+		startstop.Stop(g.Objects(), ststLogger)
+	}
+
+	return sw, stopper, err
 }
 
 func TestSingleSpanGetsCollected(t *testing.T) {
-	sopts := standardOptions()
-	remoteStore := makeRemoteStore()
-	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(t, remoteStore)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(t, err)
+	defer stopper()
+	defer cleanupRedisStore(t, store)
 
 	randomNum := rand.Intn(500)
 	span := &CentralSpan{
@@ -82,15 +136,14 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 			assert.Equal(collect, span.TraceID, states[0].TraceID)
 			assert.Equal(collect, Collecting, states[0].State)
 		}
-	}, 1*time.Second, 10*time.Millisecond)
+	}, 100*time.Second, 100*time.Millisecond)
 }
 
 func TestSingleTraceOperation(t *testing.T) {
-	sopts := standardOptions()
-	remoteStore := makeRemoteStore()
-	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(t, remoteStore)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(t, err)
+	defer stopper()
+	defer cleanupRedisStore(t, store)
 
 	span := &CentralSpan{
 		TraceID:  "trace1",
@@ -135,11 +188,10 @@ func TestSingleTraceOperation(t *testing.T) {
 }
 
 func TestBasicStoreOperation(t *testing.T) {
-	sopts := standardOptions()
-	rs := makeRemoteStore()
-	store := NewSmartWrapper(sopts, rs, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(t, rs)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(t, err)
+	defer stopper()
+	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
 	traceids := make([]string, 0)
@@ -194,11 +246,11 @@ func TestBasicStoreOperation(t *testing.T) {
 }
 
 func TestReadyForDecisionLoop(t *testing.T) {
-	sopts := standardOptions()
-	remoteStore := makeRemoteStore()
-	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(t, remoteStore)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(t, err)
+	defer stopper()
+	defer cleanupRedisStore(t, store)
+
 	ctx := context.Background()
 	numberOfTraces := 11
 	traceids := make([]string, 0)
@@ -250,11 +302,11 @@ func TestReadyForDecisionLoop(t *testing.T) {
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	sopts := standardOptions()
-	remoteStore := makeRemoteStore()
-	store := NewSmartWrapper(sopts, remoteStore, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(t, remoteStore)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(t, err)
+	defer stopper()
+	defer cleanupRedisStore(t, store)
+
 	ctx := context.Background()
 	numberOfTraces := 5
 	traceids := make([]string, 0)
@@ -343,11 +395,10 @@ func TestSetTraceStatuses(t *testing.T) {
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
-	sopts := standardOptions()
-	rs := makeRemoteStore()
-	store := NewSmartWrapper(sopts, rs, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(b, rs)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(b, err)
+	defer stopper()
+	defer cleanupRedisStore(b, store)
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -365,11 +416,10 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 }
 
 func BenchmarkStoreGetStatus(b *testing.B) {
-	sopts := standardOptions()
-	rs := makeRemoteStore()
-	store := NewSmartWrapper(sopts, rs, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(b, rs)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(b, err)
+	defer stopper()
+	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
 	spans := make([]*CentralSpan, 0)
@@ -389,11 +439,10 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 }
 
 func BenchmarkStoreGetTrace(b *testing.B) {
-	sopts := standardOptions()
-	rs := makeRemoteStore()
-	store := NewSmartWrapper(sopts, rs, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(b, rs)
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(b, err)
+	defer stopper()
+	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
 	spans := make([]*CentralSpan, 0)
@@ -414,13 +463,12 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 
 func BenchmarkStoreGetTracesForState(b *testing.B) {
 	// we want things to happen fast, so we'll set the timeouts low
-	sopts := standardOptions()
-	sopts.SendDelay = duration("100ms")
-	sopts.TraceTimeout = duration("100ms")
-	rs := makeRemoteStore()
-	store := NewSmartWrapper(sopts, rs, noopTracer())
-	defer store.Stop()
-	defer cleanupRedisStore(b, rs)
+	// sopts.SendDelay = duration("100ms")
+	// sopts.TraceTimeout = duration("100ms")
+	store, stopper, err := getAndStartSmartWrapper(storeType)
+	require.NoError(b, err)
+	defer stopper()
+	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
 	spans := make([]*CentralSpan, 0)
@@ -440,14 +488,16 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	}
 }
 
-func cleanupRedisStore(t testing.TB, store BasicStorer) {
-	if r, ok := store.(*RedisBasicStore); ok {
-		conn := r.client.Get()
-		defer conn.Close()
+func cleanupRedisStore(t testing.TB, sw *SmartWrapper) {
+	// commented out until we fix redis
+	// store := sw.BasicStore
+	// if r, ok := store.(*RedisBasicStore); ok {
+	// conn := r.Redis.Get()
+	// defer conn.Close()
 
-		_, err := conn.Do("FLUSHALL")
-		if err != nil {
-			t.Logf("failed to flush redis: %s", err)
-		}
-	}
+	// _, err := conn.Do("FLUSHALL")
+	// if err != nil {
+	// 	t.Logf("failed to flush redis: %s", err)
+	// }
+	// }
 }

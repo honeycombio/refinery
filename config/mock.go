@@ -90,6 +90,7 @@ type MockConfig struct {
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
 	CfgMetadata                      []ConfigMetadata
+	StoreOptions                     SmartWrapperOptions
 
 	Mux sync.RWMutex
 }
@@ -532,4 +533,11 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalAttributes
+}
+
+func (f *MockConfig) GetCentralStoreOptions() SmartWrapperOptions {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.StoreOptions
 }
