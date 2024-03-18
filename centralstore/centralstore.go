@@ -127,6 +127,11 @@ func (t *CentralTraceStatus) SentReason() uint {
 // This is the data storage interface used by the trace decision engine; it
 // is not the trace decision engine itself.
 type SmartStorer interface {
+	// Start should be called once at Refinery startup to start the store.
+	Start() error
+	// Stop should be called once at Refinery shutdown to shut things down.
+	Stop() error
+
 	// Register should be called once at Refinery startup to register itself
 	// with the central store. This is used to ensure that the central store
 	// knows about all the refineries that are running, and can make decisions
@@ -230,7 +235,10 @@ type SmartStorer interface {
 // - return metrics about the traces it has seen
 
 // BasicStorer is the interface for a non-intelligent remote store.
+// It will be injected, so also has to implement the Stopper and Starter interfaces from stopstart.
 type BasicStorer interface {
+	// Start should be called once at Refinery startup to start the store.
+	Start() error
 	// Stop should be called once at Refinery shutdown to shut things down.
 	Stop() error
 

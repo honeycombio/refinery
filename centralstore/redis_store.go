@@ -112,6 +112,11 @@ type RedisBasicStore struct {
 	tracer        trace.Tracer
 }
 
+func (r *RedisBasicStore) Start() error {
+	// TODO: implement
+	return nil
+}
+
 func (r *RedisBasicStore) Stop() error {
 	r.states.Stop()
 	if err := r.client.Stop(context.TODO()); err != nil {
@@ -966,9 +971,9 @@ const stateChangeScript = `
   for i, traceID in ipairs(ARGV) do
     -- unfortunately, Lua doesn't support "continue" statement in for loops.
 	-- even though, Lua 5.2+ supports "goto" statement, we can't use it here because
-	-- Redis only supports Lua 5.1. 
+	-- Redis only supports Lua 5.1.
 	-- The interior "repeat ... until true" is a way of creating a do-once loop, and "do break end" is a way to
-	-- spell "break" that indicates it's not just a normal break. 
+	-- spell "break" that indicates it's not just a normal break.
 	-- This is a common pattern to simulate "continue" in Lua versions before 5.2.
   	repeat
 		-- the first 4 arguments are not traceIDs, so skip them
@@ -983,31 +988,31 @@ const stateChangeScript = `
 	    if (currentState == nil or currentState == false) then
 	 	  currentState = previousState
 	    end
-	
+
 	   -- if the current state doesn't match with the previous state, that means the state change is
 	   --  no longer valid, so we should abort
 	   if (currentState ~= previousState) then
 	 	  do break end
 	   end
-	
-	   -- check if the state change event is valid 
+
+	   -- check if the state change event is valid
 	   -- this formatting logic should match with the formatting for the stateChangeEvent struct
 	   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
 	   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
 	   if (changeEventIsValid == 0) then
 	     do break end
 	   end
-	
+
 	   redis.call('RPUSH', traceStateKey, nextState)
 	   redis.call('EXPIRE', traceStateKey, ttl)
-	
+
 	   -- the construction of the key for the sorted set should match with the stateNameKey function
 	   -- in the traceStateProcessor struct
 	   local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
-	
+
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
-	   -- add it to the result list 
+	   -- add it to the result list
 	   table.insert(result, traceID)
 	until true
   end
