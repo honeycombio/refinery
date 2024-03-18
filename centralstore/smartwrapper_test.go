@@ -314,6 +314,10 @@ func TestSetTraceStatuses(t *testing.T) {
 	numberOfTraces := 5
 	traceids := make([]string, 0)
 
+	metrics, err := store.GetMetrics(ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 0, metrics["redisstore_count_traces"])
+
 	for t := 0; t < numberOfTraces; t++ {
 		tid := fmt.Sprintf("trace%02d", t)
 		traceids = append(traceids, tid)
@@ -349,6 +353,7 @@ func TestSetTraceStatuses(t *testing.T) {
 		for _, state := range states {
 			assert.Equal(collect, ReadyToDecide, state.State)
 		}
+
 	}, 3*time.Second, 100*time.Millisecond)
 
 	// get the traces in the Ready state
@@ -369,7 +374,7 @@ func TestSetTraceStatuses(t *testing.T) {
 
 		metrics, err := store.GetMetrics(ctx)
 		require.NoError(t, err)
-		require.Equal(t, numberOfTraces, metrics["redisstore_count_awaiting_decision"])
+		assert.Equal(t, numberOfTraces, metrics["redisstore_count_awaiting_decision"])
 	}, 3*time.Second, 100*time.Millisecond)
 
 	for _, status := range statuses {
@@ -397,6 +402,12 @@ func TestSetTraceStatuses(t *testing.T) {
 			assert.Equal(t, DecisionDrop, status.State)
 		}
 	}
+
+	metrics, err = store.GetMetrics(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, metrics["redisstore_count_awaiting_decision"])
+	assert.EqualValues(t, numberOfTraces, metrics["redisstore_count_traces"])
+	assert.NotNil(t, metrics["redisstore_memory_used_total"])
 
 }
 

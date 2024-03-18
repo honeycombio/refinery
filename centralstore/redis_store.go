@@ -810,8 +810,8 @@ func (t *traceStateProcessor) traceStatesKey(traceID string) string {
 	return fmt.Sprintf("%s:states", traceID)
 }
 
-// traceIDsByState returns the traceIDs that are in the state.
-
+// activeTraceIDsByState returns the traceIDs that are in a given trace state no older than the maxTraceRetention.
+// If n is not zero, it will return at most n traceIDs.
 func (t *traceStateProcessor) activeTraceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
 	_, span := t.tracer.Start(ctx, "traceIDsByState")
 	defer span.End()
@@ -821,6 +821,10 @@ func (t *traceStateProcessor) activeTraceIDsByState(ctx context.Context, conn re
 
 }
 
+// traceIDsByState returns the traceIDs that are in a given trace state.
+// If startTime is not zero, it will return traceIDs that have been in the state since startTime.
+// If endTime is not zero, it will return traceIDs that have been in the state until endTime.
+// If n is not zero, it will return at most n traceIDs.
 func (t *traceStateProcessor) traceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, startTime time.Time, endTime time.Time, n int) ([]string, error) {
 	_, span := t.tracer.Start(ctx, "traceIDsByState")
 	defer span.End()
