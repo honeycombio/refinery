@@ -46,6 +46,9 @@ type MockConfig struct {
 	GetRedisAuthCodeVal              string
 	GetRedisDatabaseVal              int
 	GetRedisPrefixVal                string
+	GetRedisMaxActiveVal             int
+	GetRedisMaxIdleVal               int
+	GetRedisTimeoutVal               time.Duration
 	GetUseTLSErr                     error
 	GetUseTLSVal                     bool
 	GetUseTLSInsecureErr             error
@@ -273,6 +276,27 @@ func (m *MockConfig) GetUseTLSInsecure() (bool, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetUseTLSInsecureVal, m.GetUseTLSInsecureErr
+}
+
+func (m *MockConfig) GetRedisMaxActive() int {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisMaxActiveVal
+}
+
+func (m *MockConfig) GetRedisMaxIdle() int {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisMaxIdleVal
+}
+
+func (m *MockConfig) GetRedisTimeout() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisTimeoutVal
 }
 
 func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
