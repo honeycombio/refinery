@@ -14,7 +14,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/refinerytrace"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -550,7 +549,7 @@ type testTraceStateProcessor struct {
 	clock clockwork.FakeClock
 }
 
-func newTestTraceStateProcessor(t *testing.T, redisClient redis.Client, clock clockwork.FakeClock, tracer refinerytrace.Tracer) *testTraceStateProcessor {
+func newTestTraceStateProcessor(t *testing.T, redisClient redis.Client, clock clockwork.FakeClock, tracer trace.Tracer) *testTraceStateProcessor {
 	if clock == nil {
 		clock = clockwork.NewFakeClock()
 	}
