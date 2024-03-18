@@ -8,11 +8,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/facebookgo/inject"
+	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/centralstore"
+	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/jessevdk/go-flags"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/jonboulle/clockwork"
 )
 
 // This is a test program for the CentralStore. It is designed to generate load
@@ -52,6 +57,10 @@ import (
 // we dump them to the console.
 // Each of the major tasks will decorate its spans with a "task" field.
 
+// some OTel constants
+var ResourceLibrary = "test_stores"
+var ResourceVersion = "dev"
+
 // we need a local duration type so we can marshal it from config
 type Duration time.Duration
 
@@ -68,6 +77,19 @@ func (d *Duration) UnmarshalFlag(value string) error {
 	return nil
 }
 
+// we need a dummy logger to satisfy the inject logger interface
+type dummyLogger struct{}
+
+func (d dummyLogger) Debugf(format string, v ...interface{}) {
+	fmt.Printf(format, v...)
+	fmt.Println()
+}
+
+func (d dummyLogger) Errorf(format string, v ...interface{}) {
+	fmt.Printf(format, v...)
+	fmt.Println()
+}
+
 // ensure Duration implements the flags.Marshaler interface
 var _ flags.Marshaler = Duration(0)
 
@@ -76,9 +98,8 @@ func dur(s string) config.Duration {
 	return config.Duration(d)
 }
 
-// StateTicker should be comfortably more than the ticker in EventuallyWithT
-func standardStoreOptions() centralstore.SmartWrapperOptions {
-	sopts := centralstore.SmartWrapperOptions{
+func standardStoreOptions() config.SmartWrapperOptions {
+	sopts := config.SmartWrapperOptions{
 		SpanChannelSize: 100,
 		StateTicker:     dur("150ms"),
 		SendDelay:       dur("1s"),
@@ -88,12 +109,12 @@ func standardStoreOptions() centralstore.SmartWrapperOptions {
 	return sopts
 }
 
-func makeRemoteStore(storeType string, tracer trace.Tracer) centralstore.BasicStorer {
+func makeRemoteStore(storeType string) centralstore.BasicStorer {
 	switch storeType {
 	case "local":
-		return centralstore.NewLocalRemoteStore()
+		return &centralstore.LocalRemoteStore{}
 	case "redis":
-		return centralstore.NewRedisBasicStore(&centralstore.RedisBasicStoreOptions{})
+		return &centralstore.RedisBasicStore{}
 	default:
 		panic("unknown store type " + storeType)
 	}
@@ -116,7 +137,7 @@ type CmdLineOptions struct {
 	HnyDataset         string   `long:"hny-dataset" description:"Dataset/service name for traces in Honeycomb" default:"refinery-store-test" env:"HONEYCOMB_DATASET"`
 }
 
-func main() {
+func parseCmdLineOptions() CmdLineOptions {
 	var opts CmdLineOptions
 
 	parser := flags.NewParser(&opts, flags.Default)
@@ -143,7 +164,13 @@ func main() {
 		opts.TotalNodeCount = opts.NodeCount
 	}
 
-	// set up a signal handler to stop the program
+	return opts
+}
+
+func main() {
+	opts := parseCmdLineOptions()
+
+	// set up a signal handler to stop cleanly on ctrl-C
 	stopch := make(chan struct{})
 	sigsToExit := make(chan os.Signal, 1)
 	signal.Notify(sigsToExit, syscall.SIGINT, syscall.SIGTERM)
@@ -161,11 +188,61 @@ func main() {
 	}, ResourceLibrary, ResourceVersion)
 	defer shutdown()
 
+	sw := &centralstore.SmartWrapper{}
+	store := makeRemoteStore(opts.StoreType)
+
+	// we use a MockConfig here since it's easy to set up and doesn't require a real config file
+	cfg := config.MockConfig{
+		StoreOptions: standardStoreOptions(),
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          10000,
+			DroppedSize:       100000,
+			SizeCheckInterval: dur("1s"),
+		},
+	}
+
+	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
+	if err != nil {
+		fmt.Printf("Error creating decision cache: %s\n", err)
+		os.Exit(1)
+	}
+
+	objects := []*inject.Object{
+		{Value: ResourceVersion, Name: "version"},
+		{Value: ResourceLibrary, Name: "library"},
+		{Value: &cfg},
+		{Value: &logger.NullLogger{}},
+		{Value: &metrics.NullMetrics{}},
+		{Value: tracer, Name: "tracer"},
+		{Value: decisionCache},
+		{Value: store},
+		{Value: sw},
+		{Value: clockwork.NewRealClock()},
+	}
+
+	stsLogger := dummyLogger{}
+	g := inject.Graph{Logger: stsLogger}
+	err = g.Provide(objects...)
+	if err != nil {
+		fmt.Printf("failed to provide objects to injection graph. error: %+v\n", err)
+		os.Exit(1)
+	}
+
+	if err := g.Populate(); err != nil {
+		fmt.Printf("failed to populate injection graph. error: %+v\n", err)
+		os.Exit(1)
+	}
+
+	if err := startstop.Start(g.Objects(), stsLogger); err != nil {
+		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
+		os.Exit(1)
+	}
+
+	// We don't run these on start because we want to be able to multiple instances
+	// and that gets complicated with the stopstart library (not sure it's even possible).
 	wg := &sync.WaitGroup{}
-	sopts := standardStoreOptions()
-	store := centralstore.NewSmartWrapper(sopts, makeRemoteStore(opts.StoreType, tracer), tracer)
 	for i := 0; i < opts.NodeCount; i++ {
-		inst := NewFakeRefineryInstance(store, tracer)
+		inst := NewFakeRefineryInstance(sw, tracer)
 
 		wg.Add(1)
 		go func(i int) {

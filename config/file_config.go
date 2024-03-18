@@ -68,6 +68,7 @@ type configContents struct {
 	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
 	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
 	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
+	CentralStore         SmartWrapperOptions       `yaml:"CentralStore"`
 }
 
 type GeneralConfig struct {
@@ -211,6 +212,16 @@ type CollectionConfig struct {
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
+}
+
+type SmartWrapperOptions struct {
+	BasicStoreType    string   `yaml:"Type" default:"local"`
+	SpanChannelSize   int      `yaml:"SpanChannelSize" default:"100"`
+	StateTicker       Duration `yaml:"StateTicker" default:"1s"`
+	SendDelay         Duration `yaml:"SendDelay" default:"2s"`
+	TraceTimeout      Duration `yaml:"TraceTimeout" default:"60s"`
+	DecisionTimeout   Duration `yaml:"DecisionTimeout" default:"3s"`
+	MaxTraceRetention Duration `yaml:"MaxTraceRetention" default:"24h"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -925,4 +936,11 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Specialized.AdditionalAttributes
+}
+
+func (f *fileConfig) GetCentralStoreOptions() SmartWrapperOptions {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.CentralStore
 }

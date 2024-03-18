@@ -189,6 +189,8 @@ type Config interface {
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string
+
+	GetCentralStoreOptions() SmartWrapperOptions
 }
 
 type ConfigMetadata struct {
