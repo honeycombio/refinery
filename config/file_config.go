@@ -197,11 +197,13 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
 	Database       int      `yaml:"Database"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
+	Prefix         string   `yaml:"Prefix" default:"refinery"`
+	MaxIdle        int      `yaml:"MaxIdle" default:"3"`
+	MaxActive      int      `yaml:"MaxActive" default:"5"`
 }
 
 type CollectionConfig struct {
@@ -222,6 +224,7 @@ type SmartWrapperOptions struct {
 	TraceTimeout      Duration `yaml:"TraceTimeout" default:"60s"`
 	DecisionTimeout   Duration `yaml:"DecisionTimeout" default:"3s"`
 	MaxTraceRetention Duration `yaml:"MaxTraceRetention" default:"24h"`
+	ReaperRunInterval Duration `yaml:"ReaperRunInterval" default:"1h"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -658,6 +661,20 @@ func (f *fileConfig) GetRedisIdentifier() (string, error) {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.PeerManagement.Identifier, nil
+}
+
+func (f *fileConfig) GetRedisMaxActive() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.MaxActive
+}
+
+func (f *fileConfig) GetRedisMaxIdle() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.MaxIdle
 }
 
 func (f *fileConfig) GetHoneycombAPI() (string, error) {

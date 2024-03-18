@@ -14,6 +14,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jessevdk/go-flags"
@@ -207,6 +208,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	// set up redis if the remote store type is redis
+
 	objects := []*inject.Object{
 		{Value: ResourceVersion, Name: "version"},
 		{Value: ResourceLibrary, Name: "library"},
@@ -218,6 +221,11 @@ func main() {
 		{Value: store},
 		{Value: sw},
 		{Value: clockwork.NewRealClock()},
+	}
+
+	if opts.StoreType == "redis" {
+		client := &redis.DefaultClient{}
+		objects = append(objects, &inject.Object{Value: client, Name: "redis"})
 	}
 
 	stsLogger := dummyLogger{}
