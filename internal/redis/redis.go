@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/facebookgo/startstop"
@@ -73,7 +74,7 @@ type Conn interface {
 
 	ZAdd(string, []any) error
 	ZRange(string, int, int) ([]string, error)
-	ZRangeByScoreString(string, int64) ([]string, error)
+	ZRangeByScoreString(key string, minScore int64, maxScore int64, count, offset int) ([]string, error)
 	ZScore(string, string) (int64, error)
 	ZMScore(string, []string) ([]int64, error)
 	ZCard(string) (int64, error)
@@ -537,8 +538,18 @@ func (c *DefaultConn) ZRange(key string, start, stop int) ([]string, error) {
 	return redis.Strings(c.conn.Do("ZRANGE", key, start, stop))
 }
 
-func (c *DefaultConn) ZRangeByScoreString(key string, stop int64) ([]string, error) {
-	return redis.Strings(c.conn.Do("ZRANGE", key, 0, stop, "BYSCORE"))
+func (c *DefaultConn) ZRangeByScoreString(key string, minScore int64, maxScore int64, count, offset int) ([]string, error) {
+	start := strconv.FormatInt(minScore, 10)
+	if minScore == 0 {
+		start = "-inf"
+	}
+	stop := strconv.FormatInt(maxScore, 10)
+	if maxScore == 0 {
+		stop = "+inf"
+	}
+
+	// range from start including start to stop excluding stop
+	return redis.Strings(c.conn.Do("ZRANGE", key, "("+start, stop, "BYSCORE", "LIMIT", offset, count))
 }
 
 func (c *DefaultConn) ZScore(key string, member string) (int64, error) {

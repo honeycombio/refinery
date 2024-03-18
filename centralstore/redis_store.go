@@ -107,7 +107,7 @@ func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{
 
 	for _, state := range r.states.states {
 		// get the state counts
-		traceIDs, err := r.states.traceIDsByState(ctx, conn, state, -1)
+		traceIDs, err := r.states.traceIDsByState(ctx, conn, state, time.Time{}, time.Time{}, -1)
 		if err != nil {
 			return nil, err
 		}
@@ -341,7 +341,7 @@ func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTr
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	return r.states.traceIDsByState(ctx, conn, state, -1)
+	return r.states.activeTraceIDsByState(ctx, conn, state, -1)
 }
 
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
@@ -355,7 +355,7 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(ctx context.Context, n int) (
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	traceIDs, err := r.states.traceIDsByState(ctx, conn, ReadyToDecide, n)
+	traceIDs, err := r.states.activeTraceIDsByState(ctx, conn, ReadyToDecide, n)
 	if err != nil {
 		return nil, err
 	}
@@ -810,15 +810,32 @@ func (t *traceStateProcessor) traceStatesKey(traceID string) string {
 	return fmt.Sprintf("%s:states", traceID)
 }
 
-func (t *traceStateProcessor) traceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
+// traceIDsByState returns the traceIDs that are in the state.
+
+func (t *traceStateProcessor) activeTraceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
 	_, span := t.tracer.Start(ctx, "traceIDsByState")
 	defer span.End()
 
-	index := -1
-	if n > 0 {
-		index = n - 1
+	minTimestamp := t.clock.Now().Add(-t.config.maxTraceRetention)
+	return t.traceIDsByState(ctx, conn, state, minTimestamp, time.Time{}, n)
+
+}
+
+func (t *traceStateProcessor) traceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, startTime time.Time, endTime time.Time, n int) ([]string, error) {
+	_, span := t.tracer.Start(ctx, "traceIDsByState")
+	defer span.End()
+
+	start := startTime.UnixMicro()
+	if startTime.IsZero() {
+		start = 0
 	}
-	results, err := conn.ZRange(t.stateNameKey(state), 0, index)
+
+	end := endTime.UnixMicro()
+	if endTime.IsZero() {
+		end = 0
+	}
+
+	results, err := conn.ZRangeByScoreString(t.stateNameKey(state), start, end, n, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -922,7 +939,7 @@ func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client re
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
-		traceIDs, err := conn.ZRangeByScoreString(t.stateNameKey(state), t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro())
+		traceIDs, err := conn.ZRangeByScoreString(t.stateNameKey(state), 0, t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro(), 100, 0)
 		if err != nil {
 			otelutil.AddSpanFields(span, map[string]interface{}{
 				"state": state,
