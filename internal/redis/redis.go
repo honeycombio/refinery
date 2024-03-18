@@ -2,24 +2,17 @@ package redis
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/facebookgo/startstop"
 	"github.com/gofrs/uuid/v5"
 	"github.com/gomodule/redigo/redis"
+	"github.com/honeycombio/refinery/config"
 	"github.com/jonboulle/clockwork"
 )
-
-type Config struct {
-	Addr           string        `cfg:"addr"`
-	IdleTimeout    time.Duration `cfg:"idle_timeout"`
-	ConnectTimeout time.Duration `cfg:"connect_timeout"`
-	ReadTimeout    time.Duration `cfg:"read_timeout"`
-	MaxIdle        int           `cfg:"max_idle"`
-	MaxActive      int           `cfg:"max_active"`
-	Database       int           `cfg:"database"`
-}
 
 type Script interface {
 	Load(conn Conn) error
@@ -32,7 +25,8 @@ type Script interface {
 type Client interface {
 	Get() Conn
 	NewScript(keyCount int, src string) Script
-	Stop(context.Context) error
+	startstop.Starter
+	startstop.Stopper
 	Stats() redis.PoolStats
 }
 
@@ -92,9 +86,14 @@ type Conn interface {
 	Watch(string, func(Conn) error) (func() error, error)
 }
 
+var _ Client = &DefaultClient{}
+
 type DefaultClient struct {
 	pool   *redis.Pool
-	Config *Config
+	Config config.Config `inject:""`
+
+	// An overwritable clockwork.Clock for test injection
+	Clock clockwork.Clock
 }
 
 type DefaultConn struct {
@@ -108,30 +107,96 @@ type DefaultScript struct {
 	script *redis.Script
 }
 
-func NewClient(cfg *Config) Client {
+func buildOptions(c config.Config) []redis.DialOption {
+	options := []redis.DialOption{
+		redis.DialReadTimeout(1 * time.Second),
+		redis.DialConnectTimeout(1 * time.Second),
+		redis.DialDatabase(c.GetRedisDatabase()),
+	}
+
+	username, _ := c.GetRedisUsername()
+	if username != "" {
+		options = append(options, redis.DialUsername(username))
+	}
+
+	password, _ := c.GetRedisPassword()
+	if password != "" {
+		options = append(options, redis.DialPassword(password))
+	}
+
+	useTLS, _ := c.GetUseTLS()
+	tlsInsecure, _ := c.GetUseTLSInsecure()
+	if useTLS {
+		tlsConfig := &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		}
+
+		if tlsInsecure {
+			tlsConfig.InsecureSkipVerify = true
+		}
+
+		options = append(options,
+			redis.DialTLSConfig(tlsConfig),
+			redis.DialUseTLS(true))
+	}
+
+	return options
+}
+func (d *DefaultClient) Start() error {
+	redisHost, _ := d.Config.GetRedisHost()
+
+	if redisHost == "" {
+		redisHost = "localhost:6379"
+	}
+	options := buildOptions(d.Config)
 	pool := &redis.Pool{
-		MaxIdle:     cfg.MaxIdle,
-		MaxActive:   cfg.MaxActive,
-		IdleTimeout: cfg.IdleTimeout,
+		MaxIdle:     d.Config.GetRedisMaxIdle(),
+		MaxActive:   d.Config.GetRedisMaxActive(),
+		IdleTimeout: d.Config.GetPeerTimeout(),
 		Wait:        true,
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial(
-				"tcp", cfg.Addr,
-				redis.DialReadTimeout(cfg.ReadTimeout),
-				redis.DialConnectTimeout(cfg.ConnectTimeout),
-				redis.DialDatabase(cfg.Database),
+			// if redis is started at the same time as refinery, connecting to redis can
+			// fail and cause refinery to error out.
+			// Instead, we will try to connect to redis for up to 10 seconds with
+			// a 1 second delay between attempts to allow the redis process to init
+			var (
+				conn redis.Conn
+				err  error
 			)
-			return c, err
+			for timeout := time.After(10 * time.Second); ; {
+				select {
+				case <-timeout:
+					return nil, err
+				default:
+					if authCode, _ := d.Config.GetRedisAuthCode(); authCode != "" {
+						conn, err = redis.Dial("tcp", redisHost, options...)
+						if err != nil {
+							return nil, err
+						}
+						if _, err := conn.Do("AUTH", authCode); err != nil {
+							conn.Close()
+							return nil, err
+						}
+						if err == nil {
+							return conn, nil
+						}
+					} else {
+						conn, err = redis.Dial("tcp", redisHost, options...)
+						if err == nil {
+							return conn, nil
+						}
+					}
+					time.Sleep(time.Second)
+				}
+			}
 		},
 	}
 
-	return &DefaultClient{
-		pool:   pool,
-		Config: cfg,
-	}
+	d.pool = pool
+	return nil
 }
 
-func (d *DefaultClient) Stop(ctx context.Context) error {
+func (d *DefaultClient) Stop() error {
 	return d.pool.Close()
 }
 

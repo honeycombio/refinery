@@ -63,8 +63,7 @@ func (w *SmartWrapper) Stop() error {
 	close(w.done)
 	// wait for the span processor to finish
 	<-w.doneProcessing
-	// stop the remote store
-	return w.BasicStore.Stop()
+	return nil
 }
 
 // Register should be called once at Refinery startup to register itself
