@@ -492,15 +492,14 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 }
 
 func cleanupRedisStore(t testing.TB, sw *SmartWrapper) {
-	// commented out until we fix redis
-	// store := sw.BasicStore
-	// if r, ok := store.(*RedisBasicStore); ok {
-	// conn := r.Redis.Get()
-	// defer conn.Close()
+	store := sw.BasicStore
+	if r, ok := store.(*RedisBasicStore); ok {
+		conn := r.RedisClient.Get()
+		defer conn.Close()
 
-	// _, err := conn.Do("FLUSHALL")
-	// if err != nil {
-	// 	t.Logf("failed to flush redis: %s", err)
-	// }
-	// }
+		_, err := conn.Do("FLUSHALL")
+		if err != nil {
+			t.Logf("failed to flush redis: %s", err)
+		}
+	}
 }

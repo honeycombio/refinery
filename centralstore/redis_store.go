@@ -68,7 +68,7 @@ func (r *RedisBasicStore) Start() error {
 
 	stateProcessor := newTraceStateProcessor(stateProcessorCfg, r.Clock, r.Tracer)
 
-	err := stateProcessor.Start(r.RedisClient)
+	err := stateProcessor.init(r.RedisClient)
 	if err != nil {
 		return err
 	}
@@ -708,7 +708,9 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 	return s
 }
 
-func (t *traceStateProcessor) Start(redis redis.Client) error {
+// init ensures that the valid state change events are stored in a set in redis
+// and starts a goroutine to clean up expired traces.
+func (t *traceStateProcessor) init(redis redis.Client) error {
 	if err := ensureValidStateChangeEvents(redis); err != nil {
 		return err
 	}
