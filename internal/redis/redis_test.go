@@ -7,6 +7,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gofrs/uuid/v5"
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
@@ -182,6 +183,10 @@ func Test_SetStringsTTL(t *testing.T) {
 	require.EqualValues(t, []string{"fooval", "barval", ""}, vals)
 }
 
+func createArbitraryUniqueKey() string {
+	return uuid.Must(uuid.NewV4()).String()
+}
+
 type CachingClientHarness struct {
 	Clock clockwork.FakeClock
 	Redis TestRedis
@@ -206,10 +211,6 @@ func (h *CachingClientHarness) Stop(ctx context.Context) {
 	h.Redis.Stop(context.Background())
 }
 
-func createArbitraryUniqueKey() string {
-	return uuid.Must(uuid.NewV4()).String()
-}
-
 type TestRedis struct {
 	Server                     *miniredis.Miniredis
 	Client                     redis.Client
@@ -218,14 +219,25 @@ type TestRedis struct {
 
 func (tr *TestRedis) Start(ctx context.Context) {
 	tr.Server, _ = miniredis.Run()
+	cfg := &config.MockConfig{
+		GetRedisHostVal:      tr.Server.Addr(),
+		GetRedisDatabaseVal:  0,
+		GetRedisMaxActiveVal: 10,
+		GetRedisMaxIdleVal:   10,
+		GetRedisTimeoutVal:   5,
+	}
+
+	client := redis.DefaultClient{Config: cfg}
+	client.Start()
+
 	tr.Client = &RedisClientStub{
-		Client:    redis.NewClient(&redis.Config{Addr: tr.Server.Addr()}),
+		Client:    &client,
 		testRedis: tr,
 	}
 }
 
 func (tr *TestRedis) Stop(ctx context.Context) error {
-	err := tr.Client.Stop(ctx)
+	err := tr.Client.Stop()
 	tr.Server.Close()
 	return err
 }
@@ -257,5 +269,5 @@ func (s *RedisConnStub) AcquireLockWithRetries(ctx context.Context, key string, 
 }
 
 func BadRedis() redis.Client {
-	return redis.NewClient(&redis.Config{Addr: "localhost:9"})
+	return &redis.DefaultClient{Config: &config.MockConfig{GetRedisHostVal: "localhost:0"}}
 }

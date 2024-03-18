@@ -13,6 +13,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
@@ -27,7 +28,7 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-var storeType = "local"
+var storeType = "redis"
 
 type dummyLogger struct{}
 
@@ -73,6 +74,8 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	}
 
 	sw := &SmartWrapper{}
+	redis := &redis.DefaultClient{}
+	clock := clockwork.NewFakeClock()
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
 		{Value: &cfg},
@@ -80,9 +83,10 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: &metrics.NullMetrics{}},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
+		{Value: redis, Name: "redis"},
+		{Value: clock},
 		{Value: store},
 		{Value: sw},
-		{Value: clockwork.NewFakeClock()},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err = g.Provide(objects...)
@@ -279,7 +283,6 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
-		fmt.Println(states, err)
 		return err == nil && len(states) == numberOfTraces
 	}, 1*time.Second, 100*time.Millisecond)
 
@@ -289,7 +292,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 		assert.NoError(collect, err)
 		assert.Equal(collect, numberOfTraces, len(states))
 		for _, state := range states {
-			assert.Equal(collect, ReadyToDecide, state.State)
+			assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
 		}
 	}, 3*time.Second, 100*time.Millisecond)
 
@@ -489,15 +492,14 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 }
 
 func cleanupRedisStore(t testing.TB, sw *SmartWrapper) {
-	// commented out until we fix redis
-	// store := sw.BasicStore
-	// if r, ok := store.(*RedisBasicStore); ok {
-	// conn := r.Redis.Get()
-	// defer conn.Close()
+	store := sw.BasicStore
+	if r, ok := store.(*RedisBasicStore); ok {
+		conn := r.RedisClient.Get()
+		defer conn.Close()
 
-	// _, err := conn.Do("FLUSHALL")
-	// if err != nil {
-	// 	t.Logf("failed to flush redis: %s", err)
-	// }
-	// }
+		_, err := conn.Do("FLUSHALL")
+		if err != nil {
+			t.Logf("failed to flush redis: %s", err)
+		}
+	}
 }
