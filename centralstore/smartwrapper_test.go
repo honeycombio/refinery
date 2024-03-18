@@ -74,7 +74,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	}
 
 	sw := &SmartWrapper{}
-	redis := &redis.TestService{}
+	redis := &redis.DefaultClient{}
 	clock := clockwork.NewFakeClock()
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
