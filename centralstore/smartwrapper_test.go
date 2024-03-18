@@ -283,7 +283,6 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
-		fmt.Println(states, err)
 		return err == nil && len(states) == numberOfTraces
 	}, 1*time.Second, 100*time.Millisecond)
 
@@ -293,7 +292,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 		assert.NoError(collect, err)
 		assert.Equal(collect, numberOfTraces, len(states))
 		for _, state := range states {
-			assert.Equal(collect, ReadyToDecide, state.State)
+			assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
 		}
 	}, 3*time.Second, 100*time.Millisecond)
 
