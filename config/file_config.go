@@ -60,7 +60,9 @@ type configContents struct {
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
+	RedisManagement      RedisManagementConfig     `yaml:"RedisManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
+	RedisStoreOptions    RedisStoreOptions         `yaml:"RedisStore"`
 	Collection           CollectionConfig          `yaml:"Collection"`
 	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
@@ -192,18 +194,21 @@ type PeerManagementConfig struct {
 	Peers                   []string `yaml:"Peers"`
 }
 
-type RedisPeerManagementConfig struct {
+type RedisManagementConfig struct {
 	Host           string   `yaml:"Host" cmdenv:"RedisHost"`
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
 	Database       int      `yaml:"Database"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 	MaxIdle        int      `yaml:"MaxIdle" default:"3"`
 	MaxActive      int      `yaml:"MaxActive" default:"5"`
+}
+
+type RedisPeerManagementConfig struct {
+	Prefix string `yaml:"Prefix" default:"refinery"`
 }
 
 type CollectionConfig struct {
@@ -217,12 +222,15 @@ type CollectionConfig struct {
 }
 
 type SmartWrapperOptions struct {
-	BasicStoreType    string   `yaml:"Type" default:"local"`
-	SpanChannelSize   int      `yaml:"SpanChannelSize" default:"100"`
-	StateTicker       Duration `yaml:"StateTicker" default:"1s"`
-	SendDelay         Duration `yaml:"SendDelay" default:"2s"`
-	TraceTimeout      Duration `yaml:"TraceTimeout" default:"60s"`
-	DecisionTimeout   Duration `yaml:"DecisionTimeout" default:"3s"`
+	BasicStoreType  string   `yaml:"Type" default:"local"`
+	SpanChannelSize int      `yaml:"SpanChannelSize" default:"100"`
+	StateTicker     Duration `yaml:"StateTicker" default:"1s"`
+	SendDelay       Duration `yaml:"SendDelay" default:"2s"`
+	TraceTimeout    Duration `yaml:"TraceTimeout" default:"60s"`
+	DecisionTimeout Duration `yaml:"DecisionTimeout" default:"3s"`
+}
+
+type RedisStoreOptions struct {
 	MaxTraceRetention Duration `yaml:"MaxTraceRetention" default:"24h"`
 	ReaperRunInterval Duration `yaml:"ReaperRunInterval" default:"1h"`
 }
@@ -590,14 +598,14 @@ func (f *fileConfig) GetRedisHost() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Host, nil
+	return f.mainConfig.RedisManagement.Host, nil
 }
 
 func (f *fileConfig) GetRedisUsername() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Username, nil
+	return f.mainConfig.RedisManagement.Username, nil
 }
 
 func (f *fileConfig) GetRedisPrefix() string {
@@ -611,35 +619,35 @@ func (f *fileConfig) GetRedisPassword() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Password, nil
+	return f.mainConfig.RedisManagement.Password, nil
 }
 
 func (f *fileConfig) GetRedisAuthCode() (string, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.AuthCode, nil
+	return f.mainConfig.RedisManagement.AuthCode, nil
 }
 
 func (f *fileConfig) GetRedisDatabase() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Database
+	return f.mainConfig.RedisManagement.Database
 }
 
 func (f *fileConfig) GetUseTLS() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.UseTLS, nil
+	return f.mainConfig.RedisManagement.UseTLS, nil
 }
 
 func (f *fileConfig) GetUseTLSInsecure() (bool, error) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.UseTLSInsecure, nil
+	return f.mainConfig.RedisManagement.UseTLSInsecure, nil
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
@@ -667,14 +675,14 @@ func (f *fileConfig) GetRedisMaxActive() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.MaxActive
+	return f.mainConfig.RedisManagement.MaxActive
 }
 
 func (f *fileConfig) GetRedisMaxIdle() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.MaxIdle
+	return f.mainConfig.RedisManagement.MaxIdle
 }
 
 func (f *fileConfig) GetHoneycombAPI() (string, error) {
