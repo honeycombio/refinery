@@ -19,7 +19,6 @@ type SmartWrapper struct {
 	BasicStore     BasicStorer   `inject:""`
 	Tracer         trace.Tracer  `inject:"tracer"`
 	keyfields      []string
-	closing        bool
 	spanChan       chan *CentralSpan
 	stopped        chan struct{}
 	done           chan struct{}
@@ -58,8 +57,6 @@ func (w *SmartWrapper) Start() error {
 }
 
 func (w *SmartWrapper) Stop() error {
-	fmt.Println("stopping SmartWrapper")
-	w.closing = true
 	// close the span channel to stop the span processor,
 	close(w.spanChan)
 	// stop the state manager
