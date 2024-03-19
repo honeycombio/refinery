@@ -959,6 +959,49 @@ groups:
         description: >
           It is rarely necessary to adjust this value.
 
+      - name: Prefix
+        firstversion: v2.6
+        type: string
+        valuetype: nondefault
+        default: "refinery"
+        example: "customPrefix"
+        reload: false
+        validations:
+          - type: notempty
+        summary: is a string used as a prefix for the keys in Redis while storing the peer membership.
+        description: >
+          It might be useful to override this in any situation where multiple
+          Refinery clusters or multiple applications want to share a single
+          Redis instance. It may not be blank.
+
+      - name: MaxIdle
+        firstversion: v2.6
+        type: int
+        valuetype: nondefault
+        default: 3
+        reload: false
+        validations:
+          - type: minimum
+            arg: 0
+        summary: is the maximum number of idle connections in the Redis connection pool.
+        description: >
+          This setting is used to control the number of idle connections to
+          Redis. It is rarely necessary to adjust this value.
+
+      - name: MaxActive
+        firstversion: v2.6
+        type: int
+        valuetype: nondefault
+        default: 5
+        reload: false
+        summary: is the maximum number of active connections in the Redis connection pool.
+        description: >
+          This setting is used to control the maximum number of active
+          connections to Redis in the Redis connection pool. It may be useful to
+          increase this value in high-throughput environments. Setting it
+          to 0 imposes no connection limit, but this may be risky in
+          a burst of traffic. TODO: default to a much higher number?
+
       - name: Strategy
         v1group: PeerManagement
         v1name: Strategy
@@ -1600,3 +1643,122 @@ groups:
           If this duration is `0`, then Refinery will not start in stressed
           mode, which will provide faster startup at the possible cost of
           startup instability.
+
+  - name: CentralStore
+    title: "Central Data Store"
+    description: >
+      controls the Central Data Store, which provides the storage system that
+      Refinery uses to record and share trace data while traces are in flight.
+
+    fields:
+      - name: Type
+        firstVersion: v2.6
+        type: string
+        valuetype: choice
+        choices: ["local", "redis"]
+        default: "local"
+        reload: false
+        summary: is the type of central store to use.
+        description: >
+          "local" means that refinery stores all trace data locally and
+          is generally only used in a configuration with a single Refinery node.
+
+          "redis" means that a Redis instance is used as the central store
+          for a cluster of Refineries; the Central Store is the mechanism
+          through which the refineries share trace data.
+
+      - name: SpanChannelSize
+        firstVersion: v2.6
+        type: int
+        valuetype: nondefault
+        default: 100
+        reload: true
+        summary: is the size of the channel used to buffer spans to send to the central store.
+        description: >
+          The size of this buffer is measured in spans. If the buffer fills up,
+          performance will degrade because Refinery will block while waiting for
+          space to become available. If this happens and increasing this size
+          only delays the problem, then you should consider whether the I/O
+          bandwidth to the central store is sufficient.
+
+      - name: StateTicker
+        firstVersion: v2.6
+        type: duration
+        valuetype: nondefault
+        default: 1s
+        reload: true
+        summary: is the duration of the ticker that periodically updates the state of the central store.
+        description: >
+          This ticker is used to periodically update the state of the spans in
+          the central store. Making it shorter will decrease latency in the
+          central store at the expense of increased CPU usage.
+
+      - name: SendDelay
+        firstVersion: v2.6
+        type: duration
+        valuetype: nondefault
+        default: 1s
+        reload: true
+        summary: is the duration of the delay before sending spans to the central store.
+        description: >
+          This delay is used to provide time to allow asynchronous spans to
+          arrive after the root span arrives, and before making a trace
+          decision. In a heavily async environment, you may want to increase
+          this value at the cost of greater latency and increased memory
+          consumption in the central store.
+
+          NOTE: TODO this value is the same as SendDelay in the InMemCollector,
+          should they be unified?
+
+      - name: TraceTimeout
+        firstVersion: v2.6
+        type: duration
+        valuetype: nondefault
+        default: 1m
+        reload: true
+        summary: is the maximum duration after which a trace is considered to have timed out.
+        description: >
+          This value determines how long after receiving the first span that
+          Refinery will wait for a root span to arrive. If a root span does not
+          arrive within this time, then the trace decision will be made with
+          whatever information is available.
+
+          Increasing this value can improve the accuracy of trace decisions at
+          the cost of increased memory consumption in the central store.
+
+      - name: DecisionTimeout
+        firstVersion: v2.6
+        type: duration
+        valuetype: nondefault
+        default: 3s
+        reload: true
+        summary: is the time the central store will wait to receive a trace decision from Refinery
+        description: >
+          This value controls how long the central store will wait for a trace
+          decision from Refinery after assigning it; the only reason this should
+          happen is if a Refinery crashes or is forcibly shut down. TODO: not
+          sure we need to expose this.
+
+      - name: MaxTraceRetention
+        firstVersion: v2.6
+        type: duration
+        valuetype: nondefault
+        default: 24h
+        reload: true
+        summary: is the maximum duration for which a trace is retained in the central store.
+        description: >
+          This value determines how long traces are retained in the central
+          store as a hedge against a potential memory leak. Traces older than
+          this value will be deleted. Under normal operation, this timeout
+          should never be invoked. TODO: don't expose this?
+
+      - name: ReaperRunInterval
+        firstVersion: v2.6
+        type: duration
+        valuetype: nondefault
+        default: 1h
+        reload: true
+        summary: is the interval at which the reaper runs to clean up expired traces.
+        description: >
+          This value determines how often the reaper runs to clean up expired traces
+          in the central store. TODO: don't expose this?
