@@ -27,7 +27,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
-	status, err := store.GetStatusForTraces(ctx, []string{"traceID0"})
+	status, err := store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.NotNil(t, status[0])
@@ -361,7 +361,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	testRedis.Start()
 	defer testRedis.Stop()
 
-	ts := newTestTraceStateProcessor(t, testRedis, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
+	ts := newTestTraceStateProcessor(t, testRedis, nil, noop.NewTracerProvider().Tracer("test"))
 	ts.config.maxTraceRetention = 1 * time.Minute
 	ts.config.reaperRunInterval = 500 * time.Millisecond
 	require.NoError(t, ts.init(testRedis))
@@ -397,7 +397,7 @@ func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	defer testRedis.Stop()
 
 	traceID := "traceID0"
-	ts := newTestTraceStateProcessor(t, testRedis, nil, trace.Tracer(noop.NewTracerProvider().Tracer("test")))
+	ts := newTestTraceStateProcessor(t, testRedis, nil, noop.NewTracerProvider().Tracer("test"))
 	require.NoError(t, ts.init(testRedis))
 	defer ts.Stop()
 
