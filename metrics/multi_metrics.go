@@ -50,8 +50,9 @@ func (m *MultiMetrics) Start() error {
 	return nil
 }
 
-// This is not safe for concurrent use!
 func (m *MultiMetrics) AddChild(met Metrics) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 	m.children = append(m.children, met)
 }
 
