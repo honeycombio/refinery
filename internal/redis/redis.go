@@ -695,12 +695,11 @@ func (c *DefaultConn) MemoryStats() (map[string]any, error) {
 
 	result := make(map[string]any, len(values)/2)
 	for i := 0; i < len(values); i += 2 {
-		if key, ok := values[i].([]byte); ok {
-			result[string(key)] = values[i+1]
-			continue
+		key, ok := values[i].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type from redis while parsing memory stats")
 		}
-		return nil, fmt.Errorf("unexpected type from redis while parsing memory stats")
-
+		result[string(key)] = values[i+1]
 	}
 
 	return result, nil
