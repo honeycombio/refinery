@@ -37,7 +37,6 @@ type Conn interface {
 	Close() error
 	Del(...string) (int64, error)
 	Exists(string) (bool, error)
-	Expire(string, time.Duration) error
 	GetInt64(string) (int64, error)
 	GetInt64NoDefault(string) (int64, error)
 	GetString(context.Context, string) (string, error)
@@ -84,7 +83,6 @@ type Conn interface {
 
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
-	Watch(string, func(Conn) error) (func() error, error)
 	MemoryStats() (map[string]any, error)
 }
 
@@ -426,11 +424,6 @@ func (c *DefaultConn) ListKeys(prefix string) ([]string, error) {
 	return redis.Strings(c.conn.Do("KEYS", prefix))
 }
 
-func (c *DefaultConn) Expire(key string, ttl time.Duration) error {
-	_, err := c.conn.Do("EXPIRE", key, ttl.Seconds())
-	return err
-}
-
 func (c *DefaultConn) GetTTL(key string) (int64, error) {
 	return redis.Int64(c.conn.Do("TTL", key))
 }
@@ -548,8 +541,9 @@ func (c *DefaultConn) ZRangeByScoreString(key string, minScore int64, maxScore i
 		stop = "+inf"
 	}
 
-	// range from start including start to stop excluding stop
-	return redis.Strings(c.conn.Do("ZRANGE", key, "("+start, stop, "BYSCORE", "LIMIT", offset, count))
+	// return all members with scores between start and stop excluding stop
+	// "(" is used to exclude the stop value
+	return redis.Strings(c.conn.Do("ZRANGE", key, start, "("+stop, "BYSCORE", "LIMIT", offset, count))
 }
 
 func (c *DefaultConn) ZScore(key string, member string) (int64, error) {
@@ -700,20 +694,13 @@ func (c *DefaultConn) MemoryStats() (map[string]any, error) {
 	}
 
 	result := make(map[string]any, len(values)/2)
-	for i, v := range values {
-		if i == len(values)-1 {
-			break
+	for i := 0; i < len(values); i += 2 {
+		if key, ok := values[i].([]byte); ok {
+			result[string(key)] = values[i+1]
+			continue
 		}
-		var key []byte
-		var ok bool
-		if i%2 == 0 {
-			key, ok = v.([]byte)
-			if !ok {
-				return nil, fmt.Errorf("unexpected type from redis while parsing memory stats")
-			}
-		}
+		return nil, fmt.Errorf("unexpected type from redis while parsing memory stats")
 
-		result[string(key)] = values[i+1]
 	}
 
 	return result, nil
@@ -824,27 +811,6 @@ func (c *DefaultConn) SAdd(key string, members ...any) error {
 		return err
 	}
 	return nil
-}
-
-func (c *DefaultConn) Watch(key string, f func(Conn) error) (func() error, error) {
-	_, err := c.conn.Do("WATCH", key)
-	if err != nil {
-		return nil, err
-	}
-
-	err = f(c)
-	if err != nil {
-		return func() error {
-			_, err := c.conn.Do("UNWATCH")
-			return err
-		}, err
-	}
-
-	return func() error {
-		_, err := c.conn.Do("UNWATCH")
-		return err
-	}, nil
-
 }
 
 // Args is a helper function to convert a list of arguments to a redis.Args

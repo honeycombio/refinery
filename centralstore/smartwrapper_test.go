@@ -339,7 +339,6 @@ func TestSetTraceStatuses(t *testing.T) {
 	}
 
 	assert.Equal(t, numberOfTraces, len(traceids))
-	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
 		return err == nil && len(states) == numberOfTraces
@@ -407,8 +406,9 @@ func TestSetTraceStatuses(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, metrics["redisstore_count_awaiting_decision"])
 	assert.EqualValues(t, numberOfTraces, metrics["redisstore_count_traces"])
-	assert.NotNil(t, metrics["redisstore_memory_used_total"])
-
+	assert.Greater(t, metrics["redisstore_memory_used_total"], int64(0))
+	assert.Greater(t, metrics["redisstore_memory_used_peak"], int64(0))
+	assert.Greater(t, metrics["redisstore_count_keys"], int64(0))
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {

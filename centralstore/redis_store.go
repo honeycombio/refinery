@@ -93,6 +93,9 @@ func (r *RedisBasicStore) Stop() error {
 }
 
 func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
+	_, span := r.Tracer.Start(ctx, "GetMetrics")
+	defer span.End()
+
 	m, err := r.DecisionCache.GetMetrics()
 	if err != nil {
 		return nil, err
@@ -123,11 +126,8 @@ func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{
 	}
 	m[metricsPrefix+"traces"] = count
 
-	memoryStats, err := conn.MemoryStats()
-	if err != nil {
-		return nil, err
-	}
-
+	// If we can't get memory stats from the redis client, we'll just skip it.
+	memoryStats, _ := conn.MemoryStats()
 	for k, v := range memoryStats {
 		switch k {
 		case "total.allocated":
@@ -168,6 +168,8 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 		if err != nil {
 			return err
 		}
+
+		return nil
 	case Collecting:
 		if span.ParentID == "" {
 			_, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
