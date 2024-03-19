@@ -1143,7 +1143,7 @@ const keepTraceScript = `
 
 	local totalArgs = table.getn(ARGV)
 	for i=1, totalArgs, 2 do
-	--	If trace statue does not exist, a new entry is created.
+	--	If trace status does not exist, a new entry is created.
 	--	If KeepReason already exists, this operation has no effect.
 		redis.call("HSETNX", traceStatusKey, ARGV[i], ARGV[i+1])
 	end
