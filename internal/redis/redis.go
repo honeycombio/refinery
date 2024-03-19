@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/facebookgo/startstop"
@@ -36,7 +37,6 @@ type Conn interface {
 	Close() error
 	Del(...string) (int64, error)
 	Exists(string) (bool, error)
-	Expire(string, time.Duration) error
 	GetInt64(string) (int64, error)
 	GetInt64NoDefault(string) (int64, error)
 	GetString(context.Context, string) (string, error)
@@ -73,7 +73,7 @@ type Conn interface {
 
 	ZAdd(string, []any) error
 	ZRange(string, int, int) ([]string, error)
-	ZRangeByScoreString(string, int64) ([]string, error)
+	ZRangeByScoreString(key string, minScore int64, maxScore int64, count, offset int) ([]string, error)
 	ZScore(string, string) (int64, error)
 	ZMScore(string, []string) ([]int64, error)
 	ZCard(string) (int64, error)
@@ -83,7 +83,7 @@ type Conn interface {
 
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
-	Watch(string, func(Conn) error) (func() error, error)
+	MemoryStats() (map[string]any, error)
 }
 
 var _ Client = &DefaultClient{}
@@ -424,11 +424,6 @@ func (c *DefaultConn) ListKeys(prefix string) ([]string, error) {
 	return redis.Strings(c.conn.Do("KEYS", prefix))
 }
 
-func (c *DefaultConn) Expire(key string, ttl time.Duration) error {
-	_, err := c.conn.Do("EXPIRE", key, ttl.Seconds())
-	return err
-}
-
 func (c *DefaultConn) GetTTL(key string) (int64, error) {
 	return redis.Int64(c.conn.Do("TTL", key))
 }
@@ -536,8 +531,19 @@ func (c *DefaultConn) ZRange(key string, start, stop int) ([]string, error) {
 	return redis.Strings(c.conn.Do("ZRANGE", key, start, stop))
 }
 
-func (c *DefaultConn) ZRangeByScoreString(key string, stop int64) ([]string, error) {
-	return redis.Strings(c.conn.Do("ZRANGE", key, 0, stop, "BYSCORE"))
+func (c *DefaultConn) ZRangeByScoreString(key string, minScore int64, maxScore int64, count, offset int) ([]string, error) {
+	start := strconv.FormatInt(minScore, 10)
+	if minScore == 0 {
+		start = "-inf"
+	}
+	stop := strconv.FormatInt(maxScore, 10)
+	if maxScore == 0 {
+		stop = "+inf"
+	}
+
+	// return all members with scores between start and stop excluding stop
+	// "(" is used to exclude the stop value
+	return redis.Strings(c.conn.Do("ZRANGE", key, start, "("+stop, "BYSCORE", "LIMIT", offset, count))
 }
 
 func (c *DefaultConn) ZScore(key string, member string) (int64, error) {
@@ -679,6 +685,26 @@ func (c *DefaultConn) Exec(commands ...Command) error {
 	return nil
 }
 
+// MemoryStats returns the memory statistics reported by the redis server
+// for full list of stats see https://redis.io/commands/memory-stats
+func (c *DefaultConn) MemoryStats() (map[string]any, error) {
+	values, err := redis.Values(c.conn.Do("MEMORY", "STATS"))
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]any, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, ok := values[i].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type from redis while parsing memory stats")
+		}
+		result[string(key)] = values[i+1]
+	}
+
+	return result, nil
+}
+
 func (c *DefaultConn) Do(commandString string, args ...any) (any, error) {
 	return c.conn.Do(commandString, args...)
 }
@@ -784,27 +810,6 @@ func (c *DefaultConn) SAdd(key string, members ...any) error {
 		return err
 	}
 	return nil
-}
-
-func (c *DefaultConn) Watch(key string, f func(Conn) error) (func() error, error) {
-	_, err := c.conn.Do("WATCH", key)
-	if err != nil {
-		return nil, err
-	}
-
-	err = f(c)
-	if err != nil {
-		return func() error {
-			_, err := c.conn.Do("UNWATCH")
-			return err
-		}, err
-	}
-
-	return func() error {
-		_, err := c.conn.Do("UNWATCH")
-		return err
-	}, nil
-
 }
 
 // Args is a helper function to convert a list of arguments to a redis.Args
