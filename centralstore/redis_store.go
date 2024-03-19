@@ -78,7 +78,10 @@ func (r *RedisBasicStore) Start() error {
 		return err
 	}
 
-	r.traces = newTraceStatusStore(r.Clock, r.RedisClient.NewScript(addStatusKey, addStatusScript), r.Tracer)
+	r.traces = newTraceStatusStore(r.Clock, r.Tracer,
+		r.RedisClient.NewScript(keepTraceKey, keepTraceScript),
+		r.RedisClient.NewScript(addStatusKey, addStatusScript),
+	)
 	r.states = stateProcessor
 
 	return nil
@@ -427,7 +430,6 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 	return nil
 }
 
-// TODO: batch keep traces with lua script
 func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error {
 	ctx, span := r.Tracer.Start(ctx, "KeepTraces")
 	defer span.End()
@@ -458,20 +460,22 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 		}
 	}
 
+	var keeps []*CentralTraceStatus
 	for _, status := range statuses {
 		if successMap != nil {
 			if _, ok := successMap[status.TraceID]; !ok {
 				continue
 			}
-
 		}
 
-		// store keep reason in status
-		err := r.traces.keepTrace(ctx, conn, status)
-		if err != nil {
-			continue
-		}
+		keeps = append(keeps, status)
 		r.DecisionCache.Record(status, true, status.KeepReason)
+	}
+
+	// store keep reason in status
+	err = r.traces.keepTrace(ctx, conn, keeps)
+	if err != nil {
+		return err
 	}
 
 	// remove span list
@@ -546,13 +550,15 @@ type tracesStore struct {
 	clock           clockwork.Clock
 	tracer          trace.Tracer
 	addStatusScript redis.Script
+	keepTraceScript redis.Script
 }
 
-func newTraceStatusStore(clock clockwork.Clock, addStatusScript redis.Script, tracer trace.Tracer) *tracesStore {
+func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer, keepTraceScript, addStatusScript redis.Script) *tracesStore {
 	return &tracesStore{
 		clock:           clock,
 		tracer:          tracer,
 		addStatusScript: addStatusScript,
+		keepTraceScript: keepTraceScript,
 	}
 }
 
@@ -611,16 +617,20 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, span *Cent
 	return nil
 }
 
-func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status *CentralTraceStatus) error {
+func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*CentralTraceStatus) error {
 	_, span := t.tracer.Start(ctx, "keepTrace")
 	defer span.End()
 
-	otelutil.AddSpanField(span, "trace_id", status.TraceID)
-	trace := &centralTraceStatusReason{
-		KeepReason: status.KeepReason,
+	otelutil.AddSpanField(span, "num_traces", len(status))
+	traces := make([]*centralTraceStatusReason, 0, len(status))
+	for _, s := range status {
+		traces = append(traces, &centralTraceStatusReason{
+			KeepReason: s.KeepReason,
+		})
+
 	}
 
-	_, err := conn.SetNXHash(t.traceStatusKey(status.TraceID), trace)
+	_, err := t.keepTraceScript.Do(ctx, conn, traces)
 	if err != nil {
 		return err
 	}
@@ -1122,5 +1132,19 @@ const addStatusScript = `
 
   	-- increment the trace count
 	redis.call('INCR', traceStatusCountKey)
+	return 1
+`
+
+const keepTraceKey = 1
+const keepTraceScript = `
+	local traceStatusKey = KEYS[1]
+
+	local totalArgs = table.getn(ARGV)
+	for i=1, totalArgs, 2 do
+	--	If trace statue does not exist, a new entry is created.
+	--	If KeepReason already exists, this operation has no effect.
+		redis.call("HSETNX", traceStatusKey, ARGV[i], ARGV[i+1])
+	end
+
 	return 1
 `
