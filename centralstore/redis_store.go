@@ -26,7 +26,9 @@ const (
 	metricsKey          = "refinery:metrics"
 	traceStatusCountKey = "refinery:trace_status_count"
 
-	metricsPrefix = "redisstore_count_"
+	metricsPrefixCount      = "redisstore_count_"
+	metricsPrefixMemory     = "redisstore_memory_"
+	metricsPrefixConnection = "redisstore_conn_"
 )
 
 var _ BasicStorer = (*RedisBasicStore)(nil)
@@ -117,27 +119,38 @@ func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{
 		if err != nil {
 			return nil, err
 		}
-		m[metricsPrefix+string(state)] = len(traceIDs)
+		m[metricsPrefixCount+string(state)] = len(traceIDs)
 	}
 
 	count, err := r.traces.count(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
-	m[metricsPrefix+"traces"] = count
+	m[metricsPrefixCount+"traces"] = count
+
+	m[metricsPrefixCount+"keys"] = 0
+	m[metricsPrefixMemory+"used_total"] = 0
+	m[metricsPrefixMemory+"used_peak"] = 0
 
 	// If we can't get memory stats from the redis client, we'll just skip it.
 	memoryStats, _ := conn.MemoryStats()
 	for k, v := range memoryStats {
 		switch k {
 		case "total.allocated":
-			m["redisstore_memory_used_total"] = v
+			m[metricsPrefixMemory+"used_total"] = v
 		case "peak.allocated":
-			m["redisstore_memory_used_peak"] = v
+			m[metricsPrefixMemory+"used_peak"] = v
 		case "keys.count":
-			m[metricsPrefix+"keys"] = v
+			m[metricsPrefixCount+"keys"] = v
 		}
 	}
+
+	// get the connection pool stats
+	connStats := r.RedisClient.Stats()
+	m[metricsPrefixConnection+"active"] = connStats.ActiveCount
+	m[metricsPrefixConnection+"idle"] = connStats.IdleCount
+	m[metricsPrefixConnection+"wait"] = connStats.WaitCount
+	m[metricsPrefixConnection+"wait_duration"] = connStats.WaitDuration
 
 	return m, nil
 

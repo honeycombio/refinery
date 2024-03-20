@@ -390,6 +390,38 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	}, 1*time.Second, 200*time.Millisecond)
 }
 
+func TestRedisBasicStore_GetMetrics(t *testing.T) {
+	ctx := context.Background()
+	store := NewTestRedisBasicStore(ctx, t)
+	defer store.Stop()
+
+	conn := store.RedisClient.Get()
+	defer conn.Close()
+
+	traceID := "traceID0"
+	store.ensureInitialState(t, ctx, conn, traceID, ReadyToDecide)
+
+	metrics, err := store.GetMetrics(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, metrics)
+	assert.Equal(t, 1, metrics[metricsPrefixCount+ReadyToDecide.String()])
+	assert.Equal(t, 0, metrics[metricsPrefixCount+Collecting.String()])
+	assert.Equal(t, 0, metrics[metricsPrefixCount+AwaitingDecision.String()])
+
+	// this is 0 because miniredis doesn't support memory stats command
+	// however, the test is still useful to ensure the metrics are being initialized
+	// and the function is able to proceed without error in the event of a failure from calling
+	// the memory stats command
+	assert.Equal(t, 0, metrics[metricsPrefixCount+"keys"])
+	assert.Equal(t, 0, metrics[metricsPrefixMemory+"used_total"])
+	assert.Equal(t, 0, metrics[metricsPrefixMemory+"used_peak"])
+
+	assert.Equal(t, 0, metrics[metricsPrefixConnection+"active"])
+	assert.Equal(t, 0, metrics[metricsPrefixConnection+"idle"])
+	assert.Equal(t, int64(0), metrics[metricsPrefixConnection+"wait"])
+	assert.Equal(t, time.Duration(0), metrics[metricsPrefixConnection+"wait_duration"])
+}
+
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	ctx := context.Background()
 	testRedis := &redis.TestService{}
