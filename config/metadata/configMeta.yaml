@@ -959,21 +959,6 @@ groups:
         description: >
           It is rarely necessary to adjust this value.
 
-      - name: Prefix
-        firstversion: v2.6
-        type: string
-        valuetype: nondefault
-        default: "refinery"
-        example: "customPrefix"
-        reload: false
-        validations:
-          - type: notempty
-        summary: is a string used as a prefix for the keys in Redis while storing the peer membership.
-        description: >
-          It might be useful to override this in any situation where multiple
-          Refinery clusters or multiple applications want to share a single
-          Redis instance. It may not be blank.
-
       - name: MaxIdle
         firstversion: v2.6
         type: int
