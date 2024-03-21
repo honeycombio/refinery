@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-02-23 at 22:23:26 UTC.
+# Automatically generated on 2024-03-20 at 20:36:39 UTC.
 
 General:
   - ConfigurationVersion
@@ -148,6 +148,10 @@ RedisPeerManagement:
 
   - Timeout (originally PeerManagement.Timeout)
 
+  - MaxIdle
+
+  - MaxActive
+
   - Strategy (originally PeerManagement.Strategy) (**removed in v2**)
 
 
@@ -231,4 +235,22 @@ StressRelief:
   - MinimumActivationDuration (originally StressRelief.MinimumActivationDuration)
 
   - MinimumStartupDuration (originally StressRelief.MinimumStartupDuration)
+
+
+CentralStore:
+  - Type
+
+  - SpanChannelSize
+
+  - StateTicker
+
+  - SendDelay
+
+  - TraceTimeout
+
+  - DecisionTimeout
+
+  - MaxTraceRetention
+
+  - ReaperRunInterval
 
