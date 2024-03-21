@@ -52,13 +52,20 @@ func (t *testTrace) SentReason() uint {
 }
 
 func Test_cuckooSentCache_Record(t *testing.T) {
-	cfg := config.SampleCacheConfig{
-		KeptSize:          1000,
-		DroppedSize:       1000,
-		SizeCheckInterval: config.Duration(1 * time.Second),
+	cfg := &config.MockConfig{
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          1000,
+			DroppedSize:       1000,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
-	c, err := NewCuckooSentCache(cfg, &metrics.NullMetrics{})
+	c := &CuckooSentCache{
+		Cfg: cfg,
+		Met: &metrics.NullMetrics{},
+	}
+
+	err := c.Start()
 	assert.NoError(t, err)
 	// add some items to the cache
 	for i := 0; i < 100; i++ {

@@ -202,12 +202,7 @@ func main() {
 		},
 	}
 
-	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
-	if err != nil {
-		fmt.Printf("Error creating decision cache: %s\n", err)
-		os.Exit(1)
-	}
-
+	decisionCache := &cache.CuckooSentCache{}
 	// set up redis if the remote store type is redis
 
 	objects := []*inject.Object{
@@ -230,7 +225,7 @@ func main() {
 
 	stsLogger := dummyLogger{}
 	g := inject.Graph{Logger: stsLogger}
-	err = g.Provide(objects...)
+	err := g.Provide(objects...)
 	if err != nil {
 		fmt.Printf("failed to provide objects to injection graph. error: %+v\n", err)
 		os.Exit(1)
