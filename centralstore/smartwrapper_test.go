@@ -76,7 +76,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: "version", Name: "version"},
 		{Value: &cfg},
 		{Value: &logger.NullLogger{}},
-		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		{Value: &metrics.MockMetrics{}, Name: "genericMetrics"},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
 		{Value: redis, Name: "redis"},
@@ -310,9 +310,11 @@ func TestSetTraceStatuses(t *testing.T) {
 	numberOfTraces := 5
 	traceids := make([]string, 0)
 
-	metrics, err := store.GetMetrics(ctx)
+	err = store.RecordMetrics(ctx)
 	require.NoError(t, err)
-	require.EqualValues(t, 0, metrics["redisstore_count_traces"])
+	value, ok := store.Metrics.Get("redisstore_count_traces")
+	require.True(t, ok)
+	require.EqualValues(t, 0, value)
 
 	for t := 0; t < numberOfTraces; t++ {
 		tid := fmt.Sprintf("trace%02d", t)
@@ -366,10 +368,11 @@ func TestSetTraceStatuses(t *testing.T) {
 		for _, state := range statuses {
 			assert.Equal(collect, AwaitingDecision, state.State)
 		}
-
-		metrics, err := store.GetMetrics(ctx)
+		err = store.RecordMetrics(ctx)
 		require.NoError(t, err)
-		assert.Equal(t, numberOfTraces, metrics["redisstore_count_awaiting_decision"])
+		value, ok := store.Metrics.Get("redisstore_count_awaiting_decision")
+		require.True(t, ok)
+		assert.EqualValues(t, numberOfTraces, value)
 	}, 3*time.Second, 100*time.Millisecond)
 
 	for _, status := range statuses {
@@ -398,13 +401,23 @@ func TestSetTraceStatuses(t *testing.T) {
 		}
 	}
 
-	metrics, err = store.GetMetrics(ctx)
+	err = store.RecordMetrics(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 0, metrics["redisstore_count_awaiting_decision"])
-	assert.EqualValues(t, numberOfTraces, metrics["redisstore_count_traces"])
-	assert.Greater(t, metrics["redisstore_memory_used_total"], int64(0))
-	assert.Greater(t, metrics["redisstore_memory_used_peak"], int64(0))
-	assert.Greater(t, metrics["redisstore_count_keys"], int64(0))
+	count, ok := store.Metrics.Get("redisstore_count_awaiting_decision")
+	require.True(t, ok)
+	assert.Equal(t, float64(0), count)
+	count, ok = store.Metrics.Get("redisstore_count_traces")
+	require.True(t, ok)
+	assert.Equal(t, float64(numberOfTraces), count)
+	count, ok = store.Metrics.Get("redisstore_memory_used_total")
+	require.True(t, ok)
+	assert.Greater(t, count, float64(0))
+	count, ok = store.Metrics.Get("redisstore_memory_used_peak")
+	require.True(t, ok)
+	assert.Greater(t, count, float64(0))
+	count, ok = store.Metrics.Get("redisstore_count_keys")
+	require.True(t, ok)
+	assert.Greater(t, count, float64(0))
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {

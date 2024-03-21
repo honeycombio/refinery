@@ -9,6 +9,7 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redis"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -227,7 +228,7 @@ func (tr *TestRedis) Start(ctx context.Context) {
 		GetRedisTimeoutVal:   5,
 	}
 
-	client := redis.DefaultClient{Config: cfg}
+	client := redis.DefaultClient{Config: cfg, Metrics: &metrics.NullMetrics{}}
 	client.Start()
 
 	tr.Client = &RedisClientStub{
