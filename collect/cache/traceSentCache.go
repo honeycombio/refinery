@@ -36,7 +36,7 @@ type TraceSentCache interface {
 	// It does not modify the count information.
 	Test(traceID string) (TraceSentRecord, string, bool)
 	// Stop halts the cache in preparation for shutdown
-	Stop()
+	Stop() error
 	// Resize adjusts the size of the cache according to the Config passed in
 	Resize(cfg config.SampleCacheConfig) error
 	// GetMetrics returns a map of metrics about the cache

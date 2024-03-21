@@ -26,6 +26,7 @@ import (
 	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -193,6 +194,7 @@ func newStartedApp(
 		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, metricsr, "peer"), Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: collector},
+		&inject.Object{Value: &cache.CuckooSentCache{}},
 		&inject.Object{Value: metricsr, Name: "metrics"},
 		&inject.Object{Value: metricsr, Name: "genericMetrics"},
 		&inject.Object{Value: metricsr, Name: "upstreamMetrics"},
