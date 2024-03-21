@@ -68,11 +68,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		},
 	}
 
-	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
-	if err != nil {
-		return nil, nil, err
-	}
-
+	decisionCache := &cache.CuckooSentCache{}
 	sw := &SmartWrapper{}
 	redis := &redis.DefaultClient{}
 	clock := clockwork.NewFakeClock()
@@ -80,7 +76,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: "version", Name: "version"},
 		{Value: &cfg},
 		{Value: &logger.NullLogger{}},
-		{Value: &metrics.NullMetrics{}},
+		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
 		{Value: redis, Name: "redis"},
@@ -89,7 +85,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: sw},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
-	err = g.Provide(objects...)
+	err := g.Provide(objects...)
 	if err != nil {
 		return nil, nil, err
 	}

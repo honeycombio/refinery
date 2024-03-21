@@ -25,17 +25,17 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
-func newCache() (cache.TraceSentCache, error) {
-	cfg := config.SampleCacheConfig{
-		KeptSize:          100,
-		DroppedSize:       100,
-		SizeCheckInterval: config.Duration(1 * time.Second),
+func newTestCollector(conf config.Config, transmission transmit.Transmission) *InMemCollector {
+	c := &cache.CuckooSentCache{
+		Cfg: conf,
+		Met: &metrics.NullMetrics{},
 	}
 
-	return cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
-}
+	err := c.Start()
+	if err != nil {
+		panic(err)
+	}
 
-func newTestCollector(conf config.Config, transmission transmit.Transmission) *InMemCollector {
 	s := &metrics.MockMetrics{}
 	s.Start()
 	return &InMemCollector{
@@ -49,6 +49,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Metrics: s,
 			Logger:  &logger.NullLogger{},
 		},
+		SampleTraceCache: c,
 	}
 }
 
@@ -61,6 +62,11 @@ func TestAddRootSpan(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -68,9 +74,6 @@ func TestAddRootSpan(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -136,6 +139,11 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -143,9 +151,6 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -183,7 +188,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
 
 	// Generate one more event with no upstream sampling applied.
-	err = coll.AddSpan(&types.Span{
+	err := coll.AddSpan(&types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1000),
 		Event: types.Event{
 			Dataset:    "no-upstream-sampling",
@@ -218,6 +223,11 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -225,9 +235,6 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -277,6 +284,11 @@ func TestAddSpan(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -284,9 +296,6 @@ func TestAddSpan(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -339,6 +348,11 @@ func TestDryRunMode(t *testing.T) {
 		SendTickerVal:      20 * time.Millisecond,
 		DryRun:             true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -352,9 +366,6 @@ func TestDryRunMode(t *testing.T) {
 	coll.SamplerFactory = samplerFactory
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -607,6 +618,11 @@ func TestStableMaxAlloc(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -625,9 +641,6 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -699,6 +712,11 @@ func TestAddSpanNoBlock(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -707,9 +725,6 @@ func TestAddSpanNoBlock(t *testing.T) {
 
 	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 3)
 	coll.fromPeer = make(chan *types.Span, 3)
@@ -731,7 +746,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	err = coll.AddSpan(span)
+	err := coll.AddSpan(span)
 	assert.Error(t, err)
 	err = coll.AddSpanFromPeer(span)
 	assert.Error(t, err)
@@ -748,6 +763,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &sample.SamplerFactory{}},
 		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
+		&inject.Object{Value: &cache.CuckooSentCache{}},
 	)
 	if err != nil {
 		t.Error(err)
@@ -769,6 +785,11 @@ func TestAddCountsToRoot(t *testing.T) {
 		AddSpanCountToRoot: true,
 		AddCountsToRoot:    true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -777,9 +798,6 @@ func TestAddCountsToRoot(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -848,6 +866,11 @@ func TestLateRootGetsCounts(t *testing.T) {
 		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -856,9 +879,6 @@ func TestLateRootGetsCounts(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -929,6 +949,11 @@ func TestAddSpanCount(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		AddSpanCountToRoot: true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -936,9 +961,6 @@ func TestAddSpanCount(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -992,6 +1014,11 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		AddSpanCountToRoot:   true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -999,9 +1026,6 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1056,6 +1080,11 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -1064,9 +1093,6 @@ func TestLateSpanNotDecorated(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1118,6 +1144,11 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			"name":  "foo",
 			"other": "bar",
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -1125,9 +1156,6 @@ func TestAddAdditionalAttributes(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1183,6 +1211,11 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			DeactivationLevel: 25,
 			SamplingRate:      100,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -1192,9 +1225,6 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	coll.hostname = "host123"
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1279,6 +1309,11 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		SendTickerVal:        2 * time.Millisecond,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -1287,9 +1322,6 @@ func TestSpanWithRuleReasons(t *testing.T) {
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
