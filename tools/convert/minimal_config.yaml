@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-03-08 at 14:51:11 UTC
+# automatically generated on 2024-03-20 at 20:36:40 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -81,6 +81,8 @@ RedisPeerManagement:
   UseTLS: false
   UseTLSInsecure: false
   Timeout: 5s
+  MaxIdle: 3
+  MaxActive: 5
   Strategy: hash
 Collection:
   CacheCapacity: 10_000
@@ -132,3 +134,12 @@ StressRelief:
   SamplingRate: 100
   MinimumActivationDuration: 10s
   MinimumStartupDuration: 3s
+CentralStore:
+  Type: local
+  SpanChannelSize: 100
+  StateTicker: 1s
+  SendDelay: 1s
+  TraceTimeout: 1m
+  DecisionTimeout: 3s
+  MaxTraceRetention: 24h
+  ReaperRunInterval: 1h
