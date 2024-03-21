@@ -29,11 +29,11 @@ const (
 // and the timing isn't very critical. The effect of going above "capacity" is an increased
 // false positive rate and slightly reduced performance, but the filter continues to function.
 type CuckooTraceChecker struct {
+	Met      metrics.Metrics `inject:"genericMetrics"`
 	current  *cuckoo.Filter
 	future   *cuckoo.Filter
 	mut      sync.RWMutex
 	capacity uint
-	met      metrics.Metrics
 	addch    chan string
 }
 
@@ -49,7 +49,7 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 		capacity: capacity,
 		current:  cuckoo.NewFilter(capacity),
 		future:   nil,
-		met:      m,
+		Met:      m,
 		addch:    make(chan string, AddQueueDepth),
 	}
 
@@ -98,7 +98,7 @@ outer:
 	}
 	c.mut.Unlock()
 	qlt := time.Since(lockStart)
-	c.met.Histogram(AddQueueLockTime, qlt.Microseconds())
+	c.Met.Histogram(AddQueueLockTime, qlt.Microseconds())
 }
 
 // Add puts a traceID into the filter. We need this to be fast
@@ -111,7 +111,7 @@ func (c *CuckooTraceChecker) Add(traceID string) {
 		// if the channel is full, count this in a metric
 		// but drop it on the floor; we're running so hot
 		// that we can't keep up.
-		c.met.Up(AddQueueFull)
+		c.Met.Up(AddQueueFull)
 	}
 }
 
@@ -132,11 +132,11 @@ func (c *CuckooTraceChecker) Maintain() {
 
 	c.mut.RLock()
 	currentLoadFactor := c.current.LoadFactor()
-	c.met.Gauge(CurrentLoadFactor, currentLoadFactor)
+	c.Met.Gauge(CurrentLoadFactor, currentLoadFactor)
 	if c.future != nil {
-		c.met.Gauge(FutureLoadFactor, c.future.LoadFactor())
+		c.Met.Gauge(FutureLoadFactor, c.future.LoadFactor())
 	}
-	c.met.Gauge(CurrentCapacity, c.capacity)
+	c.Met.Gauge(CurrentCapacity, c.capacity)
 	c.mut.RUnlock()
 
 	// once the current one is half loaded, we can start using the future one too

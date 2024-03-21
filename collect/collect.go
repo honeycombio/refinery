@@ -48,12 +48,13 @@ const (
 
 // InMemCollector is a single threaded collector.
 type InMemCollector struct {
-	Config         config.Config          `inject:""`
-	Logger         logger.Logger          `inject:""`
-	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
-	Metrics        metrics.Metrics        `inject:"genericMetrics"`
-	SamplerFactory *sample.SamplerFactory `inject:""`
-	StressRelief   StressReliever         `inject:"stressRelief"`
+	Config           config.Config          `inject:""`
+	Logger           logger.Logger          `inject:""`
+	Transmission     transmit.Transmission  `inject:"upstreamTransmission"`
+	Metrics          metrics.Metrics        `inject:"genericMetrics"`
+	SamplerFactory   *sample.SamplerFactory `inject:""`
+	StressRelief     StressReliever         `inject:"stressRelief"`
+	SampleTraceCache cache.TraceSentCache   `inject:""`
 
 	// For test use only
 	BlockOnAddSpan bool
@@ -64,8 +65,6 @@ type InMemCollector struct {
 
 	cache           cache.Cache
 	datasetSamplers map[string]sample.Sampler
-
-	sampleTraceCache cache.TraceSentCache
 
 	incoming chan *types.Span
 	fromPeer chan *types.Span
@@ -111,15 +110,9 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 	i.Metrics.Register(TraceSendLateSpan, "counter")
-
-	sampleCacheConfig := i.Config.GetSampleCacheConfig()
 	i.Metrics.Register(cache.CurrentCapacity, "gauge")
 	i.Metrics.Register(cache.FutureLoadFactor, "gauge")
 	i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
-	i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
-	if err != nil {
-		return err
-	}
 
 	i.incoming = make(chan *types.Span, imcConfig.GetIncomingQueueSize())
 	i.fromPeer = make(chan *types.Span, imcConfig.GetPeerQueueSize())
@@ -175,7 +168,7 @@ func (i *InMemCollector) reloadConfigs() {
 			i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 		}
 
-		i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
+		i.SampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 	} else {
 		i.Logger.Error().WithField("cache", i.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
@@ -389,7 +382,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, sentReason, found := i.sampleTraceCache.Check(sp); found {
+		if sr, sentReason, found := i.SampleTraceCache.Check(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -425,7 +418,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		if sr, reason, found := i.sampleTraceCache.Check(sp); found {
+		if sr, reason, found := i.SampleTraceCache.Check(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			i.dealWithSentTrace(sr, reason, sp)
 			return
@@ -474,7 +467,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 	}
 	// we do want a record of how we disposed of traces in case more come in after we've
 	// turned off stress relief (if stress relief is on we'll keep making the same decisions)
-	i.sampleTraceCache.Record(trace, keep, reason)
+	i.SampleTraceCache.Record(trace, keep, reason)
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
 		return
@@ -650,7 +643,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// This will observe sample rate attempts even if the trace is dropped
 	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
-	i.sampleTraceCache.Record(trace, shouldSend, reason)
+	i.SampleTraceCache.Record(trace, shouldSend, reason)
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
@@ -721,8 +714,6 @@ func (i *InMemCollector) Stop() error {
 	if i.Transmission != nil {
 		i.Transmission.Flush()
 	}
-
-	i.sampleTraceCache.Stop()
 
 	return nil
 }
