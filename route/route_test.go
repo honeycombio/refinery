@@ -15,6 +15,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -482,6 +483,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
+		&inject.Object{Value: &cache.CuckooSentCache{}},
 	)
 	if err != nil {
 		t.Error(err)

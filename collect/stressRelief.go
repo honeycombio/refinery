@@ -57,7 +57,7 @@ type StressRelief struct {
 	stressed        bool
 	stayOnUntil     time.Time
 	minDuration     time.Duration
-	RefineryMetrics metrics.Metrics `inject:"metrics"`
+	RefineryMetrics metrics.Metrics `inject:"genericMetrics"`
 	Logger          logger.Logger   `inject:""`
 	Done            chan struct{}
 

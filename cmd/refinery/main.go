@@ -22,6 +22,7 @@ import (
 
 	"github.com/honeycombio/refinery/app"
 	"github.com/honeycombio/refinery/collect"
+	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -83,7 +84,7 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts, func(err error) {
+	cfg, err := config.NewConfig(opts, func(err error) {
 		if a.Logger != nil {
 			a.Logger.Error().WithField("error", err).Logf("error loading config")
 		}
@@ -96,30 +97,30 @@ func main() {
 		fmt.Println("Config and Rules validated successfully.")
 		os.Exit(0)
 	}
-	c.RegisterReloadCallback(func() {
+	cfg.RegisterReloadCallback(func() {
 		if a.Logger != nil {
 			a.Logger.Info().Logf("configuration change was detected and the configuration was reloaded")
 		}
 	})
 
 	// get desired implementation for each dependency to inject
-	lgr := logger.GetLoggerImplementation(c)
-	collector := collect.GetCollectorImplementation(c)
-	metricsSingleton := metrics.GetMetricsImplementation(c)
-	shrdr := sharder.GetSharderImplementation(c)
+	lgr := logger.GetLoggerImplementation(cfg)
+	collector := collect.GetCollectorImplementation(cfg)
+	metricsSingleton := metrics.GetMetricsImplementation(cfg)
+	shrdr := sharder.GetSharderImplementation(cfg)
 	samplerFactory := &sample.SamplerFactory{}
 
 	// set log level
-	logLevel := c.GetLoggerLevel().String()
+	logLevel := cfg.GetLoggerLevel().String()
 	if err := lgr.SetLevel(logLevel); err != nil {
 		fmt.Printf("unable to set logging level: %v\n", err)
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.GetPeerTimeout())
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.GetPeerTimeout())
 	defer cancel()
 	done := make(chan struct{})
-	peers, err := peer.NewPeers(ctx, c, done)
+	peers, err := peer.NewPeers(ctx, cfg, done)
 
 	if err != nil {
 		fmt.Printf("unable to load peers: %+v\n", err)
@@ -151,10 +152,10 @@ func main() {
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          c.GetMaxBatchSize(),
-			BatchTimeout:          c.GetBatchTimeout(),
+			MaxBatchSize:          cfg.GetMaxBatchSize(),
+			BatchTimeout:          cfg.GetBatchTimeout(),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:   uint(c.GetUpstreamBufferSize()),
+			PendingWorkCapacity:   uint(cfg.GetUpstreamBufferSize()),
 			UserAgentAddition:     userAgentAddition,
 			Transport:             upstreamTransport,
 			BlockOnSend:           true,
@@ -169,13 +170,13 @@ func main() {
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          c.GetMaxBatchSize(),
-			BatchTimeout:          c.GetBatchTimeout(),
+			MaxBatchSize:          cfg.GetMaxBatchSize(),
+			BatchTimeout:          cfg.GetBatchTimeout(),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
+			PendingWorkCapacity:   uint(cfg.GetPeerBufferSize()),
 			UserAgentAddition:     userAgentAddition,
 			Transport:             peerTransport,
-			DisableCompression:    !c.GetCompressPeerCommunication(),
+			DisableCompression:    !cfg.GetCompressPeerCommunication(),
 			EnableMsgpackEncoding: true,
 			Metrics:               peerMetricsRecorder,
 		},
@@ -194,23 +195,27 @@ func main() {
 	var legacyMetrics metrics.Metrics = &metrics.NullMetrics{}
 	var promMetrics metrics.Metrics = &metrics.NullMetrics{}
 	var oTelMetrics metrics.Metrics = &metrics.NullMetrics{}
-	if c.GetLegacyMetricsConfig().Enabled {
+	if cfg.GetLegacyMetricsConfig().Enabled {
 		legacyMetrics = &metrics.LegacyMetrics{}
 	}
-	if c.GetPrometheusMetricsConfig().Enabled {
+	if cfg.GetPrometheusMetricsConfig().Enabled {
 		promMetrics = &metrics.PromMetrics{}
 	}
-	if c.GetOTelMetricsConfig().Enabled {
+	if cfg.GetOTelMetricsConfig().Enabled {
 		oTelMetrics = &metrics.OTelMetrics{}
 	}
+	decisionCache := &cache.CuckooSentCache{}
 
 	// we need to include all the metrics types so we can inject them in case they're needed
+	// The "recorders" are the ones that various parts of the system will use to record metrics.
+	// The "singleton" is a wrapper that contains whichever of the specific metrics implementations
+	// are enabled. It's used to provide a consistent interface to the rest of the system.
 	var g inject.Graph
 	if opts.Debug {
 		g.Logger = graphLogger{}
 	}
 	objects := []*inject.Object{
-		{Value: c},
+		{Value: cfg},
 		{Value: peers},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
@@ -219,6 +224,7 @@ func main() {
 		{Value: peerTransmission, Name: "peerTransmission"},
 		{Value: shrdr},
 		{Value: collector},
+		{Value: decisionCache},
 		{Value: legacyMetrics, Name: "legacyMetrics"},
 		{Value: promMetrics, Name: "promMetrics"},
 		{Value: oTelMetrics, Name: "otelMetrics"},
@@ -238,7 +244,7 @@ func main() {
 	}
 
 	if opts.Debug {
-		err = g.Provide(&inject.Object{Value: &debug.DebugService{Config: c}})
+		err = g.Provide(&inject.Object{Value: &debug.DebugService{Config: cfg}})
 		if err != nil {
 			fmt.Printf("failed to provide injection graph. error: %+v\n", err)
 			os.Exit(1)
@@ -281,8 +287,8 @@ func main() {
 		peerMetricsRecorder.Register(name, typ)
 	}
 
-	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
-	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
+	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(cfg.GetUpstreamBufferSize()))
+	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(cfg.GetPeerBufferSize()))
 
 	// set up signal channel to exit
 	sigsToExit := make(chan os.Signal, 1)

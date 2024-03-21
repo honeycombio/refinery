@@ -489,8 +489,7 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 			SizeCheckInterval: duration("1s"),
 		},
 	}
-	decisionCache, err := cache.NewCuckooSentCache(cfg.GetSampleCacheConfig(), &metrics.NullMetrics{})
-	require.NoError(t, err)
+	decisionCache := &cache.CuckooSentCache{}
 	clock := clockwork.NewFakeClock()
 	tracer := noop.NewTracerProvider().Tracer("redis_test")
 	redis := &redis.TestService{}
@@ -504,9 +503,10 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 		{Value: clock},
 		{Value: redis, Name: "redis"},
 		{Value: store},
+		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
-	err = g.Provide(objects...)
+	err := g.Provide(objects...)
 	require.NoError(t, err)
 
 	err = g.Populate()
@@ -549,7 +549,7 @@ type testTraceStateProcessor struct {
 	clock clockwork.FakeClock
 }
 
-func newTestTraceStateProcessor(t *testing.T, redisClient redis.Client, clock clockwork.FakeClock, tracer trace.Tracer) *testTraceStateProcessor {
+func newTestTraceStateProcessor(_ *testing.T, redisClient redis.Client, clock clockwork.FakeClock, tracer trace.Tracer) *testTraceStateProcessor {
 	if clock == nil {
 		clock = clockwork.NewFakeClock()
 	}

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/facebookgo/startstop"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
@@ -138,10 +139,11 @@ func (t *cuckooDroppedRecord) Reason() uint {
 // Make sure it implements TraceSentRecord
 var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 
-type cuckooSentCache struct {
+type CuckooSentCache struct {
+	Cfg     config.Config   `inject:""`
+	Met     metrics.Metrics `inject:"genericMetrics"`
 	kept    *lru.Cache[string, *keptTraceCacheEntry]
 	dropped *CuckooTraceChecker
-	cfg     config.SampleCacheConfig
 
 	// The done channel is used to decide when to terminate the monitor
 	// goroutine. When resizing the cache, we write to the channel, but
@@ -156,45 +158,50 @@ type cuckooSentCache struct {
 }
 
 // Make sure it implements TraceSentCache
-var _ TraceSentCache = (*cuckooSentCache)(nil)
+var _ TraceSentCache = (*CuckooSentCache)(nil)
 
-func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
-	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
+// ensure it implements startstop.Stopper
+var _ startstop.Stopper = (*CuckooSentCache)(nil)
+
+// ensure it implements startstop.Starter
+var _ startstop.Starter = (*CuckooSentCache)(nil)
+
+func (c *CuckooSentCache) Start() error {
+	cfg := c.Cfg.GetSampleCacheConfig()
+	kept, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	dropped := NewCuckooTraceChecker(cfg.DroppedSize, met)
+	c.kept = kept
+	c.dropped = NewCuckooTraceChecker(cfg.DroppedSize, c.Met)
+	c.sentReasons = NewSentReasonsCache(c.Met)
+	c.done = make(chan struct{})
 
-	cache := &cuckooSentCache{
-		kept:        stc,
-		dropped:     dropped,
-		cfg:         cfg,
-		sentReasons: NewSentReasonsCache(met),
-		done:        make(chan struct{}),
-	}
-	go cache.monitor()
-	return cache, nil
+	go c.monitor()
+	return nil
 }
 
 // goroutine to monitor the cache and cycle the size check periodically
-func (c *cuckooSentCache) monitor() {
-	ticker := time.NewTicker(time.Duration(c.cfg.SizeCheckInterval))
+func (c *CuckooSentCache) monitor() {
+	ticker := time.NewTicker(time.Duration(c.Cfg.GetSampleCacheConfig().SizeCheckInterval))
 	for {
 		select {
 		case <-ticker.C:
 			c.dropped.Maintain()
 		case <-c.done:
+			ticker.Stop()
 			return
 		}
 	}
 }
 
 // Stop halts the monitor goroutine
-func (c *cuckooSentCache) Stop() {
+func (c *CuckooSentCache) Stop() error {
 	close(c.done)
+	return nil
 }
 
-func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
+func (c *CuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
 		trace.SetSentReason(c.sentReasons.Set(reason))
@@ -211,11 +218,11 @@ func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 }
 
 // fast check to see if we've already dropped this trace
-func (c *cuckooSentCache) Dropped(traceID string) bool {
+func (c *CuckooSentCache) Dropped(traceID string) bool {
 	return c.dropped.Check(traceID)
 }
 
-func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool) {
+func (c *CuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(span.TraceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
@@ -236,7 +243,7 @@ func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool
 
 // Test checks if a trace was kept or dropped, and returns the reason if it was kept.
 // The bool return value is true if the trace was found in the cache.
-func (c *cuckooSentCache) Test(traceID string) (TraceSentRecord, string, bool) {
+func (c *CuckooSentCache) Test(traceID string) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(traceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
@@ -253,7 +260,7 @@ func (c *cuckooSentCache) Test(traceID string) (TraceSentRecord, string, bool) {
 	return nil, "", false
 }
 
-func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
+func (c *CuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
 		return err
@@ -286,13 +293,14 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	return nil
 }
 
-func (c *cuckooSentCache) GetMetrics() (map[string]interface{}, error) {
+func (c *CuckooSentCache) GetMetrics() (map[string]interface{}, error) {
+	cfg := c.Cfg.GetSampleCacheConfig()
 	metrics := map[string]interface{}{
 		"sent_cache_kept":             c.kept.Len(),
-		"sent_cache_kept_capacity":    c.cfg.KeptSize,
+		"sent_cache_kept_capacity":    cfg.KeptSize,
 		"sent_cache_dropped":          c.dropped.current.Count(),
 		"sent_cache_dropped_load":     c.dropped.current.LoadFactor(),
-		"sent_cache_dropped_capacity": c.cfg.DroppedSize,
+		"sent_cache_dropped_capacity": cfg.DroppedSize,
 	}
 	return metrics, nil
 }
