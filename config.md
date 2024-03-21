@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-11 at 14:44:30 UTC.
+It was automatically generated on 2024-03-20 at 20:36:41 UTC.
 
 ## The Config file
 
@@ -46,6 +46,7 @@ The remainder of this document describes the sections within the file and the fi
 - [gRPC Server Parameters](#grpc-server-parameters)
 - [Sample Cache](#sample-cache)
 - [Stress Relief](#stress-relief)
+- [Central Data Store](#central-data-store)
 ## General Configuration
 
 `General` contains general configuration options that apply to the entire Refinery process.
@@ -779,6 +780,30 @@ It is rarely necessary to adjust this value.
 - Type: `duration`
 - Default: `5s`
 
+### `MaxIdle`
+
+MaxIdle is the maximum number of idle connections in the Redis connection pool.
+
+This setting is used to control the number of idle connections to Redis.
+It is rarely necessary to adjust this value.
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `3`
+
+### `MaxActive`
+
+MaxActive is the maximum number of active connections in the Redis connection pool.
+
+This setting is used to control the maximum number of active connections to Redis in the Redis connection pool.
+It may be useful to increase this value in high-throughput environments.
+Setting it to 0 imposes no connection limit, but this may be risky in a burst of traffic.
+TODO: default to a much higher number?
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `5`
+
 ## Collection Settings
 
 `Collection` contains the settings that are relevant to collecting spans together to make traces.
@@ -1185,4 +1210,101 @@ If this duration is `0`, then Refinery will not start in stressed mode, which wi
 - Eligible for live reload.
 - Type: `duration`
 - Default: `3s`
+
+## Central Data Store
+
+`CentralStore` controls the Central Data Store, which provides the storage system that Refinery uses to record and share trace data while traces are in flight.
+
+### `Type`
+
+Type is the type of central store to use.
+
+"local" means that refinery stores all trace data locally and is generally only used in a configuration with a single Refinery node.
+"redis" means that a Redis instance is used as the central store for a cluster of Refineries; the Central Store is the mechanism through which the refineries share trace data.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `local`
+- Options: `local`, `redis`
+
+### `SpanChannelSize`
+
+SpanChannelSize is the size of the channel used to buffer spans to send to the central store.
+
+The size of this buffer is measured in spans.
+If the buffer fills up, performance will degrade because Refinery will block while waiting for space to become available.
+If this happens and increasing this size only delays the problem, then you should consider whether the I/O bandwidth to the central store is sufficient.
+
+- Eligible for live reload.
+- Type: `int`
+- Default: `100`
+
+### `StateTicker`
+
+StateTicker is the duration of the ticker that periodically updates the state of the central store.
+
+This ticker is used to periodically update the state of the spans in the central store.
+Making it shorter will decrease latency in the central store at the expense of increased CPU usage.
+
+- Eligible for live reload.
+- Type: `duration`
+- Default: `1s`
+
+### `SendDelay`
+
+SendDelay is the duration of the delay before sending spans to the central store.
+
+This delay is used to provide time to allow asynchronous spans to arrive after the root span arrives, and before making a trace decision.
+In a heavily async environment, you may want to increase this value at the cost of greater latency and increased memory consumption in the central store.
+NOTE: TODO this value is the same as SendDelay in the InMemCollector, should they be unified?
+
+- Eligible for live reload.
+- Type: `duration`
+- Default: `1s`
+
+### `TraceTimeout`
+
+TraceTimeout is the maximum duration after which a trace is considered to have timed out.
+
+This value determines how long after receiving the first span that Refinery will wait for a root span to arrive.
+If a root span does not arrive within this time, then the trace decision will be made with whatever information is available.
+Increasing this value can improve the accuracy of trace decisions at the cost of increased memory consumption in the central store.
+
+- Eligible for live reload.
+- Type: `duration`
+- Default: `1m`
+
+### `DecisionTimeout`
+
+DecisionTimeout is the time the central store will wait to receive a trace decision from Refinery
+
+This value controls how long the central store will wait for a trace decision from Refinery after assigning it; the only reason this should happen is if a Refinery crashes or is forcibly shut down.
+TODO: not sure we need to expose this.
+
+- Eligible for live reload.
+- Type: `duration`
+- Default: `3s`
+
+### `MaxTraceRetention`
+
+MaxTraceRetention is the maximum duration for which a trace is retained in the central store.
+
+This value determines how long traces are retained in the central store as a hedge against a potential memory leak.
+Traces older than this value will be deleted.
+Under normal operation, this timeout should never be invoked.
+TODO: don't expose this?
+
+- Eligible for live reload.
+- Type: `duration`
+- Default: `24h`
+
+### `ReaperRunInterval`
+
+ReaperRunInterval is the interval at which the reaper runs to clean up expired traces.
+
+This value determines how often the reaper runs to clean up expired traces in the central store.
+TODO: don't expose this?
+- Eligible for live reload.
+- Type: `duration`
+- Default: `1h`
 
