@@ -133,9 +133,9 @@ type CmdLineOptions struct {
 	NodeIndex          int      `long:"node-number" description:"Index of this node if Total > 1" default:"0"`
 	DecisionReqSize    int      `long:"decision-req-size" description:"Number of traces to request for decision" default:"10"`
 	ParallelDecider    bool     `long:"parallel-decider" description:"Run the decider in parallel with the sender"`
-	HnyAPIKey          string   `long:"hny-api-key" description:"API key for traces in Honeycomb" default:"" env:"HONEYCOMB_API_KEY"`
-	HnyEndpoint        string   `long:"hny-endpoint" description:"Endpoint for traces in Honeycomb" default:"https://api.honeycomb.io" env:"HONEYCOMB_ENDPOINT"`
-	HnyDataset         string   `long:"hny-dataset" description:"Dataset/service name for traces in Honeycomb" default:"refinery-store-test" env:"HONEYCOMB_DATASET"`
+	APIKey             string   `long:"apikey" description:"API key for traces in Honeycomb" default:"" env:"HONEYCOMB_API_KEY"`
+	APIHost            string   `long:"apihost" description:"Endpoint for traces in Honeycomb" default:"https://api.honeycomb.io" env:"HONEYCOMB_ENDPOINT"`
+	Dataset            string   `long:"dataset" description:"Dataset/service name for traces in Honeycomb" default:"refinery-store-test" env:"HONEYCOMB_DATASET"`
 }
 
 func parseCmdLineOptions() CmdLineOptions {
@@ -182,10 +182,10 @@ func main() {
 	}()
 
 	// let's set up some OTel tracing
-	tracer, shutdown := otelutil.SetupTracing(otelutil.TracingConfig{
-		HnyAPIKey:   opts.HnyAPIKey,
-		HnyDataset:  opts.HnyDataset,
-		HnyEndpoint: opts.HnyEndpoint,
+	tracer, shutdown := otelutil.SetupTracing(config.OTelTracingConfig{
+		APIHost: opts.APIHost,
+		APIKey:  opts.APIKey,
+		Dataset: opts.Dataset,
 	}, ResourceLibrary, ResourceVersion)
 	defer shutdown()
 

@@ -11,19 +11,23 @@ import (
 	"syscall"
 	"time"
 
-	_ "go.uber.org/automaxprocs"
-	"golang.org/x/exp/slices"
-
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
+	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
+	_ "go.uber.org/automaxprocs"
+	"golang.org/x/exp/slices"
 
+	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/app"
+	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -33,7 +37,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 )
 
-// set by travis.
+// set by CI.
 var BuildID string
 var version string
 
@@ -206,6 +210,34 @@ func main() {
 	}
 	decisionCache := &cache.CuckooSentCache{}
 
+	var basicStore centralstore.BasicStorer
+	switch cfg.GetCentralStoreOptions().BasicStoreType {
+	case "redis":
+		basicStore = &centralstore.RedisBasicStore{}
+	case "local":
+		basicStore = &centralstore.LocalRemoteStore{}
+	default:
+		fmt.Printf("unknown basic store type: %s\n", cfg.GetCentralStoreOptions().BasicStoreType)
+		os.Exit(1)
+	}
+	smartStore := &centralstore.SmartWrapper{}
+
+	resourceLib := "refinery"
+	resourceVer := version
+	var tracer trace.Tracer
+	shutdown := func() {}
+	switch cfg.GetOTelTracingConfig().Type {
+	case "none":
+		tracer = trace.Tracer(noop.Tracer{})
+	case "otel":
+		// let's set up some OTel tracing
+		tracer, shutdown = otelutil.SetupTracing(cfg.GetOTelTracingConfig(), resourceLib, resourceVer)
+	default:
+		fmt.Printf("unknown tracing type: %s\n", cfg.GetOTelTracingConfig().Type)
+		os.Exit(1)
+	}
+	defer shutdown()
+
 	// we need to include all the metrics types so we can inject them in case they're needed
 	// The "recorders" are the ones that various parts of the system will use to record metrics.
 	// The "singleton" is a wrapper that contains whichever of the specific metrics implementations
@@ -235,6 +267,10 @@ func main() {
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
+		{Value: tracer, Name: "tracer"},
+		{Value: clockwork.NewRealClock()},
+		{Value: basicStore},
+		{Value: smartStore},
 		{Value: &a},
 	}
 	err = g.Provide(objects...)

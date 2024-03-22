@@ -165,6 +165,9 @@ func validateConfig(opts *CmdEnv) ([]string, error) {
 	if config.OTelMetrics.APIKey == "" {
 		config.OTelMetrics.APIKey = "InvalidHoneycombAPIKey"
 	}
+	if config.OTelTracing.APIKey == "" {
+		config.OTelTracing.APIKey = "InvalidHoneycombAPIKey"
+	}
 
 	// write it out to a YAML buffer
 	buf := new(bytes.Buffer)
