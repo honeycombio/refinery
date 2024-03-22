@@ -280,6 +280,10 @@ func (m *Metadata) Validate(data map[string]any) []string {
 				mask := false
 				switch validation.Arg.(string) {
 				case "apikey":
+					// valid API key formats are:
+					// 1. 32 hex characters ("classic" Honeycomb API key)
+					// 2. 20-23 alphanumeric characters (new-style Honeycomb API key)
+					// 3. hc<1 letter region)><2 letter keytype>_<58 alphanumeric characters>} (ingest key)
 					pat = regexp.MustCompile(`^([a-f0-9]{32}|[a-zA-Z0-9]{20,23}|hc[a-z][a-z]{2}_[a-z0-9]{58})$`)
 					format = "field %s (%v) must be a valid Honeycomb API key"
 					mask = true
