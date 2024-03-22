@@ -472,7 +472,7 @@ groups:
         summary: is the API key used to send Refinery's logs to Honeycomb.
         description: >
           It is recommended that you create a separate team and key for
-          Refinery logs.
+          Refinery telemetry.
 
       - name: Dataset
         v1group: HoneycombLogger
@@ -628,7 +628,7 @@ groups:
         summary: is the API key used by Refinery to send its metrics to Honeycomb.
         description: >
           It is recommended that you create a separate team and key for
-          Refinery metrics.
+          Refinery telemetry.
 
       - name: Dataset
         v1group: HoneycombMetrics
@@ -699,7 +699,7 @@ groups:
         summary: is the API key used to send Honeycomb metrics via OpenTelemetry.
         description: >
           It is recommended that you create a separate team and key for
-          Refinery metrics.
+          Refinery telemetry.
 
           If this is blank, then Refinery will not set the Honeycomb-specific
           headers for OpenTelemetry, and your `APIHost` must be set to a
@@ -713,7 +713,7 @@ groups:
         validations:
           - type: notempty
         firstversion: v2.0
-        summary: is the Honeycomb dataset that Refinery sends its OpenTelemetry metrics.
+        summary: is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
         description: >
           Only used if `APIKey` is specified.
 
@@ -739,6 +739,72 @@ groups:
           `gzip` is the default and recommended value. In rare circumstances,
           compression costs may outweigh the benefits, in which case `none`
           may be used.
+
+  - name: Tracing
+    title: "Refinery Tracing"
+    description: contains configuration for tracing.
+    fields:
+      - name: Type
+        type: string
+        valuetype: choice
+        choices: ["otel", "none"]
+        default: "none"
+        reload: false
+        validations:
+          - type: choice
+        summary: is the type of tracing to use for Refinery's own traces.
+        description: >
+          The setting specifies how (and if) Refinery sends traces.
+
+          `none` means that traces are discarded.
+
+          `otel` means that OpenTelemetry traces will be generated according
+          to the settings in this section.
+
+      - name: APIHost
+        type: url
+        valuetype: nondefault
+        default: "https://api.honeycomb.io"
+        reload: false
+        firstversion: v2.6
+        summary: is the URL of the OpenTelemetry API to which traces will be sent.
+        description: >
+          Refinery's internal traces will be sent to the `/v1/traces`
+          endpoint on this host.
+
+      - name: APIKey
+        type: string
+        pattern: apikey
+        valuetype: nonemptystring
+        default: ""
+        example: "SetThisToAHoneycombKey"
+        reload: false
+        firstversion: v2.6
+        envvar: REFINERY_HONEYCOMB_TRACES_API_KEY, REFINERY_HONEYCOMB_API_KEY
+        commandline: traces-api-key
+        validations:
+          - type: format
+            arg: apikey
+        summary: is the API key used to send Refinery's traces to Honeycomb.
+        description: >
+          It is recommended that you create a separate team and key for
+          Refinery telemetry.
+
+          If this is blank, then Refinery will not set the Honeycomb-specific
+          headers for OpenTelemetry, and your `APIHost` must be set to a
+          valid OpenTelemetry endpoint.
+
+      - name: Dataset
+        type: string
+        valuetype: nondefault
+        default: "Refinery Traces"
+        reload: false
+        validations:
+          - type: notempty
+        firstversion: v2.0
+        summary: is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
+        description: >
+          Only used if `APIKey` is specified.
 
   - name: PeerManagement
     title: "Peer Management"

@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-03-20 at 20:36:39 UTC.
+# Automatically generated on 2024-03-22 at 01:48:11 UTC.
 
 General:
   - ConfigurationVersion
@@ -115,6 +115,16 @@ OTelMetrics:
   - ReportingInterval
 
   - Compression
+
+
+Tracing:
+  - Type
+
+  - APIHost
+
+  - APIKey
+
+  - Dataset
 
 
 PeerManagement:

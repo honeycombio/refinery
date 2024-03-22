@@ -59,6 +59,7 @@ type configContents struct {
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
+	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
 	Collection           CollectionConfig          `yaml:"Collection"`
@@ -182,6 +183,13 @@ type OTelMetricsConfig struct {
 	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
 	Compression       string   `yaml:"Compression" default:"gzip"`
 	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
+}
+
+type OTelTracingConfig struct {
+	Type    string `yaml:"Type" default:"none"`
+	APIHost string `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIKey  string `yaml:"APIKey" cmdenv:"OTelTracesAPIKey,HoneycombAPIKey"`
+	Dataset string `yaml:"Dataset" default:"Refinery Traces"`
 }
 
 type PeerManagementConfig struct {
@@ -771,6 +779,13 @@ func (f *fileConfig) GetOTelMetricsConfig() OTelMetricsConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.OTelMetrics
+}
+
+func (f *fileConfig) GetOTelTracingConfig() OTelTracingConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.OTelTracing
 }
 
 func (f *fileConfig) GetSendDelay() (time.Duration, error) {
