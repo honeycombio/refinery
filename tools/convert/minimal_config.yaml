@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-03-22 at 01:48:12 UTC
+# automatically generated on 2024-03-22 at 02:37:40 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -62,7 +62,7 @@ OTelMetrics:
   Dataset: "Refinery Metrics"
   ReportingInterval: 30s
   Compression: gzip
-Tracing:
+OTelTracing:
   Type: none
   APIHost: "https://api.honeycomb.io"
   APIKey: SetThisToAHoneycombKey

@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-03-22 at 01:48:12 UTC from ../../config.yaml using a template generated on 2024-03-22 at 01:48:10 UTC
+# created on 2024-03-22 at 02:37:41 UTC from ../../config.yaml using a template generated on 2024-03-22 at 02:37:39 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -634,11 +634,11 @@ OTelMetrics:
     ## Options: none gzip
     # Compression: gzip
 
-######################
-## Refinery Tracing ##
-######################
-Tracing:
-  ## Tracing contains configuration for tracing.
+###########################
+## OpenTelemetry Tracing ##
+###########################
+OTelTracing:
+  ## OTelTracing contains configuration for Refinery's own tracing.
   ####
     ## Type is the type of tracing to use for Refinery's own traces.
     ##
@@ -671,7 +671,7 @@ Tracing:
     ## OpenTelemetry endpoint.
     ##
     ## Not eligible for live reload.
-    # APIKey: SetThisToAHoneycombKey
+    # APIKey: ""
 
     ## Dataset is the Honeycomb dataset to which Refinery sends its
     ## OpenTelemetry metrics.

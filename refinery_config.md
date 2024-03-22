@@ -605,9 +605,9 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Default: `gzip`
 - Options: `none`, `gzip`
 
-## Refinery Tracing
+## OpenTelemetry Tracing
 
-`Tracing` contains configuration for tracing.
+`OTelTracing` contains configuration for Refinery's own tracing.
 
 ### `Type`
 

@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-22 at 01:48:13 UTC.
+It was automatically generated on 2024-03-22 at 02:37:42 UTC.
 
 ## The Config file
 
@@ -37,7 +37,7 @@ The remainder of this document describes the sections within the file and the fi
 - [Prometheus Metrics](#prometheus-metrics)
 - [Legacy Metrics](#legacy-metrics)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
-- [Refinery Tracing](#refinery-tracing)
+- [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
 - [Redis Peer Management](#redis-peer-management)
 - [Collection Settings](#collection-settings)
@@ -623,9 +623,9 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Default: `gzip`
 - Options: `none`, `gzip`
 
-## Refinery Tracing
+## OpenTelemetry Tracing
 
-`Tracing` contains configuration for tracing.
+`OTelTracing` contains configuration for Refinery's own tracing.
 ### `Type`
 
 Type is the type of tracing to use for Refinery's own traces.

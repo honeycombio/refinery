@@ -740,9 +740,9 @@ groups:
           compression costs may outweigh the benefits, in which case `none`
           may be used.
 
-  - name: Tracing
-    title: "Refinery Tracing"
-    description: contains configuration for tracing.
+  - name: OTelTracing
+    title: "OpenTelemetry Tracing"
+    description: contains configuration for Refinery's own tracing.
     fields:
       - name: Type
         type: string
@@ -775,13 +775,13 @@ groups:
       - name: APIKey
         type: string
         pattern: apikey
-        valuetype: nonemptystring
+        valuetype: nondefault
         default: ""
         example: "SetThisToAHoneycombKey"
         reload: false
         firstversion: v2.6
         envvar: REFINERY_HONEYCOMB_TRACES_API_KEY, REFINERY_HONEYCOMB_API_KEY
-        commandline: traces-api-key
+        commandline: otel-traces-api-key
         validations:
           - type: format
             arg: apikey
