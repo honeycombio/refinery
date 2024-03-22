@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/otel-config-go/otelconfig"
+	"github.com/honeycombio/refinery/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -52,30 +53,21 @@ func AddSpanFields(span trace.Span, fields map[string]interface{}) {
 	}
 }
 
-type TracingConfig struct {
-	// Honeycomb API key
-	HnyAPIKey string
-	// Honeycomb dataset
-	HnyDataset string
-	// Honeycomb endpoint
-	HnyEndpoint string
-}
-
-func SetupTracing(cfg TracingConfig, resourceLibrary string, resourceVersion string) (tracer trace.Tracer, shutdown func()) {
-	if cfg.HnyAPIKey != "" {
+func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string) (tracer trace.Tracer, shutdown func()) {
+	if cfg.APIKey != "" {
 		var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
 
-		cfg.HnyEndpoint = strings.TrimSuffix(cfg.HnyEndpoint, "/")
-		endpoint := fmt.Sprintf("%s:443", cfg.HnyEndpoint)
+		cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
+		apihost := fmt.Sprintf("%s:443", cfg.APIHost)
 
 		otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
 			otelconfig.WithExporterProtocol(protocol),
-			otelconfig.WithServiceName(cfg.HnyDataset),
-			otelconfig.WithTracesExporterEndpoint(endpoint),
+			otelconfig.WithServiceName(cfg.Dataset),
+			otelconfig.WithTracesExporterEndpoint(apihost),
 			otelconfig.WithMetricsEnabled(false),
 			otelconfig.WithTracesEnabled(true),
 			otelconfig.WithHeaders(map[string]string{
-				"x-honeycomb-team": cfg.HnyAPIKey,
+				"x-honeycomb-team": cfg.APIKey,
 			}),
 		)
 		if err != nil {

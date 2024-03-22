@@ -141,6 +141,9 @@ type Config interface {
 	// GetOTelMetricsConfig returns the config specific to OTelMetrics
 	GetOTelMetricsConfig() OTelMetricsConfig
 
+	// GetOTelTracingConfig returns the config specific to OTelTracing
+	GetOTelTracingConfig() OTelTracingConfig
+
 	// GetUpstreamBufferSize returns the size of the libhoney buffer to use for the upstream
 	// libhoney client
 	GetUpstreamBufferSize() int
