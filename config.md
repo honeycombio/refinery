@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-20 at 20:36:41 UTC.
+It was automatically generated on 2024-03-22 at 02:37:42 UTC.
 
 ## The Config file
 
@@ -37,6 +37,7 @@ The remainder of this document describes the sections within the file and the fi
 - [Prometheus Metrics](#prometheus-metrics)
 - [Legacy Metrics](#legacy-metrics)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
+- [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
 - [Redis Peer Management](#redis-peer-management)
 - [Collection Settings](#collection-settings)
@@ -396,7 +397,7 @@ Refinery's internal logs will be sent to this host using the standard Honeycomb 
 
 APIKey is the API key used to send Refinery's logs to Honeycomb.
 
-It is recommended that you create a separate team and key for Refinery logs.
+It is recommended that you create a separate team and key for Refinery telemetry.
 
 - Not eligible for live reload.
 - Type: `string`
@@ -525,7 +526,7 @@ Refinery's internal metrics will be sent to this host using the standard Honeyco
 
 APIKey is the API key used by Refinery to send its metrics to Honeycomb.
 
-It is recommended that you create a separate team and key for Refinery metrics.
+It is recommended that you create a separate team and key for Refinery telemetry.
 
 - Not eligible for live reload.
 - Type: `string`
@@ -582,7 +583,7 @@ Refinery's internal metrics will be sent to the `/v1/metrics` endpoint on this h
 
 APIKey is the API key used to send Honeycomb metrics via OpenTelemetry.
 
-It is recommended that you create a separate team and key for Refinery metrics.
+It is recommended that you create a separate team and key for Refinery telemetry.
 If this is blank, then Refinery will not set the Honeycomb-specific headers for OpenTelemetry, and your `APIHost` must be set to a valid OpenTelemetry endpoint.
 
 - Not eligible for live reload.
@@ -592,7 +593,7 @@ If this is blank, then Refinery will not set the Honeycomb-specific headers for 
 
 ### `Dataset`
 
-Dataset is the Honeycomb dataset that Refinery sends its OpenTelemetry metrics.
+Dataset is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
 
 Only used if `APIKey` is specified.
 
@@ -621,6 +622,54 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Type: `string`
 - Default: `gzip`
 - Options: `none`, `gzip`
+
+## OpenTelemetry Tracing
+
+`OTelTracing` contains configuration for Refinery's own tracing.
+### `Type`
+
+Type is the type of tracing to use for Refinery's own traces.
+
+The setting specifies how (and if) Refinery sends traces.
+`none` means that traces are discarded.
+`otel` means that OpenTelemetry traces will be generated according to the settings in this section.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `none`
+- Options: `otel`, `none`
+
+### `APIHost`
+
+APIHost is the URL of the OpenTelemetry API to which traces will be sent.
+
+Refinery's internal traces will be sent to the `/v1/traces` endpoint on this host.
+
+- Not eligible for live reload.
+- Type: `url`
+- Default: `https://api.honeycomb.io`
+
+### `APIKey`
+
+APIKey is the API key used to send Refinery's traces to Honeycomb.
+
+It is recommended that you create a separate team and key for Refinery telemetry.
+If this is blank, then Refinery will not set the Honeycomb-specific headers for OpenTelemetry, and your `APIHost` must be set to a valid OpenTelemetry endpoint.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `SetThisToAHoneycombKey`
+- Environment variable: `REFINERY_HONEYCOMB_TRACES_API_KEY, REFINERY_HONEYCOMB_API_KEY`
+
+### `Dataset`
+
+Dataset is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
+
+Only used if `APIKey` is specified.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `Refinery Traces`
 
 ## Peer Management
 

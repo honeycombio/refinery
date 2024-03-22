@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-03-20 at 20:36:41 UTC from ../../config.yaml using a template generated on 2024-03-20 at 20:36:38 UTC
+# created on 2024-03-22 at 02:37:41 UTC from ../../config.yaml using a template generated on 2024-03-22 at 02:37:39 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -410,7 +410,7 @@ HoneycombLogger:
     ## APIKey is the API key used to send Refinery's logs to Honeycomb.
     ##
     ## It is recommended that you create a separate team and key for Refinery
-    ## logs.
+    ## telemetry.
     ##
     ## Not eligible for live reload.
     # APIKey: SetThisToAHoneycombKey
@@ -541,7 +541,7 @@ LegacyMetrics:
     ## Honeycomb.
     ##
     ## It is recommended that you create a separate team and key for Refinery
-    ## metrics.
+    ## telemetry.
     ##
     ## Not eligible for live reload.
     # APIKey: ""
@@ -595,7 +595,7 @@ OTelMetrics:
     ## OpenTelemetry.
     ##
     ## It is recommended that you create a separate team and key for Refinery
-    ## metrics.
+    ## telemetry.
     ## If this is blank, then Refinery will not set the Honeycomb-specific
     ## headers for OpenTelemetry, and your `APIHost` must be set to a valid
     ## OpenTelemetry endpoint.
@@ -603,8 +603,8 @@ OTelMetrics:
     ## Not eligible for live reload.
     # APIKey: ""
 
-    ## Dataset is the Honeycomb dataset that Refinery sends its OpenTelemetry
-    ## metrics.
+    ## Dataset is the Honeycomb dataset to which Refinery sends its
+    ## OpenTelemetry metrics.
     ##
     ## Only used if `APIKey` is specified.
     ##
@@ -633,6 +633,54 @@ OTelMetrics:
     ## Not eligible for live reload.
     ## Options: none gzip
     # Compression: gzip
+
+###########################
+## OpenTelemetry Tracing ##
+###########################
+OTelTracing:
+  ## OTelTracing contains configuration for Refinery's own tracing.
+  ####
+    ## Type is the type of tracing to use for Refinery's own traces.
+    ##
+    ## The setting specifies how (and if) Refinery sends traces.
+    ## `none` means that traces are discarded.
+    ## `otel` means that OpenTelemetry traces will be generated according to
+    ## the settings in this section.
+    ##
+    ## default: none
+    ## Not eligible for live reload.
+    ## Options: otel none
+    # Type: none
+
+    ## APIHost is the URL of the OpenTelemetry API to which traces will be
+    ## sent.
+    ##
+    ## Refinery's internal traces will be sent to the `/v1/traces` endpoint
+    ## on this host.
+    ##
+    ## default: https://api.honeycomb.io
+    ## Not eligible for live reload.
+    # APIHost: "https://api.honeycomb.io"
+
+    ## APIKey is the API key used to send Refinery's traces to Honeycomb.
+    ##
+    ## It is recommended that you create a separate team and key for Refinery
+    ## telemetry.
+    ## If this is blank, then Refinery will not set the Honeycomb-specific
+    ## headers for OpenTelemetry, and your `APIHost` must be set to a valid
+    ## OpenTelemetry endpoint.
+    ##
+    ## Not eligible for live reload.
+    # APIKey: ""
+
+    ## Dataset is the Honeycomb dataset to which Refinery sends its
+    ## OpenTelemetry metrics.
+    ##
+    ## Only used if `APIKey` is specified.
+    ##
+    ## default: Refinery Traces
+    ## Not eligible for live reload.
+    # Dataset: "Refinery Traces"
 
 #####################
 ## Peer Management ##
