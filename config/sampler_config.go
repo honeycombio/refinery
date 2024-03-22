@@ -141,34 +141,8 @@ func (v *RulesBasedDownstreamSampler) NameMeaningfulRate() string {
 }
 
 type V2SamplerConfig struct {
-	RulesVersion         int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
-	Samplers             map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
-	uniqueSamplingFields generics.Set[string]
-}
-
-func (v *V2SamplerConfig) UniqueSamplingFields() []string {
-	return v.uniqueSamplingFields.Members()
-}
-
-func (v *V2SamplerConfig) ExtractUniqueSamplingFields() {
-	v.uniqueSamplingFields = generics.NewSet[string]()
-
-	for _, sampler := range v.Samplers {
-		if sampler == nil {
-			continue
-		}
-
-		s, _ := sampler.Sampler()
-		if s == nil {
-			continue
-		}
-
-		if c, ok := s.(GetSamplingFielder); ok {
-			for _, field := range c.GetSamplingFields() {
-				v.uniqueSamplingFields.Add(field)
-			}
-		}
-	}
+	RulesVersion int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
+	Samplers     map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
 }
 
 type GetSamplingFielder interface {
@@ -277,7 +251,7 @@ type RulesBasedSamplerConfig struct {
 }
 
 func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
-	fields := make([]string, 0)
+	fields := make(generics.Set[string], 0)
 
 	for _, rule := range r.Rules {
 		if rule == nil {
@@ -285,19 +259,19 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 		}
 
 		for _, condition := range rule.Conditions {
-			fields = append(fields, condition.Fields...)
+			fields.Add(condition.Fields...)
 
 			if condition.Field != "" {
-				fields = append(fields, condition.Field)
+				fields.Add(condition.Field)
 			}
 		}
 
 		if rule.Sampler != nil {
-			fields = append(fields, rule.Sampler.GetSamplingFields()...)
+			fields.Add(rule.Sampler.GetSamplingFields()...)
 		}
 	}
 
-	return fields
+	return fields.Members()
 }
 
 var _ GetSamplingFielder = (*RulesBasedDownstreamSampler)(nil)
@@ -312,33 +286,33 @@ type RulesBasedDownstreamSampler struct {
 }
 
 func (r *RulesBasedDownstreamSampler) GetSamplingFields() []string {
-	fields := make([]string, 0)
+	fields := make(generics.Set[string], 0)
 
 	if r.DeterministicSampler != nil {
-		fields = append(fields, r.DeterministicSampler.GetSamplingFields()...)
+		fields.Add(r.DeterministicSampler.GetSamplingFields()...)
 	}
 
 	if r.DynamicSampler != nil {
-		fields = append(fields, r.DynamicSampler.GetSamplingFields()...)
+		fields.Add(r.DynamicSampler.GetSamplingFields()...)
 	}
 
 	if r.EMADynamicSampler != nil {
-		fields = append(fields, r.EMADynamicSampler.GetSamplingFields()...)
+		fields.Add(r.EMADynamicSampler.GetSamplingFields()...)
 	}
 
 	if r.EMAThroughputSampler != nil {
-		fields = append(fields, r.EMAThroughputSampler.GetSamplingFields()...)
+		fields.Add(r.EMAThroughputSampler.GetSamplingFields()...)
 	}
 
 	if r.WindowedThroughputSampler != nil {
-		fields = append(fields, r.WindowedThroughputSampler.GetSamplingFields()...)
+		fields.Add(r.WindowedThroughputSampler.GetSamplingFields()...)
 	}
 
 	if r.TotalThroughputSampler != nil {
-		fields = append(fields, r.TotalThroughputSampler.GetSamplingFields()...)
+		fields.Add(r.TotalThroughputSampler.GetSamplingFields()...)
 	}
 
-	return fields
+	return fields.Members()
 }
 
 type RulesBasedSamplerRule struct {
