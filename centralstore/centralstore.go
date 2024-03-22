@@ -51,6 +51,7 @@ type CentralTraceStatus struct {
 	TraceID     string
 	State       CentralTraceState
 	Rate        uint
+	Metadata    map[string]interface{}
 	KeepReason  string
 	reasonIndex uint      // this is the cache ID for the reason
 	Timestamp   time.Time // this is the last time the trace state was changed

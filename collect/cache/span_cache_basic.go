@@ -3,6 +3,7 @@ package cache
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -73,9 +74,16 @@ func (sc *SpanCache_basic) GetOldest(fract float64) []string {
 		id     string
 		impact int
 	}
-	n := int(float64(len(sc.cache)) * fract)
-	ids := make([]tidWithImpact, 0, len(sc.cache))
+	sc.mut.RLock()
+	count := len(sc.cache)
+	sc.mut.RUnlock()
+	n := int(float64(count) * fract)
+	ids := make([]tidWithImpact, 0, count)
+
 	timeout := sc.Cfg.GetTraceTimeout()
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
 
 	sc.mut.RLock()
 	for traceID := range sc.cache {
@@ -122,6 +130,10 @@ func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 	if sc.nextix+n > len(sc.current) {
 		n = len(sc.current) - sc.nextix
 	}
+	defer func() {
+		sc.nextix += n
+	}()
+
 	return sc.current[sc.nextix : sc.nextix+n]
 }
 
@@ -135,4 +147,11 @@ func (sc *SpanCache_basic) Len() int {
 	sc.mut.RLock()
 	defer sc.mut.RUnlock()
 	return len(sc.cache)
+}
+
+// TODO: implement resizing
+func (sc *SpanCache_basic) Resize() SpanCache {
+	return &SpanCache_basic{
+		Cfg: sc.Cfg,
+	}
 }

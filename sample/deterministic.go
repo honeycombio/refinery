@@ -46,6 +46,9 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	if d.sampleRate <= 1 {
 		return 1, true, "deterministic/always", ""
 	}
+	// hash the trace ID and sharding salt, then take the first 4 bytes which is a
+	// uint32
+	// This will give us a random number that is deterministic for a given trace ID and salt
 	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
 	v := binary.BigEndian.Uint32(sum[:4])
 	shouldKeep := v <= d.upperBound
