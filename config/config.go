@@ -129,9 +129,6 @@ type Config interface {
 	// the given destination (environment, or dataset in classic)
 	GetSamplerConfigForDestName(string) (interface{}, string, error)
 
-	// GetAllSamplerRules returns all rules in a single map, including the default rules
-	GetAllSamplerRules() (*V2SamplerConfig, error)
-
 	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
 	GetLegacyMetricsConfig() LegacyMetricsConfig
 
