@@ -556,7 +556,6 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 		{Value: metrics, Name: "genericMetrics"},
 		{Value: redis, Name: "redis"},
 		{Value: store},
-		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err := g.Provide(objects...)
