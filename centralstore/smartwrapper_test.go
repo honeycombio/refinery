@@ -217,7 +217,6 @@ func TestBasicStoreOperation(t *testing.T) {
 	}
 
 	assert.Equal(t, 10, len(traceids))
-	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
 		fmt.Println(states, err)
