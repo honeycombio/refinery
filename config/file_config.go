@@ -278,6 +278,7 @@ type SpecializedConfig struct {
 type IDFieldsConfig struct {
 	TraceNames  []string `yaml:"TraceNames" default:"[\"trace.trace_id\",\"traceId\"]"`
 	ParentNames []string `yaml:"ParentNames" default:"[\"trace.parent_id\",\"parentId\"]"`
+	SpanNames   []string `yaml:"SpanNames" default:"[\"span.span_id\",\"spanId\"]"`
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
@@ -942,6 +943,13 @@ func (f *fileConfig) GetParentIdFieldNames() []string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.IDFieldNames.ParentNames
+}
+
+func (f *fileConfig) GetSpanIdFieldNames() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.IDFieldNames.SpanNames
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
