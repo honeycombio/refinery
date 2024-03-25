@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"context"
 	"runtime"
 	"sort"
 	"sync"
@@ -111,6 +112,7 @@ func (c *CentralCollector) collect() {
 }
 
 func (c *CentralCollector) processSpan(sp *types.Span) {
+	ctx := context.Background()
 	// add the span to the cache
 	trace := c.cache.Get(sp.TraceID)
 	if trace == nil {
@@ -134,28 +136,29 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 		if ejectedTrace != nil {
 			// TODO: maybe this is where we need to immediately consult the central store
 			// for a decision for this trace
+			// immediately transition to ready for decision
 			// c.send(ejectedTrace, TraceSendEjectedFull)
 		}
-	}
-	// if the trace we got back from the cache has already been sent, deal with the
-	// span.
-	if trace.Sent {
-		// TODO: don't need to send it to central store, just send it to honeycomb
 	}
 
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 
 	// if this is a root span, send the trace
-	if c.isRootSpan(sp) {
+	parentID, ok := c.GetParentID(sp)
+	if !ok {
 		trace.RootSpan = sp
 	}
 
-	c.Store.WriteSpan(&centralstore.CentralSpan{
-		TraceID: sp.TraceID,
-		// the types.Span doesn't have a ID field
-		// how to get the SpanID?
+	err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
+		TraceID:  sp.TraceID,
+		SpanID:   sp.ID,
+		ParentID: parentID,
 	})
+	if err != nil {
+		c.Logger.Error().WithField("error", err).Logf("Failed to write span to central store")
+	}
+
 }
 
 func (c *CentralCollector) sendTracesInCache(now time.Time) {
@@ -291,12 +294,13 @@ func (c *CentralCollector) send(sp *types.Trace, reason string) {
 	// TODO: implement getting a decision from the central store
 }
 
-func (c *CentralCollector) isRootSpan(sp *types.Span) bool {
+func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 	for _, parentIdFieldName := range c.Config.GetParentIdFieldNames() {
 		parentId := sp.Data[parentIdFieldName]
-		if _, ok := parentId.(string); ok {
-			return false
+		if v, ok := parentId.(string); ok {
+			return v, true
 		}
 	}
-	return true
+
+	return "", false
 }
