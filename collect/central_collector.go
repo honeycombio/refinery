@@ -14,7 +14,6 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/types"
-	"github.com/zyedidia/generic"
 )
 
 type CentralCollector struct {
@@ -27,7 +26,7 @@ type CentralCollector struct {
 	cache cache.Cache
 	// TODO: this can be a better name
 	datasetSamplers map[string]sample.Sampler
-	keyFields       generic.Set[string]
+	keyFields       generics.Set[string]
 
 	incoming chan *types.Span
 	reload   chan struct{}
