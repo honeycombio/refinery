@@ -136,13 +136,9 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 		if ejectedTrace != nil {
 			// TODO: maybe this is where we need to immediately consult the central store
 			// for a decision for this trace
+			// immediately transition to ready for decision
 			// c.send(ejectedTrace, TraceSendEjectedFull)
 		}
-	}
-	// if the trace we got back from the cache has already been sent, deal with the
-	// span.
-	if trace.Sent {
-		// TODO: don't need to send it to central store, just send it to honeycomb
 	}
 
 	// great! trace is live. add the span.
