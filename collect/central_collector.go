@@ -132,13 +132,15 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := c.cache.Set(trace)
 		if ejectedTrace != nil {
-			c.send(ejectedTrace, TraceSendEjectedFull)
+			// TODO: maybe this is where we need to immediately consult the central store
+			// for a decision for this trace
+			// c.send(ejectedTrace, TraceSendEjectedFull)
 		}
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		// TODO: don't need to send it to central store
+		// TODO: don't need to send it to central store, just send it to honeycomb
 	}
 
 	// great! trace is live. add the span.
@@ -166,6 +168,7 @@ func (c *CentralCollector) sendTracesInCache(now time.Time) {
 		}
 	}
 }
+
 func (c *CentralCollector) checkAlloc() {
 	inMemConfig, err := c.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
@@ -282,4 +285,18 @@ func (c *CentralCollector) reloadConfigs() {
 	// so that the new configuration will be propagated
 	c.datasetSamplers = make(map[string]sample.Sampler)
 	// TODO add resizing the LRU sent trace cache on config reload
+}
+
+func (c *CentralCollector) send(sp *types.Trace, reason string) {
+	// TODO: implement getting a decision from the central store
+}
+
+func (c *CentralCollector) isRootSpan(sp *types.Span) bool {
+	for _, parentIdFieldName := range c.Config.GetParentIdFieldNames() {
+		parentId := sp.Data[parentIdFieldName]
+		if _, ok := parentId.(string); ok {
+			return false
+		}
+	}
+	return true
 }

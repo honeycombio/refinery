@@ -518,11 +518,19 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		r.UpstreamTransmission.EnqueueEvent(ev)
 		return nil
 	}
+	var spanID string
+	for _, spanIdFieldName := range r.Config.GetSpanIdFieldNames() {
+		if spID, ok := ev.Data[spanIdFieldName]; ok {
+			spanID = spID.(string)
+			break
+		}
+	}
 	debugLog = debugLog.WithString("trace_id", traceID)
 
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: traceID,
+		SpanID:  spanID,
 	}
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;

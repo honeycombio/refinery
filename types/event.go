@@ -185,6 +185,7 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 type Span struct {
 	Event
 	TraceID     string
+	SpanID      string
 	DataSize    int
 	ArrivalTime time.Time
 }
