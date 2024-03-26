@@ -195,9 +195,8 @@ type SmartStorer interface {
 	// set.
 	SetTraceStatuses(ctx context.Context, statuses []*CentralTraceStatus) error
 
-	// GetMetrics returns a map of metrics from the central store, accumulated
-	// since the previous time this method was called.
-	GetMetrics(ctx context.Context) (map[string]interface{}, error)
+	// RecordMetrics Populates metric data from the smart store.
+	RecordMetrics(ctx context.Context) error
 }
 
 // Spec for the central store's internal behavior:
@@ -293,7 +292,6 @@ type BasicStorer interface {
 	// Statuses should include Reason and Rate; do not include State as it will be ignored.
 	KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error
 
-	// GetMetrics returns a map of metrics from the remote store, accumulated
-	// since the previous time this method was called.
-	GetMetrics(ctx context.Context) (map[string]interface{}, error)
+	// RecordMetrics Populates metric data from the basic store.
+	RecordMetrics(ctx context.Context) error
 }

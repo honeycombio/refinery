@@ -12,6 +12,7 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/gomodule/redigo/redis"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -89,15 +90,17 @@ type Conn interface {
 var _ Client = &DefaultClient{}
 
 type DefaultClient struct {
-	pool   *redis.Pool
-	Config config.Config `inject:""`
+	pool    *redis.Pool
+	Config  config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"genericMetrics"`
 
 	// An overwritable clockwork.Clock for test injection
 	Clock clockwork.Clock
 }
 
 type DefaultConn struct {
-	conn redis.Conn
+	conn    redis.Conn
+	metrics metrics.Metrics
 
 	// An overwritable clockwork.Clock for test injection
 	Clock clockwork.Clock
@@ -193,6 +196,8 @@ func (d *DefaultClient) Start() error {
 	}
 
 	d.pool = pool
+	d.Metrics.Register("redis_request_latency", "histogram")
+
 	return nil
 }
 
@@ -208,8 +213,9 @@ func (d *DefaultClient) Stats() redis.PoolStats {
 // the pool with conn.Close().
 func (d *DefaultClient) Get() Conn {
 	return &DefaultConn{
-		conn:  d.pool.Get(),
-		Clock: clockwork.NewRealClock(),
+		conn:    d.pool.Get(),
+		metrics: d.Metrics,
+		Clock:   clockwork.NewRealClock(),
 	}
 }
 
@@ -706,6 +712,12 @@ func (c *DefaultConn) MemoryStats() (map[string]any, error) {
 }
 
 func (c *DefaultConn) Do(commandString string, args ...any) (any, error) {
+	now := c.Clock.Now()
+	defer func() {
+		duration := c.Clock.Since(now)
+		c.metrics.Histogram("redis_request_latency", duration)
+	}()
+
 	return c.conn.Do(commandString, args...)
 }
 
