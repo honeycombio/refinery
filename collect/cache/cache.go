@@ -23,13 +23,6 @@ type Cache interface {
 	TakeExpiredTraces(now time.Time) []*types.Trace
 }
 
-// mentally map[TraceID]*types.Trace
-// priority queue by total cache impact
-type NewCache interface {
-	Set(span *types.Span)
-	Get(traceID string) *types.Trace
-}
-
 // DefaultInMemCache keeps a bounded number of entries to avoid growing memory
 // forever. Traces are expunged from the cache in insertion order (not access
 // order) so it is important to have a cache larger than trace throughput *
