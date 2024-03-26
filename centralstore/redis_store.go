@@ -12,6 +12,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/redis"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -26,7 +27,9 @@ const (
 	metricsKey          = "refinery:metrics"
 	traceStatusCountKey = "refinery:trace_status_count"
 
-	metricsPrefix = "redisstore_count_"
+	metricsPrefixCount      = "redisstore_count_"
+	metricsPrefixMemory     = "redisstore_memory_"
+	metricsPrefixConnection = "redisstore_conn_"
 )
 
 var _ BasicStorer = (*RedisBasicStore)(nil)
@@ -34,6 +37,7 @@ var _ BasicStorer = (*RedisBasicStore)(nil)
 // RedisBasicStore is an implementation of BasicStorer that uses Redis as the backing store.
 type RedisBasicStore struct {
 	Config        config.Config        `inject:""`
+	Metrics       metrics.Metrics      `inject:"genericMetrics"`
 	DecisionCache cache.TraceSentCache `inject:""`
 	RedisClient   redis.Client         `inject:"redis"`
 	Tracer        trace.Tracer         `inject:"tracer"`
@@ -63,6 +67,7 @@ func (r *RedisBasicStore) Start() error {
 	if r.Clock == nil {
 		return errors.New("missing Clock injection in RedisBasicStore")
 	}
+
 	opt := r.Config.GetCentralStoreOptions()
 
 	stateProcessorCfg := traceStateProcessorConfig{
@@ -84,6 +89,23 @@ func (r *RedisBasicStore) Start() error {
 	)
 	r.states = stateProcessor
 
+	// register metrics for each state
+	for _, state := range r.states.states {
+		r.Metrics.Register(metricsPrefixCount+string(state), "gauge")
+	}
+
+	// register metrics for connection pool stats
+	r.Metrics.Register(metricsPrefixConnection+"active", "gauge")
+	r.Metrics.Register(metricsPrefixConnection+"idle", "gauge")
+	r.Metrics.Register(metricsPrefixConnection+"wait", "gauge")
+	r.Metrics.Register(metricsPrefixConnection+"wait_duration", "histogram")
+
+	// register metrics for memory stats
+	r.Metrics.Register(metricsPrefixMemory+"used_total", "gauge")
+	r.Metrics.Register(metricsPrefixMemory+"used_peak", "gauge")
+	r.Metrics.Register(metricsPrefixCount+"keys", "gauge")
+	r.Metrics.Register(metricsPrefixCount+"traces", "gauge")
+
 	return nil
 }
 
@@ -92,21 +114,32 @@ func (r *RedisBasicStore) Stop() error {
 	return nil
 }
 
-func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
+func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 	_, span := r.Tracer.Start(ctx, "GetMetrics")
 	defer span.End()
 
 	m, err := r.DecisionCache.GetMetrics()
 	if err != nil {
-		return nil, err
+		return err
 	}
+
+	for k, v := range m {
+		r.Metrics.Gauge(k, v)
+	}
+
+	// get the connection pool stats from client
+	connStats := r.RedisClient.Stats()
+	r.Metrics.Gauge(metricsPrefixConnection+"active", connStats.ActiveCount)
+	r.Metrics.Gauge(metricsPrefixConnection+"idle", connStats.IdleCount)
+	r.Metrics.Gauge(metricsPrefixConnection+"wait", connStats.WaitCount)
+	r.Metrics.Histogram(metricsPrefixConnection+"wait_duration", connStats.WaitDuration)
 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
 	ok, unlock := conn.AcquireLockWithRetries(ctx, metricsKey, 10*time.Second, 3, 1*time.Second)
 	if !ok {
-		return nil, nil
+		return nil
 	}
 
 	defer unlock()
@@ -115,32 +148,31 @@ func (r *RedisBasicStore) GetMetrics(ctx context.Context) (map[string]interface{
 		// get the state counts
 		traceIDs, err := r.states.traceIDsByState(ctx, conn, state, time.Time{}, time.Time{}, -1)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		m[metricsPrefix+string(state)] = len(traceIDs)
+		r.Metrics.Gauge(metricsPrefixCount+string(state), len(traceIDs))
 	}
 
 	count, err := r.traces.count(ctx, conn)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	m[metricsPrefix+"traces"] = count
+	r.Metrics.Gauge(metricsPrefixCount+"traces", float64(count))
 
 	// If we can't get memory stats from the redis client, we'll just skip it.
 	memoryStats, _ := conn.MemoryStats()
 	for k, v := range memoryStats {
 		switch k {
 		case "total.allocated":
-			m["redisstore_memory_used_total"] = v
+			r.Metrics.Gauge(metricsPrefixMemory+"used_total", v)
 		case "peak.allocated":
-			m["redisstore_memory_used_peak"] = v
+			r.Metrics.Gauge(metricsPrefixMemory+"used_peak", v)
 		case "keys.count":
-			m[metricsPrefix+"keys"] = v
+			r.Metrics.Gauge(metricsPrefixCount+"keys", v)
 		}
 	}
 
-	return m, nil
-
+	return nil
 }
 
 func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) error {

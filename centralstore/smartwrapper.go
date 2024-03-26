@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -15,9 +16,10 @@ type statusMap map[string]*CentralTraceStatus
 
 // This is an implementation of SmartStorer that stores spans in memory locally.
 type SmartWrapper struct {
-	Config         config.Config `inject:""`
-	BasicStore     BasicStorer   `inject:""`
-	Tracer         trace.Tracer  `inject:"tracer"`
+	Config         config.Config   `inject:""`
+	Metrics        metrics.Metrics `inject:"genericMetrics"`
+	BasicStore     BasicStorer     `inject:""`
+	Tracer         trace.Tracer    `inject:"tracer"`
 	keyfields      []string
 	spanChan       chan *CentralSpan
 	stopped        chan struct{}
@@ -262,8 +264,8 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 	return err
 }
 
-// GetMetrics returns a map of metrics from the central store, accumulated
+// RecordMetrics returns a map of metrics from the central store, accumulated
 // since the previous time this method was called.
-func (w *SmartWrapper) GetMetrics(ctx context.Context) (map[string]any, error) {
-	return w.BasicStore.GetMetrics(ctx)
+func (w *SmartWrapper) RecordMetrics(ctx context.Context) error {
+	return w.BasicStore.RecordMetrics(ctx)
 }
