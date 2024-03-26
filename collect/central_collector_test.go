@@ -2,7 +2,6 @@ package collect
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -34,8 +33,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 			CacheCapacity: 3,
 		},
 	}
-	transmission := &transmit.MockTransmission{}
-	coll, stop := newTestCentralCollector(t, conf, transmission)
+	coll, stop := newTestCentralCollector(t, conf)
 	defer stop()
 
 	var traceID1 = "mytrace"
@@ -65,9 +63,6 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	trace, err := coll.Store.GetTrace(ctx, traceID1)
 	require.NoError(t, err)
 	assert.Equal(t, traceID1, trace.TraceID)
-	for _, s := range trace.Spans {
-		fmt.Println(s)
-	}
 	assert.Len(t, trace.Spans, 1)
 	assert.Nil(t, trace.Root)
 
@@ -95,7 +90,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	assert.NotNil(t, trace.Root)
 }
 
-func newTestCentralCollector(t *testing.T, cfg *config.MockConfig, transmission transmit.Transmission) (*CentralCollector, func()) {
+func newTestCentralCollector(t *testing.T, cfg *config.MockConfig) (*CentralCollector, func()) {
 	if cfg == nil {
 		cfg = &config.MockConfig{}
 	}
@@ -131,7 +126,7 @@ func newTestCentralCollector(t *testing.T, cfg *config.MockConfig, transmission 
 		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
-		{Value: transmission, Name: "upstreamTransmission"},
+		{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 		{Value: samplerFactory},
 		{Value: redis, Name: "redis"},
@@ -144,16 +139,13 @@ func newTestCentralCollector(t *testing.T, cfg *config.MockConfig, transmission 
 	require.NoError(t, g.Provide(objects...))
 	require.NoError(t, g.Populate())
 
-	fmt.Println("starting injected dependencies")
-	fmt.Println(g.Objects())
-
 	require.NoError(t, startstop.Start(g.Objects(), nil))
 
 	stopper := func() {
 		conn := redis.Get()
 		conn.Do("FLUSHALL")
 		conn.Close()
-		startstop.Stop(g.Objects(), nil)
+		require.NoError(t, startstop.Stop(g.Objects(), nil))
 	}
 
 	return collector, stopper
