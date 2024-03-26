@@ -16,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
+	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -25,6 +26,7 @@ const cacheEjectBatchSize = 100
 type CentralCollector struct {
 	Store          centralstore.SmartStorer `inject:""`
 	Config         config.Config            `inject:""`
+	Clock          clockwork.Clock          `inject:""`
 	Transmission   transmit.Transmission    `inject:"upstreamTransmission"`
 	Logger         logger.Logger            `inject:""`
 	Metrics        metrics.Metrics          `inject:"genericMetrics"`
@@ -34,7 +36,7 @@ type CentralCollector struct {
 	BlockOnAddSpan bool
 
 	mutex sync.RWMutex
-	cache cache.CacheV2
+	cache cache.SpanCache
 	// TODO: this can be a better name
 	datasetSamplers map[string]sample.Sampler
 
@@ -55,7 +57,11 @@ func (c *CentralCollector) Start() error {
 	}
 
 	// TODO: use the actual new cache implementation
-	c.cache = cache.NewToyCacheV2()
+	spanCache := &cache.DefaultSpanCache{
+		Clock: c.Clock,
+	}
+	spanCache.Start()
+	c.cache = spanCache
 
 	// listen for config reloads
 	c.Config.RegisterReloadCallback(c.sendReloadSignal)
@@ -72,6 +78,7 @@ func (c *CentralCollector) Start() error {
 				err = fmt.Errorf("panic in central collector: %v\n%s", r, debug.Stack())
 			}
 		}()
+
 		c.collect()
 		return nil
 	})
@@ -157,9 +164,23 @@ func (c *CentralCollector) collect() {
 
 func (c *CentralCollector) processSpan(sp *types.Span) {
 	// add the span to the cache
-	trace := c.cache.Get(sp.TraceID)
+	trace, err := c.cache.Get(sp.TraceID)
+	if err != nil {
+		c.Logger.Error().Logf("failed to get trace: %s from cache ", sp.TraceID)
+		return
+	}
 	if trace == nil {
-		trace = c.cache.Set(sp)
+		err = c.cache.Set(sp)
+		if err != nil {
+			c.Logger.Error().Logf("failed to set trace: %s from cache ", sp.TraceID)
+			return
+		}
+	}
+
+	trace, err = c.cache.Get(sp.TraceID)
+	if err != nil {
+		c.Logger.Error().Logf("failed to get trace: %s from cache ", sp.TraceID)
+		return
 	}
 
 	// construct a central store span
@@ -197,7 +218,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 	// send the span to the central store
 	ctx := context.Background()
-	err := c.Store.WriteSpan(ctx, cs)
+	err = c.Store.WriteSpan(ctx, cs)
 	if err != nil {
 		c.Logger.Error().WithFields(logFields).Logf("error writing span to central store: %s", err)
 	}
@@ -206,11 +227,12 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 func (c *CentralCollector) sendTracesInCache() {
 	ctx := context.Background()
-	traces := c.cache.Pop(cacheEjectBatchSize)
+	traces := c.cache.GetOldest(cacheEjectBatchSize)
 	for _, t := range traces {
 		c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
 			TraceID: t.TraceID,
 		})
+		c.cache.Remove(t.TraceID)
 	}
 }
 
@@ -246,19 +268,15 @@ func (c *CentralCollector) reloadConfigs() {
 		c.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}
 
-	if existingCache, ok := c.cache.(*cache.ToyCacheV2); ok {
-		if imcConfig.CacheCapacity != existingCache.Len() {
-			c.Logger.Debug().WithField("cache_size.previous", existingCache.Len()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-			c.cache = existingCache.Resize(imcConfig.CacheCapacity)
-		} else {
-			c.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
-		}
-
-		// reload the cache size in smart store?
-		// c.SampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
+	if imcConfig.CacheCapacity != c.cache.Len() {
+		c.Logger.Debug().WithField("cache_size.previous", c.cache.Len()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
+		c.cache = c.cache.Resize(imcConfig.CacheCapacity)
 	} else {
-		c.Logger.Error().WithField("cache", c.cache.(*cache.ToyCacheV2)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
+		c.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 	}
+
+	// reload the cache size in smart store?
+	// c.SampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
 	//c.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
@@ -288,5 +306,10 @@ func (c *CentralCollector) getFromCache(traceID string) *types.TraceV2 {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	return c.cache.Get(traceID)
+	trace, err := c.cache.Get(traceID)
+	if err != nil {
+		return nil
+	}
+
+	return trace
 }
