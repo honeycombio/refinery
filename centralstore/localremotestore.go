@@ -8,6 +8,7 @@ import (
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -17,6 +18,7 @@ import (
 type LocalRemoteStore struct {
 	Config        config.Config        `inject:""`
 	DecisionCache cache.TraceSentCache `inject:""`
+	Metrics       metrics.Metrics      `inject:"genericMetrics"`
 	Clock         clockwork.Clock      `inject:""`
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
@@ -299,25 +301,29 @@ func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*Central
 	return nil
 }
 
-// GetMetrics returns a map of metrics from the remote store, accumulated
+// RecordMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
-func (lrs *LocalRemoteStore) GetMetrics(ctx context.Context) (map[string]any, error) {
+func (lrs *LocalRemoteStore) RecordMetrics(ctx context.Context) error {
 	m, err := lrs.DecisionCache.GetMetrics()
 	if err != nil {
-		return nil, err
-	}
-	// add the state counts and trace count
-	m2 := map[string]any{
-		"localstore_count_" + string(Collecting):       len(lrs.states[Collecting]),
-		"localstore_count_" + string(DecisionDelay):    len(lrs.states[DecisionDelay]),
-		"localstore_count_" + string(ReadyToDecide):    len(lrs.states[ReadyToDecide]),
-		"localstore_count_" + string(AwaitingDecision): len(lrs.states[AwaitingDecision]),
-		"localstore_count_" + string(DecisionKeep):     len(lrs.states[DecisionKeep]),
-		"localstore_count_" + string(DecisionDrop):     len(lrs.states[DecisionDrop]),
-		"localstore_ntraces":                           len(lrs.traces),
+		return err
 	}
 	for k, v := range m {
-		m2["localstore_"+k] = v
+		lrs.Metrics.Count("localstore_"+k, v)
 	}
-	return m2, nil
+
+	// add the state counts and trace count
+	m2 := map[string]any{
+		"count_" + string(Collecting):       len(lrs.states[Collecting]),
+		"count_" + string(DecisionDelay):    len(lrs.states[DecisionDelay]),
+		"count_" + string(ReadyToDecide):    len(lrs.states[ReadyToDecide]),
+		"count_" + string(AwaitingDecision): len(lrs.states[AwaitingDecision]),
+		"count_" + string(DecisionKeep):     len(lrs.states[DecisionKeep]),
+		"count_" + string(DecisionDrop):     len(lrs.states[DecisionDrop]),
+		"ntraces":                           len(lrs.traces),
+	}
+	for k, v := range m2 {
+		lrs.Metrics.Count("localstore_"+k, v)
+	}
+	return nil
 }

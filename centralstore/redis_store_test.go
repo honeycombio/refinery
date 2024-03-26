@@ -390,6 +390,57 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	}, 1*time.Second, 200*time.Millisecond)
 }
 
+func TestRedisBasicStore_GetMetrics(t *testing.T) {
+	ctx := context.Background()
+	store := NewTestRedisBasicStore(ctx, t)
+	defer store.Stop()
+
+	conn := store.RedisClient.Get()
+	defer conn.Close()
+
+	traceID := "traceID0"
+	store.ensureInitialState(t, ctx, conn, traceID, ReadyToDecide)
+
+	err := store.RecordMetrics(ctx)
+	require.NoError(t, err)
+	count, ok := store.Metrics.Get(metricsPrefixCount + ReadyToDecide.String())
+	require.True(t, ok)
+	assert.EqualValues(t, 1, count)
+	count, ok = store.Metrics.Get(metricsPrefixCount + Collecting.String())
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+	count, ok = store.Metrics.Get(metricsPrefixCount + AwaitingDecision.String())
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+
+	// this is 0 because miniredis doesn't support memory stats command
+	// however, the test is still useful to ensure the metrics are being initialized
+	// and the function is able to proceed without error in the event of a failure from calling
+	// the memory stats command
+	count, ok = store.Metrics.Get(metricsPrefixCount + "keys")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+	count, ok = store.Metrics.Get(metricsPrefixMemory + "used_total")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+	count, ok = store.Metrics.Get(metricsPrefixMemory + "used_peak")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+
+	count, ok = store.Metrics.Get(metricsPrefixConnection + "active")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+	count, ok = store.Metrics.Get(metricsPrefixConnection + "idle")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+	count, ok = store.Metrics.Get(metricsPrefixConnection + "wait")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+	count, ok = store.Metrics.Get(metricsPrefixConnection + "wait_duration")
+	require.True(t, ok)
+	assert.EqualValues(t, 0, count)
+}
+
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
 	ctx := context.Background()
 	testRedis := &redis.TestService{}
@@ -491,6 +542,7 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 	}
 	decisionCache := &cache.CuckooSentCache{}
 	clock := clockwork.NewFakeClock()
+	metrics := &metrics.MockMetrics{}
 	tracer := noop.NewTracerProvider().Tracer("redis_test")
 	redis := &redis.TestService{}
 	store := &RedisBasicStore{}
@@ -501,9 +553,9 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 		{Value: tracer, Name: "tracer"},
 		{Value: decisionCache},
 		{Value: clock},
+		{Value: metrics, Name: "genericMetrics"},
 		{Value: redis, Name: "redis"},
 		{Value: store},
-		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
 	err := g.Provide(objects...)
