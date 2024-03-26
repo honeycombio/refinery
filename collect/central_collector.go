@@ -2,35 +2,46 @@ package collect
 
 import (
 	"context"
+	"fmt"
 	"runtime"
-	"sort"
+	"runtime/debug"
 	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
+const cacheEjectBatchSize = 100
+
 type CentralCollector struct {
-	Store   centralstore.SmartStorer `inject:""`
-	Config  config.Config            `inject:""`
-	Logger  logger.Logger            `inject:""`
-	Metrics metrics.Metrics          `inject:"genericMetrics"`
+	Store          centralstore.SmartStorer `inject:""`
+	Config         config.Config            `inject:""`
+	Transmission   transmit.Transmission    `inject:"upstreamTransmission"`
+	Logger         logger.Logger            `inject:""`
+	Metrics        metrics.Metrics          `inject:"genericMetrics"`
+	SamplerFactory *sample.SamplerFactory   `inject:""`
+
+	// For test use only
+	BlockOnAddSpan bool
 
 	mutex sync.RWMutex
-	cache cache.Cache
+	cache cache.CacheV2
 	// TODO: this can be a better name
 	datasetSamplers map[string]sample.Sampler
-	keyFields       generics.Set[string]
 
 	incoming chan *types.Span
 	reload   chan struct{}
+
+	eg *errgroup.Group
 }
 
 // ensure that we implement the Collector interface
@@ -43,7 +54,8 @@ func (c *CentralCollector) Start() error {
 		return err
 	}
 
-	c.cache = cache.NewInMemCache(collectorCfg.CacheCapacity, c.Metrics, c.Logger)
+	// TODO: use the actual new cache implementation
+	c.cache = cache.NewToyCacheV2()
 
 	// listen for config reloads
 	c.Config.RegisterReloadCallback(c.sendReloadSignal)
@@ -53,18 +65,29 @@ func (c *CentralCollector) Start() error {
 	c.datasetSamplers = make(map[string]sample.Sampler)
 
 	// spin up one collector because this is a single threaded collector
-	go c.collect()
+	c.eg = &errgroup.Group{}
+	c.eg.Go(func() (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("panic in central collector: %v\n%s", r, debug.Stack())
+			}
+		}()
+		c.collect()
+		return nil
+	})
 
 	return nil
 }
 
+func (c *CentralCollector) Stop() error {
+	close(c.incoming)
+	close(c.reload)
+	return c.eg.Wait()
+}
+
 // implement the Collector interface
 func (c *CentralCollector) AddSpan(span *types.Span) error {
-	// extract all key fields from the span
-	// construct a central store span
-	// call WriteSpan on the central store
-
-	return nil
+	return c.add(span, c.incoming)
 }
 
 func (c *CentralCollector) AddSpanFromPeer(span *types.Span) error {
@@ -82,6 +105,24 @@ func (c *CentralCollector) GetStressedSampleRate(traceID string) (rate uint, kee
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
 }
 
+func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
+	if c.BlockOnAddSpan {
+		ch <- sp
+		c.Metrics.Increment("span_received")
+		c.Metrics.Up("spans_waiting")
+		return nil
+	}
+
+	select {
+	case ch <- sp:
+		c.Metrics.Increment("span_received")
+		c.Metrics.Up("spans_waiting")
+		return nil
+	default:
+		return ErrWouldBlock
+	}
+}
+
 func (c *CentralCollector) collect() {
 	tickerDuration := c.Config.GetSendTickerValue()
 	ticker := time.NewTicker(tickerDuration)
@@ -95,14 +136,17 @@ func (c *CentralCollector) collect() {
 	for {
 		select {
 		case <-ticker.C:
-			c.sendTracesInCache(time.Now())
+			c.sendTracesInCache()
 			c.checkAlloc()
 
 			// Briefly unlock the cache, to allow test access.
 			c.mutex.Unlock()
 			runtime.Gosched()
 			c.mutex.Lock()
-		case sp := <-c.incoming:
+		case sp, ok := <-c.incoming:
+			if !ok {
+				return
+			}
 			c.processSpan(sp)
 		case <-c.reload:
 			c.reloadConfigs()
@@ -112,63 +156,61 @@ func (c *CentralCollector) collect() {
 }
 
 func (c *CentralCollector) processSpan(sp *types.Span) {
-	ctx := context.Background()
 	// add the span to the cache
 	trace := c.cache.Get(sp.TraceID)
 	if trace == nil {
-		timeout, err := c.Config.GetTraceTimeout()
-		if err != nil {
-			timeout = 60 * time.Second
-		}
-
-		now := time.Now()
-		trace = &types.Trace{
-			APIHost:     sp.APIHost,
-			APIKey:      sp.APIKey,
-			Dataset:     sp.Dataset,
-			TraceID:     sp.TraceID,
-			ArrivalTime: now,
-			SendBy:      now.Add(timeout),
-		}
-		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
-		// push this into the cache and if we eject an unsent trace, send it ASAP
-		ejectedTrace := c.cache.Set(trace)
-		if ejectedTrace != nil {
-			// TODO: maybe this is where we need to immediately consult the central store
-			// for a decision for this trace
-			// immediately transition to ready for decision
-			// c.send(ejectedTrace, TraceSendEjectedFull)
-		}
+		trace = c.cache.Set(sp)
 	}
 
-	// great! trace is live. add the span.
-	trace.AddSpan(sp)
-
-	// if this is a root span, send the trace
+	// construct a central store span
+	cs := &centralstore.CentralSpan{
+		TraceID: sp.TraceID,
+		SpanID:  sp.ID,
+	}
 	parentID, ok := c.GetParentID(sp)
 	if !ok {
-		trace.RootSpan = sp
+		cs.IsRoot = true
+	}
+	cs.ParentID = parentID
+
+	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	logFields := logrus.Fields{
+		"trace_id": trace.TraceID,
+	}
+	if isLegacyKey {
+		logFields["dataset"] = samplerKey
+	} else {
+		logFields["environment"] = samplerKey
+	}
+	sampler, found := c.datasetSamplers[samplerKey]
+	if !found {
+		sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
+		c.datasetSamplers[samplerKey] = sampler
+	}
+	// extract all key fields from the span
+	keyFields := sampler.GetKeyFields()
+	for _, keyField := range keyFields {
+		if val, ok := sp.Data[keyField]; ok {
+			cs.KeyFields[keyField] = val
+		}
 	}
 
-	err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
-		TraceID:  sp.TraceID,
-		SpanID:   sp.ID,
-		ParentID: parentID,
-	})
+	// send the span to the central store
+	ctx := context.Background()
+	err := c.Store.WriteSpan(ctx, cs)
 	if err != nil {
-		c.Logger.Error().WithField("error", err).Logf("Failed to write span to central store")
+		c.Logger.Error().WithFields(logFields).Logf("error writing span to central store: %s", err)
 	}
 
 }
 
-func (c *CentralCollector) sendTracesInCache(now time.Time) {
-	traces := c.cache.TakeExpiredTraces(now)
+func (c *CentralCollector) sendTracesInCache() {
+	ctx := context.Background()
+	traces := c.cache.Pop(cacheEjectBatchSize)
 	for _, t := range traces {
-		if t.RootSpan != nil {
-			c.send(t, TraceSendGotRoot)
-		} else {
-			c.send(t, TraceSendExpired)
-		}
+		c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
+			TraceID: t.TraceID,
+		})
 	}
 }
 
@@ -182,63 +224,8 @@ func (c *CentralCollector) checkAlloc() {
 		return
 	}
 
-	// Figure out what fraction of the total cache we should remove. We'd like it to be
-	// enough to get us below the max capacity, but not TOO much below.
-	// Because our impact numbers are only the data size, reducing by enough to reach
-	// max alloc will actually do more than that.
-	totalToRemove := mem.Alloc - uint64(maxAlloc)
+	// TODO: implement cache eviction here
 
-	// The size of the cache exceeds the user's intended allocation, so we're going to
-	// remove the traces from the cache that have had the most impact on allocation.
-	// To do this, we sort the traces by their CacheImpact value and then remove traces
-	// until the total size is less than the amount to which we want to shrink.
-	existingCache, ok := c.cache.(*cache.DefaultInMemCache)
-	if !ok {
-		c.Logger.Error().WithField("alloc", mem.Alloc).Logf(
-			"total allocation exceeds limit, but unable to control cache",
-		)
-		return
-	}
-	allTraces := existingCache.GetAll()
-	timeout, err := c.Config.GetTraceTimeout()
-	if err != nil {
-		timeout = 60 * time.Second
-	} // Sort traces by CacheImpact, heaviest first
-	sort.Slice(allTraces, func(i, j int) bool {
-		return allTraces[i].CacheImpact(timeout) > allTraces[j].CacheImpact(timeout)
-	})
-
-	// Now start removing the biggest traces, by summing up DataSize for
-	// successive traces until we've crossed the totalToRemove threshold
-	// or just run out of traces to delete.
-
-	cap := existingCache.GetCacheSize()
-
-	totalDataSizeSent := 0
-	tracesSent := generics.NewSet[string]()
-	// Send the traces we can't keep.
-	for _, trace := range allTraces {
-		tracesSent.Add(trace.TraceID)
-		totalDataSizeSent += trace.DataSize
-		c.send(trace, TraceSendEjectedMemsize)
-		if totalDataSizeSent > int(totalToRemove) {
-			break
-		}
-	}
-	existingCache.RemoveTraces(tracesSent)
-
-	// Treat any MaxAlloc overage as an error so we know it's happening
-	c.Logger.Error().
-		WithField("cache_size", cap).
-		WithField("alloc", mem.Alloc).
-		WithField("num_traces_sent", len(tracesSent)).
-		WithField("datasize_sent", totalDataSizeSent).
-		WithField("new_trace_count", existingCache.GetCacheSize()).
-		Logf("evicting large traces early due to memory overage")
-
-	// Manually GC here - without this we can easily end up evicting more than we
-	// need to, since total alloc won't be updated until after a GC pass.
-	runtime.GC()
 }
 
 // sendReloadSignal will trigger the collector reloading its config, eventually.
@@ -259,19 +246,10 @@ func (c *CentralCollector) reloadConfigs() {
 		c.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
 	}
 
-	if existingCache, ok := c.cache.(*cache.DefaultInMemCache); ok {
-		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
-			c.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-			inMemCache := cache.NewInMemCache(imcConfig.CacheCapacity, c.Metrics, c.Logger)
-			// pull the old cache contents into the new cache
-			for j, trace := range existingCache.GetAll() {
-				if j >= imcConfig.CacheCapacity {
-					c.send(trace, TraceSendEjectedFull)
-					continue
-				}
-				inMemCache.Set(trace)
-			}
-			c.cache = inMemCache
+	if existingCache, ok := c.cache.(*cache.ToyCacheV2); ok {
+		if imcConfig.CacheCapacity != existingCache.Len() {
+			c.Logger.Debug().WithField("cache_size.previous", existingCache.Len()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
+			c.cache = existingCache.Resize(imcConfig.CacheCapacity)
 		} else {
 			c.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 		}
@@ -279,7 +257,7 @@ func (c *CentralCollector) reloadConfigs() {
 		// reload the cache size in smart store?
 		// c.SampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 	} else {
-		c.Logger.Error().WithField("cache", c.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
+		c.Logger.Error().WithField("cache", c.cache.(*cache.ToyCacheV2)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
 	}
 
 	//c.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
@@ -303,4 +281,12 @@ func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 	}
 
 	return "", false
+}
+
+// Convenience method for tests.
+func (c *CentralCollector) getFromCache(traceID string) *types.TraceV2 {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	return c.cache.Get(traceID)
 }
