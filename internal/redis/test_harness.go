@@ -1,8 +1,6 @@
 package redis
 
 import (
-	"fmt"
-
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/honeycombio/refinery/config"
@@ -19,7 +17,6 @@ type TestService struct {
 }
 
 func (s *TestService) Start() error {
-	fmt.Println("Starting TestService")
 	r, err := miniredis.Run()
 	if err != nil {
 		return err

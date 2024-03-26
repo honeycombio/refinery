@@ -1,6 +1,16 @@
 package metrics
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+
+	"github.com/facebookgo/startstop"
+)
+
+var _ Metrics = &MockMetrics{}
+
+var _ startstop.Starter = &MockMetrics{}
+var _ startstop.Stopper = &MockMetrics{}
 
 // MockMetrics collects metrics that were registered and changed to allow tests to
 // verify expected behavior
@@ -16,13 +26,19 @@ type MockMetrics struct {
 }
 
 // Start initializes all metrics or resets all metrics to zero
-func (m *MockMetrics) Start() {
+func (m *MockMetrics) Start() error {
 	m.Registrations = make(map[string]string)
 	m.CounterIncrements = make(map[string]int)
 	m.GaugeRecords = make(map[string]float64)
 	m.Histograms = make(map[string][]float64)
 	m.UpdownIncrements = make(map[string]int)
 	m.Constants = make(map[string]float64)
+
+	return nil
+}
+
+func (m *MockMetrics) Stop() error {
+	return nil
 }
 
 func (m *MockMetrics) Register(name string, metricType string) {
@@ -30,6 +46,20 @@ func (m *MockMetrics) Register(name string, metricType string) {
 	defer m.lock.Unlock()
 
 	m.Registrations[name] = metricType
+	switch metricType {
+	case "counter":
+		m.CounterIncrements[name] = 0
+	case "gauge":
+		m.GaugeRecords[name] = 0
+	case "histogram":
+		m.Histograms[name] = make([]float64, 0)
+	case "updown":
+		m.UpdownIncrements[name] = 0
+	case "constant":
+		m.Constants[name] = 0
+	default:
+		panic(fmt.Sprintf("unknown metric type %s", metricType))
+	}
 }
 func (m *MockMetrics) Increment(name string) {
 	m.lock.Lock()
@@ -84,6 +114,10 @@ func (m *MockMetrics) Get(name string) (float64, bool) {
 	}
 	if v, ok := m.Constants[name]; ok {
 		return v, true
+	}
+	// return the last value in the histogram
+	if v, ok := m.Histograms[name]; ok {
+		return v[len(v)-1], true
 	}
 	return 0, false
 }
