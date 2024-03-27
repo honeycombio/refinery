@@ -1344,6 +1344,19 @@ groups:
           as the parent ID. A trace without a `parent_id` is assumed to be a
           root span.
 
+      - name: SpanNames
+        type: stringarray
+        valuetype: stringarray
+        example: "trace.span_id,spanId"
+        reload: true
+        validations:
+          - type: elementType
+            arg: string
+        summary: is the list of field names to use for the span ID.
+        description: >
+          The first field in the list that is present in an event will be used
+          as the span ID. 
+
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
     description: >
