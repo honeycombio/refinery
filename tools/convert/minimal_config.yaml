@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-03-22 at 02:37:40 UTC
+# automatically generated on 2024-03-27 at 19:47:26 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -116,6 +116,10 @@ IDFields:
   ParentNames: 
     - "trace.parent_id"
     - parentId
+
+  SpanNames: 
+    - "trace.span_id"
+    - spanId
 
 GRPCServerParameters:
   Enabled: true

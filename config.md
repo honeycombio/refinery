@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-22 at 02:37:42 UTC.
+It was automatically generated on 2024-03-27 at 19:47:28 UTC.
 
 ## The Config file
 
@@ -1031,6 +1031,16 @@ A trace without a `parent_id` is assumed to be a root span.
 - Eligible for live reload.
 - Type: `stringarray`
 - Example: `trace.parent_id,parentId`
+
+### `SpanNames`
+
+SpanNames is the list of field names to use for the span ID.
+
+The first field in the list that is present in an event will be used as the span ID.
+
+- Eligible for live reload.
+- Type: `stringarray`
+- Example: `trace.span_id,spanId`
 
 ## gRPC Server Parameters
 
