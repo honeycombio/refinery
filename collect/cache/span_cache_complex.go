@@ -99,23 +99,30 @@ func (sc *spanCache_complex) Get(traceID string) *types.Trace {
 // because it has to sort the traces by arrival time, but I couldn't find a
 // faster way to do it.
 func (sc *spanCache_complex) GetOldest(fract float64) []string {
-	n := int(float64(len(sc.active)) * fract)
-	ids := make([]int, 0, len(sc.active))
-
-	sc.mut.RLock()
-	for _, ix := range sc.active {
-		ids = append(ids, ix)
+	type tidWithImpact struct {
+		id     string
+		impact int
 	}
+	n := int(float64(len(sc.active)) * fract)
+	ids := make([]tidWithImpact, 0, len(sc.active))
+
 	timeout, err := sc.Cfg.GetTraceTimeout()
 	if err != nil {
 		timeout = 60 * time.Second
-	} // Sort traces by CacheImpact, heaviest first
-	sort.Slice(ids, func(i, j int) bool {
-		t1 := sc.cache[ids[i]]
-		t2 := sc.cache[ids[j]]
-		return t1.CacheImpact(timeout) > t2.CacheImpact(timeout)
-	})
+	}
+
+	sc.mut.RLock()
+	for _, ix := range sc.active {
+		ids = append(ids, tidWithImpact{
+			id:     sc.cache[ix].TraceID,
+			impact: sc.cache[ix].CacheImpact(timeout),
+		})
+	}
 	sc.mut.RUnlock()
+	// Sort traces by CacheImpact, heaviest first
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i].impact > ids[j].impact
+	})
 
 	if len(ids) < n {
 		n = len(ids)
@@ -123,7 +130,7 @@ func (sc *spanCache_complex) GetOldest(fract float64) []string {
 
 	ret := make([]string, n)
 	for i := 0; i < n; i++ {
-		ret[i] = sc.cache[ids[i]].TraceID
+		ret[i] = ids[i].id
 	}
 	return ret
 }

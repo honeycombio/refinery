@@ -23,6 +23,7 @@ func getCache(typ string, clock clockwork.Clock) SpanCache {
 	switch typ {
 	case "basic":
 		return &spanCache_basic{
+			Cfg:   cfg,
 			Clock: clock,
 		}
 	case "complex":
@@ -92,10 +93,12 @@ func TestGetOldest(t *testing.T) {
 				Dataset: "dataset",
 			}
 			for i := 0; i < numIDs; i++ {
+				// we want cache impact to be highest first
+				evt.Data = map[string]any{"field": genID(30 - i)}
 				span := &types.Span{
-					TraceID:  ids[i],
-					DataSize: 100 + i,
-					Event:    evt,
+					TraceID:     ids[i],
+					Event:       evt,
+					ArrivalTime: c.GetClock().Now(),
 				}
 				err := c.Set(span)
 				require.NoError(t, err)
@@ -223,9 +226,9 @@ func BenchmarkSpanCacheGetOldest(b *testing.B) {
 			}
 
 			for i := 0; i < b.N; i++ {
+				evt.Data = map[string]any{"field": genID(b.N%20 + 1)}
 				span := &types.Span{
 					TraceID:     ids[i],
-					DataSize:    100 + i, // so we don't sort everything together
 					Event:       evt,
 					ArrivalTime: c.GetClock().Now(),
 				}

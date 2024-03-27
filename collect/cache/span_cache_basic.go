@@ -3,8 +3,10 @@ package cache
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/facebookgo/startstop"
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 )
@@ -12,6 +14,7 @@ import (
 // this is a naive implementation that uses a map
 // and doesn't try to be clever about memory usage or allocations
 type spanCache_basic struct {
+	Cfg   config.Config   `inject:""`
 	Clock clockwork.Clock `inject:""`
 	cache map[string]*types.Trace
 	mut   sync.RWMutex
@@ -67,25 +70,39 @@ func (sc *spanCache_basic) Get(traceID string) *types.Trace {
 }
 
 func (sc *spanCache_basic) GetOldest(fract float64) []string {
+	type tidWithImpact struct {
+		id     string
+		impact int
+	}
 	n := int(float64(len(sc.cache)) * fract)
-	ids := make([]string, 0, len(sc.cache))
+	ids := make([]tidWithImpact, 0, len(sc.cache))
+
+	timeout, err := sc.Cfg.GetTraceTimeout()
+	if err != nil {
+		timeout = 60 * time.Second
+	}
 
 	sc.mut.RLock()
 	for traceID := range sc.cache {
-		ids = append(ids, traceID)
+		ids = append(ids, tidWithImpact{
+			id:     traceID,
+			impact: sc.cache[traceID].CacheImpact(timeout),
+		})
 	}
-	sort.Slice(ids, func(i, j int) bool {
-		t1 := sc.cache[ids[i]]
-		t2 := sc.cache[ids[j]]
-		return t1.ArrivalTime.Before(t2.ArrivalTime)
-	})
 	sc.mut.RUnlock()
+	// Sort traces by CacheImpact, heaviest first
+	sort.Slice(ids, func(i, j int) bool {
+		return ids[i].impact > ids[j].impact
+	})
 
 	if len(ids) < n {
 		n = len(ids)
 	}
-	// truncate the slice to the desired length AND capacity without reallocating
-	return ids[:n:n]
+	ret := make([]string, n)
+	for i := 0; i < n; i++ {
+		ret[i] = ids[i].id
+	}
+	return ret
 }
 
 // This gets a batch of up to n traceIDs from the cache; it's used to get a
