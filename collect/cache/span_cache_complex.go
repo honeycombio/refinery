@@ -14,7 +14,7 @@ import (
 // this cache is designed to be performant by pooling the allocated objects and
 // reusing them.
 // List of spans have capacity
-type spanCache_complex struct {
+type SpanCache_complex struct {
 	Cfg       config.Config   `inject:""`
 	Clock     clockwork.Clock `inject:""`
 	active    map[string]int
@@ -29,12 +29,12 @@ type spanCache_complex struct {
 }
 
 // ensure that spanCache implements SpanCache
-var _ SpanCache = &spanCache_complex{}
+var _ SpanCache = &SpanCache_complex{}
 
 // ensure that spanCache implements startstop.Starter
-var _ startstop.Starter = &spanCache_complex{}
+var _ startstop.Starter = &SpanCache_complex{}
 
-func (sc *spanCache_complex) Start() error {
+func (sc *SpanCache_complex) Start() error {
 	cfg, err := sc.Cfg.GetCollectionConfig()
 	if err != nil {
 		return err
@@ -45,11 +45,11 @@ func (sc *spanCache_complex) Start() error {
 	return nil
 }
 
-func (sc *spanCache_complex) GetClock() clockwork.Clock {
+func (sc *SpanCache_complex) GetClock() clockwork.Clock {
 	return sc.Clock
 }
 
-func (sc *spanCache_complex) Set(sp *types.Span) error {
+func (sc *SpanCache_complex) Set(sp *types.Span) error {
 	var trace *types.Trace
 	traceID := sp.TraceID
 	sc.mut.Lock()
@@ -84,7 +84,7 @@ func (sc *spanCache_complex) Set(sp *types.Span) error {
 	return nil
 }
 
-func (sc *spanCache_complex) Get(traceID string) *types.Trace {
+func (sc *SpanCache_complex) Get(traceID string) *types.Trace {
 	sc.mut.RLock()
 	defer sc.mut.RUnlock()
 	index, ok := sc.active[traceID]
@@ -98,7 +98,7 @@ func (sc *spanCache_complex) Get(traceID string) *types.Trace {
 // which traces to drop when the cache is full. It's moderately expensive
 // because it has to sort the traces by arrival time, but I couldn't find a
 // faster way to do it.
-func (sc *spanCache_complex) GetOldest(fract float64) []string {
+func (sc *SpanCache_complex) GetOldest(fract float64) []string {
 	type tidWithImpact struct {
 		id     string
 		impact int
@@ -142,7 +142,7 @@ func (sc *spanCache_complex) GetOldest(fract float64) []string {
 // then it will start over from a fresh snapshot.
 // GetTraceIDs is not concurrency-safe; it is intended to be called from a
 // single goroutine.
-func (sc *spanCache_complex) GetTraceIDs(n int) []string {
+func (sc *SpanCache_complex) GetTraceIDs(n int) []string {
 	// this is the only function that looks at current or nextix so it
 	// doesn't need to lock those fields
 	if sc.current == nil || sc.nextix >= len(sc.current) {
@@ -160,7 +160,7 @@ func (sc *spanCache_complex) GetTraceIDs(n int) []string {
 	return sc.current[sc.nextix : sc.nextix+n]
 }
 
-func (sc *spanCache_complex) Remove(traceID string) {
+func (sc *SpanCache_complex) Remove(traceID string) {
 	sc.mut.Lock()
 	defer sc.mut.Unlock()
 	index, ok := sc.active[traceID]
@@ -172,7 +172,7 @@ func (sc *spanCache_complex) Remove(traceID string) {
 	sc.freeSlots = append(sc.freeSlots, index)
 }
 
-func (sc *spanCache_complex) Len() int {
+func (sc *SpanCache_complex) Len() int {
 	sc.mut.RLock()
 	defer sc.mut.RUnlock()
 	return len(sc.active)

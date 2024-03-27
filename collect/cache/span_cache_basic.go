@@ -13,7 +13,7 @@ import (
 
 // this is a naive implementation that uses a map
 // and doesn't try to be clever about memory usage or allocations
-type spanCache_basic struct {
+type SpanCache_basic struct {
 	Cfg   config.Config   `inject:""`
 	Clock clockwork.Clock `inject:""`
 	cache map[string]*types.Trace
@@ -26,21 +26,21 @@ type spanCache_basic struct {
 }
 
 // ensure that spanCache implements SpanCache
-var _ SpanCache = &spanCache_basic{}
+var _ SpanCache = &SpanCache_basic{}
 
 // ensure that spanCache implements startstop.Starter
-var _ startstop.Starter = &spanCache_basic{}
+var _ startstop.Starter = &SpanCache_basic{}
 
-func (sc *spanCache_basic) Start() error {
+func (sc *SpanCache_basic) Start() error {
 	sc.cache = make(map[string]*types.Trace)
 	return nil
 }
 
-func (sc *spanCache_basic) GetClock() clockwork.Clock {
+func (sc *SpanCache_basic) GetClock() clockwork.Clock {
 	return sc.Clock
 }
 
-func (sc *spanCache_basic) Set(sp *types.Span) error {
+func (sc *SpanCache_basic) Set(sp *types.Span) error {
 	sc.mut.Lock()
 	defer sc.mut.Unlock()
 	traceID := sp.TraceID
@@ -59,7 +59,7 @@ func (sc *spanCache_basic) Set(sp *types.Span) error {
 	return nil
 }
 
-func (sc *spanCache_basic) Get(traceID string) *types.Trace {
+func (sc *SpanCache_basic) Get(traceID string) *types.Trace {
 	sc.mut.RLock()
 	defer sc.mut.RUnlock()
 	trace, ok := sc.cache[traceID]
@@ -69,7 +69,7 @@ func (sc *spanCache_basic) Get(traceID string) *types.Trace {
 	return trace
 }
 
-func (sc *spanCache_basic) GetOldest(fract float64) []string {
+func (sc *SpanCache_basic) GetOldest(fract float64) []string {
 	type tidWithImpact struct {
 		id     string
 		impact int
@@ -112,7 +112,7 @@ func (sc *spanCache_basic) GetOldest(fract float64) []string {
 // then it will start over from a fresh snapshot.
 // GetTraceIDs is not concurrency-safe; it is intended to be called from a
 // single goroutine.
-func (sc *spanCache_basic) GetTraceIDs(n int) []string {
+func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 	// this is the only function that looks at current or nextix so it
 	// doesn't need to lock those fields
 	if sc.current == nil || sc.nextix >= len(sc.current) {
@@ -130,13 +130,13 @@ func (sc *spanCache_basic) GetTraceIDs(n int) []string {
 	return sc.current[sc.nextix : sc.nextix+n]
 }
 
-func (sc *spanCache_basic) Remove(traceID string) {
+func (sc *SpanCache_basic) Remove(traceID string) {
 	sc.mut.Lock()
 	defer sc.mut.Unlock()
 	delete(sc.cache, traceID)
 }
 
-func (sc *spanCache_basic) Len() int {
+func (sc *SpanCache_basic) Len() int {
 	sc.mut.RLock()
 	defer sc.mut.RUnlock()
 	return len(sc.cache)

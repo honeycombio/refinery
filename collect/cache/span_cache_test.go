@@ -22,12 +22,12 @@ func getCache(typ string, clock clockwork.Clock) SpanCache {
 	}
 	switch typ {
 	case "basic":
-		return &spanCache_basic{
+		return &SpanCache_basic{
 			Cfg:   cfg,
 			Clock: clock,
 		}
 	case "complex":
-		return &spanCache_complex{
+		return &SpanCache_complex{
 			Cfg:   cfg,
 			Clock: clock,
 		}
