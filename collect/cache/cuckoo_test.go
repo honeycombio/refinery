@@ -5,20 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/sourcegraph/conc/pool"
 )
 
 // genID returns a random hex string of length numChars
 func genID(numChars int) string {
-	seed := 3565269841805
-
 	const charset = "abcdef0123456789"
 
 	id := make([]byte, numChars)
 	for i := 0; i < numChars; i++ {
-		id[i] = charset[int(wyhash.Rng(seed))%len(charset)]
+		id[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(id)
 }
