@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/facebookgo/startstop"
@@ -74,18 +75,24 @@ func (sc *spanCache_basic) Get(traceID string) *types.Trace {
 // appropriate fraction of traces
 func (sc *spanCache_basic) GetOldest(fract float64) []string {
 	n := int(float64(len(sc.cache)) * fract)
-	ret := make([]string, 0, n)
+	ids := make([]string, 0, len(sc.cache))
+
 	sc.mut.RLock()
-	i := 0
 	for traceID := range sc.cache {
-		ret = append(ret, traceID)
-		i++
-		if i >= n {
-			break
-		}
+		ids = append(ids, traceID)
 	}
+	sort.Slice(ids, func(i, j int) bool {
+		t1 := sc.cache[ids[i]]
+		t2 := sc.cache[ids[j]]
+		return t1.ArrivalTime.Before(t2.ArrivalTime)
+	})
 	sc.mut.RUnlock()
-	return ret
+
+	if len(ids) < n {
+		n = len(ids)
+	}
+	// truncate the slice to the desired length AND capacity without reallocating
+	return ids[:n:n]
 }
 
 // This gets a batch of up to n traceIDs from the cache; it's used to get a

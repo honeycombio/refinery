@@ -104,21 +104,30 @@ func (sc *spanCache_complex) Get(traceID string) *types.Trace {
 // faster way to do it.
 func (sc *spanCache_complex) GetOldest(fract float64) []string {
 	n := int(float64(len(sc.active)) * fract)
-	ret := make([]string, 0, n)
+	ids := make([]int, 0, len(sc.active))
+
 	sc.mut.RLock()
-	for traceID := range sc.active {
-		ret = append(ret, traceID)
+	for _, ix := range sc.active {
+		ids = append(ids, ix)
 	}
-	sc.mut.RUnlock()
-	sort.Slice(ret, func(i, j int) bool {
-		t1 := sc.cache[sc.active[ret[i]]]
-		t2 := sc.cache[sc.active[ret[j]]]
+	sort.Slice(ids, func(i, j int) bool {
+		t1 := sc.cache[ids[i]]
+		t2 := sc.cache[ids[j]]
 		return t1.ArrivalTime.Before(t2.ArrivalTime)
 	})
-	if len(ret) < n {
-		n = len(ret)
+	sc.mut.RUnlock()
+
+	if len(ids) < n {
+		n = len(ids)
 	}
-	return ret[:n]
+
+	ret := make([]string, n)
+	for i := 0; i < n; i++ {
+		ret[i] = sc.cache[ids[i]].TraceID
+	}
+
+	// truncate the slice to the desired length AND capacity without reallocating
+	return ret
 }
 
 // This gets a batch of up to n traceIDs from the cache; it's used to get a
