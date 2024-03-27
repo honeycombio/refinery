@@ -40,7 +40,6 @@ func TestSpanCache(t *testing.T) {
 
 			err := c.(startstop.Starter).Start()
 			require.NoError(t, err)
-			defer c.(startstop.Stopper).Stop()
 
 			// test that we can add a span
 			span := &types.Span{
@@ -65,8 +64,9 @@ func TestSpanCache(t *testing.T) {
 
 			// test that we can remove the span
 			c.Remove("trace1")
-			c.Get("trace1")
-			require.Equal(t, 0, c.Len())
+			trace = c.Get("trace1")
+			assert.Nil(t, trace)
+			assert.Equal(t, 0, c.Len())
 		})
 	}
 }
@@ -78,7 +78,6 @@ func TestGetOldest(t *testing.T) {
 
 			err := c.(startstop.Starter).Start()
 			require.NoError(t, err)
-			defer c.(startstop.Stopper).Stop()
 
 			const numIDs = 20
 			ids := make([]string, numIDs)
@@ -114,7 +113,6 @@ func BenchmarkSpanCacheAdd(b *testing.B) {
 		b.Run(typ, func(b *testing.B) {
 
 			c.(startstop.Starter).Start()
-			defer c.(startstop.Stopper).Stop()
 
 			ids := make([]string, b.N)
 			for i := 0; i < b.N; i++ {
@@ -144,7 +142,6 @@ func BenchmarkSpanCacheGet(b *testing.B) {
 		b.Run(typ, func(b *testing.B) {
 
 			c.(startstop.Starter).Start()
-			defer c.(startstop.Stopper).Stop()
 
 			ids := make([]string, b.N)
 			for i := 0; i < b.N; i++ {
@@ -178,7 +175,6 @@ func BenchmarkSpanCacheGetTraceIDs(b *testing.B) {
 		b.Run(typ, func(b *testing.B) {
 
 			c.(startstop.Starter).Start()
-			defer c.(startstop.Stopper).Stop()
 
 			ids := make([]string, b.N)
 			for i := 0; i < b.N; i++ {
@@ -212,7 +208,6 @@ func BenchmarkSpanCacheGetOldest(b *testing.B) {
 		b.Run(typ, func(b *testing.B) {
 
 			c.(startstop.Starter).Start()
-			defer c.(startstop.Stopper).Stop()
 
 			ids := make([]string, b.N)
 			for i := 0; i < b.N; i++ {
@@ -248,7 +243,6 @@ func BenchmarkSpanCacheMixed(b *testing.B) {
 		b.Run(typ, func(b *testing.B) {
 
 			c.(startstop.Starter).Start()
-			defer c.(startstop.Stopper).Stop()
 
 			ids := make([]string, numIDs)
 			for i := 0; i < numIDs; i++ {

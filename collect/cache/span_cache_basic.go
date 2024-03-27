@@ -12,11 +12,14 @@ import (
 // this is a naive implementation that uses a map
 // and doesn't try to be clever about memory usage or allocations
 type spanCache_basic struct {
-	Clock   clockwork.Clock `inject:""`
-	cache   map[string]*types.Trace
+	Clock clockwork.Clock `inject:""`
+	cache map[string]*types.Trace
+	mut   sync.RWMutex
+
+	// current and nextix are used only by the GetTraceIDs method and are not protected
+	// by the mutex; they are only accessed by the goroutine that calls GetTraceIDs.
 	current []string
 	nextix  int
-	mut     sync.RWMutex
 }
 
 // ensure that spanCache implements SpanCache
@@ -25,16 +28,8 @@ var _ SpanCache = &spanCache_basic{}
 // ensure that spanCache implements startstop.Starter
 var _ startstop.Starter = &spanCache_basic{}
 
-// ensure that spanCache implements startstop.Stopper
-var _ startstop.Stopper = &spanCache_basic{}
-
 func (sc *spanCache_basic) Start() error {
 	sc.cache = make(map[string]*types.Trace)
-	return nil
-}
-
-func (sc *spanCache_basic) Stop() error {
-	sc.cache = nil
 	return nil
 }
 
@@ -98,6 +93,8 @@ func (sc *spanCache_basic) GetOldest(fract float64) []string {
 // returns a slice of traceIDs that were current at the time of the call. It
 // will return successive slices of traceIDs until it has returned all of them,
 // then it will start over from a fresh snapshot.
+// GetTraceIDs is not concurrency-safe; it is intended to be called from a
+// single goroutine.
 func (sc *spanCache_basic) GetTraceIDs(n int) []string {
 	// this is the only function that looks at current or nextix so it
 	// doesn't need to lock those fields
@@ -123,5 +120,7 @@ func (sc *spanCache_basic) Remove(traceID string) {
 }
 
 func (sc *spanCache_basic) Len() int {
+	sc.mut.RLock()
+	defer sc.mut.RUnlock()
 	return len(sc.cache)
 }

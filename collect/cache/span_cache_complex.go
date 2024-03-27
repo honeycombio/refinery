@@ -19,9 +19,12 @@ type spanCache_complex struct {
 	active    map[string]int
 	freeSlots []int
 	cache     []*types.Trace
-	current   []string
-	nextix    int
 	mut       sync.RWMutex
+
+	// current and nextix are used only by the GetTraceIDs method and are not protected
+	// by the mutex; they are only accessed by the goroutine that calls GetTraceIDs.
+	current []string
+	nextix  int
 }
 
 // ensure that spanCache implements SpanCache
@@ -29,9 +32,6 @@ var _ SpanCache = &spanCache_complex{}
 
 // ensure that spanCache implements startstop.Starter
 var _ startstop.Starter = &spanCache_complex{}
-
-// ensure that spanCache implements startstop.Stopper
-var _ startstop.Stopper = &spanCache_complex{}
 
 func (sc *spanCache_complex) Start() error {
 	cfg, err := sc.Cfg.GetCollectionConfig()
@@ -41,11 +41,6 @@ func (sc *spanCache_complex) Start() error {
 	sc.active = make(map[string]int, cfg.CacheCapacity)
 	sc.freeSlots = make([]int, 0, cfg.CacheCapacity)
 	sc.cache = make([]*types.Trace, 0, cfg.CacheCapacity)
-	return nil
-}
-
-func (sc *spanCache_complex) Stop() error {
-	sc.cache = nil
 	return nil
 }
 
@@ -133,6 +128,8 @@ func (sc *spanCache_complex) GetOldest(fract float64) []string {
 // returns a slice of traceIDs that were current at the time of the call. It
 // will return successive slices of traceIDs until it has returned all of them,
 // then it will start over from a fresh snapshot.
+// GetTraceIDs is not concurrency-safe; it is intended to be called from a
+// single goroutine.
 func (sc *spanCache_complex) GetTraceIDs(n int) []string {
 	// this is the only function that looks at current or nextix so it
 	// doesn't need to lock those fields
@@ -164,5 +161,7 @@ func (sc *spanCache_complex) Remove(traceID string) {
 }
 
 func (sc *spanCache_complex) Len() int {
+	sc.mut.RLock()
+	defer sc.mut.RUnlock()
 	return len(sc.active)
 }
