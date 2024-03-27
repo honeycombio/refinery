@@ -3,6 +3,7 @@ package cache
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -105,10 +106,14 @@ func (sc *spanCache_complex) GetOldest(fract float64) []string {
 	for _, ix := range sc.active {
 		ids = append(ids, ix)
 	}
+	timeout, err := sc.Cfg.GetTraceTimeout()
+	if err != nil {
+		timeout = 60 * time.Second
+	} // Sort traces by CacheImpact, heaviest first
 	sort.Slice(ids, func(i, j int) bool {
 		t1 := sc.cache[ids[i]]
 		t2 := sc.cache[ids[j]]
-		return t1.ArrivalTime.Before(t2.ArrivalTime)
+		return t1.CacheImpact(timeout) > t2.CacheImpact(timeout)
 	})
 	sc.mut.RUnlock()
 

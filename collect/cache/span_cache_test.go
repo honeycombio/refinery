@@ -3,6 +3,7 @@ package cache
 import (
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -17,6 +18,7 @@ func getCache(typ string, clock clockwork.Clock) SpanCache {
 		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity: 10000,
 		},
+		GetTraceTimeoutVal: 10 * time.Second,
 	}
 	switch typ {
 	case "basic":
@@ -91,8 +93,9 @@ func TestGetOldest(t *testing.T) {
 			}
 			for i := 0; i < numIDs; i++ {
 				span := &types.Span{
-					TraceID: ids[i],
-					Event:   evt,
+					TraceID:  ids[i],
+					DataSize: 100 + i,
+					Event:    evt,
 				}
 				err := c.Set(span)
 				require.NoError(t, err)
@@ -204,7 +207,7 @@ func BenchmarkSpanCacheGetTraceIDs(b *testing.B) {
 
 func BenchmarkSpanCacheGetOldest(b *testing.B) {
 	for _, typ := range []string{"basic", "complex"} {
-		c := getCache(typ, clockwork.NewRealClock())
+		c := getCache(typ, clockwork.NewFakeClock())
 		b.Run(typ, func(b *testing.B) {
 
 			c.(startstop.Starter).Start()
@@ -222,10 +225,12 @@ func BenchmarkSpanCacheGetOldest(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				span := &types.Span{
 					TraceID:     ids[i],
+					DataSize:    100 + i, // so we don't sort everything together
 					Event:       evt,
 					ArrivalTime: c.GetClock().Now(),
 				}
 				c.Set(span)
+				c.GetClock().(clockwork.FakeClock).Advance(time.Millisecond)
 			}
 			b.ResetTimer()
 
@@ -268,8 +273,9 @@ func BenchmarkSpanCacheMixed(b *testing.B) {
 					c.Get(ids[i%numIDs])
 				default:
 					span := &types.Span{
-						TraceID: ids[i%numIDs],
-						Event:   evt,
+						TraceID:  ids[i%numIDs],
+						DataSize: 100,
+						Event:    evt,
 					}
 					c.Set(span)
 				}
