@@ -71,6 +71,43 @@ func TestSpanCache(t *testing.T) {
 	}
 }
 
+func TestGetOldest(t *testing.T) {
+	for _, typ := range []string{"basic", "complex"} {
+		c := getCache(typ, clockwork.NewRealClock())
+		t.Run(typ, func(t *testing.T) {
+
+			err := c.(startstop.Starter).Start()
+			require.NoError(t, err)
+			defer c.(startstop.Stopper).Stop()
+
+			const numIDs = 20
+			ids := make([]string, numIDs)
+			for i := 0; i < numIDs; i++ {
+				ids[i] = genID(32)
+			}
+			evt := types.Event{
+				APIHost: "apihost",
+				APIKey:  "apikey",
+				Dataset: "dataset",
+			}
+			for i := 0; i < numIDs; i++ {
+				span := &types.Span{
+					TraceID: ids[i],
+					Event:   evt,
+				}
+				err := c.Set(span)
+				require.NoError(t, err)
+			}
+
+			// test that we can retrieve the oldest span
+			traceIDs := c.GetOldest(0.1)
+			require.Len(t, traceIDs, 2)
+			assert.Equal(t, ids[0], traceIDs[0])
+			assert.Equal(t, ids[1], traceIDs[1])
+		})
+	}
+}
+
 func BenchmarkSpanCacheAdd(b *testing.B) {
 	for _, typ := range []string{"basic", "complex"} {
 		c := getCache(typ, clockwork.NewFakeClock())
@@ -168,6 +205,7 @@ func BenchmarkSpanCacheGetTraceIDs(b *testing.B) {
 		})
 	}
 }
+
 func BenchmarkSpanCacheGetOldest(b *testing.B) {
 	for _, typ := range []string{"basic", "complex"} {
 		c := getCache(typ, clockwork.NewRealClock())
@@ -197,7 +235,7 @@ func BenchmarkSpanCacheGetOldest(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				c.GetOldest(.10)
+				c.GetOldest(.1)
 			}
 		})
 	}
