@@ -66,6 +66,8 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 			DroppedSize:       1000,
 			SizeCheckInterval: duration("1s"),
 		},
+		// by default redis only has 16 database index slots available
+		GetRedisDatabaseVal: rand.Intn(16),
 	}
 
 	decisionCache := &cache.CuckooSentCache{}
@@ -106,6 +108,9 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	}
 
 	stopper := func() {
+		conn := redis.Get()
+		conn.Do("FLUSHDB")
+		conn.Close()
 		startstop.Stop(g.Objects(), ststLogger)
 	}
 
@@ -116,7 +121,6 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
 	defer stopper()
-	defer cleanupRedisStore(t, store)
 
 	randomNum := rand.Intn(500)
 	span := &CentralSpan{
@@ -144,7 +148,6 @@ func TestSingleTraceOperation(t *testing.T) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
 	defer stopper()
-	defer cleanupRedisStore(t, store)
 
 	span := &CentralSpan{
 		TraceID:  "trace1",
@@ -173,7 +176,7 @@ func TestSingleTraceOperation(t *testing.T) {
 		assert.Equal(collect, 1, len(states))
 		if len(states) > 0 {
 			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, DecisionDelay, states[0].State)
+			assert.Equal(collect, DecisionDelay, states[0].State, fmt.Sprintf("unexpected state for trace %s", states[0].TraceID))
 		}
 	}, 1*time.Second, 10*time.Millisecond)
 
@@ -184,16 +187,15 @@ func TestSingleTraceOperation(t *testing.T) {
 		assert.Equal(collect, 1, len(states))
 		if len(states) > 0 {
 			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, DecisionDelay, states[0].State)
+			assert.Equal(collect, ReadyToDecide, states[0].State, fmt.Sprintf("unexpected state for trace %s", states[0].TraceID))
 		}
-	}, 1*time.Second, 10*time.Millisecond)
+	}, 3*time.Second, 100*time.Millisecond)
 }
 
 func TestBasicStoreOperation(t *testing.T) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
 	defer stopper()
-	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
 	traceids := make([]string, 0)
@@ -223,7 +225,6 @@ func TestBasicStoreOperation(t *testing.T) {
 	assert.Equal(t, 10, len(traceids))
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
-		fmt.Println(states, err)
 		return err == nil && len(states) == 10
 	}, 1*time.Second, 100*time.Millisecond)
 
@@ -233,7 +234,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		assert.NoError(collect, err)
 		assert.Equal(collect, 10, len(states))
 		for _, state := range states {
-			assert.Equal(collect, ReadyToDecide, state.State)
+			assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
 		}
 	}, 3*time.Second, 100*time.Millisecond)
 
@@ -252,7 +253,6 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
 	defer stopper()
-	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
 	numberOfTraces := 11
@@ -268,7 +268,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 				SpanID:   fmt.Sprintf("span%d", s),
 				ParentID: fmt.Sprintf("span%d", s-1),
 			}
-			err = store.WriteSpan(ctx, span)
+			err := store.WriteSpan(ctx, span)
 			require.NoError(t, err)
 		}
 		// now write the root span
@@ -308,7 +308,6 @@ func TestSetTraceStatuses(t *testing.T) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(t, err)
 	defer stopper()
-	defer cleanupRedisStore(t, store)
 
 	ctx := context.Background()
 	numberOfTraces := 5
@@ -430,7 +429,6 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
 	defer stopper()
-	defer cleanupRedisStore(b, store)
 
 	spans := make([]*CentralSpan, 0)
 	for i := 0; i < 100; i++ {
@@ -451,7 +449,6 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
 	defer stopper()
-	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
 	spans := make([]*CentralSpan, 0)
@@ -474,7 +471,6 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
 	defer stopper()
-	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
 	spans := make([]*CentralSpan, 0)
@@ -500,7 +496,6 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	store, stopper, err := getAndStartSmartWrapper(storeType)
 	require.NoError(b, err)
 	defer stopper()
-	defer cleanupRedisStore(b, store)
 
 	ctx := context.Background()
 	spans := make([]*CentralSpan, 0)
@@ -517,18 +512,5 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		store.GetTracesForState(ctx, ReadyToDecide)
-	}
-}
-
-func cleanupRedisStore(t testing.TB, sw *SmartWrapper) {
-	store := sw.BasicStore
-	if r, ok := store.(*RedisBasicStore); ok {
-		conn := r.RedisClient.Get()
-		defer conn.Close()
-
-		_, err := conn.Do("FLUSHALL")
-		if err != nil {
-			t.Logf("failed to flush redis: %s", err)
-		}
 	}
 }
