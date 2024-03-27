@@ -55,7 +55,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 
 	cfg := config.MockConfig{
 		StoreOptions: config.SmartWrapperOptions{
-			SpanChannelSize: 100,
+			SpanChannelSize: 200,
 			StateTicker:     duration("50ms"),
 			SendDelay:       duration("200ms"),
 			TraceTimeout:    duration("500ms"),
@@ -125,7 +125,8 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 		ParentID: fmt.Sprintf("parent%d", randomNum), // we don't want this to be a root span
 	}
 	ctx := context.Background()
-	store.WriteSpan(ctx, span)
+	err = store.WriteSpan(ctx, span)
+	require.NoError(t, err)
 
 	// make sure that it arrived in the collecting state
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -151,7 +152,8 @@ func TestSingleTraceOperation(t *testing.T) {
 		ParentID: "parent1", // we don't want this to be a root span
 	}
 	ctx := context.Background()
-	store.WriteSpan(ctx, span)
+	err = store.WriteSpan(ctx, span)
+	require.NoError(t, err)
 
 	// make sure that it arrived in the collecting state
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -196,8 +198,8 @@ func TestBasicStoreOperation(t *testing.T) {
 	ctx := context.Background()
 	traceids := make([]string, 0)
 
-	for t := 0; t < 10; t++ {
-		tid := fmt.Sprintf("trace%d", t)
+	for tr := 0; tr < 10; tr++ {
+		tid := fmt.Sprintf("trace%d", tr)
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -206,14 +208,16 @@ func TestBasicStoreOperation(t *testing.T) {
 				SpanID:   fmt.Sprintf("span%d", s),
 				ParentID: fmt.Sprintf("span%d", s-1),
 			}
-			store.WriteSpan(ctx, span)
+			err = store.WriteSpan(ctx, span)
+			require.NoError(t, err)
 		}
 		// now write the root span
 		span := &CentralSpan{
 			TraceID: tid,
 			SpanID:  "span0",
 		}
-		store.WriteSpan(ctx, span)
+		err = store.WriteSpan(ctx, span)
+		require.NoError(t, err)
 	}
 
 	assert.Equal(t, 10, len(traceids))
@@ -254,8 +258,8 @@ func TestReadyForDecisionLoop(t *testing.T) {
 	numberOfTraces := 11
 	traceids := make([]string, 0)
 
-	for t := 0; t < numberOfTraces; t++ {
-		tid := fmt.Sprintf("trace%02d", t)
+	for tr := 0; tr < numberOfTraces; tr++ {
+		tid := fmt.Sprintf("trace%02d", tr)
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -264,18 +268,19 @@ func TestReadyForDecisionLoop(t *testing.T) {
 				SpanID:   fmt.Sprintf("span%d", s),
 				ParentID: fmt.Sprintf("span%d", s-1),
 			}
-			store.WriteSpan(ctx, span)
+			err = store.WriteSpan(ctx, span)
+			require.NoError(t, err)
 		}
 		// now write the root span
 		span := &CentralSpan{
 			TraceID: tid,
 			SpanID:  "span0",
 		}
-		store.WriteSpan(ctx, span)
+		err = store.WriteSpan(ctx, span)
+		require.NoError(t, err)
 	}
 
 	assert.Equal(t, numberOfTraces, len(traceids))
-	fmt.Println(traceids)
 	assert.Eventually(t, func() bool {
 		states, err := store.GetStatusForTraces(ctx, traceids)
 		return err == nil && len(states) == numberOfTraces
@@ -315,8 +320,8 @@ func TestSetTraceStatuses(t *testing.T) {
 	require.True(t, ok)
 	require.EqualValues(t, 0, value)
 
-	for t := 0; t < numberOfTraces; t++ {
-		tid := fmt.Sprintf("trace%02d", t)
+	for tr := 0; tr < numberOfTraces; tr++ {
+		tid := fmt.Sprintf("trace%02d", tr)
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -325,14 +330,16 @@ func TestSetTraceStatuses(t *testing.T) {
 				SpanID:   fmt.Sprintf("span%d", s),
 				ParentID: fmt.Sprintf("span%d", s-1),
 			}
-			store.WriteSpan(ctx, span)
+			err = store.WriteSpan(ctx, span)
+			require.NoError(t, err)
 		}
 		// now write the root span
 		span := &CentralSpan{
 			TraceID: tid,
 			SpanID:  "span0",
 		}
-		store.WriteSpan(ctx, span)
+		err = store.WriteSpan(ctx, span)
+		require.NoError(t, err)
 	}
 
 	assert.Equal(t, numberOfTraces, len(traceids))
