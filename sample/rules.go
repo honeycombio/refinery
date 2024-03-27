@@ -13,11 +13,12 @@ import (
 )
 
 type RulesBasedSampler struct {
-	Config   *config.RulesBasedSamplerConfig
-	Logger   logger.Logger
-	Metrics  metrics.Metrics
-	samplers map[string]Sampler
-	prefix   string
+	Config    *config.RulesBasedSamplerConfig
+	Logger    logger.Logger
+	Metrics   metrics.Metrics
+	samplers  map[string]Sampler
+	prefix    string
+	keyFields []string
 }
 
 const RootPrefix = "root."
@@ -33,6 +34,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.Metrics.Register(s.prefix+"sample_rate", "histogram")
 
 	s.samplers = make(map[string]Sampler)
+	s.keyFields = s.Config.GetSamplingFields()
 
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
@@ -147,6 +149,10 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	}
 
 	return 1, true, "no rule matched", ""
+}
+
+func (s *RulesBasedSampler) GetKeyFields() []string {
+	return s.keyFields
 }
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {

@@ -221,9 +221,11 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 		}
 	}
 
-	err := r.traces.storeSpan(ctx, conn, span)
-	if err != nil {
-		return err
+	if span.SpanID != "" {
+		err := r.traces.storeSpan(ctx, conn, span)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
