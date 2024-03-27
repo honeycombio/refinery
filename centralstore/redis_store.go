@@ -250,11 +250,13 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 		return nil, err
 	}
 
+	errs := make([]error, 0, len(tmpSpan))
 	var rootSpan *CentralSpan
 	for _, d := range tmpSpan {
 		span := &CentralSpan{}
 		err := json.Unmarshal(d.Span, span)
 		if err != nil {
+			errs = append(errs, err)
 			continue
 		}
 		spans = append(spans, span)
@@ -268,7 +270,7 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 		TraceID: traceID,
 		Root:    rootSpan,
 		Spans:   spans,
-	}, nil
+	}, errors.Join(errs...)
 }
 
 func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
@@ -323,6 +325,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		if err != nil {
 			return nil, err
 		}
+
 		notExist := make([]string, 0, len(pendingTraceIDs))
 		for id, timestamp := range timestampsByTraceIDs {
 			if timestamp.IsZero() {
@@ -842,6 +845,7 @@ func (t *traceStateProcessor) Stop() {
 func (t *traceStateProcessor) addNewTrace(ctx context.Context, conn redis.Conn, traceID string) error {
 	ctx, span := t.tracer.Start(ctx, "addNewTrace", trace.WithAttributes(attribute.KeyValue{Key: "trace_id", Value: attribute.StringValue(traceID)}))
 	defer span.End()
+
 	_, err := t.applyStateChange(ctx, conn, newTraceStateChangeEvent(Unknown, Collecting), []string{traceID})
 	return err
 }
@@ -1022,8 +1026,9 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 		otelutil.AddSpanField(span, "error", err.Error())
 		return nil, err
 	}
+
 	if len(result) == 0 {
-		return nil, errors.New("failed to apply state changes")
+		return nil, fmt.Errorf("failed to apply state change %s for traces %v", stateChange.string(), traceIDs)
 	}
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"result": result,
@@ -1089,6 +1094,7 @@ const stateChangeScript = `
 	   -- this formatting logic should match with the formatting for the stateChangeEvent struct
 	   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
 	   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
+
 	   if (changeEventIsValid == 0) then
 	     do break end
 	   end
