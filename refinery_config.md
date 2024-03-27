@@ -1017,6 +1017,16 @@ A trace without a `parent_id` is assumed to be a root span.
 - Type: `stringarray`
 - Example: `trace.parent_id,parentId`
 
+### `SpanNames`
+
+`SpanNames` is the list of field names to use for the span ID.
+
+The first field in the list that is present in an event will be used as the span ID.
+
+- Eligible for live reload.
+- Type: `stringarray`
+- Example: `trace.span_id,spanId`
+
 ## gRPC Server Parameters
 
 `GRPCServerParameters` controls the parameters of the gRPC server used to receive OpenTelemetry data in gRPC format.

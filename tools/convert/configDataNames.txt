@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-03-22 at 02:37:40 UTC.
+# Automatically generated on 2024-03-27 at 19:47:26 UTC.
 
 General:
   - ConfigurationVersion
@@ -201,6 +201,8 @@ IDFields:
   - TraceNames
 
   - ParentNames
+
+  - SpanNames
 
 
 GRPCServerParameters:
