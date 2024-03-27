@@ -125,8 +125,6 @@ func (sc *spanCache_complex) GetOldest(fract float64) []string {
 	for i := 0; i < n; i++ {
 		ret[i] = sc.cache[ids[i]].TraceID
 	}
-
-	// truncate the slice to the desired length AND capacity without reallocating
 	return ret
 }
 
