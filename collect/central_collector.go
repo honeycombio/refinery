@@ -232,7 +232,6 @@ func (c *CentralCollector) sendTracesInCache() {
 		c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
 			TraceID: t.TraceID,
 		})
-		c.cache.Remove(t.TraceID)
 	}
 }
 

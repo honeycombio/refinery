@@ -54,9 +54,8 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	// adding one span with parent ID should:
 	// * create the trace in the cache
 	// * send the trace to the central store
-	// * trace is removed from cache due to sendTickerInterval
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Nil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+		assert.NotNil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	}, 5*time.Second, 500*time.Millisecond)
 
 	ctx := context.Background()
@@ -79,9 +78,8 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	// adding one span with parent ID should:
 	// * create the trace in the cache
 	// * send the trace to the central store
-	// * trace is removed from cache due to sendTickerInterval
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Nil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+		assert.NotNil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	}, 5*time.Second, 500*time.Millisecond)
 	trace, err = coll.Store.GetTrace(ctx, traceID1)
 	require.NoError(t, err)
