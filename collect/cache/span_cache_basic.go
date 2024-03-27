@@ -71,8 +71,6 @@ func (sc *spanCache_basic) Get(traceID string) *types.Trace {
 	return trace
 }
 
-// doesn't bother to sort the spans by arrival time, just returns the
-// appropriate fraction of traces
 func (sc *spanCache_basic) GetOldest(fract float64) []string {
 	n := int(float64(len(sc.cache)) * fract)
 	ids := make([]string, 0, len(sc.cache))
