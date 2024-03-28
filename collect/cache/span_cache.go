@@ -27,6 +27,4 @@ type SpanCache interface {
 	Len() int
 	// Clock returns the clock used by the cache.
 	GetClock() clockwork.Clock
-
-	Resize() SpanCache
 }
