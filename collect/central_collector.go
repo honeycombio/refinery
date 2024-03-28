@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	cacheEjectBatchSize    = 100
+	cacheEjectBatchSize = 100
 )
 
 type CentralCollector struct {
@@ -33,23 +33,18 @@ type CentralCollector struct {
 	Logger         logger.Logger            `inject:""`
 	Metrics        metrics.Metrics          `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory   `inject:""`
-
+	SpanCache      cache.SpanCache          `inject:""`
 	// For test use only
 	BlockOnAddSpan bool
 
-	mutex sync.RWMutex
-	cache cache.SpanCache
-	// TODO: this can be a better name
-	datasetSamplers map[string]sample.Sampler
+	mut                   sync.RWMutex
+	samplersByDestination map[string]sample.Sampler
 
 	incoming chan *types.Span
 	reload   chan struct{}
 
-	eg   *errgroup.Group
+	eg *errgroup.Group
 }
-
-// ensure that we implement the Collector interface
-var _ Collector = (*CentralCollector)(nil)
 
 func (c *CentralCollector) Start() error {
 	// call reload config and then get the updated unique fields
@@ -58,19 +53,12 @@ func (c *CentralCollector) Start() error {
 		return err
 	}
 
-	spanCache := &cache.SpanCache_basic{
-		Cfg:   c.Config,
-		Clock: c.Clock,
-	}
-	spanCache.Start()
-	c.cache = spanCache
-
 	// listen for config reloads
 	c.Config.RegisterReloadCallback(c.sendReloadSignal)
 
 	c.incoming = make(chan *types.Span, collectorCfg.GetIncomingQueueSize())
 	c.reload = make(chan struct{}, 1)
-	c.datasetSamplers = make(map[string]sample.Sampler)
+	c.samplersByDestination = make(map[string]sample.Sampler)
 
 	// spin up one collector because this is a single threaded collector
 	c.eg = &errgroup.Group{}
@@ -99,21 +87,6 @@ func (c *CentralCollector) AddSpan(span *types.Span) error {
 	return c.add(span, c.incoming)
 }
 
-func (c *CentralCollector) AddSpanFromPeer(span *types.Span) error {
-	return nil
-}
-
-func (c *CentralCollector) Stressed() bool {
-	return false
-}
-
-func (c *CentralCollector) GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string) {
-	return 0, false, ""
-}
-
-func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
-}
-
 func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	if c.BlockOnAddSpan {
 		ch <- sp
@@ -140,7 +113,7 @@ func (c *CentralCollector) collect() {
 	for {
 		select {
 		case <-ticker.C:
-			c.sendTracesInCache()
+			c.sendTracesForDecision()
 			c.checkAlloc()
 
 		case sp, ok := <-c.incoming:
@@ -149,7 +122,7 @@ func (c *CentralCollector) collect() {
 			}
 			c.processSpan(sp)
 		case <-c.reload:
-			c.reloadConfigs()
+			// reload config
 		}
 	}
 
@@ -157,12 +130,16 @@ func (c *CentralCollector) collect() {
 
 func (c *CentralCollector) processSpan(sp *types.Span) {
 	// add the span to the cache
-	trace := c.cache.Get(sp.TraceID)
+	trace := c.SpanCache.Get(sp.TraceID)
 	if trace == nil {
-		c.cache.Set(sp)
+		err := c.SpanCache.Set(sp)
+		if err != nil {
+			c.Logger.Error().Logf("error adding span with trace ID %s to cache: %s", sp.TraceID, err)
+			return
+		}
 	}
 
-	trace = c.cache.Get(sp.TraceID)
+	trace = c.SpanCache.Get(sp.TraceID)
 
 	// construct a central store span
 	cs := &centralstore.CentralSpan{
@@ -184,11 +161,17 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 	} else {
 		logFields["environment"] = samplerKey
 	}
-	sampler, found := c.datasetSamplers[samplerKey]
+
+	c.mut.RLock()
+	sampler, found := c.samplersByDestination[samplerKey]
+	c.mut.RUnlock()
 	if !found {
 		sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
-		c.datasetSamplers[samplerKey] = sampler
+		c.mut.Lock()
+		c.samplersByDestination[samplerKey] = sampler
+		c.mut.Unlock()
 	}
+
 	// extract all key fields from the span
 	keyFields := sampler.GetKeyFields()
 	for _, keyField := range keyFields {
@@ -206,13 +189,16 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 }
 
-func (c *CentralCollector) sendTracesInCache() {
+func (c *CentralCollector) sendTracesForDecision() {
 	ctx := context.Background()
-	traces := c.cache.GetOldest(cacheEjectBatchSize)
+	traces := c.SpanCache.GetOldest(cacheEjectBatchSize)
 	for _, t := range traces {
-		c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
+		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
 			TraceID: t,
 		})
+		if err != nil {
+			c.Logger.Error().Logf("error trigger decision making process for trace %s: %s", t, err)
+		}
 	}
 }
 
@@ -241,31 +227,6 @@ func (c *CentralCollector) sendReloadSignal() {
 	}
 }
 
-func (c *CentralCollector) reloadConfigs() {
-	c.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig, err := c.Config.GetCollectionConfig()
-	if err != nil {
-		c.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
-	}
-
-	if imcConfig.CacheCapacity != c.cache.Len() {
-		c.Logger.Debug().WithField("cache_size.previous", c.cache.Len()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-		c.cache = c.cache.Resize()
-	} else {
-		c.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
-	}
-
-	// reload the cache size in smart store?
-	// c.SampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
-
-	//c.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
-
-	// clear out any samplers that we have previously created
-	// so that the new configuration will be propagated
-	c.datasetSamplers = make(map[string]sample.Sampler)
-	// TODO add resizing the LRU sent trace cache on config reload
-}
-
 func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 	for _, parentIdFieldName := range c.Config.GetParentIdFieldNames() {
 		parentId := sp.Data[parentIdFieldName]
@@ -275,4 +236,15 @@ func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 	}
 
 	return "", false
+}
+
+func (c *CentralCollector) Stressed() bool {
+	return false
+}
+
+func (c *CentralCollector) GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	return 0, false, ""
+}
+
+func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
 }

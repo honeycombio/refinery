@@ -56,7 +56,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace to the central store
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.NotNil(collect, coll.cache.Get(traceID1), "after sending the span, it should be removed from the cache")
+		assert.NotNil(collect, coll.SpanCache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	}, 5*time.Second, 500*time.Millisecond)
 
 	ctx := context.Background()
@@ -80,7 +80,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace to the central store
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.NotNil(collect, coll.cache.Get(traceID1), "after sending the span, it should be removed from the cache")
+		assert.NotNil(collect, coll.SpanCache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	}, 5*time.Second, 500*time.Millisecond)
 	trace, err = coll.Store.GetTrace(ctx, traceID1)
 	require.NoError(t, err)
@@ -113,6 +113,7 @@ func newTestCentralCollector(t *testing.T, cfg *config.MockConfig) (*CentralColl
 	basicStore := &centralstore.RedisBasicStore{}
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &centralstore.SmartWrapper{}
+	spanCache := &cache.SpanCache_complex{}
 	redis := &redis.DefaultClient{}
 	clock := clockwork.NewFakeClock()
 	samplerFactory := &sample.SamplerFactory{
@@ -128,6 +129,7 @@ func newTestCentralCollector(t *testing.T, cfg *config.MockConfig) (*CentralColl
 		{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
+		{Value: spanCache},
 		{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 		{Value: samplerFactory},
