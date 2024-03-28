@@ -21,7 +21,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const cacheEjectBatchSize = 100
+const (
+	cacheEjectBatchSize    = 100
+)
 
 type CentralCollector struct {
 	Store          centralstore.SmartStorer `inject:""`
@@ -43,7 +45,7 @@ type CentralCollector struct {
 	incoming chan *types.Span
 	reload   chan struct{}
 
-	eg *errgroup.Group
+	eg   *errgroup.Group
 }
 
 // ensure that we implement the Collector interface
@@ -56,8 +58,8 @@ func (c *CentralCollector) Start() error {
 		return err
 	}
 
-	// TODO: use the actual new cache implementation
-	spanCache := &cache.DefaultSpanCache{
+	spanCache := &cache.SpanCache_basic{
+		Cfg:   c.Config,
 		Clock: c.Clock,
 	}
 	spanCache.Start()
@@ -135,21 +137,12 @@ func (c *CentralCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	// mutex is normally held by this goroutine at all times.
-	// It is unlocked once per ticker cycle for tests.
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	for {
 		select {
 		case <-ticker.C:
 			c.sendTracesInCache()
 			c.checkAlloc()
 
-			// Briefly unlock the cache, to allow test access.
-			c.mutex.Unlock()
-			runtime.Gosched()
-			c.mutex.Lock()
 		case sp, ok := <-c.incoming:
 			if !ok {
 				return
@@ -164,24 +157,12 @@ func (c *CentralCollector) collect() {
 
 func (c *CentralCollector) processSpan(sp *types.Span) {
 	// add the span to the cache
-	trace, err := c.cache.Get(sp.TraceID)
-	if err != nil {
-		c.Logger.Error().Logf("failed to get trace: %s from cache ", sp.TraceID)
-		return
-	}
+	trace := c.cache.Get(sp.TraceID)
 	if trace == nil {
-		err = c.cache.Set(sp)
-		if err != nil {
-			c.Logger.Error().Logf("failed to set trace: %s from cache ", sp.TraceID)
-			return
-		}
+		c.cache.Set(sp)
 	}
 
-	trace, err = c.cache.Get(sp.TraceID)
-	if err != nil {
-		c.Logger.Error().Logf("failed to get trace: %s from cache ", sp.TraceID)
-		return
-	}
+	trace = c.cache.Get(sp.TraceID)
 
 	// construct a central store span
 	cs := &centralstore.CentralSpan{
@@ -218,7 +199,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 	// send the span to the central store
 	ctx := context.Background()
-	err = c.Store.WriteSpan(ctx, cs)
+	err := c.Store.WriteSpan(ctx, cs)
 	if err != nil {
 		c.Logger.Error().WithFields(logFields).Logf("error writing span to central store: %s", err)
 	}
@@ -230,7 +211,7 @@ func (c *CentralCollector) sendTracesInCache() {
 	traces := c.cache.GetOldest(cacheEjectBatchSize)
 	for _, t := range traces {
 		c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
-			TraceID: t.TraceID,
+			TraceID: t,
 		})
 	}
 }
@@ -269,7 +250,7 @@ func (c *CentralCollector) reloadConfigs() {
 
 	if imcConfig.CacheCapacity != c.cache.Len() {
 		c.Logger.Debug().WithField("cache_size.previous", c.cache.Len()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-		c.cache = c.cache.Resize(imcConfig.CacheCapacity)
+		c.cache = c.cache.Resize()
 	} else {
 		c.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 	}
@@ -285,10 +266,6 @@ func (c *CentralCollector) reloadConfigs() {
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
-func (c *CentralCollector) send(sp *types.Trace, reason string) {
-	// TODO: implement getting a decision from the central store
-}
-
 func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 	for _, parentIdFieldName := range c.Config.GetParentIdFieldNames() {
 		parentId := sp.Data[parentIdFieldName]
@@ -298,17 +275,4 @@ func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 	}
 
 	return "", false
-}
-
-// Convenience method for tests.
-func (c *CentralCollector) getFromCache(traceID string) *types.TraceV2 {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	trace, err := c.cache.Get(traceID)
-	if err != nil {
-		return nil
-	}
-
-	return trace
 }

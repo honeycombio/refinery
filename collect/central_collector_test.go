@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace to the central store
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.NotNil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+		assert.NotNil(collect, coll.cache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	}, 5*time.Second, 500*time.Millisecond)
 
 	ctx := context.Background()
@@ -79,7 +80,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace to the central store
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.NotNil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+		assert.NotNil(collect, coll.cache.Get(traceID1), "after sending the span, it should be removed from the cache")
 	}, 5*time.Second, 500*time.Millisecond)
 	trace, err = coll.Store.GetTrace(ctx, traceID1)
 	require.NoError(t, err)
@@ -105,6 +106,9 @@ func newTestCentralCollector(t *testing.T, cfg *config.MockConfig) (*CentralColl
 		DroppedSize:       1000,
 		SizeCheckInterval: duration("1s"),
 	}
+
+	cfg.GetRedisDatabaseVal = rand.Intn(16)
+	cfg.GetTraceTimeoutVal = time.Duration(500 * time.Microsecond)
 
 	basicStore := &centralstore.RedisBasicStore{}
 	decisionCache := &cache.CuckooSentCache{}
@@ -141,7 +145,7 @@ func newTestCentralCollector(t *testing.T, cfg *config.MockConfig) (*CentralColl
 
 	stopper := func() {
 		conn := redis.Get()
-		conn.Do("FLUSHALL")
+		conn.Do("FLUSHDB")
 		conn.Close()
 		require.NoError(t, startstop.Stop(g.Objects(), nil))
 	}

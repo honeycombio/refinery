@@ -141,3 +141,10 @@ func (sc *SpanCache_basic) Len() int {
 	defer sc.mut.RUnlock()
 	return len(sc.cache)
 }
+
+// TODO: implement resizing
+func (sc *SpanCache_basic) Resize() SpanCache {
+	return &SpanCache_basic{
+		Cfg: sc.Cfg,
+	}
+}

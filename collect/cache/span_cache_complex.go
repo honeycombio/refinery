@@ -177,3 +177,14 @@ func (sc *SpanCache_complex) Len() int {
 	defer sc.mut.RUnlock()
 	return len(sc.active)
 }
+
+// TODO: implement resizing
+func (sc *SpanCache_complex) Resize() SpanCache {
+	return &SpanCache_complex{
+		Cfg:       sc.Cfg,
+		Clock:     sc.Clock,
+		active:    make(map[string]int),
+		freeSlots: make([]int, 0, len(sc.cache)),
+		cache:     make([]*types.Trace, 0, len(sc.cache)),
+	}
+}
