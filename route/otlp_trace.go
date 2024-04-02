@@ -29,7 +29,7 @@ func (r *Router) postOTLP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result, err := huskyotlp.TranslateTraceRequestFromReader(req.Body, ri)
+	result, err := huskyotlp.TranslateTraceRequestFromReader(req.Context(), req.Body, ri)
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
@@ -59,7 +59,7 @@ func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTrac
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	result, err := huskyotlp.TranslateTraceRequest(req, ri)
+	result, err := huskyotlp.TranslateTraceRequest(ctx, req, ri)
 	if err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
