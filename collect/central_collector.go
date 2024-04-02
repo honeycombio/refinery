@@ -34,8 +34,6 @@ type CentralCollector struct {
 	Metrics        metrics.Metrics          `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory   `inject:""`
 	SpanCache      cache.SpanCache          `inject:""`
-	// For test use only
-	BlockOnAddSpan bool
 
 	mut                   sync.RWMutex
 	samplersByDestination map[string]sample.Sampler
@@ -88,13 +86,6 @@ func (c *CentralCollector) AddSpan(span *types.Span) error {
 }
 
 func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
-	if c.BlockOnAddSpan {
-		ch <- sp
-		c.Metrics.Increment("span_received")
-		c.Metrics.Up("spans_waiting")
-		return nil
-	}
-
 	select {
 	case ch <- sp:
 		c.Metrics.Increment("span_received")
