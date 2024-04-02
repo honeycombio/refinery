@@ -42,10 +42,13 @@ type Trace struct {
 	TraceID string
 
 	// SampleRate should only be changed if the changer holds the SendSampleLock
+	// TODO: remove this field
 	sampleRate uint
 	// KeepSample should only be changed if the changer holds the SendSampleLock
+	// TODO: remove this field
 	KeepSample bool
 	// Sent should only be changed if the changer holds the SendSampleLock
+	// TODO: remove this field
 	Sent       bool
 	sentReason uint
 
@@ -185,6 +188,7 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 type Span struct {
 	Event
 	TraceID     string
+	ID          string
 	DataSize    int
 	ArrivalTime time.Time
 }

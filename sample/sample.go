@@ -15,6 +15,7 @@ import (
 type Sampler interface {
 	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string)
 	Start() error
+	GetKeyFields() []string
 }
 
 type ClusterSizer interface {

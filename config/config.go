@@ -197,6 +197,8 @@ type Config interface {
 
 	GetParentIdFieldNames() []string
 
+	GetSpanIdFieldNames() []string
+
 	GetCentralStoreOptions() SmartWrapperOptions
 }
 
