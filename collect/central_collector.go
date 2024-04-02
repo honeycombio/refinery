@@ -50,6 +50,9 @@ type CentralCollector struct {
 	eg   *errgroup.Group
 
 	hostname string
+
+	// test hooks
+	BlockOnDecider bool
 }
 
 func (c *CentralCollector) Start() error {
@@ -200,6 +203,9 @@ func (c *CentralCollector) decide() error {
 		case <-c.done:
 			return nil
 		default:
+			if c.BlockOnDecider {
+				continue
+			}
 			ctx := context.Background()
 			tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, deciderBatchSize)
 			if err != nil {
@@ -255,6 +261,11 @@ func (c *CentralCollector) decide() error {
 				var found bool
 
 				tr := c.SpanCache.Get(trace.TraceID)
+				if tr == nil {
+					// This refinery instance does not have the trace in cache
+					// so we can't make a decision on it.
+					continue
+				}
 
 				// get sampler key (dataset for legacy keys, environment for new keys)
 				samplerKey, isLegacyKey := tr.GetSamplerKey()

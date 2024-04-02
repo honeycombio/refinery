@@ -3,7 +3,6 @@ package collect
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -35,7 +34,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 			CacheCapacity: 3,
 		},
 	}
-	coll := &CentralCollector{}
+	coll := &CentralCollector{BlockOnDecider: true}
 	stop := startCollector(t, conf, coll, nil, clockwork.NewFakeClock())
 	defer stop()
 
@@ -139,8 +138,8 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		count, ok := collector.Metrics.Get("trace_send_kept")
-		require.True(t, ok)
-		require.Equal(t, float64(numberOfTraces), count)
+		require.True(collect, ok)
+		assert.Equal(collect, float64(numberOfTraces), count)
 	}, 2*time.Second, 500*time.Millisecond)
 }
 
@@ -192,8 +191,8 @@ func TestCentralCollector_Decider(t *testing.T) {
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		count, ok := collector.Metrics.Get("trace_send_kept")
-		require.True(t, ok)
-		require.Equal(t, float64(6), count)
+		require.True(collect, ok)
+		require.Equal(collect, float64(6), count)
 	}, 2*time.Second, 500*time.Millisecond)
 }
 
@@ -219,15 +218,13 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		SizeCheckInterval: duration("1s"),
 	}
 
-	cfg.GetRedisDatabaseVal = rand.Intn(16)
-	fmt.Println("redis db", cfg.GetRedisDatabaseVal)
 	cfg.GetTraceTimeoutVal = time.Duration(500 * time.Microsecond)
 
 	basicStore := &centralstore.RedisBasicStore{}
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &centralstore.SmartWrapper{}
 	spanCache := &cache.SpanCache_basic{}
-	redis := &redis.DefaultClient{}
+	redis := &redis.TestService{}
 	samplerFactory := &sample.SamplerFactory{
 		Config: cfg,
 		Logger: &logger.NullLogger{},
