@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/types"
 )
 
 type SpanType string
@@ -29,6 +30,10 @@ type CentralSpan struct {
 	KeyFields map[string]interface{}
 	AllFields map[string]interface{}
 	IsRoot    bool
+}
+
+func (s *CentralSpan) Fields() map[string]interface{} {
+	return s.KeyFields
 }
 
 type CentralTraceState string
@@ -87,6 +92,46 @@ type CentralTrace struct {
 	Timestamp uint64
 	Root      *CentralSpan
 	Spans     []*CentralSpan
+}
+
+func (t *CentralTrace) GetSamplerKey() (string, bool) {
+	var samplerKey any
+	var isLegacyKey any
+
+	for _, span := range t.Spans {
+		if samplerKey != nil && isLegacyKey != nil {
+			break
+		}
+
+		if span.KeyFields["sampler_key"] != nil {
+			samplerKey = span.KeyFields["sampler_key"]
+		}
+
+		if span.KeyFields["is_legacy_key"] != nil {
+			isLegacyKey = span.KeyFields["is_legacy_key"]
+		}
+	}
+
+	return samplerKey.(string), isLegacyKey.(bool)
+}
+
+func (t *CentralTrace) ID() string {
+	return t.TraceID
+}
+
+func (t *CentralTrace) RootKeyFields() types.KeyFielder {
+	if t.Root == nil {
+		return nil
+	}
+	return t.Root
+}
+
+func (t *CentralTrace) AllKeyFields() []types.KeyFielder {
+	fields := make([]types.KeyFielder, 0, len(t.Spans))
+	for _, span := range t.Spans {
+		fields = append(fields, span)
+	}
+	return fields
 }
 
 // ensure that CentralTraceStatus implements the KeptTrace interface

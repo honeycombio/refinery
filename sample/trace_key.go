@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-
-	"github.com/honeycombio/refinery/types"
 )
 
 type traceKey struct {
@@ -23,16 +21,16 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 }
 
 // build, builds the trace key based on the configuration of the traceKeyGenerator
-func (d *traceKey) build(trace *types.Trace) string {
+func (d *traceKey) build(trace KeyInfoExtractor) string {
 	// fieldCollector gets all values from the fields listed in the config, even
 	// if they happen multiple times.
 	fieldCollector := map[string][]string{}
 
 	// for each field, for each span, get the value of that field
-	spans := trace.GetSpans()
+	spans := trace.AllKeyFields()
 	for _, field := range d.fields {
 		for _, span := range spans {
-			if val, ok := span.Data[field]; ok {
+			if val, ok := span.Fields()[field]; ok {
 				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
 			}
 		}

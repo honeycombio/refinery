@@ -17,6 +17,10 @@ const (
 	QueryTokenHeader  = "X-Honeycomb-Refinery-Query"
 )
 
+type KeyFielder interface {
+	Fields() map[string]any
+}
+
 // used to put a request ID into the request context for logging
 type RequestIDContextKey struct{}
 
@@ -30,6 +34,10 @@ type Event struct {
 	SampleRate  uint
 	Timestamp   time.Time
 	Data        map[string]interface{}
+}
+
+func (e *Event) Fields() map[string]interface{} {
+	return e.Data
 }
 
 // Trace isn't something that shows up on the wire; it gets created within
@@ -103,6 +111,22 @@ func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
 // GetSpans returns the list of descendants in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
+}
+
+func (t *Trace) RootKeyFields() KeyFielder {
+	if t.RootSpan == nil {
+		return nil
+	}
+
+	return t.RootSpan
+}
+
+func (t *Trace) AllKeyFields() []KeyFielder {
+	res := make([]KeyFielder, 0, len(t.spans))
+	for _, sp := range t.spans {
+		res = append(res, sp)
+	}
+	return res
 }
 
 func (t *Trace) ID() string {

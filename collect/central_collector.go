@@ -30,6 +30,15 @@ const (
 	deciderBatchSize             = 100
 )
 
+type traceForDecision struct {
+	*centralstore.CentralTrace
+	descendantCount uint32
+}
+
+func (t *traceForDecision) DescendantCount() uint32 {
+	return t.descendantCount
+}
+
 type CentralCollector struct {
 	Store          centralstore.SmartStorer `inject:""`
 	Config         config.Config            `inject:""`
@@ -260,15 +269,8 @@ func (c *CentralCollector) decide() error {
 				var sampler sample.Sampler
 				var found bool
 
-				tr := c.SpanCache.Get(trace.TraceID)
-				if tr == nil {
-					// This refinery instance does not have the trace in cache
-					// so we can't make a decision on it.
-					continue
-				}
-
 				// get sampler key (dataset for legacy keys, environment for new keys)
-				samplerKey, isLegacyKey := tr.GetSamplerKey()
+				samplerKey, isLegacyKey := trace.GetSamplerKey()
 				logFields := logrus.Fields{
 					"trace_id": trace.TraceID,
 				}
@@ -284,9 +286,19 @@ func (c *CentralCollector) decide() error {
 					c.samplersByDestination[samplerKey] = sampler
 				}
 
+				status, ok := stateMap[trace.TraceID]
+				if !ok {
+					c.Logger.Error().Logf("trace %s not found in state map", trace.TraceID)
+					continue
+				}
+
+				tr := &traceForDecision{
+					CentralTrace:    trace,
+					descendantCount: status.DescendantCount(),
+				}
+
 				// make sampling decision and update the trace
 				rate, shouldSend, reason, key := sampler.GetSampleRate(tr)
-				tr.SetSampleRate(rate)
 				logFields["reason"] = reason
 				if key != "" {
 					logFields["sample_key"] = key
@@ -310,7 +322,6 @@ func (c *CentralCollector) decide() error {
 
 				// These meta data should be stored on the central trace status object
 				// so that it's synced across all refinery instances
-				status := stateMap[trace.TraceID]
 				if c.Config.GetAddRuleReasonToTrace() {
 					status.Metadata["meta.refinery.reason"] = reason
 					if status.Metadata["meta.refinery.send_reason"] == "" {
@@ -382,8 +393,9 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 	// construct a central store span
 	cs := &centralstore.CentralSpan{
-		TraceID: sp.TraceID,
-		SpanID:  sp.ID,
+		TraceID:   sp.TraceID,
+		SpanID:    sp.ID,
+		KeyFields: make(map[string]interface{}),
 	}
 	parentID, ok := c.GetParentID(sp)
 	if !ok {
@@ -392,6 +404,11 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 	cs.ParentID = parentID
 
 	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	if samplerKey != "" {
+		cs.KeyFields["sampler_key"] = samplerKey
+		cs.KeyFields["is_legacy_key"] = isLegacyKey
+	}
+
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
