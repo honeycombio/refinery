@@ -2,9 +2,7 @@ package collect
 
 import (
 	"context"
-	"fmt"
 	"runtime"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -18,16 +16,16 @@ import (
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
 	// TODO: these should be configurable
-	cacheEjectBatchSize          = 100
-	processTracesBatchSize       = 100
-	processTracesBackoffInterval = 200 * time.Microsecond
-	deciderBackoffInterval       = 100 * time.Microsecond
-	deciderBatchSize             = 100
+	cacheEjectBatchSize        = 100
+	processTracesBatchSize     = 100
+	processTracesPauseDuration = 200 * time.Microsecond
+	deciderPauseDuration       = 100 * time.Microsecond
+	deciderBatchSize           = 100
+	retryLimit                 = 5
 )
 
 type traceForDecision struct {
@@ -55,8 +53,8 @@ type CentralCollector struct {
 	incoming chan *types.Span
 	reload   chan struct{}
 
-	done chan struct{}
-	eg   *errgroup.Group
+	done    chan struct{}
+	limiter *limiter
 
 	hostname string
 
@@ -78,36 +76,26 @@ func (c *CentralCollector) Start() error {
 	c.samplersByDestination = make(map[string]sample.Sampler)
 
 	// spin up one collector because this is a single threaded collector
-	c.eg = &errgroup.Group{}
-	c.eg.Go(func() (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("panic in central collector: %v\n%s", r, debug.Stack())
-			}
-		}()
-
-		c.collect()
-		return nil
+	c.limiter = newLimiter(retryLimit)
+	c.limiter.Go(func() {
+		err := catchPanic(c.collect)
+		if err != nil {
+			c.Logger.Error().Logf("error collecting spans: %s", err)
+		}
 	})
 
-	c.eg.Go(func() (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("panic in central collector: %v\n%s", r, debug.Stack())
-			}
-		}()
-
-		return c.processTraces()
+	c.limiter.Go(func() {
+		err := catchPanic(c.processTraces)
+		if err != nil {
+			c.Logger.Error().Logf("error processing traces: %s", err)
+		}
 	})
 
-	c.eg.Go(func() (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("panic in central collector: %v\n%s", r, debug.Stack())
-			}
-		}()
-
-		return c.decide()
+	c.limiter.Go(func() {
+		err := catchPanic(c.decide)
+		if err != nil {
+			c.Logger.Error().Logf("error making decision for traces: %s", err)
+		}
 	})
 
 	return nil
@@ -117,7 +105,8 @@ func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
-	return c.eg.Wait()
+	c.limiter.Close()
+	return nil
 }
 
 // implement the Collector interface
@@ -159,13 +148,14 @@ func (c *CentralCollector) collect() {
 
 }
 
-func (c *CentralCollector) processTraces() error {
+func (c *CentralCollector) processTraces() {
 	for {
 		select {
 		case <-c.done:
-			return nil
+			return
 		default:
 			ids := c.SpanCache.GetTraceIDs(processTracesBatchSize)
+			c.Metrics.Histogram("collector_processor_batch_count", len(ids))
 			if len(ids) == 0 {
 				continue
 			}
@@ -191,14 +181,14 @@ func (c *CentralCollector) processTraces() error {
 
 		select {
 		case <-c.done:
-			return nil
+			return
 		default:
 		}
 
-		ticker := c.Clock.NewTicker(processTracesBackoffInterval)
+		ticker := c.Clock.NewTicker(processTracesPauseDuration)
 		select {
 		case <-c.done:
-			return nil
+			return
 		case <-ticker.Chan():
 			ticker.Stop()
 			continue
@@ -206,11 +196,11 @@ func (c *CentralCollector) processTraces() error {
 	}
 }
 
-func (c *CentralCollector) decide() error {
+func (c *CentralCollector) decide() {
 	for {
 		select {
 		case <-c.done:
-			return nil
+			return
 		default:
 			if c.BlockOnDecider {
 				continue
@@ -366,15 +356,15 @@ func (c *CentralCollector) decide() error {
 
 		select {
 		case <-c.done:
-			return nil
+			return
 		default:
 		}
 
-		timer := c.Clock.NewTicker(deciderBackoffInterval)
+		timer := c.Clock.NewTicker(deciderPauseDuration)
 		select {
 		case <-c.done:
 			timer.Stop()
-			return nil
+			return
 		case <-timer.Chan():
 			timer.Stop()
 			continue
