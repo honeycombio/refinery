@@ -46,10 +46,7 @@ type CentralCollector struct {
 
 func (c *CentralCollector) Start() error {
 	// call reload config and then get the updated unique fields
-	collectorCfg, err := c.Config.GetCollectionConfig()
-	if err != nil {
-		return err
-	}
+	collectorCfg := c.Config.GetCollectionConfig()
 
 	// listen for config reloads
 	c.Config.RegisterReloadCallback(c.sendReloadSignal)
@@ -194,12 +191,12 @@ func (c *CentralCollector) sendTracesForDecision() {
 }
 
 func (c *CentralCollector) checkAlloc() {
-	inMemConfig, err := c.Config.GetCollectionConfig()
+	inMemConfig := c.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-	if err != nil || maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
+	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
 

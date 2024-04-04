@@ -3,7 +3,6 @@ package cache
 import (
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -35,10 +34,7 @@ var _ SpanCache = &SpanCache_complex{}
 var _ startstop.Starter = &SpanCache_complex{}
 
 func (sc *SpanCache_complex) Start() error {
-	cfg, err := sc.Cfg.GetCollectionConfig()
-	if err != nil {
-		return err
-	}
+	cfg := sc.Cfg.GetCollectionConfig()
 	sc.active = make(map[string]int, cfg.CacheCapacity)
 	sc.freeSlots = make([]int, 0, cfg.CacheCapacity)
 	sc.cache = make([]*types.Trace, 0, cfg.CacheCapacity)
@@ -105,11 +101,7 @@ func (sc *SpanCache_complex) GetOldest(fract float64) []string {
 	}
 	n := int(float64(len(sc.active)) * fract)
 	ids := make([]tidWithImpact, 0, len(sc.active))
-
-	timeout, err := sc.Cfg.GetTraceTimeout()
-	if err != nil {
-		timeout = 60 * time.Second
-	}
+	timeout := sc.Cfg.GetTraceTimeout()
 
 	sc.mut.RLock()
 	for _, ix := range sc.active {

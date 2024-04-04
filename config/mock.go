@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -11,61 +10,42 @@ import (
 type MockConfig struct {
 	Callbacks                        []func()
 	IsAPIKeyValidFunc                func(string) bool
-	GetCollectorTypeErr              error
 	GetCollectorTypeVal              string
-	GetCollectionConfigErr           error
 	GetCollectionConfigVal           CollectionConfig
-	GetHoneycombAPIErr               error
 	GetHoneycombAPIVal               string
-	GetListenAddrErr                 error
 	GetListenAddrVal                 string
-	GetPeerListenAddrErr             error
 	GetPeerListenAddrVal             string
 	GetHTTPIdleTimeoutVal            time.Duration
 	GetCompressPeerCommunicationsVal bool
 	GetGRPCEnabledVal                bool
-	GetGRPCListenAddrErr             error
 	GetGRPCListenAddrVal             string
 	GetGRPCServerParameters          GRPCServerParameters
-	GetLoggerTypeErr                 error
 	GetLoggerTypeVal                 string
-	GetHoneycombLoggerConfigErr      error
 	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
-	GetStdoutLoggerConfigErr         error
 	GetStdoutLoggerConfigVal         StdoutLoggerConfig
 	GetLoggerLevelVal                Level
-	GetPeersErr                      error
 	GetPeersVal                      []string
-	GetRedisHostErr                  error
 	GetRedisHostVal                  string
-	GetRedisUsernameErr              error
 	GetRedisUsernameVal              string
-	GetRedisPasswordErr              error
 	GetRedisPasswordVal              string
-	GetRedisAuthCodeErr              error
 	GetRedisAuthCodeVal              string
 	GetRedisDatabaseVal              int
 	GetRedisPrefixVal                string
 	GetRedisMaxActiveVal             int
 	GetRedisMaxIdleVal               int
 	GetRedisTimeoutVal               time.Duration
-	GetUseTLSErr                     error
 	GetUseTLSVal                     bool
-	GetUseTLSInsecureErr             error
 	GetUseTLSInsecureVal             bool
-	GetSamplerTypeErr                error
+	GetSamplerTypeErr                error //keep
 	GetSamplerTypeName               string
 	GetSamplerTypeVal                interface{}
-	GetMetricsTypeErr                error
 	GetMetricsTypeVal                string
 	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
-	GetSendDelayErr                  error
 	GetSendDelayVal                  time.Duration
 	GetBatchTimeoutVal               time.Duration
-	GetTraceTimeoutErr               error
 	GetTraceTimeoutVal               time.Duration
 	GetMaxBatchSizeVal               uint
 	GetUpstreamBufferSizeVal         int
@@ -127,39 +107,39 @@ func (m *MockConfig) IsAPIKeyValid(key string) bool {
 	return m.IsAPIKeyValidFunc(key)
 }
 
-func (m *MockConfig) GetCollectorType() (string, error) {
+func (m *MockConfig) GetCollectorType() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetCollectorTypeVal, m.GetCollectorTypeErr
+	return m.GetCollectorTypeVal
 }
 
-func (m *MockConfig) GetCollectionConfig() (CollectionConfig, error) {
+func (m *MockConfig) GetCollectionConfig() CollectionConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetCollectionConfigVal, m.GetCollectionConfigErr
+	return m.GetCollectionConfigVal
 }
 
-func (m *MockConfig) GetHoneycombAPI() (string, error) {
+func (m *MockConfig) GetHoneycombAPI() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetHoneycombAPIVal, m.GetHoneycombAPIErr
+	return m.GetHoneycombAPIVal
 }
 
-func (m *MockConfig) GetListenAddr() (string, error) {
+func (m *MockConfig) GetListenAddr() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetListenAddrVal, m.GetListenAddrErr
+	return m.GetListenAddrVal
 }
 
-func (m *MockConfig) GetPeerListenAddr() (string, error) {
+func (m *MockConfig) GetPeerListenAddr() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetPeerListenAddrVal, m.GetPeerListenAddrErr
+	return m.GetPeerListenAddrVal
 }
 
 func (m *MockConfig) GetHTTPIdleTimeout() time.Duration {
@@ -182,32 +162,32 @@ func (m *MockConfig) GetGRPCEnabled() bool {
 	return m.GetGRPCEnabledVal
 }
 
-func (m *MockConfig) GetGRPCListenAddr() (string, error) {
+func (m *MockConfig) GetGRPCListenAddr() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetGRPCListenAddrVal, m.GetGRPCListenAddrErr
+	return m.GetGRPCListenAddrVal
 }
 
-func (m *MockConfig) GetLoggerType() (string, error) {
+func (m *MockConfig) GetLoggerType() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetLoggerTypeVal, m.GetLoggerTypeErr
+	return m.GetLoggerTypeVal
 }
 
-func (m *MockConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
+func (m *MockConfig) GetHoneycombLoggerConfig() HoneycombLoggerConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetHoneycombLoggerConfigVal, m.GetHoneycombLoggerConfigErr
+	return m.GetHoneycombLoggerConfigVal
 }
 
-func (m *MockConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+func (m *MockConfig) GetStdoutLoggerConfig() StdoutLoggerConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetStdoutLoggerConfigVal, m.GetStdoutLoggerConfigErr
+	return m.GetStdoutLoggerConfigVal
 }
 
 func (m *MockConfig) GetLoggerLevel() Level {
@@ -217,39 +197,39 @@ func (m *MockConfig) GetLoggerLevel() Level {
 	return m.GetLoggerLevelVal
 }
 
-func (m *MockConfig) GetPeers() ([]string, error) {
+func (m *MockConfig) GetPeers() []string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetPeersVal, m.GetPeersErr
+	return m.GetPeersVal
 }
 
-func (m *MockConfig) GetRedisHost() (string, error) {
+func (m *MockConfig) GetRedisHost() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetRedisHostVal, m.GetRedisHostErr
+	return m.GetRedisHostVal
 }
 
-func (m *MockConfig) GetRedisUsername() (string, error) {
+func (m *MockConfig) GetRedisUsername() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetRedisUsernameVal, m.GetRedisUsernameErr
+	return m.GetRedisUsernameVal
 }
 
-func (m *MockConfig) GetRedisPassword() (string, error) {
+func (m *MockConfig) GetRedisPassword() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetRedisPasswordVal, m.GetRedisPasswordErr
+	return m.GetRedisPasswordVal
 }
 
-func (m *MockConfig) GetRedisAuthCode() (string, error) {
+func (m *MockConfig) GetRedisAuthCode() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetRedisAuthCodeVal, m.GetRedisAuthCodeErr
+	return m.GetRedisAuthCodeVal
 }
 
 func (m *MockConfig) GetRedisPrefix() string {
@@ -266,18 +246,18 @@ func (m *MockConfig) GetRedisDatabase() int {
 	return m.GetRedisDatabaseVal
 }
 
-func (m *MockConfig) GetUseTLS() (bool, error) {
+func (m *MockConfig) GetUseTLS() bool {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetUseTLSVal, m.GetUseTLSErr
+	return m.GetUseTLSVal
 }
 
-func (m *MockConfig) GetUseTLSInsecure() (bool, error) {
+func (m *MockConfig) GetUseTLSInsecure() bool {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetUseTLSInsecureVal, m.GetUseTLSInsecureErr
+	return m.GetUseTLSInsecureVal
 }
 
 func (m *MockConfig) GetRedisMaxActive() int {
@@ -329,11 +309,11 @@ func (m *MockConfig) GetOTelTracingConfig() OTelTracingConfig {
 	return m.GetOTelTracingConfigVal
 }
 
-func (m *MockConfig) GetSendDelay() (time.Duration, error) {
+func (m *MockConfig) GetSendDelay() time.Duration {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetSendDelayVal, m.GetSendDelayErr
+	return m.GetSendDelayVal
 }
 
 func (m *MockConfig) GetBatchTimeout() time.Duration {
@@ -343,11 +323,11 @@ func (m *MockConfig) GetBatchTimeout() time.Duration {
 	return m.GetBatchTimeoutVal
 }
 
-func (m *MockConfig) GetTraceTimeout() (time.Duration, error) {
+func (m *MockConfig) GetTraceTimeout() time.Duration {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetTraceTimeoutVal, m.GetTraceTimeoutErr
+	return m.GetTraceTimeoutVal
 }
 
 func (m *MockConfig) GetMaxBatchSize() uint {
@@ -367,7 +347,7 @@ func (m *MockConfig) GetSamplerConfigForDestName(dataset string) (interface{}, s
 
 // GetAllSamplerRules normally returns all dataset rules, including the default
 // In this mock, it returns only the rules for "dataset1" according to the type of the value field
-func (m *MockConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
+func (m *MockConfig) GetAllSamplerRules() *V2SamplerConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
@@ -384,14 +364,14 @@ func (m *MockConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
 	case *TotalThroughputSamplerConfig:
 		choice.TotalThroughputSampler = sampler
 	default:
-		return nil, fmt.Errorf("unable to determine data format")
+		return nil
 	}
 
 	v := &V2SamplerConfig{
 		Samplers: map[string]*V2SamplerChoice{"dataset1": choice},
 	}
 
-	return v, m.GetSamplerTypeErr
+	return v
 }
 
 func (m *MockConfig) GetUpstreamBufferSize() int {
@@ -408,25 +388,25 @@ func (m *MockConfig) GetPeerBufferSize() int {
 	return m.GetPeerBufferSizeVal
 }
 
-func (m *MockConfig) GetIdentifierInterfaceName() (string, error) {
+func (m *MockConfig) GetIdentifierInterfaceName() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.IdentifierInterfaceName, nil
+	return m.IdentifierInterfaceName
 }
 
-func (m *MockConfig) GetUseIPV6Identifier() (bool, error) {
+func (m *MockConfig) GetUseIPV6Identifier() bool {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.UseIPV6Identifier, nil
+	return m.UseIPV6Identifier
 }
 
-func (m *MockConfig) GetRedisIdentifier() (string, error) {
+func (m *MockConfig) GetRedisIdentifier() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.RedisIdentifier, nil
+	return m.RedisIdentifier
 }
 
 func (m *MockConfig) GetSendTickerValue() time.Duration {
@@ -436,18 +416,18 @@ func (m *MockConfig) GetSendTickerValue() time.Duration {
 	return m.SendTickerVal
 }
 
-func (m *MockConfig) GetPeerManagementType() (string, error) {
+func (m *MockConfig) GetPeerManagementType() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.PeerManagementType, nil
+	return m.PeerManagementType
 }
 
-func (m *MockConfig) GetDebugServiceAddr() (string, error) {
+func (m *MockConfig) GetDebugServiceAddr() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.DebugServiceAddr, nil
+	return m.DebugServiceAddr
 }
 
 func (m *MockConfig) GetIsDryRun() bool {

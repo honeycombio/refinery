@@ -117,18 +117,18 @@ func buildOptions(c config.Config) []redis.DialOption {
 		redis.DialDatabase(c.GetRedisDatabase()),
 	}
 
-	username, _ := c.GetRedisUsername()
+	username := c.GetRedisUsername()
 	if username != "" {
 		options = append(options, redis.DialUsername(username))
 	}
 
-	password, _ := c.GetRedisPassword()
+	password := c.GetRedisPassword()
 	if password != "" {
 		options = append(options, redis.DialPassword(password))
 	}
 
-	useTLS, _ := c.GetUseTLS()
-	tlsInsecure, _ := c.GetUseTLSInsecure()
+	useTLS := c.GetUseTLS()
+	tlsInsecure := c.GetUseTLSInsecure()
 	if useTLS {
 		tlsConfig := &tls.Config{
 			MinVersion: tls.VersionTLS12,
@@ -146,7 +146,7 @@ func buildOptions(c config.Config) []redis.DialOption {
 	return options
 }
 func (d *DefaultClient) Start() error {
-	redisHost, _ := d.Config.GetRedisHost()
+	redisHost := d.Config.GetRedisHost()
 
 	if redisHost == "" {
 		redisHost = "localhost:6379"
@@ -171,7 +171,7 @@ func (d *DefaultClient) Start() error {
 				case <-timeout:
 					return nil, err
 				default:
-					if authCode, _ := d.Config.GetRedisAuthCode(); authCode != "" {
+					if authCode := d.Config.GetRedisAuthCode(); authCode != "" {
 						conn, err = redis.Dial("tcp", redisHost, options...)
 						if err != nil {
 							return nil, err
@@ -180,9 +180,7 @@ func (d *DefaultClient) Start() error {
 							conn.Close()
 							return nil, err
 						}
-						if err == nil {
-							return conn, nil
-						}
+						return conn, nil
 					} else {
 						conn, err = redis.Dial("tcp", redisHost, options...)
 						if err == nil {
