@@ -20,12 +20,13 @@ import (
 
 const (
 	// TODO: these should be configurable
-	cacheEjectBatchSize        = 100
-	processTracesBatchSize     = 100
-	processTracesPauseDuration = 200 * time.Microsecond
-	deciderPauseDuration       = 100 * time.Microsecond
-	deciderBatchSize           = 100
-	retryLimit                 = 5
+	cacheEjectBatchSize         = 100
+	processTracesBatchSize      = 100
+	processTracesPauseDuration  = 200 * time.Microsecond
+	deciderPauseDuration        = 100 * time.Microsecond
+	deciderBatchSize            = 100
+	retryLimit                  = 5
+	concurrentTraceFetcherCount = 10
 )
 
 type traceForDecision struct {
@@ -54,7 +55,7 @@ type CentralCollector struct {
 	reload   chan struct{}
 
 	done    chan struct{}
-	limiter *limiter
+	limiter *retryLimiter
 
 	hostname string
 
@@ -75,8 +76,11 @@ func (c *CentralCollector) Start() error {
 	c.reload = make(chan struct{}, 1)
 	c.samplersByDestination = make(map[string]sample.Sampler)
 
+	c.Metrics.Register("collector_processor_batch_count", "histogram")
+	c.Metrics.Register("collector_decider_batch_count", "histogram")
+
 	// spin up one collector because this is a single threaded collector
-	c.limiter = newLimiter(retryLimit)
+	c.limiter = newRetryLimiter(retryLimit)
 	c.limiter.Go(func() {
 		err := catchPanic(c.collect)
 		if err != nil {
@@ -185,9 +189,10 @@ func (c *CentralCollector) processTraces() {
 		default:
 		}
 
-		ticker := c.Clock.NewTicker(processTracesPauseDuration)
+		ticker := c.Clock.NewTimer(processTracesPauseDuration)
 		select {
 		case <-c.done:
+			ticker.Stop()
 			return
 		case <-ticker.Chan():
 			ticker.Stop()
@@ -202,6 +207,7 @@ func (c *CentralCollector) decide() {
 		case <-c.done:
 			return
 		default:
+			// this is only ever true in test mode
 			if c.BlockOnDecider {
 				continue
 			}
@@ -212,6 +218,8 @@ func (c *CentralCollector) decide() {
 				continue
 			}
 
+			c.Metrics.Histogram("collector_decider_batch_count", len(tracesIDs))
+
 			if len(tracesIDs) == 0 {
 				continue
 			}
@@ -220,30 +228,31 @@ func (c *CentralCollector) decide() {
 				c.Logger.Error().Logf("error getting statuses for traces: %s", err)
 				continue
 			}
+
 			traces := make([]*centralstore.CentralTrace, len(statuses))
 			stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
-			var wg sync.WaitGroup
-			for i, status := range statuses {
+
+			limiter := newConcurrencyLimiter(concurrentTraceFetcherCount)
+
+			for idx, status := range statuses {
 				// make a decision on each trace
 				if status.State != centralstore.AwaitingDecision {
 					// someone else got to it first
 					continue
 				}
+				currentStatus, currentIdx := status, idx
 				stateMap[status.TraceID] = status
 
-				wg.Add(1)
-				go func(status *centralstore.CentralTraceStatus, idx int) {
-					defer wg.Done()
-
-					trace, err := c.Store.GetTrace(ctx, status.TraceID)
+				limiter.Go(func() {
+					trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
 					if err != nil {
-						c.Logger.Error().Logf("error getting trace %s: %s", status.TraceID, err)
+						c.Logger.Error().Logf("error getting trace %s: %s", currentStatus.TraceID, err)
 						return
 					}
-					traces[idx] = trace
-				}(status, i)
+					traces[currentIdx] = trace
+				})
 			}
-			wg.Wait()
+			limiter.Close()
 
 			for _, trace := range traces {
 				if trace == nil {
@@ -360,7 +369,7 @@ func (c *CentralCollector) decide() {
 		default:
 		}
 
-		timer := c.Clock.NewTicker(deciderPauseDuration)
+		timer := c.Clock.NewTimer(deciderPauseDuration)
 		select {
 		case <-c.done:
 			timer.Stop()

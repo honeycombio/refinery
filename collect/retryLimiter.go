@@ -2,21 +2,21 @@ package collect
 
 import "sync"
 
-type limiter struct {
+type retryLimiter struct {
 	limit int
 	wg    *sync.WaitGroup
 	done  chan struct{}
 }
 
-func newLimiter(n int) *limiter {
-	return &limiter{
+func newRetryLimiter(n int) *retryLimiter {
+	return &retryLimiter{
 		limit: n,
 		done:  make(chan struct{}),
 		wg:    &sync.WaitGroup{},
 	}
 }
 
-func (l *limiter) Go(fn func()) {
+func (l *retryLimiter) Go(fn func()) {
 	l.wg.Add(1)
 	go func() {
 		defer l.wg.Done()
@@ -33,7 +33,7 @@ func (l *limiter) Go(fn func()) {
 	}()
 }
 
-func (l *limiter) Close() {
+func (l *retryLimiter) Close() {
 	close(l.done)
 	l.wg.Wait()
 }
