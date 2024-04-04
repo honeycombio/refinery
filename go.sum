@@ -66,10 +66,10 @@ github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1 h1:MXRxSU
 github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1/go.mod h1:VvArVnXCHeB+tpxMOLWvaoItNHWYEgOx8Lgs1JoS+cI=
 github.com/honeycombio/dynsampler-go v0.6.0 h1:fs4mrfeFGU5V+ClwpblFzbWqn4Apb+lKlE7Ja5zL22I=
 github.com/honeycombio/dynsampler-go v0.6.0/go.mod h1:pJqWFeoMN3syX74PEvlusieyGBbtIBjmTVjLc3thmK4=
-github.com/honeycombio/husky v0.26.0 h1:nnsMJnGrB/meRix/n9nN40ort0OSMyKJGejdfgENMDA=
-github.com/honeycombio/husky v0.26.0/go.mod h1:9TaiPjYyMf2DkKMCkRPErtxiAkvMVtgIC4miUVTxOMg=
-github.com/honeycombio/libhoney-go v1.21.0 h1:uiiSfUipFSrmBucKTrwD9Bm4K60kY98p0hVLjtSLseM=
-github.com/honeycombio/libhoney-go v1.21.0/go.mod h1:RIaurCpfg5NDWSEV8t3QLcda9dUAiVNyWeHRAaSpN90=
+github.com/honeycombio/husky v0.27.0 h1:o2Gqbb1K7e6QDcONREfZcZIa3wivnM8WPBxXZpILJgc=
+github.com/honeycombio/husky v0.27.0/go.mod h1:9TaiPjYyMf2DkKMCkRPErtxiAkvMVtgIC4miUVTxOMg=
+github.com/honeycombio/libhoney-go v1.22.0 h1:JLDVH6IWoFYHhZqjTqrTLC/lX5kiCCjs+pGqlI9SYPk=
+github.com/honeycombio/libhoney-go v1.22.0/go.mod h1:RIaurCpfg5NDWSEV8t3QLcda9dUAiVNyWeHRAaSpN90=
 github.com/honeycombio/opentelemetry-proto-go/otlp v0.19.0-compat h1:fMpIzVAl5C260HisnRWV//vfckZIC4qvn656M3VLLOY=
 github.com/honeycombio/opentelemetry-proto-go/otlp v0.19.0-compat/go.mod h1:mC2aK20Z/exugKpqCgcpwEadiS0im8K6mZsD4Is/hCY=
 github.com/jessevdk/go-flags v1.5.0 h1:1jKYvbxEjfUl0fmqTCOfonvskHHXMjBySTLW4y9LFvc=
@@ -89,8 +89,8 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
-github.com/pelletier/go-toml/v2 v2.1.1 h1:LWAJwfNvjQZCFIDKWYQaM62NcYeYViCmWIwmOStowAI=
-github.com/pelletier/go-toml/v2 v2.1.1/go.mod h1:tJU2Z3ZkXwnxa4DPO899bsyIoywizdUvyaeZurnPPDc=
+github.com/pelletier/go-toml/v2 v2.2.0 h1:QLgLl2yMN7N+ruc31VynXs1vhMZa7CeHHejIeBAsoHo=
+github.com/pelletier/go-toml/v2 v2.2.0/go.mod h1:1t835xjRzz80PqgE6HHgN2JOsmgYu/h4qDAS4n929Rs=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
@@ -116,6 +116,7 @@ github.com/sourcegraph/conc v0.3.0/go.mod h1:Sdozi7LEKbFPqYX2/J+iBAM6HpqSLTASQIK
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpEOglKo=
+github.com/stretchr/objx v0.5.2/go.mod h1:FRsXN1f5AsAjCGJKqEizvkpNtU+EGNCLh3NxZ/8L+MA=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
@@ -170,8 +171,8 @@ google.golang.org/genproto/googleapis/api v0.0.0-20240213162025-012b6fc9bca9 h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20240213162025-012b6fc9bca9/go.mod h1:PVreiBMirk8ypES6aw9d4p6iiBNSIfZEBqr3UGoAi2E=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240213162025-012b6fc9bca9 h1:hZB7eLIaYlW9qXRfCq/qDaPdbeY3757uARz5Vvfv+cY=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20240213162025-012b6fc9bca9/go.mod h1:YUWgXUFRPfoYK1IHMuxH5K6nPEXSCzIMljnQ59lLRCk=
-google.golang.org/grpc v1.62.0 h1:HQKZ/fa1bXkX1oFOvSjmZEUL8wLSaZTjCcLAlmZRtdk=
-google.golang.org/grpc v1.62.0/go.mod h1:IWTG0VlJLCh1SkC58F7np9ka9mx/WNkjl4PGJaiq+QE=
+google.golang.org/grpc v1.62.1 h1:B4n+nfKzOICUXMgyrNd19h/I9oH0L1pizfk1d4zSgTk=
+google.golang.org/grpc v1.62.1/go.mod h1:IWTG0VlJLCh1SkC58F7np9ka9mx/WNkjl4PGJaiq+QE=
 google.golang.org/protobuf v1.26.0-rc.1/go.mod h1:jlhhOSvTdKEhbULTjvd4ARK9grFBp09yW+WbY/TyQbw=
 google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.33.0 h1:uNO2rsAINq/JlFpSdYEKIZ0uKD/R9cpdv0T+yoGwGmI=
