@@ -648,6 +648,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	go coll.collect()
 	defer coll.Stop()
 
+	var memorySize uint64
 	for i := 0; i < 500; i++ {
 		span := &types.Span{
 			TraceID: strconv.Itoa(i),
@@ -658,6 +659,9 @@ func TestStableMaxAlloc(t *testing.T) {
 			},
 		}
 		coll.AddSpan(span)
+		if i < 400 {
+			memorySize += uint64(span.GetDataSize())
+		}
 	}
 
 	for len(coll.incoming) > 0 {
@@ -674,7 +678,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc - memorySize)
 
 	coll.mutex.Unlock()
 
@@ -683,6 +687,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	for {
 		coll.mutex.Lock()
 		traces = coll.cache.GetAll()
+		fmt.Println("cache size", len(traces))
 		if len(traces) < 500 {
 			break
 		}

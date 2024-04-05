@@ -305,19 +305,13 @@ func (c *CentralCollector) decide() {
 				// This will observe sample rate attempts even if the trace is dropped
 				c.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
-				// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
-				if !shouldSend && !c.Config.GetIsDryRun() {
+				if !shouldSend {
 					c.Metrics.Increment("trace_decision_dropped")
 					c.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 				}
 				c.Metrics.Increment("trace_decision_kept")
 				// This will observe sample rate decisions only if the trace is kept
 				c.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
-
-				// ok, we're not dropping this trace; send all the spans
-				if c.Config.GetIsDryRun() && !shouldSend {
-					c.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but dry run mode is enabled")
-				}
 
 				// These meta data should be stored on the central trace status object
 				// so that it's synced across all refinery instances
@@ -535,15 +529,10 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 
 	c.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
-		if c.Config.GetAddRuleReasonToTrace() {
-			sp.Data["meta.refinery.reason"] = status.Metadata["meta.refinery.reason"]
-			sp.Data["meta.refinery.send_reason"] = status.Metadata["meta.refinery.send_reason"]
-			sp.Data["meta.refinery.sample_key"] = status.Metadata["meta.refinery.sample_key"]
+		for k, v := range status.Metadata {
+			sp.Data[k] = v
 		}
 
-		if c.hostname != "" {
-			sp.Data["meta.refinery.sender.local_hostname"] = c.hostname
-		}
 		mergeTraceAndSpanSampleRates(sp, status.SampleRate(), false)
 		c.addAdditionalAttributes(sp)
 		c.Transmission.EnqueueSpan(sp)
