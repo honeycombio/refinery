@@ -589,15 +589,11 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	var found bool
 
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	samplerKey := trace.GetSamplerKey(i.Config.GetDatasetPrefix())
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
+	logFields["sampler_key"] = samplerKey
 
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if trace.RootSpan != nil {
@@ -614,7 +610,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
 		i.datasetSamplers[samplerKey] = sampler
 	}
 

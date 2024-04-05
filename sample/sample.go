@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -68,13 +67,7 @@ func (s *SamplerFactory) Start() error {
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
 // samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
-func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLegacyKey bool) Sampler {
-	if isLegacyKey {
-		if prefix := s.Config.GetDatasetPrefix(); prefix != "" {
-			samplerKey = fmt.Sprintf("%s.%s", prefix, samplerKey)
-		}
-	}
-
+func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
 	c, _, err := s.Config.GetSamplerConfigForDestName(samplerKey)
 	if err != nil {
 		return nil

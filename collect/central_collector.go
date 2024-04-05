@@ -269,20 +269,21 @@ func (c *CentralCollector) decide() {
 				var found bool
 
 				// get sampler key (dataset for legacy keys, environment for new keys)
-				samplerKey, isLegacyKey := trace.GetSamplerKey()
+				samplerKey := trace.GetSamplerKey()
 				logFields := logrus.Fields{
 					"trace_id": trace.TraceID,
 				}
-				if isLegacyKey {
-					logFields["dataset"] = samplerKey
-				} else {
-					logFields["environment"] = samplerKey
-				}
+				logFields["sampler_key"] = samplerKey
 
 				// use sampler key to find sampler; create and cache if not found
-				if sampler, found = c.samplersByDestination[samplerKey]; !found {
-					sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
+				c.mut.RLock()
+				sampler, found = c.samplersByDestination[samplerKey]
+				c.mut.RUnlock()
+				if !found {
+					sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
+					c.mut.Lock()
 					c.samplersByDestination[samplerKey] = sampler
+					c.mut.Unlock()
 				}
 
 				status, ok := stateMap[trace.TraceID]
@@ -386,9 +387,8 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 	// construct a central store span
 	cs := &centralstore.CentralSpan{
-		TraceID:   sp.TraceID,
-		SpanID:    sp.ID,
-		KeyFields: make(map[string]interface{}),
+		TraceID: sp.TraceID,
+		SpanID:  sp.ID,
 	}
 	parentID, ok := c.GetParentID(sp)
 	if !ok {
@@ -396,26 +396,19 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 	}
 	cs.ParentID = parentID
 
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
-	if samplerKey != "" {
-		cs.KeyFields["sampler_key"] = samplerKey
-		cs.KeyFields["is_legacy_key"] = isLegacyKey
-	}
+	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
+	cs.SamplerKey = samplerKey
 
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
+	logFields["sampler_key"] = samplerKey
 
 	c.mut.RLock()
 	sampler, found := c.samplersByDestination[samplerKey]
 	c.mut.RUnlock()
 	if !found {
-		sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
+		sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
 		c.mut.Lock()
 		c.samplersByDestination[samplerKey] = sampler
 		c.mut.Unlock()
@@ -502,15 +495,11 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 	c.Metrics.Increment(status.KeepReason)
 
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
+	logFields["sampler_key"] = samplerKey
 
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if trace.RootSpan != nil {

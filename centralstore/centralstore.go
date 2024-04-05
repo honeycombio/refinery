@@ -23,13 +23,14 @@ const (
 // IsRoot should be set to true if the span is the root of the trace (we don't ask the store
 // to make this decision; the refinery should know this).
 type CentralSpan struct {
-	TraceID   string
-	SpanID    string // need access to this field for updating all fields
-	ParentID  string
-	Type      SpanType
-	KeyFields map[string]interface{}
-	AllFields map[string]interface{}
-	IsRoot    bool
+	TraceID    string
+	SpanID     string // need access to this field for updating all fields
+	ParentID   string
+	SamplerKey string
+	Type       SpanType
+	KeyFields  map[string]interface{}
+	AllFields  map[string]interface{}
+	IsRoot     bool
 }
 
 func (s *CentralSpan) Fields() map[string]interface{} {
@@ -94,25 +95,13 @@ type CentralTrace struct {
 	Spans     []*CentralSpan
 }
 
-func (t *CentralTrace) GetSamplerKey() (string, bool) {
-	var samplerKey any
-	var isLegacyKey any
-
+func (t *CentralTrace) GetSamplerKey() string {
 	for _, span := range t.Spans {
-		if samplerKey != nil && isLegacyKey != nil {
-			break
-		}
-
-		if span.KeyFields["sampler_key"] != nil {
-			samplerKey = span.KeyFields["sampler_key"]
-		}
-
-		if span.KeyFields["is_legacy_key"] != nil {
-			isLegacyKey = span.KeyFields["is_legacy_key"]
+		if span.SamplerKey != "" {
+			return span.SamplerKey
 		}
 	}
-
-	return samplerKey.(string), isLegacyKey.(bool)
+	return ""
 }
 
 func (t *CentralTrace) ID() string {

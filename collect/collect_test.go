@@ -353,6 +353,7 @@ func TestDryRunMode(t *testing.T) {
 			DroppedSize:       100,
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
+		DatasetPrefix: "prefix",
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -362,7 +363,7 @@ func TestDryRunMode(t *testing.T) {
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
+	sampler := samplerFactory.GetSamplerImplementationForKey("prefix.test")
 	coll.SamplerFactory = samplerFactory
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
