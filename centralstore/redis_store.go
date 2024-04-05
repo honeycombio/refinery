@@ -607,6 +607,7 @@ type centralTraceStatusInit struct {
 	Count      uint32 // number of spans in the trace
 	EventCount uint32 // number of span events in the trace
 	LinkCount  uint32 // number of span links in the trace
+	SamplerKey string
 }
 
 type centralTraceStatusReason struct {
@@ -622,6 +623,7 @@ type centralTraceStatusRedis struct {
 	EventCount  uint32
 	LinkCount   uint32
 	KeepReason  string
+	SamplerKey  string
 	ReasonIndex uint
 }
 
@@ -630,6 +632,7 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralT
 		TraceID:     status.TraceID,
 		State:       Unknown,
 		Rate:        status.Rate,
+		SamplerKey:  status.SamplerKey,
 		reasonIndex: status.ReasonIndex,
 		KeepReason:  status.KeepReason,
 		Count:       status.Count,
@@ -643,7 +646,8 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, span *Cent
 	defer spanStatus.End()
 
 	trace := &centralTraceStatusInit{
-		TraceID: span.TraceID,
+		TraceID:    span.TraceID,
+		SamplerKey: span.samplerKey,
 	}
 
 	args := redis.Args(t.traceStatusKey(trace.TraceID), traceStatusCountKey, expirationForTraceStatus.Seconds())

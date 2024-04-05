@@ -397,7 +397,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 	cs.ParentID = parentID
 
 	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
-	cs.SamplerKey = samplerKey
+	cs.SetSamplerKey(samplerKey)
 
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,

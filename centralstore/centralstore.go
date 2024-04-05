@@ -26,7 +26,7 @@ type CentralSpan struct {
 	TraceID    string
 	SpanID     string // need access to this field for updating all fields
 	ParentID   string
-	SamplerKey string
+	samplerKey string
 	Type       SpanType
 	KeyFields  map[string]interface{}
 	AllFields  map[string]interface{}
@@ -35,6 +35,10 @@ type CentralSpan struct {
 
 func (s *CentralSpan) Fields() map[string]interface{} {
 	return s.KeyFields
+}
+
+func (s *CentralSpan) SetSamplerKey(key string) {
+	s.samplerKey = key
 }
 
 type CentralTraceState string
@@ -59,6 +63,7 @@ type CentralTraceStatus struct {
 	Rate        uint
 	Metadata    map[string]interface{}
 	KeepReason  string
+	SamplerKey  string
 	reasonIndex uint      // this is the cache ID for the reason
 	Timestamp   time.Time // this is the last time the trace state was changed
 	Count       uint32    // number of spans in the trace
@@ -89,19 +94,15 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 }
 
 type CentralTrace struct {
-	TraceID   string
-	Timestamp uint64
-	Root      *CentralSpan
-	Spans     []*CentralSpan
+	TraceID    string
+	Timestamp  uint64
+	SamplerKey string
+	Root       *CentralSpan
+	Spans      []*CentralSpan
 }
 
 func (t *CentralTrace) GetSamplerKey() string {
-	for _, span := range t.Spans {
-		if span.SamplerKey != "" {
-			return span.SamplerKey
-		}
-	}
-	return ""
+	return t.SamplerKey
 }
 
 func (t *CentralTrace) ID() string {
