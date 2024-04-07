@@ -127,3 +127,16 @@ func (m *MultiMetrics) Store(name string, val float64) { // for storing a rarely
 	defer m.lock.Unlock()
 	m.values[name] = val
 }
+
+// GetAll isn't part of the Metrics API but is used by the RedisMetricsRecorder
+// to get all the metrics at once.
+func (m *MultiMetrics) GetAll() map[string]float64 {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	// copy the map so the caller can't mess with the values
+	ret := make(map[string]float64)
+	for name, v := range m.values {
+		ret[name] = float64(v)
+	}
+	return ret
+}
