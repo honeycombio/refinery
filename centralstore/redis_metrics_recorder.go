@@ -1,6 +1,8 @@
 package centralstore
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
@@ -30,13 +32,14 @@ type RedisMetricsRecorder struct {
 	done          chan struct{}
 }
 
-func NewRedisReporter(prefix string) *RedisMetricsRecorder {
-	return &RedisMetricsRecorder{
-		prefix: prefix,
-	}
-}
-
 func (r *RedisMetricsRecorder) Start() error {
+	// use the hostname if we have one, if not, use the timestamp
+	if hostname, err := os.Hostname(); err == nil && hostname != "" {
+		r.prefix = hostname
+	} else {
+		r.prefix = fmt.Sprintf("%d", r.Clock.Now().UnixMicro())
+	}
+
 	r.reportingFreq = 30 * time.Second // TODO: make this configurable
 	r.done = make(chan struct{})
 	go r.monitor()
