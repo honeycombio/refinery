@@ -145,7 +145,7 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 
 func TestCentralCollector_Decider(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -190,9 +190,13 @@ func TestCentralCollector_Decider(t *testing.T) {
 	}
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		count, ok := collector.Metrics.Get("trace_send_kept")
-		require.True(collect, ok)
-		require.Equal(collect, float64(6), count)
+		traces, err := collector.Store.GetStatusForTraces(context.Background(), traceids)
+		require.NoError(collect, err)
+		require.Equal(collect, numberOfTraces, len(traces))
+		for _, trace := range traces {
+			assert.Equal(collect, centralstore.DecisionKeep, trace.State)
+			assert.Equal(collect, "test", trace.SamplerKey)
+		}
 	}, 2*time.Second, 500*time.Millisecond)
 }
 

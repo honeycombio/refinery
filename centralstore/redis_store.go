@@ -313,7 +313,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		"num_of_cached_traces":  len(statusMap),
 	})
 
-	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, conn, pendingTraceIDs)
+	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, conn, traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -357,6 +357,8 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMap))
 	for _, status := range statusMap {
+		status.SamplerKey = statusMapFromRedis[status.TraceID].SamplerKey
+		status.Metadata = statusMapFromRedis[status.TraceID].Metadata
 		statuses = append(statuses, status)
 	}
 	sort.SliceStable(statuses, func(i, j int) bool {
