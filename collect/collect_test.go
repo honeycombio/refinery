@@ -576,8 +576,8 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.RLock()
-		defer coll.mutex.RUnlock()
+		//coll.mutex.RLock()
+		//defer coll.mutex.RUnlock()
 
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
@@ -586,8 +586,8 @@ func TestSampleConfigReload(t *testing.T) {
 	conf.ReloadConfig()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.RLock()
-		defer coll.mutex.RUnlock()
+		//coll.mutex.RLock()
+		//defer coll.mutex.RUnlock()
 
 		_, ok := coll.datasetSamplers[dataset]
 		return !ok
@@ -604,8 +604,8 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.RLock()
-		defer coll.mutex.RUnlock()
+		//coll.mutex.RLock()
+		//defer coll.mutex.RUnlock()
 
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
