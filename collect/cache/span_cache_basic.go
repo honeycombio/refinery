@@ -131,6 +131,8 @@ func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 		n = len(sc.current) - sc.nextix
 	}
 	defer func() {
+		// update the next index position to be the
+		// last element of the returned slice
 		sc.nextix += n
 	}()
 
