@@ -197,6 +197,7 @@ func (t *Trace) SpanEventCount() uint32 {
 func (t *Trace) GetSamplerKey(datasetPrefix string) string {
 	var samplerKey string
 	if IsLegacyAPIKey(t.APIKey) {
+		samplerKey = t.Dataset
 		if datasetPrefix != "" {
 			samplerKey = fmt.Sprintf("%s.%s", datasetPrefix, t.Dataset)
 		}
