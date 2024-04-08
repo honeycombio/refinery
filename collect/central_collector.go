@@ -16,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -78,6 +79,7 @@ func (c *CentralCollector) Start() error {
 
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
+	c.Metrics.Register("trace_send_kept", "counter")
 
 	// spin up one collector because this is a single threaded collector
 	c.limiter = newRetryLimiter(retryLimit)
@@ -183,19 +185,13 @@ func (c *CentralCollector) processTraces() {
 			}
 		}
 
+		timer := c.Clock.NewTimer(processTracesPauseDuration)
 		select {
 		case <-c.done:
+			timer.Stop()
 			return
-		default:
-		}
-
-		ticker := c.Clock.NewTimer(processTracesPauseDuration)
-		select {
-		case <-c.done:
-			ticker.Stop()
-			return
-		case <-ticker.Chan():
-			ticker.Stop()
+		case <-timer.Chan():
+			timer.Stop()
 			continue
 		}
 	}
@@ -232,7 +228,8 @@ func (c *CentralCollector) decide() {
 			traces := make([]*centralstore.CentralTrace, len(statuses))
 			stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
 
-			limiter := newConcurrencyLimiter(concurrentTraceFetcherCount)
+			eg := &errgroup.Group{}
+			eg.SetLimit(concurrentTraceFetcherCount)
 
 			for idx, status := range statuses {
 				// make a decision on each trace
@@ -243,16 +240,23 @@ func (c *CentralCollector) decide() {
 				currentStatus, currentIdx := status, idx
 				stateMap[status.TraceID] = status
 
-				limiter.Go(func() {
+				eg.Go(func() error {
 					trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
 					if err != nil {
-						c.Logger.Error().Logf("error getting trace %s: %s", currentStatus.TraceID, err)
-						return
+						return err
 					}
 					traces[currentIdx] = trace
+					return nil
 				})
 			}
-			limiter.Close()
+			err = eg.Wait()
+			if err != nil {
+				c.Logger.Error().Logf("error getting trace information: %s", err)
+			}
+
+			if len(traces) == 0 {
+				continue
+			}
 
 			for _, trace := range traces {
 				if trace == nil {
@@ -358,12 +362,6 @@ func (c *CentralCollector) decide() {
 			}
 		}
 
-		select {
-		case <-c.done:
-			return
-		default:
-		}
-
 		timer := c.Clock.NewTimer(deciderPauseDuration)
 		select {
 		case <-c.done:
@@ -387,8 +385,9 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 	// construct a central store span
 	cs := &centralstore.CentralSpan{
-		TraceID: sp.TraceID,
-		SpanID:  sp.ID,
+		TraceID:   sp.TraceID,
+		SpanID:    sp.ID,
+		KeyFields: make(map[string]interface{}),
 	}
 	parentID, ok := c.GetParentID(sp)
 	if !ok {
