@@ -36,6 +36,9 @@ func (s *TestService) Start() error {
 
 	s.Service.SetTime(s.Clock.Now())
 	s.pool = &redis.Pool{
+		MaxIdle:   10,
+		MaxActive: 10,
+		Wait:      true,
 		Dial: func() (redis.Conn, error) {
 			return redis.Dial("tcp", s.Service.Addr())
 		},

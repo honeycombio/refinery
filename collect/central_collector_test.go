@@ -101,7 +101,10 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 	}
 	transmission := &transmit.MockTransmission{}
 
-	collector := &CentralCollector{}
+	collector := &CentralCollector{
+		BlockOnDecider:   true,
+		BlockOnProcessor: true,
+	}
 	clock := clockwork.NewRealClock()
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
@@ -124,23 +127,26 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 					},
 				},
 			}
-			err := collector.AddSpan(span)
-			require.NoError(t, err)
+			require.NoError(t, collector.processSpan(span))
 		}
 		// now write the root span
 		span := &types.Span{
 			TraceID: tid,
 			ID:      "span0",
 		}
-		err := collector.AddSpan(span)
-		require.NoError(t, err)
+		require.NoError(t, collector.processSpan(span))
 	}
 
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		count, ok := collector.Metrics.Get("trace_send_kept")
-		require.True(collect, ok)
-		assert.Equal(collect, float64(numberOfTraces), count)
-	}, 2*time.Second, 500*time.Millisecond)
+	// wait for all traces to be processed
+	time.Sleep(2 * time.Second)
+	err := collector.makeDecision()
+	require.NoError(t, err)
+
+	collector.processTraces()
+
+	count, ok := collector.Metrics.Get("trace_send_kept")
+	require.True(t, ok)
+	assert.Equal(t, float64(numberOfTraces), count)
 }
 
 func TestCentralCollector_Decider(t *testing.T) {
@@ -258,9 +264,6 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 	require.NoError(t, startstop.Start(g.Objects(), nil))
 
 	stopper := func() {
-		conn := redis.Get()
-		conn.Do("FLUSHDB")
-		conn.Close()
 		require.NoError(t, startstop.Stop(g.Objects(), nil))
 	}
 

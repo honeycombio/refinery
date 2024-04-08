@@ -61,7 +61,8 @@ type CentralCollector struct {
 	hostname string
 
 	// test hooks
-	BlockOnDecider bool
+	BlockOnDecider   bool
+	BlockOnProcessor bool
 }
 
 func (c *CentralCollector) Start() error {
@@ -91,14 +92,14 @@ func (c *CentralCollector) Start() error {
 	})
 
 	c.limiter.Go(func() {
-		err := catchPanic(c.processTraces)
+		err := catchPanic(c.processor)
 		if err != nil {
 			c.Logger.Error().Logf("error processing traces: %s", err)
 		}
 	})
 
 	c.limiter.Go(func() {
-		err := catchPanic(c.decide)
+		err := catchPanic(c.decider)
 		if err != nil {
 			c.Logger.Error().Logf("error making decision for traces: %s", err)
 		}
@@ -146,7 +147,10 @@ func (c *CentralCollector) collect() {
 			if !ok {
 				return
 			}
-			c.processSpan(sp)
+			err := c.processSpan(sp)
+			if err != nil {
+				c.Logger.Error().Logf("error processing span: %s", err)
+			}
 		case <-c.reload:
 			// reload config
 		}
@@ -154,50 +158,56 @@ func (c *CentralCollector) collect() {
 
 }
 
-func (c *CentralCollector) processTraces() {
+func (c *CentralCollector) processor() {
 	for {
 		select {
 		case <-c.done:
 			return
 		default:
-			ids := c.SpanCache.GetTraceIDs(processTracesBatchSize)
-			c.Metrics.Histogram("collector_processor_batch_count", len(ids))
-			if len(ids) == 0 {
+			if c.BlockOnProcessor {
+			} else {
+				c.processTraces()
+			}
+
+			timer := c.Clock.NewTimer(processTracesPauseDuration)
+			select {
+			case <-c.done:
+				timer.Stop()
+				return
+			case <-timer.Chan():
+				timer.Stop()
 				continue
 			}
-
-			statuses, err := c.Store.GetStatusForTraces(context.Background(), ids)
-			if err != nil {
-				c.Logger.Error().Logf("error getting statuses for traces: %s", err)
-				continue
-			}
-			for _, status := range statuses {
-				switch status.State {
-				case centralstore.DecisionKeep:
-					c.send(status)
-					c.SpanCache.Remove(status.TraceID)
-
-				case centralstore.DecisionDrop:
-					c.SpanCache.Remove(status.TraceID)
-				default:
-					c.Logger.Debug().Logf("trace %s is still pending", status.TraceID)
-				}
-			}
-		}
-
-		timer := c.Clock.NewTimer(processTracesPauseDuration)
-		select {
-		case <-c.done:
-			timer.Stop()
-			return
-		case <-timer.Chan():
-			timer.Stop()
-			continue
 		}
 	}
 }
 
-func (c *CentralCollector) decide() {
+func (c *CentralCollector) processTraces() {
+	ids := c.SpanCache.GetTraceIDs(processTracesBatchSize)
+	c.Metrics.Histogram("collector_processor_batch_count", len(ids))
+	if len(ids) == 0 {
+		return
+	}
+
+	statuses, err := c.Store.GetStatusForTraces(context.Background(), ids)
+	if err != nil {
+		c.Logger.Error().Logf("error getting statuses for traces: %s", err)
+	}
+	for _, status := range statuses {
+		switch status.State {
+		case centralstore.DecisionKeep:
+			c.send(status)
+			c.SpanCache.Remove(status.TraceID)
+
+		case centralstore.DecisionDrop:
+			c.SpanCache.Remove(status.TraceID)
+		default:
+			c.Logger.Debug().Logf("trace %s is still pending", status.TraceID)
+		}
+	}
+}
+
+func (c *CentralCollector) decider() {
 	for {
 		select {
 		case <-c.done:
@@ -205,180 +215,181 @@ func (c *CentralCollector) decide() {
 		default:
 			// this is only ever true in test mode
 			if c.BlockOnDecider {
+			} else {
+				if err := c.makeDecision(); err != nil {
+					c.Logger.Error().Logf("error making decision: %s", err)
+				}
+			}
+
+			timer := c.Clock.NewTimer(deciderPauseDuration)
+			select {
+			case <-c.done:
+				timer.Stop()
+				return
+			case <-timer.Chan():
+				timer.Stop()
 				continue
 			}
-			ctx := context.Background()
-			tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, deciderBatchSize)
-			if err != nil {
-				c.Logger.Error().Logf("error getting traces needing decision: %s", err)
-				continue
-			}
-
-			c.Metrics.Histogram("collector_decider_batch_count", len(tracesIDs))
-
-			if len(tracesIDs) == 0 {
-				continue
-			}
-			statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs)
-			if err != nil {
-				c.Logger.Error().Logf("error getting statuses for traces: %s", err)
-				continue
-			}
-
-			traces := make([]*centralstore.CentralTrace, len(statuses))
-			stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
-
-			eg := &errgroup.Group{}
-			eg.SetLimit(concurrentTraceFetcherCount)
-
-			for idx, status := range statuses {
-				// make a decision on each trace
-				if status.State != centralstore.AwaitingDecision {
-					// someone else got to it first
-					continue
-				}
-				currentStatus, currentIdx := status, idx
-				stateMap[status.TraceID] = status
-
-				eg.Go(func() error {
-					trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
-					if err != nil {
-						return err
-					}
-					traces[currentIdx] = trace
-					return nil
-				})
-			}
-			err = eg.Wait()
-			if err != nil {
-				c.Logger.Error().Logf("error getting trace information: %s", err)
-			}
-
-			if len(traces) == 0 {
-				continue
-			}
-
-			for _, trace := range traces {
-				if trace == nil {
-					continue
-				}
-
-				if trace.Root != nil {
-					c.Metrics.Increment("trace_decision_has_root")
-				} else {
-					c.Metrics.Increment("trace_decision_no_root")
-				}
-
-				var sampler sample.Sampler
-				var found bool
-
-				// get sampler key (dataset for legacy keys, environment for new keys)
-				samplerKey := trace.GetSamplerKey()
-				logFields := logrus.Fields{
-					"trace_id": trace.TraceID,
-				}
-				logFields["sampler_key"] = samplerKey
-
-				// use sampler key to find sampler; create and cache if not found
-				c.mut.RLock()
-				sampler, found = c.samplersByDestination[samplerKey]
-				c.mut.RUnlock()
-				if !found {
-					sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
-					c.mut.Lock()
-					c.samplersByDestination[samplerKey] = sampler
-					c.mut.Unlock()
-				}
-
-				status, ok := stateMap[trace.TraceID]
-				if !ok {
-					c.Logger.Error().Logf("trace %s not found in state map", trace.TraceID)
-					continue
-				}
-
-				tr := &traceForDecision{
-					CentralTrace:    trace,
-					descendantCount: status.DescendantCount(),
-				}
-
-				// make sampling decision and update the trace
-				rate, shouldSend, reason, key := sampler.GetSampleRate(tr)
-				logFields["reason"] = reason
-				if key != "" {
-					logFields["sample_key"] = key
-				}
-				// This will observe sample rate attempts even if the trace is dropped
-				c.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
-
-				if !shouldSend {
-					c.Metrics.Increment("trace_decision_dropped")
-					c.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
-				}
-				c.Metrics.Increment("trace_decision_kept")
-				// This will observe sample rate decisions only if the trace is kept
-				c.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
-
-				// These meta data should be stored on the central trace status object
-				// so that it's synced across all refinery instances
-				if c.Config.GetAddRuleReasonToTrace() {
-					status.Metadata["meta.refinery.reason"] = reason
-					if status.Metadata["meta.refinery.send_reason"] == "" {
-						sendReason := TraceSendExpired
-						if trace.Root != nil {
-							sendReason = TraceSendGotRoot
-						}
-						status.Metadata["meta.refinery.send_reason"] = sendReason
-					}
-					if key != "" {
-						status.Metadata["meta.refinery.sample_key"] = key
-					}
-				}
-
-				if c.hostname != "" {
-					status.Metadata["meta.refinery.decider.local_hostname"] = c.hostname
-				}
-
-				var state centralstore.CentralTraceState
-				if shouldSend {
-					state = centralstore.DecisionKeep
-				} else {
-					state = centralstore.DecisionDrop
-				}
-				status.State = state
-				stateMap[status.TraceID] = status
-			}
-
-			updatedStatuses := make([]*centralstore.CentralTraceStatus, 0, len(stateMap))
-			for _, status := range stateMap {
-				if status == nil {
-					continue
-				}
-				updatedStatuses = append(updatedStatuses, status)
-			}
-
-			err = c.Store.SetTraceStatuses(ctx, updatedStatuses)
-			if err != nil {
-				c.Logger.Error().Logf("error setting trace statuses: %s", err)
-			}
-		}
-
-		timer := c.Clock.NewTimer(deciderPauseDuration)
-		select {
-		case <-c.done:
-			timer.Stop()
-			return
-		case <-timer.Chan():
-			timer.Stop()
-			continue
 		}
 	}
 }
 
-func (c *CentralCollector) processSpan(sp *types.Span) {
+func (c *CentralCollector) makeDecision() error {
+	ctx := context.Background()
+	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, deciderBatchSize)
+	if err != nil {
+		return err
+	}
+
+	c.Metrics.Histogram("collector_decider_batch_count", len(tracesIDs))
+
+	if len(tracesIDs) == 0 {
+		return nil
+	}
+	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs)
+	if err != nil {
+		return err
+	}
+
+	traces := make([]*centralstore.CentralTrace, len(statuses))
+	stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
+
+	eg := &errgroup.Group{}
+	eg.SetLimit(concurrentTraceFetcherCount)
+
+	for idx, status := range statuses {
+		// make a decision on each trace
+		if status.State != centralstore.AwaitingDecision {
+			// someone else got to it first
+			continue
+		}
+		currentStatus, currentIdx := status, idx
+		stateMap[status.TraceID] = status
+
+		eg.Go(func() error {
+			trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
+			if err != nil {
+				return err
+			}
+			traces[currentIdx] = trace
+			return nil
+		})
+	}
+	err = eg.Wait()
+	if err != nil {
+		c.Logger.Error().Logf("error getting trace information: %s", err)
+	}
+
+	if len(traces) == 0 {
+		return err
+	}
+
+	for _, trace := range traces {
+		if trace == nil {
+			continue
+		}
+
+		if trace.Root != nil {
+			c.Metrics.Increment("trace_decision_has_root")
+		} else {
+			c.Metrics.Increment("trace_decision_no_root")
+		}
+
+		var sampler sample.Sampler
+		var found bool
+
+		// get sampler key (dataset for legacy keys, environment for new keys)
+		samplerKey := trace.GetSamplerKey()
+		logFields := logrus.Fields{
+			"trace_id": trace.TraceID,
+		}
+		logFields["sampler_key"] = samplerKey
+
+		// use sampler key to find sampler; create and cache if not found
+		c.mut.RLock()
+		sampler, found = c.samplersByDestination[samplerKey]
+		c.mut.RUnlock()
+		if !found {
+			sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
+			c.mut.Lock()
+			c.samplersByDestination[samplerKey] = sampler
+			c.mut.Unlock()
+		}
+
+		status, ok := stateMap[trace.TraceID]
+		if !ok {
+			c.Logger.Error().Logf("trace %s not found in state map", trace.TraceID)
+			continue
+		}
+
+		tr := &traceForDecision{
+			CentralTrace:    trace,
+			descendantCount: status.DescendantCount(),
+		}
+
+		// make sampling decision and update the trace
+		rate, shouldSend, reason, key := sampler.GetSampleRate(tr)
+		logFields["reason"] = reason
+		if key != "" {
+			logFields["sample_key"] = key
+		}
+		// This will observe sample rate attempts even if the trace is dropped
+		c.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
+
+		if !shouldSend {
+			c.Metrics.Increment("trace_decision_dropped")
+			c.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
+		}
+		c.Metrics.Increment("trace_decision_kept")
+		// This will observe sample rate decisions only if the trace is kept
+		c.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
+
+		// These meta data should be stored on the central trace status object
+		// so that it's synced across all refinery instances
+		if c.Config.GetAddRuleReasonToTrace() {
+			status.Metadata["meta.refinery.reason"] = reason
+			if status.Metadata["meta.refinery.send_reason"] == "" {
+				sendReason := TraceSendExpired
+				if trace.Root != nil {
+					sendReason = TraceSendGotRoot
+				}
+				status.Metadata["meta.refinery.send_reason"] = sendReason
+			}
+			if key != "" {
+				status.Metadata["meta.refinery.sample_key"] = key
+			}
+		}
+
+		if c.hostname != "" {
+			status.Metadata["meta.refinery.decider.local_hostname"] = c.hostname
+		}
+
+		var state centralstore.CentralTraceState
+		if shouldSend {
+			state = centralstore.DecisionKeep
+		} else {
+			state = centralstore.DecisionDrop
+		}
+		status.State = state
+		stateMap[status.TraceID] = status
+	}
+
+	updatedStatuses := make([]*centralstore.CentralTraceStatus, 0, len(stateMap))
+	for _, status := range stateMap {
+		if status == nil {
+			continue
+		}
+		updatedStatuses = append(updatedStatuses, status)
+	}
+
+	return c.Store.SetTraceStatuses(ctx, updatedStatuses)
+}
+
+func (c *CentralCollector) processSpan(sp *types.Span) error {
 	err := c.SpanCache.Set(sp)
 	if err != nil {
 		c.Logger.Error().Logf("error adding span with trace ID %s to cache: %s", sp.TraceID, err)
-		return
+		return err
 	}
 
 	trace := c.SpanCache.Get(sp.TraceID)
@@ -423,11 +434,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) {
 
 	// send the span to the central store
 	ctx := context.Background()
-	err = c.Store.WriteSpan(ctx, cs)
-	if err != nil {
-		c.Logger.Error().WithFields(logFields).Logf("error writing span to central store: %s", err)
-	}
-
+	return c.Store.WriteSpan(ctx, cs)
 }
 
 func (c *CentralCollector) sendTracesForDecision() {
@@ -485,6 +492,7 @@ func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
 func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 	trace := c.SpanCache.Get(status.TraceID)
 	if trace == nil {
+		c.Logger.Error().Logf("trace %s not found in cache", status.TraceID)
 		return
 	}
 	traceDur := time.Since(trace.ArrivalTime)
