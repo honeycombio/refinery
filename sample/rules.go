@@ -81,7 +81,7 @@ func (s *RulesBasedSampler) Start() error {
 	return nil
 }
 
-func (s *RulesBasedSampler) GetSampleRate(trace KeyInfoExtractor) (rate uint, keep bool, reason string, key string) {
+func (s *RulesBasedSampler) GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
 		"trace_id": trace.ID(),
 	})
@@ -155,7 +155,7 @@ func (s *RulesBasedSampler) GetKeyFields() []string {
 	return s.keyFields
 }
 
-func ruleMatchesTrace(t KeyInfoExtractor, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
+func ruleMatchesTrace(t FieldsExtractor, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
 	if rule.Conditions == nil {
 		return true
@@ -168,7 +168,7 @@ func ruleMatchesTrace(t KeyInfoExtractor, rule *config.RulesBasedSamplerRule, ch
 		// If RootSpan is nil, it means the trace timer has fired or the trace has been
 		// ejected from the cache before the root span has arrived.
 		if condition.Operator == config.HasRootSpan {
-			if (t.RootKeyFields() != nil) == config.TryConvertToBool(condition.Value) {
+			if (t.RootFields() != nil) == config.TryConvertToBool(condition.Value) {
 				matched++
 				continue
 			} else {
@@ -180,7 +180,7 @@ func ruleMatchesTrace(t KeyInfoExtractor, rule *config.RulesBasedSamplerRule, ch
 		}
 
 	span:
-		for _, span := range t.AllKeyFields() {
+		for _, span := range t.AllFields() {
 			value, exists, checkedOnlyRoot := extractValueFromSpan(t, span, condition, checkNestedFields)
 			if condition.Matches == nil {
 				if conditionMatchesValue(condition, value, exists) {
@@ -202,13 +202,13 @@ func ruleMatchesTrace(t KeyInfoExtractor, rule *config.RulesBasedSamplerRule, ch
 	return matched == len(rule.Conditions)
 }
 
-func ruleMatchesSpanInTrace(trace KeyInfoExtractor, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
+func ruleMatchesSpanInTrace(trace FieldsExtractor, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
 	// We treat a rule with no conditions as a match.
 	if rule.Conditions == nil {
 		return true
 	}
 
-	for _, span := range trace.AllKeyFields() {
+	for _, span := range trace.AllFields() {
 		ruleMatched := true
 		for _, condition := range rule.Conditions {
 			// whether this condition is matched by this span.
@@ -263,8 +263,8 @@ func ruleMatchesSpanInTrace(trace KeyInfoExtractor, rule *config.RulesBasedSampl
 // value. But if we check a non-root value first, we need to keep checking all
 // the spans to see if any of them match.
 func extractValueFromSpan(
-	trace KeyInfoExtractor,
-	span types.KeyFielder,
+	trace FieldsExtractor,
+	span types.Fielder,
 	condition *config.RulesBasedSamplerCondition,
 	checkNestedFields bool) (value interface{}, exists bool, checkedOnlyRoot bool) {
 	// start with the assumption that we only checked the root span
@@ -290,10 +290,10 @@ func extractValueFromSpan(
 		// check if rule uses root span context
 		if strings.HasPrefix(field, RootPrefix) {
 			// make sure root span exists
-			if trace.RootKeyFields() != nil {
+			if trace.RootFields() != nil {
 				field = field[len(RootPrefix):]
 				// now we're using the root span
-				span = trace.RootKeyFields()
+				span = trace.RootFields()
 			} else {
 				// we wanted root span but this trace doesn't have one, so just skip it
 				continue

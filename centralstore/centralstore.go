@@ -109,15 +109,15 @@ func (t *CentralTrace) ID() string {
 	return t.TraceID
 }
 
-func (t *CentralTrace) RootKeyFields() types.KeyFielder {
+func (t *CentralTrace) RootFields() types.Fielder {
 	if t.Root == nil {
 		return nil
 	}
 	return t.Root
 }
 
-func (t *CentralTrace) AllKeyFields() []types.KeyFielder {
-	fields := make([]types.KeyFielder, 0, len(t.Spans))
+func (t *CentralTrace) AllFields() []types.Fielder {
+	fields := make([]types.Fielder, 0, len(t.Spans))
 	for _, span := range t.Spans {
 		fields = append(fields, span)
 	}

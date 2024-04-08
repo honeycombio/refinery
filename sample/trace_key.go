@@ -21,13 +21,13 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 }
 
 // build, builds the trace key based on the configuration of the traceKeyGenerator
-func (d *traceKey) build(trace KeyInfoExtractor) string {
+func (d *traceKey) build(trace FieldsExtractor) string {
 	// fieldCollector gets all values from the fields listed in the config, even
 	// if they happen multiple times.
 	fieldCollector := map[string][]string{}
 
 	// for each field, for each span, get the value of that field
-	spans := trace.AllKeyFields()
+	spans := trace.AllFields()
 	for _, field := range d.fields {
 		for _, span := range spans {
 			if val, ok := span.Fields()[field]; ok {

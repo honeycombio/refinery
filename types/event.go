@@ -18,7 +18,7 @@ const (
 	QueryTokenHeader  = "X-Honeycomb-Refinery-Query"
 )
 
-type KeyFielder interface {
+type Fielder interface {
 	Fields() map[string]any
 }
 
@@ -115,7 +115,7 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
-func (t *Trace) RootKeyFields() KeyFielder {
+func (t *Trace) RootFields() Fielder {
 	if t.RootSpan == nil {
 		return nil
 	}
@@ -123,8 +123,8 @@ func (t *Trace) RootKeyFields() KeyFielder {
 	return t.RootSpan
 }
 
-func (t *Trace) AllKeyFields() []KeyFielder {
-	res := make([]KeyFielder, 0, len(t.spans))
+func (t *Trace) AllFields() []Fielder {
+	res := make([]Fielder, 0, len(t.spans))
 	for _, sp := range t.spans {
 		res = append(res, sp)
 	}

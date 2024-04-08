@@ -11,17 +11,17 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// KeyFielder is an interface for types that can return a key field
+// FieldsExtractor is an interface for types that can return a key field
 // that's used to determine the sample rate for a trace
-type KeyInfoExtractor interface {
-	AllKeyFields() []types.KeyFielder
-	RootKeyFields() types.KeyFielder
+type FieldsExtractor interface {
+	AllFields() []types.Fielder
+	RootFields() types.Fielder
 	ID() string
 	DescendantCount() uint32
 }
 
 type Sampler interface {
-	GetSampleRate(trace KeyInfoExtractor) (rate uint, keep bool, reason string, key string)
+	GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string)
 	Start() error
 	GetKeyFields() []string
 }

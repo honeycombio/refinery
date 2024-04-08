@@ -41,7 +41,7 @@ func (d *DeterministicSampler) Start() error {
 	return nil
 }
 
-func (d *DeterministicSampler) GetSampleRate(trace KeyInfoExtractor) (rate uint, keep bool, reason string, key string) {
+func (d *DeterministicSampler) GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string) {
 	if d.sampleRate <= 1 {
 		return 1, true, "deterministic/always", ""
 	}

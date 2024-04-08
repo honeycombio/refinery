@@ -73,7 +73,7 @@ func (d *EMADynamicSampler) Start() error {
 	return nil
 }
 
-func (d *EMADynamicSampler) GetSampleRate(trace KeyInfoExtractor) (rate uint, keep bool, reason string, key string) {
+func (d *EMADynamicSampler) GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))

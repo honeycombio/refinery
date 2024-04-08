@@ -64,7 +64,7 @@ func (d *DynamicSampler) Start() error {
 	return nil
 }
 
-func (d *DynamicSampler) GetSampleRate(trace KeyInfoExtractor) (rate uint, keep bool, reason string, key string) {
+func (d *DynamicSampler) GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
