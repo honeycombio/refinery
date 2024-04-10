@@ -46,7 +46,7 @@ type redisPeers struct {
 
 // NewRedisPeers returns a peers collection backed by redis
 func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Peers, error) {
-	redisHost, _ := c.GetRedisHost()
+	redisHost := c.GetRedisHost()
 
 	if redisHost == "" {
 		redisHost = "localhost:6379"
@@ -72,7 +72,7 @@ func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Pe
 				case <-timeout:
 					return nil, err
 				default:
-					if authCode, _ := c.GetRedisAuthCode(); authCode != "" {
+					if authCode := c.GetRedisAuthCode(); authCode != "" {
 						conn, err = redis.Dial("tcp", redisHost, options...)
 						if err != nil {
 							return nil, err
@@ -81,9 +81,7 @@ func newRedisPeers(ctx context.Context, c config.Config, done chan struct{}) (Pe
 							conn.Close()
 							return nil, err
 						}
-						if err == nil {
-							return conn, nil
-						}
+						return conn, nil
 					} else {
 						conn, err = redis.Dial("tcp", redisHost, options...)
 						if err == nil {
@@ -242,18 +240,18 @@ func buildOptions(c config.Config) []redis.DialOption {
 		redis.DialDatabase(c.GetRedisDatabase()),
 	}
 
-	username, _ := c.GetRedisUsername()
+	username := c.GetRedisUsername()
 	if username != "" {
 		options = append(options, redis.DialUsername(username))
 	}
 
-	password, _ := c.GetRedisPassword()
+	password := c.GetRedisPassword()
 	if password != "" {
 		options = append(options, redis.DialPassword(password))
 	}
 
-	useTLS, _ := c.GetUseTLS()
-	tlsInsecure, _ := c.GetUseTLSInsecure()
+	useTLS := c.GetUseTLS()
+	tlsInsecure := c.GetUseTLSInsecure()
 	if useTLS {
 		tlsConfig := &tls.Config{
 			MinVersion: tls.VersionTLS12,
@@ -273,7 +271,7 @@ func buildOptions(c config.Config) []redis.DialOption {
 
 func publicAddr(c config.Config) (string, error) {
 	// compute the public version of my peer listen address
-	listenAddr, _ := c.GetPeerListenAddr()
+	listenAddr := c.GetPeerListenAddr()
 	_, port, err := net.SplitHostPort(listenAddr)
 
 	if err != nil {
@@ -283,7 +281,7 @@ func publicAddr(c config.Config) (string, error) {
 	var myIdentifier string
 
 	// If RedisIdentifier is set, use as identifier.
-	if redisIdentifier, _ := c.GetRedisIdentifier(); redisIdentifier != "" {
+	if redisIdentifier := c.GetRedisIdentifier(); redisIdentifier != "" {
 		myIdentifier = redisIdentifier
 		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
 	} else {
@@ -302,7 +300,7 @@ func publicAddr(c config.Config) (string, error) {
 // Scan network interfaces to determine an identifier from either IP or hostname.
 func getIdentifierFromInterfaces(c config.Config) (string, error) {
 	myIdentifier, _ := os.Hostname()
-	identifierInterfaceName, _ := c.GetIdentifierInterfaceName()
+	identifierInterfaceName := c.GetIdentifierInterfaceName()
 
 	if identifierInterfaceName != "" {
 		ifc, err := net.InterfaceByName(identifierInterfaceName)
@@ -321,7 +319,7 @@ func getIdentifierFromInterfaces(c config.Config) (string, error) {
 		for _, addr := range addrs {
 			// ParseIP doesn't know what to do with the suffix
 			ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
-			ipv6, _ := c.GetUseIPV6Identifier()
+			ipv6 := c.GetUseIPV6Identifier()
 			if ipv6 && ip.To16() != nil {
 				ipStr = fmt.Sprintf("[%s]", ip.String())
 				break

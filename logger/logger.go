@@ -29,11 +29,7 @@ type Entry interface {
 
 func GetLoggerImplementation(c config.Config) Logger {
 	var logger Logger
-	loggerType, err := c.GetLoggerType()
-	if err != nil {
-		fmt.Printf("unable to get logger type from config: %v\n", err)
-		os.Exit(1)
-	}
+	loggerType := c.GetLoggerType()
 	switch loggerType {
 	case "honeycomb":
 		logger = &HoneycombLogger{}

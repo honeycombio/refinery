@@ -179,23 +179,10 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	var listenAddr, grpcAddr string
 	if r.incomingOrPeer == "incoming" {
-		listenAddr, err = r.Config.GetListenAddr()
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to get listen addr config: %s", err)
-			return
-		}
-		// GRPC listen addr is optional, err means addr was not empty and invalid
-		grpcAddr, err = r.Config.GetGRPCListenAddr()
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to get grpc listen addr config: %s", err)
-			return
-		}
+		listenAddr = r.Config.GetListenAddr()
+		grpcAddr = r.Config.GetGRPCListenAddr()
 	} else {
-		listenAddr, err = r.Config.GetPeerListenAddr()
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to get peer listen addr config: %s", err)
-			return
-		}
+		listenAddr = r.Config.GetPeerListenAddr()
 	}
 
 	r.iopLogger.Info().Logf("Listening on %s", listenAddr)
@@ -290,12 +277,7 @@ func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
-	cfgs, err := r.Config.GetAllSamplerRules()
-	if err != nil {
-		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	cfgs := r.Config.GetAllSamplerRules()
 	r.marshalToFormat(w, cfgs, format)
 }
 
@@ -382,11 +364,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 	eventTime := getEventTime(req.Header.Get(types.TimestampHeader))
 	vars := mux.Vars(req)
 	dataset := vars["datasetName"]
-
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return nil, err
-	}
+	apiHost := r.Config.GetHoneycombAPI()
 
 	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
@@ -641,10 +619,7 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey
 	// once for the entire batch instead of in every event.
 	vars := mux.Vars(req)
 	dataset := vars["datasetName"]
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return nil, err
-	}
+	apiHost := r.Config.GetHoneycombAPI()
 	return &types.Event{
 		Context:     req.Context(),
 		APIHost:     apiHost,
@@ -855,10 +830,7 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 }
 
 func (r *Router) lookupEnvironment(apiKey string) (string, error) {
-	apiEndpoint, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
-	}
+	apiEndpoint := r.Config.GetHoneycombAPI()
 	authURL, err := url.Parse(apiEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
