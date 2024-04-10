@@ -1355,7 +1355,7 @@ groups:
         summary: is the list of field names to use for the span ID.
         description: >
           The first field in the list that is present in an event will be used
-          as the span ID. 
+          as the span ID.
 
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
@@ -1761,7 +1761,7 @@ groups:
         firstVersion: v2.6
         type: duration
         valuetype: nondefault
-        default: 1s
+        default: 2s
         reload: true
         summary: is the duration of the delay before sending spans to the central store.
         description: >
@@ -1771,14 +1771,14 @@ groups:
           this value at the cost of greater latency and increased memory
           consumption in the central store.
 
-          NOTE: TODO this value is the same as SendDelay in the InMemCollector,
-          should they be unified?
-
       - name: TraceTimeout
         firstVersion: v2.6
         type: duration
         valuetype: nondefault
         default: 1m
+        validations:
+          - type: minimum
+            arg: 1s
         reload: true
         summary: is the maximum duration after which a trace is considered to have timed out.
         description: >

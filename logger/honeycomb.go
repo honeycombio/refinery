@@ -40,10 +40,7 @@ func (h *HoneycombLogger) Start() error {
 	// preserve it.
 	// TODO: make LogLevel part of the HoneycombLogger/LogrusLogger sections?
 	h.level = h.Config.GetLoggerLevel()
-	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
-	if err != nil {
-		return err
-	}
+	loggerConfig := h.Config.GetHoneycombLoggerConfig()
 	h.loggerConfig = loggerConfig
 	var loggerTx transmission.Sender
 	if h.loggerConfig.APIKey == "" {
@@ -126,14 +123,7 @@ func (h *HoneycombLogger) reloadBuilder() {
 	h.Debug().Logf("reloading config for Honeycomb logger")
 	// preserve log level
 	h.level = h.Config.GetLoggerLevel()
-	loggerConfig, err := h.Config.GetHoneycombLoggerConfig()
-	if err != nil {
-		// complain about this both to STDOUT and to the previously configured
-		// honeycomb logger
-		fmt.Printf("failed to reload configs for Honeycomb logger: %+v\n", err)
-		h.Error().Logf("failed to reload configs for Honeycomb logger: %+v", err)
-		return
-	}
+	loggerConfig := h.Config.GetHoneycombLoggerConfig()
 	h.loggerConfig = loggerConfig
 	h.builder.APIHost = h.loggerConfig.APIHost
 	h.builder.WriteKey = h.loggerConfig.APIKey

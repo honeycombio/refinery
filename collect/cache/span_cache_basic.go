@@ -3,7 +3,6 @@ package cache
 import (
 	"sort"
 	"sync"
-	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -76,11 +75,7 @@ func (sc *SpanCache_basic) GetOldest(fract float64) []string {
 	}
 	n := int(float64(len(sc.cache)) * fract)
 	ids := make([]tidWithImpact, 0, len(sc.cache))
-
-	timeout, err := sc.Cfg.GetTraceTimeout()
-	if err != nil {
-		timeout = 60 * time.Second
-	}
+	timeout := sc.Cfg.GetTraceTimeout()
 
 	sc.mut.RLock()
 	for traceID := range sc.cache {
