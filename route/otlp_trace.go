@@ -78,11 +78,7 @@ func processTraceRequest(
 	apiKey string) error {
 
 	var requestID types.RequestIDContextKey
-	apiHost, err := router.Config.GetHoneycombAPI()
-	if err != nil {
-		router.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
-		return err
-	}
+	apiHost := router.Config.GetHoneycombAPI()
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)

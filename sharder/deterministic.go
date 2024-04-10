@@ -132,10 +132,7 @@ func (d *DeterministicSharder) Start() error {
 		}
 
 		// get my listen address for peer traffic for the Port number
-		listenAddr, err := d.Config.GetPeerListenAddr()
-		if err != nil {
-			return errors.Wrap(err, "failed to get listen addr config")
-		}
+		listenAddr := d.Config.GetPeerListenAddr()
 		_, localPort, err := net.SplitHostPort(listenAddr)
 		if err != nil {
 			return errors.Wrap(err, "failed to parse listen addr into host:port")
@@ -145,7 +142,7 @@ func (d *DeterministicSharder) Start() error {
 		var localIPs []string
 
 		// If RedisIdentifier is an IP, use as localIPs value.
-		if redisIdentifier, err := d.Config.GetRedisIdentifier(); err == nil && redisIdentifier != "" {
+		if redisIdentifier := d.Config.GetRedisIdentifier(); redisIdentifier != "" {
 			if ip := net.ParseIP(redisIdentifier); ip != nil {
 				d.Logger.Debug().Logf("Using RedisIdentifier as public IP: %s", redisIdentifier)
 				localIPs = []string{redisIdentifier}
