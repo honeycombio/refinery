@@ -66,6 +66,7 @@ func (r *RedisMetricsRecorder) monitor() {
 			conn.SetHashTTL("Refinery_Metrics_"+r.prefix, allmetrics, r.reportingFreq*2)
 			conn.Close()
 		case <-r.done:
+			ticker.Stop()
 			return
 		}
 	}
