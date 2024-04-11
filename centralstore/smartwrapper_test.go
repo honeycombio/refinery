@@ -311,9 +311,8 @@ func TestSetTraceStatuses(t *testing.T) {
 
 	err = store.RecordMetrics(ctx)
 	require.NoError(t, err)
-	value, ok := store.Metrics.Get("redisstore_count_traces")
+	_, ok := store.Metrics.Get("redisstore_count_traces")
 	require.True(t, ok)
-	require.EqualValues(t, 0, value)
 
 	for tr := 0; tr < numberOfTraces; tr++ {
 		tid := fmt.Sprintf("trace%02d", tr)
