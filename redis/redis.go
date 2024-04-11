@@ -91,8 +91,8 @@ var _ Client = &DefaultClient{}
 
 type DefaultClient struct {
 	pool    *redis.Pool
-	Config  config.Config   `inject:""`
-	Metrics metrics.Metrics `inject:"genericMetrics"`
+	Config  config.RedisConfig `inject:""`
+	Metrics metrics.Metrics    `inject:"genericMetrics"`
 
 	// An overwritable clockwork.Clock for test injection
 	Clock clockwork.Clock
@@ -110,7 +110,7 @@ type DefaultScript struct {
 	script *redis.Script
 }
 
-func buildOptions(c config.Config) []redis.DialOption {
+func buildOptions(c config.RedisConfig) []redis.DialOption {
 	options := []redis.DialOption{
 		redis.DialReadTimeout(1 * time.Second),
 		redis.DialConnectTimeout(1 * time.Second),

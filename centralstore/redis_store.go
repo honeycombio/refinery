@@ -11,8 +11,8 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
-	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -1167,7 +1167,7 @@ const addStatusScript = `
 	local traceStatusKey = KEYS[1]
 	local traceStatusCountKey = KEYS[2]
 	local ttl = ARGV[1]
-	
+
 	local traceStatus = {}
 	for i=2, table.getn(ARGV) do
     	traceStatus[i-1] = ARGV[i]

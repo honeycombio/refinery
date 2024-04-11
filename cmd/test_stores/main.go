@@ -14,9 +14,9 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
-	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/jessevdk/go-flags"
 	"github.com/jonboulle/clockwork"
 )
