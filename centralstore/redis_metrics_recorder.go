@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/jonboulle/clockwork"
 )
 
