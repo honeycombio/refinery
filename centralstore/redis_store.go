@@ -187,7 +187,6 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 	otelutil.AddSpanFields(writeSpan, map[string]interface{}{
 		"trace_id":  span.TraceID,
 		"span_id":   span.SpanID,
-		"parent_id": span.ParentID,
 		"span_type": span.Type,
 		"state":     state,
 	})
@@ -196,6 +195,9 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 	case DecisionDrop:
 		return nil
 	case DecisionKeep, AwaitingDecision:
+		if span.SpanID == "" {
+			return nil
+		}
 		err := r.traces.incrementSpanCounts(ctx, conn, span.TraceID, span.Type)
 		if err != nil {
 			return err
@@ -203,7 +205,7 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 
 		return nil
 	case Collecting:
-		if span.ParentID == "" {
+		if span.IsRoot {
 			_, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), span.TraceID)
 			if err != nil {
 				return err
@@ -263,7 +265,7 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 		}
 		spans = append(spans, span)
 
-		if span.ParentID == "" {
+		if span.IsRoot {
 			rootSpan = span
 		}
 	}
@@ -357,8 +359,13 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMap))
 	for _, status := range statusMap {
-		status.SamplerKey = statusMapFromRedis[status.TraceID].SamplerKey
-		status.Metadata = statusMapFromRedis[status.TraceID].Metadata
+		v, ok := statusMapFromRedis[status.TraceID]
+		if ok {
+			status.SamplerKey = v.SamplerKey
+			status.Metadata = v.Metadata
+			status.Rate = v.Rate
+			status.Timestamp = v.Timestamp
+		}
 		statuses = append(statuses, status)
 	}
 	sort.SliceStable(statuses, func(i, j int) bool {
@@ -479,6 +486,12 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
+	// store keep reason in status
+	err := r.traces.keepTrace(ctx, conn, statuses)
+	if err != nil {
+		return err
+	}
+
 	traceIDs := make([]string, 0, len(statuses))
 	for _, status := range statuses {
 		traceIDs = append(traceIDs, status.TraceID)
@@ -501,7 +514,6 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 		}
 	}
 
-	var keeps []*CentralTraceStatus
 	for _, status := range statuses {
 		if successMap != nil {
 			if _, ok := successMap[status.TraceID]; !ok {
@@ -509,14 +521,7 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 			}
 		}
 
-		keeps = append(keeps, status)
 		r.DecisionCache.Record(status, true, status.KeepReason)
-	}
-
-	// store keep reason in status
-	err = r.traces.keepTrace(ctx, conn, keeps)
-	if err != nil {
-		return err
 	}
 
 	// remove span list
@@ -605,7 +610,6 @@ func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer, keepTraceSc
 
 type centralTraceStatusInit struct {
 	TraceID    string
-	Rate       uint
 	Count      uint32 // number of spans in the trace
 	EventCount uint32 // number of span events in the trace
 	LinkCount  uint32 // number of span links in the trace
@@ -614,32 +618,46 @@ type centralTraceStatusInit struct {
 
 type centralTraceStatusReason struct {
 	KeepReason  string
+	Rate        uint
 	ReasonIndex uint // this is the cache ID for the reason
+	Metadata    []byte
 }
 
 type centralTraceStatusRedis struct {
 	TraceID     string
 	State       string
 	Rate        uint
+	Metadata    []byte
 	Count       uint32
 	EventCount  uint32
 	LinkCount   uint32
 	KeepReason  string
 	SamplerKey  string
 	ReasonIndex uint
+	Timestamp   int64
 }
 
 func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralTraceStatus {
+	metadata := make(map[string]any, 0)
+	if status.Metadata != nil {
+		err := json.Unmarshal(status.Metadata, &metadata)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
 	return &CentralTraceStatus{
 		TraceID:     status.TraceID,
 		State:       Unknown,
 		Rate:        status.Rate,
 		SamplerKey:  status.SamplerKey,
 		reasonIndex: status.ReasonIndex,
+		Metadata:    metadata,
 		KeepReason:  status.KeepReason,
 		Count:       status.Count,
 		EventCount:  status.EventCount,
 		LinkCount:   status.LinkCount,
+		Timestamp:   time.UnixMicro(status.Timestamp),
 	}
 }
 
@@ -662,20 +680,40 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, span *Cent
 	return nil
 }
 
+// keepTrace stores the reason and metadata used for making a keep decision about a trace.
+// it updates the trace statuses in batch. If one of the updates fails, it ignores the error
+// and continues to update the rest of the traces.
 func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*CentralTraceStatus) error {
 	_, span := t.tracer.Start(ctx, "keepTrace")
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_traces", len(status))
-	traces := make([]*centralTraceStatusReason, 0, len(status))
+	traces := make([]interface{}, 0, len(status)+1)
+	traces = append(traces, "key")
+	args := redis.Args()
+	var err error
+	metadata := make([]byte, 0)
 	for _, s := range status {
-		traces = append(traces, &centralTraceStatusReason{
+		if s.Metadata != nil {
+			metadata, err = json.Marshal(s.Metadata)
+			if err != nil {
+				return err
+			}
+		}
+		trace := &centralTraceStatusReason{
 			KeepReason: s.KeepReason,
-		})
+			Rate:       s.Rate,
+			Metadata:   metadata,
+		}
+		key := map[string]any{"key": t.traceStatusKey(s.TraceID)}
+
+		args = args.AddFlat(key)
+		args = args.AddFlat(trace)
+		traces = append(traces, args...)
 
 	}
 
-	_, err := t.keepTraceScript.Do(ctx, conn, traces)
+	_, err = t.keepTraceScript.Do(ctx, conn, traces...)
 	if err != nil {
 		return err
 	}
@@ -697,6 +735,9 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, tra
 		status := &centralTraceStatusRedis{}
 		err := conn.GetStructHash(t.traceStatusKey(traceID), status)
 		if err != nil {
+			if errors.Is(err, redis.ErrKeyNotFound) {
+				continue
+			}
 			return nil, fmt.Errorf("failed to retrieve trace status for trace ID %s with error %s", traceID, err)
 		}
 
@@ -1116,6 +1157,8 @@ const stateChangeScript = `
 
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
+	   local status = redis.call("HSET", string.format("%s:status", traceID), "Timestamp", timestamp)
+
 	   -- add it to the result list
 	   table.insert(result, traceID)
 	until true
@@ -1185,13 +1228,17 @@ const addStatusScript = `
 
 const keepTraceKey = 1
 const keepTraceScript = `
-	local traceStatusKey = KEYS[1]
-
 	local totalArgs = table.getn(ARGV)
+	local traceStatusKey = ""
+
 	for i=1, totalArgs, 2 do
 	--	If trace status does not exist, a new entry is created.
 	--	If KeepReason already exists, this operation has no effect.
-		redis.call("HSETNX", traceStatusKey, ARGV[i], ARGV[i+1])
+		if ARGV[i] == "key" then
+			traceStatusKey = ARGV[i+1]
+		else
+			redis.call("HSETNX", traceStatusKey, ARGV[i], ARGV[i+1])
+		end
 	end
 
 	return 1
