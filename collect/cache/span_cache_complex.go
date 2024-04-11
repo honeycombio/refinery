@@ -3,6 +3,7 @@ package cache
 import (
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -77,6 +78,7 @@ func (sc *SpanCache_complex) Set(sp *types.Span) error {
 	trace.TraceID = traceID
 	trace.ArrivalTime = sc.Clock.Now()
 	trace.AddSpan(sp)
+
 	return nil
 }
 
@@ -87,6 +89,7 @@ func (sc *SpanCache_complex) Get(traceID string) *types.Trace {
 	if !ok {
 		return nil
 	}
+
 	return sc.cache[index]
 }
 
@@ -99,9 +102,16 @@ func (sc *SpanCache_complex) GetOldest(fract float64) []string {
 		id     string
 		impact int
 	}
-	n := int(float64(len(sc.active)) * fract)
-	ids := make([]tidWithImpact, 0, len(sc.active))
+	sc.mut.RLock()
+	count := len(sc.active)
+	sc.mut.RLock()
+	n := int(float64(count) * fract)
+	ids := make([]tidWithImpact, 0, n)
+
 	timeout := sc.Cfg.GetTraceTimeout()
+	if timeout == 0 {
+		timeout = 60 * time.Second
+	}
 
 	sc.mut.RLock()
 	for _, ix := range sc.active {
@@ -149,6 +159,12 @@ func (sc *SpanCache_complex) GetTraceIDs(n int) []string {
 	if sc.nextix+n > len(sc.current) {
 		n = len(sc.current) - sc.nextix
 	}
+	defer func() {
+		// update the next index position to be the
+		// last element of the returned slice
+		sc.nextix += n
+	}()
+
 	return sc.current[sc.nextix : sc.nextix+n]
 }
 

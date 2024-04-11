@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -109,6 +110,39 @@ func TestGetOldest(t *testing.T) {
 			require.Len(t, traceIDs, 2)
 			assert.Equal(t, ids[0], traceIDs[0])
 			assert.Equal(t, ids[1], traceIDs[1])
+		})
+	}
+}
+
+func TestGetTraceIDs(t *testing.T) {
+	for _, typ := range []string{"basic", "complex"} {
+		c := getCache(typ, clockwork.NewFakeClock())
+		t.Run(typ, func(t *testing.T) {
+
+			err := c.(startstop.Starter).Start()
+			require.NoError(t, err)
+
+			for i := 0; i < 10; i++ {
+				// test that we can add a span
+				span := &types.Span{
+					TraceID: fmt.Sprintf("trace%d", i),
+					ID:      fmt.Sprintf("span%d", i),
+					Event: types.Event{
+						APIHost: "apihost",
+						APIKey:  "apikey",
+						Dataset: "dataset",
+					},
+				}
+				err = c.Set(span)
+				require.NoError(t, err)
+			}
+
+			// test that we can retrieve the traces in batches
+			firstBatch := c.GetTraceIDs(5)
+			secondBatch := c.GetTraceIDs(5)
+			thirdBatch := c.GetTraceIDs(5)
+			require.NotEqualValues(t, firstBatch, secondBatch)
+			require.NotNil(t, thirdBatch)
 		})
 	}
 }

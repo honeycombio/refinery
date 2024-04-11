@@ -9,7 +9,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/types"
 )
 
 type EMAThroughputSampler struct {
@@ -91,7 +90,7 @@ func (d *EMAThroughputSampler) SetClusterSize(size int) {
 	}
 }
 
-func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *EMAThroughputSampler) GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
@@ -103,7 +102,7 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		"sample_key":  key,
 		"sample_rate": rate,
 		"sample_keep": shouldKeep,
-		"trace_id":    trace.TraceID,
+		"trace_id":    trace.ID(),
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 	if shouldKeep {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/types"
 )
 
 type SpanType string
@@ -22,13 +23,22 @@ const (
 // IsRoot should be set to true if the span is the root of the trace (we don't ask the store
 // to make this decision; the refinery should know this).
 type CentralSpan struct {
-	TraceID   string
-	SpanID    string // need access to this field for updating all fields
-	ParentID  string
-	Type      SpanType
-	KeyFields map[string]interface{}
-	AllFields map[string]interface{}
-	IsRoot    bool
+	TraceID    string
+	SpanID     string // need access to this field for updating all fields
+	ParentID   string
+	samplerKey string
+	Type       SpanType
+	KeyFields  map[string]interface{}
+	AllFields  map[string]interface{}
+	IsRoot     bool
+}
+
+func (s *CentralSpan) Fields() map[string]interface{} {
+	return s.KeyFields
+}
+
+func (s *CentralSpan) SetSamplerKey(key string) {
+	s.samplerKey = key
 }
 
 type CentralTraceState string
@@ -51,7 +61,9 @@ type CentralTraceStatus struct {
 	TraceID     string
 	State       CentralTraceState
 	Rate        uint
+	Metadata    map[string]interface{}
 	KeepReason  string
+	SamplerKey  string
 	reasonIndex uint      // this is the cache ID for the reason
 	Timestamp   time.Time // this is the last time the trace state was changed
 	Count       uint32    // number of spans in the trace
@@ -82,10 +94,34 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 }
 
 type CentralTrace struct {
-	TraceID   string
-	Timestamp uint64
-	Root      *CentralSpan
-	Spans     []*CentralSpan
+	TraceID    string
+	Timestamp  uint64
+	SamplerKey string
+	Root       *CentralSpan
+	Spans      []*CentralSpan
+}
+
+func (t *CentralTrace) GetSamplerKey() string {
+	return t.SamplerKey
+}
+
+func (t *CentralTrace) ID() string {
+	return t.TraceID
+}
+
+func (t *CentralTrace) RootFields() types.Fielder {
+	if t.Root == nil {
+		return nil
+	}
+	return t.Root
+}
+
+func (t *CentralTrace) AllFields() []types.Fielder {
+	fields := make([]types.Fielder, 0, len(t.Spans))
+	for _, span := range t.Spans {
+		fields = append(fields, span)
+	}
+	return fields
 }
 
 // ensure that CentralTraceStatus implements the KeptTrace interface
