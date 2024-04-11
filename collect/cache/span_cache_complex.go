@@ -104,23 +104,23 @@ func (sc *SpanCache_complex) GetOldest(fract float64) []string {
 	}
 	sc.mut.RLock()
 	count := len(sc.active)
-	n := int(float64(count) * fract)
 	sc.mut.RLock()
-	ids := make([]tidWithImpact, 0, count)
+	n := int(float64(count) * fract)
+	ids := make([]tidWithImpact, 0, n)
 
 	timeout := sc.Cfg.GetTraceTimeout()
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	}
 
-	sc.mut.Lock()
+	sc.mut.RLock()
 	for _, ix := range sc.active {
 		ids = append(ids, tidWithImpact{
 			id:     sc.cache[ix].TraceID,
 			impact: sc.cache[ix].CacheImpact(timeout),
 		})
 	}
-	sc.mut.Unlock()
+	sc.mut.RUnlock()
 	// Sort traces by CacheImpact, heaviest first
 	sort.Slice(ids, func(i, j int) bool {
 		return ids[i].impact > ids[j].impact

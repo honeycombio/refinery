@@ -11,7 +11,7 @@ import (
 var _ Client = &TestService{}
 
 type TestService struct {
-	Config  config.Config   `inject:""` // currently ignored by the test service
+	Config  config.Config   `inject:""`
 	Clock   clockwork.Clock `inject:""`
 	Metrics metrics.Metrics `inject:"genericMetrics"`
 	Service *miniredis.Miniredis

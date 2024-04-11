@@ -293,7 +293,6 @@ func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 // structures.
 func (i *InMemCollector) collect() {
 	tickerDuration := i.Config.GetSendTickerValue()
-	fmt.Println("tickerDuration: ", tickerDuration)
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
@@ -593,7 +592,6 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	var found bool
 
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	fmt.Println("i.datasetPrefix: ", i.datasetPrefix)
 	samplerKey := trace.GetSamplerKey(i.datasetPrefix)
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,

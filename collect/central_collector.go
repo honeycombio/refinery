@@ -55,8 +55,8 @@ type CentralCollector struct {
 	incoming chan *types.Span
 	reload   chan struct{}
 
-	done    chan struct{}
-	limiter *retryLimiter
+	done chan struct{}
+	eg   *errgroup.Group
 
 	hostname string
 
@@ -83,26 +83,30 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("trace_send_kept", "counter")
 
 	// spin up one collector because this is a single threaded collector
-	c.limiter = newRetryLimiter(retryLimit)
-	c.limiter.Go(func() {
+	c.eg = &errgroup.Group{}
+	c.eg.SetLimit(retryLimit)
+	c.eg.Go(func() error {
 		err := catchPanic(c.collect)
 		if err != nil {
 			c.Logger.Error().Logf("error collecting spans: %s", err)
 		}
+		return nil
 	})
 
-	c.limiter.Go(func() {
+	c.eg.Go(func() error {
 		err := catchPanic(c.processor)
 		if err != nil {
 			c.Logger.Error().Logf("error processing traces: %s", err)
 		}
+		return nil
 	})
 
-	c.limiter.Go(func() {
+	c.eg.Go(func() error {
 		err := catchPanic(c.decider)
 		if err != nil {
 			c.Logger.Error().Logf("error making decision for traces: %s", err)
 		}
+		return nil
 	})
 
 	return nil
@@ -112,8 +116,7 @@ func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
-	c.limiter.Close()
-	return nil
+	return c.eg.Wait()
 }
 
 // implement the Collector interface

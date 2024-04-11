@@ -78,7 +78,7 @@ func (sc *SpanCache_basic) GetOldest(fract float64) []string {
 	count := len(sc.cache)
 	sc.mut.RUnlock()
 	n := int(float64(count) * fract)
-	ids := make([]tidWithImpact, 0, count)
+	ids := make([]tidWithImpact, 0, n)
 
 	timeout := sc.Cfg.GetTraceTimeout()
 	if timeout == 0 {
