@@ -14,17 +14,23 @@ import (
 	"time"
 
 	"github.com/facebookgo/inject"
+	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
-	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	tracev1 "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/sharder"
@@ -313,16 +319,15 @@ func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
 }
 
 func TestDebugTrace(t *testing.T) {
+
 	req, _ := http.NewRequest("GET", "/debug/trace/123abcdef", nil)
 	req = mux.SetURLVars(req, map[string]string{"traceID": "123abcdef"})
 
 	rr := httptest.NewRecorder()
-	router := &Router{
-		Sharder: &TestSharder{},
-	}
+	router := &Router{}
 
 	router.debugTrace(rr, req)
-	if body := rr.Body.String(); body != `{"traceID":"123abcdef","node":"http://localhost:12345"}` {
+	if body := rr.Body.String(); body != `{"traceID":"123abcdef"}` {
 		t.Error(body)
 	}
 }
@@ -350,8 +355,8 @@ func TestOTLPRequest(t *testing.T) {
 	defer server.Close()
 
 	request := &collectortrace.ExportTraceServiceRequest{
-		ResourceSpans: []*trace.ResourceSpans{{
-			ScopeSpans: []*trace.ScopeSpans{{
+		ResourceSpans: []*tracev1.ResourceSpans{{
+			ScopeSpans: []*tracev1.ScopeSpans{{
 				Spans: helperOTLPRequestSpansWithStatus(),
 			}},
 		}},
@@ -469,6 +474,14 @@ func TestDebugRules(t *testing.T) {
 
 func TestDependencyInjection(t *testing.T) {
 	var g inject.Graph
+	basicStore := &centralstore.RedisBasicStore{}
+	sw := &centralstore.SmartWrapper{}
+	spanCache := &cache.SpanCache_basic{}
+	redis := &redis.TestService{}
+	samplerFactory := &sample.SamplerFactory{
+		Config: &config.MockConfig{},
+		Logger: &logger.NullLogger{},
+	}
 	err := g.Provide(
 		&inject.Object{Value: &Router{}},
 
@@ -476,9 +489,15 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
-		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
 		&inject.Object{Value: &TestSharder{}},
-		&inject.Object{Value: &collect.InMemCollector{}},
+		&inject.Object{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
+		&inject.Object{Value: clockwork.NewRealClock()},
+		&inject.Object{Value: basicStore},
+		&inject.Object{Value: sw},
+		&inject.Object{Value: spanCache},
+		&inject.Object{Value: redis, Name: "redis"},
+		&inject.Object{Value: samplerFactory},
+		&inject.Object{Value: &collect.CentralCollector{}, Name: "collector"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},

@@ -16,6 +16,8 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+var ErrKeyNotFound = errors.New("key not found")
+
 type Script interface {
 	Load(conn Conn) error
 	Do(ctx context.Context, conn Conn, keysAndArgs ...any) (any, error)
@@ -26,6 +28,7 @@ type Script interface {
 
 type Client interface {
 	Get() Conn
+	GetContext(context.Context) (Conn, error)
 	NewScript(keyCount int, src string) Script
 	startstop.Starter
 	startstop.Stopper
@@ -215,6 +218,18 @@ func (d *DefaultClient) Get() Conn {
 		metrics: d.Metrics,
 		Clock:   clockwork.NewRealClock(),
 	}
+}
+
+func (d *DefaultClient) GetContext(ctx context.Context) (Conn, error) {
+	conn, err := d.pool.GetContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &DefaultConn{
+		conn:    conn,
+		metrics: d.Metrics,
+		Clock:   clockwork.NewRealClock(),
+	}, nil
 }
 
 // NewScript returns a new script object that can be optionally registered with
@@ -593,6 +608,9 @@ func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
 	values, err := redis.Values(c.conn.Do("HGETALL", key))
 	if err != nil {
 		return err
+	}
+	if len(values) == 0 {
+		return ErrKeyNotFound
 	}
 
 	return redis.ScanStruct(values, val)

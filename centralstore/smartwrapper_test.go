@@ -75,7 +75,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &SmartWrapper{}
 	redis := &redis.DefaultClient{}
-	clock := clockwork.NewFakeClock()
+	clock := clockwork.NewRealClock()
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
 		{Value: &cfg},
@@ -99,10 +99,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		return nil, nil, err
 	}
 
-	fmt.Println("starting injected dependencies")
 	ststLogger := dummyLogger{}
-
-	fmt.Println(g.Objects())
 
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
@@ -126,9 +123,9 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 
 	randomNum := rand.Intn(500)
 	span := &CentralSpan{
-		TraceID:  fmt.Sprintf("trace%d", randomNum),
-		SpanID:   fmt.Sprintf("span%d", randomNum),
-		ParentID: fmt.Sprintf("parent%d", randomNum), // we don't want this to be a root span
+		TraceID: fmt.Sprintf("trace%d", randomNum),
+		SpanID:  fmt.Sprintf("span%d", randomNum),
+		IsRoot:  false,
 	}
 	ctx := context.Background()
 	err = store.WriteSpan(ctx, span)
@@ -152,9 +149,9 @@ func TestSingleTraceOperation(t *testing.T) {
 	defer stopper()
 
 	span := &CentralSpan{
-		TraceID:  "trace1",
-		SpanID:   "span1",
-		ParentID: "parent1", // we don't want this to be a root span
+		TraceID: "trace1",
+		SpanID:  "span1",
+		IsRoot:  false,
 	}
 	ctx := context.Background()
 	err = store.WriteSpan(ctx, span)
@@ -208,9 +205,9 @@ func TestBasicStoreOperation(t *testing.T) {
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
 			span := &CentralSpan{
-				TraceID:  tid,
-				SpanID:   fmt.Sprintf("span%d", s),
-				ParentID: fmt.Sprintf("span%d", s-1),
+				TraceID: tid,
+				SpanID:  fmt.Sprintf("span%d", s),
+				IsRoot:  false,
 			}
 			err = store.WriteSpan(ctx, span)
 			require.NoError(t, err)
@@ -219,6 +216,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		span := &CentralSpan{
 			TraceID: tid,
 			SpanID:  "span0",
+			IsRoot:  true,
 		}
 		err = store.WriteSpan(ctx, span)
 		require.NoError(t, err)
@@ -266,9 +264,9 @@ func TestReadyForDecisionLoop(t *testing.T) {
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
 			span := &CentralSpan{
-				TraceID:  tid,
-				SpanID:   fmt.Sprintf("span%d", s),
-				ParentID: fmt.Sprintf("span%d", s-1),
+				TraceID: tid,
+				SpanID:  fmt.Sprintf("span%d", s),
+				IsRoot:  false,
 			}
 			err := store.WriteSpan(ctx, span)
 			require.NoError(t, err)
@@ -327,9 +325,9 @@ func TestSetTraceStatuses(t *testing.T) {
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
 			span := &CentralSpan{
-				TraceID:  tid,
-				SpanID:   fmt.Sprintf("span%d", s),
-				ParentID: fmt.Sprintf("span%d", s-1),
+				TraceID: tid,
+				SpanID:  fmt.Sprintf("span%d", s),
+				IsRoot:  false,
 			}
 			err = store.WriteSpan(ctx, span)
 			require.NoError(t, err)

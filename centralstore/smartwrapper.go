@@ -9,6 +9,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -20,6 +21,7 @@ type SmartWrapper struct {
 	Metrics        metrics.Metrics `inject:"genericMetrics"`
 	BasicStore     BasicStorer     `inject:""`
 	Tracer         trace.Tracer    `inject:"tracer"`
+	Clock          clockwork.Clock `inject:""`
 	keyfields      []string
 	spanChan       chan *CentralSpan
 	stopped        chan struct{}
@@ -151,7 +153,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	}
 	traceIDsToChange := make([]string, 0)
 	for _, status := range statuses {
-		if time.Since(status.Timestamp) > timeout {
+		if w.Clock.Since(status.Timestamp) > timeout {
 			traceIDsToChange = append(traceIDsToChange, status.TraceID)
 		}
 	}
@@ -166,13 +168,13 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 // states. It runs once each tick of the stateTicker (plus up to 10% so we don't
 // all run at the same rate) and looks for several different transitions.
 func (w *SmartWrapper) manageStates(ctx context.Context, options config.SmartWrapperOptions) {
-	ticker := time.NewTicker(time.Duration(options.StateTicker + config.Duration(rand.Int63n(int64(options.StateTicker)/10))))
+	ticker := w.Clock.NewTicker(time.Duration(options.StateTicker + config.Duration(rand.Int63n(int64(options.StateTicker)/10))))
 	for {
 		select {
 		case <-w.done:
 			ticker.Stop()
 			return
-		case <-ticker.C:
+		case <-ticker.Chan():
 			// the order of these is important!
 
 			// see if AwaitDecision traces have been waiting too long
@@ -245,7 +247,6 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 			// ignore all other states
 		}
 	}
-	// fmt.Println("keeping", len(keeps), "dropping", len(drops))
 
 	var err error
 	if len(keeps) > 0 {

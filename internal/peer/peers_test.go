@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -42,9 +43,9 @@ func TestNewPeers(t *testing.T) {
 	require.NotNil(t, p)
 
 	switch i := p.(type) {
-	case *redisPeers:
+	case *RedisPeers:
 	default:
-		t.Errorf("received %T expected %T", i, &redisPeers{})
+		t.Errorf("received %T expected %T", i, &RedisPeers{})
 	}
 }
 
@@ -60,8 +61,12 @@ func TestPeerShutdown(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, p)
 
-	peer, ok := p.(*redisPeers)
+	peer, ok := p.(*RedisPeers)
 	assert.True(t, ok)
+	peer.Config = c
+	peer.RedisClient = &redis.TestService{}
+	peer.RedisClient.Start()
+	peer.Start()
 
 	peers, err := peer.GetPeers()
 	assert.NoError(t, err)

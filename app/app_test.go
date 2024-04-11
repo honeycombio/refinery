@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,21 +19,23 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/jonboulle/clockwork"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/alexcesaro/statsd.v2"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
+	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/internal/redis"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
-	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 )
 
@@ -101,20 +104,17 @@ func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
 	basePort int,
-	peers peer.Peers,
 	enableHostMetadata bool,
-) (*App, inject.Graph) {
+) (*App, inject.Graph, func()) {
 	c := &config.MockConfig{
 		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       10 * time.Millisecond,
 		GetMaxBatchSizeVal:       500,
 		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:            2 * time.Millisecond,
+		SendTickerVal:            200 * time.Microsecond,
 		PeerManagementType:       "file",
 		GetUpstreamBufferSizeVal: 10000,
-		GetPeerBufferSizeVal:     10000,
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
-		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		IsAPIKeyValidFunc:        func(k string) bool { return k == legacyAPIKey || k == nonLegacyAPIKey },
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
 		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000},
@@ -122,14 +122,18 @@ func newStartedApp(
 		TraceIdFieldNames:        []string{"trace.trace_id"},
 		ParentIdFieldNames:       []string{"trace.parent_id"},
 		SampleCache:              config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
+		StoreOptions: config.SmartWrapperOptions{
+			StateTicker:     config.Duration(50 * time.Millisecond),
+			BasicStoreType:  "redis",
+			SpanChannelSize: 10000,
+			SendDelay:       config.Duration(2 * time.Millisecond),
+		},
 	}
+
+	c.GetRedisDatabaseVal = rand.Intn(16)
+	fmt.Println("Using Redis database", c.GetRedisDatabaseVal)
 
 	var err error
-	if peers == nil {
-		peers, err = peer.NewPeers(context.Background(), c, make(chan struct{}))
-		assert.NoError(t, err)
-	}
-
 	a := App{}
 
 	lgr := &logger.StdoutLogger{
@@ -142,19 +146,7 @@ func newStartedApp(
 	metricsr := &metrics.MockMetrics{}
 	metricsr.Start()
 
-	collector := &collect.InMemCollector{
-		BlockOnAddSpan: true,
-	}
-
-	peerList, err := peers.GetPeers()
-	assert.NoError(t, err)
-
-	var shrdr sharder.Sharder
-	if len(peerList) > 1 {
-		shrdr = &sharder.DeterministicSharder{}
-	} else {
-		shrdr = &sharder.SingleServerSharder{}
-	}
+	collector := collect.GetCollectorImplementation(nil)
 
 	samplerFactory := &sample.SamplerFactory{}
 
@@ -163,42 +155,26 @@ func newStartedApp(
 	})
 	assert.NoError(t, err)
 
-	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
-	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         c.GetMaxBatchSize(),
-			BatchTimeout:         libhoney.DefaultBatchTimeout,
-			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:  uint(c.GetPeerBufferSize()),
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				Dial: (&net.Dialer{
-					Timeout: 3 * time.Second,
-				}).Dial,
-			},
-			BlockOnSend:            true,
-			DisableGzipCompression: true,
-			EnableMsgpackEncoding:  true,
-			Metrics:                sdPeer,
-		},
-	})
-	assert.NoError(t, err)
-
+	store := &centralstore.RedisBasicStore{}
+	sw := &centralstore.SmartWrapper{}
+	redis := &redis.DefaultClient{}
 	var g inject.Graph
 	err = g.Provide(
 		&inject.Object{Value: c},
-		&inject.Object{Value: peers},
 		&inject.Object{Value: lgr},
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: transmit.NewDefaultTransmission(upstreamClient, metricsr, "upstream"), Name: "upstreamTransmission"},
-		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, metricsr, "peer"), Name: "peerTransmission"},
-		&inject.Object{Value: shrdr},
-		&inject.Object{Value: collector},
+		&inject.Object{Value: clockwork.NewRealClock()},
+		&inject.Object{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
+		&inject.Object{Value: &cache.SpanCache_basic{}},
+		&inject.Object{Value: redis, Name: "redis"},
+		&inject.Object{Value: store},
+		&inject.Object{Value: sw},
+		&inject.Object{Value: collector, Name: "collector"},
 		&inject.Object{Value: &cache.CuckooSentCache{}},
 		&inject.Object{Value: metricsr, Name: "metrics"},
 		&inject.Object{Value: metricsr, Name: "genericMetrics"},
 		&inject.Object{Value: metricsr, Name: "upstreamMetrics"},
-		&inject.Object{Value: metricsr, Name: "peerMetrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
@@ -214,7 +190,14 @@ func newStartedApp(
 
 	// Racy: wait just a moment for ListenAndServe to start up.
 	time.Sleep(10 * time.Millisecond)
-	return &a, g
+	return &a, g, func() {
+		conn := redis.Get()
+		_, err := conn.Do("FLUSHDB")
+		assert.NoError(t, err)
+		conn.Close()
+		err = startstop.Stop(g.Objects(), nil)
+		assert.NoError(t, err)
+	}
 }
 
 func post(t testing.TB, req *http.Request) {
@@ -226,11 +209,11 @@ func post(t testing.TB, req *http.Request) {
 }
 
 func TestAppIntegration(t *testing.T) {
-	t.Parallel()
 	port := 10500
 
 	sender := &transmission.MockSender{}
-	app, graph := newStartedApp(t, sender, port, nil, false)
+	app, _, stop := newStartedApp(t, sender, port, false)
+	defer stop()
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -246,7 +229,7 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(5 * app.Config.GetSendTickerValue())
+	time.Sleep(time.Duration(app.Config.GetCentralStoreOptions().StateTicker) * 5)
 
 	events := sender.Events()
 	require.Len(t, events, 1)
@@ -255,26 +238,23 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, "bar", events[0].Data["foo"])
 	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
 	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
-	// Parallel integration tests need different ports!
-	t.Parallel()
 	port := 10600
 
 	sender := &transmission.MockSender{}
-	a, graph := newStartedApp(t, sender, port, nil, false)
+	a, _, stop := newStartedApp(t, sender, port, false)
+	defer stop()
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
 	// Send a root span, it should be sent in short order.
+	traceID := strconv.Itoa(rand.Intn(1000))
+	data := `[{"data":{"trace.trace_id":"` + traceID + `","foo":"bar"}}]`
 	req := httptest.NewRequest(
 		"POST",
 		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+		strings.NewReader(data),
 	)
 	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -284,35 +264,32 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	// Wait for span to be sent.
-	time.Sleep(2 * a.Config.GetSendTickerValue())
+	dur := a.Config.GetCentralStoreOptions().StateTicker
+	time.Sleep(time.Duration(dur) * 5)
 	events := sender.Events()
 	require.Len(t, events, 1)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
+	assert.Equal(t, traceID, events[0].Data["trace.trace_id"])
 	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
 }
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
-	// Parallel integration tests need different ports!
-	t.Parallel()
 	port := 10700
 
 	sender := &transmission.MockSender{}
-	a, graph := newStartedApp(t, sender, port, nil, false)
+	a, _, stop := newStartedApp(t, sender, port, false)
+	defer stop()
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
 	// Send a root span, it should be sent in short order.
+	traceID := strconv.Itoa(rand.Intn(1000))
+	input := fmt.Sprintf(`[{"data":{"trace.trace_id":"%s","foo":"bar"}}]`, traceID)
 	req := httptest.NewRequest(
 		"POST",
 		fmt.Sprintf("http://localhost:%d/v1/traces", port),
-		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+		strings.NewReader(input),
 	)
 	req.Header.Set("X-Honeycomb-Team", "badkey")
 	req.Header.Set("Content-Type", "application/json")
@@ -324,120 +301,20 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	resp.Body.Close()
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), "not found in list of authorized keys")
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
-}
-
-func TestPeerRouting(t *testing.T) {
-	// Parallel integration tests need different ports!
-	t.Parallel()
-
-	peers := &testPeers{
-		peers: []string{
-			"http://localhost:11001",
-			"http://localhost:11003",
-		},
-	}
-
-	var apps [2]*App
-	var addrs [2]string
-	var senders [2]*transmission.MockSender
-	for i := range apps {
-		var graph inject.Graph
-		basePort := 11000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
-		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
-		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
-	}
-
-	// Deliver to host 1, it should be passed to host 0 and emitted there.
-	req, err := http.NewRequest(
-		"POST",
-		"http://localhost:11002/1/batch/dataset",
-		nil,
-	)
-	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	// this span index was chosen because it hashes to the appropriate shard for this
-	// test. You can't change it and expect the test to pass.
-	blob := `[` + string(spans[10]) + `]`
-	req.Body = io.NopCloser(strings.NewReader(blob))
-	post(t, req)
-	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
-	}, 2*time.Second, 2*time.Millisecond)
-
-	expectedEvent := &transmission.Event{
-		APIKey:     legacyAPIKey,
-		Dataset:    "dataset",
-		SampleRate: 2,
-		APIHost:    "http://api.honeycomb.io",
-		Timestamp:  now,
-		Data: map[string]interface{}{
-			"trace.trace_id":                     "2",
-			"trace.span_id":                      "10",
-			"trace.parent_id":                    "0000000000",
-			"key":                                "value",
-			"field0":                             float64(0),
-			"field1":                             float64(1),
-			"field2":                             float64(2),
-			"field3":                             float64(3),
-			"field4":                             float64(4),
-			"field5":                             float64(5),
-			"field6":                             float64(6),
-			"field7":                             float64(7),
-			"field8":                             float64(8),
-			"field9":                             float64(9),
-			"field10":                            float64(10),
-			"long":                               "this is a test of the emergency broadcast system",
-			"meta.refinery.original_sample_rate": uint(2),
-			"foo":                                "bar",
-		},
-		Metadata: map[string]any{
-			"api_host":    "http://api.honeycomb.io",
-			"dataset":     "dataset",
-			"environment": "",
-			"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-		},
-	}
-	assert.Equal(t, expectedEvent, senders[0].Events()[0])
-
-	// Repeat, but deliver to host 1 on the peer channel, it should not be
-	// passed to host 0.
-	req, err = http.NewRequest(
-		"POST",
-		"http://localhost:11003/1/batch/dataset",
-		nil,
-	)
-	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	req.Body = io.NopCloser(strings.NewReader(blob))
-	post(t, req)
-	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
-	}, 2*time.Second, 2*time.Millisecond)
-	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 }
 
 func TestHostMetadataSpanAdditions(t *testing.T) {
-	t.Parallel()
 	port := 14000
 
 	sender := &transmission.MockSender{}
-	app, graph := newStartedApp(t, sender, port, nil, true)
+	a, _, stop := newStartedApp(t, sender, port, true)
+	defer stop()
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
 		"POST",
 		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-		strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"1"}}]`),
+		strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"2"}}]`),
 	)
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
@@ -447,41 +324,30 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(5 * app.Config.GetSendTickerValue())
+	dur := a.Config.GetCentralStoreOptions().StateTicker
+	time.Sleep(time.Duration(dur) * 5)
 
 	events := sender.Events()
 	require.Len(t, events, 1)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
+	assert.Equal(t, "2", events[0].Data["trace.trace_id"])
 	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
 	hostname, _ := os.Hostname()
-	assert.Equal(t, hostname, events[0].Data["meta.refinery.local_hostname"])
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
+	assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.local_hostname"])
 }
 
 func TestEventsEndpoint(t *testing.T) {
-	t.Parallel()
-
-	peers := &testPeers{
-		peers: []string{
-			"http://localhost:13001",
-			"http://localhost:13003",
-		},
-	}
-
 	var apps [2]*App
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
-		var graph inject.Graph
+		var stop func()
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
-		defer startstop.Stop(graph.Objects(), nil)
+		apps[i], _, stop = newStartedApp(t, senders[i], basePort, false)
+		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
@@ -491,7 +357,7 @@ func TestEventsEndpoint(t *testing.T) {
 	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
 	req, err := http.NewRequest(
 		"POST",
-		"http://localhost:13002/1/events/dataset",
+		"http://localhost:13000/1/events/dataset",
 		bytes.NewReader(blob),
 	)
 	assert.NoError(t, err)
@@ -502,32 +368,36 @@ func TestEventsEndpoint(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
-	}, 2*time.Second, 2*time.Millisecond)
+	dur := apps[0].Config.GetCentralStoreOptions().StateTicker
+	time.Sleep(time.Duration(dur) * 5)
 
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     legacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     "1",
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := senders[0].Events()
+		require.Equal(collect, 1, len(events))
+		event := events[0]
+		assert.Equal(
+			t,
+			&transmission.Event{
+				APIKey:     legacyAPIKey,
+				Dataset:    "dataset",
+				SampleRate: 10,
+				APIHost:    "http://api.honeycomb.io",
+				Timestamp:  now,
+				Data: map[string]interface{}{
+					"trace.trace_id":                     "1",
+					"foo":                                "bar",
+					"meta.refinery.original_sample_rate": uint(10),
+				},
+				Metadata: map[string]any{
+					"api_host":    "http://api.honeycomb.io",
+					"dataset":     "dataset",
+					"environment": "",
+					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
+				},
 			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "",
-				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[0].Events()[0],
-	)
+			event,
+		)
+	}, 5*time.Second, 200*time.Microsecond)
 
 	// Repeat, but deliver to host 1 on the peer channel, it should not be
 	// passed to host 0.
@@ -540,7 +410,7 @@ func TestEventsEndpoint(t *testing.T) {
 
 	req, err = http.NewRequest(
 		"POST",
-		"http://localhost:13003/1/events/dataset",
+		"http://localhost:13002/1/events/dataset",
 		buf,
 	)
 	assert.NoError(t, err)
@@ -551,55 +421,48 @@ func TestEventsEndpoint(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
+	time.Sleep(time.Duration(dur) * 5)
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := senders[1].Events()
+		require.Equal(collect, 1, len(events))
+		event := events[0]
+		assert.Equal(
+			t,
+			&transmission.Event{
+				APIKey:     legacyAPIKey,
+				Dataset:    "dataset",
+				SampleRate: 10,
+				APIHost:    "http://api.honeycomb.io",
+				Timestamp:  now,
+				Data: map[string]interface{}{
+					"trace.trace_id":                     "1",
+					"foo":                                "bar",
+					"meta.refinery.original_sample_rate": uint(10),
+				},
+				Metadata: map[string]any{
+					"api_host":    "http://api.honeycomb.io",
+					"dataset":     "dataset",
+					"environment": "",
+					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
+				},
+			},
+			event,
+		)
 	}, 2*time.Second, 2*time.Millisecond)
 
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     legacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     "1",
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
-			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "",
-				"enqueued_at": senders[1].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[1].Events()[0],
-	)
 }
 
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
-	t.Parallel()
-
-	peers := &testPeers{
-		peers: []string{
-			"http://localhost:15001",
-			"http://localhost:15003",
-		},
-	}
-
 	var apps [2]*App
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		app, graph := newStartedApp(t, senders[i], basePort, peers, false)
+		app, _, stop := newStartedApp(t, senders[i], basePort, false)
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
-		defer startstop.Stop(graph.Objects(), nil)
+		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
@@ -616,7 +479,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		"http://localhost:15002/1/events/dataset",
 		bytes.NewReader(blob),
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "zstd")
@@ -624,32 +487,35 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
-	}, 2*time.Second, 2*time.Millisecond)
-
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     nonLegacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     traceID,
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
+	dur := apps[0].Config.GetCentralStoreOptions().StateTicker
+	time.Sleep(time.Duration(dur) * 5)
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := senders[1].Events()
+		require.Equal(collect, 1, len(events))
+		event := events[0]
+		assert.Equal(
+			collect,
+			&transmission.Event{
+				APIKey:     nonLegacyAPIKey,
+				Dataset:    "dataset",
+				SampleRate: 10,
+				APIHost:    "http://api.honeycomb.io",
+				Timestamp:  now,
+				Data: map[string]interface{}{
+					"trace.trace_id":                     traceID,
+					"foo":                                "bar",
+					"meta.refinery.original_sample_rate": uint(10),
+				},
+				Metadata: map[string]any{
+					"api_host":    "http://api.honeycomb.io",
+					"dataset":     "dataset",
+					"environment": "test",
+					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
+				},
 			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "test",
-				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[0].Events()[0],
-	)
+			event,
+		)
+	}, 5*time.Second, 200*time.Microsecond)
 
 	// Repeat, but deliver to host 1 on the peer channel, it should not be
 	// passed to host 0.
@@ -662,7 +528,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 
 	req, err = http.NewRequest(
 		"POST",
-		"http://localhost:15003/1/events/dataset",
+		"http://localhost:15000/1/events/dataset",
 		buf,
 	)
 	assert.NoError(t, err)
@@ -673,32 +539,35 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
-	}, 2*time.Second, 2*time.Millisecond)
+	time.Sleep(5 * time.Duration(dur))
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := senders[0].Events()
+		require.Equal(collect, 1, len(events))
+		event := events[0]
+		assert.Equal(
+			collect,
+			&transmission.Event{
+				APIKey:     nonLegacyAPIKey,
+				Dataset:    "dataset",
+				SampleRate: 10,
+				APIHost:    "http://api.honeycomb.io",
+				Timestamp:  now,
+				Data: map[string]interface{}{
+					"trace.trace_id":                     traceID,
+					"foo":                                "bar",
+					"meta.refinery.original_sample_rate": uint(10),
+				},
+				Metadata: map[string]any{
+					"api_host":    "http://api.honeycomb.io",
+					"dataset":     "dataset",
+					"environment": "test",
+					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
+				},
+			},
+			event,
+		)
+	}, 5*time.Second, 200*time.Microsecond)
 
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     nonLegacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     traceID,
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
-			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "test",
-				"enqueued_at": senders[1].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[1].Events()[0],
-	)
 }
 
 var (
@@ -761,7 +630,8 @@ func BenchmarkTraces(b *testing.B) {
 			W: io.Discard,
 		},
 	}
-	_, graph := newStartedApp(b, sender, 11000, nil, false)
+	_, _, stop := newStartedApp(b, sender, 11000, false)
+	defer stop()
 
 	req, err := http.NewRequest(
 		"POST",
@@ -833,9 +703,6 @@ func BenchmarkTraces(b *testing.B) {
 		wg.Wait()
 		sender.waitForCount(b, b.N)
 	})
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(b, err)
 }
 
 func BenchmarkDistributedTraces(b *testing.B) {
@@ -845,23 +712,13 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		},
 	}
 
-	peers := &testPeers{
-		peers: []string{
-			"http://localhost:12001",
-			"http://localhost:12003",
-			"http://localhost:12005",
-			"http://localhost:12007",
-			"http://localhost:12009",
-		},
-	}
-
 	var apps [5]*App
 	var addrs [5]string
 	for i := range apps {
-		var graph inject.Graph
+		var stop func()
 		basePort := 12000 + (i * 2)
-		apps[i], graph = newStartedApp(b, sender, basePort, peers, false)
-		defer startstop.Stop(graph.Objects(), nil)
+		apps[i], _, stop = newStartedApp(b, sender, basePort, false)
+		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}

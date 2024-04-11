@@ -1,6 +1,8 @@
 package redis
 
 import (
+	"context"
+
 	"github.com/alicebob/miniredis/v2"
 	"github.com/gomodule/redigo/redis"
 	"github.com/honeycombio/refinery/config"
@@ -59,6 +61,13 @@ func (s *TestService) Get() Conn {
 		Clock:   s.Clock,
 		metrics: s.Metrics,
 	}
+}
+func (s *TestService) GetContext(ctx context.Context) (Conn, error) {
+	return &DefaultConn{
+		conn:    s.pool.Get(),
+		Clock:   s.Clock,
+		metrics: s.Metrics,
+	}, nil
 }
 
 func (s *TestService) NewScript(keyCount int, src string) Script {

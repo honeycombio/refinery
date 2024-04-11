@@ -3,6 +3,10 @@ package collect
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +28,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 )
+
+const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
 func TestCentralCollector_AddSpan(t *testing.T) {
 	conf := &config.MockConfig{
@@ -53,11 +59,12 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	}
 	require.NoError(t, coll.AddSpan(span))
 
-	// adding one span with parent ID should:
+	// adding one child span should
 	// * create the trace in the cache
 	// * send the trace to the central store
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.NotNil(collect, coll.SpanCache.Get(traceID1))
+	require.Eventually(t, func() bool {
+		trace := coll.SpanCache.Get(traceID1)
+		return trace != nil
 	}, 5*time.Second, 500*time.Millisecond)
 
 	ctx := context.Background()
@@ -70,6 +77,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	root := &types.Span{
 		TraceID: traceID1,
 		ID:      "123",
+		IsRoot:  true,
 		Event: types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
@@ -77,11 +85,10 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	}
 	require.NoError(t, coll.AddSpan(root))
 
-	// adding one span with parent ID should:
-	// * create the trace in the cache
-	// * send the trace to the central store
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.NotNil(collect, coll.SpanCache.Get(traceID1))
+	// adding root span should send the trace to the central store
+	require.Eventually(t, func() bool {
+		trace := coll.SpanCache.Get(traceID1)
+		return trace.RootSpan != nil
 	}, 5*time.Second, 500*time.Millisecond)
 	trace, err = coll.Store.GetTrace(ctx, traceID1)
 	require.NoError(t, err)
@@ -133,6 +140,7 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 		span := &types.Span{
 			TraceID: tid,
 			ID:      "span0",
+			IsRoot:  true,
 		}
 		require.NoError(t, collector.processSpan(span))
 	}
@@ -155,12 +163,12 @@ func TestCentralCollector_Decider(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 100,
+			IncomingQueueSize: 100,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
 
-	collector := &CentralCollector{}
+	collector := &CentralCollector{BlockOnDecider: true}
 	clock := clockwork.NewRealClock()
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
@@ -190,12 +198,14 @@ func TestCentralCollector_Decider(t *testing.T) {
 		span := &types.Span{
 			TraceID: tid,
 			ID:      "span0",
+			IsRoot:  true,
 		}
 		err := collector.AddSpan(span)
 		require.NoError(t, err)
 	}
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		require.NoError(t, collector.makeDecision())
 		traces, err := collector.Store.GetStatusForTraces(context.Background(), traceids)
 		require.NoError(collect, err)
 		require.Equal(collect, numberOfTraces, len(traces))
@@ -203,7 +213,913 @@ func TestCentralCollector_Decider(t *testing.T) {
 			assert.Equal(collect, centralstore.DecisionKeep, trace.State)
 			assert.Equal(collect, "test", trace.SamplerKey)
 		}
-	}, 2*time.Second, 500*time.Millisecond)
+	}, 3*time.Second, 500*time.Millisecond)
+}
+
+func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
+	// The sample rate applied by Refinery in this test's config.
+	const expectedDeterministicSampleRate = int(2)
+	// The sample rate happening upstream of Refinery.
+	const originalSampleRate = uint(50)
+
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 100,
+		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	collector := &CentralCollector{}
+	stop := startCollector(t, conf, collector, transmission, clock)
+	defer stop()
+
+	// Generate events until one is sampled and appears on the transmission queue for sending.
+	sendAttemptCount := 0
+	for getEventsLength(transmission) < 1 {
+		sendAttemptCount++
+		span := &types.Span{
+			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
+			Event: types.Event{
+				Dataset:    "aoeu",
+				APIKey:     legacyAPIKey,
+				SampleRate: originalSampleRate,
+				Data:       make(map[string]interface{}),
+			},
+		}
+		_ = collector.AddSpan(span)
+		time.Sleep(time.Duration(conf.GetCentralStoreOptions().StateTicker) * 2)
+	}
+
+	transmission.Mux.RLock()
+	require.Greater(t, len(transmission.Events), 0,
+		"At least one event should have been sampled and transmitted by now for us to make assertions upon.")
+	upstreamSampledEvent := transmission.Events[0]
+	transmission.Mux.RUnlock()
+
+	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data["meta.refinery.original_sample_rate"],
+		"metadata should be populated with original sample rate")
+	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
+		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
+
+	// Generate one more event with no upstream sampling applied.
+	err := collector.AddSpan(&types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1000),
+		Event: types.Event{
+			Dataset:    "no-upstream-sampling",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0, // no upstream sampling
+			Data:       make(map[string]interface{}),
+		},
+	})
+	require.NoError(t, err, "must be able to add the span")
+	time.Sleep(time.Duration(conf.GetCentralStoreOptions().StateTicker) * 2)
+
+	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
+	// should be the last event on the transmission queue.
+	var noUpstreamSampleRateEvent *types.Event
+	require.Eventually(t, func() bool {
+		transmission.Mux.RLock()
+		defer transmission.Mux.RUnlock()
+		noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
+		return noUpstreamSampleRateEvent.Dataset == "no-upstream-sampling"
+	}, 5*time.Second, time.Duration(conf.GetCentralStoreOptions().StateTicker)*2, "the event with no upstream sampling should have appeared in the transmission queue by now")
+
+	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
+		"original sample rate should not be set in metadata when original sample rate is zero")
+}
+
+// HoneyComb treats a missing or 0 SampleRate the same as 1, but
+// behaves better/more consistently if the SampleRate is explicitly
+// set instead of inferred
+func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 100,
+		},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	span := &types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1),
+		Event: types.Event{
+			Dataset:    "aoeu",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0, // This should get lifted to 1
+			Data:       make(map[string]interface{}),
+		},
+	}
+
+	err := coll.AddSpan(span)
+	require.NoError(t, err)
+
+	waitDur := time.Duration(conf.GetCentralStoreOptions().StateTicker)
+	require.Eventually(t, func() bool {
+		transmission.Mux.RLock()
+		defer transmission.Mux.RUnlock()
+		return len(transmission.Events) > 0
+	}, 2*time.Second, waitDur*2)
+
+	transmission.Mux.RLock()
+	assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
+		"SampleRate should be reset to one after starting at zero")
+	transmission.Mux.RUnlock()
+}
+
+func TestCentralCollector_SampleConfigReload(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:        0,
+		GetTraceTimeoutVal:     60 * time.Second,
+		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:          2 * time.Millisecond,
+		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	dataset := "aoeu"
+
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: dataset,
+			APIKey:  legacyAPIKey,
+		},
+	}
+
+	err := coll.AddSpan(span)
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		coll.mut.RLock()
+		defer coll.mut.RUnlock()
+
+		_, ok := coll.samplersByDestination[dataset]
+		return ok
+	}, 2*time.Second, 20*time.Millisecond)
+
+	conf.ReloadConfig()
+
+	assert.Eventually(t, func() bool {
+		coll.mut.RLock()
+		defer coll.mut.RUnlock()
+
+		_, ok := coll.samplersByDestination[dataset]
+		return !ok
+	}, 2*time.Second, 20*time.Millisecond)
+
+	span = &types.Span{
+		TraceID: "2",
+		Event: types.Event{
+			Dataset: dataset,
+			APIKey:  legacyAPIKey,
+		},
+	}
+
+	err = coll.AddSpan(span)
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		coll.mut.RLock()
+		defer coll.mut.RUnlock()
+
+		_, ok := coll.samplersByDestination[dataset]
+		return ok
+	}, 2*time.Second, 20*time.Millisecond)
+}
+
+func TestCentralCollector_StableMaxAlloc(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize:      600,
+			ProcessTracesBatchSize: 500,
+			DeciderBatchSize:       100,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{BlockOnDecider: true, BlockOnProcessor: true}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	totalTraceCount := 500
+	spandata := make([]map[string]interface{}, totalTraceCount)
+	for i := 0; i < totalTraceCount; i++ {
+		spandata[i] = map[string]interface{}{
+			"trace.parent_id": "unused",
+			"id":              i,
+			"str1":            strings.Repeat("abc", rand.Intn(100)+1),
+			"str2":            strings.Repeat("def", rand.Intn(100)+1),
+		}
+	}
+
+	toRemoveTraceCount := 400
+	var memorySize uint64
+	for i := 0; i < totalTraceCount; i++ {
+		span := &types.Span{
+			TraceID: strconv.Itoa(i),
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data:    spandata[i],
+				APIKey:  legacyAPIKey,
+			},
+		}
+
+		require.NoError(t, coll.AddSpan(span))
+		if i < toRemoveTraceCount {
+			memorySize += uint64(span.GetDataSize())
+		}
+	}
+
+	waitDur := time.Duration(conf.GetCentralStoreOptions().StateTicker)
+	for len(coll.incoming) > 0 {
+		time.Sleep(2 * waitDur)
+	}
+
+	// Now there should be 500 traces in the cache.
+	assert.Equal(t, totalTraceCount, coll.SpanCache.Len())
+
+	// We want to induce an eviction event, so set MaxAlloc a bit below
+	// our current post-GC alloc.
+	runtime.GC()
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	// Set MaxAlloc, which should cause cache evictions.
+	conf.Mux.Lock()
+	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc - memorySize)
+	conf.Mux.Unlock()
+
+	// wait for the cache to take some action
+	var numOfTracesInCache int
+	for {
+		time.Sleep(2 * waitDur)
+		require.NoError(t, coll.makeDecision())
+		coll.processTraces()
+
+		numOfTracesInCache = coll.SpanCache.Len()
+		if numOfTracesInCache <= toRemoveTraceCount {
+			break
+		}
+	}
+
+	assert.Less(t, numOfTracesInCache, 480, "should have sent some traces")
+	assert.Greater(t, numOfTracesInCache, 100, "should have NOT sent some traces")
+
+	// We discarded the most costly spans, and sent them.
+	transmission.Mux.Lock()
+	assert.Greater(t, toRemoveTraceCount, len(transmission.Events), "should have sent traces that weren't kept")
+
+	transmission.Mux.Unlock()
+}
+
+func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 10 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 3,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{BlockOnAdd: true}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
+		},
+	}
+
+	for i := 0; i < 3; i++ {
+		err := coll.AddSpan(span)
+		assert.NoError(t, err)
+	}
+
+	err := coll.AddSpan(span)
+	assert.Error(t, err)
+}
+
+// TestAddCountsToRoot tests that adding a root span winds up with a trace object in
+// the cache and that that trace gets span count, span event count, span link count, and event count added to it
+// This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
+func TestCentralCollector_AddCountsToRoot(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      60 * time.Second,
+		AddSpanCountToRoot: true,
+		AddCountsToRoot:    true,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 100,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewFakeClock()
+	coll := &CentralCollector{BlockOnProcessor: true, BlockOnDecider: true}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	var traceID = "mytrace"
+	for i := 0; i < 4; i++ {
+		span := &types.Span{
+			TraceID: traceID,
+			ID:      fmt.Sprintf("span%d", i),
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id": "unused",
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		switch i {
+		case 0, 1:
+			span.Data["meta.annotation_type"] = "span_event"
+		case 2:
+			span.Data["meta.annotation_type"] = "link"
+		}
+		require.NoError(t, coll.AddSpan(span))
+	}
+	time.Sleep(10 * time.Millisecond)
+	trace := coll.SpanCache.Get(traceID)
+	require.NotNil(t, trace, "after adding the spans, we should have a trace in the cache")
+	assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
+	// ok now let's add the root span and verify that both got sent
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		ID:      "root",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	require.NoError(t, coll.AddSpan(rootSpan))
+
+	// make sure all spans are processed and the trace is ready
+	// for decision
+	var processed bool
+	ctx := context.Background()
+	for !processed {
+		clock.Advance(1 * time.Second)
+		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
+		require.NoError(t, err)
+		if len(ids) > 0 {
+			trace, err := coll.Store.GetTrace(ctx, traceID)
+			require.NoError(t, err)
+			if len(trace.Spans) == 5 {
+				processed = true
+			}
+		}
+	}
+	require.NoError(t, coll.makeDecision())
+	coll.processTraces()
+	trace = coll.SpanCache.Get(traceID)
+	require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
+
+	transmission.Mux.RLock()
+	require.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
+	assert.Equal(t, 1, transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
+	assert.Equal(t, 5, transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
+	transmission.Mux.RUnlock()
+}
+
+// TestLateRootGetsCounts tests that the root span gets decorated with the right counts
+// even if the trace had already been sent
+func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:      0,
+		GetTraceTimeoutVal:   5 * time.Millisecond,
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:        2 * time.Millisecond,
+		AddSpanCountToRoot:   true,
+		AddCountsToRoot:      true,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 100,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{BlockOnDecider: true, BlockOnProcessor: true}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	var traceID = "mytrace"
+
+	for i := 0; i < 4; i++ {
+		span := &types.Span{
+			TraceID: traceID,
+			ID:      fmt.Sprintf("span%d", i),
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id": "unused",
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		switch i {
+		case 0, 1:
+			span.Data["meta.annotation_type"] = "span_event"
+		case 2:
+			span.Data["meta.annotation_type"] = "link"
+		}
+		require.NoError(t, coll.AddSpan(span))
+	}
+	// make sure all spans are processed and the trace is ready
+	// for decision
+	var processed bool
+	for !processed {
+		require.NoError(t, coll.makeDecision())
+		coll.processTraces()
+		trace := coll.SpanCache.Get(traceID)
+		if trace != nil {
+			continue
+		}
+		require.Nil(t, trace, "after adding the spans, we should have a trace in the cache")
+		time.Sleep(time.Duration(conf.GetCollectionConfigVal.ProcessTracesPauseDuration) * 5)
+		require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
+		processed = true
+	}
+
+	// now we add the root span and verify that both got sent and that the root span had the span count
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		ID:      "root",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	require.NoError(t, coll.AddSpan(rootSpan))
+
+	require.NoError(t, coll.makeDecision())
+	coll.processTraces()
+
+	trace := coll.SpanCache.Get(traceID)
+	require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
+	transmission.Mux.RLock()
+	assert.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	assert.GreaterOrEqual(t, 1, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
+	assert.Equal(t, 1, transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
+
+	// TODO: add a comment about the race condition between processor and collector when updating
+	// the span counts. The effort to get most accurate counts is too high for the benefit.
+	assert.GreaterOrEqual(t, 4, transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
+	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
+	transmission.Mux.RUnlock()
+}
+
+// TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
+// if the AddRuleReasonToTrace attribute not set in config
+func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 5 * time.Minute,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 10,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	var traceID = "traceABC"
+
+	span := &types.Span{
+		TraceID: traceID,
+		ID:      "span1",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	require.NoError(t, coll.AddSpan(span))
+
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		ID:      "root",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	require.NoError(t, coll.AddSpan(rootSpan))
+
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		transmission.Mux.RLock()
+		assert.Equal(c, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+		if len(transmission.Events) == 2 {
+			assert.Equal(c, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
+		}
+		transmission.Mux.RUnlock()
+	}, 5*time.Second, conf.SendTickerVal)
+}
+
+func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		AdditionalAttributes: map[string]string{
+			"name":  "foo",
+			"other": "bar",
+		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 5,
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{
+		BlockOnDecider:   true,
+		BlockOnProcessor: true,
+	}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	var traceID = "trace123"
+
+	span := &types.Span{
+		TraceID: traceID,
+		ID:      "span1",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	require.NoError(t, coll.AddSpan(span))
+
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		ID:      "root",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	require.NoError(t, coll.AddSpan(rootSpan))
+	time.Sleep(time.Duration(conf.StoreOptions.StateTicker) * 5)
+
+	var processed bool
+	ctx := context.Background()
+	for !processed {
+		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
+		require.NoError(t, err)
+		if len(ids) > 0 {
+			trace, err := coll.Store.GetTrace(ctx, traceID)
+			require.NoError(t, err)
+			if len(trace.Spans) == 2 {
+				processed = true
+			}
+		}
+	}
+	require.NoError(t, coll.makeDecision())
+	coll.processTraces()
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
+	assert.Equal(t, "foo", transmission.Events[0].Data["name"], "new attribute should appear in data")
+	assert.Equal(t, "bar", transmission.Events[0].Data["other"], "new attribute should appear in data")
+	transmission.Mux.RUnlock()
+
+}
+
+// TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
+// StressReliefMode is active
+//func TestCentralCollector_StressReliefDecorateHostname(t *testing.T) {
+//	conf := &config.MockConfig{
+//		GetSendDelayVal:    0,
+//		GetTraceTimeoutVal: 5 * time.Minute,
+//		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+//		SendTickerVal:      2 * time.Millisecond,
+//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+//		StressRelief: config.StressReliefConfig{
+//			Mode:              "monitor",
+//			ActivationLevel:   75,
+//			DeactivationLevel: 25,
+//			SamplingRate:      100,
+//		},
+//		SampleCache: config.SampleCacheConfig{
+//			KeptSize:          100,
+//			DroppedSize:       100,
+//			SizeCheckInterval: config.Duration(1 * time.Second),
+//		},
+//	}
+//
+//	transmission := &transmit.MockTransmission{}
+//	transmission.Start()
+//	coll := newTestCollector(conf, transmission)
+//
+//	coll.hostname = "host123"
+//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+//	coll.cache = c
+//
+//	coll.incoming = make(chan *types.Span, 5)
+//	coll.fromPeer = make(chan *types.Span, 5)
+//	coll.datasetSamplers = make(map[string]sample.Sampler)
+//	go coll.collect()
+//	defer coll.Stop()
+//
+//	var traceID = "traceABC"
+//
+//	span := &types.Span{
+//		TraceID: traceID,
+//		Event: types.Event{
+//			Dataset: "aoeu",
+//			Data: map[string]interface{}{
+//				"trace.parent_id": "unused",
+//			},
+//			APIKey: legacyAPIKey,
+//		},
+//	}
+//	coll.AddSpanFromPeer(span)
+//	time.Sleep(conf.SendTickerVal * 2)
+//
+//	rootSpan := &types.Span{
+//		TraceID: traceID,
+//		Event: types.Event{
+//			Dataset: "aoeu",
+//			Data:    map[string]interface{}{},
+//			APIKey:  legacyAPIKey,
+//		},
+//	}
+//	coll.AddSpan(rootSpan)
+//	time.Sleep(conf.SendTickerVal * 2)
+//	transmission.Mux.RLock()
+//	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+//	assert.Equal(t, "host123", transmission.Events[1].Data["meta.refinery.local_hostname"])
+//	transmission.Mux.RUnlock()
+//
+//}
+
+func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 5 * time.Millisecond,
+		GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
+			Rules: []*config.RulesBasedSamplerRule{
+				{
+					Name:       "rule 1",
+					Scope:      "trace",
+					SampleRate: 1,
+					Conditions: []*config.RulesBasedSamplerCondition{
+						{
+							Field:    "test",
+							Operator: config.EQ,
+							Value:    int64(1),
+						},
+					},
+					Sampler: &config.RulesBasedDownstreamSampler{
+						DynamicSampler: &config.DynamicSamplerConfig{
+							SampleRate: 1,
+							FieldList:  []string{"http.status_code"},
+						},
+					},
+				},
+				{
+					Name:  "rule 2",
+					Scope: "span",
+					Conditions: []*config.RulesBasedSamplerCondition{
+						{
+							Field:    "test",
+							Operator: config.EQ,
+							Value:    int64(2),
+						},
+					},
+					Sampler: &config.RulesBasedDownstreamSampler{
+						EMADynamicSampler: &config.EMADynamicSamplerConfig{
+							GoalSampleRate: 1,
+							FieldList:      []string{"http.status_code"},
+						},
+					},
+				},
+			}},
+		SendTickerVal:        60 * time.Second,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 100,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{BlockOnProcessor: true, BlockOnDecider: true}
+	stop := startCollector(t, conf, coll, transmission, clock)
+	defer stop()
+
+	traceIDs := []string{"trace1", "trace2"}
+
+	for i := 0; i < 4; i++ {
+		span := &types.Span{
+			ID: fmt.Sprintf("span%d", i),
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id":  "unused",
+					"http.status_code": 200,
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		switch i {
+		case 0, 1:
+			span.TraceID = traceIDs[0]
+			span.Data["test"] = int64(1)
+		case 2, 3:
+			span.TraceID = traceIDs[1]
+			span.Data["test"] = int64(2)
+		}
+		require.NoError(t, coll.AddSpan(span))
+	}
+	time.Sleep(time.Duration(conf.StoreOptions.StateTicker) * 5)
+	var processed bool
+	count := len(traceIDs)
+	for !processed {
+		require.NoError(t, coll.makeDecision())
+		coll.processTraces()
+		for _, traceID := range traceIDs {
+			trace := coll.SpanCache.Get(traceID)
+			if trace != nil {
+				continue
+			}
+			count--
+			require.Nil(t, trace, "after adding the spans, we should have a trace in the cache")
+		}
+		if count != 0 {
+			continue
+		}
+		time.Sleep(time.Duration(conf.GetCollectionConfigVal.ProcessTracesPauseDuration) * 5)
+		require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
+		processed = true
+	}
+
+	for i, traceID := range traceIDs {
+		rootSpan := &types.Span{
+			TraceID: traceID,
+			ID:      "root",
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"http.status_code": 200,
+				},
+				APIKey: legacyAPIKey,
+			},
+			IsRoot: true,
+		}
+		if i == 0 {
+			rootSpan.Data["test"] = int64(1)
+		} else {
+			rootSpan.Data["test"] = int64(2)
+		}
+
+		require.NoError(t, coll.AddSpan(rootSpan))
+	}
+	// now we add the root span and verify that both got sent and that the root span had the span count
+	time.Sleep(time.Duration(conf.GetCollectionConfigVal.ProcessTracesPauseDuration) * 2)
+	require.NoError(t, coll.makeDecision())
+	coll.processTraces()
+	transmission.Mux.RLock()
+	assert.Equal(t, 6, len(transmission.Events), "adding a root span should send all spans in the trace")
+	for _, event := range transmission.Events {
+		reason := event.Data["meta.refinery.reason"]
+		if event.Data["test"] == int64(1) {
+			if _, ok := event.Data["trace.parent_id"]; ok {
+				assert.Equal(t, "rules/trace/rule 1:dynamic", reason, event.Data)
+			} else {
+				assert.Equal(t, "rules/trace/rule 1:dynamic - late arriving span", reason, event.Data)
+			}
+		} else {
+			if _, ok := event.Data["trace.parent_id"]; ok {
+				assert.Equal(t, "rules/span/rule 2:emadynamic", reason, event.Data)
+			} else {
+				assert.Equal(t, "rules/span/rule 2:emadynamic - late arriving span", reason, event.Data)
+			}
+		}
+	}
+	transmission.Mux.RUnlock()
 }
 
 func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralCollector, transmission transmit.Transmission, clock clockwork.Clock) func() {
@@ -228,7 +1144,9 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		SizeCheckInterval: duration("1s"),
 	}
 
-	cfg.GetTraceTimeoutVal = time.Duration(500 * time.Microsecond)
+	if cfg.GetTraceTimeoutVal == 0 {
+		cfg.GetTraceTimeoutVal = time.Duration(500 * time.Microsecond)
+	}
 
 	basicStore := &centralstore.RedisBasicStore{}
 	decisionCache := &cache.CuckooSentCache{}
@@ -274,4 +1192,11 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 func duration(s string) config.Duration {
 	d, _ := time.ParseDuration(s)
 	return config.Duration(d)
+}
+
+func getEventsLength(transmission *transmit.MockTransmission) int {
+	transmission.Mux.RLock()
+	defer transmission.Mux.RUnlock()
+
+	return len(transmission.Events)
 }

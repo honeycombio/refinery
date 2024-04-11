@@ -80,6 +80,8 @@ type MockConfig struct {
 	Mux sync.RWMutex
 }
 
+var _ Config = &MockConfig{}
+
 func (m *MockConfig) ReloadConfig() {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
