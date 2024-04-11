@@ -70,6 +70,8 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		GetRedisDatabaseVal: rand.Intn(16),
 	}
 
+	fmt.Println("redis db", cfg.GetRedisDatabaseVal)
+
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &SmartWrapper{}
 	redis := &redis.DefaultClient{}

@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -12,8 +11,17 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// FieldsExtractor is an interface for types that can return a key field
+// that's used to determine the sample rate for a trace
+type FieldsExtractor interface {
+	AllFields() []types.Fielder
+	RootFields() types.Fielder
+	ID() string
+	DescendantCount() uint32
+}
+
 type Sampler interface {
-	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string)
+	GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string)
 	Start() error
 	GetKeyFields() []string
 }
@@ -59,13 +67,7 @@ func (s *SamplerFactory) Start() error {
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
 // samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
-func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLegacyKey bool) Sampler {
-	if isLegacyKey {
-		if prefix := s.Config.GetDatasetPrefix(); prefix != "" {
-			samplerKey = fmt.Sprintf("%s.%s", prefix, samplerKey)
-		}
-	}
-
+func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
 	c, _, err := s.Config.GetSamplerConfigForDestName(samplerKey)
 	if err != nil {
 		return nil
