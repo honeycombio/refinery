@@ -208,3 +208,41 @@ type ConfigMetadata struct {
 	Hash     string `json:"hash"`
 	LoadedAt string `json:"loaded_at"`
 }
+
+type RedisConfig interface {
+	// GetRedisHost returns the address of a Redis instance to use for peer
+	// management.
+	GetRedisHost() string
+
+	// GetRedisUsername returns the username of a Redis instance to use for peer
+	// management.
+	GetRedisUsername() string
+
+	// GetRedisPassword returns the password of a Redis instance to use for peer
+	// management.
+	GetRedisPassword() string
+
+	// GetRedisAuthCode returns the AUTH string to use for connecting to a Redis
+	// instance to use for peer management
+	GetRedisAuthCode() string
+
+	// GetRedisPrefix returns the prefix string used in the keys for peer
+	// management.
+	GetRedisPrefix() string
+
+	// GetRedisDatabase returns the ID of the Redis database to use for peer management.
+	GetRedisDatabase() int
+
+	// GetUseTLS returns true when TLS must be enabled to dial the Redis instance to
+	// use for peer management.
+	GetUseTLS() bool
+
+	// UseTLSInsecure returns true when certificate checks are disabled
+	GetUseTLSInsecure() bool
+
+	GetRedisMaxIdle() int
+
+	GetRedisMaxActive() int
+
+	GetPeerTimeout() time.Duration
+}
