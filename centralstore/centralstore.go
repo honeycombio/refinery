@@ -25,7 +25,6 @@ const (
 type CentralSpan struct {
 	TraceID    string
 	SpanID     string // need access to this field for updating all fields
-	ParentID   string
 	samplerKey string
 	Type       SpanType
 	KeyFields  map[string]interface{}

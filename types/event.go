@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dgryski/go-wyhash"
 	huskyotlp "github.com/honeycombio/husky/otlp"
 )
+
+const hashSeed = 34527861256
 
 const (
 	APIKeyHeader = "X-Honeycomb-Team"
@@ -221,6 +224,7 @@ type Span struct {
 	ID          string
 	DataSize    int
 	ArrivalTime time.Time
+	IsRoot      bool
 }
 
 // GetDataSize computes the size of the Data element of the Span.
@@ -290,4 +294,10 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 
 func IsLegacyAPIKey(apiKey string) bool {
 	return huskyotlp.IsClassicApiKey(apiKey)
+}
+
+func GenerateSpanID(traceID string) string {
+	ts := wyhash.Hash([]byte("next"), hashSeed)
+	h := wyhash.Hash([]byte(traceID), uint64(ts))
+	return fmt.Sprintf("%016x", h)
 }

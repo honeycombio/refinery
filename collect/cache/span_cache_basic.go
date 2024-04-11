@@ -55,6 +55,9 @@ func (sc *SpanCache_basic) Set(sp *types.Span) error {
 		}
 		sc.cache[traceID] = trace
 	}
+	if sp.IsRoot {
+		trace.RootSpan = sp
+	}
 	trace.AddSpan(sp)
 	return nil
 }
