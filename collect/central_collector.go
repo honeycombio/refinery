@@ -656,7 +656,9 @@ func (c *CentralCollector) reloadConfig() {
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
+	c.mut.Lock()
 	c.samplersByDestination = make(map[string]sample.Sampler)
+	c.mut.Unlock()
 }
 
 // TODO: REMOVE THIS
