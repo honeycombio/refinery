@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/honeycombio/refinery/internal/redis"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/sirupsen/logrus"
 )
 

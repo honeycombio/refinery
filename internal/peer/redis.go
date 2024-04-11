@@ -13,7 +13,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redimem"
-	"github.com/honeycombio/refinery/internal/redis"
+	"github.com/honeycombio/refinery/redis"
 
 	"github.com/sirupsen/logrus"
 )

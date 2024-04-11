@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/internal/redis"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
