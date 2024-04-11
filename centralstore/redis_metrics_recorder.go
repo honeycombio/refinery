@@ -61,10 +61,16 @@ func (r *RedisMetricsRecorder) monitor() {
 	for {
 		select {
 		case <-ticker.Chan():
-			allmetrics := r.Metrics.GetAll()
-			conn := r.RedisClient.Get()
-			conn.SetHashTTL("Refinery_Metrics_"+r.prefix, allmetrics, r.reportingFreq*2)
-			conn.Close()
+			// if we don't have a redis client, we can't report metrics to it
+			if r.RedisClient != nil {
+				allmetrics := r.Metrics.GetAll()
+				// add the current timestamp to the metrics
+				timestamp := r.Clock.Now().UnixMicro()
+				allmetrics["timestamp"] = float64(timestamp / 1_000_000.0)
+				conn := r.RedisClient.Get()
+				conn.SetHashTTL("Refinery_Metrics_"+r.prefix, allmetrics, r.reportingFreq*2)
+				conn.Close()
+			}
 		case <-r.done:
 			ticker.Stop()
 			return
