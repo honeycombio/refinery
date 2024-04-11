@@ -79,6 +79,8 @@ type CentralCollector struct {
 	SamplerFactory *sample.SamplerFactory   `inject:""`
 	SpanCache      cache.SpanCache          `inject:""`
 
+	// whenever samplersByDestination is accessed, it should be protected by
+	// the mut mutex
 	mut                   sync.RWMutex
 	samplersByDestination map[string]sample.Sampler
 

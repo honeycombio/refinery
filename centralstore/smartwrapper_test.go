@@ -42,16 +42,7 @@ func (d dummyLogger) Errorf(format string, v ...interface{}) {
 	fmt.Println()
 }
 
-func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
-	var store BasicStorer
-	switch storetype {
-	case "local":
-		store = &LocalRemoteStore{}
-	case "redis":
-		store = &RedisBasicStore{}
-	default:
-		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
-	}
+func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*SmartWrapper, func(), error) {
 
 	cfg := config.MockConfig{
 		StoreOptions: config.SmartWrapperOptions{
@@ -66,15 +57,10 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 			DroppedSize:       1000,
 			SizeCheckInterval: duration("1s"),
 		},
-		// by default redis only has 16 database index slots available
-		GetRedisDatabaseVal: rand.Intn(16),
 	}
-
-	fmt.Println("redis db", cfg.GetRedisDatabaseVal)
 
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &SmartWrapper{}
-	redis := &redis.DefaultClient{}
 	clock := clockwork.NewRealClock()
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
@@ -83,12 +69,25 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: &metrics.MockMetrics{}, Name: "genericMetrics"},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
-		{Value: redis, Name: "redis"},
 		{Value: clock},
-		{Value: store},
 		{Value: sw},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
+
+	var store BasicStorer
+	switch storetype {
+	case "local":
+		store = &LocalRemoteStore{}
+	case "redis":
+		if redisClient == nil {
+			redisClient = &redis.TestService{}
+		}
+		objects = append(objects, &inject.Object{Value: redisClient, Name: "redis"})
+		store = &RedisBasicStore{}
+	default:
+		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
+	}
+	objects = append(objects, &inject.Object{Value: store})
 	err := g.Provide(objects...)
 	if err != nil {
 		return nil, nil, err
@@ -107,9 +106,6 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	}
 
 	stopper := func() {
-		conn := redis.Get()
-		conn.Do("FLUSHDB")
-		conn.Close()
 		startstop.Stop(g.Objects(), ststLogger)
 	}
 
@@ -117,7 +113,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 }
 
 func TestSingleSpanGetsCollected(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -144,7 +140,7 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 }
 
 func TestSingleTraceOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -192,7 +188,7 @@ func TestSingleTraceOperation(t *testing.T) {
 }
 
 func TestBasicStoreOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -250,7 +246,7 @@ func TestBasicStoreOperation(t *testing.T) {
 }
 
 func TestReadyForDecisionLoop(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -305,7 +301,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(t, err)
 	defer stopper()
 
@@ -426,7 +422,7 @@ func TestSetTraceStatuses(t *testing.T) {
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -446,7 +442,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 }
 
 func BenchmarkStoreGetStatus(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -468,7 +464,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 }
 
 func BenchmarkStoreGetTrace(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -493,7 +489,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	// we want things to happen fast, so we'll set the timeouts low
 	// sopts.SendDelay = duration("100ms")
 	// sopts.TraceTimeout = duration("100ms")
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
