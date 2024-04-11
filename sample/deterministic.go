@@ -8,7 +8,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/types"
 )
 
 // shardingSalt is a random bit to make sure we don't shard the same as any
@@ -42,11 +41,14 @@ func (d *DeterministicSampler) Start() error {
 	return nil
 }
 
-func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *DeterministicSampler) GetSampleRate(trace FieldsExtractor) (rate uint, keep bool, reason string, key string) {
 	if d.sampleRate <= 1 {
 		return 1, true, "deterministic/always", ""
 	}
-	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
+	// hash the trace ID and sharding salt, then take the first 4 bytes which is a
+	// uint32
+	// This will give us a random number that is deterministic for a given trace ID and salt
+	sum := sha1.Sum([]byte(trace.ID() + shardingSalt))
 	v := binary.BigEndian.Uint32(sum[:4])
 	shouldKeep := v <= d.upperBound
 	if shouldKeep {

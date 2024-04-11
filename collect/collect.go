@@ -70,7 +70,8 @@ type InMemCollector struct {
 	fromPeer chan *types.Span
 	reload   chan struct{}
 
-	hostname string
+	hostname      string
+	datasetPrefix string
 }
 
 func (i *InMemCollector) Start() error {
@@ -116,6 +117,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
+	i.datasetPrefix = i.Config.GetDatasetPrefix()
 	i.datasetSamplers = make(map[string]sample.Sampler)
 
 	if i.Config.GetAddHostMetadataToTrace() {
@@ -171,6 +173,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
+	i.datasetPrefix = i.Config.GetDatasetPrefix()
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	// TODO add resizing the LRU sent trace cache on config reload
 }
@@ -589,15 +592,11 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	var found bool
 
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	samplerKey := trace.GetSamplerKey(i.datasetPrefix)
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
+	logFields["sampler_key"] = samplerKey
 
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if trace.RootSpan != nil {
@@ -614,7 +613,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
 		i.datasetSamplers[samplerKey] = sampler
 	}
 

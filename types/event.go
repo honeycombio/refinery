@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -16,6 +17,10 @@ const (
 	TimestampHeader   = "X-Honeycomb-Event-Time"
 	QueryTokenHeader  = "X-Honeycomb-Refinery-Query"
 )
+
+type Fielder interface {
+	Fields() map[string]any
+}
 
 // used to put a request ID into the request context for logging
 type RequestIDContextKey struct{}
@@ -32,14 +37,19 @@ type Event struct {
 	Data        map[string]interface{}
 }
 
+func (e *Event) Fields() map[string]interface{} {
+	return e.Data
+}
+
 // Trace isn't something that shows up on the wire; it gets created within
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
 type Trace struct {
-	APIHost string
-	APIKey  string
-	Dataset string
-	TraceID string
+	APIHost       string
+	APIKey        string
+	Dataset       string
+	DatasetPrefix string
+	TraceID       string
 
 	// SampleRate should only be changed if the changer holds the SendSampleLock
 	// TODO: remove this field
@@ -105,6 +115,22 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
+func (t *Trace) RootFields() Fielder {
+	if t.RootSpan == nil {
+		return nil
+	}
+
+	return t.RootSpan
+}
+
+func (t *Trace) AllFields() []Fielder {
+	res := make([]Fielder, 0, len(t.spans))
+	for _, sp := range t.spans {
+		res = append(res, sp)
+	}
+	return res
+}
+
 func (t *Trace) ID() string {
 	return t.TraceID
 }
@@ -168,20 +194,24 @@ func (t *Trace) SpanEventCount() uint32 {
 	return count
 }
 
-func (t *Trace) GetSamplerKey() (string, bool) {
+func (t *Trace) GetSamplerKey(datasetPrefix string) string {
+	var samplerKey string
 	if IsLegacyAPIKey(t.APIKey) {
-		return t.Dataset, true
+		samplerKey = t.Dataset
+		if datasetPrefix != "" {
+			samplerKey = fmt.Sprintf("%s.%s", datasetPrefix, t.Dataset)
+		}
+		return samplerKey
 	}
 
-	env := ""
 	for _, sp := range t.GetSpans() {
 		if sp.Event.Environment != "" {
-			env = sp.Event.Environment
+			samplerKey = sp.Event.Environment
 			break
 		}
 	}
+	return samplerKey
 
-	return env, false
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace

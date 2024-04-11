@@ -353,6 +353,7 @@ func TestDryRunMode(t *testing.T) {
 			DroppedSize:       100,
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
+		DatasetPrefix: "prefix",
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -362,7 +363,7 @@ func TestDryRunMode(t *testing.T) {
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
+	sampler := samplerFactory.GetSamplerImplementationForKey("prefix.test")
 	coll.SamplerFactory = samplerFactory
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
@@ -575,8 +576,8 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
+		coll.mutex.RLock()
+		defer coll.mutex.RUnlock()
 
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
@@ -585,8 +586,8 @@ func TestSampleConfigReload(t *testing.T) {
 	conf.ReloadConfig()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
+		coll.mutex.RLock()
+		defer coll.mutex.RUnlock()
 
 		_, ok := coll.datasetSamplers[dataset]
 		return !ok
@@ -603,8 +604,8 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
+		coll.mutex.RLock()
+		defer coll.mutex.RUnlock()
 
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
@@ -648,6 +649,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	go coll.collect()
 	defer coll.Stop()
 
+	var memorySize uint64
 	for i := 0; i < 500; i++ {
 		span := &types.Span{
 			TraceID: strconv.Itoa(i),
@@ -658,6 +660,9 @@ func TestStableMaxAlloc(t *testing.T) {
 			},
 		}
 		coll.AddSpan(span)
+		if i < 400 {
+			memorySize += uint64(span.GetDataSize())
+		}
 	}
 
 	for len(coll.incoming) > 0 {
@@ -674,7 +679,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc - memorySize)
 
 	coll.mutex.Unlock()
 
@@ -683,6 +688,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	for {
 		coll.mutex.Lock()
 		traces = coll.cache.GetAll()
+		fmt.Println("cache size", len(traces))
 		if len(traces) < 500 {
 			break
 		}

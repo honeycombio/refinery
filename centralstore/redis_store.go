@@ -313,7 +313,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		"num_of_cached_traces":  len(statusMap),
 	})
 
-	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, conn, pendingTraceIDs)
+	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, conn, traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -357,6 +357,8 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMap))
 	for _, status := range statusMap {
+		status.SamplerKey = statusMapFromRedis[status.TraceID].SamplerKey
+		status.Metadata = statusMapFromRedis[status.TraceID].Metadata
 		statuses = append(statuses, status)
 	}
 	sort.SliceStable(statuses, func(i, j int) bool {
@@ -607,6 +609,7 @@ type centralTraceStatusInit struct {
 	Count      uint32 // number of spans in the trace
 	EventCount uint32 // number of span events in the trace
 	LinkCount  uint32 // number of span links in the trace
+	SamplerKey string
 }
 
 type centralTraceStatusReason struct {
@@ -622,6 +625,7 @@ type centralTraceStatusRedis struct {
 	EventCount  uint32
 	LinkCount   uint32
 	KeepReason  string
+	SamplerKey  string
 	ReasonIndex uint
 }
 
@@ -630,6 +634,7 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralT
 		TraceID:     status.TraceID,
 		State:       Unknown,
 		Rate:        status.Rate,
+		SamplerKey:  status.SamplerKey,
 		reasonIndex: status.ReasonIndex,
 		KeepReason:  status.KeepReason,
 		Count:       status.Count,
@@ -643,7 +648,8 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, span *Cent
 	defer spanStatus.End()
 
 	trace := &centralTraceStatusInit{
-		TraceID: span.TraceID,
+		TraceID:    span.TraceID,
+		SamplerKey: span.samplerKey,
 	}
 
 	args := redis.Args(t.traceStatusKey(trace.TraceID), traceStatusCountKey, expirationForTraceStatus.Seconds())
