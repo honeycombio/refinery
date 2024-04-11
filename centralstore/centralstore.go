@@ -79,6 +79,7 @@ func NewCentralTraceStatus(traceID string, state CentralTraceState, timestamp ti
 		TraceID:   traceID,
 		State:     state,
 		Timestamp: timestamp,
+		Metadata:  make(map[string]interface{}),
 	}
 }
 
@@ -90,6 +91,7 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 		KeepReason:  s.KeepReason,
 		reasonIndex: s.reasonIndex,
 		Timestamp:   s.Timestamp, // we might want this to not copy the timestamp, but to set it to now()
+		Metadata:    s.Metadata,
 	}
 }
 
@@ -136,7 +138,7 @@ func (t *CentralTraceStatus) SampleRate() uint {
 }
 
 func (t *CentralTraceStatus) DescendantCount() uint32 {
-	return t.Count
+	return t.Count + t.EventCount + t.LinkCount
 }
 
 func (t *CentralTraceStatus) SpanEventCount() uint32 {
