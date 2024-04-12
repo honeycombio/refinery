@@ -50,10 +50,6 @@ const (
 const (
 	// TODO: these should be configurable
 	cacheEjectBatchSize         = 100
-	processTracesBatchSize      = 100
-	processTracesPauseDuration  = 200 * time.Microsecond
-	deciderPauseDuration        = 100 * time.Microsecond
-	deciderBatchSize            = 50
 	retryLimit                  = 5
 	concurrentTraceFetcherCount = 10
 )
