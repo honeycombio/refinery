@@ -156,7 +156,6 @@ func (t *traceGenerator) generateTrace(ctx context.Context, out chan *centralsto
 		span := &centralstore.CentralSpan{
 			TraceID:   trace.TraceID,
 			SpanID:    t.getSpanID(trace.TraceID),
-			ParentID:  trace.Spans[i-1].SpanID,
 			Type:      centralstore.SpanTypeNormal,
 			KeyFields: t.getKeyFields(),
 		}

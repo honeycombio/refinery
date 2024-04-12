@@ -168,7 +168,7 @@ func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) e
 		lrs.states[state][span.TraceID].EventCount++
 	}
 
-	if span.ParentID == "" {
+	if span.IsRoot {
 		// this is a root span, so we need to move it to the right state
 		lrs.traces[span.TraceID].Root = span
 		switch state {

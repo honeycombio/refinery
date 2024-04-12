@@ -46,7 +46,6 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			span: &CentralSpan{
 				TraceID:   traceID,
 				SpanID:    "spanID0",
-				ParentID:  traceID,
 				KeyFields: map[string]interface{}{"foo": "bar"},
 				IsRoot:    false,
 			},
@@ -58,7 +57,6 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			span: &CentralSpan{
 				TraceID:   traceID,
 				SpanID:    "spanID1",
-				ParentID:  traceID,
 				Type:      SpanTypeEvent,
 				KeyFields: map[string]interface{}{"event": "bar"},
 				IsRoot:    false,
@@ -72,7 +70,6 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			span: &CentralSpan{
 				TraceID:   traceID,
 				SpanID:    "spanID2",
-				ParentID:  traceID,
 				Type:      SpanTypeLink,
 				KeyFields: map[string]interface{}{"link": "bar"},
 				IsRoot:    false,
@@ -87,7 +84,6 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			span: &CentralSpan{
 				TraceID:   traceID,
 				SpanID:    "spanID3",
-				ParentID:  "",
 				KeyFields: map[string]interface{}{"root": "bar"},
 				IsRoot:    true,
 			},
@@ -132,14 +128,12 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 		{
 			TraceID:   traceID,
 			SpanID:    "spanID0",
-			ParentID:  traceID,
 			KeyFields: map[string]interface{}{"foo": "bar"},
 			IsRoot:    false,
 		},
 		{
 			TraceID:   traceID,
 			SpanID:    "spanID3",
-			ParentID:  "",
 			KeyFields: map[string]interface{}{"root": "bar"},
 			IsRoot:    true,
 		},
@@ -170,7 +164,6 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	span := &CentralSpan{
 		TraceID:   "traceID0",
 		SpanID:    "spanID0",
-		ParentID:  "parent-spanID0",
 		KeyFields: map[string]interface{}{"foo": "bar"},
 	}
 
@@ -302,7 +295,6 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	require.NoError(t, store.WriteSpan(ctx, &CentralSpan{
 		TraceID:   traceID,
 		SpanID:    "spanID0",
-		ParentID:  traceID,
 		KeyFields: map[string]interface{}{"foo": "bar"},
 		IsRoot:    false,
 	}))
@@ -343,7 +335,6 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	status, err = store.GetStatusForTraces(ctx, []string{traceID})
 	require.NoError(t, err)
 	require.Len(t, status, 1)
-	fmt.Println("state: ", status[0].State)
 	require.False(t, decisionDelay)
 	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, traceID))
 	require.True(t, store.states.exists(ctx, conn, AwaitingDecision, traceID))
@@ -589,7 +580,6 @@ func (store *TestRedisBasicStore) ensureInitialState(t *testing.T, ctx context.C
 	store.WriteSpan(context.Background(), &CentralSpan{
 		TraceID:   traceID,
 		SpanID:    "spanID0",
-		ParentID:  "parentID0",
 		KeyFields: map[string]interface{}{"foo": "bar"},
 		IsRoot:    false,
 	})

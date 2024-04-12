@@ -59,6 +59,7 @@ func TestSpanCache(t *testing.T) {
 
 			// test that we can retrieve the span
 			trace := c.Get("trace1")
+			require.NotNil(t, trace)
 			assert.Equal(t, "trace1", trace.TraceID)
 			assert.Equal(t, "apihost", trace.APIHost)
 			assert.Equal(t, "apikey", trace.APIKey)
@@ -69,7 +70,7 @@ func TestSpanCache(t *testing.T) {
 			// test that we can remove the span
 			c.Remove("trace1")
 			trace = c.Get("trace1")
-			assert.Nil(t, trace)
+			require.Nil(t, trace)
 			assert.Equal(t, 0, c.Len())
 		})
 	}
