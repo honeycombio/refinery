@@ -89,17 +89,6 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	}
 }
 
-type testPeers struct {
-	peers []string
-}
-
-func (p *testPeers) GetPeers() ([]string, error) {
-	return p.peers, nil
-}
-
-func (p *testPeers) RegisterUpdatedPeersCallback(callback func()) {
-}
-
 func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
@@ -117,11 +106,15 @@ func newStartedApp(
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		IsAPIKeyValidFunc:        func(k string) bool { return k == legacyAPIKey || k == nonLegacyAPIKey },
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
-		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000},
-		AddHostMetadataToTrace:   enableHostMetadata,
-		TraceIdFieldNames:        []string{"trace.trace_id"},
-		ParentIdFieldNames:       []string{"trace.parent_id"},
-		SampleCache:              config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
+		GetCollectionConfigVal: config.CollectionConfig{
+			CacheCapacity:              10000,
+			ProcessTracesPauseDuration: config.Duration(10 * time.Millisecond),
+			DeciderPauseDuration:       config.Duration(10 * time.Millisecond),
+		},
+		AddHostMetadataToTrace: enableHostMetadata,
+		TraceIdFieldNames:      []string{"trace.trace_id"},
+		ParentIdFieldNames:     []string{"trace.parent_id"},
+		SampleCache:            config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 		StoreOptions: config.SmartWrapperOptions{
 			StateTicker:     config.Duration(50 * time.Millisecond),
 			BasicStoreType:  "redis",
@@ -212,7 +205,7 @@ func TestAppIntegration(t *testing.T) {
 	port := 10500
 
 	sender := &transmission.MockSender{}
-	app, _, stop := newStartedApp(t, sender, port, false)
+	_, _, stop := newStartedApp(t, sender, port, false)
 	defer stop()
 
 	// Send a root span, it should be sent in short order.
@@ -229,15 +222,19 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(time.Duration(app.Config.GetCentralStoreOptions().StateTicker) * 5)
+	require.Eventually(t, func() bool {
+		events := sender.Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
 
-	events := sender.Events()
-	require.Len(t, events, 1)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := sender.Events()
 
-	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+		assert.Equal(collect, "dataset", events[0].Dataset)
+		assert.Equal(collect, "bar", events[0].Data["foo"])
+		assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
+		assert.Equal(collect, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
@@ -264,15 +261,18 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	dur := a.Config.GetCentralStoreOptions().StateTicker
-	time.Sleep(time.Duration(dur) * 5)
-	events := sender.Events()
-	require.Len(t, events, 1)
+	require.Eventually(t, func() bool {
+		events := sender.Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
 
-	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, traceID, events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := sender.Events()
+		assert.Equal(t, "dataset", events[0].Dataset)
+		assert.Equal(t, "bar", events[0].Data["foo"])
+		assert.Equal(t, traceID, events[0].Data["trace.trace_id"])
+		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
@@ -307,7 +307,7 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	port := 14000
 
 	sender := &transmission.MockSender{}
-	a, _, stop := newStartedApp(t, sender, port, true)
+	_, _, stop := newStartedApp(t, sender, port, true)
 	defer stop()
 
 	// Send a root span, it should be sent in short order.
@@ -324,18 +324,21 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	dur := a.Config.GetCentralStoreOptions().StateTicker
-	time.Sleep(time.Duration(dur) * 5)
+	require.Eventually(t, func() bool {
+		events := sender.Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
 
-	events := sender.Events()
-	require.Len(t, events, 1)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := sender.Events()
 
-	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "2", events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
-	hostname, _ := os.Hostname()
-	assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.local_hostname"])
+		assert.Equal(t, "dataset", events[0].Dataset)
+		assert.Equal(t, "bar", events[0].Data["foo"])
+		assert.Equal(t, "2", events[0].Data["trace.trace_id"])
+		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+		hostname, _ := os.Hostname()
+		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.local_hostname"])
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 func TestEventsEndpoint(t *testing.T) {
@@ -368,12 +371,13 @@ func TestEventsEndpoint(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	dur := apps[0].Config.GetCentralStoreOptions().StateTicker
-	time.Sleep(time.Duration(dur) * 5)
+	require.Eventually(t, func() bool {
+		events := senders[0].Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := senders[0].Events()
-		require.Equal(collect, 1, len(events))
 		event := events[0]
 		assert.Equal(
 			t,
@@ -421,10 +425,13 @@ func TestEventsEndpoint(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	time.Sleep(time.Duration(dur) * 5)
+	require.Eventually(t, func() bool {
+		events := senders[1].Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
+
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := senders[1].Events()
-		require.Equal(collect, 1, len(events))
 		event := events[0]
 		assert.Equal(
 			t,
@@ -487,8 +494,12 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	dur := apps[0].Config.GetCentralStoreOptions().StateTicker
-	time.Sleep(time.Duration(dur) * 5)
+
+	require.Eventually(t, func() bool {
+		events := senders[1].Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
+
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := senders[1].Events()
 		require.Equal(collect, 1, len(events))
@@ -539,7 +550,11 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Samplerate", "10")
 
 	post(t, req)
-	time.Sleep(5 * time.Duration(dur))
+	require.Eventually(t, func() bool {
+		events := senders[0].Events()
+		return len(events) == 1
+	}, 5*time.Second, 100*time.Millisecond)
+
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := senders[0].Events()
 		require.Equal(collect, 1, len(events))

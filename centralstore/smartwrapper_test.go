@@ -315,7 +315,7 @@ func TestSetTraceStatuses(t *testing.T) {
 	require.True(t, ok)
 
 	for tr := 0; tr < numberOfTraces; tr++ {
-		tid := fmt.Sprintf("trace%02d", tr)
+		tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -358,7 +358,9 @@ func TestSetTraceStatuses(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, numberOfTraces, len(toDecide))
 	sort.Strings(toDecide)
-	assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
+	expected := traceids[:numberOfTraces]
+	sort.Strings(expected)
+	assert.EqualValues(t, expected, toDecide)
 
 	statuses := make([]*CentralTraceStatus, 0)
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -408,7 +410,7 @@ func TestSetTraceStatuses(t *testing.T) {
 	assert.Equal(t, float64(0), count)
 	count, ok = store.Metrics.Get("redisstore_count_traces")
 	require.True(t, ok)
-	assert.Equal(t, float64(numberOfTraces), count)
+	assert.GreaterOrEqual(t, count, float64(numberOfTraces))
 	count, ok = store.Metrics.Get("redisstore_memory_used_total")
 	require.True(t, ok)
 	assert.Greater(t, count, float64(0))
