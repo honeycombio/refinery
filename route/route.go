@@ -35,7 +35,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
@@ -58,9 +57,7 @@ type Router struct {
 	Logger               logger.Logger         `inject:""`
 	HTTPTransport        *http.Transport       `inject:"upstreamTransport"`
 	UpstreamTransmission transmit.Transmission `inject:"upstreamTransmission"`
-	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
-	Sharder              sharder.Sharder       `inject:""`
-	Collector            collect.Collector     `inject:""`
+	Collector            collect.Collector     `inject:"collector"`
 	Metrics              metrics.Metrics       `inject:"genericMetrics"`
 
 	// version is set on startup so that the router may answer HTTP requests for
@@ -68,10 +65,6 @@ type Router struct {
 	versionStr string
 
 	proxyClient *http.Client
-
-	// type indicates whether this should listen for incoming events or content
-	// redirected from a peer
-	incomingOrPeer string
 
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger iopLogger
@@ -115,11 +108,9 @@ func (r *Router) SetVersion(ver string) {
 // initialized as being for either incoming traffic from clients or traffic from
 // a peer. They listen on different addresses so peer traffic can be
 // prioritized.
-func (r *Router) LnS(incomingOrPeer string) {
-	r.incomingOrPeer = incomingOrPeer
+func (r *Router) LnS() {
 	r.iopLogger = iopLogger{
-		Logger:         r.Logger,
-		incomingOrPeer: incomingOrPeer,
+		Logger: r.Logger,
 	}
 
 	r.proxyClient = &http.Client{
@@ -135,13 +126,13 @@ func (r *Router) LnS(incomingOrPeer string) {
 		return
 	}
 
-	r.Metrics.Register(r.incomingOrPeer+"_router_proxied", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_event", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_batch", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_nonspan", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_span", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_peer", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_dropped", "counter")
+	r.Metrics.Register("incoming_router_proxied", "counter")
+	r.Metrics.Register("incoming_router_event", "counter")
+	r.Metrics.Register("incoming_router_batch", "counter")
+	r.Metrics.Register("incoming_router_nonspan", "counter")
+	r.Metrics.Register("incoming_router_span", "counter")
+	r.Metrics.Register("incoming_router_peer", "counter")
+	r.Metrics.Register("incoming_router_dropped", "counter")
 
 	muxxer := mux.NewRouter()
 
@@ -177,12 +168,16 @@ func (r *Router) LnS(incomingOrPeer string) {
 	// pass everything else through unmolested
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
-	var listenAddr, grpcAddr string
-	if r.incomingOrPeer == "incoming" {
-		listenAddr = r.Config.GetListenAddr()
-		grpcAddr = r.Config.GetGRPCListenAddr()
-	} else {
-		listenAddr = r.Config.GetPeerListenAddr()
+	listenAddr := r.Config.GetListenAddr()
+	if err != nil {
+		r.iopLogger.Error().Logf("failed to get listen addr config: %s", err)
+		return
+	}
+	// GRPC listen addr is optional, err means addr was not empty and invalid
+	grpcAddr := r.Config.GetGRPCListenAddr()
+	if err != nil {
+		r.iopLogger.Error().Logf("failed to get grpc listen addr config: %s", err)
+		return
 	}
 
 	r.iopLogger.Info().Logf("Listening on %s", listenAddr)
@@ -259,8 +254,7 @@ func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 	traceID := mux.Vars(req)["traceID"]
-	shard := r.Sharder.WhichShard(traceID)
-	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
+	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s"}`, traceID)))
 }
 
 func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
@@ -322,7 +316,7 @@ func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format 
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
+	r.Metrics.Increment("incoming_router_event")
 	defer req.Body.Close()
 
 	bodyReader, err := r.getMaybeCompressedBody(req)
@@ -391,7 +385,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
+	r.Metrics.Increment("incoming_router_batch")
 	defer req.Body.Close()
 
 	reqID := req.Context().Value(types.RequestIDContextKey{})
@@ -489,7 +483,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 	if traceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
+		r.Metrics.Increment("incoming_router_nonspan")
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
@@ -503,12 +497,21 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 			break
 		}
 	}
+	if spanID == "" {
+		spanID = types.GenerateSpanID(traceID)
+	}
 	debugLog = debugLog.WithString("trace_id", traceID)
+
+	var isRoot bool
+	for _, parentIdFieldName := range r.Config.GetParentIdFieldNames() {
+		_, isRoot = ev.Data[parentIdFieldName]
+	}
 
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: traceID,
 		ID:      spanID,
+		IsRoot:  isRoot,
 	}
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
@@ -529,23 +532,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		isProbe = true
 	}
 
-	// Figure out if we should handle this span locally or pass on to a peer
-	targetShard := r.Sharder.WhichShard(traceID)
-	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
-		debugLog.
-			WithString("peer", targetShard.GetAddress()).
-			WithField("isprobe", isProbe).
-			Logf("Sending span from batch to peer")
-		ev.APIHost = targetShard.GetAddress()
-
-		// Unfortunately this doesn't tell us if the event was actually
-		// enqueued; we need to watch the response channel to find out, at
-		// which point it's too late to tell the client.
-		r.PeerTransmission.EnqueueEvent(ev)
-		return nil
-	}
-
 	if isProbe {
 		// If we got here it's because the span we were using for a probe was
 		// intended for us, so just skip it.
@@ -554,20 +540,16 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// we're supposed to handle it normally
 	var err error
-	if r.incomingOrPeer == "incoming" {
-		err = r.Collector.AddSpan(span)
-	} else {
-		err = r.Collector.AddSpanFromPeer(span)
-	}
+	err = r.Collector.AddSpan(span)
 	if err != nil {
-		r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
+		r.Metrics.Increment("incoming_router_dropped")
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
 
-	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
+	r.Metrics.Increment("incoming_router_span")
 
-	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
+	debugLog.WithField("source", "incoming").Logf("Accepting span from batch for collection into a trace")
 	return nil
 }
 

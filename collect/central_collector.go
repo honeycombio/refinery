@@ -2,6 +2,9 @@ package collect
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -19,13 +22,38 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type Collector interface {
+	// AddSpan adds a span to be collected, buffered, and merged into a trace.
+	// Once the trace is "complete", it'll be passed off to the sampler then
+	// scheduled for transmission.
+	AddSpan(*types.Span) error
+	Stressed() bool
+	GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string)
+	ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string)
+}
+
+func GetCollectorImplementation(c config.Config) Collector {
+	return &CentralCollector{}
+}
+
+var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
+
+// These are the names of the metrics we use to track our send decisions.
+const (
+	TraceSendGotRoot        = "trace_send_got_root"
+	TraceSendExpired        = "trace_send_expired"
+	TraceSendEjectedFull    = "trace_send_ejected_full"
+	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
+	TraceSendLateSpan       = "trace_send_late_span"
+)
+
 const (
 	// TODO: these should be configurable
 	cacheEjectBatchSize         = 100
 	processTracesBatchSize      = 100
 	processTracesPauseDuration  = 200 * time.Microsecond
 	deciderPauseDuration        = 100 * time.Microsecond
-	deciderBatchSize            = 100
+	deciderBatchSize            = 50
 	retryLimit                  = 5
 	concurrentTraceFetcherCount = 10
 )
@@ -39,6 +67,8 @@ func (t *traceForDecision) DescendantCount() uint32 {
 	return t.descendantCount
 }
 
+var _ Collector = &CentralCollector{}
+
 type CentralCollector struct {
 	Store          centralstore.SmartStorer `inject:""`
 	Config         config.Config            `inject:""`
@@ -49,6 +79,8 @@ type CentralCollector struct {
 	SamplerFactory *sample.SamplerFactory   `inject:""`
 	SpanCache      cache.SpanCache          `inject:""`
 
+	// whenever samplersByDestination is accessed, it should be protected by
+	// the mut mutex
 	mut                   sync.RWMutex
 	samplersByDestination map[string]sample.Sampler
 
@@ -61,6 +93,7 @@ type CentralCollector struct {
 	hostname string
 
 	// test hooks
+	BlockOnAdd       bool
 	BlockOnDecider   bool
 	BlockOnProcessor bool
 }
@@ -81,6 +114,12 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
 	c.Metrics.Register("trace_send_kept", "counter")
+
+	if c.Config.GetAddHostMetadataToTrace() {
+		if hostname, err := os.Hostname(); err == nil && hostname != "" {
+			c.hostname = hostname
+		}
+	}
 
 	// spin up one collector because this is a single threaded collector
 	c.eg = &errgroup.Group{}
@@ -140,6 +179,11 @@ func (c *CentralCollector) collect() {
 	ticker := c.Clock.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
+	if c.BlockOnAdd {
+		c.Logger.Debug().Logf("blocking on add")
+		return
+	}
+
 	for {
 		select {
 		case <-ticker.Chan():
@@ -155,6 +199,7 @@ func (c *CentralCollector) collect() {
 				c.Logger.Error().Logf("error processing span: %s", err)
 			}
 		case <-c.reload:
+			c.reloadConfig()
 			// reload config
 		}
 	}
@@ -167,26 +212,29 @@ func (c *CentralCollector) processor() {
 		case <-c.done:
 			return
 		default:
+
 			if c.BlockOnProcessor {
 			} else {
 				c.processTraces()
 			}
 
-			timer := c.Clock.NewTimer(processTracesPauseDuration)
-			select {
-			case <-c.done:
-				timer.Stop()
-				return
-			case <-timer.Chan():
-				timer.Stop()
-				continue
-			}
+		}
+
+		timer := c.Clock.NewTimer(processTracesPauseDuration)
+		select {
+		case <-c.done:
+			timer.Stop()
+			return
+		case <-timer.Chan():
+			timer.Stop()
+			continue
 		}
 	}
 }
 
 func (c *CentralCollector) processTraces() {
 	ids := c.SpanCache.GetTraceIDs(processTracesBatchSize)
+
 	c.Metrics.Histogram("collector_processor_batch_count", len(ids))
 	if len(ids) == 0 {
 		return
@@ -374,6 +422,7 @@ func (c *CentralCollector) makeDecision() error {
 			state = centralstore.DecisionDrop
 		}
 		status.State = state
+		status.Rate = rate
 		stateMap[status.TraceID] = status
 	}
 
@@ -402,15 +451,23 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 		TraceID:   sp.TraceID,
 		SpanID:    sp.ID,
 		KeyFields: make(map[string]interface{}),
+		IsRoot:    sp.IsRoot,
 	}
-	parentID, ok := c.GetParentID(sp)
-	if !ok {
-		cs.IsRoot = true
+	annotationType := sp.AnnotationType()
+	switch annotationType {
+	case types.SpanAnnotationTypeSpanEvent:
+		cs.Type = centralstore.SpanTypeEvent
+	case types.SpanAnnotationTypeLink:
+		cs.Type = centralstore.SpanTypeLink
+	default:
+		cs.Type = centralstore.SpanTypeNormal
 	}
-	cs.ParentID = parentID
 
 	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
 	cs.SetSamplerKey(samplerKey)
+	if samplerKey == "" {
+		c.Logger.Error().Logf("error getting sampler key for trace %s", sp.TraceID)
+	}
 
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
@@ -459,14 +516,52 @@ func (c *CentralCollector) sendTracesForDecision() {
 func (c *CentralCollector) checkAlloc() {
 	inMemConfig := c.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
+	c.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
 
 	var mem runtime.MemStats
+	// Manually GC here - so we can get a more accurate picture of memory usage
+	runtime.GC()
 	runtime.ReadMemStats(&mem)
+	c.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
 
-	// TODO: implement cache eviction here
+	// Figure out what fraction of the total cache we should remove. We'd like it to be
+	// enough to get us below the max capacity, but not TOO much below.
+	// Because our impact numbers are only the data size, reducing by enough to reach
+	// max alloc will actually do more than that.
+	totalToRemove := mem.Alloc - uint64(maxAlloc)
+	totalTraces := c.SpanCache.Len()
+	c.Metrics.Gauge("collector_cache_size", totalTraces)
+
+	percentage := float64(totalToRemove) / float64(totalTraces)
+	traceIDs := c.SpanCache.GetOldest(percentage)
+
+	ctx := context.Background()
+	totalDataSizeSent := 0
+	var numOfTracesSent int
+	// send traces for decisions
+	for _, id := range traceIDs {
+		trace := c.SpanCache.Get(id)
+		if trace == nil {
+			continue
+		}
+		totalDataSizeSent += trace.DataSize
+		numOfTracesSent++
+		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id})
+		if err != nil {
+			c.Logger.Error().Logf("error sending trace %s for decision: %s", id, err)
+		}
+	}
+
+	// Treat any MaxAlloc overage as an error so we know it's happening
+	c.Logger.Error().
+		WithField("cache_size", totalTraces).
+		WithField("alloc", mem.Alloc).
+		WithField("num_traces_sent", numOfTracesSent).
+		WithField("datasize_sent", totalDataSizeSent).
+		Logf("evicting large traces early due to memory overage")
 
 }
 
@@ -481,23 +576,13 @@ func (c *CentralCollector) sendReloadSignal() {
 	}
 }
 
-func (c *CentralCollector) GetParentID(sp *types.Span) (string, bool) {
-	for _, parentIdFieldName := range c.Config.GetParentIdFieldNames() {
-		parentId := sp.Data[parentIdFieldName]
-		if v, ok := parentId.(string); ok {
-			return v, true
-		}
-	}
-
-	return "", false
-}
-
 func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 	trace := c.SpanCache.Get(status.TraceID)
 	if trace == nil {
 		c.Logger.Error().Logf("trace %s not found in cache", status.TraceID)
 		return
 	}
+
 	traceDur := time.Since(trace.ArrivalTime)
 	c.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	c.Metrics.Histogram("trace_span_count", float64(status.DescendantCount()))
@@ -514,10 +599,12 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if trace.RootSpan != nil {
 		rs := trace.RootSpan
-		rs.Data["meta.span_event_count"] = int64(status.SpanEventCount())
-		rs.Data["meta.span_link_count"] = int64(status.SpanLinkCount())
-		rs.Data["meta.span_count"] = int64(status.SpanCount())
-		rs.Data["meta.event_count"] = int64(status.DescendantCount())
+		if c.Config.GetAddCountsToRoot() {
+			rs.Data["meta.span_event_count"] = int(status.SpanEventCount())
+			rs.Data["meta.span_link_count"] = int(status.SpanLinkCount())
+			rs.Data["meta.span_count"] = int(status.SpanCount())
+			rs.Data["meta.event_count"] = int(status.DescendantCount())
+		}
 	}
 
 	logFields["reason"] = status.KeepReason
@@ -528,7 +615,26 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 
 	c.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
+		if c.Config.GetAddRuleReasonToTrace() {
+			reason, ok := status.Metadata["meta.refinery.reason"]
+			if sp.ArrivalTime.After(status.Timestamp) {
+				if !ok {
+					reason = "late arriving span"
+				} else {
+					reason = fmt.Sprintf("%s - late arriving span", reason)
+				}
+			}
+			sp.Data["meta.refinery.reason"] = reason
+			sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
+
+		}
 		for k, v := range status.Metadata {
+			if k == "meta.refinery.decider.local_hostname" && !c.Config.GetAddHostMetadataToTrace() {
+				continue
+			}
+			if k == "meta.refinery.send_reason" || k == "meta.refinery.reason" {
+				continue
+			}
 			sp.Data[k] = v
 		}
 
@@ -542,4 +648,56 @@ func (c *CentralCollector) addAdditionalAttributes(sp *types.Span) {
 	for k, v := range c.Config.GetAdditionalAttributes() {
 		sp.Data[k] = v
 	}
+}
+
+func (c *CentralCollector) reloadConfig() {
+	c.Logger.Debug().Logf("reloading central collector config")
+
+	// TODO enable this when stress relief is implemented
+	// c.StressRelief.UpdateFromConfig(c.Config.GetStressReliefConfig())
+
+	// clear out any samplers that we have previously created
+	// so that the new configuration will be propagated
+	c.mut.Lock()
+	c.samplersByDestination = make(map[string]sample.Sampler)
+	c.mut.Unlock()
+}
+
+// TODO: REMOVE THIS
+func (c *CentralCollector) AddSpanFromPeer(sp *types.Span) error {
+	return c.add(sp, c.incoming)
+}
+
+// TODO: REMOVE THIS
+func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
+	c.processSpan(sp)
+	return
+}
+
+func (c *CentralCollector) Stressed() bool {
+	return false
+}
+
+func (c *CentralCollector) GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	return 1, true, "stressed"
+}
+
+func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMode bool) {
+	tempSampleRate := sp.SampleRate
+	if sp.SampleRate != 0 {
+		// Write down the original sample rate so that that information
+		// is more easily recovered
+		sp.Data["meta.refinery.original_sample_rate"] = sp.SampleRate
+	}
+
+	if tempSampleRate < 1 {
+		// See https://docs.honeycomb.io/manage-data-volume/sampling/
+		// SampleRate is the denominator of the ratio of sampled spans
+		// HoneyComb treats a missing or 0 SampleRate the same as 1, but
+		// behaves better/more consistently if the SampleRate is explicitly
+		// set instead of inferred
+		tempSampleRate = 1
+	}
+
+	sp.SampleRate = tempSampleRate * traceSampleRate
 }

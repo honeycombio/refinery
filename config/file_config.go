@@ -216,12 +216,16 @@ type RedisPeerManagementConfig struct {
 
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
-	PeerQueueSize       int        `yaml:"PeerQueueSize"`
-	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
-	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
-	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
-	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
+	CacheCapacity              int        `yaml:"CacheCapacity" default:"10_000"`
+	IncomingQueueSize          int        `yaml:"IncomingQueueSize"`
+	CacheEjectBatchSize        int        `yaml:"CacheEjectBatchSize" default:"100"`
+	ProcessTracesBatchSize     int        `yaml:"ProcessTracesBatchSize" default:"50"`
+	ProcessTracesPauseDuration Duration   `yaml:"ProcessTracesPauseDuration" default:"1s"`
+	DeciderPauseDuration       Duration   `yaml:"DeciderPauseDuration" default:"1s"`
+	DeciderBatchSize           int        `yaml:"DeciderBatchSize" default:"50"`
+	AvailableMemory            MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
+	MaxMemoryPercentage        int        `yaml:"MaxMemoryPercentage" default:"75"`
+	MaxAlloc                   MemorySize `yaml:"MaxAlloc"`
 }
 
 type SmartWrapperOptions struct {
@@ -244,16 +248,6 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	return c.AvailableMemory * MemorySize(c.MaxMemoryPercentage) / 100
 }
 
-// GetPeerBufferCapacity returns the capacity of the in-memory channel for peer traces.
-// If PeerBufferCapacity is not set, it uses 3x the cache capacity.
-// The minimum value is 3x the cache capacity.
-func (c CollectionConfig) GetPeerQueueSize() int {
-	if c.PeerQueueSize == 0 || c.PeerQueueSize < c.CacheCapacity*3 {
-		return c.CacheCapacity * 3
-	}
-	return c.PeerQueueSize
-}
-
 // GetIncomingBufferCapacity returns the capacity of the in-memory channel for incoming traces.
 // If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
 // The minimum value is 3x the cache capacity.
@@ -262,6 +256,35 @@ func (c CollectionConfig) GetIncomingQueueSize() int {
 		return c.CacheCapacity * 3
 	}
 	return c.IncomingQueueSize
+}
+
+func (c CollectionConfig) GetCacheEjectBatchSize() int {
+	if c.CacheEjectBatchSize == 0 {
+		return 100
+	}
+	return c.CacheEjectBatchSize
+}
+
+func (c CollectionConfig) GetProcessTracesBatchSize() int {
+	if c.ProcessTracesBatchSize == 0 {
+		return 50
+	}
+	return c.ProcessTracesBatchSize
+}
+
+func (c CollectionConfig) GetProcessTracesPauseDuration() time.Duration {
+	return time.Duration(c.ProcessTracesPauseDuration)
+}
+
+func (c CollectionConfig) GetDeciderPauseDuration() time.Duration {
+	return time.Duration(c.DeciderPauseDuration)
+}
+
+func (c CollectionConfig) GetDeciderBatchSize() int {
+	if c.DeciderBatchSize == 0 {
+		return 50
+	}
+	return c.DeciderBatchSize
 }
 
 type BufferSizeConfig struct {

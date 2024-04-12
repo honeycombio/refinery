@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/sirupsen/logrus"
 )
 
@@ -45,7 +45,7 @@ type RedisMembership struct {
 	// Prefix is a way of namespacing your group membership
 	Prefix string
 	// Pool should be an already-initialized redis pool
-	Pool *redis.Pool
+	Pool redis.Client
 	// RepeatCount is the number of times GetMembers should ask Redis for the list
 	// of members in the pool. As seen in the Redis docs "The SCAN family of
 	// commands only offer limited guarantees about the returned elements"
@@ -179,57 +179,14 @@ func (rm *RedisMembership) getMembersOnce(ctx context.Context) ([]string, error)
 // channel, and there may or may not be additional keys in the DB.
 func (rm *RedisMembership) scan(conn redis.Conn, pattern, count string, timeout time.Duration) (<-chan string, <-chan error) {
 	// make both channels buffered so they can be read in any order instead of both
-	// at once
-	keyChan := make(chan string, 1)
-	errChan := make(chan error, 1)
-
-	// this stop assumes that any individual redis scan operation is fast. It will
-	// not trigger if an individual scan blocks. The redis connection has timeouts
-	// for other bits, so it should be fine.
-	stopAt := time.Now().Add(timeout)
+	done := make(chan struct{})
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 
 	go func() {
-		cursor := "0"
-		for {
-			if time.Now().After(stopAt) {
-				errChan <- errors.New("redis scan timeout")
-				break
-			}
-			values, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", pattern, "COUNT", count))
-			if err != nil {
-				errChan <- err
-				break
-			}
-			if len(values) != 2 {
-				errChan <- errors.New("unexpected response format from redis")
-				break
-			}
-
-			cursor, err = redis.String(values[0], nil)
-			if err != nil {
-				errChan <- err
-				break
-			}
-
-			keys, err := redis.Strings(values[1], nil)
-			if err != nil {
-				errChan <- err
-				break
-			}
-
-			for _, key := range keys {
-				keyChan <- key
-			}
-
-			// redis will return 0 when we have iterated over the entire set
-			if cursor == "0" {
-				break
-			}
-		}
-		close(errChan)
-		close(keyChan)
-
+		<-timer.C
+		close(done)
 	}()
 
-	return keyChan, errChan
+	return conn.Scan(pattern, count, done)
 }

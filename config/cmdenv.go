@@ -29,8 +29,8 @@ type CmdEnv struct {
 	ConfigLocation        string     `short:"c" long:"config" env:"REFINERY_CONFIG" default:"/etc/refinery/refinery.yaml" description:"config file or URL to load"`
 	RulesLocation         string     `short:"r" long:"rules_config" env:"REFINERY_RULES_CONFIG" default:"/etc/refinery/rules.yaml" description:"config file or URL to load"`
 	HTTPListenAddr        string     `long:"http-listen-address" env:"REFINERY_HTTP_LISTEN_ADDRESS" description:"HTTP listen address for incoming event traffic"`
-	PeerListenAddr        string     `long:"peer-listen-address" env:"REFINERY_PEER_LISTEN_ADDRESS" description:"Peer listen address for communication between Refinery instances"`
 	GRPCListenAddr        string     `long:"grpc-listen-address" env:"REFINERY_GRPC_LISTEN_ADDRESS" description:"gRPC listen address for OTLP traffic"`
+	PeerListenAddr        string     `long:"peer-listen-address" env:"REFINERY_PEER_LISTEN_ADDRESS" description:"Peer listen address for incoming peer traffic"`
 	RedisHost             string     `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
 	RedisUsername         string     `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username"`
 	RedisPassword         string     `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password"`
