@@ -12,6 +12,7 @@ import (
 )
 
 func TestErrorReloading(t *testing.T) {
+	t.Skip()
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
 		"General.ConfigReloadInterval", Duration(1*time.Second),

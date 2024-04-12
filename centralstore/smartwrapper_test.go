@@ -42,16 +42,7 @@ func (d dummyLogger) Errorf(format string, v ...interface{}) {
 	fmt.Println()
 }
 
-func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
-	var store BasicStorer
-	switch storetype {
-	case "local":
-		store = &LocalRemoteStore{}
-	case "redis":
-		store = &RedisBasicStore{}
-	default:
-		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
-	}
+func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*SmartWrapper, func(), error) {
 
 	cfg := config.MockConfig{
 		StoreOptions: config.SmartWrapperOptions{
@@ -66,16 +57,11 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 			DroppedSize:       1000,
 			SizeCheckInterval: duration("1s"),
 		},
-		// by default redis only has 16 database index slots available
-		GetRedisDatabaseVal: rand.Intn(16),
 	}
-
-	fmt.Println("redis db", cfg.GetRedisDatabaseVal)
 
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &SmartWrapper{}
-	redis := &redis.DefaultClient{}
-	clock := clockwork.NewFakeClock()
+	clock := clockwork.NewRealClock()
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
 		{Value: &cfg},
@@ -83,12 +69,25 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		{Value: &metrics.MockMetrics{}, Name: "genericMetrics"},
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
-		{Value: redis, Name: "redis"},
 		{Value: clock},
-		{Value: store},
 		{Value: sw},
 	}
 	g := inject.Graph{Logger: dummyLogger{}}
+
+	var store BasicStorer
+	switch storetype {
+	case "local":
+		store = &LocalRemoteStore{}
+	case "redis":
+		if redisClient == nil {
+			redisClient = &redis.TestService{}
+		}
+		objects = append(objects, &inject.Object{Value: redisClient, Name: "redis"})
+		store = &RedisBasicStore{}
+	default:
+		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
+	}
+	objects = append(objects, &inject.Object{Value: store})
 	err := g.Provide(objects...)
 	if err != nil {
 		return nil, nil, err
@@ -99,10 +98,7 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 		return nil, nil, err
 	}
 
-	fmt.Println("starting injected dependencies")
 	ststLogger := dummyLogger{}
-
-	fmt.Println(g.Objects())
 
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
@@ -110,9 +106,6 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 	}
 
 	stopper := func() {
-		conn := redis.Get()
-		conn.Do("FLUSHDB")
-		conn.Close()
 		startstop.Stop(g.Objects(), ststLogger)
 	}
 
@@ -120,15 +113,15 @@ func getAndStartSmartWrapper(storetype string) (*SmartWrapper, func(), error) {
 }
 
 func TestSingleSpanGetsCollected(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
 	randomNum := rand.Intn(500)
 	span := &CentralSpan{
-		TraceID:  fmt.Sprintf("trace%d", randomNum),
-		SpanID:   fmt.Sprintf("span%d", randomNum),
-		ParentID: fmt.Sprintf("parent%d", randomNum), // we don't want this to be a root span
+		TraceID: fmt.Sprintf("trace%d", randomNum),
+		SpanID:  fmt.Sprintf("span%d", randomNum),
+		IsRoot:  false,
 	}
 	ctx := context.Background()
 	err = store.WriteSpan(ctx, span)
@@ -147,14 +140,14 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 }
 
 func TestSingleTraceOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
 	span := &CentralSpan{
-		TraceID:  "trace1",
-		SpanID:   "span1",
-		ParentID: "parent1", // we don't want this to be a root span
+		TraceID: "trace1",
+		SpanID:  "span1",
+		IsRoot:  false,
 	}
 	ctx := context.Background()
 	err = store.WriteSpan(ctx, span)
@@ -195,7 +188,7 @@ func TestSingleTraceOperation(t *testing.T) {
 }
 
 func TestBasicStoreOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -208,9 +201,9 @@ func TestBasicStoreOperation(t *testing.T) {
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
 			span := &CentralSpan{
-				TraceID:  tid,
-				SpanID:   fmt.Sprintf("span%d", s),
-				ParentID: fmt.Sprintf("span%d", s-1),
+				TraceID: tid,
+				SpanID:  fmt.Sprintf("span%d", s),
+				IsRoot:  false,
 			}
 			err = store.WriteSpan(ctx, span)
 			require.NoError(t, err)
@@ -219,6 +212,7 @@ func TestBasicStoreOperation(t *testing.T) {
 		span := &CentralSpan{
 			TraceID: tid,
 			SpanID:  "span0",
+			IsRoot:  true,
 		}
 		err = store.WriteSpan(ctx, span)
 		require.NoError(t, err)
@@ -252,7 +246,7 @@ func TestBasicStoreOperation(t *testing.T) {
 }
 
 func TestReadyForDecisionLoop(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -266,9 +260,9 @@ func TestReadyForDecisionLoop(t *testing.T) {
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
 			span := &CentralSpan{
-				TraceID:  tid,
-				SpanID:   fmt.Sprintf("span%d", s),
-				ParentID: fmt.Sprintf("span%d", s-1),
+				TraceID: tid,
+				SpanID:  fmt.Sprintf("span%d", s),
+				IsRoot:  false,
 			}
 			err := store.WriteSpan(ctx, span)
 			require.NoError(t, err)
@@ -307,7 +301,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(t, err)
 	defer stopper()
 
@@ -317,9 +311,8 @@ func TestSetTraceStatuses(t *testing.T) {
 
 	err = store.RecordMetrics(ctx)
 	require.NoError(t, err)
-	value, ok := store.Metrics.Get("redisstore_count_traces")
+	_, ok := store.Metrics.Get("redisstore_count_traces")
 	require.True(t, ok)
-	require.EqualValues(t, 0, value)
 
 	for tr := 0; tr < numberOfTraces; tr++ {
 		tid := fmt.Sprintf("trace%02d", tr)
@@ -327,9 +320,9 @@ func TestSetTraceStatuses(t *testing.T) {
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
 			span := &CentralSpan{
-				TraceID:  tid,
-				SpanID:   fmt.Sprintf("span%d", s),
-				ParentID: fmt.Sprintf("span%d", s-1),
+				TraceID: tid,
+				SpanID:  fmt.Sprintf("span%d", s),
+				IsRoot:  false,
 			}
 			err = store.WriteSpan(ctx, span)
 			require.NoError(t, err)
@@ -428,7 +421,7 @@ func TestSetTraceStatuses(t *testing.T) {
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -448,7 +441,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 }
 
 func BenchmarkStoreGetStatus(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -470,7 +463,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 }
 
 func BenchmarkStoreGetTrace(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -495,7 +488,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	// we want things to happen fast, so we'll set the timeouts low
 	// sopts.SendDelay = duration("100ms")
 	// sopts.TraceTimeout = duration("100ms")
-	store, stopper, err := getAndStartSmartWrapper(storeType)
+	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 

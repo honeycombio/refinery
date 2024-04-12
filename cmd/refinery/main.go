@@ -31,9 +31,9 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/redis"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/service/debug"
-	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 )
 
@@ -109,9 +109,8 @@ func main() {
 
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(cfg)
-	collector := collect.GetCollectorImplementation(cfg)
+	centralcollector := &collect.CentralCollector{}
 	metricsSingleton := metrics.GetMetricsImplementation(cfg)
-	shrdr := sharder.GetSharderImplementation(cfg)
 	samplerFactory := &sample.SamplerFactory{}
 
 	// set log level
@@ -140,18 +139,8 @@ func main() {
 		TLSHandshakeTimeout: 15 * time.Second,
 	}
 
-	// peerTransport is the http transport used to send things to a local peer
-	peerTransport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		Dial: (&net.Dialer{
-			Timeout: 3 * time.Second,
-		}).Dial,
-		TLSHandshakeTimeout: 1200 * time.Millisecond,
-	}
-
 	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
 	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
-	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
 
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
@@ -172,27 +161,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          cfg.GetMaxBatchSize(),
-			BatchTimeout:          cfg.GetBatchTimeout(),
-			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:   uint(cfg.GetPeerBufferSize()),
-			UserAgentAddition:     userAgentAddition,
-			Transport:             peerTransport,
-			DisableCompression:    !cfg.GetCompressPeerCommunication(),
-			EnableMsgpackEncoding: true,
-			Metrics:               peerMetricsRecorder,
-		},
-	})
-	if err != nil {
-		fmt.Printf("unable to initialize peer libhoney client")
-		os.Exit(1)
-	}
-
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
-	peerTransmission := transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer")
 
 	// we need to include all the metrics types so we can inject them in case they're needed
 	// but we only want to instantiate the ones that are enabled with non-null values
@@ -251,11 +221,9 @@ func main() {
 		{Value: peers},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
-		{Value: peerTransport, Name: "peerTransport"},
 		{Value: upstreamTransmission, Name: "upstreamTransmission"},
-		{Value: peerTransmission, Name: "peerTransmission"},
-		{Value: shrdr},
-		{Value: collector},
+		{Value: &cache.SpanCache_basic{}},
+		{Value: centralcollector, Name: "collector"},
 		{Value: decisionCache},
 		{Value: legacyMetrics, Name: "legacyMetrics"},
 		{Value: promMetrics, Name: "promMetrics"},
@@ -263,7 +231,6 @@ func main() {
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
-		{Value: peerMetricsRecorder, Name: "peerMetrics"},
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
@@ -272,6 +239,10 @@ func main() {
 		{Value: basicStore},
 		{Value: smartStore},
 		{Value: &a},
+	}
+
+	if cfg.GetCentralStoreOptions().BasicStoreType == "redis" {
+		objects = append(objects, &inject.Object{Value: &redis.DefaultClient{}, Name: "redis"})
 	}
 	err = g.Provide(objects...)
 	if err != nil {
@@ -320,11 +291,9 @@ func main() {
 	}
 	for name, typ := range libhoneyMetricsName {
 		upstreamMetricsRecorder.Register(name, typ)
-		peerMetricsRecorder.Register(name, typ)
 	}
 
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(cfg.GetUpstreamBufferSize()))
-	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(cfg.GetPeerBufferSize()))
 
 	// set up signal channel to exit
 	sigsToExit := make(chan os.Signal, 1)

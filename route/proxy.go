@@ -11,7 +11,7 @@ import (
 // response, blocking until it gets one. This is used for all non-event traffic
 // (eg team api key verification, markers, etc.)
 func (r *Router) proxy(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_proxied")
+	r.Metrics.Increment("incoming_router_proxied")
 	r.Logger.Debug().Logf("proxying request for %s", req.URL.Path)
 	upstreamTarget := r.Config.GetHoneycombAPI()
 	forwarded := req.Header.Get("X-Forwarded-For")

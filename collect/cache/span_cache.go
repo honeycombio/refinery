@@ -13,6 +13,9 @@ type SpanCache interface {
 	Set(span *types.Span) error
 	// Retrieves a trace from the cache by traceID. If no trace with the traceID
 	// exists, returns nil.
+	// Note: the returned trace is a pointer to the trace in the cache. It should
+	// be treated as a read-only trace. This is because the cache may modify the
+	// trace after it is returned. If you need to modify the trace, make a copy.
 	Get(traceID string) *types.Trace
 	// Returns the desired fraction of oldest trace IDs in the cache.
 	// (e.g. if fract is 0.1, returns the oldest 10% of trace IDs)

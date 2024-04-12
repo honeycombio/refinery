@@ -77,6 +77,9 @@ func (sc *SpanCache_complex) Set(sp *types.Span) error {
 	trace.Dataset = sp.Dataset
 	trace.TraceID = traceID
 	trace.ArrivalTime = sc.Clock.Now()
+	if sp.IsRoot {
+		trace.RootSpan = sp
+	}
 	trace.AddSpan(sp)
 
 	return nil
