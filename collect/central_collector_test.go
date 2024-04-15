@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,9 +41,11 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 			CacheCapacity: 3,
 		},
 	}
-	coll := &CentralCollector{BlockOnDecider: true}
+	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, nil, clockwork.NewFakeClock())
 	defer stop()
+
+	coll.processorCycle.Pause()
 
 	var traceID1 = "mytrace"
 
@@ -103,18 +106,20 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 100,
+			CacheCapacity:              100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 	transmission := &transmit.MockTransmission{}
 
-	collector := &CentralCollector{
-		BlockOnDecider:   true,
-		BlockOnProcessor: true,
-	}
+	collector := &CentralCollector{}
 	clock := clockwork.NewRealClock()
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
+
+	collector.processorCycle.Pause()
+	collector.deciderCycle.Pause()
 
 	numberOfTraces := 10
 	traceids := make([]string, 0, numberOfTraces)
@@ -134,7 +139,7 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, collector.processSpan(span))
+			require.NoError(t, collector.AddSpan(span))
 		}
 		// now write the root span
 		span := &types.Span{
@@ -142,15 +147,15 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 			ID:      "span0",
 			IsRoot:  true,
 		}
-		require.NoError(t, collector.processSpan(span))
+		require.NoError(t, collector.AddSpan(span))
 	}
 
 	// wait for all traces to be processed
-	time.Sleep(2 * time.Second)
-	err := collector.makeDecision()
-	require.NoError(t, err)
+	waitUntilReadyToDecide(t, collector, traceids)
 
-	collector.processTraces()
+	collector.deciderCycle.RunOnce()
+
+	collector.processorCycle.RunOnce()
 
 	count, ok := collector.Metrics.Get("trace_send_kept")
 	require.True(t, ok)
@@ -163,15 +168,18 @@ func TestCentralCollector_Decider(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 100,
+			IncomingQueueSize:          100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 	transmission := &transmit.MockTransmission{}
 
-	collector := &CentralCollector{BlockOnDecider: true}
+	collector := &CentralCollector{}
 	clock := clockwork.NewRealClock()
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
+	collector.deciderCycle.Pause()
 
 	numberOfTraces := 10
 	traceids := make([]string, 0, numberOfTraces)
@@ -204,16 +212,17 @@ func TestCentralCollector_Decider(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		require.NoError(t, collector.makeDecision())
-		traces, err := collector.Store.GetStatusForTraces(context.Background(), traceids)
-		require.NoError(collect, err)
-		require.Equal(collect, numberOfTraces, len(traces))
-		for _, trace := range traces {
-			assert.Equal(collect, centralstore.DecisionKeep, trace.State)
-			assert.Equal(collect, "test", trace.SamplerKey)
-		}
-	}, 3*time.Second, 500*time.Millisecond)
+	waitUntilReadyToDecide(t, collector, traceids)
+
+	ctx := context.Background()
+	collector.deciderCycle.RunOnce()
+	traces, err := collector.Store.GetStatusForTraces(ctx, traceids)
+	require.NoError(t, err)
+	require.Equal(t, numberOfTraces, len(traces))
+	for _, trace := range traces {
+		assert.Equal(t, centralstore.DecisionKeep, trace.State)
+		assert.Equal(t, "test", trace.SamplerKey)
+	}
 }
 
 func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
@@ -229,7 +238,9 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 100,
+			IncomingQueueSize:          10000,
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
 		},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
@@ -243,12 +254,14 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
 
+	collector.deciderCycle.Pause()
+	collector.processorCycle.Pause()
+
 	// Generate events until one is sampled and appears on the transmission queue for sending.
-	sendAttemptCount := 0
-	for getEventsLength(transmission) < 1 {
-		sendAttemptCount++
+	traceIDs := make([]string, 0, 10)
+	for i := 0; i < 10; i++ {
 		span := &types.Span{
-			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
+			TraceID: fmt.Sprintf("trace-%v", i),
 			Event: types.Event{
 				Dataset:    "aoeu",
 				APIKey:     legacyAPIKey,
@@ -256,9 +269,15 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				Data:       make(map[string]interface{}),
 			},
 		}
-		_ = collector.AddSpan(span)
-		time.Sleep(time.Duration(conf.GetCentralStoreOptions().StateTicker) * 2)
+		traceIDs = append(traceIDs, span.TraceID)
+		require.NoError(t, collector.AddSpan(span))
 	}
+	waitUntilReadyToDecide(t, collector, traceIDs)
+	collector.deciderCycle.RunOnce()
+
+	waitForTraceDecision(t, collector, traceIDs)
+
+	collector.processorCycle.RunOnce()
 
 	transmission.Mux.RLock()
 	require.Greater(t, len(transmission.Events), 0,
@@ -272,8 +291,9 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
 
 	// Generate one more event with no upstream sampling applied.
+	traceID := fmt.Sprintf("trace-%v", 1000)
 	err := collector.AddSpan(&types.Span{
-		TraceID: fmt.Sprintf("trace-%v", 1000),
+		TraceID: traceID,
 		Event: types.Event{
 			Dataset:    "no-upstream-sampling",
 			APIKey:     legacyAPIKey,
@@ -282,17 +302,18 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		},
 	})
 	require.NoError(t, err, "must be able to add the span")
-	time.Sleep(time.Duration(conf.GetCentralStoreOptions().StateTicker) * 2)
+	waitUntilReadyToDecide(t, collector, []string{traceID})
+	collector.deciderCycle.RunOnce()
+	waitForTraceDecision(t, collector, []string{traceID})
 
+	collector.processorCycle.RunOnce()
 	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
 	// should be the last event on the transmission queue.
 	var noUpstreamSampleRateEvent *types.Event
-	require.Eventually(t, func() bool {
-		transmission.Mux.RLock()
-		defer transmission.Mux.RUnlock()
-		noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
-		return noUpstreamSampleRateEvent.Dataset == "no-upstream-sampling"
-	}, 5*time.Second, time.Duration(conf.GetCentralStoreOptions().StateTicker)*2, "the event with no upstream sampling should have appeared in the transmission queue by now")
+	transmission.Mux.RLock()
+	noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
+	require.Equal(t, "no-upstream-sampling", noUpstreamSampleRateEvent.Dataset)
+	transmission.Mux.RUnlock()
 
 	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
 		"original sample rate should not be set in metadata when original sample rate is zero")
@@ -307,7 +328,9 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 100,
+			IncomingQueueSize:          100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -323,6 +346,9 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
+
 	span := &types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1),
 		Event: types.Event{
@@ -335,28 +361,28 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 
 	err := coll.AddSpan(span)
 	require.NoError(t, err)
+	waitUntilReadyToDecide(t, coll, []string{span.TraceID})
+	coll.deciderCycle.RunOnce()
+	waitForTraceDecision(t, coll, []string{span.TraceID})
+	coll.processorCycle.RunOnce()
 
-	waitDur := time.Duration(conf.GetCentralStoreOptions().StateTicker)
-	require.Eventually(t, func() bool {
-		transmission.Mux.RLock()
-		defer transmission.Mux.RUnlock()
-		return len(transmission.Events) > 0
-	}, 2*time.Second, waitDur*2)
-
-	transmission.Mux.RLock()
+	require.Len(t, transmission.Events, 1)
 	assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
 		"SampleRate should be reset to one after starting at zero")
-	transmission.Mux.RUnlock()
 }
 
 func TestCentralCollector_SampleConfigReload(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:        0,
-		GetTraceTimeoutVal:     60 * time.Second,
-		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:          2 * time.Millisecond,
-		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
+		GetSendDelayVal:    0,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			CacheCapacity:              10,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
+		},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -370,10 +396,14 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
+
 	dataset := "aoeu"
 
 	span := &types.Span{
 		TraceID: "1",
+		ID:      "span1",
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
@@ -383,13 +413,10 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 	err := coll.AddSpan(span)
 	require.NoError(t, err)
 
-	assert.Eventually(t, func() bool {
-		coll.mut.RLock()
-		defer coll.mut.RUnlock()
+	waitUntilReadyToDecide(t, coll, []string{span.TraceID})
 
-		_, ok := coll.samplersByDestination[dataset]
-		return ok
-	}, 2*time.Second, 20*time.Millisecond)
+	_, ok := coll.samplersByDestination[dataset]
+	require.True(t, ok)
 
 	conf.ReloadConfig()
 
@@ -411,20 +438,14 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 
 	err = coll.AddSpan(span)
 	require.NoError(t, err)
+	waitUntilReadyToDecide(t, coll, []string{span.TraceID})
 
-	assert.Eventually(t, func() bool {
-		coll.mut.RLock()
-		defer coll.mut.RUnlock()
-
-		_, ok := coll.samplersByDestination[dataset]
-		return ok
-	}, 2*time.Second, 20*time.Millisecond)
+	_, ok = coll.samplersByDestination[dataset]
+	require.True(t, ok)
 }
 
 func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -434,19 +455,30 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize:      600,
-			ProcessTracesBatchSize: 500,
-			DeciderBatchSize:       100,
+			IncomingQueueSize:          600,
+			ProcessTracesBatchSize:     500,
+			DeciderBatchSize:           100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
+		},
+		StoreOptions: config.SmartWrapperOptions{
+			DecisionTimeout: config.Duration(1 * time.Minute),
+			StateTicker:     config.Duration(5 * time.Millisecond),
+			SendDelay:       config.Duration(1 * time.Millisecond),
+			TraceTimeout:    config.Duration(1 * time.Millisecond),
 		},
 	}
 
 	transmission := &transmit.MockTransmission{}
 	clock := clockwork.NewRealClock()
-	coll := &CentralCollector{BlockOnDecider: true, BlockOnProcessor: true}
+	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	totalTraceCount := 500
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
+
+	totalTraceCount := 300
 	spandata := make([]map[string]interface{}, totalTraceCount)
 	for i := 0; i < totalTraceCount; i++ {
 		spandata[i] = map[string]interface{}{
@@ -457,11 +489,13 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 		}
 	}
 
-	toRemoveTraceCount := 400
+	toRemoveTraceCount := 200
 	var memorySize uint64
+	traceIDs := make([]string, 0, totalTraceCount)
 	for i := 0; i < totalTraceCount; i++ {
 		span := &types.Span{
 			TraceID: strconv.Itoa(i),
+			ID:      fmt.Sprintf("span%d", i),
 			Event: types.Event{
 				Dataset: "aoeu",
 				Data:    spandata[i],
@@ -473,12 +507,10 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 		if i < toRemoveTraceCount {
 			memorySize += uint64(span.GetDataSize())
 		}
+		traceIDs = append(traceIDs, span.TraceID)
 	}
 
-	waitDur := time.Duration(conf.GetCentralStoreOptions().StateTicker)
-	for len(coll.incoming) > 0 {
-		time.Sleep(2 * waitDur)
-	}
+	waitUntilReadyToDecide(t, coll, traceIDs)
 
 	// Now there should be 500 traces in the cache.
 	assert.Equal(t, totalTraceCount, coll.SpanCache.Len())
@@ -496,9 +528,9 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 	// wait for the cache to take some action
 	var numOfTracesInCache int
 	for {
-		time.Sleep(2 * waitDur)
-		require.NoError(t, coll.makeDecision())
-		coll.processTraces()
+		time.Sleep(20 * time.Millisecond)
+		coll.deciderCycle.RunOnce()
+		coll.processorCycle.RunOnce()
 
 		numOfTracesInCache = coll.SpanCache.Len()
 		if numOfTracesInCache <= toRemoveTraceCount {
@@ -506,7 +538,7 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 		}
 	}
 
-	assert.Less(t, numOfTracesInCache, 480, "should have sent some traces")
+	assert.Less(t, numOfTracesInCache, 280, "should have sent some traces")
 	assert.Greater(t, numOfTracesInCache, 100, "should have NOT sent some traces")
 
 	// We discarded the most costly spans, and sent them.
@@ -535,7 +567,9 @@ func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
 
 	transmission := &transmit.MockTransmission{}
 	clock := clockwork.NewRealClock()
-	coll := &CentralCollector{BlockOnAdd: true}
+	coll := &CentralCollector{
+		blockOnCollect: true,
+	}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
@@ -561,7 +595,7 @@ func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
 // This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
 func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    10 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      60 * time.Second,
@@ -574,15 +608,20 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 100,
+			IncomingQueueSize:          100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 
 	transmission := &transmit.MockTransmission{}
-	clock := clockwork.NewFakeClock()
-	coll := &CentralCollector{BlockOnProcessor: true, BlockOnDecider: true}
+	clock := clockwork.NewRealClock()
+	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
+
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "mytrace"
 	for i := 0; i < 4; i++ {
@@ -605,11 +644,14 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 		}
 		require.NoError(t, coll.AddSpan(span))
 	}
-	time.Sleep(10 * time.Millisecond)
+	coll.deciderCycle.RunOnce()
+	coll.processorCycle.RunOnce()
+
 	trace := coll.SpanCache.Get(traceID)
 	require.NotNil(t, trace, "after adding the spans, we should have a trace in the cache")
 	assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
+
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -625,22 +667,11 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 
 	// make sure all spans are processed and the trace is ready
 	// for decision
-	var processed bool
-	ctx := context.Background()
-	for !processed {
-		clock.Advance(1 * time.Second)
-		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
-		require.NoError(t, err)
-		if len(ids) > 0 {
-			trace, err := coll.Store.GetTrace(ctx, traceID)
-			require.NoError(t, err)
-			if len(trace.Spans) == 5 {
-				processed = true
-			}
-		}
-	}
-	require.NoError(t, coll.makeDecision())
-	coll.processTraces()
+	waitUntilReadyToDecide(t, coll, []string{traceID})
+	coll.deciderCycle.RunOnce()
+	waitForTraceDecision(t, coll, []string{traceID})
+	coll.processorCycle.RunOnce()
+
 	trace = coll.SpanCache.Get(traceID)
 	require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
 
@@ -676,15 +707,20 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 100,
+			IncomingQueueSize:          100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 
 	transmission := &transmit.MockTransmission{}
 	clock := clockwork.NewRealClock()
-	coll := &CentralCollector{BlockOnDecider: true, BlockOnProcessor: true}
+	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
+
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "mytrace"
 
@@ -710,19 +746,13 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 	}
 	// make sure all spans are processed and the trace is ready
 	// for decision
-	var processed bool
-	for !processed {
-		require.NoError(t, coll.makeDecision())
-		coll.processTraces()
-		trace := coll.SpanCache.Get(traceID)
-		if trace != nil {
-			continue
-		}
-		require.Nil(t, trace, "after adding the spans, we should have a trace in the cache")
-		time.Sleep(time.Duration(conf.GetCollectionConfigVal.ProcessTracesPauseDuration) * 5)
-		require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
-		processed = true
-	}
+	waitUntilReadyToDecide(t, coll, []string{traceID})
+	coll.deciderCycle.RunOnce()
+	waitForTraceDecision(t, coll, []string{traceID})
+	coll.processorCycle.RunOnce()
+	trace := coll.SpanCache.Get(traceID)
+	require.Nil(t, trace, "trace should have been sent")
+	require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
 
 	// now we add the root span and verify that both got sent and that the root span had the span count
 	rootSpan := &types.Span{
@@ -736,13 +766,14 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 		IsRoot: true,
 	}
 	require.NoError(t, coll.AddSpan(rootSpan))
+	// The trace decision is already made for the late root span
+	waitForTraceDecision(t, coll, []string{traceID})
+	coll.processorCycle.RunOnce()
 
-	require.NoError(t, coll.makeDecision())
-	coll.processTraces()
-
-	trace := coll.SpanCache.Get(traceID)
+	trace = coll.SpanCache.Get(traceID)
 	require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
+
 	assert.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
@@ -775,7 +806,9 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 10,
+			IncomingQueueSize:          10,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 
@@ -784,6 +817,9 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
+
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "traceABC"
 
@@ -799,6 +835,15 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 		},
 	}
 	require.NoError(t, coll.AddSpan(span))
+	// make sure all spans are processed and the trace is ready
+	// for decision
+	waitUntilReadyToDecide(t, coll, []string{traceID})
+	coll.deciderCycle.RunOnce()
+	waitForTraceDecision(t, coll, []string{traceID})
+	coll.processorCycle.RunOnce()
+	trace := coll.SpanCache.Get(traceID)
+	require.Nil(t, trace, "trace should have been sent")
+	require.Equal(t, 1, len(transmission.Events), "adding a non-root span and waiting should send the span")
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -811,15 +856,17 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 		IsRoot: true,
 	}
 	require.NoError(t, coll.AddSpan(rootSpan))
+	// The trace decision is already made for the late root span
+	waitForTraceDecision(t, coll, []string{traceID})
+	coll.processorCycle.RunOnce()
 
-	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-		transmission.Mux.RLock()
-		assert.Equal(c, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-		if len(transmission.Events) == 2 {
-			assert.Equal(c, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
-		}
-		transmission.Mux.RUnlock()
-	}, 5*time.Second, conf.SendTickerVal)
+	trace = coll.SpanCache.Get(traceID)
+	require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
+	transmission.Mux.RUnlock()
 }
 
 func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
@@ -838,17 +885,19 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 5,
+			IncomingQueueSize:          5,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 	transmission := &transmit.MockTransmission{}
 	clock := clockwork.NewRealClock()
-	coll := &CentralCollector{
-		BlockOnDecider:   true,
-		BlockOnProcessor: true,
-	}
+	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
+
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "trace123"
 
@@ -876,23 +925,11 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 		IsRoot: true,
 	}
 	require.NoError(t, coll.AddSpan(rootSpan))
-	time.Sleep(time.Duration(conf.StoreOptions.StateTicker) * 5)
+	waitUntilReadyToDecide(t, coll, []string{traceID})
+	coll.deciderCycle.RunOnce()
+	waitForTraceDecision(t, coll, []string{traceID})
+	coll.processorCycle.RunOnce()
 
-	var processed bool
-	ctx := context.Background()
-	for !processed {
-		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
-		require.NoError(t, err)
-		if len(ids) > 0 {
-			trace, err := coll.Store.GetTrace(ctx, traceID)
-			require.NoError(t, err)
-			if len(trace.Spans) == 2 {
-				processed = true
-			}
-		}
-	}
-	require.NoError(t, coll.makeDecision())
-	coll.processTraces()
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
 	assert.Equal(t, "foo", transmission.Events[0].Data["name"], "new attribute should appear in data")
@@ -1020,15 +1057,20 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 100,
+			IncomingQueueSize:          100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
 		},
 	}
 
 	transmission := &transmit.MockTransmission{}
 	clock := clockwork.NewRealClock()
-	coll := &CentralCollector{BlockOnProcessor: true, BlockOnDecider: true}
+	coll := &CentralCollector{}
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
+
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	traceIDs := []string{"trace1", "trace2"}
 
@@ -1054,27 +1096,11 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 		}
 		require.NoError(t, coll.AddSpan(span))
 	}
-	time.Sleep(time.Duration(conf.StoreOptions.StateTicker) * 5)
-	var processed bool
-	count := len(traceIDs)
-	for !processed {
-		require.NoError(t, coll.makeDecision())
-		coll.processTraces()
-		for _, traceID := range traceIDs {
-			trace := coll.SpanCache.Get(traceID)
-			if trace != nil {
-				continue
-			}
-			count--
-			require.Nil(t, trace, "after adding the spans, we should have a trace in the cache")
-		}
-		if count != 0 {
-			continue
-		}
-		time.Sleep(time.Duration(conf.GetCollectionConfigVal.ProcessTracesPauseDuration) * 5)
-		require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
-		processed = true
-	}
+	waitUntilReadyToDecide(t, coll, traceIDs)
+	coll.deciderCycle.RunOnce()
+	waitForTraceDecision(t, coll, traceIDs)
+	coll.processorCycle.RunOnce()
+	require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
 
 	for i, traceID := range traceIDs {
 		rootSpan := &types.Span{
@@ -1097,10 +1123,10 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 
 		require.NoError(t, coll.AddSpan(rootSpan))
 	}
-	// now we add the root span and verify that both got sent and that the root span had the span count
-	time.Sleep(time.Duration(conf.GetCollectionConfigVal.ProcessTracesPauseDuration) * 2)
-	require.NoError(t, coll.makeDecision())
-	coll.processTraces()
+
+	waitForTraceDecision(t, coll, traceIDs)
+	coll.processorCycle.RunOnce()
+
 	transmission.Mux.RLock()
 	assert.Equal(t, 6, len(transmission.Events), "adding a root span should send all spans in the trace")
 	for _, event := range transmission.Events {
@@ -1131,17 +1157,35 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		transmission = &transmit.MockTransmission{}
 	}
 
-	cfg.StoreOptions = config.SmartWrapperOptions{
-		SpanChannelSize: 200,
-		StateTicker:     duration("50ms"),
-		SendDelay:       duration("200ms"),
-		TraceTimeout:    duration("500ms"),
-		DecisionTimeout: duration("500ms"),
+	if cfg.StoreOptions.SpanChannelSize == 0 {
+		cfg.StoreOptions.SpanChannelSize = 100
 	}
-	cfg.SampleCache = config.SampleCacheConfig{
-		KeptSize:          1000,
-		DroppedSize:       1000,
-		SizeCheckInterval: duration("1s"),
+
+	if cfg.StoreOptions.StateTicker == 0 {
+		cfg.StoreOptions.StateTicker = duration("50ms")
+	}
+
+	if cfg.StoreOptions.SendDelay == 0 {
+		cfg.StoreOptions.SendDelay = duration("200ms")
+	}
+
+	if cfg.StoreOptions.TraceTimeout == 0 {
+		cfg.StoreOptions.TraceTimeout = duration("500ms")
+	}
+
+	if cfg.StoreOptions.DecisionTimeout == 0 {
+		cfg.StoreOptions.DecisionTimeout = duration("500ms")
+	}
+
+	if cfg.SampleCache.KeptSize == 0 {
+		cfg.SampleCache.KeptSize = 1000
+	}
+	if cfg.SampleCache.DroppedSize == 0 {
+		cfg.SampleCache.DroppedSize = 1000
+	}
+
+	if cfg.SampleCache.SizeCheckInterval == 0 {
+		cfg.SampleCache.SizeCheckInterval = duration("1s")
 	}
 
 	if cfg.GetTraceTimeoutVal == 0 {
@@ -1194,9 +1238,40 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-func getEventsLength(transmission *transmit.MockTransmission) int {
-	transmission.Mux.RLock()
-	defer transmission.Mux.RUnlock()
+func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []string) {
+	ctx := context.Background()
 
-	return len(transmission.Events)
+	require.Eventually(t, func() bool {
+		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
+		require.NoError(t, err)
+		for _, id := range traceIDs {
+			if !slices.Contains(ids, id) {
+				return false
+			}
+		}
+		return true
+	}, 8*time.Second, 50*time.Millisecond)
+}
+
+func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []string) {
+	ctx := context.Background()
+	require.Eventually(t, func() bool {
+		statuses, err := coll.Store.GetStatusForTraces(ctx, traceIDs)
+		require.NoError(t, err)
+		var count int
+		for _, status := range statuses {
+			if !slices.Contains(traceIDs, status.TraceID) {
+				continue
+			}
+			switch status.State {
+			case centralstore.DecisionKeep:
+				count++
+			case centralstore.DecisionDrop:
+				count++
+			default:
+				fmt.Println("status", status.State)
+			}
+		}
+		return count == len(traceIDs)
+	}, 5*time.Second, 20*time.Millisecond)
 }

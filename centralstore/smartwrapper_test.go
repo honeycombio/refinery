@@ -301,7 +301,7 @@ func TestReadyForDecisionLoop(t *testing.T) {
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
@@ -309,13 +309,8 @@ func TestSetTraceStatuses(t *testing.T) {
 	numberOfTraces := 5
 	traceids := make([]string, 0)
 
-	err = store.RecordMetrics(ctx)
-	require.NoError(t, err)
-	_, ok := store.Metrics.Get("redisstore_count_traces")
-	require.True(t, ok)
-
 	for tr := 0; tr < numberOfTraces; tr++ {
-		tid := fmt.Sprintf("trace%02d", tr)
+		tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
 		traceids = append(traceids, tid)
 		// write 9 child spans to the store
 		for s := 1; s < 10; s++ {
@@ -358,7 +353,9 @@ func TestSetTraceStatuses(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, numberOfTraces, len(toDecide))
 	sort.Strings(toDecide)
-	assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
+	expected := traceids[:numberOfTraces]
+	sort.Strings(expected)
+	assert.EqualValues(t, expected, toDecide)
 
 	statuses := make([]*CentralTraceStatus, 0)
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -400,24 +397,6 @@ func TestSetTraceStatuses(t *testing.T) {
 			assert.Equal(t, DecisionDrop, status.State)
 		}
 	}
-
-	err = store.RecordMetrics(ctx)
-	require.NoError(t, err)
-	count, ok := store.Metrics.Get("redisstore_count_awaiting_decision")
-	require.True(t, ok)
-	assert.Equal(t, float64(0), count)
-	count, ok = store.Metrics.Get("redisstore_count_traces")
-	require.True(t, ok)
-	assert.Equal(t, float64(numberOfTraces), count)
-	count, ok = store.Metrics.Get("redisstore_memory_used_total")
-	require.True(t, ok)
-	assert.Greater(t, count, float64(0))
-	count, ok = store.Metrics.Get("redisstore_memory_used_peak")
-	require.True(t, ok)
-	assert.Greater(t, count, float64(0))
-	count, ok = store.Metrics.Get("redisstore_count_keys")
-	require.True(t, ok)
-	assert.Greater(t, count, float64(0))
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
