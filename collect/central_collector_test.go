@@ -45,7 +45,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 	stop := startCollector(t, conf, coll, nil, clockwork.NewFakeClock())
 	defer stop()
 
-	coll.processorCycle.pause <- struct{}{}
+	coll.processorCycle.Pause()
 
 	var traceID1 = "mytrace"
 
@@ -118,8 +118,8 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
 
-	collector.processorCycle.pause <- struct{}{}
-	collector.deciderCycle.pause <- struct{}{}
+	collector.processorCycle.Pause()
+	collector.deciderCycle.Pause()
 
 	numberOfTraces := 10
 	traceids := make([]string, 0, numberOfTraces)
@@ -179,7 +179,7 @@ func TestCentralCollector_Decider(t *testing.T) {
 	clock := clockwork.NewRealClock()
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
-	collector.deciderCycle.pause <- struct{}{}
+	collector.deciderCycle.Pause()
 
 	numberOfTraces := 10
 	traceids := make([]string, 0, numberOfTraces)
@@ -254,8 +254,8 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	stop := startCollector(t, conf, collector, transmission, clock)
 	defer stop()
 
-	collector.deciderCycle.pause <- struct{}{}
-	collector.processorCycle.pause <- struct{}{}
+	collector.deciderCycle.Pause()
+	collector.processorCycle.Pause()
 
 	// Generate events until one is sampled and appears on the transmission queue for sending.
 	traceIDs := make([]string, 0, 10)
@@ -346,8 +346,8 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	span := &types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1),
@@ -396,8 +396,8 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	dataset := "aoeu"
 
@@ -474,8 +474,8 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	totalTraceCount := 300
 	spandata := make([]map[string]interface{}, totalTraceCount)
@@ -619,8 +619,8 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "mytrace"
 	for i := 0; i < 4; i++ {
@@ -718,8 +718,8 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "mytrace"
 
@@ -817,8 +817,8 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "traceABC"
 
@@ -895,8 +895,8 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	var traceID = "trace123"
 
@@ -1068,8 +1068,8 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 	stop := startCollector(t, conf, coll, transmission, clock)
 	defer stop()
 
-	coll.deciderCycle.pause <- struct{}{}
-	coll.processorCycle.pause <- struct{}{}
+	coll.deciderCycle.Pause()
+	coll.processorCycle.Pause()
 
 	traceIDs := []string{"trace1", "trace2"}
 

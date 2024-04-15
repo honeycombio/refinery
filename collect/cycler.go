@@ -110,3 +110,13 @@ func (c *Cycle) RunOnce() {
 		return
 	}
 }
+
+// Pause pauses the cycle.
+func (c *Cycle) Pause() {
+	c.pause <- struct{}{}
+}
+
+// Continue resumes the cycle.
+func (c *Cycle) Continue() {
+	c.continueRun <- struct{}{}
+}
