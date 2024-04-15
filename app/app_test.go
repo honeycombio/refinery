@@ -96,7 +96,6 @@ func newStartedApp(
 	enableHostMetadata bool,
 ) (*App, inject.Graph, func()) {
 	c := &config.MockConfig{
-		GetSendDelayVal:          0,
 		GetTraceTimeoutVal:       10 * time.Millisecond,
 		GetMaxBatchSizeVal:       500,
 		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},
@@ -120,6 +119,7 @@ func newStartedApp(
 			BasicStoreType:  "redis",
 			SpanChannelSize: 10000,
 			SendDelay:       config.Duration(2 * time.Millisecond),
+			DecisionTimeout: config.Duration(100 * time.Millisecond),
 		},
 	}
 

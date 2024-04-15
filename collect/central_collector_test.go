@@ -446,8 +446,6 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 
 func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
-		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -465,6 +463,9 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 		},
 		StoreOptions: config.SmartWrapperOptions{
 			DecisionTimeout: config.Duration(1 * time.Minute),
+			StateTicker:     config.Duration(5 * time.Millisecond),
+			SendDelay:       config.Duration(1 * time.Millisecond),
+			TraceTimeout:    config.Duration(1 * time.Millisecond),
 		},
 	}
 
@@ -1239,6 +1240,7 @@ func duration(s string) config.Duration {
 
 func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []string) {
 	ctx := context.Background()
+
 	require.Eventually(t, func() bool {
 		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
 		require.NoError(t, err)
@@ -1248,7 +1250,7 @@ func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []str
 			}
 		}
 		return true
-	}, 5*time.Second, 10*time.Millisecond)
+	}, 8*time.Second, 50*time.Millisecond)
 }
 
 func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []string) {

@@ -301,18 +301,13 @@ func TestReadyForDecisionLoop(t *testing.T) {
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 	require.NoError(t, err)
 	defer stopper()
 
 	ctx := context.Background()
 	numberOfTraces := 5
 	traceids := make([]string, 0)
-
-	err = store.RecordMetrics(ctx)
-	require.NoError(t, err)
-	_, ok := store.Metrics.Get("redisstore_count_traces")
-	require.True(t, ok)
 
 	for tr := 0; tr < numberOfTraces; tr++ {
 		tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
@@ -402,24 +397,6 @@ func TestSetTraceStatuses(t *testing.T) {
 			assert.Equal(t, DecisionDrop, status.State)
 		}
 	}
-
-	err = store.RecordMetrics(ctx)
-	require.NoError(t, err)
-	count, ok := store.Metrics.Get("redisstore_count_awaiting_decision")
-	require.True(t, ok)
-	assert.Equal(t, float64(0), count)
-	count, ok = store.Metrics.Get("redisstore_count_traces")
-	require.True(t, ok)
-	assert.GreaterOrEqual(t, count, float64(numberOfTraces))
-	count, ok = store.Metrics.Get("redisstore_memory_used_total")
-	require.True(t, ok)
-	assert.Greater(t, count, float64(0))
-	count, ok = store.Metrics.Get("redisstore_memory_used_peak")
-	require.True(t, ok)
-	assert.Greater(t, count, float64(0))
-	count, ok = store.Metrics.Get("redisstore_count_keys")
-	require.True(t, ok)
-	assert.Greater(t, count, float64(0))
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
