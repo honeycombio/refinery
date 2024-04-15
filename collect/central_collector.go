@@ -50,10 +50,6 @@ const (
 const (
 	// TODO: these should be configurable
 	cacheEjectBatchSize         = 100
-	processTracesBatchSize      = 100
-	processTracesPauseDuration  = 200 * time.Microsecond
-	deciderPauseDuration        = 100 * time.Microsecond
-	deciderBatchSize            = 50
 	retryLimit                  = 5
 	concurrentTraceFetcherCount = 10
 )
@@ -87,15 +83,15 @@ type CentralCollector struct {
 	incoming chan *types.Span
 	reload   chan struct{}
 
-	done chan struct{}
-	eg   *errgroup.Group
+	done           chan struct{}
+	eg             *errgroup.Group
+	processorCycle *Cycle
+	deciderCycle   *Cycle
 
 	hostname string
 
 	// test hooks
-	BlockOnAdd       bool
-	BlockOnDecider   bool
-	BlockOnProcessor bool
+	blockOnCollect bool
 }
 
 func (c *CentralCollector) Start() error {
@@ -110,6 +106,10 @@ func (c *CentralCollector) Start() error {
 	c.incoming = make(chan *types.Span, collectorCfg.GetIncomingQueueSize())
 	c.reload = make(chan struct{}, 1)
 	c.samplersByDestination = make(map[string]sample.Sampler)
+
+	// test hooks
+	c.processorCycle = NewCycle(c.Clock, collectorCfg.GetProcessTracesPauseDuration(), c.done)
+	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderPauseDuration(), c.done)
 
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
@@ -174,25 +174,26 @@ func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	}
 }
 
-func (c *CentralCollector) collect() {
+func (c *CentralCollector) collect() error {
 	tickerDuration := c.Config.GetSendTickerValue()
 	ticker := c.Clock.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	if c.BlockOnAdd {
-		c.Logger.Debug().Logf("blocking on add")
-		return
+	if c.blockOnCollect {
+		return nil
 	}
 
 	for {
 		select {
+		case <-c.done:
+			return nil
 		case <-ticker.Chan():
 			c.sendTracesForDecision()
 			c.checkAlloc()
 
 		case sp, ok := <-c.incoming:
 			if !ok {
-				return
+				return nil
 			}
 			err := c.processSpan(sp)
 			if err != nil {
@@ -206,38 +207,16 @@ func (c *CentralCollector) collect() {
 
 }
 
-func (c *CentralCollector) processor() {
-	for {
-		select {
-		case <-c.done:
-			return
-		default:
-
-			if c.BlockOnProcessor {
-			} else {
-				c.processTraces()
-			}
-
-		}
-
-		timer := c.Clock.NewTimer(processTracesPauseDuration)
-		select {
-		case <-c.done:
-			timer.Stop()
-			return
-		case <-timer.Chan():
-			timer.Stop()
-			continue
-		}
-	}
+func (c *CentralCollector) processor() error {
+	return c.processorCycle.Run(context.Background(), c.processTraces)
 }
 
-func (c *CentralCollector) processTraces() {
-	ids := c.SpanCache.GetTraceIDs(processTracesBatchSize)
+func (c *CentralCollector) processTraces(ctx context.Context) error {
+	ids := c.SpanCache.GetTraceIDs(c.Config.GetCollectionConfig().GetProcessTracesBatchSize())
 
 	c.Metrics.Histogram("collector_processor_batch_count", len(ids))
 	if len(ids) == 0 {
-		return
+		return nil
 	}
 
 	statuses, err := c.Store.GetStatusForTraces(context.Background(), ids)
@@ -256,38 +235,16 @@ func (c *CentralCollector) processTraces() {
 			c.Logger.Debug().Logf("trace %s is still pending", status.TraceID)
 		}
 	}
+
+	return nil
 }
 
-func (c *CentralCollector) decider() {
-	for {
-		select {
-		case <-c.done:
-			return
-		default:
-			// this is only ever true in test mode
-			if c.BlockOnDecider {
-			} else {
-				if err := c.makeDecision(); err != nil {
-					c.Logger.Error().Logf("error making decision: %s", err)
-				}
-			}
-
-			timer := c.Clock.NewTimer(deciderPauseDuration)
-			select {
-			case <-c.done:
-				timer.Stop()
-				return
-			case <-timer.Chan():
-				timer.Stop()
-				continue
-			}
-		}
-	}
+func (c *CentralCollector) decider() error {
+	return c.deciderCycle.Run(context.Background(), c.makeDecision)
 }
 
-func (c *CentralCollector) makeDecision() error {
-	ctx := context.Background()
-	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, deciderBatchSize)
+func (c *CentralCollector) makeDecision(ctx context.Context) error {
+	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, c.Config.GetCollectionConfig().GetDeciderBatchSize())
 	if err != nil {
 		return err
 	}
