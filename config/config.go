@@ -200,6 +200,8 @@ type Config interface {
 	GetSpanIdFieldNames() []string
 
 	GetCentralStoreOptions() SmartWrapperOptions
+
+	GetCentralCollectorConfig() CentralCollectorConfig
 }
 
 type ConfigMetadata struct {

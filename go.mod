@@ -42,7 +42,6 @@ require (
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e
 	google.golang.org/grpc v1.62.1
 	google.golang.org/protobuf v1.33.0
-	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -66,6 +65,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
+	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
 )
 
 require (
