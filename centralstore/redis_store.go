@@ -13,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
+	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -780,7 +781,7 @@ func (t *tracesStore) storeSpan(ctx context.Context, conn redis.Conn, span *Cent
 	return conn.Exec(commands...)
 }
 
-func (t *tracesStore) incrementSpanCounts(ctx context.Context, conn redis.Conn, traceID string, spanType SpanType) error {
+func (t *tracesStore) incrementSpanCounts(ctx context.Context, conn redis.Conn, traceID string, spanType types.SpanType) error {
 	_, span := t.tracer.Start(ctx, "incrementSpanCounts")
 	defer span.End()
 
@@ -793,13 +794,13 @@ func (t *tracesStore) incrementSpanCounts(ctx context.Context, conn redis.Conn, 
 	return err
 }
 
-func (t *tracesStore) incrementSpanCountsCMD(traceID string, spanType SpanType) (redis.Command, error) {
+func (t *tracesStore) incrementSpanCountsCMD(traceID string, spanType types.SpanType) (redis.Command, error) {
 
 	var field string
 	switch spanType {
-	case SpanTypeEvent:
+	case types.SpanTypeEvent:
 		field = "EventCount"
-	case SpanTypeLink:
+	case types.SpanTypeLink:
 		field = "LinkCount"
 	default:
 		field = "Count"

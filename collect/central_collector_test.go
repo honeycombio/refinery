@@ -1148,6 +1148,80 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 	transmission.Mux.RUnlock()
 }
 
+func TestCentralCollector_Shutdown(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			CacheCapacity:              100,
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
+			ShutdownDelay:              config.Duration(500 * time.Millisecond),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+
+	collector := &CentralCollector{}
+	clock := clockwork.NewRealClock()
+	stop := startCollector(t, conf, collector, transmission, clock)
+	defer stop()
+
+	collector.processorCycle.Pause()
+	collector.deciderCycle.Pause()
+
+	numberOfTraces := 10
+	numberOfSpansPerTrace := 10
+	traceids := make([]string, 0, numberOfTraces)
+	for tr := 0; tr < numberOfTraces; tr++ {
+		tid := fmt.Sprintf("trace%02d", tr)
+		traceids = append(traceids, tid)
+		// write 9 child spans to the store
+		for s := 1; s < numberOfSpansPerTrace; s++ {
+			span := &types.Span{
+				TraceID: tid,
+				ID:      fmt.Sprintf("span%d", s),
+				Event: types.Event{
+					Dataset:     "aoeu",
+					Environment: "test",
+					Data: map[string]interface{}{
+						"trace.parent_id": fmt.Sprintf("span%d", s-1),
+					},
+				},
+			}
+			require.NoError(t, collector.AddSpan(span))
+		}
+		// now write the root span
+		span := &types.Span{
+			TraceID: tid,
+			ID:      "span0",
+			IsRoot:  true,
+		}
+		require.NoError(t, collector.AddSpan(span))
+	}
+
+	// wait for all traces to be processed
+	waitUntilReadyToDecide(t, collector, traceids)
+
+	// start the decider again to mock trace decision process
+	collector.deciderCycle.Continue()
+	time.Sleep(conf.GetCollectionConfigVal.GetDeciderPauseDuration() * 3)
+
+	waitForTraceDecision(t, collector, traceids)
+
+	ctx := context.Background()
+	err := collector.shutdown(ctx)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		transmission.Mux.Lock()
+		defer transmission.Mux.Unlock()
+
+		sentCount := len(transmission.Events)
+		return sentCount > 0 && sentCount < numberOfSpansPerTrace*numberOfTraces
+	}, 2*time.Second, 50*time.Millisecond, "should have sent some traces")
+}
+
 func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralCollector, transmission transmit.Transmission, clock clockwork.Clock) func() {
 	if cfg == nil {
 		cfg = &config.MockConfig{}
@@ -1186,6 +1260,10 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 
 	if cfg.SampleCache.SizeCheckInterval == 0 {
 		cfg.SampleCache.SizeCheckInterval = duration("1s")
+	}
+
+	if cfg.GetCollectionConfigVal.ShutdownDelay == 0 {
+		cfg.GetCollectionConfigVal.ShutdownDelay = duration("10ms")
 	}
 
 	if cfg.GetTraceTimeoutVal == 0 {

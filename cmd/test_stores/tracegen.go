@@ -9,6 +9,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/internal/otelutil"
+	"github.com/honeycombio/refinery/types"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -145,7 +146,7 @@ func (t *traceGenerator) generateTrace(ctx context.Context, out chan *centralsto
 	rootSpan := &centralstore.CentralSpan{
 		TraceID:   trace.TraceID,
 		SpanID:    t.getSpanID(trace.TraceID),
-		Type:      centralstore.SpanTypeNormal,
+		Type:      types.SpanTypeNormal,
 		KeyFields: rootFields,
 		IsRoot:    true,
 	}
@@ -156,18 +157,18 @@ func (t *traceGenerator) generateTrace(ctx context.Context, out chan *centralsto
 		span := &centralstore.CentralSpan{
 			TraceID:   trace.TraceID,
 			SpanID:    t.getSpanID(trace.TraceID),
-			Type:      centralstore.SpanTypeNormal,
+			Type:      types.SpanTypeNormal,
 			KeyFields: t.getKeyFields(),
 		}
 		trace.Spans = append(trace.Spans, span)
 	}
 	// the first spans after the root span are the span events
 	for i := 0; i < spanEventCount; i++ {
-		trace.Spans[i+1].Type = centralstore.SpanTypeEvent
+		trace.Spans[i+1].Type = types.SpanTypeEvent
 	}
 	// the next spans are the span links
 	for i := spanEventCount; i < spanEventCount+spanLinkCount; i++ {
-		trace.Spans[i+1].Type = centralstore.SpanTypeLink
+		trace.Spans[i+1].Type = types.SpanTypeLink
 	}
 
 	// Now we have a trace, set up a timer to send all the spans in reverse
