@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/trace"
@@ -19,10 +20,10 @@ type statusMap map[string]*CentralTraceStatus
 type SmartWrapper struct {
 	Config         config.Config   `inject:""`
 	Metrics        metrics.Metrics `inject:"genericMetrics"`
+	Logger         logger.Logger   `inject:""`
 	BasicStore     BasicStorer     `inject:""`
 	Tracer         trace.Tracer    `inject:"tracer"`
 	Clock          clockwork.Clock `inject:""`
-	keyfields      []string
 	spanChan       chan *CentralSpan
 	stopped        chan struct{}
 	done           chan struct{}
@@ -51,6 +52,11 @@ func (w *SmartWrapper) Start() error {
 	w.done = make(chan struct{})
 	w.doneProcessing = make(chan struct{})
 
+	w.Metrics.Register("smartstore_span_queue", "histogram")
+	w.Metrics.Register("smartstore_span_queue_length", "gauge")
+
+	w.Metrics.Store("SPAN_CHANNEL_CAP", float64(opts.SpanChannelSize))
+
 	// start the span processor
 	go w.processSpans(context.Background())
 
@@ -67,34 +73,6 @@ func (w *SmartWrapper) Stop() error {
 	close(w.done)
 	// wait for the span processor to finish
 	<-w.doneProcessing
-	return nil
-}
-
-// Register should be called once at Refinery startup to register itself
-// with the central store. This is used to ensure that the central store
-// knows about all the refineries that are running, and can make decisions
-// about which refinery is responsible for which trace.
-// For an in-memory store, this is a no-op.
-func (w *SmartWrapper) Register(ctx context.Context) error {
-	return nil
-}
-
-// Unregister should be called once at Refinery shutdown to unregister itself
-// with the central store. Once it has been unregistered, the central store
-// will no longer ask it to make decisions on any new traces. (Calls to
-// GetTracesNeedingDecision will return an empty list.)
-// For an in-memory store, this is a no-op.
-func (w *SmartWrapper) Unregister(ctx context.Context) error {
-	return nil
-}
-
-// SetKeyFields sets the fields that will be recorded in the central store;
-// if they are changed live, inflight trace decisions may be affected.
-// Certain fields are always recorded, such as the trace ID, span ID, and
-// parent ID; listing them in keyFields is not necessary (but won't hurt).
-func (w *SmartWrapper) SetKeyFields(ctx context.Context, keyFields []string) error {
-	// someday maybe we compare new keyFields to old keyFields and do something
-	w.keyfields = keyFields
 	return nil
 }
 
@@ -116,7 +94,6 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 	case <-w.done:
 		return fmt.Errorf("span channel closed")
 	case w.spanChan <- span:
-		// fmt.Println("span written")
 	default:
 		return fmt.Errorf("span queue full")
 	}
@@ -129,7 +106,7 @@ func (w *SmartWrapper) processSpans(ctx context.Context) {
 	for span := range w.spanChan {
 		err := w.BasicStore.WriteSpan(ctx, span)
 		if err != nil {
-			fmt.Println(err)
+			w.Logger.Debug().Logf("error writing span: %s", err)
 		}
 	}
 
@@ -139,7 +116,7 @@ func (w *SmartWrapper) processSpans(ctx context.Context) {
 // helper function for manageStates
 func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration, fromState, toState CentralTraceState) error {
 	if w.BasicStore == nil {
-		fmt.Println("basicStore is nil")
+		return fmt.Errorf("basic store is nil")
 	}
 	st, err := w.BasicStore.GetTracesForState(ctx, fromState)
 	if err != nil {
@@ -160,7 +137,6 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 		}
 	}
 	if len(traceIDsToChange) > 0 {
-		fmt.Println("changing", traceIDsToChange, "traces from", fromState, "to", toState)
 		err = w.BasicStore.ChangeTraceStatus(ctx, traceIDsToChange, fromState, toState)
 	}
 	return err
@@ -180,14 +156,20 @@ func (w *SmartWrapper) manageStates(ctx context.Context, options config.SmartWra
 			// the order of these is important!
 
 			// see if AwaitDecision traces have been waiting too long
-			w.manageTimeouts(ctx, time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyToDecide)
+			if err := w.manageTimeouts(ctx, time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyToDecide); err != nil {
+				w.Logger.Error().Logf("error managing timeouts for moving traces from awaiting decision to ready to decide: %s", err)
+			}
 
 			// traces that are past SendDelay should be moved to ready for decision
 			// the only errors can be syntax errors, so won't happen at runtime
-			w.manageTimeouts(ctx, time.Duration(options.SendDelay), DecisionDelay, ReadyToDecide)
+			if err := w.manageTimeouts(ctx, time.Duration(options.SendDelay), DecisionDelay, ReadyToDecide); err != nil {
+				w.Logger.Error().Logf("error managing timeouts for moving traces from decision delay to ready to decide: %s", err)
+			}
 
 			// trace that are past TraceTimeout should be moved to waiting to decide
-			w.manageTimeouts(ctx, time.Duration(options.TraceTimeout), Collecting, DecisionDelay)
+			if err := w.manageTimeouts(ctx, time.Duration(options.TraceTimeout), Collecting, DecisionDelay); err != nil {
+				w.Logger.Error().Logf("error managing timeouts for moving traces from collecting to decision delay: %s", err)
+			}
 		}
 	}
 }
@@ -267,8 +249,11 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 	return err
 }
 
-// RecordMetrics returns a map of metrics from the central store, accumulated
-// since the previous time this method was called.
+// RecordMetrics calls the RecordMetrics method on the BasicStore.
 func (w *SmartWrapper) RecordMetrics(ctx context.Context) error {
+	// record channel lengths as histogram but also as gauges
+	w.Metrics.Histogram("smartstore_incoming_queue", float64(len(w.spanChan)))
+	w.Metrics.Gauge("smartstore_incoming_queue_length", float64(len(w.spanChan)))
+
 	return w.BasicStore.RecordMetrics(ctx)
 }

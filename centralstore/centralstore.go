@@ -165,24 +165,6 @@ type SmartStorer interface {
 	// Stop should be called once at Refinery shutdown to shut things down.
 	Stop() error
 
-	// Register should be called once at Refinery startup to register itself
-	// with the central store. This is used to ensure that the central store
-	// knows about all the refineries that are running, and can make decisions
-	// about which refinery is responsible for which trace.
-	Register(context.Context) error
-
-	// Unregister should be called once at Refinery shutdown to unregister itself
-	// with the central store. Once it has been unregistered, the central store
-	// will no longer ask it to make decisions on any new traces. (Calls to
-	// GetTracesNeedingDecision will return an empty list.)
-	Unregister(context.Context) error
-
-	// SetKeyFields sets the fields that will be recorded in the central store;
-	// if they are changed live, inflight trace decisions may be affected.
-	// Certain fields are always recorded, such as the trace ID, span ID, and
-	// parent ID; listing them in keyFields is not necessary (but won't hurt).
-	SetKeyFields(ctx context.Context, keyFields []string) error
-
 	// WriteSpan writes one or more CentralSpans to the CentralStore.
 	// It is valid to write a span that has already been written; this can happen
 	// on shutdown, when a refinery forwards all its remaining spans to the central store.

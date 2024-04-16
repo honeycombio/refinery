@@ -29,7 +29,6 @@ type Collector interface {
 	AddSpan(*types.Span) error
 	Stressed() bool
 	GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string)
-	ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -52,6 +51,7 @@ const (
 	cacheEjectBatchSize         = 100
 	retryLimit                  = 5
 	concurrentTraceFetcherCount = 10
+	metricsCycleInterval        = 5 * time.Second
 )
 
 type traceForDecision struct {
@@ -74,6 +74,7 @@ type CentralCollector struct {
 	Metrics        metrics.Metrics          `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory   `inject:""`
 	SpanCache      cache.SpanCache          `inject:""`
+	StressRelief   StressRelief             `inject:""`
 
 	// whenever samplersByDestination is accessed, it should be protected by
 	// the mut mutex
@@ -87,6 +88,7 @@ type CentralCollector struct {
 	eg             *errgroup.Group
 	processorCycle *Cycle
 	deciderCycle   *Cycle
+	metricsCycle   *Cycle
 
 	hostname string
 
@@ -102,28 +104,43 @@ func (c *CentralCollector) Start() error {
 
 	// listen for config reloads
 	c.Config.RegisterReloadCallback(c.sendReloadSignal)
+	c.StressRelief.UpdateFromConfig(c.Config.GetStressReliefConfig())
 
 	c.incoming = make(chan *types.Span, collectorCfg.GetIncomingQueueSize())
 	c.reload = make(chan struct{}, 1)
 	c.samplersByDestination = make(map[string]sample.Sampler)
 
 	// test hooks
+	c.metricsCycle = NewCycle(c.Clock, metricsCycleInterval, c.done)
 	c.processorCycle = NewCycle(c.Clock, collectorCfg.GetProcessTracesPauseDuration(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderPauseDuration(), c.done)
 
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
 	c.Metrics.Register("trace_send_kept", "counter")
+	c.Metrics.Register("trace_duration_ms", "histogram")
+	c.Metrics.Register("trace_span_count", "histogram")
+	c.Metrics.Register("trace_decision_ket", "counter")
+	c.Metrics.Register("trace_decision_dropped", "counter")
+	c.Metrics.Register("trace_decision_has_root", "counter")
+	c.Metrics.Register("trace_decision_no_root", "counter")
+	c.Metrics.Register("collector_incoming_queue", "histogram")
+	c.Metrics.Register("collector_incoming_queue_length", "gauge")
+	c.Metrics.Register("collector_cache_size", "gauge")
+	c.Metrics.Register("memory_heap_allocation", "gauge")
+	c.Metrics.Register("span_received", "counter")
+	c.Metrics.Register("span_processed", "counter")
+	c.Metrics.Register("spans_waiting", "updown")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
 			c.hostname = hostname
 		}
 	}
+	c.Metrics.Store("INCOMING_CAP", float64(cap(c.incoming)))
 
 	// spin up one collector because this is a single threaded collector
 	c.eg = &errgroup.Group{}
-	c.eg.SetLimit(retryLimit)
 	c.eg.Go(func() error {
 		err := catchPanic(c.receive)
 		if err != nil {
@@ -145,6 +162,14 @@ func (c *CentralCollector) Start() error {
 		if err != nil {
 			c.Logger.Error().Logf("error making decision for traces: %s", err)
 		}
+		return nil
+	})
+
+	c.eg.Go(func() error {
+		if err := c.metricsCycle.Run(context.Background(), c.Store.RecordMetrics); err != nil {
+			c.Logger.Error().Logf("error recording metrics: %s", err)
+		}
+
 		return nil
 	})
 
@@ -261,6 +286,10 @@ func (c *CentralCollector) receive() error {
 	}
 
 	for {
+		// record channel lengths as histogram but also as gauges
+		c.Metrics.Histogram("collector_incoming_queue", float64(len(c.incoming)))
+		c.Metrics.Gauge("collector_incoming_queue_length", float64(len(c.incoming)))
+
 		select {
 		case <-c.done:
 			return nil
@@ -426,9 +455,6 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 			c.Metrics.Increment("trace_decision_dropped")
 			c.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 		}
-		c.Metrics.Increment("trace_decision_kept")
-		// This will observe sample rate decisions only if the trace is kept
-		c.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
 
 		// These meta data should be stored on the central trace status object
 		// so that it's synced across all refinery instances
@@ -473,6 +499,10 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 }
 
 func (c *CentralCollector) processSpan(sp *types.Span) error {
+	defer func() {
+		c.Metrics.Increment("span_processed")
+		c.Metrics.Down("spans_waiting")
+	}()
 	err := c.SpanCache.Set(sp)
 	if err != nil {
 		c.Logger.Error().Logf("error adding span with trace ID %s to cache: %s", sp.TraceID, err)
@@ -623,22 +653,11 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 	}
 	logFields["sampler_key"] = samplerKey
 
-	// If we have a root span, update it with the count before determining the SampleRate.
-	if trace.RootSpan != nil {
-		rs := trace.RootSpan
-		if c.Config.GetAddCountsToRoot() {
-			rs.Data["meta.span_event_count"] = int(status.SpanEventCount())
-			rs.Data["meta.span_link_count"] = int(status.SpanLinkCount())
-			rs.Data["meta.span_count"] = int(status.SpanCount())
-			rs.Data["meta.event_count"] = int(status.DescendantCount())
-		}
-	}
-
 	logFields["reason"] = status.KeepReason
 
 	c.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
-	c.Metrics.Histogram("trace_kept_sample_rate", float64(status.Rate))
+	c.Metrics.Histogram("trace_send_kept_sample_rate", float64(status.Rate))
 
 	c.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
@@ -655,6 +674,10 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 			sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
 
 		}
+		sp.Data["meta.span_event_count"] = int(status.SpanEventCount())
+		sp.Data["meta.span_link_count"] = int(status.SpanLinkCount())
+		sp.Data["meta.span_count"] = int(status.SpanCount())
+		sp.Data["meta.event_count"] = int(status.DescendantCount())
 		for k, v := range status.Metadata {
 			if k == "meta.refinery.decider.local_hostname" && !c.Config.GetAddHostMetadataToTrace() {
 				continue
@@ -680,8 +703,7 @@ func (c *CentralCollector) addAdditionalAttributes(sp *types.Span) {
 func (c *CentralCollector) reloadConfig() {
 	c.Logger.Debug().Logf("reloading central collector config")
 
-	// TODO enable this when stress relief is implemented
-	// c.StressRelief.UpdateFromConfig(c.Config.GetStressReliefConfig())
+	c.StressRelief.UpdateFromConfig(c.Config.GetStressReliefConfig())
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
@@ -690,23 +712,12 @@ func (c *CentralCollector) reloadConfig() {
 	c.mut.Unlock()
 }
 
-// TODO: REMOVE THIS
-func (c *CentralCollector) AddSpanFromPeer(sp *types.Span) error {
-	return c.add(sp, c.incoming)
-}
-
-// TODO: REMOVE THIS
-func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
-	c.processSpan(sp)
-	return
-}
-
 func (c *CentralCollector) Stressed() bool {
-	return false
+	return c.StressRelief.Stressed()
 }
 
 func (c *CentralCollector) GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string) {
-	return 1, true, "stressed"
+	return c.StressRelief.GetSampleRate(traceID)
 }
 
 func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint) {
