@@ -216,13 +216,12 @@ type RedisPeerManagementConfig struct {
 }
 
 type CentralCollectorConfig struct {
-	ProcessTracesBatchSize      int      `yaml:"ProcessTracesBatchSize"`
-	ProcessTracesPauseDuration  Duration `yaml:"ProcessTracesPauseDuration"`
-	DeciderBatchSize            int      `yaml:"DeciderBatchSize"`
-	DeciderPauseDuration        Duration `yaml:"DeciderPauseDuration"`
-	EjectionBatchSize           int      `yaml:"EjectionBatchSize"`
-	RetryLimit                  int      `yaml:"RetryLimit"`
-	ConcurrentTraceFetcherCount int      `yaml:"ConcurrentTraceFetcherCount"`
+	ProcessTracesBatchSize      int      `yaml:"ProcessTracesBatchSize" default:"100"`
+	ProcessTracesPauseDuration  Duration `yaml:"ProcessTracesPauseDuration" default:"200us"`
+	DeciderBatchSize            int      `yaml:"DeciderBatchSize" default:"100"`
+	DeciderPauseDuration        Duration `yaml:"DeciderPauseDuration" default:"100us"`
+	EjectionBatchSize           int      `yaml:"EjectionBatchSize" default:"100"`
+	ConcurrentTraceFetcherCount int      `yaml:"ConcurrentTraceFetcherCount" default:"10"`
 }
 
 type CollectionConfig struct {
