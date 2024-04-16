@@ -83,8 +83,8 @@ type CentralCollector struct {
 	incoming chan *types.Span
 	reload   chan struct{}
 
+	limiters       [3]*limiter
 	done           chan struct{}
-	eg             *errgroup.Group
 	processorCycle *Cycle
 	deciderCycle   *Cycle
 
@@ -121,32 +121,50 @@ func (c *CentralCollector) Start() error {
 		}
 	}
 
-	// spin up one collector because this is a single threaded collector
-	c.eg = &errgroup.Group{}
-	c.eg.SetLimit(retryLimit)
-	c.eg.Go(func() error {
+	// start collector, decider, and processor goroutines with retry limit
+	c.limiters[0] = newLimiter("receiver", retryLimit)
+	c.limiters[0].Go(func() error {
 		err := catchPanic(c.receive)
 		if err != nil {
 			c.Logger.Error().Logf("error collecting spans: %s", err)
 		}
-		return nil
+
+		return err
 	})
 
-	c.eg.Go(func() error {
+	c.limiters[1] = newLimiter("processor", retryLimit)
+	c.limiters[1].Go(func() error {
 		err := catchPanic(c.process)
 		if err != nil {
 			c.Logger.Error().Logf("error processing traces: %s", err)
 		}
-		return nil
+		return err
 	})
 
-	c.eg.Go(func() error {
+	c.limiters[2] = newLimiter("decider", retryLimit)
+	c.limiters[2].Go(func() error {
 		err := catchPanic(c.decide)
 		if err != nil {
 			c.Logger.Error().Logf("error making decision for traces: %s", err)
 		}
-		return nil
+
+		return err
 	})
+
+	// If a process has issues, we should shut down refinery and let the user know
+	for _, l := range c.limiters {
+		l := l
+		go func() {
+			select {
+			case <-c.done:
+				return
+			case <-l.RetryExhausted():
+				c.Logger.Error().Logf("retry limit reached, shutting down")
+				// something really bad happened, shut down
+				panic(fmt.Sprintf("retry limit %d reached for %s", l.limit, l.name))
+			}
+		}()
+	}
 
 	return nil
 }
@@ -156,9 +174,8 @@ func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
-
-	if err := c.eg.Wait(); err != nil {
-		c.Logger.Error().Logf("error waiting for goroutines to finish: %s", err)
+	for _, l := range c.limiters {
+		l.Close()
 	}
 
 	ctx := context.Background()
@@ -189,8 +206,6 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 		c.Logger.Error().Logf("error processing remaining traces: %s", err)
 	}
 	defer close(done)
-
-	fmt.Println("Sending remaining traces to central store")
 
 	// send the remaining traces to the central store
 	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
