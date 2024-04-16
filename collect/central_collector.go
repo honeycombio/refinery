@@ -312,7 +312,11 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
 
 	eg := &errgroup.Group{}
-	eg.SetLimit(c.Config.GetCentralCollectorConfig().ConcurrentTraceFetcherCount)
+	fetcherCount := c.Config.GetCentralCollectorConfig().ConcurrentTraceFetcherCount
+	if fetcherCount <= 0 {
+		fetcherCount = 10
+	}
+	eg.SetLimit(fetcherCount)
 
 	for idx, status := range statuses {
 		// make a decision on each trace
