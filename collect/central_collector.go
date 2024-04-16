@@ -173,15 +173,23 @@ func (c *CentralCollector) Stop() error {
 }
 
 // shutdown implements the shutdown logic for the collector.
-// It will immediately stop the receiver and the decider.
-// The processor will finish its current cycle before stopping.
-// It will also upload all the remaining traces in the cache to
-// the central store.
+// It starts a new processor cycle with a shorter interval to monitor
+// trace decisions made for the remaining traces in the cache.
+//
+// After the processor cycle is finished, it also uploads all the
+// remaining traces in the cache to the central store.
+//
+// The shutdown process is expected to finish within the shutdown delay.
+// Half of the shutdown delay is used for the processor cycle and the
+// other half is used for uploading the remaining traces.
+// If the shutdown process exceeds the shutdown delay, it will return an error.
 func (c *CentralCollector) shutdown(ctx context.Context) error {
 	// try to send the remaining traces to the cache
-	interval := 20 * time.Microsecond
+	interval := 1 * time.Second
 	done := make(chan struct{})
 	processCycle := NewCycle(c.Clock, interval, done)
+
+	// create a new context with a deadline that's half of the shutdown delay for the processor cycle
 	processCtx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay()/2)
 	defer cancel()
 
@@ -190,10 +198,11 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	}
 	defer close(done)
 
-	fmt.Println("Sending remaining traces to central store")
-
 	// send the remaining traces to the central store
 	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
+	var sentCount int
+	defer c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
+
 	for _, id := range ids {
 		trace := c.SpanCache.Get(id)
 
@@ -212,6 +221,11 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 			if err != nil {
 				c.Logger.Error().Logf("error sending span %s for trace %s during shutdown: %s", sp.ID, id, err)
 			}
+			sentCount++
+			// if the context deadline is exceeded, that means we are
+			// about to exceed the shutdown delay, so we should stop
+			// sending traces to the central store. Unfortunately, the
+			// remaining traces will be lost.
 			if errors.Is(err, context.DeadlineExceeded) {
 				return err
 			}
