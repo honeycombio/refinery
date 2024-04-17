@@ -226,6 +226,7 @@ type CollectionConfig struct {
 	AvailableMemory            MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage        int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc                   MemorySize `yaml:"MaxAlloc"`
+	ShutdownDelay              Duration   `yaml:"ShutdownDelay" default:"30s"`
 }
 
 type SmartWrapperOptions struct {
@@ -237,6 +238,13 @@ type SmartWrapperOptions struct {
 	DecisionTimeout   Duration `yaml:"DecisionTimeout" default:"3s"`
 	MaxTraceRetention Duration `yaml:"MaxTraceRetention" default:"24h"`
 	ReaperRunInterval Duration `yaml:"ReaperRunInterval" default:"1h"`
+}
+
+func (c CollectionConfig) GetShutdownDelay() time.Duration {
+	if c.ShutdownDelay == 0 {
+		return 30 * time.Second
+	}
+	return time.Duration(c.ShutdownDelay)
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.

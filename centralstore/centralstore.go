@@ -8,14 +8,6 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-type SpanType string
-
-const (
-	SpanTypeNormal SpanType = ""
-	SpanTypeLink   SpanType = "link"
-	SpanTypeEvent  SpanType = "span_event"
-)
-
 // CentralSpan is the subset of a span that is sent to the central store.
 // If AllFields is non-nil, it contains all the fields from the original span; this
 // is used when a refinery needs to shut down; it can forward all its spans to the central
@@ -26,13 +18,17 @@ type CentralSpan struct {
 	TraceID    string
 	SpanID     string // need access to this field for updating all fields
 	samplerKey string
-	Type       SpanType
+	Type       types.SpanType
 	KeyFields  map[string]interface{}
 	AllFields  map[string]interface{}
 	IsRoot     bool
 }
 
 func (s *CentralSpan) Fields() map[string]interface{} {
+	if s.KeyFields == nil {
+		return s.AllFields
+	}
+
 	return s.KeyFields
 }
 

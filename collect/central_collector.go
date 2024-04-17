@@ -125,7 +125,7 @@ func (c *CentralCollector) Start() error {
 	c.eg = &errgroup.Group{}
 	c.eg.SetLimit(retryLimit)
 	c.eg.Go(func() error {
-		err := catchPanic(c.collect)
+		err := catchPanic(c.receive)
 		if err != nil {
 			c.Logger.Error().Logf("error collecting spans: %s", err)
 		}
@@ -133,7 +133,7 @@ func (c *CentralCollector) Start() error {
 	})
 
 	c.eg.Go(func() error {
-		err := catchPanic(c.processor)
+		err := catchPanic(c.process)
 		if err != nil {
 			c.Logger.Error().Logf("error processing traces: %s", err)
 		}
@@ -141,7 +141,7 @@ func (c *CentralCollector) Start() error {
 	})
 
 	c.eg.Go(func() error {
-		err := catchPanic(c.decider)
+		err := catchPanic(c.decide)
 		if err != nil {
 			c.Logger.Error().Logf("error making decision for traces: %s", err)
 		}
@@ -151,11 +151,88 @@ func (c *CentralCollector) Start() error {
 	return nil
 }
 
+// Stop will be called when the refinery is shutting down.
 func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
-	return c.eg.Wait()
+
+	if err := c.eg.Wait(); err != nil {
+		c.Logger.Error().Logf("error waiting for goroutines to finish: %s", err)
+	}
+
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay())
+	defer cancel()
+
+	if err := c.shutdown(ctx); err != nil {
+		c.Logger.Error().Logf("error shutting down collector: %s", err)
+	}
+
+	return nil
+}
+
+// shutdown implements the shutdown logic for the collector.
+// It starts a new processor cycle with a shorter interval to monitor
+// trace decisions made for the remaining traces in the cache.
+//
+// After the processor cycle is finished, it also uploads all the
+// remaining traces in the cache to the central store.
+//
+// The shutdown process is expected to finish within the shutdown delay.
+// Half of the shutdown delay is used for the processor cycle and the
+// other half is used for uploading the remaining traces.
+// If the shutdown process exceeds the shutdown delay, it will return an error.
+func (c *CentralCollector) shutdown(ctx context.Context) error {
+	// try to send the remaining traces to the cache
+	interval := 1 * time.Second
+	done := make(chan struct{})
+	processCycle := NewCycle(c.Clock, interval, done)
+
+	// create a new context with a deadline that's half of the shutdown delay for the processor cycle
+	processCtx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay()/2)
+	defer cancel()
+
+	if err := processCycle.Run(processCtx, c.processTraces); err != nil {
+		c.Logger.Error().Logf("error processing remaining traces: %s", err)
+	}
+	defer close(done)
+
+	// send the remaining traces to the central store
+	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
+	var sentCount int
+	defer c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
+
+	for _, id := range ids {
+		trace := c.SpanCache.Get(id)
+
+		for _, sp := range trace.GetSpans() {
+			// send the spans to the central store
+			cs := &centralstore.CentralSpan{
+				TraceID:   id,
+				SpanID:    sp.ID,
+				Type:      sp.Type(),
+				AllFields: sp.Data,
+				IsRoot:    sp.IsRoot,
+			}
+
+			cs.SetSamplerKey(trace.GetSamplerKey(c.Config.GetDatasetPrefix()))
+			err := c.Store.WriteSpan(ctx, cs)
+			if err != nil {
+				c.Logger.Error().Logf("error sending span %s for trace %s during shutdown: %s", sp.ID, id, err)
+			}
+			sentCount++
+			// if the context deadline is exceeded, that means we are
+			// about to exceed the shutdown delay, so we should stop
+			// sending traces to the central store. Unfortunately, the
+			// remaining traces will be lost.
+			if errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 // implement the Collector interface
@@ -174,7 +251,7 @@ func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	}
 }
 
-func (c *CentralCollector) collect() error {
+func (c *CentralCollector) receive() error {
 	tickerDuration := c.Config.GetSendTickerValue()
 	ticker := c.Clock.NewTicker(tickerDuration)
 	defer ticker.Stop()
@@ -207,7 +284,7 @@ func (c *CentralCollector) collect() error {
 
 }
 
-func (c *CentralCollector) processor() error {
+func (c *CentralCollector) process() error {
 	return c.processorCycle.Run(context.Background(), c.processTraces)
 }
 
@@ -219,10 +296,11 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		return nil
 	}
 
-	statuses, err := c.Store.GetStatusForTraces(context.Background(), ids)
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids)
 	if err != nil {
 		c.Logger.Error().Logf("error getting statuses for traces: %s", err)
 	}
+
 	for _, status := range statuses {
 		switch status.State {
 		case centralstore.DecisionKeep:
@@ -239,7 +317,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 	return nil
 }
 
-func (c *CentralCollector) decider() error {
+func (c *CentralCollector) decide() error {
 	return c.deciderCycle.Run(context.Background(), c.makeDecision)
 }
 
@@ -410,15 +488,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 		KeyFields: make(map[string]interface{}),
 		IsRoot:    sp.IsRoot,
 	}
-	annotationType := sp.AnnotationType()
-	switch annotationType {
-	case types.SpanAnnotationTypeSpanEvent:
-		cs.Type = centralstore.SpanTypeEvent
-	case types.SpanAnnotationTypeLink:
-		cs.Type = centralstore.SpanTypeLink
-	default:
-		cs.Type = centralstore.SpanTypeNormal
-	}
+	cs.Type = sp.Type()
 
 	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
 	cs.SetSamplerKey(samplerKey)
@@ -595,7 +665,7 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 			sp.Data[k] = v
 		}
 
-		mergeTraceAndSpanSampleRates(sp, status.SampleRate(), false)
+		mergeTraceAndSpanSampleRates(sp, status.SampleRate())
 		c.addAdditionalAttributes(sp)
 		c.Transmission.EnqueueSpan(sp)
 	}
@@ -639,7 +709,7 @@ func (c *CentralCollector) GetStressedSampleRate(traceID string) (rate uint, kee
 	return 1, true, "stressed"
 }
 
-func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMode bool) {
+func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint) {
 	tempSampleRate := sp.SampleRate
 	if sp.SampleRate != 0 {
 		// Write down the original sample rate so that that information
