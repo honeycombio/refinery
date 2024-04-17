@@ -76,7 +76,6 @@ type MockConfig struct {
 	SpanIdFieldNames                 []string
 	CfgMetadata                      []ConfigMetadata
 	StoreOptions                     SmartWrapperOptions
-	GetCentralCollectorConfigVal     CentralCollectorConfig
 
 	Mux sync.RWMutex
 }
@@ -563,11 +562,4 @@ func (f *MockConfig) GetCentralStoreOptions() SmartWrapperOptions {
 	defer f.Mux.RUnlock()
 
 	return f.StoreOptions
-}
-
-func (f *MockConfig) GetCentralCollectorConfig() CentralCollectorConfig {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.GetCentralCollectorConfigVal
 }

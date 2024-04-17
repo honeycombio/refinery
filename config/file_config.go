@@ -47,30 +47,29 @@ type fileConfig struct {
 }
 
 type configContents struct {
-	General                GeneralConfig             `yaml:"General"`
-	Network                NetworkConfig             `yaml:"Network"`
-	AccessKeys             AccessKeyConfig           `yaml:"AccessKeys"`
-	Telemetry              RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
-	Traces                 TracesConfig              `yaml:"Traces"`
-	Debugging              DebuggingConfig           `yaml:"Debugging"`
-	Logger                 LoggerConfig              `yaml:"Logger"`
-	HoneycombLogger        HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
-	StdoutLogger           StdoutLoggerConfig        `yaml:"StdoutLogger"`
-	PrometheusMetrics      PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics          LegacyMetricsConfig       `yaml:"LegacyMetrics"`
-	OTelMetrics            OTelMetricsConfig         `yaml:"OTelMetrics"`
-	OTelTracing            OTelTracingConfig         `yaml:"OTelTracing"`
-	PeerManagement         PeerManagementConfig      `yaml:"PeerManagement"`
-	RedisPeerManagement    RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
-	CentralCollectorConfig CentralCollectorConfig    `yaml:"CentralCollector"`
-	Collection             CollectionConfig          `yaml:"Collection"`
-	BufferSizes            BufferSizeConfig          `yaml:"BufferSizes"`
-	Specialized            SpecializedConfig         `yaml:"Specialized"`
-	IDFieldNames           IDFieldsConfig            `yaml:"IDFields"`
-	GRPCServerParameters   GRPCServerParameters      `yaml:"GRPCServerParameters"`
-	SampleCache            SampleCacheConfig         `yaml:"SampleCache"`
-	StressRelief           StressReliefConfig        `yaml:"StressRelief"`
-	CentralStore           SmartWrapperOptions       `yaml:"CentralStore"`
+	General              GeneralConfig             `yaml:"General"`
+	Network              NetworkConfig             `yaml:"Network"`
+	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
+	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
+	Traces               TracesConfig              `yaml:"Traces"`
+	Debugging            DebuggingConfig           `yaml:"Debugging"`
+	Logger               LoggerConfig              `yaml:"Logger"`
+	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
+	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
+	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
+	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
+	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
+	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
+	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
+	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
+	Collection           CollectionConfig          `yaml:"Collection"`
+	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
+	Specialized          SpecializedConfig         `yaml:"Specialized"`
+	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
+	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
+	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
+	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
+	CentralStore         SmartWrapperOptions       `yaml:"CentralStore"`
 }
 
 type GeneralConfig struct {
@@ -215,19 +214,11 @@ type RedisPeerManagementConfig struct {
 	MaxActive      int      `yaml:"MaxActive" default:"5"`
 }
 
-type CentralCollectorConfig struct {
-	ProcessTracesBatchSize      int      `yaml:"ProcessTracesBatchSize" default:"100"`
-	ProcessTracesPauseDuration  Duration `yaml:"ProcessTracesPauseDuration" default:"200us"`
-	DeciderBatchSize            int      `yaml:"DeciderBatchSize" default:"100"`
-	DeciderPauseDuration        Duration `yaml:"DeciderPauseDuration" default:"100us"`
-	EjectionBatchSize           int      `yaml:"EjectionBatchSize" default:"100"`
-	ConcurrentTraceFetcherCount int      `yaml:"ConcurrentTraceFetcherCount" default:"10"`
-}
-
 type CollectionConfig struct {
 	CacheCapacity              int        `yaml:"CacheCapacity" default:"10_000"`
 	IncomingQueueSize          int        `yaml:"IncomingQueueSize"`
-	CacheEjectBatchSize        int        `yaml:"CacheEjectBatchSize" default:"100"`
+	EjectionBatchSize          int        `yaml:"EjectionBatchSize" default:"100"`
+	TraceFetcherConcurrency    int        `yaml:"TraceFetcherConcurrency" default:"10"`
 	ProcessTracesBatchSize     int        `yaml:"ProcessTracesBatchSize" default:"50"`
 	ProcessTracesPauseDuration Duration   `yaml:"ProcessTracesPauseDuration" default:"1s"`
 	DeciderPauseDuration       Duration   `yaml:"DeciderPauseDuration" default:"1s"`
@@ -276,10 +267,10 @@ func (c CollectionConfig) GetIncomingQueueSize() int {
 }
 
 func (c CollectionConfig) GetCacheEjectBatchSize() int {
-	if c.CacheEjectBatchSize == 0 {
+	if c.EjectionBatchSize == 0 {
 		return 100
 	}
-	return c.CacheEjectBatchSize
+	return c.EjectionBatchSize
 }
 
 func (c CollectionConfig) GetProcessTracesBatchSize() int {
@@ -1006,11 +997,4 @@ func (f *fileConfig) GetCentralStoreOptions() SmartWrapperOptions {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.CentralStore
-}
-
-func (f *fileConfig) GetCentralCollectorConfig() CentralCollectorConfig {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.CentralCollectorConfig
 }

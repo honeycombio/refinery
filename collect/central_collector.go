@@ -312,11 +312,11 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
 
 	eg := &errgroup.Group{}
-	fetcherCount := c.Config.GetCentralCollectorConfig().ConcurrentTraceFetcherCount
-	if fetcherCount <= 0 {
-		fetcherCount = 10
+	concurrency := c.Config.GetCollectionConfig().TraceFetcherConcurrency
+	if concurrency <= 0 {
+		concurrency = 10
 	}
-	eg.SetLimit(fetcherCount)
+	eg.SetLimit(concurrency)
 
 	for idx, status := range statuses {
 		// make a decision on each trace
@@ -501,7 +501,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 
 func (c *CentralCollector) sendTracesForDecision() {
 	ctx := context.Background()
-	traces := c.SpanCache.GetOldest(float64(c.Config.GetCentralCollectorConfig().EjectionBatchSize))
+	traces := c.SpanCache.GetOldest(float64(c.Config.GetCollectionConfig().EjectionBatchSize))
 	for _, t := range traces {
 		// TODO: we should add the metadata about this trace
 		// is sent for decision due to cache ejection

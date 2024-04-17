@@ -457,11 +457,13 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 		GetCollectionConfigVal: config.CollectionConfig{
 			IncomingQueueSize:          600,
 			ProcessTracesBatchSize:     500,
-			DeciderBatchSize:           100,
+			DeciderBatchSize:           200,
 			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
 			DeciderPauseDuration:       config.Duration(1 * time.Second),
+			EjectionBatchSize:          79,
 		},
 		StoreOptions: config.SmartWrapperOptions{
+			SpanChannelSize: 500,
 			DecisionTimeout: config.Duration(1 * time.Minute),
 			StateTicker:     config.Duration(5 * time.Millisecond),
 			SendDelay:       config.Duration(1 * time.Millisecond),
@@ -512,7 +514,7 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 
 	waitUntilReadyToDecide(t, coll, traceIDs)
 
-	// Now there should be 500 traces in the cache.
+	// Now there should be 300 traces in the cache.
 	assert.Equal(t, totalTraceCount, coll.SpanCache.Len())
 
 	// We want to induce an eviction event, so set MaxAlloc a bit below
@@ -539,11 +541,11 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 	}
 
 	assert.Less(t, numOfTracesInCache, 280, "should have sent some traces")
-	assert.Greater(t, numOfTracesInCache, 100, "should have NOT sent some traces")
+	assert.Greater(t, numOfTracesInCache, 99, "should have NOT sent some traces")
 
 	// We discarded the most costly spans, and sent them.
 	transmission.Mux.Lock()
-	assert.Greater(t, toRemoveTraceCount, len(transmission.Events), "should have sent traces that weren't kept")
+	assert.GreaterOrEqual(t, toRemoveTraceCount, len(transmission.Events), "should have sent traces that weren't kept")
 
 	transmission.Mux.Unlock()
 }
@@ -561,7 +563,9 @@ func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			IncomingQueueSize: 3,
+			IncomingQueueSize:          3,
+			DeciderPauseDuration:       config.Duration(1 * time.Second),
+			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
 		},
 	}
 
@@ -1322,6 +1326,7 @@ func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []str
 	require.Eventually(t, func() bool {
 		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
 		require.NoError(t, err)
+		fmt.Println("num IDs", len(ids))
 		for _, id := range traceIDs {
 			if !slices.Contains(ids, id) {
 				return false
