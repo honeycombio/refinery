@@ -14,6 +14,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
+	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,7 +58,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			span: &CentralSpan{
 				TraceID:   traceID,
 				SpanID:    "spanID1",
-				Type:      SpanTypeEvent,
+				Type:      types.SpanTypeEvent,
 				KeyFields: map[string]interface{}{"event": "bar"},
 				IsRoot:    false,
 			},
@@ -70,7 +71,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			span: &CentralSpan{
 				TraceID:   traceID,
 				SpanID:    "spanID2",
-				Type:      SpanTypeLink,
+				Type:      types.SpanTypeLink,
 				KeyFields: map[string]interface{}{"link": "bar"},
 				IsRoot:    false,
 			},

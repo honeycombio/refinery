@@ -45,11 +45,11 @@ func TestSpan_AnnotationType(t *testing.T) {
 	tests := []struct {
 		name string
 		data map[string]any
-		want SpanAnnotationType
+		want SpanType
 	}{
-		{"unknown", map[string]any{}, SpanAnnotationTypeUnknown},
-		{"span_event", map[string]any{"meta.annotation_type": "span_event"}, SpanAnnotationTypeSpanEvent},
-		{"link", map[string]any{"meta.annotation_type": "link"}, SpanAnnotationTypeLink},
+		{"unknown", map[string]any{}, SpanTypeNormal},
+		{"span_event", map[string]any{"meta.annotation_type": "span_event"}, SpanTypeEvent},
+		{"link", map[string]any{"meta.annotation_type": "link"}, SpanTypeLink},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestSpan_AnnotationType(t *testing.T) {
 					Data: tt.data,
 				},
 			}
-			if got := sp.AnnotationType(); got != tt.want {
+			if got := sp.Type(); got != tt.want {
 				t.Errorf("Span.AnnotationType() = %v, want %v", got, tt.want)
 			}
 		})

@@ -53,6 +53,8 @@ func (c *Cycle) Run(ctx context.Context, fn func(ctx context.Context) error) err
 
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-c.done:
 			return nil
 
