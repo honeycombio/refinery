@@ -109,6 +109,7 @@ func newStartedApp(
 			CacheCapacity:              10000,
 			ProcessTracesPauseDuration: config.Duration(10 * time.Millisecond),
 			DeciderPauseDuration:       config.Duration(10 * time.Millisecond),
+			ShutdownDelay:              config.Duration(1 * time.Millisecond),
 		},
 		AddHostMetadataToTrace: enableHostMetadata,
 		TraceIdFieldNames:      []string{"trace.trace_id"},

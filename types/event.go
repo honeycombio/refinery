@@ -164,8 +164,8 @@ func (t *Trace) DescendantCount() uint32 {
 func (t *Trace) SpanCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		switch s.AnnotationType() {
-		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
+		switch s.Type() {
+		case SpanTypeEvent, SpanTypeLink:
 			continue
 		default:
 			count++
@@ -179,7 +179,7 @@ func (t *Trace) SpanCount() uint32 {
 func (t *Trace) SpanLinkCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeLink {
+		if s.Type() == SpanTypeLink {
 			count++
 		}
 	}
@@ -190,7 +190,7 @@ func (t *Trace) SpanLinkCount() uint32 {
 func (t *Trace) SpanEventCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
+		if s.Type() == SpanTypeEvent {
 			count++
 		}
 	}
@@ -251,28 +251,28 @@ func (sp *Span) GetDataSize() int {
 	return total
 }
 
-// SpanAnnotationType is an enum for the type of annotation this span is.
-type SpanAnnotationType int
+// SpanType is an enum for the type of annotation this span is.
+type SpanType int
 
 const (
-	// SpanAnnotationTypeUnknown is the default value for an unknown annotation type.
-	SpanAnnotationTypeUnknown SpanAnnotationType = iota
-	// SpanAnnotationTypeSpanEvent is the type for a span event.
-	SpanAnnotationTypeSpanEvent
-	// SpanAnnotationTypeLink is the type for a span link.
-	SpanAnnotationTypeLink
+	// SpanTypeNormal is the default value for an unknown annotation type.
+	SpanTypeNormal SpanType = iota
+	// SpanTypeEvent is the type for a span event.
+	SpanTypeEvent
+	// SpanTypeLink is the type for a span link.
+	SpanTypeLink
 )
 
-// AnnotationType returns the type of annotation this span is.
-func (sp *Span) AnnotationType() SpanAnnotationType {
+// Type returns the type of annotation this span is.
+func (sp *Span) Type() SpanType {
 	t := sp.Data["meta.annotation_type"]
 	switch t {
 	case "span_event":
-		return SpanAnnotationTypeSpanEvent
+		return SpanTypeEvent
 	case "link":
-		return SpanAnnotationTypeLink
+		return SpanTypeLink
 	default:
-		return SpanAnnotationTypeUnknown
+		return SpanTypeNormal
 	}
 }
 

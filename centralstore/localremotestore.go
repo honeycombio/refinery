@@ -9,6 +9,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -162,9 +163,9 @@ func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) e
 	// Add the span to the trace; this works even if the trace doesn't exist yet
 	lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
 	lrs.states[state][span.TraceID].Count++
-	if span.Type == SpanTypeLink {
+	if span.Type == types.SpanTypeLink {
 		lrs.states[state][span.TraceID].LinkCount++
-	} else if span.Type == SpanTypeEvent {
+	} else if span.Type == types.SpanTypeEvent {
 		lrs.states[state][span.TraceID].EventCount++
 	}
 

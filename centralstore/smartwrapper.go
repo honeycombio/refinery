@@ -111,6 +111,8 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 
 	// otherwise, put the span in the channel but don't block
 	select {
+	case <-ctx.Done():
+		return ctx.Err()
 	case <-w.done:
 		return fmt.Errorf("span channel closed")
 	case w.spanChan <- span:
