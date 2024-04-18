@@ -28,7 +28,7 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-var storeType = "redis"
+var storeType = "local"
 
 type dummyLogger struct{}
 
@@ -77,7 +77,7 @@ func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*Smart
 	var store BasicStorer
 	switch storetype {
 	case "local":
-		store = &LocalRemoteStore{}
+		store = &LocalStore{}
 	case "redis":
 		if redisClient == nil {
 			redisClient = &redis.TestService{}
@@ -118,289 +118,309 @@ func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*Smart
 }
 
 func TestSingleSpanGetsCollected(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
-	require.NoError(t, err)
-	defer stopper()
+	for _, storeType := range []string{"local", "redis"} {
+		t.Run(storeType, func(t *testing.T) {
+			store, stopper, err := getAndStartSmartWrapper(storeType, nil)
+			require.NoError(t, err)
+			defer stopper()
 
-	randomNum := rand.Intn(500)
-	span := &CentralSpan{
-		TraceID: fmt.Sprintf("trace%d", randomNum),
-		SpanID:  fmt.Sprintf("span%d", randomNum),
-		IsRoot:  false,
+			randomNum := rand.Intn(500)
+			span := &CentralSpan{
+				TraceID: fmt.Sprintf("trace%d", randomNum),
+				SpanID:  fmt.Sprintf("span%d", randomNum),
+				IsRoot:  false,
+			}
+			ctx := context.Background()
+			err = store.WriteSpan(ctx, span)
+			require.NoError(t, err)
+
+			// make sure that it arrived in the collecting state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
+				assert.NoError(collect, err)
+				assert.Equal(collect, 1, len(states))
+				if len(states) > 0 {
+					assert.Equal(collect, span.TraceID, states[0].TraceID)
+					assert.Equal(collect, Collecting, states[0].State)
+				}
+			}, 100*time.Second, 100*time.Millisecond)
+		})
 	}
-	ctx := context.Background()
-	err = store.WriteSpan(ctx, span)
-	require.NoError(t, err)
-
-	// make sure that it arrived in the collecting state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
-		assert.NoError(collect, err)
-		assert.Equal(collect, 1, len(states))
-		if len(states) > 0 {
-			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, Collecting, states[0].State)
-		}
-	}, 100*time.Second, 100*time.Millisecond)
 }
 
 func TestSingleTraceOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
-	require.NoError(t, err)
-	defer stopper()
+	for _, storeType := range []string{"local", "redis"} {
+		t.Run(storeType, func(t *testing.T) {
+			store, stopper, err := getAndStartSmartWrapper(storeType, nil)
+			require.NoError(t, err)
+			defer stopper()
 
-	span := &CentralSpan{
-		TraceID: "trace1",
-		SpanID:  "span1",
-		IsRoot:  false,
+			span := &CentralSpan{
+				TraceID: "trace1",
+				SpanID:  "span1",
+				IsRoot:  false,
+			}
+			ctx := context.Background()
+			err = store.WriteSpan(ctx, span)
+			require.NoError(t, err)
+
+			// make sure that it arrived in the collecting state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
+				assert.NoError(collect, err)
+				assert.Equal(collect, 1, len(states))
+				if len(states) > 0 {
+					assert.Equal(collect, span.TraceID, states[0].TraceID)
+					assert.Equal(collect, Collecting, states[0].State)
+				}
+			}, 1*time.Second, 10*time.Millisecond)
+
+			// it should automatically time out to the Waiting state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
+				assert.NoError(collect, err)
+				assert.Equal(collect, 1, len(states))
+				if len(states) > 0 {
+					assert.Equal(collect, span.TraceID, states[0].TraceID)
+					assert.Equal(collect, DecisionDelay, states[0].State, fmt.Sprintf("unexpected state for trace %s", states[0].TraceID))
+				}
+			}, 1*time.Second, 10*time.Millisecond)
+
+			// and then to the Ready state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
+				assert.NoError(collect, err)
+				assert.Equal(collect, 1, len(states))
+				if len(states) > 0 {
+					assert.Equal(collect, span.TraceID, states[0].TraceID)
+					assert.Equal(collect, ReadyToDecide, states[0].State, fmt.Sprintf("unexpected state for trace %s", states[0].TraceID))
+				}
+			}, 3*time.Second, 100*time.Millisecond)
+		})
 	}
-	ctx := context.Background()
-	err = store.WriteSpan(ctx, span)
-	require.NoError(t, err)
-
-	// make sure that it arrived in the collecting state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
-		assert.NoError(collect, err)
-		assert.Equal(collect, 1, len(states))
-		if len(states) > 0 {
-			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, Collecting, states[0].State)
-		}
-	}, 1*time.Second, 10*time.Millisecond)
-
-	// it should automatically time out to the Waiting state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
-		assert.NoError(collect, err)
-		assert.Equal(collect, 1, len(states))
-		if len(states) > 0 {
-			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, DecisionDelay, states[0].State, fmt.Sprintf("unexpected state for trace %s", states[0].TraceID))
-		}
-	}, 1*time.Second, 10*time.Millisecond)
-
-	// and then to the Ready state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, []string{span.TraceID})
-		assert.NoError(collect, err)
-		assert.Equal(collect, 1, len(states))
-		if len(states) > 0 {
-			assert.Equal(collect, span.TraceID, states[0].TraceID)
-			assert.Equal(collect, ReadyToDecide, states[0].State, fmt.Sprintf("unexpected state for trace %s", states[0].TraceID))
-		}
-	}, 3*time.Second, 100*time.Millisecond)
 }
 
 func TestBasicStoreOperation(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
-	require.NoError(t, err)
-	defer stopper()
-
-	ctx := context.Background()
-	traceids := make([]string, 0)
-
-	for tr := 0; tr < 10; tr++ {
-		tid := fmt.Sprintf("trace%d", tr)
-		traceids = append(traceids, tid)
-		// write 9 child spans to the store
-		for s := 1; s < 10; s++ {
-			span := &CentralSpan{
-				TraceID: tid,
-				SpanID:  fmt.Sprintf("span%d", s),
-				IsRoot:  false,
-			}
-			err = store.WriteSpan(ctx, span)
+	for _, storeType := range []string{"local", "redis"} {
+		t.Run(storeType, func(t *testing.T) {
+			store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 			require.NoError(t, err)
-		}
-		// now write the root span
-		span := &CentralSpan{
-			TraceID: tid,
-			SpanID:  "span0",
-			IsRoot:  true,
-		}
-		err = store.WriteSpan(ctx, span)
-		require.NoError(t, err)
-	}
+			defer stopper()
 
-	assert.Equal(t, 10, len(traceids))
-	assert.Eventually(t, func() bool {
-		states, err := store.GetStatusForTraces(ctx, traceids)
-		return err == nil && len(states) == 10
-	}, 1*time.Second, 100*time.Millisecond)
+			ctx := context.Background()
+			traceids := make([]string, 0)
 
-	// wait for it to reach the Ready state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, traceids)
-		assert.NoError(collect, err)
-		assert.Equal(collect, 10, len(states))
-		for _, state := range states {
-			assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
-		}
-	}, 3*time.Second, 100*time.Millisecond)
+			for tr := 0; tr < 10; tr++ {
+				tid := fmt.Sprintf("trace%d", tr)
+				traceids = append(traceids, tid)
+				// write 9 child spans to the store
+				for s := 1; s < 10; s++ {
+					span := &CentralSpan{
+						TraceID: tid,
+						SpanID:  fmt.Sprintf("span%d", s),
+						IsRoot:  false,
+					}
+					err = store.WriteSpan(ctx, span)
+					require.NoError(t, err)
+				}
+				// now write the root span
+				span := &CentralSpan{
+					TraceID: tid,
+					SpanID:  "span0",
+					IsRoot:  true,
+				}
+				err = store.WriteSpan(ctx, span)
+				require.NoError(t, err)
+			}
 
-	// check that the spans are in the store
-	for _, tid := range traceids {
-		trace, err := store.GetTrace(ctx, tid)
-		assert.NoError(t, err)
-		if err == nil {
-			assert.Equal(t, 10, len(trace.Spans))
-			assert.NotNil(t, trace.Root)
-		}
+			assert.Equal(t, 10, len(traceids))
+			assert.Eventually(t, func() bool {
+				states, err := store.GetStatusForTraces(ctx, traceids)
+				return err == nil && len(states) == 10
+			}, 1*time.Second, 100*time.Millisecond)
+
+			// wait for it to reach the Ready state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, traceids)
+				assert.NoError(collect, err)
+				assert.Equal(collect, 10, len(states))
+				for _, state := range states {
+					assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
+				}
+			}, 3*time.Second, 100*time.Millisecond)
+
+			// check that the spans are in the store
+			for _, tid := range traceids {
+				trace, err := store.GetTrace(ctx, tid)
+				assert.NoError(t, err)
+				if err == nil {
+					assert.Equal(t, 10, len(trace.Spans))
+					assert.NotNil(t, trace.Root)
+				}
+			}
+		})
 	}
 }
 
 func TestReadyForDecisionLoop(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
-	require.NoError(t, err)
-	defer stopper()
-
-	ctx := context.Background()
-	numberOfTraces := 11
-	traceids := make([]string, 0)
-
-	for tr := 0; tr < numberOfTraces; tr++ {
-		tid := fmt.Sprintf("trace%02d", tr)
-		traceids = append(traceids, tid)
-		// write 9 child spans to the store
-		for s := 1; s < 10; s++ {
-			span := &CentralSpan{
-				TraceID: tid,
-				SpanID:  fmt.Sprintf("span%d", s),
-				IsRoot:  false,
-			}
-			err := store.WriteSpan(ctx, span)
+	for _, storeType := range []string{"local", "redis"} {
+		t.Run(storeType, func(t *testing.T) {
+			store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 			require.NoError(t, err)
-		}
-		// now write the root span
-		span := &CentralSpan{
-			TraceID: tid,
-			SpanID:  "span0",
-		}
-		err = store.WriteSpan(ctx, span)
-		require.NoError(t, err)
+			defer stopper()
+
+			ctx := context.Background()
+			numberOfTraces := 11
+			traceids := make([]string, 0)
+
+			for tr := 0; tr < numberOfTraces; tr++ {
+				tid := fmt.Sprintf("trace%02d", tr)
+				traceids = append(traceids, tid)
+				// write 9 child spans to the store
+				for s := 1; s < 10; s++ {
+					span := &CentralSpan{
+						TraceID: tid,
+						SpanID:  fmt.Sprintf("span%d", s),
+						IsRoot:  false,
+					}
+					err := store.WriteSpan(ctx, span)
+					require.NoError(t, err)
+				}
+				// now write the root span
+				span := &CentralSpan{
+					TraceID: tid,
+					SpanID:  "span0",
+				}
+				err = store.WriteSpan(ctx, span)
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, numberOfTraces, len(traceids))
+			assert.Eventually(t, func() bool {
+				states, err := store.GetStatusForTraces(ctx, traceids)
+				return err == nil && len(states) == numberOfTraces
+			}, 1*time.Second, 100*time.Millisecond)
+
+			// wait for it to reach the Ready state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, traceids)
+				assert.NoError(collect, err)
+				assert.Equal(collect, numberOfTraces, len(states))
+				for _, state := range states {
+					assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
+				}
+			}, 3*time.Second, 100*time.Millisecond)
+
+			// get the traces in the Ready state
+			toDecide, err := store.GetTracesNeedingDecision(ctx, numberOfTraces)
+			require.NoError(t, err)
+			sort.Strings(toDecide)
+			assert.Equal(t, numberOfTraces, len(toDecide))
+			assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
+		})
 	}
-
-	assert.Equal(t, numberOfTraces, len(traceids))
-	assert.Eventually(t, func() bool {
-		states, err := store.GetStatusForTraces(ctx, traceids)
-		return err == nil && len(states) == numberOfTraces
-	}, 1*time.Second, 100*time.Millisecond)
-
-	// wait for it to reach the Ready state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, traceids)
-		assert.NoError(collect, err)
-		assert.Equal(collect, numberOfTraces, len(states))
-		for _, state := range states {
-			assert.Equal(collect, ReadyToDecide, state.State, fmt.Sprintf("unexpected state for trace %s", state.TraceID))
-		}
-	}, 3*time.Second, 100*time.Millisecond)
-
-	// get the traces in the Ready state
-	toDecide, err := store.GetTracesNeedingDecision(ctx, numberOfTraces)
-	require.NoError(t, err)
-	sort.Strings(toDecide)
-	assert.Equal(t, numberOfTraces, len(toDecide))
-	assert.EqualValues(t, traceids[:numberOfTraces], toDecide)
 }
 
 func TestSetTraceStatuses(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, nil)
-	require.NoError(t, err)
-	defer stopper()
-
-	ctx := context.Background()
-	numberOfTraces := 5
-	traceids := make([]string, 0)
-
-	for tr := 0; tr < numberOfTraces; tr++ {
-		tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
-		traceids = append(traceids, tid)
-		// write 9 child spans to the store
-		for s := 1; s < 10; s++ {
-			span := &CentralSpan{
-				TraceID: tid,
-				SpanID:  fmt.Sprintf("span%d", s),
-				IsRoot:  false,
-			}
-			err = store.WriteSpan(ctx, span)
+	for _, storeType := range []string{"local", "redis"} {
+		t.Run(storeType, func(t *testing.T) {
+			store, stopper, err := getAndStartSmartWrapper(storeType, nil)
 			require.NoError(t, err)
-		}
-		// now write the root span
-		span := &CentralSpan{
-			TraceID: tid,
-			SpanID:  "span0",
-		}
-		err = store.WriteSpan(ctx, span)
-		require.NoError(t, err)
-	}
+			defer stopper()
 
-	assert.Equal(t, numberOfTraces, len(traceids))
-	assert.Eventually(t, func() bool {
-		states, err := store.GetStatusForTraces(ctx, traceids)
-		return err == nil && len(states) == numberOfTraces
-	}, 1*time.Second, 100*time.Millisecond)
+			ctx := context.Background()
+			numberOfTraces := 5
+			traceids := make([]string, 0)
 
-	// wait for it to reach the Ready state
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, traceids)
-		assert.NoError(collect, err)
-		assert.Equal(collect, numberOfTraces, len(states))
-		for _, state := range states {
-			assert.Equal(collect, ReadyToDecide, state.State)
-		}
+			for tr := 0; tr < numberOfTraces; tr++ {
+				tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
+				traceids = append(traceids, tid)
+				// write 9 child spans to the store
+				for s := 1; s < 10; s++ {
+					span := &CentralSpan{
+						TraceID: tid,
+						SpanID:  fmt.Sprintf("span%d", s),
+						IsRoot:  false,
+					}
+					err = store.WriteSpan(ctx, span)
+					require.NoError(t, err)
+				}
+				// now write the root span
+				span := &CentralSpan{
+					TraceID: tid,
+					SpanID:  "span0",
+				}
+				err = store.WriteSpan(ctx, span)
+				require.NoError(t, err)
+			}
 
-	}, 3*time.Second, 100*time.Millisecond)
+			assert.Equal(t, numberOfTraces, len(traceids))
+			assert.Eventually(t, func() bool {
+				states, err := store.GetStatusForTraces(ctx, traceids)
+				return err == nil && len(states) == numberOfTraces
+			}, 1*time.Second, 100*time.Millisecond)
 
-	// get the traces in the Ready state
-	toDecide, err := store.GetTracesNeedingDecision(ctx, numberOfTraces)
-	assert.NoError(t, err)
-	assert.Equal(t, numberOfTraces, len(toDecide))
-	sort.Strings(toDecide)
-	expected := traceids[:numberOfTraces]
-	sort.Strings(expected)
-	assert.EqualValues(t, expected, toDecide)
+			// wait for it to reach the Ready state
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				states, err := store.GetStatusForTraces(ctx, traceids)
+				assert.NoError(collect, err)
+				assert.Equal(collect, numberOfTraces, len(states))
+				for _, state := range states {
+					assert.Equal(collect, ReadyToDecide, state.State)
+				}
 
-	statuses := make([]*CentralTraceStatus, 0)
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		statuses, err = store.GetStatusForTraces(ctx, toDecide)
-		assert.NoError(collect, err)
-		assert.Equal(collect, numberOfTraces, len(statuses))
-		for _, state := range statuses {
-			assert.Equal(collect, AwaitingDecision, state.State)
-		}
-		err = store.RecordMetrics(ctx)
-		require.NoError(t, err)
-		value, ok := store.Metrics.Get("redisstore_count_awaiting_decision")
-		require.True(t, ok)
-		assert.EqualValues(t, numberOfTraces, value)
-	}, 3*time.Second, 100*time.Millisecond)
+			}, 3*time.Second, 100*time.Millisecond)
 
-	for _, status := range statuses {
-		if status.TraceID == traceids[0] {
-			status.State = DecisionKeep
-			status.KeepReason = "because"
-		} else {
-			status.State = DecisionDrop
-		}
-	}
-	require.NotEmpty(t, statuses)
-	err = store.SetTraceStatuses(ctx, statuses)
-	assert.NoError(t, err)
+			// get the traces in the Ready state
+			toDecide, err := store.GetTracesNeedingDecision(ctx, numberOfTraces)
+			assert.NoError(t, err)
+			assert.Equal(t, numberOfTraces, len(toDecide))
+			sort.Strings(toDecide)
+			expected := traceids[:numberOfTraces]
+			sort.Strings(expected)
+			assert.EqualValues(t, expected, toDecide)
 
-	// we need to give the dropped traces cache a chance to run or it might not process everything
-	time.Sleep(50 * time.Millisecond)
-	statuses, err = store.GetStatusForTraces(ctx, traceids)
-	assert.NoError(t, err)
-	assert.Equal(t, numberOfTraces, len(statuses))
-	for _, status := range statuses {
-		if status.TraceID == traceids[0] {
-			assert.Equal(t, DecisionKeep, status.State)
-			assert.Equal(t, "because", status.KeepReason)
-		} else {
-			assert.Equal(t, DecisionDrop, status.State)
-		}
+			statuses := make([]*CentralTraceStatus, 0)
+			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+				statuses, err = store.GetStatusForTraces(ctx, toDecide)
+				assert.NoError(collect, err)
+				assert.Equal(collect, numberOfTraces, len(statuses))
+				for _, state := range statuses {
+					assert.Equal(collect, AwaitingDecision, state.State)
+				}
+				err = store.RecordMetrics(ctx)
+				require.NoError(t, err)
+				value, ok := store.Metrics.Get(storeType + "store_count_awaiting_decision")
+				require.True(t, ok)
+				assert.EqualValues(t, numberOfTraces, value)
+			}, 3*time.Second, 100*time.Millisecond)
+
+			for _, status := range statuses {
+				if status.TraceID == traceids[0] {
+					status.State = DecisionKeep
+					status.KeepReason = "because"
+				} else {
+					status.State = DecisionDrop
+				}
+			}
+			require.NotEmpty(t, statuses)
+			err = store.SetTraceStatuses(ctx, statuses)
+			assert.NoError(t, err)
+
+			// we need to give the dropped traces cache a chance to run or it might not process everything
+			time.Sleep(50 * time.Millisecond)
+			statuses, err = store.GetStatusForTraces(ctx, traceids)
+			assert.NoError(t, err)
+			assert.Equal(t, numberOfTraces, len(statuses))
+			for _, status := range statuses {
+				if status.TraceID == traceids[0] {
+					assert.Equal(t, DecisionKeep, status.State)
+					assert.Equal(t, "because", status.KeepReason)
+				} else {
+					assert.Equal(t, DecisionDrop, status.State)
+				}
+			}
+		})
 	}
 }
 

@@ -113,7 +113,7 @@ func standardStoreOptions() config.SmartWrapperOptions {
 func makeRemoteStore(storeType string) centralstore.BasicStorer {
 	switch storeType {
 	case "local":
-		return &centralstore.LocalRemoteStore{}
+		return &centralstore.LocalStore{}
 	case "redis":
 		return &centralstore.RedisBasicStore{}
 	default:
