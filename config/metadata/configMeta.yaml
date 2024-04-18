@@ -1194,7 +1194,7 @@ groups:
         type: int
         valuetype: nondefault
         default: 100
-        reload: false
+        reload: true
         summary: is the maximum number of traces retrieved by the ejection processor in a single request when refinery is under memory pressure.
         description: >
           This setting controls the number of traces that are returned from the
@@ -1215,7 +1215,7 @@ groups:
         type: int
         valuetype: nondefault
         default: 100
-        reload: false
+        reload: true
         summary: is the maximum number of traces retrieved by the decision processor in a single request.
         description: >
           This setting controls the number of traces that are returned from the
@@ -1247,7 +1247,7 @@ groups:
         type: int
         valuetype: nondefault
         default: 10
-        reload: false
+        reload: true
         summary: is the maximum concurrency to use when fetching traces from the central store.
         description: >
           This setting controls the number of concurrent trace fetchers that
@@ -1258,7 +1258,7 @@ groups:
         type: duration
         valuetype: nondefault
         default: 30s
-        reload: false
+        reload: true
         summary: controls the maximum time Refinery can use while draining traces at shutdown.
         description: >
           This setting controls the duration that Refinery expects to have to
