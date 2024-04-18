@@ -1112,6 +1112,7 @@ groups:
         valuetype: nondefault
         reload: false
         firstversion: v2.2
+        lastversion: v2.5
         summary: is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
         description: >
           The peer span queue serves as a buffer for spans redirected from other peers before they are processed.
@@ -1188,6 +1189,86 @@ groups:
           and `Gi`) are supported. Fractional values with a suffix are
           supported. See `MaxMemoryPercentage` for more details. If set,
           `Collections.AvailableMemory` must not be defined.
+
+      - name: EjectionBatchSize
+        type: int
+        valuetype: nondefault
+        default: 100
+        reload: false
+        summary: is the maximum number of traces retrieved by the ejection processor in a single request when refinery is under memory pressure.
+        description: >
+          This setting controls the number of traces that are returned from the
+          central store when Refinery is under memory pressure and attempting to
+          reduce cache size. It is rarely necessary to adjust this value.
+
+      - name: DeciderPauseDuration
+        type: duration
+        valuetype: nondefault
+        default: 100us
+        reload: false
+        summary: is the duration to pause between processing trace batches.
+        description: >
+          This setting controls the duration that Refinery waits between
+          processing trace batches. It is rarely necessary to adjust this value.
+
+      - name: DeciderBatchSize
+        type: int
+        valuetype: nondefault
+        default: 100
+        reload: false
+        summary: is the maximum number of traces retrieved by the decision processor in a single request.
+        description: >
+          This setting controls the number of traces that are returned from the
+          central store when Refinery is making trace decisions. It is rarely
+          necessary to adjust this value.
+
+      - name: ProcessTracesBatchSize
+        type: int
+        valuetype: nondefault
+        default: 100
+        reload: false
+        summary: is the number of traces evaluated for sending in a single request.
+        description: >
+          This setting controls the number of trace IDs processed when refinery
+          is considering which spans to send or drop. It is rarely necessary to
+          adjust this value.
+
+      - name: ProcessTracesPauseDuration
+        type: duration
+        valuetype: nondefault
+        default: 200us
+        reload: false
+        summary: is the duration to pause between processing trace batches.
+        description: >
+          This setting controls the duration that Refinery waits between
+          processing trace batches. It is rarely necessary to adjust this value.
+
+      - name: TraceFetcherConcurrency
+        type: int
+        valuetype: nondefault
+        default: 10
+        reload: false
+        summary: is the maximum concurrency to use when fetching traces from the central store.
+        description: >
+          This setting controls the number of concurrent trace fetchers that
+          Refinery will use when fetching traces from the central store to make
+          trace decisions. It is rarely necessary to adjust this value.
+
+      - name: ShutdownDelay
+        type: duration
+        valuetype: nondefault
+        default: 30s
+        reload: false
+        summary: controls the maximum time Refinery can use while draining traces at shutdown.
+        description: >
+          This setting controls the duration that Refinery expects to have to
+          drain in-process traces before shutting down an instance. When asked
+          to shut down gracefully, Refinery stops accepting new spans
+          immediately and uses half of this duration to allow traces to drain
+          naturally. After that time, it actively drains the remaining traces by
+          sending them to Redis. This value should be set to a bit less than the
+          normal timeout period for shutting down without forcibly terminating
+          the process.
 
   - name: BufferSizes
     title: "Buffer Sizes"

@@ -148,7 +148,6 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	if len(st) == 0 || st == nil {
 		return nil
 	}
-	// TODO: This is inefficent, this call searches all statuses but we know that they can only be in fromState
 	statuses, err := w.BasicStore.GetStatusForTraces(ctx, st)
 	if err != nil {
 		return err

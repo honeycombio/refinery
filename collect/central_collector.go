@@ -47,13 +47,6 @@ const (
 	TraceSendLateSpan       = "trace_send_late_span"
 )
 
-const (
-	// TODO: these should be configurable
-	cacheEjectBatchSize         = 100
-	retryLimit                  = 5
-	concurrentTraceFetcherCount = 10
-)
-
 type traceForDecision struct {
 	*centralstore.CentralTrace
 	descendantCount uint32
@@ -123,31 +116,9 @@ func (c *CentralCollector) Start() error {
 
 	// spin up one collector because this is a single threaded collector
 	c.eg = &errgroup.Group{}
-	c.eg.SetLimit(retryLimit)
-	c.eg.Go(func() error {
-		err := catchPanic(c.receive)
-		if err != nil {
-			c.Logger.Error().Logf("error collecting spans: %s", err)
-		}
-		return nil
-	})
-
-	c.eg.Go(func() error {
-		err := catchPanic(c.process)
-		if err != nil {
-			c.Logger.Error().Logf("error processing traces: %s", err)
-		}
-		return nil
-	})
-
-	c.eg.Go(func() error {
-		err := catchPanic(c.decide)
-		if err != nil {
-			c.Logger.Error().Logf("error making decision for traces: %s", err)
-		}
-		return nil
-	})
-
+	c.eg.Go(c.receive)
+	c.eg.Go(c.process)
+	c.eg.Go(c.decide)
 	return nil
 }
 
@@ -341,7 +312,11 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
 
 	eg := &errgroup.Group{}
-	eg.SetLimit(concurrentTraceFetcherCount)
+	concurrency := c.Config.GetCollectionConfig().TraceFetcherConcurrency
+	if concurrency <= 0 {
+		concurrency = 10
+	}
+	eg.SetLimit(concurrency)
 
 	for idx, status := range statuses {
 		// make a decision on each trace
@@ -526,7 +501,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 
 func (c *CentralCollector) sendTracesForDecision() {
 	ctx := context.Background()
-	traces := c.SpanCache.GetOldest(cacheEjectBatchSize)
+	traces := c.SpanCache.GetOldest(float64(c.Config.GetCollectionConfig().EjectionBatchSize))
 	for _, t := range traces {
 		// TODO: we should add the metadata about this trace
 		// is sent for decision due to cache ejection
@@ -698,7 +673,6 @@ func (c *CentralCollector) AddSpanFromPeer(sp *types.Span) error {
 // TODO: REMOVE THIS
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
 	c.processSpan(sp)
-	return
 }
 
 func (c *CentralCollector) Stressed() bool {
