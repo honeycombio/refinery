@@ -85,6 +85,7 @@ type CentralCollector struct {
 
 	// test hooks
 	blockOnCollect bool
+	isTest         bool
 }
 
 func (c *CentralCollector) Start() error {
@@ -164,7 +165,16 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	processCtx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay()/2)
 	defer cancel()
 
-	if err := processCycle.Run(processCtx, c.processTraces); err != nil {
+	if err := processCycle.Run(processCtx, func(ctx context.Context) error {
+		err := c.processTraces(ctx)
+		if err != nil {
+			c.Logger.Error().Logf("error processing remaining traces: %s", err)
+			if c.isTest {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
 		c.Logger.Error().Logf("error processing remaining traces: %s", err)
 	}
 	defer close(done)
@@ -256,7 +266,17 @@ func (c *CentralCollector) receive() error {
 }
 
 func (c *CentralCollector) process() error {
-	return c.processorCycle.Run(context.Background(), c.processTraces)
+	return c.processorCycle.Run(context.Background(), func(ctx context.Context) error {
+		err := c.processTraces(ctx)
+		if err != nil {
+			c.Logger.Error().Logf("error processing traces: %s", err)
+			if c.isTest {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func (c *CentralCollector) processTraces(ctx context.Context) error {
@@ -269,7 +289,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids)
 	if err != nil {
-		c.Logger.Error().Logf("error getting statuses for traces: %s", err)
+		return err
 	}
 
 	for _, status := range statuses {
@@ -289,7 +309,17 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 }
 
 func (c *CentralCollector) decide() error {
-	return c.deciderCycle.Run(context.Background(), c.makeDecision)
+	return c.deciderCycle.Run(context.Background(), func(ctx context.Context) error {
+		err := c.makeDecision(ctx)
+		if err != nil {
+			c.Logger.Error().Logf("error making decision: %s", err)
+			if c.isTest {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 func (c *CentralCollector) makeDecision(ctx context.Context) error {
