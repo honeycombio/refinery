@@ -1326,7 +1326,6 @@ func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []str
 	require.Eventually(t, func() bool {
 		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
 		require.NoError(t, err)
-		fmt.Println("num IDs", len(ids))
 		for _, id := range traceIDs {
 			if !slices.Contains(ids, id) {
 				return false
