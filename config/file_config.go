@@ -215,10 +215,10 @@ type RedisPeerManagementConfig struct {
 }
 
 type CollectionConfig struct {
-	// CacheCapacity must be less than math.MaxInt32
 	CacheCapacity              int        `yaml:"CacheCapacity" default:"10_000"`
 	IncomingQueueSize          int        `yaml:"IncomingQueueSize"`
-	CacheEjectBatchSize        int        `yaml:"CacheEjectBatchSize" default:"100"`
+	EjectionBatchSize          int        `yaml:"EjectionBatchSize" default:"100"`
+	TraceFetcherConcurrency    int        `yaml:"TraceFetcherConcurrency" default:"10"`
 	ProcessTracesBatchSize     int        `yaml:"ProcessTracesBatchSize" default:"50"`
 	ProcessTracesPauseDuration Duration   `yaml:"ProcessTracesPauseDuration" default:"1s"`
 	DeciderPauseDuration       Duration   `yaml:"DeciderPauseDuration" default:"1s"`
@@ -267,10 +267,10 @@ func (c CollectionConfig) GetIncomingQueueSize() int {
 }
 
 func (c CollectionConfig) GetCacheEjectBatchSize() int {
-	if c.CacheEjectBatchSize == 0 {
+	if c.EjectionBatchSize == 0 {
 		return 100
 	}
-	return c.CacheEjectBatchSize
+	return c.EjectionBatchSize
 }
 
 func (c CollectionConfig) GetProcessTracesBatchSize() int {
