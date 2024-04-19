@@ -304,6 +304,8 @@ func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceS
 // RecordMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
 func (lrs *LocalStore) RecordMetrics(ctx context.Context) error {
+	lrs.mutex.RLock()
+	defer lrs.mutex.RUnlock()
 	m, err := lrs.DecisionCache.GetMetrics()
 	if err != nil {
 		return err

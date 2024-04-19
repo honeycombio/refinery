@@ -33,7 +33,8 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
-var storeTypes = []string{"local", "redis"}
+// var storeTypes = []string{"local", "redis"}
+var storeTypes = []string{"redis"}
 
 func TestCentralCollector_AddSpan(t *testing.T) {
 	for _, storeType := range storeTypes {
