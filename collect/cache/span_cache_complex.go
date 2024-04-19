@@ -101,6 +101,10 @@ func (sc *SpanCache_complex) Get(traceID string) *types.Trace {
 // because it has to sort the traces by arrival time, but I couldn't find a
 // faster way to do it.
 func (sc *SpanCache_complex) GetOldest(fract float64) []string {
+	if fract <= 0 {
+		return nil
+	}
+
 	type tidWithImpact struct {
 		id     string
 		impact int
