@@ -517,25 +517,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
 	// if we are, then we want to make an immediate, deterministic trace decision
 	// and either drop or send the trace without even trying to cache or forward it.
-	isProbe := false
 	if r.Collector.Stressed() {
-		rate, keep, reason := r.Collector.GetStressedSampleRate(traceID)
-
-		r.Collector.ProcessSpanImmediately(span, keep, rate, reason)
-
-		if !keep {
-			return nil
-		}
-		// If the span was kept, we want to generate a probe that we'll forward
-		// to a peer IF this span would have been forwarded.
-		ev.Data["meta.refinery.probe"] = true
-		isProbe = true
-	}
-
-	if isProbe {
-		// If we got here it's because the span we were using for a probe was
-		// intended for us, so just skip it.
-		return nil
+		// TODO: process span in stress relief mode
 	}
 
 	// we're supposed to handle it normally

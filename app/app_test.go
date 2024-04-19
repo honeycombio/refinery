@@ -93,6 +93,7 @@ func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
 	basePort int,
+	redisDB int,
 	enableHostMetadata bool,
 ) (*App, inject.Graph, func()) {
 	c := &config.MockConfig{
@@ -102,12 +103,13 @@ func newStartedApp(
 		SendTickerVal:            200 * time.Microsecond,
 		PeerManagementType:       "file",
 		GetUpstreamBufferSizeVal: 10000,
+		AddRuleReasonToTrace:     true,
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		IsAPIKeyValidFunc:        func(k string) bool { return k == legacyAPIKey || k == nonLegacyAPIKey },
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
 		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity:              10000,
-			ProcessTracesPauseDuration: config.Duration(10 * time.Millisecond),
+			ProcessTracesPauseDuration: config.Duration(100 * time.Millisecond),
 			DeciderPauseDuration:       config.Duration(10 * time.Millisecond),
 			ShutdownDelay:              config.Duration(1 * time.Millisecond),
 		},
@@ -124,7 +126,7 @@ func newStartedApp(
 		},
 	}
 
-	c.GetRedisDatabaseVal = rand.Intn(16)
+	c.GetRedisDatabaseVal = redisDB
 	fmt.Println("Using Redis database", c.GetRedisDatabaseVal)
 
 	var err error
@@ -204,9 +206,10 @@ func post(t testing.TB, req *http.Request) {
 
 func TestAppIntegration(t *testing.T) {
 	port := 10500
+	redisDB := 2
 
 	sender := &transmission.MockSender{}
-	_, _, stop := newStartedApp(t, sender, port, false)
+	_, _, stop := newStartedApp(t, sender, port, redisDB, false)
 	defer stop()
 
 	// Send a root span, it should be sent in short order.
@@ -240,9 +243,10 @@ func TestAppIntegration(t *testing.T) {
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	port := 10600
+	redisDB := 3
 
 	sender := &transmission.MockSender{}
-	a, _, stop := newStartedApp(t, sender, port, false)
+	a, _, stop := newStartedApp(t, sender, port, redisDB, false)
 	defer stop()
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
@@ -278,9 +282,10 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	port := 10700
+	redisDB := 4
 
 	sender := &transmission.MockSender{}
-	a, _, stop := newStartedApp(t, sender, port, false)
+	a, _, stop := newStartedApp(t, sender, port, redisDB, false)
 	defer stop()
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
@@ -306,9 +311,10 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 
 func TestHostMetadataSpanAdditions(t *testing.T) {
 	port := 14000
+	redisDB := 6
 
 	sender := &transmission.MockSender{}
-	_, _, stop := newStartedApp(t, sender, port, true)
+	_, _, stop := newStartedApp(t, sender, port, redisDB, true)
 	defer stop()
 
 	// Send a root span, it should be sent in short order.
@@ -346,11 +352,12 @@ func TestEventsEndpoint(t *testing.T) {
 	var apps [2]*App
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
+	redisDB := 7
 	for i := range apps {
 		var stop func()
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		apps[i], _, stop = newStartedApp(t, senders[i], basePort, false)
+		apps[i], _, stop = newStartedApp(t, senders[i], basePort, redisDB, false)
 		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
@@ -392,6 +399,10 @@ func TestEventsEndpoint(t *testing.T) {
 					"trace.trace_id":                     "1",
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   1,
+					"meta.span_count":                    1,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -404,7 +415,7 @@ func TestEventsEndpoint(t *testing.T) {
 		)
 	}, 5*time.Second, 200*time.Microsecond)
 
-	// Repeat, but deliver to host 1 on the peer channel, it should not be
+	// Repeat, but deliver to host 1, it should not be
 	// passed to host 0.
 
 	blob = blob[:0]
@@ -446,6 +457,10 @@ func TestEventsEndpoint(t *testing.T) {
 					"trace.trace_id":                     "1",
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   2,
+					"meta.span_count":                    2,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -464,10 +479,11 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	var apps [2]*App
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
+	redisDB := 9
 	for i := range apps {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		app, _, stop := newStartedApp(t, senders[i], basePort, false)
+		app, _, stop := newStartedApp(t, senders[i], basePort, redisDB, false)
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
 		defer stop()
@@ -475,8 +491,6 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
-	// this traceID was chosen because it hashes to the appropriate shard for this
-	// test. You can't change it or the number of peers and still expect the test to pass.
 	traceID := "4"
 	traceData := []byte(fmt.Sprintf(`{"foo":"bar","trace.trace_id":"%s"}`, traceID))
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
@@ -517,6 +531,11 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 					"trace.trace_id":                     traceID,
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   1,
+					"meta.span_count":                    1,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
+					"meta.refinery.reason":               "deterministic/always",
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -572,6 +591,12 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 					"trace.trace_id":                     traceID,
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   2,
+					"meta.span_count":                    2,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
+					"meta.refinery.reason":               "deterministic/always - late arriving span",
+					"meta.refinery.send_reason":          "trace_send_late_span",
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -646,7 +671,7 @@ func BenchmarkTraces(b *testing.B) {
 			W: io.Discard,
 		},
 	}
-	_, _, stop := newStartedApp(b, sender, 11000, false)
+	_, _, stop := newStartedApp(b, sender, 11000, 11, false)
 	defer stop()
 
 	req, err := http.NewRequest(
@@ -733,7 +758,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 	for i := range apps {
 		var stop func()
 		basePort := 12000 + (i * 2)
-		apps[i], _, stop = newStartedApp(b, sender, basePort, false)
+		apps[i], _, stop = newStartedApp(b, sender, basePort, 11, false)
 		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)

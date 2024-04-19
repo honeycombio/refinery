@@ -82,8 +82,10 @@ func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*Smart
 		if redisClient == nil {
 			redisClient = &redis.TestService{}
 		}
-		objects = append(objects, &inject.Object{Value: redisClient, Name: "redis"})
+
+		cfg.GetRedisDatabaseVal = 13
 		store = &RedisBasicStore{}
+		objects = append(objects, &inject.Object{Value: redisClient, Name: "redis"})
 	default:
 		return nil, nil, fmt.Errorf("unknown store type %s", storetype)
 	}
@@ -106,6 +108,9 @@ func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*Smart
 	}
 
 	stopper := func() {
+		conn := redisClient.Get()
+		conn.Do("FLUSHDB")
+		conn.Close()
 		startstop.Stop(g.Objects(), ststLogger)
 	}
 

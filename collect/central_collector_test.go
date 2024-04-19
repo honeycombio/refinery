@@ -16,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -460,7 +461,7 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 			DeciderBatchSize:           200,
 			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
 			DeciderPauseDuration:       config.Duration(1 * time.Second),
-			EjectionBatchSize:          79,
+			EjectionBatchSize:          0,
 		},
 		StoreOptions: config.SmartWrapperOptions{
 			SpanChannelSize: 500,
@@ -603,8 +604,6 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      60 * time.Second,
-		AddSpanCountToRoot: true,
-		AddCountsToRoot:    true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
@@ -681,11 +680,11 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 
 	transmission.Mux.RLock()
 	require.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	assert.Equal(t, 2, transmission.Events[0].Data["meta.span_count"], "child span metadata should be populated with span count")
+	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_count"], "child span metadata should be populated with span count")
+	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should be populated with span event count")
+	assert.Equal(t, 1, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should be populated with span link count")
+	assert.Equal(t, 5, transmission.Events[1].Data["meta.event_count"], "child span metadata should be populated with event count")
 	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
 	assert.Equal(t, 1, transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
@@ -701,8 +700,6 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 		GetTraceTimeoutVal:   5 * time.Millisecond,
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:        2 * time.Millisecond,
-		AddSpanCountToRoot:   true,
-		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		SampleCache: config.SampleCacheConfig{
@@ -779,17 +776,18 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 	transmission.Mux.RLock()
 
 	assert.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
-	assert.Equal(t, nil, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	assert.Equal(t, 1, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, 1, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
+	assert.Equal(t, 1, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
+	assert.Equal(t, 4, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
 	assert.GreaterOrEqual(t, 1, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
 	assert.Equal(t, 1, transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
 
-	// TODO: add a comment about the race condition between processor and collector when updating
-	// the span counts. The effort to get most accurate counts is too high for the benefit.
+	// When a late span arrives, it's sent to redis by the collector to update all counters related to the trace.
+	// The processor could retrieve the trace before redis has updated the counters, leading to inaccurate counts
+	// where the late span is not counted.
 	assert.GreaterOrEqual(t, 4, transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
 	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
 	transmission.Mux.RUnlock()
@@ -1293,6 +1291,7 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
 		{Value: spanCache},
+		{Value: &StressRelief{}, Name: "stressRelief"},
 		{Value: transmission, Name: "upstreamTransmission"},
 		{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 		{Value: samplerFactory},
@@ -1323,16 +1322,13 @@ func duration(s string) config.Duration {
 
 func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []string) {
 	ctx := context.Background()
+	idMap := generics.NewSetWithCapacity[string](len(traceIDs))
 
 	require.Eventually(t, func() bool {
 		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
 		require.NoError(t, err)
-		for _, id := range traceIDs {
-			if !slices.Contains(ids, id) {
-				return false
-			}
-		}
-		return true
+		idMap.Add(ids...)
+		return len(idMap.Members()) == len(traceIDs)
 	}, 8*time.Second, 50*time.Millisecond)
 }
 
