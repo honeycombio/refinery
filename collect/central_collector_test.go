@@ -1274,6 +1274,7 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		cfg.GetTraceTimeoutVal = time.Duration(500 * time.Microsecond)
 	}
 
+	collector.isTest = true
 	basicStore := &centralstore.RedisBasicStore{}
 	decisionCache := &cache.CuckooSentCache{}
 	sw := &centralstore.SmartWrapper{}
