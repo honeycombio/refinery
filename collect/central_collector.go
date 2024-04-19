@@ -266,7 +266,6 @@ func (c *CentralCollector) receive() error {
 		case <-c.done:
 			return nil
 		case <-ticker.Chan():
-			c.sendTracesForDecision()
 			c.checkAlloc()
 
 		case sp, ok := <-c.incoming:
@@ -533,22 +532,6 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	return c.Store.WriteSpan(ctx, cs)
 }
 
-func (c *CentralCollector) sendTracesForDecision() {
-	ctx := context.Background()
-	traces := c.SpanCache.GetOldest(float64(c.Config.GetCollectionConfig().EjectionBatchSize))
-	for _, t := range traces {
-		// TODO: we should add the metadata about this trace
-		// is sent for decision due to cache ejection
-		// to the trace status object
-		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{
-			TraceID: t,
-		})
-		if err != nil {
-			c.Logger.Error().Logf("error trigger decision making process for trace %s: %s", t, err)
-		}
-	}
-}
-
 func (c *CentralCollector) checkAlloc() {
 	inMemConfig := c.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
@@ -645,17 +628,21 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 
 		if c.Config.GetAddRuleReasonToTrace() {
 			reason, ok := status.Metadata["meta.refinery.reason"]
+			sendReason := status.Metadata["meta.refinery.send_reason"]
 			if sp.ArrivalTime.After(status.Timestamp) {
 				if !ok {
 					reason = "late arriving span"
 				} else {
 					reason = fmt.Sprintf("%s - late arriving span", reason)
 				}
+				sendReason = TraceSendLateSpan
 			}
 			sp.Data["meta.refinery.reason"] = reason
-			sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
-
+			if sendReason != nil {
+				sp.Data["meta.refinery.send_reason"] = sendReason
+			}
 		}
+
 		sp.Data["meta.span_event_count"] = int(status.SpanEventCount())
 		sp.Data["meta.span_link_count"] = int(status.SpanLinkCount())
 		sp.Data["meta.span_count"] = int(status.SpanCount())

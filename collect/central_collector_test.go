@@ -461,7 +461,7 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 			DeciderBatchSize:           200,
 			ProcessTracesPauseDuration: config.Duration(1 * time.Second),
 			DeciderPauseDuration:       config.Duration(1 * time.Second),
-			EjectionBatchSize:          79,
+			EjectionBatchSize:          0,
 		},
 		StoreOptions: config.SmartWrapperOptions{
 			SpanChannelSize: 500,
@@ -1328,7 +1328,7 @@ func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []str
 		require.NoError(t, err)
 		idMap.Add(ids...)
 		return len(idMap.Members()) == len(traceIDs)
-	}, 10*time.Second, 100*time.Millisecond)
+	}, 8*time.Second, 50*time.Millisecond)
 }
 
 func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []string) {
