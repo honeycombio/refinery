@@ -156,10 +156,10 @@ func (lrs *LocalStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
 		// we don't have a state for this trace, so we create it
 		state = Collecting
 		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.Clock.Now())
-		lrs.traces[span.TraceID] = &CentralTrace{}
+		lrs.traces[span.TraceID] = &CentralTrace{TraceID: span.TraceID}
 	}
 
-	// Add the span to the trace; this works even if the trace doesn't exist yet
+	// Add the span to the trace; this works even if the trace has no spans yet
 	lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
 	lrs.states[state][span.TraceID].Count++
 	if span.Type == types.SpanTypeLink {
