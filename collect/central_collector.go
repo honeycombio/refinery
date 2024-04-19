@@ -112,7 +112,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("trace_send_kept", "counter")
 	c.Metrics.Register("trace_duration_ms", "histogram")
 	c.Metrics.Register("trace_span_count", "histogram")
-	c.Metrics.Register("trace_decision_ket", "counter")
+	c.Metrics.Register("trace_decision_kept", "counter")
 	c.Metrics.Register("trace_decision_dropped", "counter")
 	c.Metrics.Register("trace_decision_has_root", "counter")
 	c.Metrics.Register("trace_decision_no_root", "counter")

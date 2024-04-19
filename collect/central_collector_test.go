@@ -16,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -679,11 +680,11 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 
 	transmission.Mux.RLock()
 	require.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, 2, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
-	assert.Equal(t, 1, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
-	assert.Equal(t, 5, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	assert.Equal(t, 2, transmission.Events[0].Data["meta.span_count"], "child span metadata should be populated with span count")
+	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_count"], "child span metadata should be populated with span count")
+	assert.Equal(t, 2, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should be populated with span event count")
+	assert.Equal(t, 1, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should be populated with span link count")
+	assert.Equal(t, 5, transmission.Events[1].Data["meta.event_count"], "child span metadata should be populated with event count")
 	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.Equal(t, 2, transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
 	assert.Equal(t, 1, transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
@@ -1320,16 +1321,14 @@ func duration(s string) config.Duration {
 
 func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []string) {
 	ctx := context.Background()
-	idMap := make(map[string]struct{})
+	idMap := generics.NewSetWithCapacity[string](len(traceIDs))
 
 	require.Eventually(t, func() bool {
 		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
 		require.NoError(t, err)
-		for _, id := range ids {
-			idMap[id] = struct{}{}
-		}
-		return len(idMap) == len(traceIDs)
-	}, 8*time.Second, 50*time.Millisecond)
+		idMap.Add(ids...)
+		return len(idMap.Members()) == len(traceIDs)
+	}, 10*time.Second, 100*time.Millisecond)
 }
 
 func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []string) {

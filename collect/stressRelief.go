@@ -14,7 +14,7 @@ import (
 
 type StressReliever interface {
 	Start() error
-	UpdateFromConfig(cfg config.StressReliefConfig) error
+	UpdateFromConfig(cfg config.StressReliefConfig)
 	Recalc()
 	StressLevel() uint
 	Stressed() bool
@@ -23,11 +23,11 @@ type StressReliever interface {
 
 type MockStressReliever struct{}
 
-func (m *MockStressReliever) Start() error                                         { return nil }
-func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) error { return nil }
-func (m *MockStressReliever) Recalc()                                              {}
-func (m *MockStressReliever) StressLevel() uint                                    { return 0 }
-func (m *MockStressReliever) Stressed() bool                                       { return false }
+func (m *MockStressReliever) Start() error                                   { return nil }
+func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) {}
+func (m *MockStressReliever) Recalc()                                        {}
+func (m *MockStressReliever) StressLevel() uint                              { return 0 }
+func (m *MockStressReliever) Stressed() bool                                 { return false }
 func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
 	return 1, false, ""
 }
@@ -44,6 +44,8 @@ const (
 	Monitor
 	Always
 )
+
+var _ StressReliever = &StressRelief{}
 
 type StressRelief struct {
 	mode            StressReliefMode

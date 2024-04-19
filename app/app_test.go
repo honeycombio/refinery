@@ -392,6 +392,10 @@ func TestEventsEndpoint(t *testing.T) {
 					"trace.trace_id":                     "1",
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   1,
+					"meta.span_count":                    1,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -446,6 +450,10 @@ func TestEventsEndpoint(t *testing.T) {
 					"trace.trace_id":                     "1",
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   1,
+					"meta.span_count":                    1,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -517,6 +525,10 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 					"trace.trace_id":                     traceID,
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   1,
+					"meta.span_count":                    1,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
@@ -572,6 +584,10 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 					"trace.trace_id":                     traceID,
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.event_count":                   1,
+					"meta.span_count":                    1,
+					"meta.span_event_count":              0,
+					"meta.span_link_count":               0,
 				},
 				Metadata: map[string]any{
 					"api_host":    "http://api.honeycomb.io",
