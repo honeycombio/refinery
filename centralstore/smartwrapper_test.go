@@ -108,9 +108,11 @@ func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*Smart
 	}
 
 	stopper := func() {
-		conn := redisClient.Get()
-		conn.Do("FLUSHDB")
-		conn.Close()
+		if redisClient != nil {
+			conn := redisClient.Get()
+			conn.Do("FLUSHDB")
+			conn.Close()
+		}
 		startstop.Stop(g.Objects(), ststLogger)
 	}
 
