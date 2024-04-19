@@ -14,7 +14,7 @@ import (
 
 type StressReliever interface {
 	Start() error
-	UpdateFromConfig(cfg config.StressReliefConfig) error
+	UpdateFromConfig(cfg config.StressReliefConfig)
 	Recalc()
 	StressLevel() uint
 	Stressed() bool
@@ -23,11 +23,11 @@ type StressReliever interface {
 
 type MockStressReliever struct{}
 
-func (m *MockStressReliever) Start() error                                         { return nil }
-func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) error { return nil }
-func (m *MockStressReliever) Recalc()                                              {}
-func (m *MockStressReliever) StressLevel() uint                                    { return 0 }
-func (m *MockStressReliever) Stressed() bool                                       { return false }
+func (m *MockStressReliever) Start() error                                   { return nil }
+func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) {}
+func (m *MockStressReliever) Recalc()                                        {}
+func (m *MockStressReliever) StressLevel() uint                              { return 0 }
+func (m *MockStressReliever) Stressed() bool                                 { return false }
 func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
 	return 1, false, ""
 }
@@ -44,6 +44,8 @@ const (
 	Monitor
 	Always
 )
+
+var _ StressReliever = &StressRelief{}
 
 type StressRelief struct {
 	mode            StressReliefMode
@@ -88,6 +90,8 @@ func (s *StressRelief) Start() error {
 		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (incoming)"},
 		{Numerator: "libhoney_upstream_queue_length", Denominator: "UPSTREAM_BUFFER_SIZE", Algorithm: "sqrt", Reason: "UpstreamBufferSize"},
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
+		// TODO: what's the denominator for this one?
+		//{Numerator: "redisstore_memory_used_total", }
 	}
 
 	// start our monitor goroutine that periodically calls recalc
@@ -107,7 +111,7 @@ func (s *StressRelief) Start() error {
 	return nil
 }
 
-func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
+func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -156,8 +160,6 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 	// uint64. In the case where the sample rate is 1, this should sample every
 	// value.
 	s.upperBound = math.MaxUint64 / s.sampleRate
-
-	return nil
 }
 
 func clamp(f float64, min float64, max float64) float64 {

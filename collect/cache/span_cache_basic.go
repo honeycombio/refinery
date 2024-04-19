@@ -73,6 +73,10 @@ func (sc *SpanCache_basic) Get(traceID string) *types.Trace {
 }
 
 func (sc *SpanCache_basic) GetOldest(fract float64) []string {
+	if fract <= 0 {
+		return nil
+	}
+
 	type tidWithImpact struct {
 		id     string
 		impact int
