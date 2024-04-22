@@ -362,7 +362,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 	for _, status := range statusMap {
 		v, ok := statusMapFromRedis[status.TraceID]
 		if ok {
-			status.SamplerKey = v.SamplerKey
+			status.SamplerSelector = v.SamplerSelector
 			status.Metadata = v.Metadata
 			status.Rate = v.Rate
 			status.Timestamp = v.Timestamp
@@ -648,17 +648,17 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralT
 	}
 
 	return &CentralTraceStatus{
-		TraceID:     status.TraceID,
-		State:       Unknown,
-		Rate:        status.Rate,
-		SamplerKey:  status.SamplerKey,
-		reasonIndex: status.ReasonIndex,
-		Metadata:    metadata,
-		KeepReason:  status.KeepReason,
-		Count:       status.Count,
-		EventCount:  status.EventCount,
-		LinkCount:   status.LinkCount,
-		Timestamp:   time.UnixMicro(status.Timestamp),
+		TraceID:         status.TraceID,
+		State:           Unknown,
+		Rate:            status.Rate,
+		SamplerSelector: status.SamplerKey,
+		reasonIndex:     status.ReasonIndex,
+		Metadata:        metadata,
+		KeepReason:      status.KeepReason,
+		Count:           status.Count,
+		EventCount:      status.EventCount,
+		LinkCount:       status.LinkCount,
+		Timestamp:       time.UnixMicro(status.Timestamp),
 	}
 }
 
@@ -668,7 +668,7 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, span *Cent
 
 	trace := &centralTraceStatusInit{
 		TraceID:    span.TraceID,
-		SamplerKey: span.samplerKey,
+		SamplerKey: span.samplerSelector,
 	}
 
 	args := redis.Args(t.traceStatusKey(trace.TraceID), traceStatusCountKey, expirationForTraceStatus.Seconds())

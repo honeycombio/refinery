@@ -197,23 +197,23 @@ func (t *Trace) SpanEventCount() uint32 {
 	return count
 }
 
-func (t *Trace) GetSamplerKey(datasetPrefix string) string {
-	var samplerKey string
+func (t *Trace) GetSamplerSelector(datasetPrefix string) string {
+	var samplerSelector string
 	if IsLegacyAPIKey(t.APIKey) {
-		samplerKey = t.Dataset
+		samplerSelector = t.Dataset
 		if datasetPrefix != "" {
-			samplerKey = fmt.Sprintf("%s.%s", datasetPrefix, t.Dataset)
+			samplerSelector = fmt.Sprintf("%s.%s", datasetPrefix, t.Dataset)
 		}
-		return samplerKey
+		return samplerSelector
 	}
 
 	for _, sp := range t.GetSpans() {
 		if sp.Event.Environment != "" {
-			samplerKey = sp.Event.Environment
+			samplerSelector = sp.Event.Environment
 			break
 		}
 	}
-	return samplerKey
+	return samplerSelector
 
 }
 

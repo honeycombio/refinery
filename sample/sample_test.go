@@ -103,7 +103,7 @@ func TestDatasetPrefix(t *testing.T) {
 		trace := &types.Trace{APIKey: tc.apiKey, Dataset: tc.dataset}
 		trace.AddSpan(&types.Span{Event: types.Event{Environment: tc.environment}})
 
-		assert.Equal(t, tc.expectedSamplerKey, trace.GetSamplerKey("prefix"))
+		assert.Equal(t, tc.expectedSamplerKey, trace.GetSamplerSelector("prefix"))
 	}
 }
 
