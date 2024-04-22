@@ -148,6 +148,7 @@ func buildOptions(c config.RedisConfig) []redis.DialOption {
 
 	return options
 }
+
 func (d *DefaultClient) Start() error {
 	redisHost := d.Config.GetRedisHost()
 

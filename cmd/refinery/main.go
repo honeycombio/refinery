@@ -185,7 +185,7 @@ func main() {
 	case "redis":
 		basicStore = &centralstore.RedisBasicStore{}
 	case "local":
-		basicStore = &centralstore.LocalRemoteStore{}
+		basicStore = &centralstore.LocalStore{}
 	default:
 		fmt.Printf("unknown basic store type: %s\n", cfg.GetCentralStoreOptions().BasicStoreType)
 		os.Exit(1)

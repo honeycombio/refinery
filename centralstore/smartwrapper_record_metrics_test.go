@@ -16,7 +16,9 @@ import (
 )
 
 func TestRecordMetrics(t *testing.T) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	t.Skip("This test can't run unless there's a real redis available, and it's excluded by build tags locally")
+
+	store, stopper, err := getAndStartSmartWrapper("redis", &redis.DefaultClient{})
 	require.NoError(t, err)
 	defer stopper()
 
