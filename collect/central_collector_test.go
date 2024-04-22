@@ -489,7 +489,6 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 					DeciderBatchSize:           200,
 					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
 					DeciderPauseDuration:       config.Duration(1 * time.Second),
-					EjectionBatchSize:          0,
 				},
 				StoreOptions: config.SmartWrapperOptions{
 					SpanChannelSize: 500,

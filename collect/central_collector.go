@@ -194,21 +194,27 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	if err := processCycle.Run(processCtx, func(ctx context.Context) error {
 		err := c.processTraces(ctx)
 		if err != nil {
-			c.Logger.Error().Logf("error processing remaining traces: %s", err)
+			c.Logger.Error().Logf("during shutdown - error processing remaining traces: %s", err)
 			if c.isTest {
 				return err
 			}
 		}
 		return nil
 	}); err != nil {
-		c.Logger.Error().Logf("error processing remaining traces: %s", err)
+		// this is expected to happen whenever long traces haven't finished during shutdown;
+		// log it, but it's not an error
+		if errors.Is(err, context.DeadlineExceeded) {
+			c.Logger.Info().Logf("traces did not drain in time for shutdown -- forwarding remaining spans")
+		} else {
+			c.Logger.Error().Logf("during shutdown: context error processing remaining traces: %s", err)
+		}
 	}
 	defer close(done)
 
 	// send the remaining traces to the central store
 	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
 	var sentCount int
-	defer c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
+	defer c.Logger.Info().Logf("sending %d traces to central store during shutdown", sentCount)
 
 	for _, id := range ids {
 		trace := c.SpanCache.Get(id)

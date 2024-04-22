@@ -349,6 +349,8 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 }
 
 func TestEventsEndpoint(t *testing.T) {
+	t.Skip("This is testing deterministic trace sharding, which isn't relevant for Refinery 3.")
+
 	var apps [2]*App
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
@@ -399,6 +401,7 @@ func TestEventsEndpoint(t *testing.T) {
 					"trace.trace_id":                     "1",
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.refinery.reason":               "deterministic/always",
 					"meta.event_count":                   1,
 					"meta.span_count":                    1,
 					"meta.span_event_count":              0,
@@ -457,6 +460,8 @@ func TestEventsEndpoint(t *testing.T) {
 					"trace.trace_id":                     "1",
 					"foo":                                "bar",
 					"meta.refinery.original_sample_rate": uint(10),
+					"meta.refinery.reason":               "deterministic/always - late arriving span",
+					"meta.refinery.send_reason":          "trace_send_late_span",
 					"meta.event_count":                   2,
 					"meta.span_count":                    2,
 					"meta.span_event_count":              0,
@@ -471,11 +476,13 @@ func TestEventsEndpoint(t *testing.T) {
 			},
 			event,
 		)
-	}, 2*time.Second, 2*time.Millisecond)
+	}, 3*time.Second, 2*time.Millisecond)
 
 }
 
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
+	t.Skip("This is testing deterministic trace sharding, which isn't relevant for Refinery 3.")
+
 	var apps [2]*App
 	var addrs [2]string
 	var senders [2]*transmission.MockSender
@@ -548,7 +555,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		)
 	}, 5*time.Second, 200*time.Microsecond)
 
-	// Repeat, but deliver to host 1 on the peer channel, it should not be
+	// Repeat, but deliver to host 1, it should not be
 	// passed to host 0.
 
 	blob = blob[:0]

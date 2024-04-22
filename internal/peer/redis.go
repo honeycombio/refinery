@@ -37,7 +37,7 @@ const (
 
 type RedisPeers struct {
 	store       *redimem.RedisMembership
-	RedisClient redis.Client `inject:""`
+	RedisClient redis.Client `inject:"redis"`
 	peers       []string
 	peerLock    sync.Mutex
 	Config      config.Config `inject:""`
