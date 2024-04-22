@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 	"time"
 
@@ -16,6 +15,10 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 )
+
+// A ping is set to the server with this period to test for the health of
+// the connection and server.
+const healthCheckPeriod = time.Minute
 
 var ErrKeyNotFound = errors.New("key not found")
 
@@ -99,21 +102,13 @@ type PubSubConn interface {
 }
 
 type DefaultPubSubConn struct {
-	channels []string
-	conn     redis.PubSubConn
-	metrics  metrics.Metrics
-	clock    clockwork.Clock
+	conn    redis.PubSubConn
+	metrics metrics.Metrics
+	clock   clockwork.Clock
 }
 
 func (d *DefaultPubSubConn) Publish(channel string, message interface{}) error {
-	if !slices.Contains(d.channels, channel) {
-		return errors.New("channel not subscribed")
-	}
 	return d.conn.Conn.Send("PUBLISH", channel, message)
-}
-
-func (d *DefaultPubSubConn) Channels() []string {
-	return d.channels
 }
 
 func (d *DefaultPubSubConn) Close() error {
@@ -145,8 +140,8 @@ type DefaultScript struct {
 
 func buildOptions(c config.RedisConfig) []redis.DialOption {
 	options := []redis.DialOption{
-		redis.DialReadTimeout(1 * time.Second),
-		redis.DialConnectTimeout(1 * time.Second),
+		redis.DialReadTimeout(healthCheckPeriod + 10*time.Second),
+		redis.DialConnectTimeout(30 * time.Second),
 		redis.DialDatabase(c.GetRedisDatabase()),
 	}
 
@@ -276,10 +271,6 @@ func (d *DefaultClient) GetPubSubConn() PubSubConn {
 func (d *DefaultClient) ListenPubSubChannels(onStart func() error,
 	onMessage func(channel string, data []byte), shutdown <-chan struct{},
 	channels ...string) error {
-	// A ping is set to the server with this period to test for the health of
-	// the connection and server.
-	const healthCheckPeriod = time.Minute
-
 	// Read timeout on server should be greater than ping period.
 	c := d.pool.Get()
 
