@@ -1190,17 +1190,6 @@ groups:
           supported. See `MaxMemoryPercentage` for more details. If set,
           `Collections.AvailableMemory` must not be defined.
 
-      - name: EjectionBatchSize
-        type: int
-        valuetype: nondefault
-        default: 100
-        reload: true
-        summary: is the maximum number of traces retrieved by the ejection processor in a single request when refinery is under memory pressure.
-        description: >
-          This setting controls the number of traces that are returned from the
-          central store when Refinery is under memory pressure and attempting to
-          reduce cache size. It is rarely necessary to adjust this value.
-
       - name: DeciderPauseDuration
         type: duration
         valuetype: nondefault

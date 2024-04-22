@@ -15,13 +15,13 @@ import (
 // IsRoot should be set to true if the span is the root of the trace (we don't ask the store
 // to make this decision; the refinery should know this).
 type CentralSpan struct {
-	TraceID    string
-	SpanID     string // need access to this field for updating all fields
-	samplerKey string
-	Type       types.SpanType
-	KeyFields  map[string]interface{}
-	AllFields  map[string]interface{}
-	IsRoot     bool
+	TraceID         string
+	SpanID          string // need access to this field for updating all fields
+	samplerSelector string
+	Type            types.SpanType
+	KeyFields       map[string]interface{}
+	AllFields       map[string]interface{}
+	IsRoot          bool
 }
 
 func (s *CentralSpan) Fields() map[string]interface{} {
@@ -32,8 +32,8 @@ func (s *CentralSpan) Fields() map[string]interface{} {
 	return s.KeyFields
 }
 
-func (s *CentralSpan) SetSamplerKey(key string) {
-	s.samplerKey = key
+func (s *CentralSpan) SetSamplerSelector(key string) {
+	s.samplerSelector = key
 }
 
 type CentralTraceState string
@@ -53,17 +53,17 @@ func (s CentralTraceState) String() string {
 }
 
 type CentralTraceStatus struct {
-	TraceID     string
-	State       CentralTraceState
-	Rate        uint
-	Metadata    map[string]interface{}
-	KeepReason  string
-	SamplerKey  string
-	reasonIndex uint      // this is the cache ID for the reason
-	Timestamp   time.Time // this is the last time the trace state was changed
-	Count       uint32    // number of spans in the trace
-	EventCount  uint32    // number of span events in the trace
-	LinkCount   uint32    // number of span links in the trace
+	TraceID         string
+	State           CentralTraceState
+	Rate            uint
+	Metadata        map[string]interface{}
+	KeepReason      string
+	SamplerSelector string
+	reasonIndex     uint      // this is the cache ID for the reason
+	Timestamp       time.Time // this is the last time the trace state was changed
+	Count           uint32    // number of spans in the trace
+	EventCount      uint32    // number of span events in the trace
+	LinkCount       uint32    // number of span links in the trace
 }
 
 // ensure that CentralTraceStatus implements KeptTrace
@@ -79,27 +79,19 @@ func NewCentralTraceStatus(traceID string, state CentralTraceState, timestamp ti
 }
 
 func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
-	return &CentralTraceStatus{
-		TraceID:     s.TraceID,
-		State:       s.State,
-		Rate:        s.Rate,
-		KeepReason:  s.KeepReason,
-		reasonIndex: s.reasonIndex,
-		Timestamp:   s.Timestamp, // we might want this to not copy the timestamp, but to set it to now()
-		Metadata:    s.Metadata,
+	c := *s
+	c.Metadata = make(map[string]interface{}, len(s.Metadata))
+	for k, v := range s.Metadata {
+		c.Metadata[k] = v
 	}
+	return &c
 }
 
 type CentralTrace struct {
-	TraceID    string
-	Timestamp  uint64
-	SamplerKey string
-	Root       *CentralSpan
-	Spans      []*CentralSpan
-}
-
-func (t *CentralTrace) GetSamplerKey() string {
-	return t.SamplerKey
+	TraceID   string
+	Timestamp uint64
+	Root      *CentralSpan
+	Spans     []*CentralSpan
 }
 
 func (t *CentralTrace) ID() string {

@@ -13,10 +13,9 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
-// LocalRemoteStore (yes, a contradiction in terms, deal with it) is a remote
-// store that is local to the Refinery process. This is used when there is only one
-// refinery in the system, and for testing and benchmarking.
-type LocalRemoteStore struct {
+// LocalStore is a basic store that is local to the Refinery process. This is
+// used when there is only one refinery in the system.
+type LocalStore struct {
 	Config        config.Config        `inject:""`
 	DecisionCache cache.TraceSentCache `inject:""`
 	Metrics       metrics.Metrics      `inject:"genericMetrics"`
@@ -28,18 +27,18 @@ type LocalRemoteStore struct {
 	mutex  sync.RWMutex
 }
 
-// ensure that LocalRemoteStore implements RemoteStore
-var _ BasicStorer = (*LocalRemoteStore)(nil)
+// ensure that LocalStore implements RemoteStore
+var _ BasicStorer = (*LocalStore)(nil)
 
-func (lrs *LocalRemoteStore) Start() error {
+func (lrs *LocalStore) Start() error {
 	if lrs.DecisionCache == nil {
-		return fmt.Errorf("LocalRemoteStore requires a DecisionCache")
+		return fmt.Errorf("LocalStore requires a DecisionCache")
 	}
 	if lrs.Clock == nil {
-		return fmt.Errorf("LocalRemoteStore requires a Clock")
+		return fmt.Errorf("LocalStore requires a Clock")
 	}
 	if lrs.Config == nil {
-		return fmt.Errorf("LocalRemoteStore requires a Config")
+		return fmt.Errorf("LocalStore requires a Config")
 	}
 
 	lrs.states = make(map[CentralTraceState]statusMap)
@@ -62,14 +61,14 @@ func (lrs *LocalRemoteStore) Start() error {
 	return nil
 }
 
-func (lrs *LocalRemoteStore) Stop() error {
+func (lrs *LocalStore) Stop() error {
 	return nil
 }
 
 // findTraceStatus returns the state and status of a trace, or Unknown if the trace
 // wasn't found in any state. If the trace is found, the status will be non-nil.
 // Only call this if you're holding a Lock.
-func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
+func (lrs *LocalStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
 	if tracerec, reason, found := lrs.DecisionCache.Test(traceID); found {
 		// it was in the decision cache, so we can return the right thing
 		if tracerec.Kept() {
@@ -92,7 +91,7 @@ func (lrs *LocalRemoteStore) findTraceStatus(traceID string) (CentralTraceState,
 // changes the status of a trace; if fromState is Unknown, the trace will be searched for
 // in all states. If the trace wasn't found, false will be returned.
 // Only call this if you're holding a Lock.
-func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState CentralTraceState) bool {
+func (lrs *LocalStore) changeTraceState(traceID string, fromState, toState CentralTraceState) bool {
 	var status *CentralTraceStatus
 	var ok bool
 	if fromState == Unknown {
@@ -121,7 +120,7 @@ func (lrs *LocalRemoteStore) changeTraceState(traceID string, fromState, toState
 // SpanID, and have the IsRoot flag set. AllFields is optional and is used
 // during shutdown. WriteSpan is expecting to be called from an asynchronous
 // process and will only return an error if the span could not be written.
-func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
+func (lrs *LocalStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 
@@ -157,10 +156,10 @@ func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) e
 		// we don't have a state for this trace, so we create it
 		state = Collecting
 		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.Clock.Now())
-		lrs.traces[span.TraceID] = &CentralTrace{}
+		lrs.traces[span.TraceID] = &CentralTrace{TraceID: span.TraceID}
 	}
 
-	// Add the span to the trace; this works even if the trace doesn't exist yet
+	// Add the span to the trace; this works even if the trace has no spans yet
 	lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
 	lrs.states[state][span.TraceID].Count++
 	if span.Type == types.SpanTypeLink {
@@ -191,7 +190,7 @@ func (lrs *LocalRemoteStore) WriteSpan(ctx context.Context, span *CentralSpan) e
 // is Keep. If the trace has a root span, the Root property will be
 // populated. Normally this call will be made after Refinery has been asked
 // to make a trace decision.
-func (lrs *LocalRemoteStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
+func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	if trace, ok := lrs.traces[traceID]; ok {
@@ -210,7 +209,7 @@ func (lrs *LocalRemoteStore) GetTrace(ctx context.Context, traceID string) (*Cen
 // of; the central store will not change the decision state of these traces
 // after this call (although kept spans will have counts updated when late
 // spans arrive).
-func (lrs *LocalRemoteStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
+func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
@@ -225,7 +224,7 @@ func (lrs *LocalRemoteStore) GetStatusForTraces(ctx context.Context, traceIDs []
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
-func (lrs *LocalRemoteStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
+func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	switch state {
@@ -247,7 +246,7 @@ func (lrs *LocalRemoteStore) GetTracesForState(ctx context.Context, state Centra
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 // ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 // atomically, so that no other refinery will be assigned the same trace.
-func (lrs *LocalRemoteStore) GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error) {
+func (lrs *LocalStore) GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error) {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	// get the list of traces in the ReadyForDecision state
@@ -266,7 +265,7 @@ func (lrs *LocalRemoteStore) GetTracesNeedingDecision(ctx context.Context, n int
 // ChangeTraceStatus changes the status of a set of traces from one state to another
 // atomically. This can be used for all trace states except transition to Keep.
 // If a traceID is not found in the fromState, this is not considered to be an error.
-func (lrs *LocalRemoteStore) ChangeTraceStatus(ctx context.Context, traceIDs []string, fromState, toState CentralTraceState) error {
+func (lrs *LocalStore) ChangeTraceStatus(ctx context.Context, traceIDs []string, fromState, toState CentralTraceState) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, traceID := range traceIDs {
@@ -289,7 +288,7 @@ func (lrs *LocalRemoteStore) ChangeTraceStatus(ctx context.Context, traceIDs []s
 // it is used to record the keep decisions made by the trace decision engine.
 // Statuses should include Reason and Rate; do not include State as it will be ignored.
 // If a trace is not in the AwaitingDecision state, it will be ignored.
-func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error {
+func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error {
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
@@ -304,7 +303,9 @@ func (lrs *LocalRemoteStore) KeepTraces(ctx context.Context, statuses []*Central
 
 // RecordMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
-func (lrs *LocalRemoteStore) RecordMetrics(ctx context.Context) error {
+func (lrs *LocalStore) RecordMetrics(ctx context.Context) error {
+	lrs.mutex.RLock()
+	defer lrs.mutex.RUnlock()
 	m, err := lrs.DecisionCache.GetMetrics()
 	if err != nil {
 		return err

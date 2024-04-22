@@ -194,21 +194,27 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	if err := processCycle.Run(processCtx, func(ctx context.Context) error {
 		err := c.processTraces(ctx)
 		if err != nil {
-			c.Logger.Error().Logf("error processing remaining traces: %s", err)
+			c.Logger.Error().Logf("during shutdown - error processing remaining traces: %s", err)
 			if c.isTest {
 				return err
 			}
 		}
 		return nil
 	}); err != nil {
-		c.Logger.Error().Logf("error processing remaining traces: %s", err)
+		// this is expected to happen whenever long traces haven't finished during shutdown;
+		// log it, but it's not an error
+		if errors.Is(err, context.DeadlineExceeded) {
+			c.Logger.Info().Logf("traces did not drain in time for shutdown -- forwarding remaining spans")
+		} else {
+			c.Logger.Error().Logf("during shutdown: context error processing remaining traces: %s", err)
+		}
 	}
 	defer close(done)
 
 	// send the remaining traces to the central store
 	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
 	var sentCount int
-	defer c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
+	defer c.Logger.Info().Logf("sending %d traces to central store during shutdown", sentCount)
 
 	for _, id := range ids {
 		trace := c.SpanCache.Get(id)
@@ -223,7 +229,7 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 				IsRoot:    sp.IsRoot,
 			}
 
-			cs.SetSamplerKey(trace.GetSamplerKey(c.Config.GetDatasetPrefix()))
+			cs.SetSamplerSelector(trace.GetSamplerSelector(c.Config.GetDatasetPrefix()))
 			err := c.Store.WriteSpan(ctx, cs)
 			if err != nil {
 				c.Logger.Error().Logf("error sending span %s for trace %s during shutdown: %s", sp.ID, id, err)
@@ -419,20 +425,20 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		var found bool
 
 		// get sampler key (dataset for legacy keys, environment for new keys)
-		samplerKey := trace.GetSamplerKey()
+		selector := stateMap[trace.TraceID].SamplerSelector
 		logFields := logrus.Fields{
 			"trace_id": trace.TraceID,
 		}
-		logFields["sampler_key"] = samplerKey
+		logFields["sampler_selector"] = selector
 
 		// use sampler key to find sampler; create and cache if not found
 		c.mut.RLock()
-		sampler, found = c.samplersByDestination[samplerKey]
+		sampler, found = c.samplersByDestination[selector]
 		c.mut.RUnlock()
 		if !found {
-			sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
+			sampler = c.SamplerFactory.GetSamplerImplementationForKey(selector)
 			c.mut.Lock()
-			c.samplersByDestination[samplerKey] = sampler
+			c.samplersByDestination[selector] = sampler
 			c.mut.Unlock()
 		}
 
@@ -528,24 +534,24 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	}
 	cs.Type = sp.Type()
 
-	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
-	cs.SetSamplerKey(samplerKey)
-	if samplerKey == "" {
-		c.Logger.Error().Logf("error getting sampler key for trace %s", sp.TraceID)
+	selector := trace.GetSamplerSelector(c.Config.GetDatasetPrefix())
+	cs.SetSamplerSelector(selector)
+	if selector == "" {
+		c.Logger.Error().Logf("error getting sampler selection key for trace %s", sp.TraceID)
 	}
 
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
-	logFields["sampler_key"] = samplerKey
+	logFields["sampler_selector"] = selector
 
 	c.mut.RLock()
-	sampler, found := c.samplersByDestination[samplerKey]
+	sampler, found := c.samplersByDestination[selector]
 	c.mut.RUnlock()
 	if !found {
-		sampler = c.SamplerFactory.GetSamplerImplementationForKey(samplerKey)
+		sampler = c.SamplerFactory.GetSamplerImplementationForKey(selector)
 		c.mut.Lock()
-		c.samplersByDestination[samplerKey] = sampler
+		c.samplersByDestination[selector] = sampler
 		c.mut.Unlock()
 	}
 
@@ -637,12 +643,12 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 
 	c.Metrics.Increment(status.KeepReason)
 
-	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey := trace.GetSamplerKey(c.Config.GetDatasetPrefix())
+	// get sampler selector (dataset for legacy keys, environment for new keys)
+	selector := trace.GetSamplerSelector(c.Config.GetDatasetPrefix())
 	logFields := logrus.Fields{
 		"trace_id": trace.TraceID,
 	}
-	logFields["sampler_key"] = samplerKey
+	logFields["sampler_selector"] = selector
 
 	logFields["reason"] = status.KeepReason
 
