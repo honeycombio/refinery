@@ -28,8 +28,6 @@ func duration(s string) config.Duration {
 	return config.Duration(d)
 }
 
-var storeType = "local"
-
 type dummyLogger struct{}
 
 func (d dummyLogger) Debugf(format string, v ...interface{}) {
@@ -427,7 +425,7 @@ func TestSetTraceStatuses(t *testing.T) {
 }
 
 func BenchmarkStoreWriteSpan(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	store, stopper, err := getAndStartSmartWrapper("redis", &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -447,7 +445,7 @@ func BenchmarkStoreWriteSpan(b *testing.B) {
 }
 
 func BenchmarkStoreGetStatus(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	store, stopper, err := getAndStartSmartWrapper("redis", &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -469,7 +467,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 }
 
 func BenchmarkStoreGetTrace(b *testing.B) {
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	store, stopper, err := getAndStartSmartWrapper("redis", &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
@@ -494,7 +492,7 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 	// we want things to happen fast, so we'll set the timeouts low
 	// sopts.SendDelay = duration("100ms")
 	// sopts.TraceTimeout = duration("100ms")
-	store, stopper, err := getAndStartSmartWrapper(storeType, &redis.DefaultClient{})
+	store, stopper, err := getAndStartSmartWrapper("redis", &redis.DefaultClient{})
 	require.NoError(b, err)
 	defer stopper()
 
