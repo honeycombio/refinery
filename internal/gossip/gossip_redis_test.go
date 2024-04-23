@@ -32,15 +32,27 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, g.Start())
 
 	// Test that we can register a handler
-	require.NoError(t, g.Subscribe("test"))
+	require.NoError(t, g.Subscribe("test", "test2"))
 
 	// Test that we can publish a message
 	require.NoError(t, g.Publish("test", []byte("hi")))
+	require.NoError(t, g.Publish("test2", []byte("bye")))
 
 	// Test that we can receive a message
+	var received []bool
 	require.Eventually(t, func() bool {
-		msg := g.Receive()
-		return "hi" == string(msg)
+		channel, data := g.Receive()
+		switch channel {
+		case "test":
+			if "hi" == string(data) {
+				received = append(received, true)
+			}
+		case "test2":
+			if "bye" == string(data) {
+				received = append(received, true)
+			}
+		}
+		return len(received) == 2
 	}, 3*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, g.Stop())

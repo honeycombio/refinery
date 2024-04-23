@@ -16,7 +16,7 @@ type GossipRedis struct {
 
 	done chan struct{}
 
-	msg chan []byte
+	msg chan message
 
 	startstop.Stopper
 }
@@ -24,7 +24,6 @@ type GossipRedis struct {
 func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
-	g.msg = make(chan []byte, 1)
 
 	return nil
 }
@@ -34,7 +33,8 @@ func (g *GossipRedis) Stop() error {
 	return g.eg.Wait()
 }
 
-func (g *GossipRedis) Subscribe(channel string) error {
+func (g *GossipRedis) Subscribe(channel ...string) error {
+	g.msg = make(chan message, len(channel))
 	g.eg.Go(func() error {
 		for {
 			select {
@@ -43,11 +43,11 @@ func (g *GossipRedis) Subscribe(channel string) error {
 			default:
 				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
 					select {
-					case g.msg <- b:
+					case g.msg <- message{channel, b}:
 					case <-g.done:
 					default:
 					}
-				}, g.done, channel)
+				}, g.done, channel...)
 				if err != nil {
 					g.Logger.Debug().Logf("Error listening to channel %s: %s", channel, err)
 				}
@@ -66,13 +66,18 @@ func (g *GossipRedis) Publish(channel string, message []byte) error {
 	return conn.Publish(channel, message)
 }
 
-func (g *GossipRedis) Receive() []byte {
+func (g *GossipRedis) Receive() (string, []byte) {
 	select {
 	case msg := <-g.msg:
-		return msg
+		return msg.channel, msg.data
 	case <-g.done:
-		return nil
+		return "", nil
 	default:
-		return nil
+		return "", nil
 	}
+}
+
+type message struct {
+	channel string
+	data    []byte
 }
