@@ -1,6 +1,8 @@
 package gossip
 
 import (
+	"errors"
+
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/redis"
@@ -64,6 +66,12 @@ func (g *GossipRedis) Stop() error {
 
 // Subscribe registers a callback for a given channel.
 func (g *GossipRedis) Subscribe(channel string, cb func(data []byte)) error {
+	select {
+	case <-g.done:
+		return errors.New("gossip has been stopped")
+	default:
+	}
+
 	g.subscribers[channel] = append(g.subscribers[channel], cb)
 	return nil
 
@@ -71,6 +79,12 @@ func (g *GossipRedis) Subscribe(channel string, cb func(data []byte)) error {
 
 // Publish sends a message to all subscribers of a given channel.
 func (g *GossipRedis) Publish(channel string, value []byte) error {
+	select {
+	case <-g.done:
+		return errors.New("gossip has been stopped")
+	default:
+	}
+
 	conn := g.Redis.GetPubSubConn()
 	defer conn.Close()
 

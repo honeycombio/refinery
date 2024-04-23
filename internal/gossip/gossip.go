@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/facebookgo/startstop"
 	"golang.org/x/sync/errgroup"
@@ -39,12 +40,20 @@ func (g *InMemoryGossip) Publish(channel string, value []byte) error {
 
 	select {
 	case <-g.done:
+		return errors.New("gossip has been stopped")
 	case g.channel <- msg.ToBytes():
 	default:
 	}
 	return nil
 }
+
 func (g *InMemoryGossip) Subscribe(channel string, callback func(data []byte)) error {
+	select {
+	case <-g.done:
+		return errors.New("gossip has been stopped")
+	default:
+	}
+
 	g.subscribers[channel] = append(g.subscribers[channel], callback)
 	return nil
 }
