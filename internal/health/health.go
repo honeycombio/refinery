@@ -24,14 +24,18 @@ import (
 // frequently when they are ready to receive traffic. Note that Registration
 // does not start the ticker -- it only starts once Ready is called for the
 // first time.
-type HealthRecorder interface {
+
+// Recorder is the interface used by object that want to record their own health
+// status and make it available to the system.
+type Recorder interface {
 	Register(source string, timeout time.Duration)
 	Ready(source string, ready bool)
 }
 
 // Reporter is the interface that is used to read back the health status of the system.
 type Reporter interface {
-	Report() (alive bool, ready bool)
+	IsAlive() bool
+	IsReady() bool
 }
 
 // TickerTime is the interval at which we will check the health of the system.
@@ -49,7 +53,7 @@ type Health struct {
 	done     chan struct{}
 	startstop.Starter
 	startstop.Stopper
-	HealthRecorder
+	Recorder
 	Reporter
 }
 
@@ -140,4 +144,39 @@ func (h *Health) Report() (alive bool, ready bool) {
 		ready = ready || r
 	}
 	return alive, ready
+}
+
+func (h *Health) IsAlive() bool {
+	h.mut.RLock()
+	defer h.mut.RUnlock()
+	// if any counter is 0, we're dead
+	for _, a := range h.timeLeft {
+		if a == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (h *Health) IsReady() bool {
+	h.mut.RLock()
+	defer h.mut.RUnlock()
+	// if any counter is not positive, we're not ready
+	for _, a := range h.timeLeft {
+		if a <= 0 {
+			return false
+		}
+	}
+
+	// if no one has registered yet, we're not ready
+	if len(h.readies) == 0 {
+		return false
+	}
+
+	// if any registered service is not ready, we're not ready
+	ready := true
+	for _, r := range h.readies {
+		ready = ready && r
+	}
+	return ready
 }
