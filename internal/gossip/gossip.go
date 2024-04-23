@@ -1,27 +1,92 @@
 package gossip
 
-import "github.com/facebookgo/startstop"
+import (
+	"bytes"
 
+	"github.com/facebookgo/startstop"
+	"golang.org/x/sync/errgroup"
+)
+
+// Gossiper is an interface for broadcasting messages to all receivers
+// subscribed to a channel
 type Gossiper interface {
-	// Gossip sends a message to all peers that are listening on the channel
-	Publish(channel string, message []byte) error
+	// Publish sends a message to all peers listening on the channel
+	Publish(channel string, value []byte) error
 
 	// Subscribe listens for messages on the channel
-	Subscribe(channel ...string) error
-
-	Receive() (string, []byte)
+	Subscribe(channel string, callback func(data []byte)) error
 
 	startstop.Starter
 	startstop.Stopper
 }
 
-var _ Gossiper = &NullGossip{}
+var _ Gossiper = &InMemoryGossip{}
 
-type NullGossip struct{}
+// InMemoryGossip is a Gossiper that uses an in-memory channel
+type InMemoryGossip struct {
+	channel     chan []byte
+	subscribers map[string][]func(data []byte)
 
-func (g *NullGossip) Publish(channel string, message []byte) error { return nil }
-func (g *NullGossip) Subscribe(channel ...string) error            { return nil }
-func (g *NullGossip) Receive() (string, []byte)                    { return "", nil }
+	done chan struct{}
+	eg   *errgroup.Group
+}
 
-func (g *NullGossip) Start() error { return nil }
-func (g *NullGossip) Stop() error  { return nil }
+func (g *InMemoryGossip) Publish(channel string, value []byte) error {
+	msg := message{
+		key:  channel,
+		data: value,
+	}
+
+	select {
+	case <-g.done:
+	case g.channel <- msg.ToBytes():
+	default:
+	}
+	return nil
+}
+func (g *InMemoryGossip) Subscribe(channel string, callback func(data []byte)) error {
+	g.subscribers[channel] = append(g.subscribers[channel], callback)
+	return nil
+}
+
+func (g *InMemoryGossip) Start() error {
+	g.eg.Go(func() error {
+		for {
+			select {
+			case <-g.done:
+				return nil
+			case value := <-g.channel:
+				msg := newMessageFromBytes(value)
+				callbacks := g.subscribers[msg.key]
+
+				for _, cb := range callbacks {
+					cb(msg.data)
+				}
+			}
+		}
+	})
+
+	return nil
+}
+func (g *InMemoryGossip) Stop() error {
+	close(g.done)
+	close(g.channel)
+	return g.eg.Wait()
+}
+
+type message struct {
+	key  string
+	data []byte
+}
+
+func (m message) ToBytes() []byte {
+	return append([]byte(m.key+":"), m.data...)
+}
+
+func newMessageFromBytes(b []byte) message {
+	splits := bytes.SplitN(b, []byte(":"), 2)
+	return message{
+		key:  string(splits[0]),
+		data: splits[1],
+	}
+}
