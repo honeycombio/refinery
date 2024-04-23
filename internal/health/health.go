@@ -1,7 +1,6 @@
 package health
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -45,7 +44,7 @@ var TickerTime = 1 * time.Second
 // When services are registered, they will be expected to report in at least once every timeout interval.
 // If they don't, they will be marked as not alive.
 type Health struct {
-	Clock    clockwork.Clock
+	Clock    clockwork.Clock `inject:""`
 	timeouts map[string]time.Duration
 	timeLeft map[string]time.Duration
 	readies  map[string]bool
@@ -72,17 +71,14 @@ func (h *Health) Stop() error {
 }
 
 func (h *Health) ticker() {
-	fmt.Println("starting ticker")
 	tick := h.Clock.NewTicker(TickerTime)
 	for {
 		select {
 		case <-tick.Chan():
-			fmt.Println("got a tick")
 			h.mut.Lock()
 			for source, timeLeft := range h.timeLeft {
 				// only decrement positive counters since 0 means we're dead
 				if timeLeft > 0 {
-					fmt.Println("Decrementing timeout for source", source)
 					h.timeLeft[source] -= TickerTime
 					if h.timeLeft[source] < 0 {
 						h.timeLeft[source] = 0
@@ -128,8 +124,7 @@ func (h *Health) Report() (alive bool, ready bool) {
 	defer h.mut.RUnlock()
 	// if any counter is 0, we're dead
 	alive = true
-	for name, a := range h.timeLeft {
-		fmt.Printf("%s=%d\n", name, a)
+	for _, a := range h.timeLeft {
 		alive = alive && a != 0
 	}
 	if !alive {
@@ -161,16 +156,16 @@ func (h *Health) IsAlive() bool {
 func (h *Health) IsReady() bool {
 	h.mut.RLock()
 	defer h.mut.RUnlock()
+	// if no one has registered yet, we're not ready
+	if len(h.readies) == 0 {
+		return false
+	}
+
 	// if any counter is not positive, we're not ready
 	for _, a := range h.timeLeft {
 		if a <= 0 {
 			return false
 		}
-	}
-
-	// if no one has registered yet, we're not ready
-	if len(h.readies) == 0 {
-		return false
 	}
 
 	// if any registered service is not ready, we're not ready
