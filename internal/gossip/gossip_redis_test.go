@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"testing"
+	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -31,16 +32,16 @@ func TestRoundTrip(t *testing.T) {
 	require.NoError(t, g.Start())
 
 	// Test that we can register a handler
-	require.NoError(t, g.Register("test", func(msg Message) {
-		require.Equal(t, "hi", msg.Key)
-		require.Equal(t, "hello", msg.Value)
-	}))
+	require.NoError(t, g.Subscribe("test"))
 
 	// Test that we can publish a message
-	require.NoError(t, g.Publish("test", Message{
-		Key:   "hi",
-		Value: "hello",
-	}))
+	require.NoError(t, g.Publish("test", []byte("hi")))
+
+	// Test that we can receive a message
+	require.Eventually(t, func() bool {
+		msg := g.Receive()
+		return "hi" == string(msg)
+	}, 3*time.Second, 100*time.Millisecond)
 
 	require.NoError(t, g.Stop())
 }
