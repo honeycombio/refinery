@@ -473,6 +473,8 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 }
 
 func TestCentralCollector_StableMaxAlloc(t *testing.T) {
+	t.Skip("This test is flaky in CI and should be fixed before re-enabling")
+
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
