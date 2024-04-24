@@ -59,6 +59,8 @@ func (g *InMemoryGossip) Subscribe(channel string, callback func(data []byte)) e
 }
 
 func (g *InMemoryGossip) Start() error {
+	g.channel = make(chan []byte, 10)
+
 	g.eg.Go(func() error {
 		for {
 			select {
