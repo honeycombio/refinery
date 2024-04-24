@@ -32,6 +32,7 @@ import (
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -174,6 +175,7 @@ func newStartedApp(
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
+		&inject.Object{Value: &health.Health{}},
 		&inject.Object{Value: &a},
 	)
 	assert.NoError(t, err)
