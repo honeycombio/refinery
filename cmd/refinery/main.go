@@ -26,7 +26,9 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
@@ -162,7 +164,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	stressRelief := &collect.StressRelief{Done: done}
+	stressRelief := &stressRelief.StressRelief{}
 	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
 
 	// we need to include all the metrics types so we can inject them in case they're needed
@@ -182,11 +184,14 @@ func main() {
 	decisionCache := &cache.CuckooSentCache{}
 
 	var basicStore centralstore.BasicStorer
+	var channels gossip.Gossiper
 	switch cfg.GetCentralStoreOptions().BasicStoreType {
 	case "redis":
 		basicStore = &centralstore.RedisBasicStore{}
+		channels = &gossip.GossipRedis{}
 	case "local":
 		basicStore = &centralstore.LocalStore{}
+		channels = &gossip.InMemoryGossip{}
 	default:
 		fmt.Printf("unknown basic store type: %s\n", cfg.GetCentralStoreOptions().BasicStoreType)
 		os.Exit(1)
@@ -234,6 +239,7 @@ func main() {
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
+		{Value: channels, Name: "gossip"},
 		{Value: stressRelief, Name: "stressRelief"},
 		{Value: tracer, Name: "tracer"},
 		{Value: clockwork.NewRealClock()},
