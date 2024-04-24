@@ -17,6 +17,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -1363,6 +1364,7 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		{Value: basicStore},
 		{Value: sw},
 		{Value: collector},
+		{Value: &health.Health{}},
 	}
 	g := inject.Graph{}
 	require.NoError(t, g.Provide(objects...))
