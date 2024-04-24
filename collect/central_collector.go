@@ -12,6 +12,7 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
@@ -68,6 +69,7 @@ type CentralCollector struct {
 	StressRelief   StressReliever           `inject:"stressRelief"`
 	SamplerFactory *sample.SamplerFactory   `inject:""`
 	SpanCache      cache.SpanCache          `inject:""`
+	Health         health.Recorder          `inject:""`
 
 	// whenever samplersByDestination is accessed, it should be protected by
 	// the mut mutex
@@ -90,9 +92,20 @@ type CentralCollector struct {
 	isTest         bool
 }
 
+const (
+	receiverHealth  = "receiver"
+	deciderHealth   = "decider"
+	processorHealth = "processor"
+)
+
 func (c *CentralCollector) Start() error {
 	// call reload config and then get the updated unique fields
 	collectorCfg := c.Config.GetCollectionConfig()
+
+	// we're a health check reporter so register ourselves for each of our major routines
+	c.Health.Register(receiverHealth, 2*c.Config.GetSendTickerValue())
+	c.Health.Register(deciderHealth, 2*collectorCfg.GetDeciderPauseDuration())
+	c.Health.Register(processorHealth, 2*collectorCfg.GetProcessTracesPauseDuration())
 
 	c.done = make(chan struct{})
 
@@ -199,6 +212,10 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 				return err
 			}
 		}
+		// we have to make sure the health check says we're alive but not accepting data during shutdown
+		c.Health.Ready(receiverHealth, false)
+		c.Health.Ready(processorHealth, true)
+		c.Health.Ready(deciderHealth, true)
 		return nil
 	}); err != nil {
 		// this is expected to happen whenever long traces haven't finished during shutdown;
@@ -277,6 +294,7 @@ func (c *CentralCollector) receive() error {
 		// record channel lengths as histogram but also as gauges
 		c.Metrics.Histogram("collector_incoming_queue", float64(len(c.incoming)))
 		c.Metrics.Gauge("collector_incoming_queue_length", float64(len(c.incoming)))
+		c.Health.Ready(receiverHealth, true)
 
 		select {
 		case <-c.done:
@@ -309,6 +327,7 @@ func (c *CentralCollector) process() error {
 				return err
 			}
 		}
+		c.Health.Ready(processorHealth, true)
 
 		return nil
 	})
@@ -352,6 +371,7 @@ func (c *CentralCollector) decide() error {
 				return err
 			}
 		}
+		c.Health.Ready(deciderHealth, true)
 
 		return nil
 	})

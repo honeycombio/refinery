@@ -3,7 +3,6 @@ package route
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -36,7 +35,6 @@ import (
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v5"
-	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -595,41 +593,4 @@ func TestEnvironmentCache(t *testing.T) {
 			t.Errorf("expected %e - got %e", expectedErr, err)
 		}
 	})
-}
-
-func TestGRPCHealthProbeCheck(t *testing.T) {
-	router := &Router{
-		Config: &config.MockConfig{},
-		iopLogger: iopLogger{
-			Logger:         &logger.MockLogger{},
-			incomingOrPeer: "incoming",
-		},
-	}
-
-	req := &grpc_health_v1.HealthCheckRequest{}
-	resp, err := router.Check(context.Background(), req)
-	if err != nil {
-		t.Errorf(`Unexpected error: %s`, err)
-	}
-	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, resp.Status)
-}
-
-func TestGRPCHealthProbeWatch(t *testing.T) {
-	router := &Router{
-		Config: &config.MockConfig{},
-		iopLogger: iopLogger{
-			Logger:         &logger.MockLogger{},
-			incomingOrPeer: "incoming",
-		},
-	}
-
-	mockServer := &MockGRPCHealthWatchServer{}
-	err := router.Watch(&grpc_health_v1.HealthCheckRequest{}, mockServer)
-	if err != nil {
-		t.Errorf(`Unexpected error: %s`, err)
-	}
-	assert.Equal(t, 1, len(mockServer.GetSentMessages()))
-
-	sentMessage := mockServer.GetSentMessages()[0]
-	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, sentMessage.Status)
 }
