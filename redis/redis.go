@@ -16,6 +16,10 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+// A ping is set to the server with this period to test for the health of
+// the connection and server.
+const healthCheckPeriod = time.Minute
+
 var ErrKeyNotFound = errors.New("key not found")
 
 type Script interface {
@@ -30,6 +34,8 @@ type Client interface {
 	Get() Conn
 	GetContext(context.Context) (Conn, error)
 	NewScript(keyCount int, src string) Script
+	ListenPubSubChannels(func() error, func(string, []byte), <-chan struct{}, ...string) error
+	GetPubSubConn() PubSubConn
 	startstop.Starter
 	startstop.Stopper
 	Stats() redis.PoolStats
@@ -90,6 +96,25 @@ type Conn interface {
 	MemoryStats() (map[string]any, error)
 }
 
+type PubSubConn interface {
+	Publish(channel string, message interface{}) error
+	Close() error
+}
+
+type DefaultPubSubConn struct {
+	conn    redis.PubSubConn
+	metrics metrics.Metrics
+	clock   clockwork.Clock
+}
+
+func (d *DefaultPubSubConn) Publish(channel string, message interface{}) error {
+	return d.conn.Conn.Send("PUBLISH", channel, message)
+}
+
+func (d *DefaultPubSubConn) Close() error {
+	return d.conn.Close()
+}
+
 var _ Client = &DefaultClient{}
 
 type DefaultClient struct {
@@ -115,8 +140,8 @@ type DefaultScript struct {
 
 func buildOptions(c config.RedisConfig) []redis.DialOption {
 	options := []redis.DialOption{
-		redis.DialReadTimeout(1 * time.Second),
-		redis.DialConnectTimeout(1 * time.Second),
+		redis.DialReadTimeout(healthCheckPeriod + 10*time.Second),
+		redis.DialConnectTimeout(30 * time.Second),
 		redis.DialDatabase(c.GetRedisDatabase()),
 	}
 
@@ -231,6 +256,89 @@ func (d *DefaultClient) GetContext(ctx context.Context) (Conn, error) {
 		metrics: d.Metrics,
 		Clock:   clockwork.NewRealClock(),
 	}, nil
+}
+
+func (d *DefaultClient) GetPubSubConn() PubSubConn {
+	return &DefaultPubSubConn{
+		conn: redis.PubSubConn{Conn: d.pool.Get()},
+	}
+
+}
+
+// listenPubSubChannels listens for messages on Redis pubsub channels. The
+// onStart function is called after the channels are subscribed. The onMessage
+// function is called for each message.
+func (d *DefaultClient) ListenPubSubChannels(onStart func() error,
+	onMessage func(channel string, data []byte), shutdown <-chan struct{},
+	channels ...string) error {
+	// Read timeout on server should be greater than ping period.
+	c := d.pool.Get()
+
+	psc := redis.PubSubConn{Conn: c}
+	defer func() { psc.Close() }()
+
+	if err := psc.Subscribe(redis.Args{}.AddFlat(channels)...); err != nil {
+		return err
+	}
+
+	done := make(chan error, 1)
+
+	// Start a goroutine to receive notifications from the server.
+	go func() {
+		for {
+			switch n := psc.Receive().(type) {
+			case error:
+				done <- n
+				return
+			case redis.Message:
+				onMessage(n.Channel, n.Data)
+			case redis.Subscription:
+				switch n.Count {
+				case len(channels):
+					// Notify application when all channels are subscribed.
+					if onStart == nil {
+						continue
+					}
+					if err := onStart(); err != nil {
+						done <- err
+						return
+					}
+				case 0:
+					// Return from the goroutine when all channels are unsubscribed.
+					done <- nil
+					return
+				}
+			}
+		}
+	}()
+
+	ticker := time.NewTicker(healthCheckPeriod)
+	defer ticker.Stop()
+loop:
+	for {
+		select {
+		case <-ticker.C:
+			// Send ping to test health of connection and server. If
+			// corresponding pong is not received, then receive on the
+			// connection will timeout and the receive goroutine will exit.
+			if err := psc.Ping(""); err != nil {
+				return err
+			}
+		case <-shutdown:
+			break loop
+		case err := <-done:
+			// Return error from the receive goroutine.
+			return err
+		}
+	}
+
+	// Signal the receiving goroutine to exit by unsubscribing from all channels.
+	if err := psc.Unsubscribe(); err != nil {
+		return err
+	}
+
+	// Wait for goroutine to complete.
+	return <-done
 }
 
 // NewScript returns a new script object that can be optionally registered with
