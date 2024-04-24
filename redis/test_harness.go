@@ -70,6 +70,18 @@ func (s *TestService) GetContext(ctx context.Context) (Conn, error) {
 	}, nil
 }
 
+func (s *TestService) GetPubSubConn() PubSubConn {
+	return &DefaultPubSubConn{
+		conn:    redis.PubSubConn{Conn: s.pool.Get()},
+		metrics: s.Metrics,
+		clock:   s.Clock,
+	}
+}
+
+func (s *TestService) ListenPubSubChannels(onStart func() error, onMessage func(string, []byte), shutdown <-chan struct{}, channels ...string) error {
+	return nil
+}
+
 func (s *TestService) NewScript(keyCount int, src string) Script {
 	return &DefaultScript{
 		script: redis.NewScript(keyCount, src),
