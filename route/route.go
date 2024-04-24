@@ -548,7 +548,13 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// if we are, then we want to make an immediate, deterministic trace decision
 	// and either drop or send the trace without even trying to cache or forward it.
 	if r.Collector.Stressed() {
-		// TODO: process span in stress relief mode
+		processed, err := r.Collector.ProcessSpanImmediately(span)
+		if err != nil {
+			return err
+		}
+		if processed {
+			return nil
+		}
 	}
 
 	// we're supposed to handle it normally
