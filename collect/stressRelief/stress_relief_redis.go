@@ -76,7 +76,8 @@ func (s *StressRelief) Start() error {
 		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (incoming)"},
 		{Numerator: "libhoney_upstream_queue_length", Denominator: "UPSTREAM_BUFFER_SIZE", Algorithm: "sqrt", Reason: "UpstreamBufferSize"},
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
-		// TODO: what's the denominator for this one?
+		// TODO: add metrics for stress relief calculation
+
 		// users need to tell us what's their redis memory limit
 		//{Numerator: "redisstore_memory_used_total", }
 	}

@@ -270,9 +270,9 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	return nil
 }
 
-// determine if this trace should be part of the deterministic sample
-// sample through the deterministic sampler
-// write the decision to the decision cache
+// ProcessSpanImmediately determines if this trace should be part of the deterministic sample.
+// If it's part of the deterministic sample, the decision is written to the central store and
+// the span is enqueued for transmission.
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) {
 	if !c.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
 		return false, nil
@@ -286,6 +286,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		Rate:       rate,
 		KeepReason: reason,
 	}
+
 	err := c.Store.RecordTraceDecision(context.Background(), status, keep, reason)
 	if err != nil {
 		return true, err

@@ -1,9 +1,9 @@
 package stressRelief
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
 	"testing"
 	"time"
 
@@ -138,9 +138,9 @@ func TestStressRelief_Peer(t *testing.T) {
 	require.False(t, sr.Stressed())
 
 	// activate stress relief in one refinery
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 1000)
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
 	require.Eventually(t, func() bool {
-		clock.Advance(time.Second * 6)
+		clock.Advance(time.Second * 1)
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 
@@ -161,7 +161,7 @@ func TestStressRelief_Peer(t *testing.T) {
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
 	msg = stressLevelMessage{
-		level: 5,
+		level: 10,
 		id:    "peer",
 	}
 	require.NoError(t, channel.Publish("stress_level", msg.ToBytes()))
@@ -177,9 +177,10 @@ func TestStressRelief_Peer(t *testing.T) {
 // The test generates 10000 traceIDs and checks that the sampling rate is
 // within 10% of the expected value.
 func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
-	traceIDs := make([]string, 0, 100000)
-	for i := 0; i < 100; i++ {
-		traceIDs = append(traceIDs, strconv.Itoa(rand.Intn(1000000)))
+	traceCount := 10000
+	traceIDs := make([]string, 0, traceCount)
+	for i := 0; i < traceCount; i++ {
+		traceIDs = append(traceIDs, fmt.Sprintf("%016x%016x", rand.Int63(), rand.Int63()))
 	}
 
 	sr := &StressRelief{
@@ -205,7 +206,7 @@ func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
 		}
 	}
 
-	difference := float64(sampled)/float64(100)*100 - float64(sr.deterministicFraction())
+	difference := float64(sampled)/float64(traceCount)*100 - float64(sr.deterministicFraction())
 	require.LessOrEqual(t, math.Floor(math.Abs(float64(difference))), float64(10), sampled)
 
 	// make sure that the same traceID always gets the same result
