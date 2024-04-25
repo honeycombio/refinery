@@ -539,6 +539,21 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	return nil
 }
 
+// RecordTraceDecision records the decision made about a trace.
+// Note: Currently, the decision is only recorded in memory.
+func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error {
+	_, span := r.Tracer.Start(ctx, "RecordTraceDecision")
+	defer span.End()
+
+	if keep {
+		r.DecisionCache.Record(trace, keep, reason)
+	} else {
+		r.DecisionCache.Dropped(trace.ID())
+	}
+
+	return nil
+}
+
 func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, traceID string) (state CentralTraceState) {
 	ctx, span := r.Tracer.Start(ctx, "getTraceState")
 	defer span.End()

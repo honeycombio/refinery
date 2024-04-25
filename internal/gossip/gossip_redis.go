@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	"sync"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/logger"
@@ -17,9 +18,10 @@ var _ Gossiper = &GossipRedis{}
 // name.
 type GossipRedis struct {
 	Redis  redis.Client  `inject:"redis"`
-	Logger logger.Logger `inject:"logger"`
+	Logger logger.Logger `inject:""`
 	eg     *errgroup.Group
 
+	lock        sync.RWMutex
 	subscribers map[string][]func(data []byte)
 	done        chan struct{}
 
@@ -43,7 +45,9 @@ func (g *GossipRedis) Start() error {
 			default:
 				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
 					msg := newMessageFromBytes(b)
+					g.lock.RLock()
 					callbacks := g.subscribers[msg.key]
+					g.lock.RUnlock()
 					for _, cb := range callbacks {
 						cb(msg.data)
 					}
@@ -72,7 +76,10 @@ func (g *GossipRedis) Subscribe(channel string, cb func(data []byte)) error {
 	default:
 	}
 
+	g.lock.Lock()
+	defer g.lock.Unlock()
 	g.subscribers[channel] = append(g.subscribers[channel], cb)
+
 	return nil
 
 }
