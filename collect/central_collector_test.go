@@ -15,6 +15,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/health"
@@ -48,8 +49,10 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 					CacheCapacity: 3,
 				},
 			}
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, nil, clockwork.NewFakeClock(), storeType)
+			coll := &CentralCollector{
+				Clock: clockwork.NewFakeClock(),
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.processorCycle.Pause()
@@ -124,9 +127,10 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 			}
 			transmission := &transmit.MockTransmission{}
 
-			collector := &CentralCollector{}
-			clock := clockwork.NewRealClock()
-			stop := startCollector(t, conf, collector, transmission, clock, storeType)
+			collector := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 
 			collector.processorCycle.Pause()
@@ -190,9 +194,10 @@ func TestCentralCollector_Decider(t *testing.T) {
 			}
 			transmission := &transmit.MockTransmission{}
 
-			collector := &CentralCollector{}
-			clock := clockwork.NewRealClock()
-			stop := startCollector(t, conf, collector, transmission, clock, storeType)
+			collector := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 			collector.deciderCycle.Pause()
 
@@ -267,9 +272,10 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				},
 			}
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			collector := &CentralCollector{}
-			stop := startCollector(t, conf, collector, transmission, clock, storeType)
+			collector := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 
 			collector.deciderCycle.Pause()
@@ -363,9 +369,10 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 				},
 			}
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -417,9 +424,10 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -503,9 +511,10 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -605,11 +614,11 @@ func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
 			coll := &CentralCollector{
+				Transmission:   transmission,
 				blockOnCollect: true,
 			}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			span := &types.Span{
@@ -656,9 +665,10 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -757,9 +767,10 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -861,9 +872,10 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -943,9 +955,10 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 				},
 			}
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -990,74 +1003,6 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 		})
 	}
 }
-
-// TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
-// StressReliefMode is active
-//func TestCentralCollector_StressReliefDecorateHostname(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetSendDelayVal:    0,
-//		GetTraceTimeoutVal: 5 * time.Minute,
-//		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-//		SendTickerVal:      2 * time.Millisecond,
-//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-//		StressRelief: config.StressReliefConfig{
-//			Mode:              "monitor",
-//			ActivationLevel:   75,
-//			DeactivationLevel: 25,
-//			SamplingRate:      100,
-//		},
-//		SampleCache: config.SampleCacheConfig{
-//			KeptSize:          100,
-//			DroppedSize:       100,
-//			SizeCheckInterval: config.Duration(1 * time.Second),
-//		},
-//	}
-//
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	coll := newTestCollector(conf, transmission)
-//
-//	coll.hostname = "host123"
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	defer coll.Stop()
-//
-//	var traceID = "traceABC"
-//
-//	span := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data: map[string]interface{}{
-//				"trace.parent_id": "unused",
-//			},
-//			APIKey: legacyAPIKey,
-//		},
-//	}
-//	coll.AddSpanFromPeer(span)
-//	time.Sleep(conf.SendTickerVal * 2)
-//
-//	rootSpan := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data:    map[string]interface{}{},
-//			APIKey:  legacyAPIKey,
-//		},
-//	}
-//	coll.AddSpan(rootSpan)
-//	time.Sleep(conf.SendTickerVal * 2)
-//	transmission.Mux.RLock()
-//	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-//	assert.Equal(t, "host123", transmission.Events[1].Data["meta.refinery.local_hostname"])
-//	transmission.Mux.RUnlock()
-//
-//}
 
 func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 	for _, storeType := range storeTypes {
@@ -1119,9 +1064,10 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 			}
 
 			transmission := &transmit.MockTransmission{}
-			clock := clockwork.NewRealClock()
-			coll := &CentralCollector{}
-			stop := startCollector(t, conf, coll, transmission, clock, storeType)
+			coll := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
 			coll.deciderCycle.Pause()
@@ -1221,9 +1167,10 @@ func TestCentralCollector_Shutdown(t *testing.T) {
 			}
 			transmission := &transmit.MockTransmission{}
 
-			collector := &CentralCollector{}
-			clock := clockwork.NewRealClock()
-			stop := startCollector(t, conf, collector, transmission, clock, storeType)
+			collector := &CentralCollector{
+				Transmission: transmission,
+			}
+			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 
 			collector.processorCycle.Pause()
@@ -1283,14 +1230,97 @@ func TestCentralCollector_Shutdown(t *testing.T) {
 	}
 }
 
+func TestCentralCollector_ProcessSpanImmediately(t *testing.T) {
+	for _, storeType := range storeTypes {
+		t.Run(storeType, func(t *testing.T) {
+			conf := &config.MockConfig{
+				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetCollectionConfigVal: config.CollectionConfig{
+					IncomingQueueSize:          100,
+					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+					DeciderPauseDuration:       config.Duration(1 * time.Second),
+				},
+				StressRelief: config.StressReliefConfig{
+					SamplingRate: 1,
+				},
+			}
+			transmission := &transmit.MockTransmission{}
+			collector := &CentralCollector{
+				Transmission: transmission,
+				StressRelief: &stressRelief.MockStressReliever{
+					SampleDeterministically: false,
+					SampleRate:              1,
+				},
+			}
+			stop := startCollector(t, conf, collector, storeType)
+			defer stop()
+
+			span := &types.Span{
+				TraceID: "trace1",
+				ID:      "span1",
+				Event: types.Event{
+					Dataset: "aoeu",
+					Data:    make(map[string]interface{}),
+				},
+			}
+
+			// if the trace should not be deterministically sampled, it should go through
+			// the normal processing path not the immediate path
+			processed, err := collector.ProcessSpanImmediately(span)
+			require.NoError(t, err)
+			require.False(t, processed)
+			// No new spans should be sent
+			transmission.Mux.Lock()
+			events := transmission.Events
+			require.Len(t, events, 0)
+			transmission.Mux.Unlock()
+
+			// if the trace should be deterministically sampled, it should go through
+			// the immediate processing path.
+			// If the sample decision is drop, the span should not be sent
+			collector.StressRelief.(*stressRelief.MockStressReliever).SampleDeterministically = true
+			processed, err = collector.ProcessSpanImmediately(span)
+			require.NoError(t, err)
+			require.True(t, processed)
+			// No new spans should be sent
+			transmission.Mux.Lock()
+			events = transmission.Events
+			require.Len(t, events, 0)
+			transmission.Mux.Unlock()
+
+			// if the sample decision is kept, the span should be sent
+			collector.StressRelief.(*stressRelief.MockStressReliever).ShouldKeep = true
+			processed, err = collector.ProcessSpanImmediately(span)
+			require.NoError(t, err)
+			require.True(t, processed)
+
+			transmission.Mux.Lock()
+			events = transmission.Events
+			require.Len(t, events, 1)
+			require.NotEmpty(t, events[0].Data)
+			require.True(t, events[0].Data["meta.stressed"].(bool))
+			require.Equal(t, uint(1), events[0].SampleRate)
+			transmission.Mux.Unlock()
+		})
+	}
+}
+
 func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralCollector,
-	transmission transmit.Transmission, clock clockwork.Clock, storeType string) func() {
+	storeType string) func() {
 	if cfg == nil {
 		cfg = &config.MockConfig{}
 	}
 
-	if transmission == nil {
-		transmission = &transmit.MockTransmission{}
+	if collector.Clock == nil {
+		collector.Clock = clockwork.NewRealClock()
+	}
+
+	if collector.Transmission == nil {
+		collector.Transmission = &transmit.MockTransmission{}
+	}
+
+	if collector.StressRelief == nil {
+		collector.StressRelief = &stressRelief.MockStressReliever{}
 	}
 
 	if cfg.StoreOptions.SpanChannelSize == 0 {
@@ -1299,6 +1329,10 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 
 	if cfg.StoreOptions.StateTicker == 0 {
 		cfg.StoreOptions.StateTicker = duration("50ms")
+	}
+
+	if cfg.GetSendTickerValue() == 0 {
+		cfg.SendTickerVal = 50 * time.Millisecond
 	}
 
 	if cfg.StoreOptions.SendDelay == 0 {
@@ -1322,6 +1356,14 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 
 	if cfg.SampleCache.SizeCheckInterval == 0 {
 		cfg.SampleCache.SizeCheckInterval = duration("1s")
+	}
+
+	if cfg.GetCollectionConfigVal.DeciderBatchSize == 0 {
+		cfg.GetCollectionConfigVal.DeciderBatchSize = 10
+	}
+
+	if cfg.GetCollectionConfigVal.ProcessTracesBatchSize == 0 {
+		cfg.GetCollectionConfigVal.ProcessTracesBatchSize = 10
 	}
 
 	if cfg.GetCollectionConfigVal.ShutdownDelay == 0 {
@@ -1357,12 +1399,12 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		{Value: decisionCache},
 		{Value: spanCache},
-		{Value: &StressRelief{}, Name: "stressRelief"},
-		{Value: transmission, Name: "upstreamTransmission"},
+		{Value: collector.Transmission, Name: "upstreamTransmission"},
 		{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 		{Value: samplerFactory},
 		{Value: redis, Name: "redis"},
-		{Value: clock},
+		{Value: collector.Clock},
+		{Value: collector.StressRelief, Name: "stressRelief"},
 		{Value: basicStore},
 		{Value: sw},
 		{Value: collector},

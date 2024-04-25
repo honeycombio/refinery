@@ -257,3 +257,7 @@ func (w *SmartWrapper) RecordMetrics(ctx context.Context) error {
 
 	return w.BasicStore.RecordMetrics(ctx)
 }
+
+func (w *SmartWrapper) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error {
+	return w.BasicStore.RecordTraceDecision(ctx, trace, keep, reason)
+}
