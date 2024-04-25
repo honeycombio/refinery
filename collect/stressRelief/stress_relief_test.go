@@ -88,6 +88,90 @@ func TestStressRelief_Monitor(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 }
 
+// TestStressRelief_Peer tests stress relief activation and deactivation
+// based on the stress level of a peer.
+func TestStressRelief_Peer(t *testing.T) {
+	// Create a new StressRelief object
+	metric := &metrics.MockMetrics{}
+	metric.Start()
+	defer metric.Stop()
+	clock := clockwork.NewFakeClock()
+
+	db := &redis.DefaultClient{
+		Config: &config.MockConfig{
+			GetRedisHostVal: "localhost:6379",
+		},
+		Metrics: metric,
+	}
+	channel := &gossip.GossipRedis{
+		Redis: db,
+	}
+	sr := StressRelief{
+		Gossip:          channel,
+		Clock:           clock,
+		Logger:          &logger.NullLogger{},
+		RefineryMetrics: metric,
+	}
+
+	require.NoError(t, db.Start())
+	defer db.Stop()
+	require.NoError(t, channel.Start())
+	defer channel.Stop()
+
+	require.NoError(t, sr.Start())
+	defer sr.Stop()
+	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
+
+	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
+
+	cfg := config.StressReliefConfig{
+		Mode:                      "monitor",
+		ActivationLevel:           80,
+		DeactivationLevel:         65,
+		SamplingRate:              2,
+		MinimumActivationDuration: config.Duration(5 * time.Second),
+		MinimumStartupDuration:    config.Duration(time.Second),
+	}
+
+	// On startup, the stress relief should not be active
+	sr.UpdateFromConfig(cfg)
+	require.False(t, sr.Stressed())
+
+	// activate stress relief in one refinery
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 1000)
+	require.Eventually(t, func() bool {
+		clock.Advance(time.Second * 6)
+		return sr.Stressed()
+	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
+
+	// pretend another refinery just started up
+	msg := stressLevelMessage{
+		level: 0,
+		id:    "peer",
+	}
+	require.NoError(t, channel.Publish("stress_level", msg.ToBytes()))
+
+	// when a peer just started up, it should not affect the stress level of the
+	// cluster overall stress level
+	require.Eventually(t, func() bool {
+		clock.Advance(time.Second * 1)
+		return sr.Stressed()
+	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
+
+	// now the peer has reported valid stress level
+	// it should be taken into account for the overall stress level
+	msg = stressLevelMessage{
+		level: 5,
+		id:    "peer",
+	}
+	require.NoError(t, channel.Publish("stress_level", msg.ToBytes()))
+
+	require.Eventually(t, func() bool {
+		clock.Advance(time.Second * 1)
+		return !sr.Stressed()
+	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
+}
+
 // TestStressRelief_Sample tests that traces are sampled deterministically
 // by traceID.
 // The test generates 10000 traceIDs and checks that the sampling rate is
@@ -100,7 +184,7 @@ func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
 
 	sr := &StressRelief{
 		overallStressLevel: 90,
-		activateLevel:      80,
+		activateLevel:      60,
 	}
 
 	var sampled int
@@ -124,6 +208,7 @@ func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
 	difference := float64(sampled)/float64(100)*100 - float64(sr.deterministicFraction())
 	require.LessOrEqual(t, math.Floor(math.Abs(float64(difference))), float64(10), sampled)
 
+	// make sure that the same traceID always gets the same result
 	require.True(t, sr.ShouldSampleDeterministically(sampledTraceID))
 	require.False(t, sr.ShouldSampleDeterministically(droppedTraceID))
 }

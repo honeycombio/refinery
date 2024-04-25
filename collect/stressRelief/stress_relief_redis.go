@@ -198,11 +198,12 @@ func (s *StressRelief) Recalc() uint {
 
 	s.Logger.Debug().WithField("stress_level", level).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
 
-	s.overallStressLevel = s.clusterStressLevel(level)
+	clusterStressLevel := s.clusterStressLevel(level)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	s.overallStressLevel = clusterStressLevel
 	s.reason = reason
 	s.formula = formula
 
@@ -326,16 +327,22 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 
 	s.stressLevels[s.identification] = report
 	var total float64
+	var availablePeers int
 	for _, report := range s.stressLevels {
 		// TODO: maybe make the expiration time configurable
 		if s.Clock.Since(report.timestamp) > 5*time.Second {
 			delete(s.stressLevels, report.key)
 			continue
 		}
+		// we don't want to include peers that are just starting up
+		if report.level == 0 {
+			continue
+		}
+		availablePeers++
 		total += float64(report.level * report.level)
 	}
 
-	return uint(math.Sqrt(total / float64(len(s.stressLevels))))
+	return uint(math.Sqrt(total / float64(availablePeers)))
 }
 
 // stressLevelMessage is used to communicate stress levels between refinery instances
