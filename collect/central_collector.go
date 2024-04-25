@@ -111,6 +111,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
 	c.Metrics.Register("trace_send_kept", "counter")
+	c.Metrics.Register("trace_send_kept_sample_rate", "histogram")
 	c.Metrics.Register("trace_duration_ms", "histogram")
 	c.Metrics.Register("trace_span_count", "histogram")
 	c.Metrics.Register("trace_decision_kept", "counter")
