@@ -27,6 +27,7 @@ import (
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -238,6 +239,7 @@ func main() {
 		{Value: clockwork.NewRealClock()},
 		{Value: basicStore},
 		{Value: smartStore},
+		{Value: &health.Health{}},
 		{Value: &a},
 	}
 
