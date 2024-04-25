@@ -214,8 +214,8 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 		}
 		// we have to make sure the health check says we're alive but not accepting data during shutdown
 		c.Health.Ready(receiverHealth, false)
+		c.Health.Ready(deciderHealth, false)
 		c.Health.Ready(processorHealth, true)
-		c.Health.Ready(deciderHealth, true)
 		return nil
 	}); err != nil {
 		// this is expected to happen whenever long traces haven't finished during shutdown;
