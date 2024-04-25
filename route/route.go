@@ -545,10 +545,19 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
-	// if we are, then we want to make an immediate, deterministic trace decision
-	// and either drop or send the trace without even trying to cache or forward it.
+	// if we are, then we hash the trace ID to determine if we should process it immediately
+	// based on the hash and current stress levels.
+	// The decision is only saved in the in-memory cache so that we can make the same decision
+	// for all spans in the same trace.
+	// If it's not a trace we should process immediately, we'll add it to the collector
 	if r.Collector.Stressed() {
-		// TODO: process span in stress relief mode
+		processed, err := r.Collector.ProcessSpanImmediately(span)
+		if err != nil {
+			return err
+		}
+		if processed {
+			return nil
+		}
 	}
 
 	// we're supposed to handle it normally

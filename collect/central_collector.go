@@ -11,6 +11,7 @@ import (
 
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
@@ -29,6 +30,7 @@ type Collector interface {
 	// scheduled for transmission.
 	AddSpan(*types.Span) error
 	Stressed() bool
+	ProcessSpanImmediately(*types.Span) (bool, error)
 }
 
 func GetCollectorImplementation(c config.Config) Collector {
@@ -60,16 +62,16 @@ func (t *traceForDecision) DescendantCount() uint32 {
 var _ Collector = &CentralCollector{}
 
 type CentralCollector struct {
-	Store          centralstore.SmartStorer `inject:""`
-	Config         config.Config            `inject:""`
-	Clock          clockwork.Clock          `inject:""`
-	Transmission   transmit.Transmission    `inject:"upstreamTransmission"`
-	Logger         logger.Logger            `inject:""`
-	Metrics        metrics.Metrics          `inject:"genericMetrics"`
-	StressRelief   StressReliever           `inject:"stressRelief"`
-	SamplerFactory *sample.SamplerFactory   `inject:""`
-	SpanCache      cache.SpanCache          `inject:""`
-	Health         health.Recorder          `inject:""`
+	Store          centralstore.SmartStorer    `inject:""`
+	Config         config.Config               `inject:""`
+	Clock          clockwork.Clock             `inject:""`
+	Transmission   transmit.Transmission       `inject:"upstreamTransmission"`
+	Logger         logger.Logger               `inject:""`
+	Metrics        metrics.Metrics             `inject:"genericMetrics"`
+	StressRelief   stressRelief.StressReliever `inject:"stressRelief"`
+	SamplerFactory *sample.SamplerFactory      `inject:""`
+	Health         health.Recorder             `inject:""`
+	SpanCache      cache.SpanCache             `inject:""`
 
 	// whenever samplersByDestination is accessed, it should be protected by
 	// the mut mutex
@@ -111,6 +113,7 @@ func (c *CentralCollector) Start() error {
 
 	// listen for config reloads
 	c.Config.RegisterReloadCallback(c.sendReloadSignal)
+	c.StressRelief.UpdateFromConfig(c.Config.GetStressReliefConfig())
 
 	c.incoming = make(chan *types.Span, collectorCfg.GetIncomingQueueSize())
 	c.reload = make(chan struct{}, 1)
@@ -265,6 +268,47 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// ProcessSpanImmediately determines if this trace should be part of the deterministic sample.
+// If it's part of the deterministic sample, the decision is written to the central store and
+// the span is enqueued for transmission.
+func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) {
+	if !c.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
+		return false, nil
+	}
+
+	rate, keep, reason := c.StressRelief.GetSampleRate(sp.TraceID)
+
+	status := &centralstore.CentralTraceStatus{
+		TraceID:    sp.TraceID,
+		State:      centralstore.DecisionKeep,
+		Rate:       rate,
+		KeepReason: reason,
+	}
+
+	err := c.Store.RecordTraceDecision(context.Background(), status, keep, reason)
+	if err != nil {
+		return true, err
+	}
+
+	if !keep {
+		c.Metrics.Increment("dropped_from_stress")
+		return true, nil
+	}
+
+	sp.Event.Data["meta.stressed"] = true
+	if c.Config.GetAddRuleReasonToTrace() {
+		sp.Event.Data["meta.refinery.reason"] = reason
+	}
+	if c.hostname != "" {
+		sp.Data["meta.refinery.local_hostname"] = c.hostname
+	}
+	c.addAdditionalAttributes(sp)
+	mergeTraceAndSpanSampleRates(sp, rate)
+	c.Transmission.EnqueueSpan(sp)
+	return true, nil
+
 }
 
 // implement the Collector interface
@@ -716,7 +760,13 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 			sp.Data[k] = v
 		}
 
-		mergeTraceAndSpanSampleRates(sp, status.SampleRate())
+		// if the trace doesn't have a sample rate and is kept, it
+		traceSampleRate := status.SampleRate()
+		if traceSampleRate == 0 {
+			traceSampleRate = uint(c.Config.GetStressReliefConfig().SamplingRate)
+		}
+
+		mergeTraceAndSpanSampleRates(sp, traceSampleRate)
 		c.addAdditionalAttributes(sp)
 		c.Transmission.EnqueueSpan(sp)
 	}

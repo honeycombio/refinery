@@ -31,7 +31,9 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -174,17 +176,18 @@ func newStartedApp(
 		&inject.Object{Value: metricsr, Name: "upstreamMetrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
-		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: &gossip.GossipRedis{}, Name: "gossip"},
+		&inject.Object{Value: &stressRelief.StressRelief{}, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = g.Populate()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = startstop.Start(g.Objects(), nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Racy: wait just a moment for ListenAndServe to start up.
 	time.Sleep(10 * time.Millisecond)

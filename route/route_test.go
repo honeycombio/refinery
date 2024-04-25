@@ -16,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
@@ -499,7 +500,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &collect.CentralCollector{}, Name: "collector"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
-		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
+		&inject.Object{Value: &stressRelief.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
 		&inject.Object{Value: &cache.CuckooSentCache{}},
 		&inject.Object{Value: &health.Health{}},
