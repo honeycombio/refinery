@@ -124,6 +124,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
 	c.Metrics.Register("trace_send_kept", "counter")
+	c.Metrics.Register("trace_send_kept_sample_rate", "histogram")
 	c.Metrics.Register("trace_duration_ms", "histogram")
 	c.Metrics.Register("trace_span_count", "histogram")
 	c.Metrics.Register("trace_decision_kept", "counter")
@@ -250,6 +251,7 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 			err := c.Store.WriteSpan(ctx, cs)
 			if err != nil {
 				c.Logger.Error().Logf("error sending span %s for trace %s during shutdown: %s", sp.ID, id, err)
+
 			}
 			sentCount++
 			// if the context deadline is exceeded, that means we are
@@ -487,8 +489,6 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 			c.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 		}
 		c.Metrics.Increment("trace_decision_kept")
-		// This will observe sample rate decisions only if the trace is kept
-		c.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
 
 		// These meta data should be stored on the central trace status object
 		// so that it's synced across all refinery instances
@@ -513,6 +513,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		var state centralstore.CentralTraceState
 		if shouldSend {
 			state = centralstore.DecisionKeep
+			status.KeepReason = reason
 		} else {
 			state = centralstore.DecisionDrop
 		}
@@ -684,9 +685,12 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 
 		if c.Config.GetAddRuleReasonToTrace() {
 			reason, ok := status.Metadata["meta.refinery.reason"]
+			if !ok {
+				reason = status.KeepReason
+			}
 			sendReason := status.Metadata["meta.refinery.send_reason"]
 			if sp.ArrivalTime.After(status.Timestamp) {
-				if !ok {
+				if reason == "" {
 					reason = "late arriving span"
 				} else {
 					reason = fmt.Sprintf("%s - late arriving span", reason)
@@ -698,7 +702,6 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 				sp.Data["meta.refinery.send_reason"] = sendReason
 			}
 		}
-
 		sp.Data["meta.span_event_count"] = int(status.SpanEventCount())
 		sp.Data["meta.span_link_count"] = int(status.SpanLinkCount())
 		sp.Data["meta.span_count"] = int(status.SpanCount())
