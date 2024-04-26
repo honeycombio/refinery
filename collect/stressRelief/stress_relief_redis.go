@@ -13,6 +13,7 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/gossip"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
@@ -21,11 +22,16 @@ import (
 
 var _ StressReliever = &StressRelief{}
 
+const stressReliefHealthSource = "stress_relief"
+
+var calculationInterval = 100 * time.Millisecond
+
 type StressRelief struct {
 	RefineryMetrics metrics.Metrics `inject:"genericMetrics"`
 	Logger          logger.Logger   `inject:""`
 	Gossip          gossip.Gossiper `inject:"gossip"`
 	Clock           clockwork.Clock `inject:""`
+	Health          health.Recorder `inject:""`
 	done            chan struct{}
 
 	mode               StressReliefMode
@@ -99,13 +105,15 @@ func (s *StressRelief) Start() error {
 
 	s.eg = &errgroup.Group{}
 
+	s.Health.Register(stressReliefHealthSource, 2*calculationInterval)
+
 	if err := s.Gossip.Subscribe("stress_level", s.onStressLevelMessage); err != nil {
 		return err
 	}
 
 	// start our monitor goroutine that periodically calls recalc
 	s.eg.Go(func() error {
-		tick := time.NewTicker(100 * time.Millisecond)
+		tick := time.NewTicker(calculationInterval)
 		defer tick.Stop()
 		for {
 			select {
@@ -119,6 +127,8 @@ func (s *StressRelief) Start() error {
 				err := s.Gossip.Publish("stress_level", msg.ToBytes())
 				if err != nil {
 					s.Logger.Error().Logf("error publishing stress level: %s", err)
+				} else {
+					s.Health.Ready(stressReliefHealthSource, true)
 				}
 			case <-s.done:
 				s.Logger.Debug().Logf("Stopping StressRelief system")
@@ -132,6 +142,7 @@ func (s *StressRelief) Start() error {
 }
 
 func (s *StressRelief) Stop() error {
+	s.Health.Ready(stressReliefHealthSource, false)
 	close(s.done)
 	return s.eg.Wait()
 }
