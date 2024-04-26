@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -31,7 +30,6 @@ import (
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
-	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -123,10 +121,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), cfg.GetPeerTimeout())
-	defer cancel()
 	done := make(chan struct{})
-	peers, err := peer.NewPeers(ctx, cfg, done)
 
 	if err != nil {
 		fmt.Printf("unable to load peers: %+v\n", err)
@@ -224,7 +219,6 @@ func main() {
 	}
 	objects := []*inject.Object{
 		{Value: cfg},
-		{Value: peers},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
 		{Value: upstreamTransmission, Name: "upstreamTransmission"},
