@@ -9,6 +9,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/gossip"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -19,35 +20,12 @@ import (
 // TestStressRelief_Monitor tests that the Stressed method returns the correct value
 // for a given metrics data.
 func TestStressRelief_Monitor(t *testing.T) {
-	// Create a new StressRelief object
-	metric := &metrics.MockMetrics{}
-	metric.Start()
-	defer metric.Stop()
 	clock := clockwork.NewFakeClock()
-
-	db := &redis.DefaultClient{
-		Config: &config.MockConfig{
-			GetRedisHostVal: "localhost:6379",
-		},
-		Metrics: metric,
-	}
-	channel := &gossip.GossipRedis{
-		Redis: db,
-	}
-	sr := StressRelief{
-		Gossip:          channel,
-		Clock:           clock,
-		Logger:          &logger.NullLogger{},
-		RefineryMetrics: metric,
-	}
-
-	require.NoError(t, db.Start())
-	defer db.Stop()
-	require.NoError(t, channel.Start())
-	defer channel.Stop()
-
+	sr, stop := newStressRelief(t, clock)
+	defer stop()
 	require.NoError(t, sr.Start())
 	defer sr.Stop()
+
 	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
@@ -91,35 +69,12 @@ func TestStressRelief_Monitor(t *testing.T) {
 // TestStressRelief_Peer tests stress relief activation and deactivation
 // based on the stress level of a peer.
 func TestStressRelief_Peer(t *testing.T) {
-	// Create a new StressRelief object
-	metric := &metrics.MockMetrics{}
-	metric.Start()
-	defer metric.Stop()
 	clock := clockwork.NewFakeClock()
-
-	db := &redis.DefaultClient{
-		Config: &config.MockConfig{
-			GetRedisHostVal: "localhost:6379",
-		},
-		Metrics: metric,
-	}
-	channel := &gossip.GossipRedis{
-		Redis: db,
-	}
-	sr := StressRelief{
-		Gossip:          channel,
-		Clock:           clock,
-		Logger:          &logger.NullLogger{},
-		RefineryMetrics: metric,
-	}
-
-	require.NoError(t, db.Start())
-	defer db.Stop()
-	require.NoError(t, channel.Start())
-	defer channel.Stop()
-
+	sr, stop := newStressRelief(t, clock)
+	defer stop()
 	require.NoError(t, sr.Start())
 	defer sr.Stop()
+
 	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
@@ -149,7 +104,7 @@ func TestStressRelief_Peer(t *testing.T) {
 		level: 0,
 		id:    "peer",
 	}
-	require.NoError(t, channel.Publish("stress_level", msg.ToBytes()))
+	require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
 
 	// when a peer just started up, it should not affect the stress level of the
 	// cluster overall stress level
@@ -164,7 +119,7 @@ func TestStressRelief_Peer(t *testing.T) {
 		level: 10,
 		id:    "peer",
 	}
-	require.NoError(t, channel.Publish("stress_level", msg.ToBytes()))
+	require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
 
 	require.Eventually(t, func() bool {
 		clock.Advance(time.Second * 1)
@@ -212,4 +167,45 @@ func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
 	// make sure that the same traceID always gets the same result
 	require.True(t, sr.ShouldSampleDeterministically(sampledTraceID))
 	require.False(t, sr.ShouldSampleDeterministically(droppedTraceID))
+}
+
+func newStressRelief(t *testing.T, clock clockwork.Clock) (*StressRelief, func()) {
+	// Create a new StressRelief object
+	metric := &metrics.MockMetrics{}
+	metric.Start()
+
+	if clock == nil {
+		clock = clockwork.NewRealClock()
+	}
+
+	db := &redis.DefaultClient{
+		Config: &config.MockConfig{
+			GetRedisHostVal: "localhost:6379",
+		},
+		Metrics: metric,
+	}
+	channel := &gossip.GossipRedis{
+		Redis: db,
+	}
+	healthCheck := &health.Health{
+		Clock: clock,
+	}
+	require.NoError(t, healthCheck.Start())
+	sr := &StressRelief{
+		Gossip:          channel,
+		Clock:           clock,
+		Logger:          &logger.NullLogger{},
+		RefineryMetrics: metric,
+		Health:          healthCheck,
+	}
+
+	require.NoError(t, db.Start())
+	require.NoError(t, channel.Start())
+
+	return sr, func() {
+		require.NoError(t, channel.Stop())
+		require.NoError(t, db.Stop())
+		require.NoError(t, healthCheck.Stop())
+		require.NoError(t, metric.Stop())
+	}
 }
