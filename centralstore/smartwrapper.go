@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
@@ -87,6 +88,13 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 		return fmt.Errorf("span channel closed")
 	}
 
+	ctx, spanWrite := otelutil.StartSpanWith(ctx, w.Tracer, "SmartWrapper.WriteSpan", map[string]interface{}{
+		"trace_id":         span.TraceID,
+		"span_chan_length": len(w.spanChan),
+		"span_chan_cap":    cap(w.spanChan),
+	})
+	defer spanWrite.End()
+
 	// otherwise, put the span in the channel but don't block
 	select {
 	case <-ctx.Done():
@@ -95,7 +103,9 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 		return fmt.Errorf("span channel closed")
 	case w.spanChan <- span:
 	default:
-		return fmt.Errorf("span queue full")
+		err := fmt.Errorf("span queue full")
+		spanWrite.RecordError(err)
+		return err
 	}
 	return nil
 }
@@ -118,8 +128,15 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	if w.BasicStore == nil {
 		return fmt.Errorf("basic store is nil")
 	}
+	ctx, span := otelutil.StartSpanWith(ctx, w.Tracer, "SmartWrapper.manageTimeouts", map[string]interface{}{
+		"from_state": fromState,
+		"to_state":   toState,
+	})
+	defer span.End()
+
 	st, err := w.BasicStore.GetTracesForState(ctx, fromState)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 	if len(st) == 0 || st == nil {
@@ -127,6 +144,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	}
 	statuses, err := w.BasicStore.GetStatusForTraces(ctx, st)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 	traceIDsToChange := make([]string, 0)
@@ -135,11 +153,16 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 			traceIDsToChange = append(traceIDsToChange, status.TraceID)
 		}
 	}
+	otelutil.AddSpanField(span, "num_trace_ids", len(traceIDsToChange))
 	if len(traceIDsToChange) > 0 {
 		w.Logger.Debug().Logf("changing %d traces from %s to %s", len(traceIDsToChange), fromState, toState)
 		err = w.BasicStore.ChangeTraceStatus(ctx, traceIDsToChange, fromState, toState)
+		if err != nil {
+			span.RecordError(err)
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 // manageStates is a goroutine that manages the time-based transitions between
@@ -154,22 +177,27 @@ func (w *SmartWrapper) manageStates(ctx context.Context, options config.SmartWra
 			return
 		case <-ticker.Chan():
 			// the order of these is important!
+			ctx, span := otelutil.StartSpan(ctx, w.Tracer, "SmartWrapper.manageStates")
 
 			// see if AwaitDecision traces have been waiting too long
 			if err := w.manageTimeouts(ctx, time.Duration(options.DecisionTimeout), AwaitingDecision, ReadyToDecide); err != nil {
+				span.RecordError(err)
 				w.Logger.Error().Logf("error managing timeouts for moving traces from awaiting decision to ready to decide: %s", err)
 			}
 
 			// traces that are past SendDelay should be moved to ready for decision
 			// the only errors can be syntax errors, so won't happen at runtime
 			if err := w.manageTimeouts(ctx, time.Duration(options.SendDelay), DecisionDelay, ReadyToDecide); err != nil {
+				span.RecordError(err)
 				w.Logger.Error().Logf("error managing timeouts for moving traces from decision delay to ready to decide: %s", err)
 			}
 
 			// trace that are past TraceTimeout should be moved to waiting to decide
 			if err := w.manageTimeouts(ctx, time.Duration(options.TraceTimeout), Collecting, DecisionDelay); err != nil {
+				span.RecordError(err)
 				w.Logger.Error().Logf("error managing timeouts for moving traces from collecting to decision delay: %s", err)
 			}
+			span.End()
 		}
 	}
 }
@@ -231,6 +259,12 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 			// ignore all other states
 		}
 	}
+	ctx, span := otelutil.StartSpanWith(ctx, w.Tracer, "SmartWrapper.SetTraceStatuses", map[string]interface{}{
+		"num_statuses": len(statuses),
+		"num_keeps":    len(keeps),
+		"num_drops":    len(drops),
+	})
+	defer span.End()
 
 	var err error
 	if len(keeps) > 0 {
@@ -245,6 +279,9 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 				err = err2
 			}
 		}
+	}
+	if err != nil {
+		span.RecordError(err)
 	}
 	return err
 }

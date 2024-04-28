@@ -1,10 +1,10 @@
 package otelutil
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/honeycombio/otel-config-go/otelconfig"
 	"github.com/honeycombio/refinery/config"
@@ -27,30 +27,51 @@ func AddException(span trace.Span, err error) {
 
 // addSpanField adds a field to a span, using the appropriate method for the type of the value.
 func AddSpanField(span trace.Span, key string, value interface{}) {
-	k := attribute.Key(key)
-	switch v := value.(type) {
-	case string:
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.StringValue(v)})
-	case int:
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.IntValue(v)})
-	case bool:
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.BoolValue(v)})
-	case int64:
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.Int64Value(v)})
-	case float64:
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.Float64Value(v)})
-	case time.Duration:
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.Int64Value(int64(v))})
-	default:
-		// fallback if we don't have anything better, render it to a string
-		span.SetAttributes(attribute.KeyValue{Key: k, Value: attribute.StringValue(fmt.Sprintf("%v", value))})
-	}
+	span.SetAttributes(Attributes(map[string]interface{}{key: value})...)
 }
 
+// AddSpanFields adds multiple fields to a span, using the appropriate method for the type of each value.
 func AddSpanFields(span trace.Span, fields map[string]interface{}) {
+	span.SetAttributes(Attributes(fields)...)
+}
+
+// Attributes converts a map of fields to a slice of attribute.KeyValue, setting types appropriately.
+func Attributes(fields map[string]interface{}) []attribute.KeyValue {
+	attrs := make([]attribute.KeyValue, 0, len(fields))
 	for k, v := range fields {
-		AddSpanField(span, k, v)
+		kv := attribute.KeyValue{Key: attribute.Key(k)}
+		switch val := v.(type) {
+		case string:
+			kv.Value = attribute.StringValue(val)
+		case int:
+			kv.Value = attribute.IntValue(val)
+		case int64:
+			kv.Value = attribute.Int64Value(val)
+		case float64:
+			kv.Value = attribute.Float64Value(val)
+		case bool:
+			kv.Value = attribute.BoolValue(val)
+		default:
+			kv.Value = attribute.StringValue(fmt.Sprintf("%v", val))
+		}
+		attrs = append(attrs, kv)
 	}
+	return attrs
+}
+
+// Starts a span with no extra fields.
+func StartSpan(ctx context.Context, tracer trace.Tracer, name string) (context.Context, trace.Span) {
+	return tracer.Start(ctx, name)
+}
+
+// Starts a span with a single field.
+func StartSpan1(ctx context.Context, tracer trace.Tracer, name string, field string, value interface{}) (context.Context, trace.Span) {
+	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(map[string]interface{}{field: value})...))
+}
+
+// Starts a span with multiple fields.
+func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, fields map[string]interface{}) (context.Context, trace.Span) {
+	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(fields)...))
 }
 
 func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string) (tracer trace.Tracer, shutdown func()) {
