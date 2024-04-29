@@ -65,12 +65,12 @@ func StartSpan(ctx context.Context, tracer trace.Tracer, name string) (context.C
 }
 
 // Starts a span with a single field.
-func StartSpan1(ctx context.Context, tracer trace.Tracer, name string, field string, value interface{}) (context.Context, trace.Span) {
+func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, field string, value interface{}) (context.Context, trace.Span) {
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(map[string]interface{}{field: value})...))
 }
 
 // Starts a span with multiple fields.
-func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, fields map[string]interface{}) (context.Context, trace.Span) {
+func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, fields map[string]interface{}) (context.Context, trace.Span) {
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(fields)...))
 }
 

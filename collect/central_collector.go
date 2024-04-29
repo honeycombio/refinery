@@ -202,7 +202,7 @@ func (c *CentralCollector) Stop() error {
 // other half is used for uploading the remaining traces.
 // If the shutdown process exceeds the shutdown delay, it will return an error.
 func (c *CentralCollector) shutdown(ctx context.Context) error {
-	ctx, span := otelutil.StartSpan1(ctx, c.Tracer, "CentralCollector.shutdown", "span_cache_len", c.SpanCache.Len())
+	ctx, span := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.shutdown", "span_cache_len", c.SpanCache.Len())
 	defer span.End()
 	// keep processing, hoping to send the remaining traces
 	interval := 1 * time.Second
@@ -237,7 +237,7 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	}
 	defer close(done)
 
-	ctxForward, spanForward := otelutil.StartSpan1(ctx, c.Tracer, "CentralCollector.shutdown.forward", "span_cache_len", c.SpanCache.Len())
+	ctxForward, spanForward := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.shutdown.forward", "span_cache_len", c.SpanCache.Len())
 	defer spanForward.End()
 
 	// send the remaining traces to the central store
@@ -285,7 +285,7 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 // If it's part of the deterministic sample, the decision is written to the central store and
 // the span is enqueued for transmission.
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) {
-	ctx, span := otelutil.StartSpan1(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
+	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
 
 	if !c.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
 		otelutil.AddSpanField(span, "nondeterministic", 1)
@@ -505,7 +505,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		return err
 	}
 
-	ctxTraces, spanTraces := otelutil.StartSpan1(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
+	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
 	defer spanTraces.End()
 	for _, trace := range traces {
 		if trace == nil {

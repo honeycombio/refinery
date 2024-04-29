@@ -677,7 +677,7 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralT
 }
 
 func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, cspan *CentralSpan) error {
-	_, spanStatus := otelutil.StartSpanWith(ctx, t.tracer, "addStatus", map[string]interface{}{
+	_, spanStatus := otelutil.StartSpanMulti(ctx, t.tracer, "addStatus", map[string]interface{}{
 		"trace_id": cspan.TraceID,
 		"isScript": true,
 	})
@@ -703,7 +703,7 @@ func (t *tracesStore) addStatus(ctx context.Context, conn redis.Conn, cspan *Cen
 // it updates the trace statuses in batch. If one of the updates fails, it ignores the error
 // and continues to update the rest of the traces.
 func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*CentralTraceStatus) error {
-	_, keepspan := otelutil.StartSpanWith(ctx, t.tracer, "keepTrace", map[string]interface{}{
+	_, keepspan := otelutil.StartSpanMulti(ctx, t.tracer, "keepTrace", map[string]interface{}{
 		"num_statuses": len(status),
 		"isScript":     true,
 	})
@@ -746,7 +746,7 @@ func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*
 }
 
 func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, traceIDs []string) (map[string]*CentralTraceStatus, error) {
-	ctx2, statusSpan := otelutil.StartSpan1(ctx, t.tracer, "getTraceStatuses", "num_ids", len(traceIDs))
+	ctx2, statusSpan := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatuses", "num_ids", len(traceIDs))
 	defer statusSpan.End()
 
 	if len(traceIDs) == 0 {
@@ -755,7 +755,7 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, tra
 
 	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, traceID := range traceIDs {
-		_, loopspan := otelutil.StartSpan1(ctx2, t.tracer, "getTraceStatusLoop", "traceID", traceID)
+		_, loopspan := otelutil.StartSpanWith(ctx2, t.tracer, "getTraceStatusLoop", "traceID", traceID)
 		status := &centralTraceStatusRedis{}
 		err := conn.GetStructHash(t.traceStatusKey(traceID), status)
 		if err != nil {
@@ -790,7 +790,7 @@ func (t *tracesStore) count(ctx context.Context, conn redis.Conn) (int64, error)
 
 // storeSpan stores the span in the spans hash and increments the span count for the trace.
 func (t *tracesStore) storeSpan(ctx context.Context, conn redis.Conn, span *CentralSpan) error {
-	_, spanStore := otelutil.StartSpanWith(ctx, t.tracer, "storeSpan", map[string]interface{}{
+	_, spanStore := otelutil.StartSpanMulti(ctx, t.tracer, "storeSpan", map[string]interface{}{
 		"trace_id":  span.TraceID,
 		"span_type": span.Type,
 		"isScript":  true,
@@ -819,7 +819,7 @@ func (t *tracesStore) storeSpan(ctx context.Context, conn redis.Conn, span *Cent
 }
 
 func (t *tracesStore) incrementSpanCounts(ctx context.Context, conn redis.Conn, traceID string, spanType types.SpanType) error {
-	_, spanInc := otelutil.StartSpanWith(ctx, t.tracer, "incrementSpanCounts", map[string]interface{}{
+	_, spanInc := otelutil.StartSpanMulti(ctx, t.tracer, "incrementSpanCounts", map[string]interface{}{
 		"trace_id":  traceID,
 		"span_type": spanType,
 		"isScript":  true,
@@ -938,7 +938,7 @@ func (t *traceStateProcessor) Stop() {
 // a list. The list is used to keep track of the time the trace was added to
 // the state. The set is used to check if the trace is in the state.
 func (t *traceStateProcessor) addNewTrace(ctx context.Context, conn redis.Conn, traceID string) error {
-	ctx, span := otelutil.StartSpan1(ctx, t.tracer, "addNewTrace", "trace_id", traceID)
+	ctx, span := otelutil.StartSpanWith(ctx, t.tracer, "addNewTrace", "trace_id", traceID)
 	defer span.End()
 
 	_, err := t.applyStateChange(ctx, conn, newTraceStateChangeEvent(Unknown, Collecting), []string{traceID})
@@ -1003,7 +1003,7 @@ func (t *traceStateProcessor) traceIDsByState(ctx context.Context, conn redis.Co
 }
 
 func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs []string) (map[string]time.Time, error) {
-	_, span := otelutil.StartSpanWith(ctx, t.tracer, "traceIDsWithTimestamp", map[string]interface{}{
+	_, span := otelutil.StartSpanMulti(ctx, t.tracer, "traceIDsWithTimestamp", map[string]interface{}{
 		"state":   state,
 		"cmd":     "ZMSCORE",
 		"num_ids": len(traceIDs),
@@ -1029,7 +1029,7 @@ func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn re
 }
 
 func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state CentralTraceState, traceID string) bool {
-	_, span := otelutil.StartSpanWith(ctx, t.tracer, "exists", map[string]interface{}{
+	_, span := otelutil.StartSpanMulti(ctx, t.tracer, "exists", map[string]interface{}{
 		"trace_id": traceID,
 		"state":    state,
 		"exists":   false,
@@ -1048,7 +1048,7 @@ func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state
 }
 
 func (t *traceStateProcessor) remove(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs ...string) error {
-	_, span := otelutil.StartSpanWith(ctx, t.tracer, "remove", map[string]interface{}{
+	_, span := otelutil.StartSpanMulti(ctx, t.tracer, "remove", map[string]interface{}{
 		"state":      state,
 		"cmd":        "ZREMOVE",
 		"num_traces": len(traceIDs),
@@ -1062,7 +1062,7 @@ func (t *traceStateProcessor) remove(ctx context.Context, conn redis.Conn, state
 }
 
 func (t *traceStateProcessor) toNextState(ctx context.Context, conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) ([]string, error) {
-	ctx, span := otelutil.StartSpanWith(ctx, t.tracer, "toNextState", map[string]interface{}{
+	ctx, span := otelutil.StartSpanMulti(ctx, t.tracer, "toNextState", map[string]interface{}{
 		"num_traces": len(traceIDs),
 		"from_state": changeEvent.current,
 		"to_state":   changeEvent.next,
@@ -1092,7 +1092,7 @@ func (t *traceStateProcessor) cleanupExpiredTraces(redis redis.Client) {
 }
 
 func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client redis.Client) {
-	ctx, span := otelutil.StartSpanWith(ctx, t.tracer, "removeExpiredTraces", map[string]interface{}{
+	ctx, span := otelutil.StartSpanMulti(ctx, t.tracer, "removeExpiredTraces", map[string]interface{}{
 		"num_states": len(t.states),
 		"cmd":        "ZRANGEBYSCORE",
 	})

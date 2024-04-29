@@ -88,7 +88,7 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 		return fmt.Errorf("span channel closed")
 	}
 
-	ctx, spanWrite := otelutil.StartSpanWith(ctx, w.Tracer, "SmartWrapper.WriteSpan", map[string]interface{}{
+	ctx, spanWrite := otelutil.StartSpanMulti(ctx, w.Tracer, "SmartWrapper.WriteSpan", map[string]interface{}{
 		"trace_id":         span.TraceID,
 		"span_chan_length": len(w.spanChan),
 		"span_chan_cap":    cap(w.spanChan),
@@ -128,7 +128,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	if w.BasicStore == nil {
 		return fmt.Errorf("basic store is nil")
 	}
-	ctx, span := otelutil.StartSpanWith(ctx, w.Tracer, "SmartWrapper.manageTimeouts", map[string]interface{}{
+	ctx, span := otelutil.StartSpanMulti(ctx, w.Tracer, "SmartWrapper.manageTimeouts", map[string]interface{}{
 		"from_state": fromState,
 		"to_state":   toState,
 	})
@@ -259,7 +259,7 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 			// ignore all other states
 		}
 	}
-	ctx, span := otelutil.StartSpanWith(ctx, w.Tracer, "SmartWrapper.SetTraceStatuses", map[string]interface{}{
+	ctx, span := otelutil.StartSpanMulti(ctx, w.Tracer, "SmartWrapper.SetTraceStatuses", map[string]interface{}{
 		"num_statuses": len(statuses),
 		"num_keeps":    len(keeps),
 		"num_drops":    len(drops),
