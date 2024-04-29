@@ -899,6 +899,30 @@ func NewSetHashCommand(key string, value interface{}) command {
 	}
 }
 
+func NewMultiSetHashCommand(key string, value any) command {
+	args := redis.Args{key}.AddFlat(value)
+	return command{
+		name: "HMSET",
+		args: args,
+	}
+}
+
+func NewExpireCommand(key string, value any) command {
+	args := redis.Args{key}.AddFlat(value)
+	return command{
+		name: "EXPIRE",
+		args: args,
+	}
+}
+
+func NewINCRCommand(key string) command {
+	args := redis.Args{key}
+	return command{
+		name: "INCR",
+		args: args,
+	}
+}
+
 func NewIncrByHashCommand(key, field string, incrVal int64) command {
 	return command{
 		name: "HINCRBY",
