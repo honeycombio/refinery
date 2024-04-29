@@ -123,11 +123,6 @@ func main() {
 
 	done := make(chan struct{})
 
-	if err != nil {
-		fmt.Printf("unable to load peers: %+v\n", err)
-		os.Exit(1)
-	}
-
 	// upstreamTransport is the http transport used to send things on to Honeycomb
 	upstreamTransport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,

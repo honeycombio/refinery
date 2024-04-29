@@ -116,7 +116,7 @@ func TestStressRelief_Peer(t *testing.T) {
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
 	msg = stressLevelMessage{
-		level: 10,
+		level: 5,
 		id:    "peer",
 	}
 	require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
