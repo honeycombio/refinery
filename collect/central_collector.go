@@ -14,6 +14,7 @@ import (
 	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
@@ -21,6 +22,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -68,6 +70,7 @@ type CentralCollector struct {
 	Transmission   transmit.Transmission       `inject:"upstreamTransmission"`
 	Logger         logger.Logger               `inject:""`
 	Metrics        metrics.Metrics             `inject:"genericMetrics"`
+	Tracer         trace.Tracer                `inject:"tracer"`
 	StressRelief   stressRelief.StressReliever `inject:"stressRelief"`
 	SamplerFactory *sample.SamplerFactory      `inject:""`
 	Health         health.Recorder             `inject:""`
@@ -199,7 +202,9 @@ func (c *CentralCollector) Stop() error {
 // other half is used for uploading the remaining traces.
 // If the shutdown process exceeds the shutdown delay, it will return an error.
 func (c *CentralCollector) shutdown(ctx context.Context) error {
-	// try to send the remaining traces to the cache
+	ctx, span := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.shutdown", "span_cache_len", c.SpanCache.Len())
+	defer span.End()
+	// keep processing, hoping to send the remaining traces
 	interval := 1 * time.Second
 	done := make(chan struct{})
 	processCycle := NewCycle(c.Clock, interval, done)
@@ -232,10 +237,14 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	}
 	defer close(done)
 
+	ctxForward, spanForward := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.shutdown.forward", "span_cache_len", c.SpanCache.Len())
+	defer spanForward.End()
+
 	// send the remaining traces to the central store
 	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
 	var sentCount int
-	defer c.Logger.Info().Logf("sending %d traces to central store during shutdown", sentCount)
+	defer otelutil.AddSpanField(spanForward, "sent_count", sentCount)
+	defer c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
 
 	for _, id := range ids {
 		trace := c.SpanCache.Get(id)
@@ -251,8 +260,9 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 			}
 
 			cs.SetSamplerSelector(trace.GetSamplerSelector(c.Config.GetDatasetPrefix()))
-			err := c.Store.WriteSpan(ctx, cs)
+			err := c.Store.WriteSpan(ctxForward, cs)
 			if err != nil {
+				spanForward.RecordError(err)
 				c.Logger.Error().Logf("error sending span %s for trace %s during shutdown: %s", sp.ID, id, err)
 
 			}
@@ -262,6 +272,7 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 			// sending traces to the central store. Unfortunately, the
 			// remaining traces will be lost.
 			if errors.Is(err, context.DeadlineExceeded) {
+				spanForward.RecordError(err)
 				return err
 			}
 		}
@@ -274,11 +285,19 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 // If it's part of the deterministic sample, the decision is written to the central store and
 // the span is enqueued for transmission.
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) {
+	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
+
 	if !c.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
+		otelutil.AddSpanField(span, "nondeterministic", 1)
 		return false, nil
 	}
 
 	rate, keep, reason := c.StressRelief.GetSampleRate(sp.TraceID)
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"rate":   rate,
+		"keep":   keep,
+		"reason": reason,
+	})
 
 	status := &centralstore.CentralTraceStatus{
 		TraceID:    sp.TraceID,
@@ -287,8 +306,9 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		KeepReason: reason,
 	}
 
-	err := c.Store.RecordTraceDecision(context.Background(), status, keep, reason)
+	err := c.Store.RecordTraceDecision(ctx, status, keep, reason)
 	if err != nil {
+		span.RecordError(err)
 		return true, err
 	}
 
@@ -380,7 +400,10 @@ func (c *CentralCollector) process() error {
 }
 
 func (c *CentralCollector) processTraces(ctx context.Context) error {
+	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.processTraces")
+	defer span.End()
 	ids := c.SpanCache.GetTraceIDs(c.Config.GetCollectionConfig().GetProcessTracesBatchSize())
+	otelutil.AddSpanField(span, "num_ids", len(ids))
 
 	c.Metrics.Histogram("collector_processor_batch_count", len(ids))
 	if len(ids) == 0 {
@@ -424,6 +447,8 @@ func (c *CentralCollector) decide() error {
 }
 
 func (c *CentralCollector) makeDecision(ctx context.Context) error {
+	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.makeDecision")
+	defer span.End()
 	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, c.Config.GetCollectionConfig().GetDeciderBatchSize())
 	if err != nil {
 		return err
@@ -436,6 +461,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	}
 	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs)
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
@@ -448,6 +474,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		concurrency = 10
 	}
 	eg.SetLimit(concurrency)
+	otelutil.AddSpanField(span, "concurrency", concurrency)
 
 	for idx, status := range statuses {
 		// make a decision on each trace
@@ -459,6 +486,8 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		stateMap[status.TraceID] = status
 
 		eg.Go(func() error {
+			ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.makeDecision.getTrace")
+			defer span.End()
 			trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
 			if err != nil {
 				return err
@@ -476,10 +505,13 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		return err
 	}
 
+	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
+	defer spanTraces.End()
 	for _, trace := range traces {
 		if trace == nil {
 			continue
 		}
+		_, span := otelutil.StartSpan(ctxTraces, c.Tracer, "CentralCollector.makeDecision.trace")
 
 		if trace.Root != nil {
 			c.Metrics.Increment("trace_decision_has_root")
@@ -564,6 +596,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		status.State = state
 		status.Rate = rate
 		stateMap[status.TraceID] = status
+		span.End()
 	}
 
 	updatedStatuses := make([]*centralstore.CentralTraceStatus, 0, len(stateMap))
