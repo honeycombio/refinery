@@ -149,8 +149,12 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	}
 	traceIDsToChange := make([]string, 0)
 	for _, status := range statuses {
-		if w.Clock.Since(status.Timestamp) > timeout {
-			traceIDsToChange = append(traceIDsToChange, status.TraceID)
+		if !status.Timestamp.IsZero() && w.Clock.Since(status.Timestamp) > timeout {
+			if status.TraceID != "" {
+				w.Logger.Warn().Logf("Attempted to change state from %s to %s of empty trace id", fromState, toState)
+			} else {
+				traceIDsToChange = append(traceIDsToChange, status.TraceID)
+			}
 		}
 	}
 	otelutil.AddSpanField(span, "num_trace_ids", len(traceIDsToChange))

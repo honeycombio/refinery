@@ -179,6 +179,10 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 	_, writeSpan := r.Tracer.Start(ctx, "WriteSpan")
 	defer writeSpan.End()
 
+	if span.TraceID == "" {
+		return fmt.Errorf("span %q had no trace id", span.SpanID)
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
