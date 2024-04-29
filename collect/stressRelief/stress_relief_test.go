@@ -99,29 +99,28 @@ func TestStressRelief_Peer(t *testing.T) {
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 
-	// pretend another refinery just started up
-	msg := stressLevelMessage{
-		level: 0,
-		id:    "peer",
-	}
-	require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
-
 	// when a peer just started up, it should not affect the stress level of the
 	// cluster overall stress level
 	require.Eventually(t, func() bool {
+		// pretend another refinery just started up
+		msg := stressLevelMessage{
+			level: 0,
+			id:    "peer",
+		}
+		require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
-	msg = stressLevelMessage{
-		level: 10,
-		id:    "peer",
-	}
-	require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
-
 	require.Eventually(t, func() bool {
+		msg := stressLevelMessage{
+			level: 5,
+			id:    "peer",
+		}
+		require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
+
 		clock.Advance(time.Second * 1)
 		return !sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
