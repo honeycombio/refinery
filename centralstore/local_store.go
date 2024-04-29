@@ -8,9 +8,11 @@ import (
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // LocalStore is a basic store that is local to the Refinery process. This is
@@ -19,6 +21,7 @@ type LocalStore struct {
 	Config        config.Config        `inject:""`
 	DecisionCache cache.TraceSentCache `inject:""`
 	Metrics       metrics.Metrics      `inject:"genericMetrics"`
+	Tracer        trace.Tracer         `inject:"tracer"`
 	Clock         clockwork.Clock      `inject:""`
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
@@ -121,17 +124,22 @@ func (lrs *LocalStore) changeTraceState(traceID string, fromState, toState Centr
 // during shutdown. WriteSpan is expecting to be called from an asynchronous
 // process and will only return an error if the span could not be written.
 func (lrs *LocalStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
+	_, spanWrite := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.WriteSpan")
+	defer spanWrite.End()
+
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 
 	// first let's check if we've already processed and dropped this trace; if so, we're done and
 	// can just ignore the span.
 	if lrs.DecisionCache.Dropped(span.TraceID) {
+		otelutil.AddSpanField(spanWrite, "dropped", true)
 		return nil
 	}
 
 	// we have to find the state and decide what to do based on that
 	state, _ := lrs.findTraceStatus(span.TraceID)
+	otelutil.AddSpanField(spanWrite, "state", state)
 
 	// TODO: Integrate the trace decision cache
 	switch state {
@@ -191,11 +199,15 @@ func (lrs *LocalStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
 // populated. Normally this call will be made after Refinery has been asked
 // to make a trace decision.
 func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTrace")
+	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	if trace, ok := lrs.traces[traceID]; ok {
+		otelutil.AddSpanField(span, "found", true)
 		return trace, nil
 	}
+	otelutil.AddSpanField(span, "found", false)
 	return nil, fmt.Errorf("trace %s not found", traceID)
 }
 
@@ -210,6 +222,8 @@ func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTr
 // after this call (although kept spans will have counts updated when late
 // spans arrive).
 func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetStatusForTraces")
+	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
@@ -225,6 +239,8 @@ func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
 func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTracesForState")
+	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	switch state {
@@ -247,6 +263,8 @@ func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTrace
 // ReadyForDecision state. These IDs are moved to the AwaitingDecision state
 // atomically, so that no other refinery will be assigned the same trace.
 func (lrs *LocalStore) GetTracesNeedingDecision(ctx context.Context, n int) ([]string, error) {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTracesNeedingDecision")
+	defer span.End()
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	// get the list of traces in the ReadyForDecision state
@@ -266,6 +284,8 @@ func (lrs *LocalStore) GetTracesNeedingDecision(ctx context.Context, n int) ([]s
 // atomically. This can be used for all trace states except transition to Keep.
 // If a traceID is not found in the fromState, this is not considered to be an error.
 func (lrs *LocalStore) ChangeTraceStatus(ctx context.Context, traceIDs []string, fromState, toState CentralTraceState) error {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.ChangeTraceStatus")
+	defer span.End()
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, traceID := range traceIDs {
@@ -289,6 +309,8 @@ func (lrs *LocalStore) ChangeTraceStatus(ctx context.Context, traceIDs []string,
 // Statuses should include Reason and Rate; do not include State as it will be ignored.
 // If a trace is not in the AwaitingDecision state, it will be ignored.
 func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceStatus) error {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.KeepTraces")
+	defer span.End()
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
@@ -302,6 +324,8 @@ func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceS
 }
 
 func (lrs *LocalStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.RecordTraceDecision")
+	defer span.End()
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	if keep {
@@ -316,6 +340,8 @@ func (lrs *LocalStore) RecordTraceDecision(ctx context.Context, trace *CentralTr
 // RecordMetrics returns a map of metrics from the remote store, accumulated
 // since the previous time this method was called.
 func (lrs *LocalStore) RecordMetrics(ctx context.Context) error {
+	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.RecordMetrics")
+	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	m, err := lrs.DecisionCache.GetMetrics()
