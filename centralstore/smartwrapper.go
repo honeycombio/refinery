@@ -15,6 +15,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+const WriteSpanBatchSize = 10
+
 type statusMap map[string]*CentralTraceStatus
 
 // This is an implementation of SmartStorer that stores spans in memory locally.
@@ -113,8 +115,24 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 // processSpans processes spans from the span channel. This is run in a
 // goroutine and runs indefinitely until cancelled by calling Stop().
 func (w *SmartWrapper) processSpans(ctx context.Context) {
-	for span := range w.spanChan {
-		err := w.BasicStore.WriteSpan(ctx, span)
+	for first := range w.spanChan {
+		var spans []*CentralSpan
+		spans = append(spans, first)
+
+	Remaining:
+		for len(spans) < WriteSpanBatchSize { // For control maximum size of batch
+			select {
+			case span, ok := <-w.spanChan:
+				if !ok {
+					break Remaining
+				}
+
+				spans = append(spans, span)
+			default:
+				break Remaining
+			}
+		}
+		err := w.BasicStore.WriteSpans(ctx, spans)
 		if err != nil {
 			w.Logger.Debug().Logf("error writing span: %s", err)
 		}

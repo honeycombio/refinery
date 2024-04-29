@@ -123,69 +123,70 @@ func (lrs *LocalStore) changeTraceState(traceID string, fromState, toState Centr
 // SpanID, and have the IsRoot flag set. AllFields is optional and is used
 // during shutdown. WriteSpan is expecting to be called from an asynchronous
 // process and will only return an error if the span could not be written.
-func (lrs *LocalStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
+func (lrs *LocalStore) WriteSpans(ctx context.Context, spans []*CentralSpan) error {
+	// TODO: fix the instrumentation here
 	_, spanWrite := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.WriteSpan")
 	defer spanWrite.End()
-
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 
-	// first let's check if we've already processed and dropped this trace; if so, we're done and
-	// can just ignore the span.
-	if lrs.DecisionCache.Dropped(span.TraceID) {
-		otelutil.AddSpanField(spanWrite, "dropped", true)
-		return nil
-	}
+	for _, span := range spans {
+		// first let's check if we've already processed and dropped this trace; if so, we're done and
+		// can just ignore the span.
+		if lrs.DecisionCache.Dropped(span.TraceID) {
+			return nil
+		}
 
-	// we have to find the state and decide what to do based on that
-	state, _ := lrs.findTraceStatus(span.TraceID)
-	otelutil.AddSpanField(spanWrite, "state", state)
+		// we have to find the state and decide what to do based on that
+		state, _ := lrs.findTraceStatus(span.TraceID)
 
-	// TODO: Integrate the trace decision cache
-	switch state {
-	case DecisionDrop:
-		// The decision has been made and we can't affect it, so we just ignore the span
-		// We'll only get here if the decision was made after the span was added
-		// to the channel but before it got read out.
-		return nil
-	case DecisionKeep:
-		// The decision has been made and we can't affect it, but we do have to count this span
-		// The centralspan needs to be converted to a span and then counted or we have to
-		// give the cache a way to count span events and links
-		// lrs.decisionCache.Check(span)
-		return nil
-	case AwaitingDecision:
-		// The decision hasn't been received yet but it has been sent to a refinery for a decision
-		// We can't affect the decision but we can append it and mark it late.
-		// i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
-	case Collecting, DecisionDelay, ReadyToDecide:
-		// we're in a state where we can just add the span
-	case Unknown:
-		// we don't have a state for this trace, so we create it
-		state = Collecting
-		lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.Clock.Now())
-		lrs.traces[span.TraceID] = &CentralTrace{TraceID: span.TraceID}
-	}
-
-	// Add the span to the trace; this works even if the trace has no spans yet
-	lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
-	lrs.states[state][span.TraceID].Count++
-	if span.Type == types.SpanTypeLink {
-		lrs.states[state][span.TraceID].LinkCount++
-	} else if span.Type == types.SpanTypeEvent {
-		lrs.states[state][span.TraceID].EventCount++
-	}
-
-	if span.IsRoot {
-		// this is a root span, so we need to move it to the right state
-		lrs.traces[span.TraceID].Root = span
+		// TODO: Integrate the trace decision cache
 		switch state {
-		case Collecting:
-			lrs.changeTraceState(span.TraceID, Collecting, DecisionDelay)
-		default:
-			// for all other states, we don't need to do anything
+		case DecisionDrop:
+			// The decision has been made and we can't affect it, so we just ignore the span
+			// We'll only get here if the decision was made after the span was added
+			// to the channel but before it got read out.
+			return nil
+		case DecisionKeep:
+			// The decision has been made and we can't affect it, but we do have to count this span
+			// The centralspan needs to be converted to a span and then counted or we have to
+			// give the cache a way to count span events and links
+			// lrs.decisionCache.Check(span)
+			return nil
+		case AwaitingDecision:
+			// The decision hasn't been received yet but it has been sent to a refinery for a decision
+			// We can't affect the decision but we can append it and mark it late.
+			// i.states[state][span.TraceID].KeepReason = "late" // TODO: decorate this properly
+		case Collecting, DecisionDelay, ReadyToDecide:
+			// we're in a state where we can just add the span
+		case Unknown:
+			// we don't have a state for this trace, so we create it
+			state = Collecting
+			lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.Clock.Now())
+			lrs.traces[span.TraceID] = &CentralTrace{TraceID: span.TraceID}
+		}
+
+		// Add the span to the trace; this works even if the trace has no spans yet
+		lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
+		lrs.states[state][span.TraceID].Count++
+		if span.Type == types.SpanTypeLink {
+			lrs.states[state][span.TraceID].LinkCount++
+		} else if span.Type == types.SpanTypeEvent {
+			lrs.states[state][span.TraceID].EventCount++
+		}
+
+		if span.IsRoot {
+			// this is a root span, so we need to move it to the right state
+			lrs.traces[span.TraceID].Root = span
+			switch state {
+			case Collecting:
+				lrs.changeTraceState(span.TraceID, Collecting, DecisionDelay)
+			default:
+				// for all other states, we don't need to do anything
+			}
 		}
 	}
+
 	return nil
 }
 
