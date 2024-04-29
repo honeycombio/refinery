@@ -133,11 +133,13 @@ func (lrs *LocalStore) WriteSpan(ctx context.Context, span *CentralSpan) error {
 	// first let's check if we've already processed and dropped this trace; if so, we're done and
 	// can just ignore the span.
 	if lrs.DecisionCache.Dropped(span.TraceID) {
+		otelutil.AddSpanField(spanWrite, "dropped", true)
 		return nil
 	}
 
 	// we have to find the state and decide what to do based on that
 	state, _ := lrs.findTraceStatus(span.TraceID)
+	otelutil.AddSpanField(spanWrite, "state", state)
 
 	// TODO: Integrate the trace decision cache
 	switch state {
@@ -202,8 +204,10 @@ func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTr
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	if trace, ok := lrs.traces[traceID]; ok {
+		otelutil.AddSpanField(span, "found", true)
 		return trace, nil
 	}
+	otelutil.AddSpanField(span, "found", false)
 	return nil, fmt.Errorf("trace %s not found", traceID)
 }
 
