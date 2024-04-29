@@ -278,7 +278,7 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 }
 
 func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
-	ctx, span := r.Tracer.Start(ctx, "GetStatusForTraces")
+	ctx, span := otelutil.StartSpanWith(ctx, r.Tracer, "GetStatusForTraces", "num_traces", len(traceIDs))
 	defer span.End()
 
 	conn := r.RedisClient.Get()
@@ -746,7 +746,7 @@ func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*
 }
 
 func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, traceIDs []string) (map[string]*CentralTraceStatus, error) {
-	ctx2, statusSpan := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatuses", "num_ids", len(traceIDs))
+	_, statusSpan := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatuses", "num_ids", len(traceIDs))
 	defer statusSpan.End()
 
 	if len(traceIDs) == 0 {
@@ -755,16 +755,12 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, tra
 
 	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
 	for _, traceID := range traceIDs {
-		_, loopspan := otelutil.StartSpanWith(ctx2, t.tracer, "getTraceStatusLoop", "traceID", traceID)
 		status := &centralTraceStatusRedis{}
 		err := conn.GetStructHash(t.traceStatusKey(traceID), status)
 		if err != nil {
 			if errors.Is(err, redis.ErrKeyNotFound) {
-				otelutil.AddSpanField(loopspan, "status", "not found")
-				loopspan.End()
 				continue
 			}
-			loopspan.RecordError(err)
 			statusSpan.RecordError(err)
 			return nil, fmt.Errorf("failed to retrieve trace status for trace ID %s with error %s", traceID, err)
 		}
