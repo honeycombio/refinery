@@ -587,6 +587,10 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 		return state
 	}
 
+	if r.states.exists(ctx, conn, Collecting, traceID) {
+		return Collecting
+	}
+
 	if r.states.exists(ctx, conn, DecisionDrop, traceID) {
 		return DecisionDrop
 	}
@@ -605,10 +609,6 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 
 	if r.states.exists(ctx, conn, DecisionDelay, traceID) {
 		return DecisionDelay
-	}
-
-	if r.states.exists(ctx, conn, Collecting, traceID) {
-		return Collecting
 	}
 
 	return Unknown
