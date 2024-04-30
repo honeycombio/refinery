@@ -3,6 +3,7 @@ package centralstore
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -211,27 +212,22 @@ func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTr
 	return nil, fmt.Errorf("trace %s not found", traceID)
 }
 
-// GetStatusForTraces returns the current state for a list of trace IDs,
-// including any reason information and trace counts if the trace decision
-// has been made and it was to keep the trace. If a requested trace was not
-// found, it will be returned as Status:Unknown. This should be considered
-// to be a bug in the central store, as the trace should have been created
-// when the first span was added. Any traces with a state of DecisionKeep or
-// DecisionDrop should be considered to be final and appropriately disposed
-// of; the central store will not change the decision state of these traces
-// after this call (although kept spans will have counts updated when late
-// spans arrive).
-func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
+// GetStatusForTraces returns the current state for a list of traces if they
+// match any of the states passed in, including any reason information if
+// the trace decision has been made and it was to keep the trace. If a trace
+// is not found in any of the listed states, it will be not be returned. Any
+// traces with a state of DecisionKeep or DecisionDrop should be considered
+// to be final and appropriately disposed of; the central store will not
+// change the state of these traces after this call.
+func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck []CentralTraceState) ([]*CentralTraceStatus, error) {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetStatusForTraces")
 	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
-		if state, status := lrs.findTraceStatus(traceID); state != Unknown {
+		if state, status := lrs.findTraceStatus(traceID); slices.Contains(statesToCheck, state) {
 			statuses = append(statuses, status.Clone())
-		} else {
-			statuses = append(statuses, NewCentralTraceStatus(traceID, state, lrs.Clock.Now()))
 		}
 	}
 	return statuses, nil

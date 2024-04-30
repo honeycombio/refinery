@@ -101,7 +101,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 			}
 
 			statCtx, span2 := fri.Tracer.Start(ctx, "get_status_for_traces")
-			statuses, err := fri.Store.GetStatusForTraces(statCtx, traceIDs)
+			statuses, err := fri.Store.GetStatusForTraces(statCtx, traceIDs, []centralstore.CentralTraceState{centralstore.AwaitingDecision})
 			if err != nil {
 				otelutil.AddException(span2, err)
 			}
@@ -318,7 +318,8 @@ func (fri *FakeRefineryInstance) runProcessor(opts CmdLineOptions, nodeIndex int
 			}
 			statusCtx, span := fri.Tracer.Start(ctx, "get_status_for_traces")
 			otelutil.AddSpanField(span, "num_trace_ids", len(tids))
-			statuses, err := fri.Store.GetStatusForTraces(statusCtx, tids)
+			statuses, err := fri.Store.GetStatusForTraces(statusCtx, tids,
+				[]centralstore.CentralTraceState{centralstore.DecisionKeep, centralstore.DecisionDrop})
 			if err != nil {
 				otelutil.AddException(span, err)
 				span.End()

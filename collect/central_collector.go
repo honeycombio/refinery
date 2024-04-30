@@ -48,8 +48,6 @@ const (
 	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 	TraceSendLateSpan       = "trace_send_late_span"
-
-	metricsCycleInterval = 1 * time.Second
 )
 
 type traceForDecision struct {
@@ -410,7 +408,8 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		return nil
 	}
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids)
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids,
+		[]centralstore.CentralTraceState{centralstore.DecisionKeep, centralstore.DecisionDrop})
 	if err != nil {
 		return err
 	}
@@ -459,7 +458,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	if len(tracesIDs) == 0 {
 		return nil
 	}
-	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs)
+	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs, []centralstore.CentralTraceState{centralstore.AwaitingDecision})
 	if err != nil {
 		span.RecordError(err)
 		return err

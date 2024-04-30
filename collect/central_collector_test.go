@@ -236,7 +236,7 @@ func TestCentralCollector_Decider(t *testing.T) {
 
 			ctx := context.Background()
 			collector.deciderCycle.RunOnce()
-			traces, err := collector.Store.GetStatusForTraces(ctx, traceids)
+			traces, err := collector.Store.GetStatusForTraces(ctx, traceids, []centralstore.CentralTraceState{centralstore.DecisionKeep})
 			require.NoError(t, err)
 			require.Equal(t, numberOfTraces, len(traces))
 			for _, trace := range traces {
@@ -1444,7 +1444,8 @@ func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []str
 func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []string) {
 	ctx := context.Background()
 	require.Eventually(t, func() bool {
-		statuses, err := coll.Store.GetStatusForTraces(ctx, traceIDs)
+		statuses, err := coll.Store.GetStatusForTraces(ctx, traceIDs,
+			[]centralstore.CentralTraceState{centralstore.DecisionKeep, centralstore.DecisionDrop})
 		require.NoError(t, err)
 		var count int
 		for _, status := range statuses {

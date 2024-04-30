@@ -210,8 +210,8 @@ type RedisPeerManagementConfig struct {
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	MaxIdle        int      `yaml:"MaxIdle" default:"3"`
-	MaxActive      int      `yaml:"MaxActive" default:"5"`
+	MaxIdle        int      `yaml:"MaxIdle" default:"15"`
+	MaxActive      int      `yaml:"MaxActive" default:"30"`
 }
 
 type CollectionConfig struct {
