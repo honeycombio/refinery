@@ -783,10 +783,14 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 		}
 	}()
 
+	const (
+		maxConnections = 10
+		traceIDsPerGo  = 10
+	)
 	// determine the number of goroutines to use based on the number of traceIDs
-	numGoroutines := len(traceIDs)/10 + 1
-	if numGoroutines > 10 {
-		numGoroutines = 10
+	numGoroutines := len(traceIDs)/traceIDsPerGo + 1
+	if numGoroutines > maxConnections {
+		numGoroutines = maxConnections
 	}
 
 	// create workers to get the traceIDs and send their statuses to the fanin channel
