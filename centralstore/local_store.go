@@ -134,7 +134,7 @@ func (lrs *LocalStore) WriteSpans(ctx context.Context, spans []*CentralSpan) err
 		// first let's check if we've already processed and dropped this trace; if so, we're done and
 		// can just ignore the span.
 		if lrs.DecisionCache.Dropped(span.TraceID) {
-			return nil
+			continue
 		}
 
 		// we have to find the state and decide what to do based on that
