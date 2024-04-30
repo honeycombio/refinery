@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -290,7 +292,7 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 	}, errors.Join(errs...)
 }
 
-func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error) {
+func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error) {
 	ctx, span := otelutil.StartSpanWith(ctx, r.Tracer, "GetStatusForTraces", "num_traces", len(traceIDs))
 	defer span.End()
 
@@ -328,12 +330,12 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		"num_of_cached_traces":  len(statusMap),
 	})
 
-	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, conn, traceIDs)
+	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, r.RedisClient, traceIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, state := range r.states.states {
+	for _, state := range statesToCheck {
 		if len(pendingTraceIDs) == 0 {
 			break
 		}
@@ -342,13 +344,12 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		if err != nil {
 			return nil, err
 		}
+		pendingTraceIDs = slices.DeleteFunc(pendingTraceIDs, func(id string) bool {
+			_, ok := timestampsByTraceIDs[id]
+			return ok
+		})
 
-		notExist := make([]string, 0, len(pendingTraceIDs))
 		for id, timestamp := range timestampsByTraceIDs {
-			if timestamp.IsZero() {
-				notExist = append(notExist, id)
-				continue
-			}
 			status, ok := statusMapFromRedis[id]
 			if !ok {
 				continue
@@ -358,16 +359,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 			statusMap[id] = status
 		}
 
-		pendingTraceIDs = notExist
-	}
-
-	otelutil.AddSpanField(span, "num_of_unknown_traces", len(pendingTraceIDs))
-
-	for _, id := range pendingTraceIDs {
-		statusMap[id] = &CentralTraceStatus{
-			TraceID: id,
-			State:   Unknown,
-		}
+		otelutil.AddSpanField(span, "num_in_"+state.String(), len(timestampsByTraceIDs))
 	}
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMap))
@@ -455,7 +447,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 	defer conn.Close()
 
 	if toState == DecisionDrop {
-		traces, err := r.traces.getTraceStatuses(ctx, conn, traceIDs)
+		traces, err := r.traces.getTraceStatuses(ctx, r.RedisClient, traceIDs)
 		if err != nil {
 			return err
 		}
@@ -759,7 +751,7 @@ func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*
 	return nil
 }
 
-func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, traceIDs []string) (map[string]*CentralTraceStatus, error) {
+func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client, traceIDs []string) (map[string]*CentralTraceStatus, error) {
 	_, statusSpan := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatuses", "num_ids", len(traceIDs))
 	defer statusSpan.End()
 
@@ -767,21 +759,83 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, conn redis.Conn, tra
 		return nil, nil
 	}
 
-	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
-	for _, traceID := range traceIDs {
-		status := &centralTraceStatusRedis{}
-		err := conn.GetStructHash(t.traceStatusKey(traceID), status)
-		if err != nil {
-			if errors.Is(err, redis.ErrKeyNotFound) {
-				continue
-			}
-			statusSpan.RecordError(err)
-			return nil, fmt.Errorf("failed to retrieve trace status for trace ID %s with error %s", traceID, err)
-		}
+	fanoutChan := make(chan string, 100)
+	faninChan := make(chan *CentralTraceStatus, 100)
 
-		statuses[traceID] = normalizeCentralTraceStatusRedis(status)
+	// send all the trace IDs to the fanout channel
+	wgFans := sync.WaitGroup{}
+	wgFans.Add(1)
+	go func() {
+		defer wgFans.Done()
+		defer close(fanoutChan)
+		for i := range traceIDs {
+			fanoutChan <- traceIDs[i]
+		}
+	}()
+
+	// collect the statuses from the fanin channel
+	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
+	wgFans.Add(1)
+	go func() {
+		defer wgFans.Done()
+		for status := range faninChan {
+			statuses[status.TraceID] = status
+		}
+	}()
+
+	const (
+		maxConnections = 10
+		traceIDsPerGo  = 10
+	)
+	// determine the number of goroutines to use based on the number of traceIDs
+	numGoroutines := len(traceIDs)/traceIDsPerGo + 1
+	if numGoroutines > maxConnections {
+		numGoroutines = maxConnections
 	}
 
+	// create workers to get the traceIDs and send their statuses to the fanin channel
+	// They will pull from the fanout channel and terminate when it closes
+	wgWorkers := sync.WaitGroup{}
+	for i := 0; i < numGoroutines; i++ {
+		wgWorkers.Add(1)
+		go func(i int) {
+			conn := client.Get()
+			defer conn.Close()
+			queries := 0
+			found := 0
+			_, span := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker", i)
+			defer span.End()
+			defer wgWorkers.Done()
+			for traceID := range fanoutChan {
+				status := &centralTraceStatusRedis{}
+				err := conn.GetStructHash(t.traceStatusKey(traceID), status)
+				queries++
+				if err != nil {
+					if errors.Is(err, redis.ErrKeyNotFound) {
+						continue
+					}
+					statusSpan.RecordError(err)
+					continue
+				}
+				faninChan <- normalizeCentralTraceStatusRedis(status)
+				found++
+			}
+			otelutil.AddSpanFields(span, map[string]interface{}{
+				"num_queries": queries,
+				"num_found":   found,
+			})
+		}(i)
+	}
+
+	// wait for the workers to finish
+	wgWorkers.Wait()
+	// now we can close the fanin channel and wait for the fanin goroutine to finish
+	// fanout should already be done but this makes sure we don't lose track of it
+	close(faninChan)
+	wgFans.Wait()
+
+	// and our result is ready
+	otelutil.AddSpanField(statusSpan, "num_statuses", len(statuses))
 	return statuses, nil
 }
 
@@ -915,10 +969,10 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 		states: []CentralTraceState{
 			DecisionKeep,
 			DecisionDrop,
+			Collecting,
+			DecisionDelay,
 			AwaitingDecision,
 			ReadyToDecide,
-			DecisionDelay,
-			Collecting,
 		},
 		config: cfg,
 		clock:  clock,
@@ -1041,7 +1095,7 @@ func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn re
 	traces := make(map[string]time.Time, len(timestamps))
 	for i, value := range timestamps {
 		if value == 0 {
-			traces[traceIDs[i]] = time.Time{}
+			// it didn't exist, skip it
 			continue
 		}
 		traces[traceIDs[i]] = time.UnixMicro(value)
