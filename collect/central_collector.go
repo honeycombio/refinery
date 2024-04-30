@@ -422,7 +422,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		case centralstore.DecisionDrop:
 			c.SpanCache.Remove(status.TraceID)
 		default:
-			c.Logger.Debug().Logf("trace %s is still pending", status.TraceID)
+			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
 	}
 
@@ -477,8 +477,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	for idx, status := range statuses {
 		// make a decision on each trace
 		if status.State != centralstore.AwaitingDecision {
-			// someone else got to it first
-			continue
+			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
 		currentStatus, currentIdx := status, idx
 		stateMap[status.TraceID] = status
