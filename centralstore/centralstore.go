@@ -258,7 +258,7 @@ type BasicStorer interface {
 	// Root spans should always be sent and must contain at least SpanID, and have the IsRoot flag set.
 	// AllFields is optional and is used during shutdown.
 	// WriteSpan may be asynchronous and will only return an error if the span could not be written.
-	WriteSpan(ctx context.Context, span *CentralSpan) error
+	WriteSpans(ctx context.Context, spans []*CentralSpan) error
 
 	// GetTrace fetches the current state of a trace (including all of its
 	// spans) from the central store. The trace contains a list of CentralSpans,
