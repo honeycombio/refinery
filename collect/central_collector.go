@@ -408,8 +408,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		return nil
 	}
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids,
-		[]centralstore.CentralTraceState{centralstore.DecisionKeep, centralstore.DecisionDrop})
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
 		return err
 	}
@@ -458,7 +457,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	if len(tracesIDs) == 0 {
 		return nil
 	}
-	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs, []centralstore.CentralTraceState{centralstore.AwaitingDecision})
+	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs, centralstore.AwaitingDecision)
 	if err != nil {
 		span.RecordError(err)
 		return err

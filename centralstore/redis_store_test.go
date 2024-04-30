@@ -28,7 +28,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
-	status, err := store.GetStatusForTraces(ctx, []string{traceID}, []CentralTraceState{Unknown})
+	status, err := store.GetStatusForTraces(ctx, []string{traceID}, Unknown)
 	require.NoError(t, err)
 	require.Len(t, status, 0)
 
@@ -97,7 +97,7 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 	for i, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			require.NoError(t, store.WriteSpan(ctx, tc.span))
-			status, err := store.GetStatusForTraces(ctx, []string{tc.span.TraceID}, []CentralTraceState{tc.expectedState})
+			status, err := store.GetStatusForTraces(ctx, []string{tc.span.TraceID}, tc.expectedState)
 			require.NoError(t, err)
 			require.Len(t, status, 1)
 			require.NotNil(t, status[0])
@@ -168,7 +168,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 
 	require.NoError(t, store.WriteSpan(ctx, span))
 
-	collectingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{Collecting})
+	collectingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, Collecting)
 	require.NoError(t, err)
 	require.Len(t, collectingStatus, 1)
 	assert.Equal(t, Collecting, collectingStatus[0].State)
@@ -177,7 +177,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, Collecting, DecisionDelay))
 
-	waitingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{DecisionDelay})
+	waitingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, DecisionDelay)
 	require.NoError(t, err)
 	require.Len(t, waitingStatus, 1)
 	assert.Equal(t, DecisionDelay, waitingStatus[0].State)
@@ -186,7 +186,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, DecisionDelay, ReadyToDecide))
 
-	readyStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{ReadyToDecide})
+	readyStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, ReadyToDecide)
 	require.NoError(t, err)
 	require.Len(t, readyStatus, 1)
 	assert.Equal(t, ReadyToDecide, readyStatus[0].State)
@@ -195,7 +195,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, ReadyToDecide, AwaitingDecision))
 
-	awaitingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{AwaitingDecision})
+	awaitingStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, AwaitingDecision)
 	require.NoError(t, err)
 	require.Len(t, awaitingStatus, 1)
 	assert.Equal(t, AwaitingDecision, awaitingStatus[0].State)
@@ -204,7 +204,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, AwaitingDecision, ReadyToDecide))
 
-	readyStatus, err = store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{ReadyToDecide})
+	readyStatus, err = store.GetStatusForTraces(ctx, []string{span.TraceID}, ReadyToDecide)
 	require.NoError(t, err)
 	require.Len(t, readyStatus, 1)
 	assert.Equal(t, ReadyToDecide, readyStatus[0].State)
@@ -212,12 +212,12 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, ReadyToDecide, AwaitingDecision))
-	awaitingStatus, err = store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{AwaitingDecision})
+	awaitingStatus, err = store.GetStatusForTraces(ctx, []string{span.TraceID}, AwaitingDecision)
 	require.NoError(t, err)
 
 	require.NoError(t, store.KeepTraces(ctx, awaitingStatus))
 
-	keepStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{DecisionKeep})
+	keepStatus, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, DecisionKeep)
 	require.NoError(t, err)
 	require.Len(t, keepStatus, 1)
 	assert.Equal(t, DecisionKeep, keepStatus[0].State)
@@ -262,7 +262,7 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	defer conn.Close()
 
 	store.ensureInitialState(t, ctx, conn, traceID, AwaitingDecision)
-	status, err := store.GetStatusForTraces(ctx, []string{traceID}, []CentralTraceState{AwaitingDecision})
+	status, err := store.GetStatusForTraces(ctx, []string{traceID}, AwaitingDecision)
 	require.NoError(t, err)
 	require.NoError(t, store.KeepTraces(ctx, status))
 
@@ -272,7 +272,7 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	require.Equal(t, uint(1), record.DescendantCount())
 
 	// make sure it's state is updated to keep
-	status, err = store.GetStatusForTraces(ctx, []string{traceID}, []CentralTraceState{DecisionKeep})
+	status, err = store.GetStatusForTraces(ctx, []string{traceID}, DecisionKeep)
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.Equal(t, DecisionKeep, status[0].State)
@@ -298,7 +298,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 		IsRoot:    false,
 	}))
 
-	status, err := store.GetStatusForTraces(ctx, []string{traceID}, []CentralTraceState{Collecting})
+	status, err := store.GetStatusForTraces(ctx, []string{traceID}, Collecting)
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.Equal(t, Collecting, status[0].State)
@@ -331,14 +331,14 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 
 	require.False(t, store.states.exists(ctx, conn, Collecting, traceID))
 	decisionDelay := store.states.exists(ctx, conn, DecisionDelay, traceID)
-	status, err = store.GetStatusForTraces(ctx, []string{traceID}, []CentralTraceState{AwaitingDecision})
+	status, err = store.GetStatusForTraces(ctx, []string{traceID}, AwaitingDecision)
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.False(t, decisionDelay)
 	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, traceID))
 	require.True(t, store.states.exists(ctx, conn, AwaitingDecision, traceID))
 
-	status, err = store.GetStatusForTraces(ctx, []string{traceID}, []CentralTraceState{AwaitingDecision})
+	status, err = store.GetStatusForTraces(ctx, []string{traceID}, AwaitingDecision)
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	assert.Equal(t, AwaitingDecision, status[0].State)

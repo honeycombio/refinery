@@ -136,7 +136,7 @@ func TestSingleSpanGetsCollected(t *testing.T) {
 
 			// make sure that it arrived in the collecting state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{Collecting})
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, Collecting)
 				assert.NoError(collect, err)
 				assert.Equal(collect, 1, len(states))
 				if len(states) > 0 {
@@ -166,7 +166,7 @@ func TestSingleTraceOperation(t *testing.T) {
 
 			// make sure that it arrived in the collecting state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{Collecting})
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, Collecting)
 				assert.NoError(collect, err)
 				assert.Equal(collect, 1, len(states))
 				if len(states) > 0 {
@@ -177,7 +177,7 @@ func TestSingleTraceOperation(t *testing.T) {
 
 			// it should automatically time out to the Waiting state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{DecisionDelay})
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, DecisionDelay)
 				assert.NoError(collect, err)
 				assert.Equal(collect, 1, len(states))
 				if len(states) > 0 {
@@ -188,7 +188,7 @@ func TestSingleTraceOperation(t *testing.T) {
 
 			// and then to the Ready state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, []CentralTraceState{ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, []string{span.TraceID}, ReadyToDecide)
 				assert.NoError(collect, err)
 				assert.Equal(collect, 1, len(states))
 				if len(states) > 0 {
@@ -235,13 +235,13 @@ func TestBasicStoreOperation(t *testing.T) {
 
 			assert.Equal(t, 10, len(traceids))
 			assert.Eventually(t, func() bool {
-				states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{Collecting, DecisionDelay, ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, traceids, Collecting, DecisionDelay, ReadyToDecide)
 				return err == nil && len(states) == 10
 			}, 1*time.Second, 100*time.Millisecond)
 
 			// wait for it to reach the Ready state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, traceids, ReadyToDecide)
 				assert.NoError(collect, err)
 				assert.Equal(collect, 10, len(states))
 				for _, state := range states {
@@ -297,13 +297,13 @@ func TestReadyForDecisionLoop(t *testing.T) {
 
 			assert.Equal(t, numberOfTraces, len(traceids))
 			assert.Eventually(t, func() bool {
-				states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{Collecting, DecisionDelay, ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, traceids, Collecting, DecisionDelay, ReadyToDecide)
 				return err == nil && len(states) == numberOfTraces
 			}, 1*time.Second, 100*time.Millisecond)
 
 			// wait for it to reach the Ready state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, traceids, ReadyToDecide)
 				assert.NoError(collect, err)
 				assert.Equal(collect, numberOfTraces, len(states))
 				for _, state := range states {
@@ -356,13 +356,13 @@ func TestSetTraceStatuses(t *testing.T) {
 
 			assert.Equal(t, numberOfTraces, len(traceids))
 			assert.Eventually(t, func() bool {
-				states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{Collecting, DecisionDelay, ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, traceids, Collecting, DecisionDelay, ReadyToDecide)
 				return err == nil && len(states) == numberOfTraces
 			}, 1*time.Second, 100*time.Millisecond)
 
 			// wait for it to reach the Ready state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{ReadyToDecide})
+				states, err := store.GetStatusForTraces(ctx, traceids, ReadyToDecide)
 				assert.NoError(collect, err)
 				assert.Equal(collect, numberOfTraces, len(states))
 				for _, state := range states {
@@ -382,7 +382,7 @@ func TestSetTraceStatuses(t *testing.T) {
 
 			statuses := make([]*CentralTraceStatus, 0)
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				statuses, err = store.GetStatusForTraces(ctx, toDecide, []CentralTraceState{AwaitingDecision})
+				statuses, err = store.GetStatusForTraces(ctx, toDecide, AwaitingDecision)
 				assert.NoError(collect, err)
 				assert.Equal(collect, numberOfTraces, len(statuses))
 				for _, state := range statuses {
@@ -409,7 +409,7 @@ func TestSetTraceStatuses(t *testing.T) {
 
 			// we need to give the dropped traces cache a chance to run or it might not process everything
 			time.Sleep(50 * time.Millisecond)
-			statuses, err = store.GetStatusForTraces(ctx, traceids, []CentralTraceState{DecisionDrop, DecisionKeep})
+			statuses, err = store.GetStatusForTraces(ctx, traceids, DecisionDrop, DecisionKeep)
 			assert.NoError(t, err)
 			assert.Equal(t, numberOfTraces, len(statuses))
 			for _, status := range statuses {
@@ -463,7 +463,7 @@ func BenchmarkStoreGetStatus(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetStatusForTraces(ctx, []string{spans[i%100].TraceID}, states)
+		store.GetStatusForTraces(ctx, []string{spans[i%100].TraceID}, states...)
 	}
 }
 

@@ -142,7 +142,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	if len(st) == 0 || st == nil {
 		return nil
 	}
-	statuses, err := w.BasicStore.GetStatusForTraces(ctx, st, []CentralTraceState{fromState})
+	statuses, err := w.BasicStore.GetStatusForTraces(ctx, st, fromState)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -223,8 +223,8 @@ func (w *SmartWrapper) GetTrace(ctx context.Context, traceID string) (*CentralTr
 // added. Any traces with a state of DecisionKeep or DecisionDrop should be
 // considered to be final and appropriately disposed of; the central store
 // will not change the state of these traces after this call.
-func (w *SmartWrapper) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck []CentralTraceState) ([]*CentralTraceStatus, error) {
-	return w.BasicStore.GetStatusForTraces(ctx, traceIDs, statesToCheck)
+func (w *SmartWrapper) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error) {
+	return w.BasicStore.GetStatusForTraces(ctx, traceIDs, statesToCheck...)
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.

@@ -279,7 +279,7 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 	}, errors.Join(errs...)
 }
 
-func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck []CentralTraceState) ([]*CentralTraceStatus, error) {
+func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error) {
 	ctx, span := otelutil.StartSpanWith(ctx, r.Tracer, "GetStatusForTraces", "num_traces", len(traceIDs))
 	defer span.End()
 
@@ -801,8 +801,6 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 				}
 				faninChan <- normalizeCentralTraceStatusRedis(status)
 				found++
-				// just to make sure we give all the goroutines a chance to run
-				time.Sleep(1 * time.Microsecond)
 			}
 			otelutil.AddSpanFields(span, map[string]interface{}{
 				"num_queries": queries,

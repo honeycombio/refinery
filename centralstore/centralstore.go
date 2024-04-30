@@ -182,7 +182,7 @@ type SmartStorer interface {
 	// traces with a state of DecisionKeep or DecisionDrop should be considered
 	// to be final and appropriately disposed of; the central store will not
 	// change the state of these traces after this call.
-	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck []CentralTraceState) ([]*CentralTraceStatus, error)
+	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
 	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)
@@ -278,7 +278,7 @@ type BasicStorer interface {
 	// traces with a state of DecisionKeep or DecisionDrop should be considered
 	// to be final and appropriately disposed of; the central store will not
 	// change the state of these traces after this call.
-	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck []CentralTraceState) ([]*CentralTraceStatus, error)
+	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
 	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)

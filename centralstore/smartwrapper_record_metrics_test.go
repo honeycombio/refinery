@@ -50,13 +50,13 @@ func TestRecordMetrics(t *testing.T) {
 
 	assert.Equal(t, numberOfTraces, len(traceids))
 	assert.Eventually(t, func() bool {
-		states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{Collecting, ReadyToDecide})
+		states, err := store.GetStatusForTraces(ctx, traceids, Collecting, ReadyToDecide)
 		return err == nil && len(states) == numberOfTraces
 	}, 1*time.Second, 100*time.Millisecond)
 
 	// wait for it to reach the Ready state
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		states, err := store.GetStatusForTraces(ctx, traceids, []CentralTraceState{ReadyToDecide})
+		states, err := store.GetStatusForTraces(ctx, traceids, ReadyToDecide)
 		assert.NoError(collect, err)
 		assert.Equal(collect, numberOfTraces, len(states))
 		for _, state := range states {
@@ -76,7 +76,7 @@ func TestRecordMetrics(t *testing.T) {
 
 	statuses := make([]*CentralTraceStatus, 0)
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		statuses, err = store.GetStatusForTraces(ctx, toDecide, []CentralTraceState{AwaitingDecision})
+		statuses, err = store.GetStatusForTraces(ctx, toDecide, AwaitingDecision)
 		assert.NoError(collect, err)
 		assert.Equal(collect, numberOfTraces, len(statuses))
 		for _, state := range statuses {
@@ -103,7 +103,7 @@ func TestRecordMetrics(t *testing.T) {
 
 	// we need to give the dropped traces cache a chance to run or it might not process everything
 	time.Sleep(50 * time.Millisecond)
-	statuses, err = store.GetStatusForTraces(ctx, traceids, []CentralTraceState{DecisionKeep, DecisionDrop})
+	statuses, err = store.GetStatusForTraces(ctx, traceids, DecisionKeep, DecisionDrop)
 	assert.NoError(t, err)
 	assert.Equal(t, numberOfTraces, len(statuses))
 	for _, status := range statuses {

@@ -219,7 +219,7 @@ func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTr
 // traces with a state of DecisionKeep or DecisionDrop should be considered
 // to be final and appropriately disposed of; the central store will not
 // change the state of these traces after this call.
-func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck []CentralTraceState) ([]*CentralTraceStatus, error) {
+func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error) {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetStatusForTraces")
 	defer span.End()
 	lrs.mutex.RLock()
