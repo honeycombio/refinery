@@ -129,12 +129,12 @@ func (lrs *LocalStore) WriteSpans(ctx context.Context, spans []*CentralSpan) err
 	defer spanWrite.End()
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
-
+spanLoop:
 	for _, span := range spans {
 		// first let's check if we've already processed and dropped this trace; if so, we're done and
 		// can just ignore the span.
 		if lrs.DecisionCache.Dropped(span.TraceID) {
-			return nil
+			continue
 		}
 
 		// we have to find the state and decide what to do based on that
@@ -146,13 +146,13 @@ func (lrs *LocalStore) WriteSpans(ctx context.Context, spans []*CentralSpan) err
 			// The decision has been made and we can't affect it, so we just ignore the span
 			// We'll only get here if the decision was made after the span was added
 			// to the channel but before it got read out.
-			return nil
+			continue spanLoop
 		case DecisionKeep:
 			// The decision has been made and we can't affect it, but we do have to count this span
 			// The centralspan needs to be converted to a span and then counted or we have to
 			// give the cache a way to count span events and links
 			// lrs.decisionCache.Check(span)
-			return nil
+			continue spanLoop
 		case AwaitingDecision:
 			// The decision hasn't been received yet but it has been sent to a refinery for a decision
 			// We can't affect the decision but we can append it and mark it late.

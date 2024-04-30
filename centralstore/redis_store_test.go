@@ -151,6 +151,38 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 	assert.EqualValues(t, testSpans[1], trace.Root)
 }
 
+func TestRedisBasicStore_applyStateChange_NoTraces(t *testing.T) {
+	ctx := context.Background()
+	testRedis := &redis.TestService{}
+	testRedis.Start()
+	defer testRedis.Stop()
+
+	ts := newTestTraceStateProcessor(t, testRedis, nil, noop.NewTracerProvider().Tracer("test"))
+	require.NoError(t, ts.init(testRedis))
+	defer ts.Stop()
+
+	conn := testRedis.Get()
+	defer conn.Close()
+
+	result, err := ts.applyStateChange(ctx, conn, stateChangeEvent{}, []string{})
+	require.Nil(t, err)
+	assert.Nil(t, result)
+
+	result, err = ts.applyStateChange(ctx, conn, stateChangeEvent{}, nil)
+	require.Nil(t, err)
+	assert.Nil(t, result)
+}
+
+func TestRedisBasicStore_ChangeTraceStatus_NoTraces(t *testing.T) {
+	ctx := context.Background()
+
+	store := NewTestRedisBasicStore(ctx, t)
+	defer store.Stop()
+
+	assert.NoError(t, store.ChangeTraceStatus(ctx, []string{}, Collecting, DecisionDelay))
+	assert.NoError(t, store.ChangeTraceStatus(ctx, nil, Collecting, DecisionDelay))
+}
+
 func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	ctx := context.Background()
 

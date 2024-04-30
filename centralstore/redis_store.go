@@ -186,6 +186,10 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	newSpans := make([]*CentralSpan, 0, len(spans))
 	shouldIncrementCounts := make([]*CentralSpan, 0, len(spans))
 	for _, span := range spans {
+		if span.TraceID == "" {
+			continue
+		}
+
 		state := r.getTraceState(ctx, conn, span.TraceID)
 		switch state {
 		case DecisionDrop:
@@ -443,6 +447,10 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 		"to_state":   toState,
 	})
 
+	if len(traceIDs) == 0 {
+		return nil
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
@@ -454,10 +462,6 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 
 		for _, trace := range traces {
 			r.DecisionCache.Record(trace, false, "")
-		}
-
-		if len(traceIDs) == 0 {
-			return nil
 		}
 
 		succeed, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
@@ -583,6 +587,10 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 		return state
 	}
 
+	if r.states.exists(ctx, conn, Collecting, traceID) {
+		return Collecting
+	}
+
 	if r.states.exists(ctx, conn, DecisionDrop, traceID) {
 		return DecisionDrop
 	}
@@ -601,10 +609,6 @@ func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, tr
 
 	if r.states.exists(ctx, conn, DecisionDelay, traceID) {
 		return DecisionDelay
-	}
-
-	if r.states.exists(ctx, conn, Collecting, traceID) {
-		return Collecting
 	}
 
 	return Unknown
@@ -1155,6 +1159,10 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_traces", len(traceIDs))
+
+	if len(traceIDs) == 0 {
+		return nil, nil
+	}
 
 	args := redis.Args(validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(),
 		expirationForTraceState.Seconds(), t.clock.Now().UnixMicro()).AddFlat(traceIDs)
