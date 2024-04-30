@@ -3,12 +3,12 @@ package centralstore
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -221,13 +221,26 @@ func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTr
 // to be final and appropriately disposed of; the central store will not
 // change the state of these traces after this call.
 func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error) {
+	// create a function to check if a state is one of the ones we're looking for; we can
+	// specialize this for the common case where we're only looking for one state.
+	// this has been benchmarked and is faster than using a map for the common case.
+	var shouldUse func(st CentralTraceState) bool
+	if len(statesToCheck) == 1 {
+		shouldUse = func(st CentralTraceState) bool { return st == statesToCheck[0] }
+	} else {
+		// put the states in a set for faster lookup
+		states := generics.NewSet[CentralTraceState]()
+		states.Add(statesToCheck...)
+		shouldUse = func(st CentralTraceState) bool { return states.Contains(st) }
+	}
+
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetStatusForTraces")
 	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
 	var statuses = make([]*CentralTraceStatus, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
-		if state, status := lrs.findTraceStatus(traceID); slices.Contains(statesToCheck, state) {
+		if state, status := lrs.findTraceStatus(traceID); shouldUse(state) {
 			statuses = append(statuses, status.Clone())
 		}
 	}
