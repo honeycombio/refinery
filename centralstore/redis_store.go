@@ -179,6 +179,10 @@ func (r *RedisBasicStore) WriteSpan(ctx context.Context, span *CentralSpan) erro
 	_, writeSpan := r.Tracer.Start(ctx, "WriteSpan")
 	defer writeSpan.End()
 
+	if span.TraceID == "" {
+		return fmt.Errorf("span %q had no trace id", span.SpanID)
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
@@ -434,6 +438,10 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 		"to_state":   toState,
 	})
 
+	if len(traceIDs) == 0 {
+		return nil
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
@@ -445,10 +453,6 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 
 		for _, trace := range traces {
 			r.DecisionCache.Record(trace, false, "")
-		}
-
-		if len(traceIDs) == 0 {
-			return nil
 		}
 
 		succeed, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(fromState, toState), traceIDs...)
@@ -1124,6 +1128,10 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_traces", len(traceIDs))
+
+	if len(traceIDs) == 0 {
+		return nil, nil
+	}
 
 	args := redis.Args(validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(),
 		expirationForTraceState.Seconds(), t.clock.Now().UnixMicro()).AddFlat(traceIDs)
