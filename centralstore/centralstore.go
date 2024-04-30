@@ -175,15 +175,14 @@ type SmartStorer interface {
 	// its state will not be changed.
 	GetTrace(ctx context.Context, traceID string) (*CentralTrace, error)
 
-	// GetStatusForTraces returns the current state for a list of traces,
-	// including any reason information if the trace decision has been made and
-	// it was to keep the trace. If a trace is not found, it will be returned as
-	// Status:Unknown. This should be considered to be a bug in the central
-	// store, as the trace should have been created when the first span was
-	// added. Any traces with a state of DecisionKeep or DecisionDrop should be
-	// considered to be final and appropriately disposed of; the central store
-	// will not change the state of these traces after this call.
-	GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error)
+	// GetStatusForTraces returns the current state for a list of traces if they
+	// match any of the states passed in, including any reason information if
+	// the trace decision has been made and it was to keep the trace. If a trace
+	// is not found in any of the listed states, it will be not be returned. Any
+	// traces with a state of DecisionKeep or DecisionDrop should be considered
+	// to be final and appropriately disposed of; the central store will not
+	// change the state of these traces after this call.
+	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
 	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)
@@ -272,17 +271,14 @@ type BasicStorer interface {
 	// to make a trace decision.
 	GetTrace(ctx context.Context, traceID string) (*CentralTrace, error)
 
-	// GetStatusForTraces returns the current state for a list of trace IDs,
-	// including any reason information and trace counts if the trace decision
-	// has been made and it was to keep the trace. If a requested trace was not
-	// found, it will be returned as Status:Unknown. This should be considered
-	// to be a bug in the central store, as the trace should have been created
-	// when the first span was added. Any traces with a state of DecisionKeep or
-	// DecisionDrop should be considered to be final and appropriately disposed
-	// of; the central store will not change the decision state of these traces
-	// after this call (although kept spans will have counts updated when late
-	// spans arrive).
-	GetStatusForTraces(ctx context.Context, traceIDs []string) ([]*CentralTraceStatus, error)
+	// GetStatusForTraces returns the current state for a list of traces if they
+	// match any of the states passed in, including any reason information if
+	// the trace decision has been made and it was to keep the trace. If a trace
+	// is not found in any of the listed states, it will be not be returned. Any
+	// traces with a state of DecisionKeep or DecisionDrop should be considered
+	// to be final and appropriately disposed of; the central store will not
+	// change the state of these traces after this call.
+	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
 	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)

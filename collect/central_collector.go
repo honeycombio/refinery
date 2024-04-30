@@ -48,8 +48,6 @@ const (
 	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 	TraceSendLateSpan       = "trace_send_late_span"
-
-	metricsCycleInterval = 1 * time.Second
 )
 
 type traceForDecision struct {
@@ -410,7 +408,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		return nil
 	}
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids)
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
 		return err
 	}
@@ -424,7 +422,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		case centralstore.DecisionDrop:
 			c.SpanCache.Remove(status.TraceID)
 		default:
-			c.Logger.Debug().Logf("trace %s is still pending", status.TraceID)
+			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
 	}
 
@@ -459,7 +457,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	if len(tracesIDs) == 0 {
 		return nil
 	}
-	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs)
+	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs, centralstore.AwaitingDecision)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -479,8 +477,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	for idx, status := range statuses {
 		// make a decision on each trace
 		if status.State != centralstore.AwaitingDecision {
-			// someone else got to it first
-			continue
+			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
 		currentStatus, currentIdx := status, idx
 		stateMap[status.TraceID] = status
