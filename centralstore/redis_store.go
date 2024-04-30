@@ -178,10 +178,6 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	})
 	defer writespan.End()
 
-	if span.TraceID == "" {
-		return fmt.Errorf("span %q had no trace id", span.SpanID)
-	}
-
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
@@ -190,6 +186,11 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	newSpans := make([]*CentralSpan, 0, len(spans))
 	shouldIncrementCounts := make([]*CentralSpan, 0, len(spans))
 	for _, span := range spans {
+		if span.TraceID == "" {
+			// r.Logger.Errorf("span %q had no trace id", span.SpanID)
+			continue
+		}
+
 		state := r.getTraceState(ctx, conn, span.TraceID)
 		switch state {
 		case DecisionDrop:
