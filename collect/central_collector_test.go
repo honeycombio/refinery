@@ -834,14 +834,14 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 			assert.Equal(t, 2, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
 			assert.Equal(t, 1, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
 			assert.Equal(t, 4, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
-			assert.GreaterOrEqual(t, 1, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
+			assert.GreaterOrEqual(t, transmission.Events[4].Data["meta.span_count"], 1, "root span metadata should be populated with span count")
 			assert.Equal(t, 2, transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
 			assert.Equal(t, 1, transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
 
 			// When a late span arrives, it's sent to redis by the collector to update all counters related to the trace.
 			// The processor could retrieve the trace before redis has updated the counters, leading to inaccurate counts
 			// where the late span is not counted.
-			assert.GreaterOrEqual(t, 4, transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
+			assert.GreaterOrEqual(t, transmission.Events[4].Data["meta.event_count"], 4, "root span metadata should be populated with event count")
 			assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
 			transmission.Mux.RUnlock()
 		})
