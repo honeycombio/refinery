@@ -64,7 +64,8 @@ type Conn interface {
 	SetStringsTTL([]string, []string, time.Duration) ([]any, error)
 	SetStringTTL(context.Context, string, string, time.Duration) (string, error)
 
-	GetStringHash(string) (map[string]string, error)
+	GetAllStringsHash(string) (map[string]string, error)
+	GetHashString(string, string) (string, error)
 	GetStructHash(string, any) error
 	GetSliceOfStructsHash(string, any) error
 	GetFloat64Hash(string) (map[string]float64, error)
@@ -705,7 +706,17 @@ func (c *DefaultConn) TTL(key string) (int64, error) {
 	return redis.Int64(c.conn.Do("TTL", key))
 }
 
-func (c *DefaultConn) GetStringHash(key string) (map[string]string, error) {
+func (c *DefaultConn) GetHashString(key string, field string) (string, error) {
+	reply, err := c.conn.Do("HGET", key, field)
+	value, err := redis.String(reply, err)
+	if err == redis.ErrNil {
+		return "", ErrKeyNotFound
+	}
+
+	return value, nil
+}
+
+func (c *DefaultConn) GetAllStringsHash(key string) (map[string]string, error) {
 	return redis.StringMap(c.conn.Do("HGETALL", key))
 }
 
