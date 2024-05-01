@@ -108,6 +108,9 @@ func (s *StressRelief) Start() error {
 
 	s.Health.Register(stressReliefHealthSource, 2*calculationInterval)
 
+	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
+	s.RefineryMetrics.Register("individual_stress_level", "gauge")
+
 	if err := s.Gossip.Subscribe("stress_level", s.onStressLevelMessage); err != nil {
 		return err
 	}
@@ -208,10 +211,12 @@ func (s *StressRelief) Recalc() uint {
 		}
 	}
 	level := uint(maximumLevel)
+	s.RefineryMetrics.Gauge("individual_stress_level", level)
 
 	s.Logger.Debug().WithField("stress_level", level).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
 
 	clusterStressLevel := s.clusterStressLevel(level)
+	s.RefineryMetrics.Gauge("cluster_stress_level", clusterStressLevel)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()

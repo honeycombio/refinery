@@ -311,8 +311,8 @@ func (w *SmartWrapper) SetTraceStatuses(ctx context.Context, statuses []*Central
 // RecordMetrics calls the RecordMetrics method on the BasicStore.
 func (w *SmartWrapper) RecordMetrics(ctx context.Context) error {
 	// record channel lengths as histogram but also as gauges
-	w.Metrics.Histogram("smartstore_incoming_queue", float64(len(w.spanChan)))
-	w.Metrics.Gauge("smartstore_incoming_queue_length", float64(len(w.spanChan)))
+	w.Metrics.Histogram("smartstore_span_queue", float64(len(w.spanChan)))
+	w.Metrics.Gauge("smartstore_span_queue_length", float64(len(w.spanChan)))
 
 	return w.BasicStore.RecordMetrics(ctx)
 }
