@@ -340,7 +340,7 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 
 	s.stressLevels[s.identification] = report
 	var total float64
-	var availablePeers int
+	availablePeers := 0
 	for _, report := range s.stressLevels {
 		// TODO: maybe make the expiration time configurable
 		if s.Clock.Since(report.timestamp) > 5*time.Second {
@@ -353,6 +353,10 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 		}
 		availablePeers++
 		total += float64(report.level * report.level)
+	}
+
+	if availablePeers == 0 {
+		availablePeers = 1
 	}
 
 	return uint(math.Sqrt(total / float64(availablePeers)))
