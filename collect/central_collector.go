@@ -142,6 +142,8 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("span_received", "counter")
 	c.Metrics.Register("span_processed", "counter")
 	c.Metrics.Register("spans_waiting", "updown")
+	c.Metrics.Register("dropped_from_stress", "counter")
+	c.Metrics.Register("kept_from_stress", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -314,6 +316,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		c.Metrics.Increment("dropped_from_stress")
 		return true, nil
 	}
+	c.Metrics.Increment("kept_from_stress")
 
 	sp.Event.Data["meta.stressed"] = true
 	if c.Config.GetAddRuleReasonToTrace() {

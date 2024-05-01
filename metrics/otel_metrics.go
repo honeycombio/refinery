@@ -195,6 +195,8 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 		o.counters[name] = ctr
 	case "gauge":
 		var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
+			o.lock.RLock()
+			defer o.lock.RUnlock()
 			result.Observe(o.values[name])
 			return nil
 		}
