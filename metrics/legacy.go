@@ -372,13 +372,17 @@ func createUpdown(name string) *updown {
 	}
 }
 
+// because count is generic to both counters and updowns, it won't
+// create a new metric if it doesn't exist
 func (h *LegacyMetrics) Count(name string, n interface{}) {
-	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
+	h.lock.Lock()
+	if ctr, ok := h.counters[name]; ok {
+		ctr.val = ctr.val + int(ConvertNumeric(n))
+	} else if ud, ok := h.updowns[name]; ok {
+		ud.val = ud.val + int(ConvertNumeric(n))
+	}
+	h.lock.Unlock()
 
-	// update value, using counter's lock
-	counter.lock.Lock()
-	counter.val = counter.val + int(ConvertNumeric(n))
-	counter.lock.Unlock()
 }
 
 func (h *LegacyMetrics) Increment(name string) {
