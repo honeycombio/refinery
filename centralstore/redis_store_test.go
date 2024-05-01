@@ -458,7 +458,7 @@ func TestRedisBasicStore_GetMetrics(t *testing.T) {
 	count, ok = store.Metrics.Get(metricsPrefixConnection + "wait")
 	require.True(t, ok)
 	assert.EqualValues(t, 0, count)
-	count, ok = store.Metrics.Get(metricsPrefixConnection + "wait_duration")
+	count, ok = store.Metrics.Get(metricsPrefixConnection + "wait_duration_ms")
 	require.True(t, ok)
 	assert.EqualValues(t, 0, count)
 }
