@@ -109,6 +109,12 @@ func (p *PromMetrics) Count(name string, n interface{}) {
 			counter.Add(f)
 			p.values[name] += f
 		}
+	} else if gaugeIface, ok := p.metrics[name]; ok {
+		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
+			f := ConvertNumeric(n)
+			gauge.Add(f)
+			p.values[name] += f
+		}
 	}
 }
 func (p *PromMetrics) Gauge(name string, val interface{}) {

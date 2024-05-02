@@ -8,6 +8,7 @@ import (
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
@@ -24,8 +25,9 @@ func getCache(typ string, clock clockwork.Clock) SpanCache {
 	switch typ {
 	case "basic":
 		return &SpanCache_basic{
-			Cfg:   cfg,
-			Clock: clock,
+			Cfg:     cfg,
+			Clock:   clock,
+			Metrics: &metrics.NullMetrics{},
 		}
 	case "complex":
 		return &SpanCache_complex{
