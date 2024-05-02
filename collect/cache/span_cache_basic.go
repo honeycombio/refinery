@@ -7,6 +7,7 @@ import (
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 )
@@ -14,10 +15,11 @@ import (
 // this is a naive implementation that uses a map
 // and doesn't try to be clever about memory usage or allocations
 type SpanCache_basic struct {
-	Cfg   config.Config   `inject:""`
-	Clock clockwork.Clock `inject:""`
-	cache map[string]*types.Trace
-	mut   sync.RWMutex
+	Cfg     config.Config   `inject:""`
+	Clock   clockwork.Clock `inject:""`
+	Metrics metrics.Metrics `inject:"genericMetrics"`
+	cache   map[string]*types.Trace
+	mut     sync.RWMutex
 
 	// current and nextix are used only by the GetTraceIDs method and are not protected
 	// by the mutex; they are only accessed by the goroutine that calls GetTraceIDs.
@@ -32,6 +34,8 @@ var _ SpanCache = &SpanCache_basic{}
 var _ startstop.Starter = &SpanCache_basic{}
 
 func (sc *SpanCache_basic) Start() error {
+	sc.Metrics.Register("spancache_spans", "updown")
+	sc.Metrics.Register("spancache_traces", "updown")
 	sc.cache = make(map[string]*types.Trace)
 	return nil
 }
@@ -54,11 +58,13 @@ func (sc *SpanCache_basic) Set(sp *types.Span) error {
 			ArrivalTime: sc.Clock.Now(),
 		}
 		sc.cache[traceID] = trace
+		sc.Metrics.Up("spancache_traces")
 	}
 	if sp.IsRoot {
 		trace.RootSpan = sp
 	}
 	trace.AddSpan(sp)
+	sc.Metrics.Up("spancache_spans")
 	return nil
 }
 
@@ -149,6 +155,12 @@ func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 func (sc *SpanCache_basic) Remove(traceID string) {
 	sc.mut.Lock()
 	defer sc.mut.Unlock()
+	trace, ok := sc.cache[traceID]
+	if !ok {
+		return
+	}
+	sc.Metrics.Down("spancache_traces")
+	sc.Metrics.Count("spancache_spans", -int64(trace.DescendantCount()))
 	delete(sc.cache, traceID)
 }
 
