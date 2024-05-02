@@ -107,8 +107,8 @@ func (c *CentralCollector) Start() error {
 
 	// we're a health check reporter so register ourselves for each of our major routines
 	c.Health.Register(receiverHealth, 2*c.Config.GetSendTickerValue())
-	c.Health.Register(deciderHealth, 2*collectorCfg.GetDeciderPauseDuration())
-	c.Health.Register(processorHealth, 2*collectorCfg.GetProcessTracesPauseDuration())
+	c.Health.Register(deciderHealth, 2*collectorCfg.GetDeciderCycleDuration())
+	c.Health.Register(processorHealth, 2*collectorCfg.GetProcessTracesCycleDuration())
 
 	c.done = make(chan struct{})
 
@@ -122,8 +122,8 @@ func (c *CentralCollector) Start() error {
 
 	// test hooks
 	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
-	c.processorCycle = NewCycle(c.Clock, collectorCfg.GetProcessTracesPauseDuration(), c.done)
-	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderPauseDuration(), c.done)
+	c.processorCycle = NewCycle(c.Clock, collectorCfg.GetProcessTracesCycleDuration(), c.done)
+	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
 
 	c.Metrics.Register("collector_processor_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
@@ -144,6 +144,8 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("spans_waiting", "updown")
 	c.Metrics.Register("dropped_from_stress", "counter")
 	c.Metrics.Register("kept_from_stress", "counter")
+	c.Metrics.Register("collector_process_trace", "counter")
+	c.Metrics.Register("collector_decide_trace", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -427,6 +429,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		default:
 			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
+		c.Metrics.Increment("collector_process_trace")
 	}
 
 	return nil
@@ -596,6 +599,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		status.State = state
 		status.Rate = rate
 		stateMap[status.TraceID] = status
+		c.Metrics.Increment("collector_decide_trace")
 		span.End()
 	}
 

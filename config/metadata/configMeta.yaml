@@ -1029,7 +1029,7 @@ groups:
         firstversion: v2.6
         type: int
         valuetype: nondefault
-        default: 3
+        default: 15
         reload: false
         validations:
           - type: minimum
@@ -1043,15 +1043,13 @@ groups:
         firstversion: v2.6
         type: int
         valuetype: nondefault
-        default: 5
+        default: 30
         reload: false
         summary: is the maximum number of active connections in the Redis connection pool.
         description: >
           This setting is used to control the maximum number of active
           connections to Redis in the Redis connection pool. It may be useful to
-          increase this value in high-throughput environments. Setting it
-          to 0 imposes no connection limit, but this may be risky in
-          a burst of traffic. TODO: default to a much higher number?
+          increase this value in high-throughput environments.
 
       - name: Strategy
         v1group: PeerManagement
@@ -1190,47 +1188,53 @@ groups:
           supported. See `MaxMemoryPercentage` for more details. If set,
           `Collections.AvailableMemory` must not be defined.
 
-      - name: DeciderPauseDuration
+      - name: DeciderCycleDuration
         type: duration
         valuetype: nondefault
-        default: 100us
+        default: 100ms
         reload: false
-        summary: is the duration to pause between processing trace batches.
+        summary: is the cycle time used for processing batches of traces.
         description: >
-          This setting controls the duration that Refinery waits between
-          processing trace batches. It is rarely necessary to adjust this value.
+          This setting controls the duration that Refinery uses for processing
+          trace batches. It is rarely necessary to adjust this value.
 
       - name: DeciderBatchSize
         type: int
         valuetype: nondefault
-        default: 100
+        default: 1000
         reload: true
         summary: is the maximum number of traces retrieved by the decision processor in a single request.
         description: >
-          This setting controls the number of traces that are returned from the
-          central store when Refinery is making trace decisions. It is rarely
+          This setting controls the number of traces that are requested from the
+          central store when Refinery is making trace decisions. Refinery's
+          trace throughput is limited by
+          `DeciderBatchSize*DeciderCycleDuration`, which is the maximum number
+          of trace decisions Refinery can make in one second. It is rarely
           necessary to adjust this value.
 
-      - name: ProcessTracesBatchSize
-        type: int
-        valuetype: nondefault
-        default: 100
-        reload: false
-        summary: is the number of traces evaluated for sending in a single request.
-        description: >
-          This setting controls the number of trace IDs processed when refinery
-          is considering which spans to send or drop. It is rarely necessary to
-          adjust this value.
-
-      - name: ProcessTracesPauseDuration
+      - name: ProcessTracesCycleDuration
         type: duration
         valuetype: nondefault
-        default: 200us
+        default: 100ms
         reload: false
         summary: is the duration to pause between processing trace batches.
         description: >
           This setting controls the duration that Refinery waits between
           processing trace batches. It is rarely necessary to adjust this value.
+
+      - name: ProcessTracesBatchSize
+        type: int
+        valuetype: nondefault
+        default: 1000
+        reload: false
+        summary: is the number of traces evaluated for sending in a single request.
+        description: >
+          This setting controls the number of trace IDs processed when refinery
+          is considering which spans to send or drop. Refinery's trace
+          throughput is limited by
+          `ProcessTracesBatchSize*ProcessTracesCycleDuration`, which is the
+          maximum number of traces that can be processed in one second. It is
+          rarely necessary to adjust this value.
 
       - name: TraceFetcherConcurrency
         type: int

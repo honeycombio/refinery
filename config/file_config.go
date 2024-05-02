@@ -218,10 +218,10 @@ type CollectionConfig struct {
 	CacheCapacity              int        `yaml:"CacheCapacity" default:"10_000"`
 	IncomingQueueSize          int        `yaml:"IncomingQueueSize"`
 	TraceFetcherConcurrency    int        `yaml:"TraceFetcherConcurrency" default:"10"`
-	ProcessTracesBatchSize     int        `yaml:"ProcessTracesBatchSize" default:"50"`
-	ProcessTracesPauseDuration Duration   `yaml:"ProcessTracesPauseDuration" default:"1s"`
-	DeciderPauseDuration       Duration   `yaml:"DeciderPauseDuration" default:"1s"`
-	DeciderBatchSize           int        `yaml:"DeciderBatchSize" default:"50"`
+	ProcessTracesBatchSize     int        `yaml:"ProcessTracesBatchSize" default:"1000"`
+	ProcessTracesCycleDuration Duration   `yaml:"ProcessTracesCycleDuration" default:"100ms"`
+	DeciderCycleDuration       Duration   `yaml:"DeciderCycleDuration" default:"100ms"`
+	DeciderBatchSize           int        `yaml:"DeciderBatchSize" default:"1000"`
 	AvailableMemory            MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage        int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc                   MemorySize `yaml:"MaxAlloc"`
@@ -272,12 +272,12 @@ func (c CollectionConfig) GetProcessTracesBatchSize() int {
 	return c.ProcessTracesBatchSize
 }
 
-func (c CollectionConfig) GetProcessTracesPauseDuration() time.Duration {
-	return time.Duration(c.ProcessTracesPauseDuration)
+func (c CollectionConfig) GetProcessTracesCycleDuration() time.Duration {
+	return time.Duration(c.ProcessTracesCycleDuration)
 }
 
-func (c CollectionConfig) GetDeciderPauseDuration() time.Duration {
-	return time.Duration(c.DeciderPauseDuration)
+func (c CollectionConfig) GetDeciderCycleDuration() time.Duration {
+	return time.Duration(c.DeciderCycleDuration)
 }
 
 func (c CollectionConfig) GetDeciderBatchSize() int {

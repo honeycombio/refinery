@@ -57,6 +57,8 @@ func (w *SmartWrapper) Start() error {
 
 	w.Metrics.Register("smartstore_span_queue", "histogram")
 	w.Metrics.Register("smartstore_span_queue_length", "gauge")
+	w.Metrics.Register("smartstore_span_queue_in", "counter")
+	w.Metrics.Register("smartstore_span_queue_out", "counter")
 
 	w.Metrics.Store("SPAN_CHANNEL_CAP", float64(opts.SpanChannelSize))
 
@@ -104,6 +106,7 @@ func (w *SmartWrapper) WriteSpan(ctx context.Context, span *CentralSpan) error {
 	case <-w.done:
 		return fmt.Errorf("span channel closed")
 	case w.spanChan <- span:
+		w.Metrics.Increment("smartstore_span_queue_in")
 	default:
 		err := fmt.Errorf("span queue full")
 		spanWrite.RecordError(err)
@@ -126,6 +129,7 @@ func (w *SmartWrapper) processSpans(ctx context.Context) {
 				if !ok {
 					break Remaining
 				}
+				w.Metrics.Increment("smartstore_span_queue_out")
 
 				spans = append(spans, span)
 			default:

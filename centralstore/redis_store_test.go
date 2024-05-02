@@ -561,6 +561,8 @@ func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicSt
 			DroppedSize:       1000,
 			SizeCheckInterval: duration("1s"),
 		},
+		GetRedisMaxActiveVal: 10,
+		GetRedisMaxIdleVal:   10,
 	}
 	decisionCache := &cache.CuckooSentCache{}
 	clock := clockwork.NewFakeClock()

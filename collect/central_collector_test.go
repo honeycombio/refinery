@@ -116,13 +116,15 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity:              100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -183,13 +185,15 @@ func TestCentralCollector_Decider(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -255,15 +259,17 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			const originalSampleRate = uint(50)
 
 			conf := &config.MockConfig{
-				GetSendDelayVal:    0,
-				GetTraceTimeoutVal: 60 * time.Second,
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSendDelayVal:      0,
+				GetTraceTimeoutVal:   60 * time.Second,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          10000,
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
 				},
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
@@ -357,8 +363,8 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 				SendTickerVal:      2 * time.Millisecond,
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -367,6 +373,8 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 					DroppedSize:       100,
 					SizeCheckInterval: config.Duration(1 * time.Second),
 				},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 			}
 			transmission := &transmit.MockTransmission{}
 			coll := &CentralCollector{
@@ -406,15 +414,17 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSendDelayVal:    0,
-				GetTraceTimeoutVal: 60 * time.Second,
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSendDelayVal:      0,
+				GetTraceTimeoutVal:   60 * time.Second,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity:              10,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
@@ -498,8 +508,8 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 					IncomingQueueSize:          600,
 					ProcessTracesBatchSize:     500,
 					DeciderBatchSize:           200,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 				StoreOptions: config.SmartWrapperOptions{
 					SpanChannelSize: 500,
@@ -608,8 +618,8 @@ func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          3,
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
 				},
 			}
 
@@ -647,11 +657,13 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSendDelayVal:    10 * time.Millisecond,
-				GetTraceTimeoutVal: 60 * time.Second,
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      60 * time.Second,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSendDelayVal:      10 * time.Millisecond,
+				GetTraceTimeoutVal:   60 * time.Second,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        60 * time.Second,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
 					DroppedSize:       100,
@@ -659,8 +671,8 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 
@@ -754,6 +766,8 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 				SendTickerVal:        2 * time.Millisecond,
 				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 				AddRuleReasonToTrace: true,
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
 					DroppedSize:       100,
@@ -761,8 +775,8 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 
@@ -854,11 +868,13 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSendDelayVal:    0,
-				GetTraceTimeoutVal: 5 * time.Minute,
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSendDelayVal:      0,
+				GetTraceTimeoutVal:   5 * time.Minute,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
 					DroppedSize:       100,
@@ -866,8 +882,8 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          10,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 
@@ -935,10 +951,12 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSendDelayVal:    0,
-				GetTraceTimeoutVal: 60 * time.Second,
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
+				GetSendDelayVal:      0,
+				GetTraceTimeoutVal:   60 * time.Second,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				AdditionalAttributes: map[string]string{
 					"name":  "foo",
 					"other": "bar",
@@ -950,8 +968,8 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          5,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -1008,8 +1026,10 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSendDelayVal:    0,
-				GetTraceTimeoutVal: 5 * time.Millisecond,
+				GetSendDelayVal:      0,
+				GetTraceTimeoutVal:   5 * time.Millisecond,
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
 					Rules: []*config.RulesBasedSamplerRule{
 						{
@@ -1058,8 +1078,8 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 			}
 
@@ -1155,13 +1175,15 @@ func TestCentralCollector_Shutdown(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 2},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetRedisMaxActiveVal: 10,
+				GetRedisMaxIdleVal:   10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity:              100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 					ShutdownDelay:              config.Duration(500 * time.Millisecond),
 				},
 			}
@@ -1211,7 +1233,7 @@ func TestCentralCollector_Shutdown(t *testing.T) {
 
 			// start the decider again to mock trace decision process
 			collector.deciderCycle.Continue()
-			time.Sleep(conf.GetCollectionConfigVal.GetDeciderPauseDuration() * 3)
+			time.Sleep(conf.GetCollectionConfigVal.GetDeciderCycleDuration() * 3)
 
 			waitForTraceDecision(t, collector, traceids)
 
@@ -1237,8 +1259,8 @@ func TestCentralCollector_ProcessSpanImmediately(t *testing.T) {
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:          100,
-					ProcessTracesPauseDuration: config.Duration(1 * time.Second),
-					DeciderPauseDuration:       config.Duration(1 * time.Second),
+					ProcessTracesCycleDuration: config.Duration(1 * time.Second),
+					DeciderCycleDuration:       config.Duration(1 * time.Second),
 				},
 				StressRelief: config.StressReliefConfig{
 					SamplingRate: 1,
