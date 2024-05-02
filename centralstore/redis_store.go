@@ -180,13 +180,13 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	})
 	defer writespan.End()
 
-	conn := r.RedisClient.Get()
-	defer conn.Close()
-
 	states := make(map[string]CentralTraceState, len(spans))
 	for _, span := range spans {
 		states[span.TraceID] = Unknown
 	}
+
+	conn := r.RedisClient.Get()
+	defer conn.Close()
 
 	err := r.getTraceStates(ctx, conn, states)
 	if err != nil {
@@ -661,17 +661,27 @@ func (t *tracesStore) getTraceStates(ctx context.Context, conn redis.Conn, trace
 
 	states := make(map[string]CentralTraceState, len(traceIDs))
 	for _, id := range traceIDs {
-		state, err := conn.GetHashString(t.traceStatusKey(id), "State")
+		cmd := redis.NewGetHashCommand(t.traceStatusKey(id), "State")
+		err := cmd.Send(conn)
 		if err != nil {
-			if errors.Is(err, redis.ErrKeyNotFound) {
-				states[id] = Unknown
-				continue
-			}
 			span.RecordError(err)
-			return states, err
+			return nil, err
+		}
+	}
+
+	replies, err := conn.ReceiveStrings(len(traceIDs))
+	if err != nil {
+		span.RecordError(err)
+		return nil, err
+	}
+
+	for i, reply := range replies {
+		if reply == "" {
+			states[traceIDs[i]] = Unknown
+			continue
 		}
 
-		states[id] = CentralTraceState(state)
+		states[traceIDs[i]] = CentralTraceState(reply)
 	}
 
 	return states, nil
