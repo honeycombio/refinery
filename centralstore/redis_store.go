@@ -131,7 +131,7 @@ func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 	r.Metrics.Gauge(metricsPrefixConnection+"active", connStats.ActiveCount)
 	r.Metrics.Gauge(metricsPrefixConnection+"idle", connStats.IdleCount)
 	r.Metrics.Gauge(metricsPrefixConnection+"wait", connStats.WaitCount)
-	r.Metrics.Histogram(metricsPrefixConnection+"wait_duration_ms", connStats.WaitDuration.Microseconds())
+	r.Metrics.Histogram(metricsPrefixConnection+"wait_duration_ms", connStats.WaitDuration.Milliseconds())
 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
@@ -183,18 +183,16 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	traceIDs := make([]string, 0, len(spans))
+	states := make(map[string]CentralTraceState, len(spans))
 	for _, span := range spans {
-		traceIDs = append(traceIDs, span.TraceID)
-
+		states[span.TraceID] = Unknown
 	}
 
-	states, err := r.getTraceState(ctx, conn, traceIDs)
+	err := r.getTraceStates(ctx, conn, states)
 	if err != nil {
 		return err
 	}
 
-	otelutil.AddSpanField(writespan, "states", states)
 	collecting := make(map[string]struct{})
 	storeSpans := make([]*CentralSpan, 0, len(spans))
 	newSpans := make([]*CentralSpan, 0, len(spans))
@@ -510,42 +508,43 @@ func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *Centra
 	return nil
 }
 
-func (r *RedisBasicStore) getTraceState(ctx context.Context, conn redis.Conn, traceIDs []string) (map[string]CentralTraceState, error) {
-	ctx, span := r.Tracer.Start(ctx, "getTraceState")
+func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, states map[string]CentralTraceState) error {
+	ctx, span := r.Tracer.Start(ctx, "getTraceStates")
 	defer span.End()
 
-	states := make(map[string]CentralTraceState, len(traceIDs))
 	var cacheHitCount int
-	notFound := make([]string, 0, len(traceIDs))
-	for _, traceID := range traceIDs {
-		if tracerec, _, found := r.DecisionCache.Test(traceID); found {
-			// it was in the decision cache, so we can return the right thing
-			cacheHitCount++
-			if tracerec.Kept() {
-				states[traceID] = DecisionKeep
-			} else {
-				states[traceID] = DecisionDrop
-			}
+	notFound := make([]string, 0, len(states))
+	for traceID := range states {
+		tracerec, _, found := r.DecisionCache.Test(traceID)
+		if !found {
+			// if the trace is not in the cache, we need to retrieve its state from redis
+			notFound = append(notFound, traceID)
+			continue
 		}
 
-		notFound = append(notFound, traceID)
+		cacheHitCount++
+		if tracerec.Kept() {
+			states[traceID] = DecisionKeep
+		} else {
+			states[traceID] = DecisionDrop
+		}
 	}
 	otelutil.AddSpanField(span, "cache_hit_count", cacheHitCount)
 
-	if cacheHitCount == len(traceIDs) {
-		return states, nil
+	if cacheHitCount == len(states) {
+		return nil
 	}
 
 	results, err := r.traces.getTraceStates(ctx, conn, notFound)
 	if err != nil {
-		return states, err
+		return err
 	}
 
 	for id, state := range results {
 		states[id] = state
 	}
 
-	return states, nil
+	return nil
 }
 
 // TraceStore stores trace state status and spans.
