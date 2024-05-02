@@ -790,6 +790,9 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 	// for our maximum number of connections in the redis pool.
 	// It seems (after messing around) that adding a bit of randomness here helps with the performance.
 	maxGoroutines := t.config.GetRedisMaxActive()
+	if maxGoroutines <= 0 {
+		maxGoroutines = 1
+	}
 	randRange := maxGoroutines/4 + 1
 	numGoroutines := rand.Intn(randRange) + maxGoroutines - randRange
 	otelutil.AddSpanField(statusSpan, "num_goroutines", numGoroutines)

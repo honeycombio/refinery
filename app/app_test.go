@@ -116,6 +116,8 @@ func newStartedApp(
 			DeciderCycleDuration:       config.Duration(10 * time.Millisecond),
 			ShutdownDelay:              config.Duration(1 * time.Millisecond),
 		},
+		GetRedisMaxActiveVal:   10,
+		GetRedisMaxIdleVal:     10,
 		AddHostMetadataToTrace: enableHostMetadata,
 		TraceIdFieldNames:      []string{"trace.trace_id"},
 		ParentIdFieldNames:     []string{"trace.parent_id"},
