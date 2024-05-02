@@ -207,8 +207,8 @@ Tests if the trace as a whole has a root span.
 
 The `Value` parameter can either be `true` or `false`.
 
-WARNING: `has-root-span` does not check if a given span is a root span.
-It only checks if a trace has a root span.
+NOTE: `has-root-span` does not check if a given span **is** a root span,
+it checks if the containing trace **has** a root span.
 
 ### `matches`
 
