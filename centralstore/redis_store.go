@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"slices"
 	"sort"
 	"sync"
@@ -85,7 +86,7 @@ func (r *RedisBasicStore) Start() error {
 		return err
 	}
 
-	r.traces = newTraceStatusStore(r.Clock, r.Tracer, r.RedisClient.NewScript(keepTraceKey, keepTraceScript))
+	r.traces = newTraceStatusStore(r.Clock, r.Tracer, r.RedisClient.NewScript(keepTraceKey, keepTraceScript), r.Config)
 	r.states = stateProcessor
 
 	// register metrics for each state
@@ -616,13 +617,15 @@ type tracesStore struct {
 	clock           clockwork.Clock
 	tracer          trace.Tracer
 	keepTraceScript redis.Script
+	config          config.Config
 }
 
-func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer, keepTraceScript redis.Script) *tracesStore {
+func newTraceStatusStore(clock clockwork.Clock, tracer trace.Tracer, keepTraceScript redis.Script, cfg config.Config) *tracesStore {
 	return &tracesStore{
 		clock:           clock,
 		tracer:          tracer,
 		keepTraceScript: keepTraceScript,
+		config:          cfg,
 	}
 }
 
@@ -783,15 +786,16 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 		}
 	}()
 
-	const (
-		maxConnections = 10
-		traceIDsPerGo  = 10
-	)
-	// determine the number of goroutines to use based on the number of traceIDs
-	numGoroutines := len(traceIDs)/traceIDsPerGo + 1
-	if numGoroutines > maxConnections {
-		numGoroutines = maxConnections
+	// Randomly select the number of goroutines to use, using most of what we've been given
+	// for our maximum number of connections in the redis pool.
+	// It seems (after messing around) that adding a bit of randomness here helps with the performance.
+	maxGoroutines := t.config.GetRedisMaxActive()
+	if maxGoroutines <= 0 {
+		maxGoroutines = 1
 	}
+	randRange := maxGoroutines/4 + 1
+	numGoroutines := rand.Intn(randRange) + maxGoroutines - randRange
+	otelutil.AddSpanField(statusSpan, "num_goroutines", numGoroutines)
 
 	// create workers to get the traceIDs and send their statuses to the fanin channel
 	// They will pull from the fanout channel and terminate when it closes
