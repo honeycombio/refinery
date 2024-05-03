@@ -97,7 +97,7 @@ func (r *RedisBasicStore) Start() error {
 	r.Metrics.Register(metricsPrefixConnection+"active", "gauge")
 	r.Metrics.Register(metricsPrefixConnection+"idle", "gauge")
 	r.Metrics.Register(metricsPrefixConnection+"wait", "gauge")
-	r.Metrics.Register(metricsPrefixConnection+"wait_duration_ms", "histogram")
+	r.Metrics.Register(metricsPrefixConnection+"wait_duration_ms", "gauge")
 
 	// register metrics for memory stats
 	r.Metrics.Register(metricsPrefixMemory+"used_total", "gauge")
@@ -131,7 +131,7 @@ func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 	r.Metrics.Gauge(metricsPrefixConnection+"active", connStats.ActiveCount)
 	r.Metrics.Gauge(metricsPrefixConnection+"idle", connStats.IdleCount)
 	r.Metrics.Gauge(metricsPrefixConnection+"wait", connStats.WaitCount)
-	r.Metrics.Histogram(metricsPrefixConnection+"wait_duration_ms", connStats.WaitDuration.Milliseconds())
+	r.Metrics.Gauge(metricsPrefixConnection+"wait_duration_ms", connStats.WaitDuration.Milliseconds())
 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
