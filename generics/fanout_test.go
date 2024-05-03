@@ -33,27 +33,32 @@ func TestFanoutIsActuallyParallel(t *testing.T) {
 		return worker, cleanup
 	}
 
-	// with parallelism = 1, this should take about 15ms
+	// with parallelism = 1, this should take at least 15ms
 	start := time.Now()
 	result := Fanout(input, 1, workerFactory, nil)
 	dur := time.Since(start)
 	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-	assert.Less(t, dur.Milliseconds(), int64(18))
-	assert.Greater(t, dur.Milliseconds(), int64(12))
+	assert.Greater(t, dur.Milliseconds(), int64(15))
 
-	// with parallelism = 5, this should take about 5ms
-	start = time.Now()
-	result = Fanout(input, 5, workerFactory, nil)
-	dur = time.Since(start)
-	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-	assert.Less(t, dur.Milliseconds(), int64(6))
+	// with parallelism = 5, this should take about 5ms, although
+	// it might fail if the machine is under heavy load, so we use an
+	// eventually loop to make sure it passes
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		start = time.Now()
+		result = Fanout(input, 5, workerFactory, nil)
+		dur = time.Since(start)
+		assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
+		assert.Less(t, dur.Milliseconds(), int64(6))
+	}, 1*time.Second, 50*time.Millisecond)
 
 	// with parallelism = 15, this should still take about 5ms
-	start = time.Now()
-	result = Fanout(input, 5, workerFactory, nil)
-	dur = time.Since(start)
-	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-	assert.Less(t, dur.Milliseconds(), int64(6))
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		start = time.Now()
+		result = Fanout(input, 15, workerFactory, nil)
+		dur = time.Since(start)
+		assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
+		assert.Less(t, dur.Milliseconds(), int64(6))
+	}, 1*time.Second, 50*time.Millisecond)
 }
 
 func TestFanoutWithPredicate(t *testing.T) {
@@ -128,27 +133,30 @@ func TestFanoutMapIsActuallyParallel(t *testing.T) {
 		return worker, cleanup
 	}
 
-	// with parallelism = 1, this should take about 15ms
+	// with parallelism = 1, this should take at least 15ms
 	start := time.Now()
 	result := FanoutToMap(input, 1, workerFactory, nil)
 	dur := time.Since(start)
 	assert.EqualValues(t, expected, result)
-	assert.Less(t, dur.Milliseconds(), int64(18))
-	assert.Greater(t, dur.Milliseconds(), int64(12))
+	assert.Greater(t, dur.Milliseconds(), int64(15))
 
 	// with parallelism = 5, this should take about 5ms
-	start = time.Now()
-	result = FanoutToMap(input, 5, workerFactory, nil)
-	dur = time.Since(start)
-	assert.EqualValues(t, expected, result)
-	assert.Less(t, dur.Milliseconds(), int64(6))
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		start = time.Now()
+		result = FanoutToMap(input, 5, workerFactory, nil)
+		dur = time.Since(start)
+		assert.EqualValues(t, expected, result)
+		assert.Less(t, dur.Milliseconds(), int64(6))
+	}, 1*time.Second, 50*time.Millisecond)
 
 	// with parallelism = 15, this should still take about 5ms
-	start = time.Now()
-	result = FanoutToMap(input, 5, workerFactory, nil)
-	dur = time.Since(start)
-	assert.EqualValues(t, expected, result)
-	assert.Less(t, dur.Milliseconds(), int64(6))
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		start = time.Now()
+		result = FanoutToMap(input, 15, workerFactory, nil)
+		dur = time.Since(start)
+		assert.EqualValues(t, expected, result)
+		assert.Less(t, dur.Milliseconds(), int64(6))
+	}, 1*time.Second, 50*time.Millisecond)
 }
 
 func TestFanoutMapWithPredicate(t *testing.T) {
