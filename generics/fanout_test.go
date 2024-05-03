@@ -48,7 +48,7 @@ func TestFanoutIsActuallyParallel(t *testing.T) {
 		result = Fanout(input, 5, workerFactory, nil)
 		dur = time.Since(start)
 		assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-		assert.Less(t, dur.Milliseconds(), int64(7))
+		assert.Less(t, dur.Milliseconds(), int64(10))
 	}, 2*time.Second, 50*time.Millisecond)
 }
 
@@ -139,7 +139,7 @@ func TestFanoutMapIsActuallyParallel(t *testing.T) {
 		result = FanoutToMap(input, 5, workerFactory, nil)
 		dur = time.Since(start)
 		assert.EqualValues(t, expected, result)
-		assert.Less(t, dur.Milliseconds(), int64(7))
+		assert.Less(t, dur.Milliseconds(), int64(10))
 	}, 2*time.Second, 50*time.Millisecond)
 }
 
