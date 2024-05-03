@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -316,10 +315,16 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		return nil, err
 	}
 
+	validStates := make(map[CentralTraceState]struct{}, len(statesToCheck))
+	for _, state := range statesToCheck {
+		validStates[state] = struct{}{}
+	}
+
 	statuses := make([]*CentralTraceStatus, 0, len(statusMapFromRedis))
 	for _, status := range statusMapFromRedis {
 		// only include statuses that are in the statesToCheck list
-		if !slices.Contains(statesToCheck, status.State) {
+		_, ok := validStates[status.State]
+		if !ok {
 			continue
 		}
 		statuses = append(statuses, status)
