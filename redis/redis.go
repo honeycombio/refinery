@@ -726,18 +726,6 @@ func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
 	return redis.ScanStruct(values, val)
 }
 
-func (c *DefaultConn) GetStructsHash(key string, val interface{}) error {
-	values, err := redis.Values(c.conn.Do("HGETALL", key))
-	if err != nil {
-		return err
-	}
-	if len(values) == 0 {
-		return ErrKeyNotFound
-	}
-
-	return redis.ScanStruct(values, val)
-}
-
 func (c *DefaultConn) GetSliceOfStructsHash(key string, val interface{}) error {
 	values, err := redis.Values(c.conn.Do("HGETALL", key))
 	if err != nil {
