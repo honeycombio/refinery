@@ -161,3 +161,15 @@ func (c *CuckooTraceChecker) SetNextCapacity(capacity uint) {
 	defer c.mut.Unlock()
 	c.capacity = capacity
 }
+
+func (c *CuckooTraceChecker) Count() uint {
+	c.mut.RLock()
+	defer c.mut.RUnlock()
+	return c.current.Count()
+}
+
+func (c *CuckooTraceChecker) LoadFactor() float64 {
+	c.mut.RLock()
+	defer c.mut.RUnlock()
+	return c.current.LoadFactor()
+}
