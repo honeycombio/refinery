@@ -64,7 +64,7 @@ type Conn interface {
 	SetStringsTTL([]string, []string, time.Duration) ([]any, error)
 	SetStringTTL(context.Context, string, string, time.Duration) (string, error)
 
-	GetStringHash(string) (map[string]string, error)
+	GetAllStringsHash(string) (map[string]string, error)
 	GetStructHash(string, any) error
 	GetSliceOfStructsHash(string, any) error
 	GetFloat64Hash(string) (map[string]float64, error)
@@ -91,6 +91,7 @@ type Conn interface {
 	ZRemove(string, []string) error
 	TTL(string) (int64, error)
 
+	ReceiveStrings(int) ([]string, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
 	MemoryStats() (map[string]any, error)
@@ -705,7 +706,7 @@ func (c *DefaultConn) TTL(key string) (int64, error) {
 	return redis.Int64(c.conn.Do("TTL", key))
 }
 
-func (c *DefaultConn) GetStringHash(key string) (map[string]string, error) {
+func (c *DefaultConn) GetAllStringsHash(key string) (map[string]string, error) {
 	return redis.StringMap(c.conn.Do("HGETALL", key))
 }
 
@@ -836,6 +837,45 @@ func (c *DefaultConn) MemoryStats() (map[string]any, error) {
 	return result, nil
 }
 
+func (c *DefaultConn) ReceiveStrings(n int) ([]string, error) {
+	replies := make([]string, 0, n)
+	err := c.receive(n, func(reply any, err error) error {
+		if err != nil {
+			return err
+		}
+		val, err := redis.String(reply, nil)
+		if errors.Is(err, redis.ErrNil) {
+			replies = append(replies, "")
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		replies = append(replies, val)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return replies, nil
+}
+
+func (c *DefaultConn) receive(n int, converter func(reply any, err error) error) error {
+	err := c.conn.Flush()
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < n; i++ {
+		err := converter(c.conn.Receive())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *DefaultConn) Do(commandString string, args ...any) (any, error) {
 	now := c.Clock.Now()
 	defer func() {
@@ -876,6 +916,12 @@ var _ Command = command{}
 type command struct {
 	name string
 	args []any
+}
+
+func (c command) Send(conn Conn) error {
+	defaultConn := conn.(*DefaultConn)
+
+	return defaultConn.conn.Send(c.Name(), c.Args()...)
 }
 
 func (c command) Args() []any {
@@ -927,6 +973,13 @@ func NewIncrByHashCommand(key, field string, incrVal int64) command {
 	return command{
 		name: "HINCRBY",
 		args: redis.Args{key, field, incrVal},
+	}
+}
+
+func NewGetHashCommand(key string, field string) command {
+	return command{
+		name: "HGET",
+		args: redis.Args{key, field},
 	}
 }
 
