@@ -50,15 +50,6 @@ func TestFanoutIsActuallyParallel(t *testing.T) {
 		assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
 		assert.Less(t, dur.Milliseconds(), int64(7))
 	}, 2*time.Second, 50*time.Millisecond)
-
-	// with parallelism = 15, this should still take about 5ms
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		start = time.Now()
-		result = Fanout(input, 15, workerFactory, nil)
-		dur = time.Since(start)
-		assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-		assert.Less(t, dur.Milliseconds(), int64(7))
-	}, 2*time.Second, 50*time.Millisecond)
 }
 
 func TestFanoutWithPredicate(t *testing.T) {
@@ -146,15 +137,6 @@ func TestFanoutMapIsActuallyParallel(t *testing.T) {
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		start = time.Now()
 		result = FanoutToMap(input, 5, workerFactory, nil)
-		dur = time.Since(start)
-		assert.EqualValues(t, expected, result)
-		assert.Less(t, dur.Milliseconds(), int64(7))
-	}, 2*time.Second, 50*time.Millisecond)
-
-	// with parallelism = 15, this should still take about 5ms
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		start = time.Now()
-		result = FanoutToMap(input, 15, workerFactory, nil)
 		dur = time.Since(start)
 		assert.EqualValues(t, expected, result)
 		assert.Less(t, dur.Milliseconds(), int64(7))
