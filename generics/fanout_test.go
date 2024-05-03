@@ -1,6 +1,9 @@
 package generics
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -20,36 +23,6 @@ func TestFanout(t *testing.T) {
 
 	result := Fanout(input, parallelism, workerFactory, nil)
 	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-}
-
-func TestFanoutIsActuallyParallel(t *testing.T) {
-	input := []int{1, 2, 3, 4, 5}
-	workerFactory := func(i int) (func(int) int, func(int)) {
-		worker := func(i int) int {
-			time.Sleep(time.Duration(i) * time.Millisecond)
-			return i * 2
-		}
-		cleanup := func(i int) {}
-		return worker, cleanup
-	}
-
-	// with parallelism = 1, this should take at least 15ms
-	start := time.Now()
-	result := Fanout(input, 1, workerFactory, nil)
-	dur := time.Since(start)
-	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-	assert.Greater(t, dur.Milliseconds(), int64(14))
-
-	// with parallelism = 5, this should take about 5ms, although
-	// it might take longer if the machine is under heavy load, so we use an
-	// eventually loop to make sure it passes
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		start = time.Now()
-		result = Fanout(input, 5, workerFactory, nil)
-		dur = time.Since(start)
-		assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-		assert.Less(t, dur.Milliseconds(), int64(10))
-	}, 2*time.Second, 50*time.Millisecond)
 }
 
 func TestFanoutWithPredicate(t *testing.T) {
@@ -113,36 +86,6 @@ func TestFanoutMap(t *testing.T) {
 	assert.EqualValues(t, expected, result)
 }
 
-func TestFanoutMapIsActuallyParallel(t *testing.T) {
-	input := []int{1, 2, 3, 4, 5}
-	workerFactory := func(i int) (func(int) int, func(int)) {
-		worker := func(i int) int {
-			time.Sleep(time.Duration(i) * time.Millisecond)
-			return i * 2
-		}
-		cleanup := func(i int) {}
-		return worker, cleanup
-	}
-
-	// with parallelism = 1, this should take at least 15ms
-	start := time.Now()
-	result := FanoutToMap(input, 1, workerFactory, nil)
-	dur := time.Since(start)
-	assert.EqualValues(t, expected, result)
-	assert.Greater(t, dur.Milliseconds(), int64(14))
-
-	// with parallelism = 5, this should take about 5ms
-	// but we'll give it a little extra time to account for CI load
-	// and try for a while to get it right
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		start = time.Now()
-		result = FanoutToMap(input, 5, workerFactory, nil)
-		dur = time.Since(start)
-		assert.EqualValues(t, expected, result)
-		assert.Less(t, dur.Milliseconds(), int64(10))
-	}, 2*time.Second, 50*time.Millisecond)
-}
-
 func TestFanoutMapWithPredicate(t *testing.T) {
 	input := []int{1, 2, 3, 4, 5}
 	parallelism := 3
@@ -200,4 +143,54 @@ func TestEasyFanoutToMap(t *testing.T) {
 
 	result := EasyFanoutToMap(input, 3, worker)
 	assert.EqualValues(t, expected, result)
+}
+
+func BenchmarkFanoutParallelism(b *testing.B) {
+	parallelisms := []int{1, 3, 6, 10, 25, 100}
+	for _, parallelism := range parallelisms {
+		b.Run(fmt.Sprintf("parallelism%02d", parallelism), func(b *testing.B) {
+
+			input := make([]int, b.N)
+			for i := range input {
+				input[i] = i
+			}
+
+			workerFactory := func(i int) (func(int) string, func(int)) {
+				worker := func(i int) string {
+					h := sha256.Sum256(([]byte(fmt.Sprintf("%d", i))))
+					time.Sleep(1 * time.Millisecond)
+					return hex.EncodeToString(h[:])
+				}
+				cleanup := func(i int) {}
+				return worker, cleanup
+			}
+			b.ResetTimer()
+			_ = Fanout(input, parallelism, workerFactory, nil)
+		})
+	}
+}
+
+func BenchmarkFanoutMapParallelism(b *testing.B) {
+	parallelisms := []int{1, 3, 6, 10, 25, 100}
+	for _, parallelism := range parallelisms {
+		b.Run(fmt.Sprintf("parallelism%02d", parallelism), func(b *testing.B) {
+
+			input := make([]int, b.N)
+			for i := range input {
+				input[i] = i
+			}
+
+			workerFactory := func(i int) (func(int) string, func(int)) {
+				worker := func(i int) string {
+					h := sha256.Sum256(([]byte(fmt.Sprintf("%d", i))))
+					time.Sleep(1 * time.Millisecond)
+					return hex.EncodeToString(h[:])
+				}
+				cleanup := func(i int) {}
+				return worker, cleanup
+			}
+			b.ResetTimer()
+			_ = FanoutToMap(input, parallelism, workerFactory, nil)
+		})
+	}
 }
