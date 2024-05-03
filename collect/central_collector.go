@@ -797,6 +797,10 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 			sp.Data[k] = v
 		}
 
+		if c.hostname != "" && c.Config.GetAddHostMetadataToTrace() {
+			sp.Data["meta.refinery.sender.local_hostname"] = c.hostname
+		}
+
 		// if the trace doesn't have a sample rate and is kept, it
 		traceSampleRate := status.SampleRate()
 		if traceSampleRate == 0 {
