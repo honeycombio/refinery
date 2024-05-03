@@ -82,6 +82,7 @@ func (s *StressRelief) Start() error {
 		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (incoming)"},
 		{Numerator: "libhoney_upstream_queue_length", Denominator: "UPSTREAM_BUFFER_SIZE", Algorithm: "sqrt", Reason: "UpstreamBufferSize"},
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
+		{Numerator: "smartstore_span_queue_length", Denominator: "SPAN_CHANNEL_CAP", Algorithm: "sqrt", Reason: "SpanChannelCapacity"},
 		// TODO: add metrics for stress relief calculation
 
 		// users need to tell us what's their redis memory limit
@@ -106,6 +107,9 @@ func (s *StressRelief) Start() error {
 	s.eg = &errgroup.Group{}
 
 	s.Health.Register(stressReliefHealthSource, 2*calculationInterval)
+
+	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
+	s.RefineryMetrics.Register("individual_stress_level", "gauge")
 
 	if err := s.Gossip.Subscribe("stress_level", s.onStressLevelMessage); err != nil {
 		return err
@@ -207,10 +211,12 @@ func (s *StressRelief) Recalc() uint {
 		}
 	}
 	level := uint(maximumLevel)
+	s.RefineryMetrics.Gauge("individual_stress_level", level)
 
 	s.Logger.Debug().WithField("stress_level", level).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
 
 	clusterStressLevel := s.clusterStressLevel(level)
+	s.RefineryMetrics.Gauge("cluster_stress_level", clusterStressLevel)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -339,7 +345,7 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 
 	s.stressLevels[s.identification] = report
 	var total float64
-	var availablePeers int
+	availablePeers := 0
 	for _, report := range s.stressLevels {
 		// TODO: maybe make the expiration time configurable
 		if s.Clock.Since(report.timestamp) > 5*time.Second {
@@ -352,6 +358,10 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 		}
 		availablePeers++
 		total += float64(report.level * report.level)
+	}
+
+	if availablePeers == 0 {
+		availablePeers = 1
 	}
 
 	return uint(math.Sqrt(total / float64(availablePeers)))
