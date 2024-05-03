@@ -201,6 +201,15 @@ For most cases, use `not-exists` in a rule with a scope of "span".
 WARNING: Rules can have `Scope: trace` or `Scope: span`; `not-exists` used with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
 This is almost never desired behavior.
 
+### has-root-span
+
+Tests if the trace as a whole has a root span.
+
+The `Value` parameter can either be `true` or `false`.
+
+NOTE: `has-root-span` does not check if a given span **is** a root span,
+it checks if the containing trace **has** a root span.
+
 ### `matches`
 
 Tests if the span value specified by the `Field` parameter matches the regular expression specified by the `Value` parameter.

@@ -108,6 +108,8 @@ Samplers:
                 - Name: drop incomplete traces from the buggy service
                   Drop: true
                   Conditions:
+                    # NOTE: has-root-span only checks if the trace has a root span.
+                    # It does NOT act as a shorthand for evaluating the root span; use the `root.` construct for that.
                     - Operator: has-root-span
                       Value: false
                     - Field: service.name
