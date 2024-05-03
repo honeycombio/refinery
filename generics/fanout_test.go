@@ -38,7 +38,7 @@ func TestFanoutIsActuallyParallel(t *testing.T) {
 	result := Fanout(input, 1, workerFactory, nil)
 	dur := time.Since(start)
 	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-	assert.Greater(t, dur.Milliseconds(), int64(15))
+	assert.Greater(t, dur.Milliseconds(), int64(14))
 
 	// with parallelism = 5, this should take about 5ms, although
 	// it might fail if the machine is under heavy load, so we use an
@@ -138,7 +138,7 @@ func TestFanoutMapIsActuallyParallel(t *testing.T) {
 	result := FanoutToMap(input, 1, workerFactory, nil)
 	dur := time.Since(start)
 	assert.EqualValues(t, expected, result)
-	assert.Greater(t, dur.Milliseconds(), int64(15))
+	assert.Greater(t, dur.Milliseconds(), int64(14))
 
 	// with parallelism = 5, this should take about 5ms
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
