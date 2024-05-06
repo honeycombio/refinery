@@ -215,17 +215,17 @@ type RedisPeerManagementConfig struct {
 }
 
 type CollectionConfig struct {
-	CacheCapacity              int        `yaml:"CacheCapacity" default:"10_000"`
-	IncomingQueueSize          int        `yaml:"IncomingQueueSize"`
-	TraceFetcherConcurrency    int        `yaml:"TraceFetcherConcurrency" default:"10"`
-	ProcessTracesBatchSize     int        `yaml:"ProcessTracesBatchSize" default:"1000"`
-	ProcessTracesCycleDuration Duration   `yaml:"ProcessTracesCycleDuration" default:"100ms"`
-	DeciderCycleDuration       Duration   `yaml:"DeciderCycleDuration" default:"100ms"`
-	DeciderBatchSize           int        `yaml:"DeciderBatchSize" default:"1000"`
-	AvailableMemory            MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
-	MaxMemoryPercentage        int        `yaml:"MaxMemoryPercentage" default:"75"`
-	MaxAlloc                   MemorySize `yaml:"MaxAlloc"`
-	ShutdownDelay              Duration   `yaml:"ShutdownDelay" default:"30s"`
+	CacheCapacity           int        `yaml:"CacheCapacity" default:"10_000"`
+	IncomingQueueSize       int        `yaml:"IncomingQueueSize"`
+	TraceFetcherConcurrency int        `yaml:"TraceFetcherConcurrency" default:"10"`
+	SenderBatchSize         int        `yaml:"SenderBatchSize" default:"1000"`
+	SenderCycleDuration     Duration   `yaml:"SenderCycleDuration" default:"100ms"`
+	DeciderCycleDuration    Duration   `yaml:"DeciderCycleDuration" default:"100ms"`
+	DeciderBatchSize        int        `yaml:"DeciderBatchSize" default:"1000"`
+	AvailableMemory         MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
+	MaxMemoryPercentage     int        `yaml:"MaxMemoryPercentage" default:"75"`
+	MaxAlloc                MemorySize `yaml:"MaxAlloc"`
+	ShutdownDelay           Duration   `yaml:"ShutdownDelay" default:"30s"`
 }
 
 type SmartWrapperOptions struct {
@@ -265,15 +265,15 @@ func (c CollectionConfig) GetIncomingQueueSize() int {
 	return c.IncomingQueueSize
 }
 
-func (c CollectionConfig) GetProcessTracesBatchSize() int {
-	if c.ProcessTracesBatchSize == 0 {
+func (c CollectionConfig) GetSenderBatchSize() int {
+	if c.SenderBatchSize == 0 {
 		return 50
 	}
-	return c.ProcessTracesBatchSize
+	return c.SenderBatchSize
 }
 
-func (c CollectionConfig) GetProcessTracesCycleDuration() time.Duration {
-	return time.Duration(c.ProcessTracesCycleDuration)
+func (c CollectionConfig) GetSenderCycleDuration() time.Duration {
+	return time.Duration(c.SenderCycleDuration)
 }
 
 func (c CollectionConfig) GetDeciderCycleDuration() time.Duration {
