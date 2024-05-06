@@ -325,7 +325,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		sp.Event.Data["meta.refinery.reason"] = reason
 	}
 	if c.hostname != "" {
-		sp.Data["meta.refinery.local_hostname"] = c.hostname
+		sp.Data["meta.refinery.host.name"] = c.hostname
 	}
 	c.addAdditionalAttributes(sp)
 	mergeTraceAndSpanSampleRates(sp, rate)
@@ -586,7 +586,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		}
 
 		if c.hostname != "" {
-			status.Metadata["meta.refinery.decider.local_hostname"] = c.hostname
+			status.Metadata["meta.refinery.decider.host.name"] = c.hostname
 		}
 
 		var state centralstore.CentralTraceState
@@ -788,13 +788,17 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 		sp.Data["meta.span_count"] = int(status.SpanCount())
 		sp.Data["meta.event_count"] = int(status.DescendantCount())
 		for k, v := range status.Metadata {
-			if k == "meta.refinery.decider.local_hostname" && !c.Config.GetAddHostMetadataToTrace() {
+			if k == "meta.refinery.decider.host.name" && !c.Config.GetAddHostMetadataToTrace() {
 				continue
 			}
 			if k == "meta.refinery.send_reason" || k == "meta.refinery.reason" {
 				continue
 			}
 			sp.Data[k] = v
+		}
+
+		if c.hostname != "" && c.Config.GetAddHostMetadataToTrace() {
+			sp.Data["meta.refinery.sender.host.name"] = c.hostname
 		}
 
 		// if the trace doesn't have a sample rate and is kept, it
