@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -749,84 +748,57 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 		return nil, nil
 	}
 
-	fanoutChan := make(chan string, 100)
-	faninChan := make(chan *CentralTraceStatus, 100)
+	// We're going to use generics.FanoutToMap to create a set of parallel workers that will farm
+	// out the work of getting the status for each traceID.
 
-	// send all the trace IDs to the fanout channel
-	wgFans := sync.WaitGroup{}
-	wgFans.Add(1)
-	go func() {
-		defer wgFans.Done()
-		defer close(fanoutChan)
-		for i := range traceIDs {
-			fanoutChan <- traceIDs[i]
-		}
-	}()
-
-	// collect the statuses from the fanin channel
-	statuses := make(map[string]*CentralTraceStatus, len(traceIDs))
-	wgFans.Add(1)
-	go func() {
-		defer wgFans.Done()
-		for status := range faninChan {
-			statuses[status.TraceID] = status
-		}
-	}()
-
-	// Randomly select the number of goroutines to use, using most of what we've been given
-	// for our maximum number of connections in the redis pool.
-	// It seems (after messing around) that adding a bit of randomness here helps with the performance.
-	maxGoroutines := t.config.GetRedisMaxActive()
-	if maxGoroutines <= 0 {
-		maxGoroutines = 1
+	// First, calculate the max number of goroutines to use -- half the max active connections configured
+	numGoroutines := t.config.GetRedisMaxActive() / 2
+	if numGoroutines < 1 {
+		numGoroutines = 1
 	}
-	randRange := maxGoroutines/4 + 1
-	numGoroutines := rand.Intn(randRange) + maxGoroutines - randRange
 	otelutil.AddSpanField(statusSpan, "num_goroutines", numGoroutines)
 
-	// create workers to get the traceIDs and send their statuses to the fanin channel
-	// They will pull from the fanout channel and terminate when it closes
-	wgWorkers := sync.WaitGroup{}
-	for i := 0; i < numGoroutines; i++ {
-		wgWorkers.Add(1)
-		go func(i int) {
-			conn := client.Get()
-			defer conn.Close()
-			queries := 0
-			found := 0
-			_, span := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker", i)
-			defer span.End()
-			defer wgWorkers.Done()
-			for traceID := range fanoutChan {
-				status := &centralTraceStatusRedis{}
-				err := conn.GetStructHash(t.traceStatusKey(traceID), status)
-				queries++
-				if err != nil {
-					if errors.Is(err, redis.ErrKeyNotFound) {
-						continue
-					}
-					statusSpan.RecordError(err)
-					continue
+	// Now create a worker factory that will create a worker that will get the status for a traceID.
+	// We also want telemetry so we do a little bit of prework and a cleanup function.
+	workerFactory := func(i int) (func(traceID string) *CentralTraceStatus, func(int)) {
+		conn := client.Get()
+		queries := 0
+		found := 0
+		_, span := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker", i)
+		worker := func(traceID string) *CentralTraceStatus {
+			status := &centralTraceStatusRedis{}
+			err := conn.GetStructHash(t.traceStatusKey(traceID), status)
+			queries++
+			if err != nil {
+				if errors.Is(err, redis.ErrKeyNotFound) {
+					return nil
 				}
-				faninChan <- normalizeCentralTraceStatusRedis(status)
-				found++
+				statusSpan.RecordError(err)
+				return nil
 			}
+			found++
+			return normalizeCentralTraceStatusRedis(status)
+		}
+		cleanup := func(i int) {
+			conn.Close()
 			otelutil.AddSpanFields(span, map[string]interface{}{
 				"num_queries": queries,
 				"num_found":   found,
 			})
-		}(i)
+			span.End()
+		}
+		return worker, cleanup
+	}
+	// this filters out the nil statuses
+	predicate := func(s *CentralTraceStatus) bool {
+		return s != nil
 	}
 
-	// wait for the workers to finish
-	wgWorkers.Wait()
-	// now we can close the fanin channel and wait for the fanin goroutine to finish
-	// fanout should already be done but this makes sure we don't lose track of it
-	close(faninChan)
-	wgFans.Wait()
-
-	// and our result is ready
+	// Now we have all our parts, and this does all the work.
+	statuses := generics.FanoutToMap(traceIDs, numGoroutines, workerFactory, predicate)
 	otelutil.AddSpanField(statusSpan, "num_statuses", len(statuses))
+
+	// Our result is ready
 	return statuses, nil
 }
 
