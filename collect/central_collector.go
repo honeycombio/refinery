@@ -82,11 +82,11 @@ type CentralCollector struct {
 	incoming chan *types.Span
 	reload   chan struct{}
 
-	done           chan struct{}
-	eg             *errgroup.Group
-	processorCycle *Cycle
-	deciderCycle   *Cycle
-	metricsCycle   *Cycle
+	done         chan struct{}
+	eg           *errgroup.Group
+	senderCycle  *Cycle
+	deciderCycle *Cycle
+	metricsCycle *Cycle
 
 	hostname string
 
@@ -96,9 +96,9 @@ type CentralCollector struct {
 }
 
 const (
-	receiverHealth  = "receiver"
-	deciderHealth   = "decider"
-	processorHealth = "processor"
+	receiverHealth = "receiver"
+	deciderHealth  = "decider"
+	senderHealth   = "sender"
 )
 
 func (c *CentralCollector) Start() error {
@@ -108,7 +108,7 @@ func (c *CentralCollector) Start() error {
 	// we're a health check reporter so register ourselves for each of our major routines
 	c.Health.Register(receiverHealth, 2*c.Config.GetSendTickerValue())
 	c.Health.Register(deciderHealth, 2*collectorCfg.GetDeciderCycleDuration())
-	c.Health.Register(processorHealth, 2*collectorCfg.GetProcessTracesCycleDuration())
+	c.Health.Register(senderHealth, 2*collectorCfg.GetSenderCycleDuration())
 
 	c.done = make(chan struct{})
 
@@ -122,10 +122,10 @@ func (c *CentralCollector) Start() error {
 
 	// test hooks
 	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
-	c.processorCycle = NewCycle(c.Clock, collectorCfg.GetProcessTracesCycleDuration(), c.done)
+	c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
 
-	c.Metrics.Register("collector_processor_batch_count", "histogram")
+	c.Metrics.Register("collector_sender_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
 	c.Metrics.Register("trace_send_kept", "counter")
 	c.Metrics.Register("trace_send_kept_sample_rate", "histogram")
@@ -144,7 +144,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("spans_waiting", "updown")
 	c.Metrics.Register("dropped_from_stress", "counter")
 	c.Metrics.Register("kept_from_stress", "counter")
-	c.Metrics.Register("collector_process_trace", "counter")
+	c.Metrics.Register("collector_send_trace", "counter")
 	c.Metrics.Register("collector_decide_trace", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
@@ -157,7 +157,7 @@ func (c *CentralCollector) Start() error {
 	// spin up one collector because this is a single threaded collector
 	c.eg = &errgroup.Group{}
 	c.eg.Go(c.receive)
-	c.eg.Go(c.process)
+	c.eg.Go(c.send)
 	c.eg.Go(c.decide)
 	c.eg.Go(func() error {
 		return c.metricsCycle.Run(context.Background(), func(ctx context.Context) error {
@@ -193,14 +193,14 @@ func (c *CentralCollector) Stop() error {
 }
 
 // shutdown implements the shutdown logic for the collector.
-// It starts a new processor cycle with a shorter interval to monitor
+// It starts a new sender cycle with a shorter interval to monitor
 // trace decisions made for the remaining traces in the cache.
 //
-// After the processor cycle is finished, it also uploads all the
+// After the sender cycle is finished, it also uploads all the
 // remaining traces in the cache to the central store.
 //
 // The shutdown process is expected to finish within the shutdown delay.
-// Half of the shutdown delay is used for the processor cycle and the
+// Half of the shutdown delay is used for the sender cycle and the
 // other half is used for uploading the remaining traces.
 // If the shutdown process exceeds the shutdown delay, it will return an error.
 func (c *CentralCollector) shutdown(ctx context.Context) error {
@@ -209,14 +209,14 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	// keep processing, hoping to send the remaining traces
 	interval := 1 * time.Second
 	done := make(chan struct{})
-	processCycle := NewCycle(c.Clock, interval, done)
+	sendCycle := NewCycle(c.Clock, interval, done)
 
-	// create a new context with a deadline that's half of the shutdown delay for the processor cycle
-	processCtx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay()/2)
+	// create a new context with a deadline that's half of the shutdown delay for the sender cycle
+	sendCtx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay()/2)
 	defer cancel()
 
-	if err := processCycle.Run(processCtx, func(ctx context.Context) error {
-		err := c.processTraces(ctx)
+	if err := sendCycle.Run(sendCtx, func(ctx context.Context) error {
+		err := c.sendTraces(ctx)
 		if err != nil {
 			c.Logger.Error().Logf("during shutdown - error processing remaining traces: %s", err)
 			if c.isTest {
@@ -226,7 +226,7 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 		// we have to make sure the health check says we're alive but not accepting data during shutdown
 		c.Health.Ready(receiverHealth, false)
 		c.Health.Ready(deciderHealth, false)
-		c.Health.Ready(processorHealth, true)
+		c.Health.Ready(senderHealth, true)
 		return nil
 	}); err != nil {
 		// this is expected to happen whenever long traces haven't finished during shutdown;
@@ -387,28 +387,28 @@ func (c *CentralCollector) receive() error {
 
 }
 
-func (c *CentralCollector) process() error {
-	return c.processorCycle.Run(context.Background(), func(ctx context.Context) error {
-		err := c.processTraces(ctx)
+func (c *CentralCollector) send() error {
+	return c.senderCycle.Run(context.Background(), func(ctx context.Context) error {
+		err := c.sendTraces(ctx)
 		if err != nil {
 			c.Logger.Error().Logf("error processing traces: %s", err)
 			if c.isTest {
 				return err
 			}
 		}
-		c.Health.Ready(processorHealth, true)
+		c.Health.Ready(senderHealth, true)
 
 		return nil
 	})
 }
 
-func (c *CentralCollector) processTraces(ctx context.Context) error {
-	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.processTraces")
+func (c *CentralCollector) sendTraces(ctx context.Context) error {
+	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.sendTraces")
 	defer span.End()
-	ids := c.SpanCache.GetTraceIDs(c.Config.GetCollectionConfig().GetProcessTracesBatchSize())
+	ids := c.SpanCache.GetTraceIDs(c.Config.GetCollectionConfig().GetSenderBatchSize())
 	otelutil.AddSpanField(span, "num_ids", len(ids))
 
-	c.Metrics.Histogram("collector_processor_batch_count", len(ids))
+	c.Metrics.Histogram("collector_sender_batch_count", len(ids))
 	if len(ids) == 0 {
 		return nil
 	}
@@ -421,7 +421,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 	for _, status := range statuses {
 		switch status.State {
 		case centralstore.DecisionKeep:
-			c.send(status)
+			c.sendSpans(status)
 			c.SpanCache.Remove(status.TraceID)
 
 		case centralstore.DecisionDrop:
@@ -429,7 +429,7 @@ func (c *CentralCollector) processTraces(ctx context.Context) error {
 		default:
 			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
-		c.Metrics.Increment("collector_process_trace")
+		c.Metrics.Increment("collector_sender_trace")
 	}
 
 	return nil
@@ -732,7 +732,7 @@ func (c *CentralCollector) sendReloadSignal() {
 	}
 }
 
-func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
+func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 	trace := c.SpanCache.Get(status.TraceID)
 	if trace == nil {
 		c.Logger.Error().Logf("trace %s not found in cache", status.TraceID)
@@ -759,6 +759,7 @@ func (c *CentralCollector) send(status *centralstore.CentralTraceStatus) {
 	c.Metrics.Histogram("trace_send_kept_sample_rate", float64(status.Rate))
 
 	c.Logger.Info().WithFields(logFields).Logf("Sending trace")
+
 	for _, sp := range trace.GetSpans() {
 		if sp.Data == nil {
 			sp.Data = make(map[string]interface{})

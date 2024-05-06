@@ -1212,17 +1212,17 @@ groups:
           of trace decisions Refinery can make in one second. It is rarely
           necessary to adjust this value.
 
-      - name: ProcessTracesCycleDuration
+      - name: SenderCycleDuration
         type: duration
         valuetype: nondefault
         default: 100ms
         reload: false
-        summary: is the duration to pause between processing trace batches.
+        summary: is the duration to pause between sending trace batches.
         description: >
           This setting controls the duration that Refinery waits between
-          processing trace batches. It is rarely necessary to adjust this value.
+          sending trace batches. It is rarely necessary to adjust this value.
 
-      - name: ProcessTracesBatchSize
+      - name: SenderBatchSize
         type: int
         valuetype: nondefault
         default: 1000
@@ -1232,7 +1232,7 @@ groups:
           This setting controls the number of trace IDs processed when refinery
           is considering which spans to send or drop. Refinery's trace
           throughput is limited by
-          `ProcessTracesBatchSize*ProcessTracesCycleDuration`, which is the
+          `SenderBatchSize*SenderCycleDuration`, which is the
           maximum number of traces that can be processed in one second. It is
           rarely necessary to adjust this value.
 
