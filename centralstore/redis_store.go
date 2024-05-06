@@ -751,13 +751,9 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 	// We're going to use generics.FanoutToMap to create a set of parallel workers that will farm
 	// out the work of getting the status for each traceID.
 
-	// First, calculate the max number of goroutines to use (leaving a few for the rest of the world).
-	numGoroutines := t.config.GetRedisMaxActive() - 5
-	// but don't use more than 1 for every 10 traceIDs
-	if numGoroutines > len(traceIDs)/10 {
-		numGoroutines = len(traceIDs) / 10
-	}
-	if numGoroutines <= 0 {
+	// First, calculate the max number of goroutines to use -- half the max active connections configured
+	numGoroutines := t.config.GetRedisMaxActive() / 2
+	if numGoroutines < 1 {
 		numGoroutines = 1
 	}
 	otelutil.AddSpanField(statusSpan, "num_goroutines", numGoroutines)
