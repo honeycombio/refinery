@@ -321,7 +321,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	store := NewTestRedisBasicStore(ctx, t)
 	defer store.Stop()
 
-	require.NoError(t, store.WriteSpans(ctx, []*CentralSpan{&CentralSpan{
+	require.NoError(t, store.WriteSpans(ctx, []*CentralSpan{{
 		TraceID:   traceID,
 		SpanID:    "spanID0",
 		KeyFields: map[string]interface{}{"foo": "bar"},
