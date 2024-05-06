@@ -251,7 +251,7 @@ groups:
         description: >
           If `true`, then Refinery will add the following tag to all
           traces:
-          - `meta.refinery.local_hostname`: the hostname of the Refinery node
+          - `meta.refinery.host.name`: the hostname of the Refinery node
 
   - name: Traces
     title: "Traces"

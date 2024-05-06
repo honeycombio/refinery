@@ -351,7 +351,7 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 		assert.Equal(t, "2", events[0].Data["trace.trace_id"])
 		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
 		hostname, _ := os.Hostname()
-		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.local_hostname"])
+		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.host.name"])
 	}, 5*time.Second, 100*time.Millisecond)
 }
 
