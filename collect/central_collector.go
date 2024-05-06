@@ -429,7 +429,7 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 		default:
 			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
-		c.Metrics.Increment("collector_sender_trace")
+		c.Metrics.Increment("collector_send_trace")
 	}
 
 	return nil
