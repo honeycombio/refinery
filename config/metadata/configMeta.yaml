@@ -1838,15 +1838,15 @@ groups:
           bandwidth to the central store is sufficient.
 
       - name: WriteSpanBatchSize
-        firstVersion: v2.6
+        firstVersion: v3.0
         type: int
         valuetype: nondefault
         default: 20
         reload: true
         summary: is the maximum number of spans to be included for writing to basic store in a single request.
         description: >
-          This setting controls the number of spans sent to the basic store in
-          central store when Refinery is processing incoming spans.
+          This setting controls the number of spans sent to the basic store at
+          the same time when Refinery is processing incoming spans.
 
       - name: StateTicker
         firstVersion: v2.6
