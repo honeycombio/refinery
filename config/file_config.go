@@ -230,14 +230,15 @@ type CollectionConfig struct {
 }
 
 type SmartWrapperOptions struct {
-	BasicStoreType    string   `yaml:"Type" default:"local"`
-	SpanChannelSize   int      `yaml:"SpanChannelSize" default:"100"`
-	StateTicker       Duration `yaml:"StateTicker" default:"1s"`
-	SendDelay         Duration `yaml:"SendDelay" default:"2s"`
-	TraceTimeout      Duration `yaml:"TraceTimeout" default:"60s"`
-	DecisionTimeout   Duration `yaml:"DecisionTimeout" default:"3s"`
-	MaxTraceRetention Duration `yaml:"MaxTraceRetention" default:"24h"`
-	ReaperRunInterval Duration `yaml:"ReaperRunInterval" default:"1h"`
+	BasicStoreType     string   `yaml:"Type" default:"local"`
+	SpanChannelSize    int      `yaml:"SpanChannelSize" default:"100"`
+	WriteSpanBatchSize int      `yaml:"WriteSpanBatchSize" default:"20"`
+	StateTicker        Duration `yaml:"StateTicker" default:"1s"`
+	SendDelay          Duration `yaml:"SendDelay" default:"2s"`
+	TraceTimeout       Duration `yaml:"TraceTimeout" default:"60s"`
+	DecisionTimeout    Duration `yaml:"DecisionTimeout" default:"3s"`
+	MaxTraceRetention  Duration `yaml:"MaxTraceRetention" default:"24h"`
+	ReaperRunInterval  Duration `yaml:"ReaperRunInterval" default:"1h"`
 }
 
 func (c CollectionConfig) GetShutdownDelay() time.Duration {

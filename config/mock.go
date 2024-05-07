@@ -569,5 +569,9 @@ func (f *MockConfig) GetCentralStoreOptions() SmartWrapperOptions {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
+	if f.StoreOptions.WriteSpanBatchSize == 0 {
+		f.StoreOptions.WriteSpanBatchSize = 20
+	}
+
 	return f.StoreOptions
 }
