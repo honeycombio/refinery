@@ -439,9 +439,13 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
 		default:
+			// this shouldn't happen, but we want to be safe about it.
 			// we don't want to send traces that are in any other state;
-			// it's also an error, but ending the loop is not what we want
-			c.Logger.Error().Logf("unexpected state %s for trace %s", status.State, status.TraceID)
+			// it's an error, but ending the loop is not what we want
+			c.Logger.Error().WithFields(logrus.Fields{
+				"trace_id": status.TraceID,
+				"state":    status.State,
+			}).Logf("unexpected state for trace")
 			continue
 		}
 		c.Metrics.Increment("collector_send_trace")
