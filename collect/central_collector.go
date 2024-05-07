@@ -245,8 +245,10 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	// send the remaining traces to the central store
 	ids := c.SpanCache.GetTraceIDs(c.SpanCache.Len())
 	var sentCount int
-	defer otelutil.AddSpanField(spanForward, "sent_count", sentCount)
-	defer c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
+	defer func() {
+		c.Logger.Info().Logf("sent %d traces to central store during shutdown", sentCount)
+		otelutil.AddSpanField(spanForward, "sent_count", sentCount)
+	}()
 
 	for _, id := range ids {
 		trace := c.SpanCache.Get(id)
@@ -264,9 +266,12 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 			cs.SetSamplerSelector(trace.GetSamplerSelector(c.Config.GetDatasetPrefix()))
 			err := c.Store.WriteSpan(ctxForward, cs)
 			if err != nil {
+				logField := logrus.Fields{
+					"span_id":  sp.ID,
+					"trace_id": id,
+				}
 				spanForward.RecordError(err)
-				c.Logger.Error().Logf("error sending span %s for trace %s during shutdown: %s", sp.ID, id, err)
-
+				c.Logger.Error().WithFields(logField).Logf("error sending span during shutdown: %s", err)
 			}
 			sentCount++
 			// if the context deadline is exceeded, that means we are
@@ -545,7 +550,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 
 		status, ok := stateMap[trace.TraceID]
 		if !ok {
-			c.Logger.Error().Logf("trace %s not found in state map", trace.TraceID)
+			c.Logger.Error().WithFields(logFields).Logf("trace not found in state map")
 			continue
 		}
 
@@ -619,9 +624,12 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 		c.Metrics.Increment("span_processed")
 		c.Metrics.Down("spans_waiting")
 	}()
+	logFields := logrus.Fields{
+		"trace_id": sp.TraceID,
+	}
 	err := c.SpanCache.Set(sp)
 	if err != nil {
-		c.Logger.Error().Logf("error adding span with trace ID %s to cache: %s", sp.TraceID, err)
+		c.Logger.Error().WithFields(logFields).Logf("error adding span to cache: %s", err)
 		return err
 	}
 
@@ -639,12 +647,9 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	selector := trace.GetSamplerSelector(c.Config.GetDatasetPrefix())
 	cs.SetSamplerSelector(selector)
 	if selector == "" {
-		c.Logger.Error().Logf("error getting sampler selection key for trace %s", sp.TraceID)
+		c.Logger.Error().WithFields(logFields).Logf("error getting sampler selection key for trace")
 	}
 
-	logFields := logrus.Fields{
-		"trace_id": trace.TraceID,
-	}
 	logFields["sampler_selector"] = selector
 
 	c.mut.RLock()
@@ -707,7 +712,7 @@ func (c *CentralCollector) checkAlloc() {
 		numOfTracesSent++
 		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id})
 		if err != nil {
-			c.Logger.Error().Logf("error sending trace %s for decision: %s", id, err)
+			c.Logger.Error().WithField("trace_id", id).Logf("error sending trace for decision: %s", err)
 		}
 	}
 
@@ -735,7 +740,7 @@ func (c *CentralCollector) sendReloadSignal() {
 func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 	trace := c.SpanCache.Get(status.TraceID)
 	if trace == nil {
-		c.Logger.Error().Logf("trace %s not found in cache", status.TraceID)
+		c.Logger.Error().WithField("trace_id", status.TraceID).Logf("trace not found in cache")
 		return
 	}
 

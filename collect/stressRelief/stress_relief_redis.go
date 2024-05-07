@@ -110,6 +110,7 @@ func (s *StressRelief) Start() error {
 
 	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
+	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
 	if err := s.Gossip.Subscribe("stress_level", s.onStressLevelMessage); err != nil {
 		return err
@@ -256,6 +257,12 @@ func (s *StressRelief) Recalc() uint {
 				"instance_stress_level": level,
 			}).Logf("StressRelief has been deactivated")
 		}
+	}
+
+	if s.stressed {
+		s.RefineryMetrics.Gauge("stress_relief_activated", 1)
+	} else {
+		s.RefineryMetrics.Gauge("stress_relief_activated", 0)
 	}
 
 	return uint(level)
