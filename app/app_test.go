@@ -98,6 +98,7 @@ func newStartedApp(
 	basePort int,
 	redisDB int,
 	enableHostMetadata bool,
+	storeType string,
 ) (*App, inject.Graph, func()) {
 	c := &config.MockConfig{
 		GetTraceTimeoutVal:       10 * time.Millisecond,
@@ -117,21 +118,25 @@ func newStartedApp(
 			ShutdownDelay:        config.Duration(1 * time.Millisecond),
 		},
 		GetParallelismVal:      10,
+		GetRedisMaxActiveVal:   10,
+		GetRedisMaxIdleVal:     10,
+		GetRedisDatabaseVal:    redisDB,
 		AddHostMetadataToTrace: enableHostMetadata,
 		TraceIdFieldNames:      []string{"trace.trace_id"},
 		ParentIdFieldNames:     []string{"trace.parent_id"},
 		SampleCache:            config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 		StoreOptions: config.SmartWrapperOptions{
 			StateTicker:     config.Duration(50 * time.Millisecond),
-			BasicStoreType:  "redis",
+			BasicStoreType:  storeType,
 			SpanChannelSize: 10000,
 			SendDelay:       config.Duration(2 * time.Millisecond),
 			DecisionTimeout: config.Duration(100 * time.Millisecond),
 		},
 	}
 
-	c.GetRedisDatabaseVal = redisDB
-	fmt.Println("Using Redis database", c.GetRedisDatabaseVal)
+	if storeType == "redis" {
+		fmt.Println("Using Redis database", c.GetRedisDatabaseVal)
+	}
 
 	var err error
 	a := App{}
@@ -155,9 +160,7 @@ func newStartedApp(
 	})
 	assert.NoError(t, err)
 
-	store := &centralstore.RedisBasicStore{}
 	sw := &centralstore.SmartWrapper{}
-	redis := &redis.DefaultClient{}
 	var g inject.Graph
 	err = g.Provide(
 		&inject.Object{Value: c},
@@ -167,8 +170,6 @@ func newStartedApp(
 		&inject.Object{Value: clockwork.NewRealClock()},
 		&inject.Object{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		&inject.Object{Value: &cache.SpanCache_basic{}},
-		&inject.Object{Value: redis, Name: "redis"},
-		&inject.Object{Value: store},
 		&inject.Object{Value: sw},
 		&inject.Object{Value: collector, Name: "collector"},
 		&inject.Object{Value: &cache.CuckooSentCache{}},
@@ -178,11 +179,26 @@ func newStartedApp(
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &health.Health{}},
-		&inject.Object{Value: &gossip.GossipRedis{}, Name: "gossip"},
 		&inject.Object{Value: &stressRelief.StressRelief{}, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)
 	require.NoError(t, err)
+
+	var red redis.Client
+	if storeType == "redis" {
+		red = &redis.DefaultClient{}
+		err = g.Provide(&inject.Object{Value: red, Name: "redis"})
+		require.NoError(t, err)
+		err = g.Provide(&inject.Object{Value: &gossip.GossipRedis{}, Name: "gossip"})
+		require.NoError(t, err)
+		err = g.Provide(&inject.Object{Value: &centralstore.RedisBasicStore{}})
+		require.NoError(t, err)
+	} else {
+		err = g.Provide(&inject.Object{Value: &gossip.InMemoryGossip{}, Name: "gossip"})
+		require.NoError(t, err)
+		err = g.Provide(&inject.Object{Value: &centralstore.LocalStore{}})
+		require.NoError(t, err)
+	}
 
 	err = g.Populate()
 	require.NoError(t, err)
@@ -193,10 +209,12 @@ func newStartedApp(
 	// Racy: wait just a moment for ListenAndServe to start up.
 	time.Sleep(10 * time.Millisecond)
 	return &a, g, func() {
-		conn := redis.Get()
-		_, err := conn.Do("FLUSHDB")
-		assert.NoError(t, err)
-		conn.Close()
+		if storeType == "redis" {
+			conn := red.Get()
+			_, err := conn.Do("FLUSHDB")
+			assert.NoError(t, err)
+			conn.Close()
+		}
 		err = startstop.Stop(g.Objects(), nil)
 		assert.NoError(t, err)
 	}
@@ -210,148 +228,166 @@ func post(t testing.TB, req *http.Request) {
 	resp.Body.Close()
 }
 
+var storesToTest = []string{"redis", "local"}
+
 func TestAppIntegration(t *testing.T) {
 	port := 10500
 	redisDB := 2
 
 	sender := &transmission.MockSender{}
-	_, _, stop := newStartedApp(t, sender, port, redisDB, false)
-	defer stop()
+	for _, storeType := range storesToTest {
+		t.Run(storeType, func(t *testing.T) {
+			_, _, stop := newStartedApp(t, sender, port, redisDB, false, storeType)
+			defer stop()
 
-	// Send a root span, it should be sent in short order.
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
-	)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+			// Send a root span, it should be sent in short order.
+			req := httptest.NewRequest(
+				"POST",
+				fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+				strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+			)
+			req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+			req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			resp.Body.Close()
 
-	require.Eventually(t, func() bool {
-		events := sender.Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
+			require.Eventually(t, func() bool {
+				events := sender.Events()
+				return len(events) == 1
+			}, 5*time.Second, 100*time.Millisecond)
 
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := sender.Events()
+			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				events := sender.Events()
 
-		assert.Equal(collect, "dataset", events[0].Dataset)
-		assert.Equal(collect, "bar", events[0].Data["foo"])
-		assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
-		assert.Equal(collect, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
-	}, 5*time.Second, 100*time.Millisecond)
+				assert.Equal(collect, "dataset", events[0].Dataset)
+				assert.Equal(collect, "bar", events[0].Data["foo"])
+				assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
+				assert.Equal(collect, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+			}, 5*time.Second, 100*time.Millisecond)
+		})
+	}
 }
 
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	port := 10600
 	redisDB := 3
 
-	sender := &transmission.MockSender{}
-	a, _, stop := newStartedApp(t, sender, port, redisDB, false)
-	defer stop()
-	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+	for _, storeType := range storesToTest {
+		t.Run(storeType, func(t *testing.T) {
+			sender := &transmission.MockSender{}
+			a, _, stop := newStartedApp(t, sender, port, redisDB, false, storeType)
+			defer stop()
+			a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
-	// Send a root span, it should be sent in short order.
-	traceID := strconv.Itoa(rand.Intn(1000))
-	data := `[{"data":{"trace.trace_id":"` + traceID + `","foo":"bar"}}]`
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-		strings.NewReader(data),
-	)
-	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+			// Send a root span, it should be sent in short order.
+			traceID := strconv.Itoa(rand.Intn(1000))
+			data := `[{"data":{"trace.trace_id":"` + traceID + `","foo":"bar"}}]`
+			req := httptest.NewRequest(
+				"POST",
+				fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+				strings.NewReader(data),
+			)
+			req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
+			req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			resp.Body.Close()
 
-	require.Eventually(t, func() bool {
-		events := sender.Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
+			require.Eventually(t, func() bool {
+				events := sender.Events()
+				return len(events) == 1
+			}, 5*time.Second, 100*time.Millisecond)
 
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := sender.Events()
-		assert.Equal(t, "dataset", events[0].Dataset)
-		assert.Equal(t, "bar", events[0].Data["foo"])
-		assert.Equal(t, traceID, events[0].Data["trace.trace_id"])
-		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
-	}, 5*time.Second, 100*time.Millisecond)
+			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				events := sender.Events()
+				assert.Equal(t, "dataset", events[0].Dataset)
+				assert.Equal(t, "bar", events[0].Data["foo"])
+				assert.Equal(t, traceID, events[0].Data["trace.trace_id"])
+				assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+			}, 5*time.Second, 100*time.Millisecond)
+		})
+	}
 }
 
 func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	port := 10700
 	redisDB := 4
 
-	sender := &transmission.MockSender{}
-	a, _, stop := newStartedApp(t, sender, port, redisDB, false)
-	defer stop()
-	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+	for _, storeType := range storesToTest {
+		t.Run(storeType, func(t *testing.T) {
+			sender := &transmission.MockSender{}
+			a, _, stop := newStartedApp(t, sender, port, redisDB, false, storeType)
+			defer stop()
+			a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
-	// Send a root span, it should be sent in short order.
-	traceID := strconv.Itoa(rand.Intn(1000))
-	input := fmt.Sprintf(`[{"data":{"trace.trace_id":"%s","foo":"bar"}}]`, traceID)
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/v1/traces", port),
-		strings.NewReader(input),
-	)
-	req.Header.Set("X-Honeycomb-Team", "badkey")
-	req.Header.Set("Content-Type", "application/json")
+			// Send a root span, it should be sent in short order.
+			traceID := strconv.Itoa(rand.Intn(1000))
+			input := fmt.Sprintf(`[{"data":{"trace.trace_id":"%s","foo":"bar"}}]`, traceID)
+			req := httptest.NewRequest(
+				"POST",
+				fmt.Sprintf("http://localhost:%d/v1/traces", port),
+				strings.NewReader(input),
+			)
+			req.Header.Set("X-Honeycomb-Team", "badkey")
+			req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 401, resp.StatusCode)
-	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err)
-	assert.Contains(t, string(data), "not found in list of authorized keys")
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(t, err)
+			assert.Equal(t, 401, resp.StatusCode)
+			data, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			assert.NoError(t, err)
+			assert.Contains(t, string(data), "not found in list of authorized keys")
+		})
+	}
 }
 
 func TestHostMetadataSpanAdditions(t *testing.T) {
 	port := 14000
 	redisDB := 6
 
-	sender := &transmission.MockSender{}
-	_, _, stop := newStartedApp(t, sender, port, redisDB, true)
-	defer stop()
+	for _, storeType := range storesToTest {
+		t.Run(storeType, func(t *testing.T) {
+			sender := &transmission.MockSender{}
+			_, _, stop := newStartedApp(t, sender, port, redisDB, true, storeType)
+			defer stop()
 
-	// Send a root span, it should be sent in short order.
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-		strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"2"}}]`),
-	)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+			// Send a root span, it should be sent in short order.
+			req := httptest.NewRequest(
+				"POST",
+				fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+				strings.NewReader(`[{"data":{"foo":"bar","trace.trace_id":"2"}}]`),
+			)
+			req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+			req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	resp.Body.Close()
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(t, err)
+			assert.Equal(t, http.StatusOK, resp.StatusCode)
+			resp.Body.Close()
 
-	require.Eventually(t, func() bool {
-		events := sender.Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
+			require.Eventually(t, func() bool {
+				events := sender.Events()
+				return len(events) == 1
+			}, 5*time.Second, 100*time.Millisecond)
 
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := sender.Events()
+			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				events := sender.Events()
 
-		assert.Equal(t, "dataset", events[0].Dataset)
-		assert.Equal(t, "bar", events[0].Data["foo"])
-		assert.Equal(t, "2", events[0].Data["trace.trace_id"])
-		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
-		hostname, _ := os.Hostname()
-		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.host.name"])
-	}, 5*time.Second, 100*time.Millisecond)
+				assert.Equal(t, "dataset", events[0].Dataset)
+				assert.Equal(t, "bar", events[0].Data["foo"])
+				assert.Equal(t, "2", events[0].Data["trace.trace_id"])
+				assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+				hostname, _ := os.Hostname()
+				assert.Equal(t, hostname, events[0].Data["meta.refinery.sender.host.name"])
+			}, 5*time.Second, 100*time.Millisecond)
+		})
+	}
 }
 
 func TestEventsEndpoint(t *testing.T) {
@@ -365,7 +401,7 @@ func TestEventsEndpoint(t *testing.T) {
 		var stop func()
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		apps[i], _, stop = newStartedApp(t, senders[i], basePort, redisDB, false)
+		apps[i], _, stop = newStartedApp(t, senders[i], basePort, redisDB, false, "redis")
 		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
@@ -483,7 +519,6 @@ func TestEventsEndpoint(t *testing.T) {
 			event,
 		)
 	}, 3*time.Second, 2*time.Millisecond)
-
 }
 
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
@@ -496,7 +531,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	for i := range apps {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
-		app, _, stop := newStartedApp(t, senders[i], basePort, redisDB, false)
+		app, _, stop := newStartedApp(t, senders[i], basePort, redisDB, false, "redis")
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
 		defer stop()
@@ -684,7 +719,7 @@ func BenchmarkTraces(b *testing.B) {
 			W: io.Discard,
 		},
 	}
-	_, _, stop := newStartedApp(b, sender, 11000, 11, false)
+	_, _, stop := newStartedApp(b, sender, 11000, 11, false, "redis")
 	defer stop()
 
 	req, err := http.NewRequest(
@@ -771,7 +806,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 	for i := range apps {
 		var stop func()
 		basePort := 12000 + (i * 2)
-		apps[i], _, stop = newStartedApp(b, sender, basePort, 11, false)
+		apps[i], _, stop = newStartedApp(b, sender, basePort, 11, false, "redis")
 		defer stop()
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
