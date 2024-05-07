@@ -534,8 +534,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	var isRoot bool
 	for _, parentIdFieldName := range r.Config.GetParentIdFieldNames() {
-		_, isRoot = ev.Data[parentIdFieldName]
-		if isRoot {
+		if _, isRoot = ev.Data[parentIdFieldName]; isRoot {
 			break
 		}
 	}
