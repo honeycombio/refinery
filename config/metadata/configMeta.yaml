@@ -1029,7 +1029,7 @@ groups:
         firstversion: v2.6
         type: int
         valuetype: nondefault
-        default: 15
+        default: 20
         reload: false
         validations:
           - type: minimum
@@ -1043,13 +1043,31 @@ groups:
         firstversion: v2.6
         type: int
         valuetype: nondefault
-        default: 30
+        default: 20
+        validations:
+          - type: minimum
+            arg: 10
         reload: false
         summary: is the maximum number of active connections in the Redis connection pool.
         description: >
           This setting is used to control the maximum number of active
           connections to Redis in the Redis connection pool. It may be useful to
           increase this value in high-throughput environments.
+
+      - name: Parallelism
+        firstversion: v3.0
+        type: int
+        valuetype: nondefault
+        default: 10
+        reload: true
+        validations:
+          - type: minimum
+            arg: 3
+        summary: is the number of parallel Redis connections to use when communicating with Redis for trace decisions.
+        description: >
+          This setting is used to control the number of parallel Redis
+          connections use when communicating trace information to Redis. It may
+          be useful to increase this value in high-throughput environments.
 
       - name: Strategy
         v1group: PeerManagement

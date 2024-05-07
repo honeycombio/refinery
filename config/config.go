@@ -90,6 +90,8 @@ type Config interface {
 
 	GetRedisMaxActive() int
 
+	GetParallelism() int
+
 	// GetHoneycombAPI returns the base URL (protocol, hostname, and port) of
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() string
@@ -245,4 +247,6 @@ type RedisConfig interface {
 	GetRedisMaxActive() int
 
 	GetPeerTimeout() time.Duration
+
+	GetParallelism() int
 }

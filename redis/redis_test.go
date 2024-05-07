@@ -221,11 +221,10 @@ type TestRedis struct {
 func (tr *TestRedis) Start(ctx context.Context) {
 	tr.Server, _ = miniredis.Run()
 	cfg := &config.MockConfig{
-		GetRedisHostVal:      tr.Server.Addr(),
-		GetRedisDatabaseVal:  0,
-		GetRedisMaxActiveVal: 10,
-		GetRedisMaxIdleVal:   10,
-		GetRedisTimeoutVal:   5,
+		GetRedisHostVal:     tr.Server.Addr(),
+		GetRedisDatabaseVal: 0,
+		GetParallelismVal:   10,
+		GetRedisTimeoutVal:  5,
 	}
 
 	client := redis.DefaultClient{Config: cfg, Metrics: &metrics.NullMetrics{}}

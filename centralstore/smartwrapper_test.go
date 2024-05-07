@@ -55,8 +55,7 @@ func getAndStartSmartWrapper(storetype string, redisClient redis.Client) (*Smart
 			DroppedSize:       1000,
 			SizeCheckInterval: duration("1s"),
 		},
-		GetRedisMaxActiveVal: 10,
-		GetRedisMaxIdleVal:   10,
+		GetParallelismVal: 10,
 	}
 
 	decisionCache := &cache.CuckooSentCache{}
