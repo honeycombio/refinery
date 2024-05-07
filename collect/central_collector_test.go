@@ -48,6 +48,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity: 3,
 				},
+				GetParallelismVal: 10,
 			}
 			coll := &CentralCollector{
 				Clock: clockwork.NewFakeClock(),
