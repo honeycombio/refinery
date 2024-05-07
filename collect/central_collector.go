@@ -146,6 +146,9 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("kept_from_stress", "counter")
 	c.Metrics.Register("collector_send_trace", "counter")
 	c.Metrics.Register("collector_decide_trace", "counter")
+	c.Metrics.Register("decider_decided_per_second", "histogram")
+	c.Metrics.Register("decider_considered_per_second", "histogram")
+	c.Metrics.Register("sender_considered_per_second", "histogram")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -413,6 +416,13 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 		return nil
 	}
 
+	var tracesConsidered float64
+	now := c.Clock.Now()
+	defer func() {
+		sendTime := c.Clock.Since(now)
+		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
+	}()
+
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
 		return err
@@ -423,11 +433,20 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 		case centralstore.DecisionKeep:
 			c.sendSpans(status)
 			c.SpanCache.Remove(status.TraceID)
+			tracesConsidered++
 
 		case centralstore.DecisionDrop:
 			c.SpanCache.Remove(status.TraceID)
+			tracesConsidered++
 		default:
-			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
+			// this shouldn't happen, but we want to be safe about it.
+			// we don't want to send traces that are in any other state;
+			// it's an error, but ending the loop is not what we want
+			c.Logger.Error().WithFields(logrus.Fields{
+				"trace_id": status.TraceID,
+				"state":    status.State,
+			}).Logf("unexpected state for trace")
+			continue
 		}
 		c.Metrics.Increment("collector_send_trace")
 	}
@@ -437,7 +456,7 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 
 func (c *CentralCollector) decide() error {
 	return c.deciderCycle.Run(context.Background(), func(ctx context.Context) error {
-		err := c.makeDecision(ctx)
+		err := c.makeDecisions(ctx)
 		if err != nil {
 			c.Logger.Error().Logf("error making decision: %s", err)
 			if c.isTest {
@@ -450,7 +469,7 @@ func (c *CentralCollector) decide() error {
 	})
 }
 
-func (c *CentralCollector) makeDecision(ctx context.Context) error {
+func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.makeDecision")
 	defer span.End()
 	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, c.Config.GetCollectionConfig().GetDeciderBatchSize())
@@ -463,6 +482,16 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 	if len(tracesIDs) == 0 {
 		return nil
 	}
+
+	var tracesDecided float64
+	var tracesConsidered float64
+	now := c.Clock.Now()
+	defer func() {
+		sendTime := c.Clock.Since(now)
+		c.Metrics.Histogram("decider_decided_per_second", tracesDecided/sendTime.Seconds())
+		c.Metrics.Histogram("decider_considered_per_second", tracesConsidered/sendTime.Seconds())
+	}()
+
 	statuses, err := c.Store.GetStatusForTraces(ctx, tracesIDs, centralstore.AwaitingDecision)
 	if err != nil {
 		span.RecordError(err)
@@ -514,6 +543,8 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		if trace == nil {
 			continue
 		}
+		tracesConsidered++
+
 		_, span := otelutil.StartSpan(ctxTraces, c.Tracer, "CentralCollector.makeDecision.trace")
 
 		if trace.Root != nil {
@@ -562,6 +593,7 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		}
 		// This will observe sample rate attempts even if the trace is dropped
 		c.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
+		tracesDecided++
 
 		if !shouldSend {
 			c.Metrics.Increment("trace_decision_dropped")
