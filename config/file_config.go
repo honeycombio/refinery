@@ -210,8 +210,9 @@ type RedisPeerManagementConfig struct {
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	MaxIdle        int      `yaml:"MaxIdle" default:"15"`
+	MaxIdle        int      `yaml:"MaxIdle" default:"30"`
 	MaxActive      int      `yaml:"MaxActive" default:"30"`
+	Parallelism    int      `yaml:"Parallelism" default:"10"`
 }
 
 type CollectionConfig struct {
@@ -659,6 +660,13 @@ func (f *fileConfig) GetUseTLSInsecure() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.UseTLSInsecure
+}
+
+func (f *fileConfig) GetParallelism() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.Parallelism
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() string {
