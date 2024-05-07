@@ -444,7 +444,7 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 			c.Logger.Error().Logf("unexpected state %s for trace %s", status.State, status.TraceID)
 			continue
 		}
-		c.Metrics.Increment("collector_sender_trace")
+		c.Metrics.Increment("collector_send_trace")
 	}
 
 	return nil
