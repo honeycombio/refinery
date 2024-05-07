@@ -533,9 +533,9 @@ func (c *CentralCollector) makeDecision(ctx context.Context) error {
 		// get sampler key (dataset for legacy keys, environment for new keys)
 		selector := stateMap[trace.TraceID].SamplerSelector
 		logFields := logrus.Fields{
-			"trace_id": trace.TraceID,
+			"trace_id":         trace.TraceID,
+			"sampler_selector": selector,
 		}
-		logFields["sampler_selector"] = selector
 
 		// use sampler key to find sampler; create and cache if not found
 		c.mut.RLock()
@@ -624,12 +624,10 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 		c.Metrics.Increment("span_processed")
 		c.Metrics.Down("spans_waiting")
 	}()
-	logFields := logrus.Fields{
-		"trace_id": sp.TraceID,
-	}
+
 	err := c.SpanCache.Set(sp)
 	if err != nil {
-		c.Logger.Error().WithFields(logFields).Logf("error adding span to cache: %s", err)
+		c.Logger.Error().WithField("trace_id", sp.TraceID).Logf("error adding span to cache: %s", err)
 		return err
 	}
 
@@ -647,10 +645,8 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	selector := trace.GetSamplerSelector(c.Config.GetDatasetPrefix())
 	cs.SetSamplerSelector(selector)
 	if selector == "" {
-		c.Logger.Error().WithFields(logFields).Logf("error getting sampler selection key for trace")
+		c.Logger.Error().WithField("trace_id", trace.ID()).Logf("error getting sampler selection key for trace")
 	}
-
-	logFields["sampler_selector"] = selector
 
 	c.mut.RLock()
 	sampler, found := c.samplersByDestination[selector]
