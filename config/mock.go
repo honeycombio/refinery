@@ -541,6 +541,9 @@ func (f *MockConfig) GetParentIdFieldNames() []string {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
+	if f.ParentIdFieldNames == nil {
+		f.ParentIdFieldNames = []string{"trace.parent_id", "parent_id"}
+	}
 	return f.ParentIdFieldNames
 }
 
