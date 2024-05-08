@@ -117,10 +117,11 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-				GetParallelismVal:  10,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				AddRuleReasonToTrace: true,
+				GetParallelismVal:    10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity:        100,
 					SenderCycleDuration:  config.Duration(1 * time.Second),
@@ -177,6 +178,16 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 			count, ok := collector.Metrics.Get("trace_send_kept")
 			require.True(t, ok)
 			assert.Equal(t, float64(numberOfTraces), count)
+
+			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				transmission.Mux.RLock()
+				assert.Equal(t, numberOfTraces*10, len(transmission.Events))
+				assert.Equal(t, "aoeu", transmission.Events[0].Dataset)
+				assert.Equal(t, "test", transmission.Events[0].Environment)
+				assert.Equal(t, TraceSendGotRoot, transmission.Events[0].Data["meta.refinery.send_reason"])
+				assert.Equal(t, "deterministic/always", transmission.Events[0].Data["meta.refinery.reason"])
+				transmission.Mux.RUnlock()
+			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
 }
@@ -185,10 +196,11 @@ func TestCentralCollector_Decider(t *testing.T) {
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
-				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-				SendTickerVal:      2 * time.Millisecond,
-				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-				GetParallelismVal:  10,
+				GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+				SendTickerVal:        2 * time.Millisecond,
+				AddRuleReasonToTrace: true,
+				ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+				GetParallelismVal:    10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
 					SenderCycleDuration:  config.Duration(1 * time.Second),
@@ -244,6 +256,8 @@ func TestCentralCollector_Decider(t *testing.T) {
 			require.Equal(t, numberOfTraces, len(traces))
 			for _, trace := range traces {
 				assert.Equal(t, centralstore.DecisionKeep, trace.State)
+				assert.Equal(t, TraceSendGotRoot, trace.Metadata["meta.refinery.send_reason"])
+				assert.Equal(t, "deterministic/always", trace.Metadata["meta.refinery.reason"])
 			}
 		})
 	}
