@@ -344,12 +344,8 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 
 // implement the Collector interface
 func (c *CentralCollector) AddSpan(span *types.Span) error {
-	return c.add(span, c.incoming)
-}
-
-func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	select {
-	case ch <- sp:
+	case c.incoming <- span:
 		c.Metrics.Increment("span_received")
 		c.Metrics.Up("spans_waiting")
 		return nil
