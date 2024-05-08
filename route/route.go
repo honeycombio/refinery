@@ -532,9 +532,11 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 	debugLog = debugLog.WithString("trace_id", traceID)
 
-	var isRoot bool
+	// check if this is a root span; if we can't find a parent ID, it is.
+	isRoot := true
 	for _, parentIdFieldName := range r.Config.GetParentIdFieldNames() {
-		if _, isRoot = ev.Data[parentIdFieldName]; isRoot {
+		if _, hasParent := ev.Data[parentIdFieldName]; hasParent {
+			isRoot = false
 			break
 		}
 	}
