@@ -731,6 +731,9 @@ func (c *CentralCollector) checkAlloc() {
 		}
 		totalDataSizeSent += trace.DataSize
 		numOfTracesSent++
+		// in order to eject a trace from refinery's cache, we pretend that its root span has
+		// arrived. This will force the trace to enter the decision-making process. Once a decision
+		// is made, the trace will be removed from the cache.
 		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id, IsRoot: true})
 		if err != nil {
 			c.Logger.Error().WithField("trace_id", id).Logf("error sending trace for decision: %s", err)
