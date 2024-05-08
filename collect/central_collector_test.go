@@ -304,6 +304,7 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				span := &types.Span{
 					TraceID: fmt.Sprintf("trace-%v", i),
+					ID:      fmt.Sprintf("span%d", i),
 					Event: types.Event{
 						Dataset:    "aoeu",
 						APIKey:     legacyAPIKey,
@@ -336,6 +337,7 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			traceID := fmt.Sprintf("trace-%v", 1000)
 			err := collector.AddSpan(&types.Span{
 				TraceID: traceID,
+				ID:      "span1000",
 				Event: types.Event{
 					Dataset:    "no-upstream-sampling",
 					APIKey:     legacyAPIKey,
