@@ -45,7 +45,6 @@ var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
 const (
 	TraceSendGotRoot        = "trace_send_got_root"
 	TraceSendExpired        = "trace_send_expired"
-	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 	TraceSendLateSpan       = "trace_send_late_span"
 )
@@ -609,12 +608,9 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		// so that it's synced across all refinery instances
 		if c.Config.GetAddRuleReasonToTrace() {
 			status.Metadata["meta.refinery.reason"] = reason
-			sendReason, ok := status.Metadata["meta.refinery.send_reason"]
-			if !ok {
-				sendReason = TraceSendExpired
-				if trace.Root != nil {
-					sendReason = TraceSendGotRoot
-				}
+			sendReason := TraceSendExpired
+			if trace.Root != nil {
+				sendReason = TraceSendGotRoot
 			}
 			status.Metadata["meta.refinery.send_reason"] = sendReason
 			if key != "" {
@@ -739,7 +735,7 @@ func (c *CentralCollector) checkAlloc() {
 		}
 		totalDataSizeSent += trace.DataSize
 		numOfTracesSent++
-		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id})
+		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id, IsRoot: true})
 		if err != nil {
 			c.Logger.Error().WithField("trace_id", id).Logf("error sending trace for decision: %s", err)
 		}
