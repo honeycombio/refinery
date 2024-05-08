@@ -412,7 +412,6 @@ func TestSamplerKeys(t *testing.T) {
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := sender.Events()
 
-		// these are the wrong asserts for this test, but I don't care as long as they fail; will fix
 		assert.Equal(t, "dataset", events[0].Dataset)
 		assert.Equal(t, "123", events[0].Data["trace.trace_id"])
 		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])

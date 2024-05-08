@@ -3,13 +3,12 @@ package types
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
 	huskyotlp "github.com/honeycombio/husky/otlp"
 )
-
-const hashSeed = 34527861256
 
 const (
 	APIKeyHeader = "X-Honeycomb-Team"
@@ -299,7 +298,9 @@ func IsLegacyAPIKey(apiKey string) bool {
 func GenerateSpanID() string {
 	id, err := uuid.NewV7()
 	if err != nil {
-		return ""
+		// don't know why we got an error, but we can't do anything about it
+		// so just return a random number
+		return fmt.Sprintf("%016x", rand.Int63())
 	}
 	return id.String()
 }
