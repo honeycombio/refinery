@@ -3,9 +3,10 @@ package types
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/dgryski/go-wyhash"
+	"github.com/gofrs/uuid/v5"
 	huskyotlp "github.com/honeycombio/husky/otlp"
 )
 
@@ -296,8 +297,13 @@ func IsLegacyAPIKey(apiKey string) bool {
 	return huskyotlp.IsClassicApiKey(apiKey)
 }
 
-func GenerateSpanID(traceID string) string {
-	ts := wyhash.Hash([]byte("next"), hashSeed)
-	h := wyhash.Hash([]byte(traceID), uint64(ts))
-	return fmt.Sprintf("%016x", h)
+func GenerateSpanID() string {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return ""
+	}
+	hexID := strings.ReplaceAll(id.String(), "-", "")
+	fmt.Println(hexID)
+
+	return hexID
 }

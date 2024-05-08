@@ -123,6 +123,7 @@ func newStartedApp(
 		AddHostMetadataToTrace: enableHostMetadata,
 		TraceIdFieldNames:      []string{"trace.trace_id"},
 		ParentIdFieldNames:     []string{"trace.parent_id"},
+		SpanIdFieldNames:       []string{"trace.span_id"},
 		SampleCache:            config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 		StoreOptions: config.SmartWrapperOptions{
 			StateTicker:     config.Duration(50 * time.Millisecond),
@@ -408,19 +409,18 @@ func TestSamplerKeys(t *testing.T) {
 		return len(events) == 5
 	}, 5*time.Second, 100*time.Millisecond)
 
-	for _, event := range sender.Events() {
-		fmt.Printf("event %s, key: %v\n", event.Data["trace.span_id"], event.Data["meta.refinery.sample_key"])
-	}
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := sender.Events()
 
 		// these are the wrong asserts for this test, but I don't care as long as they fail; will fix
 		assert.Equal(t, "dataset", events[0].Dataset)
-		assert.Equal(t, "bar", events[0].Data["foo"])
-		assert.Equal(t, "2", events[0].Data["trace.trace_id"])
+		assert.Equal(t, "123", events[0].Data["trace.trace_id"])
 		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
 		hostname, _ := os.Hostname()
 		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.host.name"])
+		assert.Equal(t, "/bar•/bazz•/buzz•/foo•,200•404•503•,", events[0].Data["meta.refinery.sample_key"])
+		assert.Equal(t, 5, events[0].Data["meta.event_count"])
+		assert.Equal(t, 5, events[0].Data["meta.span_count"])
 	}, 5*time.Second, 100*time.Millisecond)
 }
 

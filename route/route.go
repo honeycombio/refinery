@@ -528,7 +528,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		}
 	}
 	if spanID == "" {
-		spanID = types.GenerateSpanID(traceID)
+		spanID = types.GenerateSpanID()
 	}
 	debugLog = debugLog.WithString("trace_id", traceID)
 
