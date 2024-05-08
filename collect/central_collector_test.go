@@ -401,6 +401,7 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 
 			span := &types.Span{
 				TraceID: fmt.Sprintf("trace-%v", 1),
+				ID:      "span1",
 				Event: types.Event{
 					Dataset:    "aoeu",
 					APIKey:     legacyAPIKey,
