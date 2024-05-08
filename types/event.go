@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -302,8 +301,5 @@ func GenerateSpanID() string {
 	if err != nil {
 		return ""
 	}
-	hexID := strings.ReplaceAll(id.String(), "-", "")
-	fmt.Println(hexID)
-
-	return hexID
+	return id.String()
 }
