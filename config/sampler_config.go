@@ -159,6 +159,15 @@ func (d *DeterministicSamplerConfig) GetSamplingFields() []string {
 	return nil
 }
 
+type MockSamplerConfig struct {
+	SampleRate int `yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
+	FieldList  []string
+}
+
+func (d *MockSamplerConfig) GetSamplingFields() []string {
+	return d.FieldList
+}
+
 var _ GetSamplingFielder = (*DynamicSamplerConfig)(nil)
 
 type DynamicSamplerConfig struct {
