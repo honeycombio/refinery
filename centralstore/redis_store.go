@@ -44,8 +44,9 @@ type RedisBasicStore struct {
 	Tracer        trace.Tracer         `inject:"tracer"`
 	Clock         clockwork.Clock      `inject:""`
 
-	traces *tracesStore
-	states *traceStateProcessor
+	traces              *tracesStore
+	states              *traceStateProcessor
+	lastMetricsRecorded time.Time
 }
 
 func (r *RedisBasicStore) Start() error {
@@ -98,11 +99,13 @@ func (r *RedisBasicStore) Start() error {
 	r.Metrics.Register(metricsPrefixConnection+"wait", "gauge")
 	r.Metrics.Register(metricsPrefixConnection+"wait_duration_ms", "gauge")
 
-	// register metrics for memory stats
-	r.Metrics.Register(metricsPrefixMemory+"used_total", "gauge")
-	r.Metrics.Register(metricsPrefixMemory+"used_peak", "gauge")
-	r.Metrics.Register(metricsPrefixCount+"keys", "gauge")
-	r.Metrics.Register(metricsPrefixCount+"traces", "gauge")
+	if r.Config.GetRedisMetricsCycleRate() != 0 {
+		// register metrics for memory stats
+		r.Metrics.Register(metricsPrefixMemory+"used_total", "gauge")
+		r.Metrics.Register(metricsPrefixMemory+"used_peak", "gauge")
+		r.Metrics.Register(metricsPrefixCount+"keys", "gauge")
+		r.Metrics.Register(metricsPrefixCount+"traces", "gauge")
+	}
 
 	return nil
 }
@@ -131,6 +134,13 @@ func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 	r.Metrics.Gauge(metricsPrefixConnection+"idle", connStats.IdleCount)
 	r.Metrics.Gauge(metricsPrefixConnection+"wait", connStats.WaitCount)
 	r.Metrics.Gauge(metricsPrefixConnection+"wait_duration_ms", connStats.WaitDuration.Milliseconds())
+
+	// don't record metrics if the cycle rate is 0 or if we haven't reached the cycle rate
+	if r.Config.GetRedisMetricsCycleRate() == 0 || r.Clock.Now().Sub(r.lastMetricsRecorded) < r.Config.GetRedisMetricsCycleRate() {
+		return nil
+	}
+
+	r.lastMetricsRecorded = r.Clock.Now()
 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
