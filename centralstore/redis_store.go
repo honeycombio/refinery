@@ -646,6 +646,11 @@ func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, cspans [
 
 	commands := make([]redis.Command, 0, 3*len(cspans))
 	for _, span := range cspans {
+		// prevent storing signaling spans sent from central collector
+		// all actual spans should have a spanID
+		if span.SpanID == "" {
+			continue
+		}
 
 		trace := &centralTraceStatusInit{
 			TraceID:    span.TraceID,
