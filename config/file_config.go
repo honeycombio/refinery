@@ -201,19 +201,19 @@ type PeerManagementConfig struct {
 }
 
 type RedisPeerManagementConfig struct {
-	Host           string   `yaml:"Host" cmdenv:"RedisHost"`
-	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
-	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
-	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Database       int      `yaml:"Database"`
-	UseTLS         bool     `yaml:"UseTLS" `
-	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
-	Timeout        Duration `yaml:"Timeout" default:"5s"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	MaxIdle        int      `yaml:"MaxIdle" default:"30"`
-	MaxActive      int      `yaml:"MaxActive" default:"30"`
-	Parallelism    int      `yaml:"Parallelism" default:"10"`
-	DisableMetrics bool     `yaml:"DisableMetrics"`
+	Host             string   `yaml:"Host" cmdenv:"RedisHost"`
+	Username         string   `yaml:"Username" cmdenv:"RedisUsername"`
+	Password         string   `yaml:"Password" cmdenv:"RedisPassword"`
+	AuthCode         string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
+	Database         int      `yaml:"Database"`
+	UseTLS           bool     `yaml:"UseTLS" `
+	UseTLSInsecure   bool     `yaml:"UseTLSInsecure" `
+	Timeout          Duration `yaml:"Timeout" default:"5s"`
+	Prefix           string   `yaml:"Prefix" default:"refinery"`
+	MaxIdle          int      `yaml:"MaxIdle" default:"30"`
+	MaxActive        int      `yaml:"MaxActive" default:"30"`
+	Parallelism      int      `yaml:"Parallelism" default:"10"`
+	MetricsCycleRate Duration `yaml:"MetricsCycleRate" default:"1m`
 }
 
 type CollectionConfig struct {
@@ -671,11 +671,11 @@ func (f *fileConfig) GetParallelism() int {
 	return f.mainConfig.RedisPeerManagement.Parallelism
 }
 
-func (f *fileConfig) GetRedisDisableMetrics() bool {
+func (f *fileConfig) GetRedisMetricsCycleRate() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.DisableMetrics
+	return time.Duration(f.mainConfig.RedisPeerManagement.MetricsCycleRate)
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() string {

@@ -1069,17 +1069,18 @@ groups:
           connections use when communicating trace information to Redis. It may
           be useful to increase this value in high-throughput environments.
       
-      - name: DisableMetrics
+      - name: MetricsCycleRate
         firstversion: v3.0
-        type: bool
+        type: duration
         valuetype: nondefault
-        default: false
+        default: 1m
         reload: true
-        summary: disables the collection of metrics for the Redis server.
+        summary: is the interval between retrieving metrics from Redis server.
         description: >
-          This setting is used to disable the collection of metrics for the Redis
-          server. It may be useful to disable this setting in environments
-          where metrics collection is not desired.
+          This setting is used to control the interval between retrieving
+          metrics from Redis server. It may be useful to increase this value in
+          high-throughput environments. By setting this value to 0, the metrics
+          retrieval will be disabled.
 
 
       - name: Strategy
