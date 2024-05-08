@@ -168,6 +168,7 @@ spanLoop:
 		}
 
 		// Add the span to the trace; this works even if the trace has no spans yet
+		fmt.Printf("Adding span %s to trace %s\n", span.SpanID, span.TraceID)
 		lrs.traces[span.TraceID].Spans = append(lrs.traces[span.TraceID].Spans, span)
 		lrs.states[state][span.TraceID].Count++
 		if span.Type == types.SpanTypeLink {

@@ -105,7 +105,7 @@ func newStartedApp(
 		GetTraceTimeoutVal:       10 * time.Millisecond,
 		GetMaxBatchSizeVal:       500,
 		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:            200 * time.Microsecond,
+		SendTickerVal:            20 * time.Millisecond,
 		PeerManagementType:       "file",
 		GetUpstreamBufferSizeVal: 10000,
 		GetRedisDatabaseVal:      redisDB,
@@ -126,7 +126,7 @@ func newStartedApp(
 		SampleCache:            config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 		StoreOptions: config.SmartWrapperOptions{
 			StateTicker:     config.Duration(50 * time.Millisecond),
-			BasicStoreType:  "local",
+			BasicStoreType:  "redis",
 			SpanChannelSize: 10000,
 			SendDelay:       config.Duration(2 * time.Millisecond),
 			DecisionTimeout: config.Duration(100 * time.Millisecond),
@@ -160,7 +160,12 @@ func newStartedApp(
 	})
 	assert.NoError(t, err)
 
-	store := &centralstore.RedisBasicStore{}
+	var store centralstore.BasicStorer
+	if c.StoreOptions.BasicStoreType == "local" {
+		store = &centralstore.LocalStore{}
+	} else {
+		store = &centralstore.RedisBasicStore{}
+	}
 	sw := &centralstore.SmartWrapper{}
 	redis := &redis.DefaultClient{}
 	var g inject.Graph
@@ -377,11 +382,11 @@ func TestSamplerKeys(t *testing.T) {
 	defer stop()
 
 	spandata := `[
-		{"data":{"trace.trace_id":"123","trace.span_id":"1","path":"/foo","status":"200"}},
 		{"data":{"trace.trace_id":"123","trace.span_id":"2","path":"/bar","status":"200","trace.parent_id":"1"}},
 		{"data":{"trace.trace_id":"123","trace.span_id":"3","path":"/bar","status":"404","trace.parent_id":"2"}},
 		{"data":{"trace.trace_id":"123","trace.span_id":"4","path":"/bazz","status":"200","trace.parent_id":"3"}},
-		{"data":{"trace.trace_id":"123","trace.span_id":"5","path":"/buzz","status":"503,"trace.parent_id":"4""}}
+		{"data":{"trace.trace_id":"123","trace.span_id":"5","path":"/buzz","status":"503","trace.parent_id":"4"}},
+		{"data":{"trace.trace_id":"123","trace.span_id":"1","path":"/foo","status":"200"}}
 		]`
 
 	// send some spans
@@ -404,11 +409,12 @@ func TestSamplerKeys(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 
 	for _, event := range sender.Events() {
-		fmt.Printf("event: %v\n", event)
+		fmt.Printf("event %s, key: %v\n", event.Data["trace.span_id"], event.Data["meta.refinery.sample_key"])
 	}
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := sender.Events()
 
+		// these are the wrong asserts for this test, but I don't care as long as they fail; will fix
 		assert.Equal(t, "dataset", events[0].Dataset)
 		assert.Equal(t, "bar", events[0].Data["foo"])
 		assert.Equal(t, "2", events[0].Data["trace.trace_id"])
