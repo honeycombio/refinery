@@ -35,6 +35,7 @@ type MockConfig struct {
 	GetRedisMaxIdleVal               int
 	GetRedisTimeoutVal               time.Duration
 	GetParallelismVal                int
+	GetRedisMetricsCycleRateVal      time.Duration
 	GetUseTLSVal                     bool
 	GetUseTLSInsecureVal             bool
 	GetSamplerTypeErr                error //keep
@@ -289,6 +290,17 @@ func (m *MockConfig) GetParallelism() int {
 	defer m.Mux.RUnlock()
 
 	return m.GetParallelismVal
+}
+
+func (m *MockConfig) GetRedisMetricsCycleRate() time.Duration {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	if m.GetRedisMetricsCycleRateVal == 0 {
+		return 1 * time.Second
+	}
+
+	return m.GetRedisMetricsCycleRateVal
 }
 
 func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {

@@ -461,6 +461,8 @@ func TestRedisBasicStore_GetMetrics(t *testing.T) {
 	count, ok = store.Metrics.Get(metricsPrefixConnection + "wait_duration_ms")
 	require.True(t, ok)
 	assert.EqualValues(t, 0, count)
+
+	require.NotEmpty(t, store.lastMetricsRecorded)
 }
 
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
