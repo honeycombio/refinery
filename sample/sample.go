@@ -78,6 +78,8 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampl
 		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.WindowedThroughputSamplerConfig:
 		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+	case *config.MockSamplerConfig:
+		sampler = &MockSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	default:
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)

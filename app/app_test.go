@@ -92,6 +92,8 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	}
 }
 
+var configCallback = func(c *config.MockConfig) {}
+
 func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
@@ -103,9 +105,10 @@ func newStartedApp(
 		GetTraceTimeoutVal:       10 * time.Millisecond,
 		GetMaxBatchSizeVal:       500,
 		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:            200 * time.Microsecond,
+		SendTickerVal:            20 * time.Millisecond,
 		PeerManagementType:       "file",
 		GetUpstreamBufferSizeVal: 10000,
+		GetRedisDatabaseVal:      redisDB,
 		AddRuleReasonToTrace:     true,
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		IsAPIKeyValidFunc:        func(k string) bool { return k == legacyAPIKey || k == nonLegacyAPIKey },
@@ -120,6 +123,7 @@ func newStartedApp(
 		AddHostMetadataToTrace: enableHostMetadata,
 		TraceIdFieldNames:      []string{"trace.trace_id"},
 		ParentIdFieldNames:     []string{"trace.parent_id"},
+		SpanIdFieldNames:       []string{"trace.span_id"},
 		SampleCache:            config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 		StoreOptions: config.SmartWrapperOptions{
 			StateTicker:     config.Duration(50 * time.Millisecond),
@@ -130,7 +134,9 @@ func newStartedApp(
 		},
 	}
 
-	c.GetRedisDatabaseVal = redisDB
+	// give the test a chance to override parts of the config
+	configCallback(c)
+
 	fmt.Println("Using Redis database", c.GetRedisDatabaseVal)
 
 	var err error
@@ -155,7 +161,12 @@ func newStartedApp(
 	})
 	assert.NoError(t, err)
 
-	store := &centralstore.RedisBasicStore{}
+	var store centralstore.BasicStorer
+	if c.StoreOptions.BasicStoreType == "local" {
+		store = &centralstore.LocalStore{}
+	} else {
+		store = &centralstore.RedisBasicStore{}
+	}
 	sw := &centralstore.SmartWrapper{}
 	redis := &redis.DefaultClient{}
 	var g inject.Graph
@@ -351,6 +362,64 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
 		hostname, _ := os.Hostname()
 		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.host.name"])
+	}, 5*time.Second, 100*time.Millisecond)
+}
+
+func TestSamplerKeys(t *testing.T) {
+	port := 14000
+	redisDB := 11
+
+	sender := &transmission.MockSender{}
+	sampler := &config.MockSamplerConfig{
+		SampleRate: 2,
+		FieldList:  []string{"path", "status"},
+	}
+	configCallback = func(c *config.MockConfig) {
+		c.GetSamplerTypeVal = sampler
+		c.GetSamplerTypeName = "mock"
+	}
+
+	_, _, stop := newStartedApp(t, sender, port, redisDB, true)
+	defer stop()
+
+	spandata := `[
+		{"data":{"trace.trace_id":"123","trace.span_id":"2","path":"/bar","status":"200","trace.parent_id":"1"}},
+		{"data":{"trace.trace_id":"123","trace.span_id":"3","path":"/bar","status":"404","trace.parent_id":"2"}},
+		{"data":{"trace.trace_id":"123","trace.span_id":"4","path":"/bazz","status":"200","trace.parent_id":"3"}},
+		{"data":{"trace.trace_id":"123","trace.span_id":"5","path":"/buzz","status":"503","trace.parent_id":"4"}},
+		{"data":{"trace.trace_id":"123","trace.span_id":"1","path":"/foo","status":"200"}}
+		]`
+
+	// send some spans
+	req := httptest.NewRequest(
+		"POST",
+		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+		strings.NewReader(spandata),
+	)
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	require.Eventually(t, func() bool {
+		events := sender.Events()
+		return len(events) == 5
+	}, 5*time.Second, 100*time.Millisecond)
+
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := sender.Events()
+
+		assert.Equal(t, "dataset", events[0].Dataset)
+		assert.Equal(t, "123", events[0].Data["trace.trace_id"])
+		assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+		hostname, _ := os.Hostname()
+		assert.Equal(t, hostname, events[0].Data["meta.refinery.decider.host.name"])
+		assert.Equal(t, "/bar•/bazz•/buzz•/foo•,200•404•503•,", events[0].Data["meta.refinery.sample_key"])
+		assert.Equal(t, 5, events[0].Data["meta.event_count"])
+		assert.Equal(t, 5, events[0].Data["meta.span_count"])
 	}, 5*time.Second, 100*time.Millisecond)
 }
 

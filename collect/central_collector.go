@@ -120,7 +120,7 @@ func (c *CentralCollector) Start() error {
 	c.reload = make(chan struct{}, 1)
 	c.samplersByDestination = make(map[string]sample.Sampler)
 
-	// test hooks
+	// The cycles manage a periodic task and also provide some test hooks
 	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
 	c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
@@ -164,6 +164,7 @@ func (c *CentralCollector) Start() error {
 	c.eg.Go(c.decide)
 	c.eg.Go(func() error {
 		return c.metricsCycle.Run(context.Background(), func(ctx context.Context) error {
+			fmt.Println("metrics cycle running")
 			if err := c.Store.RecordMetrics(ctx); err != nil {
 				c.Logger.Error().Logf("error recording metrics: %s", err)
 			}
@@ -344,12 +345,8 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 
 // implement the Collector interface
 func (c *CentralCollector) AddSpan(span *types.Span) error {
-	return c.add(span, c.incoming)
-}
-
-func (c *CentralCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 	select {
-	case ch <- sp:
+	case c.incoming <- span:
 		c.Metrics.Increment("span_received")
 		c.Metrics.Up("spans_waiting")
 		return nil
@@ -397,6 +394,7 @@ func (c *CentralCollector) receive() error {
 
 func (c *CentralCollector) send() error {
 	return c.senderCycle.Run(context.Background(), func(ctx context.Context) error {
+		fmt.Println("sender cycle running")
 		err := c.sendTraces(ctx)
 		if err != nil {
 			c.Logger.Error().Logf("error processing traces: %s", err)
@@ -461,6 +459,7 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 
 func (c *CentralCollector) decide() error {
 	return c.deciderCycle.Run(context.Background(), func(ctx context.Context) error {
+		fmt.Println("decider cycle running")
 		err := c.makeDecisions(ctx)
 		if err != nil {
 			c.Logger.Error().Logf("error making decision: %s", err)
@@ -657,6 +656,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 		c.Metrics.Down("spans_waiting")
 	}()
 
+	fmt.Printf("processing span %s\n", sp.Data["trace.span_id"])
 	err := c.SpanCache.Set(sp)
 	if err != nil {
 		c.Logger.Error().WithField("trace_id", sp.TraceID).Logf("error adding span to cache: %s", err)
