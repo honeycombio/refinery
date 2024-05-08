@@ -213,6 +213,7 @@ type RedisPeerManagementConfig struct {
 	MaxIdle        int      `yaml:"MaxIdle" default:"30"`
 	MaxActive      int      `yaml:"MaxActive" default:"30"`
 	Parallelism    int      `yaml:"Parallelism" default:"10"`
+	DisableMetrics bool     `yaml:"DisableMetrics"`
 }
 
 type CollectionConfig struct {
@@ -668,6 +669,13 @@ func (f *fileConfig) GetParallelism() int {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.Parallelism
+}
+
+func (f *fileConfig) GetRedisDisableMetrics() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.DisableMetrics
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() string {

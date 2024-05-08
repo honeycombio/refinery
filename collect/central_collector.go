@@ -121,7 +121,7 @@ func (c *CentralCollector) Start() error {
 	c.samplersByDestination = make(map[string]sample.Sampler)
 
 	// The cycles manage a periodic task and also provide some test hooks
-	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
+	c.metricsCycle = NewCycle(c.Clock, 2*c.Config.GetSendTickerValue(), c.done)
 	c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
 

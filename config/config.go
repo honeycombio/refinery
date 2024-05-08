@@ -92,6 +92,8 @@ type Config interface {
 
 	GetParallelism() int
 
+	GetRedisDisableMetrics() bool
+
 	// GetHoneycombAPI returns the base URL (protocol, hostname, and port) of
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() string
