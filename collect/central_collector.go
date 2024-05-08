@@ -45,7 +45,6 @@ var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
 const (
 	TraceSendGotRoot        = "trace_send_got_root"
 	TraceSendExpired        = "trace_send_expired"
-	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 	TraceSendLateSpan       = "trace_send_late_span"
 )
@@ -606,13 +605,11 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		// so that it's synced across all refinery instances
 		if c.Config.GetAddRuleReasonToTrace() {
 			status.Metadata["meta.refinery.reason"] = reason
-			if status.Metadata["meta.refinery.send_reason"] == "" {
-				sendReason := TraceSendExpired
-				if trace.Root != nil {
-					sendReason = TraceSendGotRoot
-				}
-				status.Metadata["meta.refinery.send_reason"] = sendReason
+			sendReason := TraceSendExpired
+			if trace.Root != nil {
+				sendReason = TraceSendGotRoot
 			}
+			status.Metadata["meta.refinery.send_reason"] = sendReason
 			if key != "" {
 				status.Metadata["meta.refinery.sample_key"] = key
 			}
@@ -734,7 +731,10 @@ func (c *CentralCollector) checkAlloc() {
 		}
 		totalDataSizeSent += trace.DataSize
 		numOfTracesSent++
-		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id})
+		// in order to eject a trace from refinery's cache, we pretend that its root span has
+		// arrived. This will force the trace to enter the decision-making process. Once a decision
+		// is made, the trace will be removed from the cache.
+		err := c.Store.WriteSpan(ctx, &centralstore.CentralSpan{TraceID: id, IsRoot: true})
 		if err != nil {
 			c.Logger.Error().WithField("trace_id", id).Logf("error sending trace for decision: %s", err)
 		}
@@ -799,7 +799,7 @@ func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 			if !ok {
 				reason = status.KeepReason
 			}
-			sendReason := status.Metadata["meta.refinery.send_reason"]
+			var sendReason string
 			if sp.ArrivalTime.After(status.Timestamp) {
 				if reason == "" {
 					reason = "late arriving span"
@@ -809,9 +809,16 @@ func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 				sendReason = TraceSendLateSpan
 			}
 			sp.Data["meta.refinery.reason"] = reason
-			if sendReason != nil {
-				sp.Data["meta.refinery.send_reason"] = sendReason
+			if sendReason == "" {
+				val, ok := status.Metadata["meta.refinery.send_reason"]
+				if ok {
+					stringVal, ok := val.(string)
+					if ok {
+						sendReason = stringVal
+					}
+				}
 			}
+			sp.Data["meta.refinery.send_reason"] = sendReason
 		}
 		sp.Data["meta.span_event_count"] = int(status.SpanEventCount())
 		sp.Data["meta.span_link_count"] = int(status.SpanLinkCount())
