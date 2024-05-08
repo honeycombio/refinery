@@ -234,15 +234,18 @@ func post(t testing.TB, req *http.Request) {
 	resp.Body.Close()
 }
 
-var storesToTest = []string{"redis", "local"}
+var storesToTest = []string{
+	"redis",
+	"local",
+}
 
 func TestAppIntegration(t *testing.T) {
 	port := 10500
 	redisDB := 2
 
-	sender := &transmission.MockSender{}
 	for _, storeType := range storesToTest {
 		t.Run(storeType, func(t *testing.T) {
+			sender := &transmission.MockSender{}
 			_, _, stop := newStartedApp(t, sender, port, redisDB, false, storeType)
 			defer stop()
 
