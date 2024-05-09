@@ -520,17 +520,9 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		r.UpstreamTransmission.EnqueueEvent(ev)
 		return nil
 	}
-	var spanID string
-	for _, spanIdFieldName := range r.Config.GetSpanIdFieldNames() {
-		if spID, ok := ev.Data[spanIdFieldName]; ok {
-			spanID = spID.(string)
-			break
-		}
-	}
-	if spanID == "" {
-		spanID = types.GenerateSpanID()
-	}
-	debugLog = debugLog.WithString("trace_id", traceID)
+
+	uniqueID := types.GenerateSpanID()
+	debugLog = debugLog.WithString("trace_id", traceID).WithString("unique_id", uniqueID)
 
 	// check if this is a root span; if we can't find a parent ID, it is.
 	isRoot := true
@@ -544,7 +536,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: traceID,
-		ID:      spanID,
+		ID:      uniqueID,
 		IsRoot:  isRoot,
 	}
 

@@ -75,7 +75,6 @@ type MockConfig struct {
 	AdditionalAttributes             map[string]string
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
-	SpanIdFieldNames                 []string
 	CfgMetadata                      []ConfigMetadata
 	StoreOptions                     SmartWrapperOptions
 
@@ -557,13 +556,6 @@ func (f *MockConfig) GetParentIdFieldNames() []string {
 		f.ParentIdFieldNames = []string{"trace.parent_id", "parent_id"}
 	}
 	return f.ParentIdFieldNames
-}
-
-func (f *MockConfig) GetSpanIdFieldNames() []string {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
-
-	return f.SpanIdFieldNames
 }
 
 func (f *MockConfig) GetConfigMetadata() []ConfigMetadata {
