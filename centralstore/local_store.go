@@ -17,7 +17,11 @@ import (
 )
 
 // LocalStore is a basic store that is local to the Refinery process. This is
-// used when there is only one refinery in the system.
+// used when there is only one refinery in the system. LocalStore keeps trace
+// decisions (after they've been made) in the decision cache with much less
+// information, and synthesizes the state of those traces from the cache. But
+// when a trace is Kept, it *also* keeps it in a local store with a short TTL
+// so that all the information is still available while the trace is being sent.
 type LocalStore struct {
 	Config        config.Config        `inject:""`
 	DecisionCache cache.TraceSentCache `inject:""`
@@ -29,6 +33,7 @@ type LocalStore struct {
 	states map[CentralTraceState]statusMap
 	traces map[string]*CentralTrace
 	mutex  sync.RWMutex
+	done   chan struct{}
 }
 
 // ensure that LocalStore implements RemoteStore
@@ -55,18 +60,56 @@ func (lrs *LocalStore) Start() error {
 		DecisionDelay,
 		ReadyToDecide,
 		AwaitingDecision,
-		// DecisionKeep, // these are in the decision cache
-		// DecisionDrop, // these are in the decision cache
+		DecisionKeep, // these are also in the decision cache
+		// DecisionDrop, // these are ONLY in the decision cache
 	}
 	for _, state := range mapStates {
 		// initialize the map for each state
 		lrs.states[state] = make(statusMap)
 	}
+	lrs.done = make(chan struct{})
+	go lrs.cleanup()
 	return nil
 }
 
 func (lrs *LocalStore) Stop() error {
+	close(lrs.done)
 	return nil
+}
+
+var cleanupTTL = 5 * time.Minute
+
+// this is run every minute and deletes traces that have been in the
+// DecisionKeep state in the status map for more than 5 minutes. They're only
+// there to allow the sender time to process them. This is to prevent the local
+// store from growing indefinitely.
+func (lrs *LocalStore) cleanup() {
+	ticker := lrs.Clock.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-lrs.done:
+			return
+		case <-ticker.Chan():
+			// make a list of traces to delete
+			lrs.mutex.RLock()
+			deletes := make([]string, 0)
+			for traceID, status := range lrs.states[DecisionKeep] {
+				if lrs.Clock.Since(status.Timestamp) > cleanupTTL {
+					deletes = append(deletes, traceID)
+				}
+			}
+			lrs.mutex.RUnlock()
+			// delete them
+			if len(deletes) > 0 {
+				lrs.mutex.Lock()
+				for _, traceID := range deletes {
+					delete(lrs.states[DecisionKeep], traceID)
+				}
+				lrs.mutex.Unlock()
+			}
+		}
+	}
 }
 
 // findTraceStatus returns the state and status of a trace, or Unknown if the trace
@@ -74,8 +117,14 @@ func (lrs *LocalStore) Stop() error {
 // Only call this if you're holding a Lock.
 func (lrs *LocalStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
 	if tracerec, reason, found := lrs.DecisionCache.Test(traceID); found {
-		// it was in the decision cache, so we can return the right thing
+		// it was in the decision cache
 		if tracerec.Kept() {
+			// but let's look in the local status map to see if we have more information
+			if status, ok := lrs.states[DecisionKeep][traceID]; ok {
+				// we have more information, so we return that
+				return DecisionKeep, status
+			}
+			// we don't have more information, so we return what we have
 			status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.Clock.Now())
 			status.KeepReason = reason
 			return DecisionKeep, status
@@ -325,8 +374,14 @@ func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceS
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
 		if _, ok := lrs.states[AwaitingDecision][status.TraceID]; ok {
+			// record in the decision cache for the long term
 			lrs.DecisionCache.Record(status, true, status.KeepReason)
+			// and move it to the DecisionKeep state for the short term
+			// note that the status we're looking at may have been updated, so we need to
+			// use the one we have in the statuses list
+			lrs.states[DecisionKeep][status.TraceID] = status
 			delete(lrs.states[AwaitingDecision], status.TraceID)
+			// also remove it from the current traces list
 			delete(lrs.traces, status.TraceID)
 		}
 	}
