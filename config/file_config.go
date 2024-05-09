@@ -213,7 +213,7 @@ type RedisPeerManagementConfig struct {
 	MaxIdle          int      `yaml:"MaxIdle" default:"30"`
 	MaxActive        int      `yaml:"MaxActive" default:"30"`
 	Parallelism      int      `yaml:"Parallelism" default:"10"`
-	MetricsCycleRate Duration `yaml:"MetricsCycleRate" default:"1m`
+	MetricsCycleRate Duration `yaml:"MetricsCycleRate" default:"1m"`
 }
 
 type CollectionConfig struct {
@@ -968,13 +968,6 @@ func (f *fileConfig) GetParentIdFieldNames() []string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.IDFieldNames.ParentNames
-}
-
-func (f *fileConfig) GetSpanIdFieldNames() []string {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.IDFieldNames.SpanNames
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {

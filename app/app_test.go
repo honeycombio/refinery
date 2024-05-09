@@ -126,7 +126,6 @@ func newStartedApp(
 		AddHostMetadataToTrace: enableHostMetadata,
 		TraceIdFieldNames:      []string{"trace.trace_id"},
 		ParentIdFieldNames:     []string{"trace.parent_id"},
-		SpanIdFieldNames:       []string{"trace.span_id"},
 		SampleCache:            config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
 		StoreOptions: config.SmartWrapperOptions{
 			StateTicker:     config.Duration(50 * time.Millisecond),
