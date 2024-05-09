@@ -297,7 +297,7 @@ func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
-func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
+func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error) {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTracesForState")
 	defer span.End()
 	lrs.mutex.RLock()

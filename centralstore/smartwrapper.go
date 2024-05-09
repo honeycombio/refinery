@@ -157,7 +157,10 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	})
 	defer span.End()
 
-	st, err := w.BasicStore.GetTracesForState(ctx, fromState)
+	// process up to 20% of the channel size
+	n := w.Config.GetCentralStoreOptions().SpanChannelSize * 20 / 100
+
+	st, err := w.BasicStore.GetTracesForState(ctx, fromState, n)
 	if err != nil {
 		span.RecordError(err)
 		return err
@@ -255,8 +258,8 @@ func (w *SmartWrapper) GetStatusForTraces(ctx context.Context, traceIDs []string
 }
 
 // GetTracesForState returns a list of trace IDs that match the provided status.
-func (w *SmartWrapper) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
-	return w.BasicStore.GetTracesForState(ctx, state)
+func (w *SmartWrapper) GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error) {
+	return w.BasicStore.GetTracesForState(ctx, state, n)
 }
 
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -349,7 +350,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 }
 
-func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
+func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error) {
 	ctx, span := r.Tracer.Start(ctx, "GetTracesForState")
 	defer span.End()
 
@@ -359,10 +360,15 @@ func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTr
 		return nil, nil
 	}
 
+	// if the batch size is -1, we want to return all traces
+	if n == -1 {
+		n = math.MaxInt64
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	return r.states.activeTraceIDsByState(ctx, conn, state, -1)
+	return r.states.randomTraceIDsByState(ctx, conn, state, n)
 }
 
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
@@ -1004,16 +1010,16 @@ func (t *traceStateProcessor) traceStatesKey(traceID string) string {
 	return fmt.Sprintf("%s:states", traceID)
 }
 
-// activeTraceIDsByState returns the traceIDs that are in a given trace state no older than the maxTraceRetention.
+// randomTraceIDsByState returns the traceIDs that are in a given trace state no older than the maxTraceRetention.
 // If n is not zero, it will return at most n traceIDs.
-func (t *traceStateProcessor) activeTraceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
-	_, span := t.tracer.Start(ctx, "activeTraceIDsByState")
+func (t *traceStateProcessor) randomTraceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
+	_, span := t.tracer.Start(ctx, "randomTraceIDsByState")
 	defer span.End()
 
-	minTimestamp := t.clock.Now().Add(-t.config.maxTraceRetention)
-	ids, err := t.traceIDsByState(ctx, conn, state, minTimestamp, time.Time{}, n)
+	ids, err := conn.ZRandom(t.stateNameKey(state), n)
 	if err != nil {
 		span.RecordError(err)
+		return nil, err
 	}
 	otelutil.AddSpanField(span, "num_ids", len(ids))
 	return ids, err

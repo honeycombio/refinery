@@ -185,7 +185,7 @@ type SmartStorer interface {
 	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
-	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)
+	GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error)
 
 	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 	// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
@@ -281,7 +281,7 @@ type BasicStorer interface {
 	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
 	// GetTracesForState returns a list of trace IDs that match the provided status.
-	GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error)
+	GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error)
 
 	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
 	// ReadyForDecision state. These IDs are moved to the AwaitingDecision state
