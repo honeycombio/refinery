@@ -260,21 +260,29 @@ func TestRedisBasicStore_GetTracesNeedingDecision(t *testing.T) {
 
 	conn := store.RedisClient.Get()
 	defer conn.Close()
-
 	traces := []string{"traceID0", "traceID1", "traceID2"}
 	for _, id := range traces {
 		store.ensureInitialState(t, ctx, conn, id, ReadyToDecide)
 	}
 
-	decisionTraces, err := store.GetTracesNeedingDecision(ctx, 1)
-	require.NoError(t, err)
-	require.Len(t, decisionTraces, 1)
-	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, decisionTraces[0]))
-	require.False(t, store.states.exists(ctx, conn, ReadyToDecide, decisionTraces[0]))
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		conn := store.RedisClient.Get()
+		defer conn.Close()
+		decisionTraces, err := store.GetTracesNeedingDecision(ctx, 1)
+		require.NoError(t, err)
+		require.Len(t, decisionTraces, 1)
+		require.False(t, store.states.exists(ctx, conn, ReadyToDecide, decisionTraces[0]))
+		require.True(t, store.states.exists(ctx, conn, AwaitingDecision, decisionTraces[0]))
+	}()
 
-	decisionTraces, err = store.GetTracesNeedingDecision(ctx, 2)
+	decisionTraces, err := store.GetTracesNeedingDecision(ctx, 2)
 	require.NoError(t, err)
 	require.Len(t, decisionTraces, 2)
+
+	wg.Wait()
 
 	for _, id := range traces {
 		require.False(t, store.states.exists(ctx, conn, ReadyToDecide, id))
