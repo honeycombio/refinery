@@ -139,11 +139,20 @@ func (h *Health) Ready(source string, ready bool) {
 	}
 	h.readies[source] = ready
 	h.timeLeft[source] = h.timeouts[source]
+	h.Metrics.Gauge("is_ready", h.checkReady())
+	h.Metrics.Gauge("is_alive", h.checkAlive())
 }
 
+// IsAlive returns true if all registered services are alive
 func (h *Health) IsAlive() bool {
 	h.mut.RLock()
 	defer h.mut.RUnlock()
+	return h.checkAlive()
+}
+
+// checkAlive returns true if all registered services are alive
+// only call with the lock held
+func (h *Health) checkAlive() bool {
 	// if any counter is 0, we're dead
 	for source, a := range h.timeLeft {
 		if a == 0 {
@@ -154,9 +163,16 @@ func (h *Health) IsAlive() bool {
 	return true
 }
 
+// IsReady returns true if all registered services are ready
 func (h *Health) IsReady() bool {
 	h.mut.RLock()
 	defer h.mut.RUnlock()
+	return h.checkReady()
+}
+
+// checkReady returns true if all registered services are ready
+// only call with the lock held
+func (h *Health) checkReady() bool {
 	// if no one has registered yet, we're not ready
 	if len(h.readies) == 0 {
 		h.Logger.Debug().Logf("IsReady: no one has registered yet")

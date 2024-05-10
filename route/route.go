@@ -256,14 +256,9 @@ func (r *Router) Stop() error {
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /alive check")
+
 	alive := r.Health.IsAlive()
-
-	isalive := 0
-	if alive {
-		isalive = 1
-	}
-	r.Metrics.Gauge("is_alive", isalive)
-
+	r.Metrics.Gauge("is_alive", alive)
 	if !alive {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "no"}, "json")
@@ -274,14 +269,9 @@ func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /ready check")
+
 	ready := r.Health.IsReady()
-
-	isready := 0
-	if ready {
-		isready = 1
-	}
-	r.Metrics.Gauge("is_ready", isready)
-
+	r.Metrics.Gauge("is_ready", ready)
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "no"}, "json")
