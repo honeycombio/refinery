@@ -329,9 +329,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 	for _, state := range statesToCheck {
 		validStates[state] = struct{}{}
 		// is any of the states we are looking for a decision state?
-		if (state == DecisionKeep || state == DecisionDrop) && !decisionMade {
-			decisionMade = true
-		}
+		decisionMade = decisionMade || state == DecisionKeep || state == DecisionDrop
 	}
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMapFromRedis))
