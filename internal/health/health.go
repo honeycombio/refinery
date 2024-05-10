@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/facebookgo/startstop"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -38,13 +40,18 @@ type Reporter interface {
 }
 
 // TickerTime is the interval at which we will check the health of the system.
-var TickerTime = 1 * time.Second
+// We will decrement the counters for each service that has registered.
+// If a counter reaches 0, we will mark the service as dead.
+// This value should be less than the duration of any reporting timeout in the system.
+var TickerTime = 100 * time.Millisecond
 
 // The Health object is the main object that services will interact with.
 // When services are registered, they will be expected to report in at least once every timeout interval.
 // If they don't, they will be marked as not alive.
 type Health struct {
 	Clock    clockwork.Clock `inject:""`
+	Metrics  metrics.Metrics `inject:"genericMetrics"`
+	Logger   logger.Logger   `inject:""`
 	timeouts map[string]time.Duration
 	timeLeft map[string]time.Duration
 	readies  map[string]bool
@@ -104,6 +111,14 @@ func (h *Health) Register(source string, timeout time.Duration) {
 	// we use a negative value to indicate that we haven't seen a report yet so
 	// we don't return "dead" immediately
 	h.timeLeft[source] = -1
+	fields := map[string]any{
+		"source":  source,
+		"timeout": timeout,
+	}
+	h.Logger.Debug().WithFields(fields).Logf("Registered Health ticker", source, timeout)
+	if timeout < TickerTime {
+		h.Logger.Error().WithFields(fields).Logf("Registering a timeout less than the ticker time")
+	}
 }
 
 // Ready is called by services to indicate their readiness to receive traffic.
@@ -112,41 +127,27 @@ func (h *Health) Register(source string, timeout time.Duration) {
 func (h *Health) Ready(source string, ready bool) {
 	h.mut.Lock()
 	defer h.mut.Unlock()
+	if _, ok := h.timeouts[source]; !ok {
+		h.Logger.Error().WithField("source", source).Logf("Health.Ready called for unregistered source")
+		return
+	}
+	if h.readies[source] != ready {
+		h.Logger.Info().WithFields(map[string]any{
+			"source": source,
+			"ready":  ready,
+		}).Logf("Health.Ready reporting source changing state")
+	}
 	h.readies[source] = ready
 	h.timeLeft[source] = h.timeouts[source]
-}
-
-// Report returns the current health status of the system as a pair of booleans.
-// Alive is true at startup; once all services have reported in at least once, it
-// is true only if all services have reported within their timeout interval.
-func (h *Health) Report() (alive bool, ready bool) {
-	h.mut.RLock()
-	defer h.mut.RUnlock()
-	// if any counter is 0, we're dead
-	alive = true
-	for _, a := range h.timeLeft {
-		alive = alive && a != 0
-	}
-	if !alive {
-		// can't be ready if we're not alive
-		return false, false
-	}
-	for name, r := range h.readies {
-		// can't be ready if any service has not reported yet
-		if h.timeLeft[name] < 0 {
-			return true, false
-		}
-		ready = ready || r
-	}
-	return alive, ready
 }
 
 func (h *Health) IsAlive() bool {
 	h.mut.RLock()
 	defer h.mut.RUnlock()
 	// if any counter is 0, we're dead
-	for _, a := range h.timeLeft {
+	for source, a := range h.timeLeft {
 		if a == 0 {
+			h.Logger.Error().WithField("source", source).Logf("IsAlive: source dead due to timeout")
 			return false
 		}
 	}
@@ -158,19 +159,30 @@ func (h *Health) IsReady() bool {
 	defer h.mut.RUnlock()
 	// if no one has registered yet, we're not ready
 	if len(h.readies) == 0 {
+		h.Logger.Debug().Logf("IsReady: no one has registered yet")
 		return false
 	}
 
 	// if any counter is not positive, we're not ready
-	for _, a := range h.timeLeft {
-		if a <= 0 {
+	for source, counter := range h.timeLeft {
+		if counter <= 0 {
+			h.Logger.Info().WithFields(map[string]any{
+				"source":  source,
+				"counter": counter,
+			}).Logf("Health.IsReady failed due to counter <= 0")
 			return false
 		}
 	}
 
 	// if any registered service is not ready, we're not ready
 	ready := true
-	for _, r := range h.readies {
+	for source, r := range h.readies {
+		if !r {
+			h.Logger.Info().WithFields(map[string]any{
+				"source": source,
+				"ready":  ready,
+			}).Logf("Health.IsReady reporting source not ready")
+		}
 		ready = ready && r
 	}
 	return ready
