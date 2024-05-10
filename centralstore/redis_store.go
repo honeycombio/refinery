@@ -328,6 +328,7 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 	var decisionMade bool
 	for _, state := range statesToCheck {
 		validStates[state] = struct{}{}
+		// is any of the states we are looking for a decision state?
 		if (state == DecisionKeep || state == DecisionDrop) && !decisionMade {
 			decisionMade = true
 		}
@@ -335,8 +336,8 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMapFromRedis))
 	for _, status := range statusMapFromRedis {
-		// only include statuses that are in the statesToCheck list with one
-		// exception: if a trace decision is made during stress relief, we need to
+		// only include statuses that are in the statesToCheck list.
+		// exception: if a trace decision was made during stress relief, we need to
 		// find the trace state from the decision cache instead of redis
 		_, ok := validStates[status.State]
 		if !ok {
