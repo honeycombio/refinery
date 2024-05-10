@@ -138,6 +138,8 @@ func (r *Router) LnS() {
 	r.Metrics.Register("incoming_router_span", "counter")
 	r.Metrics.Register("incoming_router_peer", "counter")
 	r.Metrics.Register("incoming_router_dropped", "counter")
+	r.Metrics.Register("is_alive", "gauge")
+	r.Metrics.Register("is_ready", "gauge")
 
 	muxxer := mux.NewRouter()
 
@@ -254,7 +256,9 @@ func (r *Router) Stop() error {
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /alive check")
+
 	alive := r.Health.IsAlive()
+	r.Metrics.Gauge("is_alive", alive)
 	if !alive {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "no"}, "json")
@@ -265,7 +269,9 @@ func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /ready check")
+
 	ready := r.Health.IsReady()
+	r.Metrics.Gauge("is_ready", ready)
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "no"}, "json")
@@ -557,9 +563,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// we're supposed to handle it normally
-	var err error
-	err = r.Collector.AddSpan(span)
-	if err != nil {
+	if err := r.Collector.AddSpan(span); err != nil {
 		r.Metrics.Increment("incoming_router_dropped")
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
