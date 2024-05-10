@@ -89,6 +89,7 @@ type Conn interface {
 	ZCard(string) (int64, error)
 	ZExist(string, string) (bool, error)
 	ZRemove(string, []string) error
+	ZRandom(string, int) ([]string, error)
 	TTL(string) (int64, error)
 
 	ReceiveStrings(int) ([]string, error)
@@ -696,6 +697,10 @@ func (c *DefaultConn) ZExist(key string, member string) (bool, error) {
 	return value != 0, nil
 }
 
+func (c *DefaultConn) ZRandom(key string, count int) ([]string, error) {
+	return redis.Strings(c.conn.Do("ZRANDMEMBER", key, count))
+}
+
 func (c *DefaultConn) ZRemove(key string, members []string) error {
 	args := redis.Args{key}.AddFlat(members)
 	_, err := c.conn.Do("ZREM", args...)
@@ -893,7 +898,17 @@ func (s *DefaultScript) Load(conn Conn) error {
 
 func (s *DefaultScript) DoStrings(ctx context.Context, conn Conn, keysAndArgs ...any) ([]string, error) {
 	defaultConn := conn.(*DefaultConn)
-	return redis.Strings(s.script.Do(defaultConn.conn, keysAndArgs...))
+	result, err := s.script.Do(defaultConn.conn, keysAndArgs...)
+
+	if v, err := redis.Int(result, err); err == nil {
+		if v == -1 {
+			return nil, ErrKeyNotFound
+		}
+
+		return nil, fmt.Errorf("unexpected integer response from redis: %d", v)
+	}
+
+	return redis.Strings(result, err)
 }
 
 func (s *DefaultScript) Do(ctx context.Context, conn Conn, keysAndArgs ...any) (any, error) {
@@ -909,6 +924,10 @@ func (s *DefaultScript) SendHash(ctx context.Context, conn Conn, keysAndArgs ...
 func (s *DefaultScript) Send(ctx context.Context, conn Conn, keysAndArgs ...any) error {
 	defaultConn := conn.(*DefaultConn)
 	return s.script.Send(defaultConn.conn, keysAndArgs...)
+}
+
+func (s *DefaultScript) Hash() string {
+	return s.script.Hash()
 }
 
 var _ Command = command{}

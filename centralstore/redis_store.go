@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -73,9 +74,10 @@ func (r *RedisBasicStore) Start() error {
 	opt := r.Config.GetCentralStoreOptions()
 
 	stateProcessorCfg := traceStateProcessorConfig{
-		reaperRunInterval: time.Duration(opt.ReaperRunInterval),
-		maxTraceRetention: time.Duration(opt.MaxTraceRetention),
-		changeState:       r.RedisClient.NewScript(stateChangeKey, stateChangeScript),
+		reaperRunInterval:       time.Duration(opt.ReaperRunInterval),
+		maxTraceRetention:       time.Duration(opt.MaxTraceRetention),
+		changeState:             r.RedisClient.NewScript(stateChangeKey, stateChangeScript),
+		getTraceNeedingDecision: r.RedisClient.NewScript(tracesNeedingDecisionScriptKey, tracesNeedingDecisionScript),
 	}
 
 	stateProcessor := newTraceStateProcessor(stateProcessorCfg, r.Clock, r.Tracer)
@@ -349,7 +351,9 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 }
 
-func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTraceState) ([]string, error) {
+// GetTracesForState returns a list of up to n trace IDs that match the provided status.
+// If n is -1, returns all matching traces.
+func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error) {
 	ctx, span := r.Tracer.Start(ctx, "GetTracesForState")
 	defer span.End()
 
@@ -359,10 +363,15 @@ func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTr
 		return nil, nil
 	}
 
+	// if the batch size is -1, we want to return all traces
+	if n == -1 {
+		n = math.MaxInt64
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	return r.states.activeTraceIDsByState(ctx, conn, state, -1)
+	return r.states.randomTraceIDsByState(ctx, conn, state, n)
 }
 
 // GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
@@ -376,21 +385,20 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(ctx context.Context, n int) (
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	traceIDs, err := r.states.activeTraceIDsByState(ctx, conn, ReadyToDecide, n)
+	traceIDs, err := r.states.config.getTraceNeedingDecision.DoStrings(ctx, conn,
+		validStateChangeEventsKey, n, expirationForTraceState.Seconds(), time.Now().UnixMicro())
 	if err != nil {
+		if errors.Is(err, redis.ErrKeyNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
 	if len(traceIDs) == 0 {
-		return nil, nil
+		return nil, errors.New("failed to get traces for needing decisions")
 	}
 
-	succeed, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(ReadyToDecide, AwaitingDecision), traceIDs...)
-	if err != nil {
-		return nil, err
-	}
-
-	return succeed, nil
+	return traceIDs, nil
 
 }
 
@@ -919,9 +927,10 @@ func addToSpanHash(span *CentralSpan) (redis.Command, error) {
 // on it's current state.
 
 type traceStateProcessorConfig struct {
-	reaperRunInterval time.Duration
-	maxTraceRetention time.Duration
-	changeState       redis.Script
+	reaperRunInterval       time.Duration
+	maxTraceRetention       time.Duration
+	changeState             redis.Script
+	getTraceNeedingDecision redis.Script
 }
 
 type traceStateProcessor struct {
@@ -1004,16 +1013,16 @@ func (t *traceStateProcessor) traceStatesKey(traceID string) string {
 	return fmt.Sprintf("%s:states", traceID)
 }
 
-// activeTraceIDsByState returns the traceIDs that are in a given trace state no older than the maxTraceRetention.
+// randomTraceIDsByState returns the traceIDs that are in a given trace state no older than the maxTraceRetention.
 // If n is not zero, it will return at most n traceIDs.
-func (t *traceStateProcessor) activeTraceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
-	_, span := t.tracer.Start(ctx, "activeTraceIDsByState")
+func (t *traceStateProcessor) randomTraceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, n int) ([]string, error) {
+	_, span := t.tracer.Start(ctx, "randomTraceIDsByState")
 	defer span.End()
 
-	minTimestamp := t.clock.Now().Add(-t.config.maxTraceRetention)
-	ids, err := t.traceIDsByState(ctx, conn, state, minTimestamp, time.Time{}, n)
+	ids, err := conn.ZRandom(t.stateNameKey(state), n)
 	if err != nil {
 		span.RecordError(err)
+		return nil, err
 	}
 	otelutil.AddSpanField(span, "num_ids", len(ids))
 	return ids, err
@@ -1214,6 +1223,40 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 	return result, nil
 }
 
+const tracesNeedingDecisionScriptKey = 1
+const tracesNeedingDecisionScript = `
+		local possibleStateChangeEvents = KEYS[1]
+		local batchSize = ARGV[1]
+		local ttl = ARGV[2]
+		local timestamp = ARGV[3]
+		local result = {}
+		local previousState = "ready_to_decide"
+		local nextState = "awaiting_decision"
+
+	  	local traceIDs = redis.call('ZRANDMEMBER', "ready_to_decide:traces", batchSize)
+		if next(traceIDs) == nil then
+   			-- myTable is empty
+			return -1
+		end
+  -- iterate through the traceIDs and move them to the next state
+  for i, traceID in ipairs(traceIDs) do
+    -- unfortunately, Lua doesn't support "continue" statement in for loops.
+	-- even though, Lua 5.2+ supports "goto" statement, we can't use it here because
+	-- Redis only supports Lua 5.1.
+	-- The interior "repeat ... until true" is a way of creating a do-once loop, and "do break end" is a way to
+	-- spell "break" that indicates it's not just a normal break.
+	-- This is a common pattern to simulate "continue" in Lua versions before 5.2.
+  	repeat
+` + traceStateChangeScript + `
+	   -- add it to the result list
+	   table.insert(result, traceID)
+	until true
+  end
+
+
+		return result
+`
+
 // stateChangeScript is a lua script that atomically moves traces between states and returns
 // the trace IDs that has completed a state change.
 // It takes the following arguments:
@@ -1252,7 +1295,17 @@ const stateChangeScript = `
 	    if i < 5 then
 		  do break end
 		end
+` + traceStateChangeScript + `
+	   -- add it to the result list
+	   table.insert(result, traceID)
+	until true
+  end
 
+
+ return result
+`
+
+const traceStateChangeScript = `
 		--  get current state for the trace. If it doesn't exist yet, use the previous state
 		-- this formatting logic should match with the traceStatesKey function in the traceStateProcessor struct
 		local traceStateKey = string.format("%s:states", traceID)
@@ -1286,14 +1339,6 @@ const stateChangeScript = `
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
 	   local status = redis.call("HSET", string.format("%s:status", traceID), "State", nextState, "Timestamp", timestamp)
-
-	   -- add it to the result list
-	   table.insert(result, traceID)
-	until true
-  end
-
-
- return result
 `
 
 const validStateChangeEventsKey = "valid-state-change-events"

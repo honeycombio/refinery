@@ -1463,7 +1463,7 @@ func waitUntilReadyToDecide(t *testing.T, coll *CentralCollector, traceIDs []str
 	idMap := generics.NewSetWithCapacity[string](len(traceIDs))
 
 	require.Eventually(t, func() bool {
-		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide)
+		ids, err := coll.Store.GetTracesForState(ctx, centralstore.ReadyToDecide, 1000)
 		require.NoError(t, err)
 		idMap.Add(ids...)
 		return len(idMap.Members()) == len(traceIDs)

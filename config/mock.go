@@ -580,5 +580,9 @@ func (f *MockConfig) GetCentralStoreOptions() SmartWrapperOptions {
 		f.StoreOptions.WriteSpanBatchSize = 20
 	}
 
+	if f.StoreOptions.StateBatchSize == 0 {
+		f.StoreOptions.StateBatchSize = 400
+	}
+
 	return f.StoreOptions
 }
