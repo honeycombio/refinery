@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/honeycombio/refinery/logger"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 )
@@ -13,8 +12,7 @@ func TestHealthStartup(t *testing.T) {
 	// Create a new Health object
 	cl := clockwork.NewFakeClock()
 	h := &Health{
-		Logger: &logger.NullLogger{},
-		Clock:  cl,
+		Clock: cl,
 	}
 	// Start the Health object
 	h.Start()
@@ -30,8 +28,7 @@ func TestHealthRegistrationNotReady(t *testing.T) {
 	// Create a new Health object
 	cl := clockwork.NewFakeClock()
 	h := &Health{
-		Logger: &logger.NullLogger{},
-		Clock:  cl,
+		Clock: cl,
 	}
 	// Start the Health object
 	h.Start()
@@ -60,8 +57,7 @@ func TestHealthRegistrationAndReady(t *testing.T) {
 	// Create a new Health object
 	cl := clockwork.NewFakeClock()
 	h := &Health{
-		Logger: &logger.NullLogger{},
-		Clock:  cl,
+		Clock: cl,
 	}
 	// Start the Health object
 	h.Start()
@@ -98,8 +94,7 @@ func TestHealthReadyFalse(t *testing.T) {
 	// Create a new Health object
 	cl := clockwork.NewFakeClock()
 	h := &Health{
-		Logger: &logger.NullLogger{},
-		Clock:  cl,
+		Clock: cl,
 	}
 	// Start the Health object
 	h.Start()
@@ -126,8 +121,7 @@ func TestNotReadyFromOneService(t *testing.T) {
 	// Create a new Health object
 	cl := clockwork.NewFakeClock()
 	h := &Health{
-		Logger: &logger.NullLogger{},
-		Clock:  cl,
+		Clock: cl,
 	}
 	// Start the Health object
 	h.Start()

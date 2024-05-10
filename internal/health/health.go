@@ -64,6 +64,13 @@ type Health struct {
 }
 
 func (h *Health) Start() error {
+	// if we don't have a logger or metrics object, we'll use the null ones (makes testing easier)
+	if h.Logger == nil {
+		h.Logger = &logger.NullLogger{}
+	}
+	if h.Metrics == nil {
+		h.Metrics = &metrics.NullMetrics{}
+	}
 	h.timeouts = make(map[string]time.Duration)
 	h.timeLeft = make(map[string]time.Duration)
 	h.readies = make(map[string]bool)
