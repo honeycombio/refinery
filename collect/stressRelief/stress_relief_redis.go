@@ -106,7 +106,7 @@ func (s *StressRelief) Start() error {
 
 	s.eg = &errgroup.Group{}
 
-	s.Health.Register(stressReliefHealthSource, 2*calculationInterval)
+	s.Health.Register(stressReliefHealthSource, 5*calculationInterval)
 
 	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
