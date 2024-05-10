@@ -235,6 +235,7 @@ type SmartWrapperOptions struct {
 	SpanChannelSize    int      `yaml:"SpanChannelSize" default:"100"`
 	WriteSpanBatchSize int      `yaml:"WriteSpanBatchSize" default:"20"`
 	StateTicker        Duration `yaml:"StateTicker" default:"1s"`
+	StateBatchSize     int      `yaml:"StateBatchSize" default:"400"`
 	SendDelay          Duration `yaml:"SendDelay" default:"2s"`
 	TraceTimeout       Duration `yaml:"TraceTimeout" default:"60s"`
 	DecisionTimeout    Duration `yaml:"DecisionTimeout" default:"3s"`

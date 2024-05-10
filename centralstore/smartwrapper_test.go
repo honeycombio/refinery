@@ -512,6 +512,6 @@ func BenchmarkStoreGetTracesForState(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetTracesForState(ctx, ReadyToDecide)
+		store.GetTracesForState(ctx, ReadyToDecide, -1)
 	}
 }

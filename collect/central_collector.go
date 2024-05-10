@@ -105,9 +105,9 @@ func (c *CentralCollector) Start() error {
 	collectorCfg := c.Config.GetCollectionConfig()
 
 	// we're a health check reporter so register ourselves for each of our major routines
-	c.Health.Register(receiverHealth, 2*c.Config.GetSendTickerValue())
-	c.Health.Register(deciderHealth, 2*collectorCfg.GetDeciderCycleDuration())
-	c.Health.Register(senderHealth, 2*collectorCfg.GetSenderCycleDuration())
+	c.Health.Register(receiverHealth, 5*c.Config.GetSendTickerValue())
+	c.Health.Register(deciderHealth, 5*collectorCfg.GetDeciderCycleDuration())
+	c.Health.Register(senderHealth, 5*collectorCfg.GetSenderCycleDuration())
 
 	c.done = make(chan struct{})
 
@@ -148,6 +148,9 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("decider_decided_per_second", "histogram")
 	c.Metrics.Register("decider_considered_per_second", "histogram")
 	c.Metrics.Register("sender_considered_per_second", "histogram")
+	c.Metrics.Register("collector_receiver_runs", "counter")
+	c.Metrics.Register("collector_sender_runs", "counter")
+	c.Metrics.Register("collector_decider_runs", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -371,6 +374,7 @@ func (c *CentralCollector) receive() error {
 		// record channel lengths as histogram but also as gauges
 		c.Metrics.Histogram("collector_incoming_queue", float64(len(c.incoming)))
 		c.Metrics.Gauge("collector_incoming_queue_length", float64(len(c.incoming)))
+		c.Metrics.Increment("collector_receiver_runs")
 		c.Health.Ready(receiverHealth, true)
 
 		select {
@@ -389,7 +393,6 @@ func (c *CentralCollector) receive() error {
 			}
 		case <-c.reload:
 			c.reloadConfig()
-			// reload config
 		}
 	}
 
@@ -405,6 +408,7 @@ func (c *CentralCollector) send() error {
 			}
 		}
 		c.Health.Ready(senderHealth, true)
+		c.Metrics.Increment("collector_sender_runs")
 
 		return nil
 	})
@@ -469,6 +473,7 @@ func (c *CentralCollector) decide() error {
 			}
 		}
 		c.Health.Ready(deciderHealth, true)
+		c.Metrics.Increment("collector_decider_runs")
 
 		return nil
 	})
@@ -592,6 +597,13 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 
 		// make sampling decision and update the trace
 		rate, shouldSend, reason, key := sampler.GetSampleRate(tr)
+		otelutil.AddSpanFields(span, map[string]interface{}{
+			"trace_id": trace.TraceID,
+			"rate":     rate,
+			"keep":     shouldSend,
+			"reason":   reason,
+			"key":      key,
+		})
 		logFields["reason"] = reason
 		if key != "" {
 			logFields["sample_key"] = key

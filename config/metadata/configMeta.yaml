@@ -1862,6 +1862,17 @@ groups:
           This setting controls the number of spans sent to the basic store at
           the same time when Refinery is processing incoming spans.
 
+      - name: StateBatchSize
+        firstVersion: v3.0
+        type: int
+        valuetype: nondefault
+        default: 400
+        reload: true
+        summary: is the maximum number of traces to be included for updating state of the central store in a single request.
+        description: >
+          This setting controls the number of traces sent to the central store at
+          the same time when Refinery is updating the state of the central store.
+
       - name: StateTicker
         firstVersion: v2.6
         type: duration
