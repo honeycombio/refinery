@@ -327,19 +327,51 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 	}
 
 	validStates := make(map[CentralTraceState]struct{}, len(statesToCheck))
+	var decisionMade bool
 	for _, state := range statesToCheck {
 		validStates[state] = struct{}{}
+		// is any of the states we are looking for a decision state?
+		decisionMade = decisionMade || state == DecisionKeep || state == DecisionDrop
 	}
 
 	statuses := make([]*CentralTraceStatus, 0, len(statusMapFromRedis))
 	for _, status := range statusMapFromRedis {
-		// only include statuses that are in the statesToCheck list
+		// only include statuses that are in the statesToCheck list.
+		// exception: if a trace decision was made during stress relief, we need to
+		// find the trace state from the decision cache instead of redis
 		_, ok := validStates[status.State]
 		if !ok {
+			if decisionMade {
+				//we still need to grab the trace state from decision cache since
+				// trace decisions are only stored in memory during stress relief
+				record, reason, found := r.DecisionCache.Test(status.TraceID)
+				if !found {
+					r.DecisionCache.Dropped(status.TraceID)
+					continue
+				}
+
+				if record.Kept() {
+					status.State = DecisionKeep
+					status.KeepReason = reason
+					status.Rate = record.Rate()
+					status.Count = uint32(record.DescendantCount())
+					status.EventCount = uint32(record.SpanEventCount())
+					status.LinkCount = uint32(record.SpanLinkCount())
+					statuses = append(statuses, status)
+				} else {
+					status.State = DecisionDrop
+					status.Count = uint32(record.DescendantCount())
+					status.EventCount = uint32(record.SpanEventCount())
+					status.LinkCount = uint32(record.SpanLinkCount())
+					statuses = append(statuses, status)
+				}
+
+			}
 			continue
 		}
 		statuses = append(statuses, status)
 	}
+
 	sort.SliceStable(statuses, func(i, j int) bool {
 		if statuses[i].Timestamp.IsZero() {
 			return false
@@ -522,11 +554,7 @@ func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *Centra
 	_, span := r.Tracer.Start(ctx, "RecordTraceDecision")
 	defer span.End()
 
-	if keep {
-		r.DecisionCache.Record(trace, keep, reason)
-	} else {
-		r.DecisionCache.Dropped(trace.ID())
-	}
+	r.DecisionCache.Record(trace, keep, reason)
 
 	return nil
 }
@@ -791,7 +819,8 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 			queries++
 			if err != nil {
 				if errors.Is(err, redis.ErrKeyNotFound) {
-					return nil
+					status.TraceID = traceID
+					return normalizeCentralTraceStatusRedis(status)
 				}
 				statusSpan.RecordError(err)
 				return nil

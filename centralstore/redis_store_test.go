@@ -149,6 +149,35 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 	assert.EqualValues(t, testSpans[1], trace.Root)
 }
 
+func TestRedisBasicStore_GetStatusForTraces(t *testing.T) {
+	ctx := context.Background()
+	store := NewTestRedisBasicStore(ctx, t)
+	defer store.Stop()
+
+	traceID := "traceID0"
+
+	// before the trace is stored in redis, we should get no status
+	status, err := store.GetStatusForTraces(ctx, []string{traceID}, Collecting)
+	require.NoError(t, err)
+
+	require.Len(t, status, 0)
+
+	store.ensureInitialState(t, ctx, store.RedisClient.Get(), traceID, Collecting)
+
+	// after the trace is stored in redis, we should get the status for the state we expect
+	status, err = store.GetStatusForTraces(ctx, []string{traceID}, Collecting, AwaitingDecision)
+	require.NoError(t, err)
+	require.Len(t, status, 1)
+	assert.Equal(t, Collecting, status[0].State)
+	assert.Equal(t, traceID, status[0].TraceID)
+	assert.Equal(t, uint32(1), status[0].DescendantCount())
+
+	// when we ask for a state that the trace doesn't belong to, we should get no status
+	status, err = store.GetStatusForTraces(ctx, []string{traceID}, AwaitingDecision)
+	require.NoError(t, err)
+	require.Len(t, status, 0)
+}
+
 func TestRedisBasicStore_applyStateChange_NoTraces(t *testing.T) {
 	ctx := context.Background()
 	testRedis := &redis.TestService{}
@@ -471,6 +500,36 @@ func TestRedisBasicStore_GetMetrics(t *testing.T) {
 	assert.EqualValues(t, 0, count)
 
 	require.NotEmpty(t, store.lastMetricsRecorded)
+}
+
+func TestRedisBasicStore_RecordTraceDecision(t *testing.T) {
+	ctx := context.Background()
+	store := NewTestRedisBasicStore(ctx, t)
+	defer store.Stop()
+
+	keepTraceID := "traceID0"
+	dropTraceID := "traceID1"
+
+	err := store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: keepTraceID, State: DecisionKeep, KeepReason: "test"}, true, "kept")
+	require.NoError(t, err)
+	err = store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: dropTraceID, State: DecisionDrop}, false, "dropped")
+	require.NoError(t, err)
+
+	conn := store.RedisClient.Get()
+	defer conn.Close()
+
+	status, err := store.GetStatusForTraces(ctx, []string{keepTraceID, dropTraceID}, DecisionKeep, DecisionDrop)
+	require.NoError(t, err)
+	require.Len(t, status, 2)
+	for _, s := range status {
+		if s.TraceID == keepTraceID {
+			assert.Equal(t, DecisionKeep, s.State)
+			assert.Equal(t, "kept", s.KeepReason)
+		} else if s.TraceID == dropTraceID {
+			assert.Equal(t, DecisionDrop, s.State)
+		}
+	}
+
 }
 
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {

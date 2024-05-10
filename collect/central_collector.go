@@ -312,10 +312,15 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 	})
 
 	status := &centralstore.CentralTraceStatus{
-		TraceID:    sp.TraceID,
-		State:      centralstore.DecisionKeep,
-		Rate:       rate,
-		KeepReason: reason,
+		TraceID: sp.TraceID,
+	}
+
+	if keep {
+		status.State = centralstore.DecisionKeep
+		status.KeepReason = reason
+		status.Rate = rate
+	} else {
+		status.State = centralstore.DecisionDrop
 	}
 
 	err := c.Store.RecordTraceDecision(ctx, status, keep, reason)
