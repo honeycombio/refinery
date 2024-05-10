@@ -296,7 +296,8 @@ func (lrs *LocalStore) GetStatusForTraces(ctx context.Context, traceIDs []string
 	return statuses, nil
 }
 
-// GetTracesForState returns a list of trace IDs that match the provided status.
+// GetTracesForState returns a list of up to n trace IDs that match the provided status.
+// If n is -1, returns all matching traces.
 func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error) {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTracesForState")
 	defer span.End()
@@ -311,10 +312,19 @@ func (lrs *LocalStore) GetTracesForState(ctx context.Context, state CentralTrace
 	if _, ok := lrs.states[state]; !ok {
 		return nil, fmt.Errorf("invalid state %s", state)
 	}
-	traceids := make([]string, 0, len(lrs.states[state]))
+	if n < 0 {
+		n = len(lrs.states[state])
+	}
+
+	traceids := make([]string, 0, n)
+
 	for _, traceStatus := range lrs.states[state] {
 		traceids = append(traceids, traceStatus.TraceID)
+		if len(traceids) == n {
+			break
+		}
 	}
+
 	return traceids, nil
 }
 

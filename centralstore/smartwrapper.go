@@ -158,9 +158,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	defer span.End()
 
 	// process up to 20% of the channel size
-	n := w.Config.GetCentralStoreOptions().SpanChannelSize * 20 / 100
-
-	st, err := w.BasicStore.GetTracesForState(ctx, fromState, n)
+	st, err := w.BasicStore.GetTracesForState(ctx, fromState, w.Config.GetCentralStoreOptions().StateBatchSize)
 	if err != nil {
 		span.RecordError(err)
 		return err

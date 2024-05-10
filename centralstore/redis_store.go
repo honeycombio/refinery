@@ -351,6 +351,8 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 
 }
 
+// GetTracesForState returns a list of up to n trace IDs that match the provided status.
+// If n is -1, returns all matching traces.
 func (r *RedisBasicStore) GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error) {
 	ctx, span := r.Tracer.Start(ctx, "GetTracesForState")
 	defer span.End()

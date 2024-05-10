@@ -184,7 +184,8 @@ type SmartStorer interface {
 	// change the state of these traces after this call.
 	GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error)
 
-	// GetTracesForState returns a list of trace IDs that match the provided status.
+	// GetTracesForState returns a list of up to n trace IDs that match the provided status.
+	// If n is -1, return all matching traces.
 	GetTracesForState(ctx context.Context, state CentralTraceState, n int) ([]string, error)
 
 	// GetTracesNeedingDecision returns a list of up to n trace IDs that are in the
