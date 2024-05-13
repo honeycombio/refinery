@@ -121,6 +121,10 @@ func (m *MockConfig) GetCollectionConfig() CollectionConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
+	v := m.GetCollectionConfigVal
+	if v.MemoryCycleDuration == 0 {
+		v.MemoryCycleDuration = Duration(1 * time.Second)
+	}
 	return m.GetCollectionConfigVal
 }
 

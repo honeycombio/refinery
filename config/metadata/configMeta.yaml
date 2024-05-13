@@ -1317,6 +1317,8 @@ groups:
         type: duration
         valuetype: nondefault
         default: 10s
+        validations:
+          - type: nonzero
         reload: false
         summary: is the cycle time between memory checks.
         description: >
