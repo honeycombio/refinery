@@ -362,9 +362,12 @@ func (c *CentralCollector) AddSpan(span *types.Span) error {
 }
 
 func (c *CentralCollector) receive() error {
-	tickerDuration := c.Config.GetSendTickerValue()
-	ticker := c.Clock.NewTicker(tickerDuration)
-	defer ticker.Stop()
+	tickerDuration := time.Duration(c.Config.GetCollectionConfig().MemoryCycleDuration)
+	if tickerDuration <= 0 {
+		tickerDuration = 1 * time.Second
+	}
+	memTicker := c.Clock.NewTicker(tickerDuration)
+	defer memTicker.Stop()
 
 	if c.blockOnCollect {
 		return nil
@@ -380,7 +383,7 @@ func (c *CentralCollector) receive() error {
 		select {
 		case <-c.done:
 			return nil
-		case <-ticker.Chan():
+		case <-memTicker.Chan():
 			c.checkAlloc()
 
 		case sp, ok := <-c.incoming:
