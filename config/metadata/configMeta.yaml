@@ -300,7 +300,7 @@ groups:
           the root span) arrive, they will be kept or dropped based on the
           original decision. 
 
-          When running Refinery with Redis as the central store, this timer is 
+          When running Refinery with Redis as the central store, this timer is
           also used to determine how long to keep trace decisions in Redis.
           Refinery will keep trace decisions in Redis for 10 times the value of
           this timer or 15 minutes, whichever is greater.
