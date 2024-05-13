@@ -186,10 +186,11 @@ type OTelMetricsConfig struct {
 }
 
 type OTelTracingConfig struct {
-	Type    string `yaml:"Type" default:"none"`
-	APIHost string `yaml:"APIHost" default:"https://api.honeycomb.io"`
-	APIKey  string `yaml:"APIKey" cmdenv:"OTelTracesAPIKey,HoneycombAPIKey"`
-	Dataset string `yaml:"Dataset" default:"Refinery Traces"`
+	Type       string `yaml:"Type" default:"none"`
+	APIHost    string `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIKey     string `yaml:"APIKey" cmdenv:"OTelTracesAPIKey,HoneycombAPIKey"`
+	Dataset    string `yaml:"Dataset" default:"Refinery Traces"`
+	SampleRate uint64 `yaml:"SampleRate" default:"100"`
 }
 
 type PeerManagementConfig struct {

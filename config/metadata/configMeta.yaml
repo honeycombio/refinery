@@ -742,7 +742,11 @@ groups:
 
   - name: OTelTracing
     title: "OpenTelemetry Tracing"
-    description: contains configuration for Refinery's own tracing.
+    description: contains configuration for Refinery's own tracing. This is
+      generally not expected to be used by end users, but is useful for
+      debugging Refinery itself. In rare cases, it may be useful for debugging
+      user configurations; please consult with Honeycomb support before using
+      this feature.
     fields:
       - name: Type
         type: string
@@ -805,6 +809,20 @@ groups:
         summary: is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
         description: >
           Only used if `APIKey` is specified.
+
+      - name: SampleRate
+        type: int
+        valuetype: nondefault
+        default: 100
+        validations:
+          - type: minimum
+            arg: 1
+        reload: true
+        summary: is the rate at which Refinery samples its own traces.
+        description: >
+          This is the Honeycomb sample rate used to sample traces sent by Refinery. Since each
+          incoming span generates multiple outgoing spans, a sample rate of at least 100 is
+          strongly advised.
 
   - name: PeerManagement
     title: "Peer Management"
@@ -1068,7 +1086,7 @@ groups:
           This setting is used to control the number of parallel Redis
           connections use when communicating trace information to Redis. It may
           be useful to increase this value in high-throughput environments.
-      
+
       - name: MetricsCycleRate
         firstversion: v3.0
         type: duration
