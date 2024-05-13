@@ -229,6 +229,7 @@ type CollectionConfig struct {
 	MaxMemoryPercentage     int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc                MemorySize `yaml:"MaxAlloc"`
 	ShutdownDelay           Duration   `yaml:"ShutdownDelay" default:"30s"`
+	MemoryCycleDuration     Duration   `yaml:"MemoryCycleDuration" default:"10s"`
 }
 
 type SmartWrapperOptions struct {
