@@ -83,7 +83,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		apihost := fmt.Sprintf("%s:443", cfg.APIHost)
 
 		sampleRate := cfg.SampleRate
-		if sampleRate == 0 {
+		if sampleRate < 1 {
 			sampleRate = 1
 		}
 
