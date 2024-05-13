@@ -1963,19 +1963,6 @@ groups:
           happen is if a Refinery crashes or is forcibly shut down. TODO: not
           sure we need to expose this.
 
-      - name: MaxTraceRetention
-        firstVersion: v2.6
-        type: duration
-        valuetype: nondefault
-        default: 24h
-        reload: true
-        summary: is the maximum duration for which a trace is retained in the central store.
-        description: >
-          This value determines how long traces are retained in the central
-          store as a hedge against a potential memory leak. Traces older than
-          this value will be deleted. Under normal operation, this timeout
-          should never be invoked. TODO: don't expose this?
-
       - name: ReaperRunInterval
         firstVersion: v2.6
         type: duration
