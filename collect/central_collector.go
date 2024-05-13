@@ -363,6 +363,9 @@ func (c *CentralCollector) AddSpan(span *types.Span) error {
 
 func (c *CentralCollector) receive() error {
 	tickerDuration := time.Duration(c.Config.GetCollectionConfig().MemoryCycleDuration)
+	if tickerDuration <= 0 {
+		tickerDuration = 1 * time.Second
+	}
 	memTicker := c.Clock.NewTicker(tickerDuration)
 	defer memTicker.Stop()
 
