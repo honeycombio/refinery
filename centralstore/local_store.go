@@ -105,6 +105,8 @@ func (lrs *LocalStore) cleanup() {
 				lrs.mutex.Lock()
 				for _, traceID := range deletes {
 					delete(lrs.states[DecisionKeep], traceID)
+					// also remove it from the current traces list
+					delete(lrs.traces, traceID)
 				}
 				lrs.mutex.Unlock()
 			}
@@ -125,11 +127,21 @@ func (lrs *LocalStore) findTraceStatus(traceID string) (CentralTraceState, *Cent
 				return DecisionKeep, status
 			}
 			// we don't have more information, so we return what we have
-			status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.Clock.Now())
+			// status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.Clock.Now())
+			status := &CentralTraceStatus{
+				TraceID:   traceID,
+				State:     DecisionKeep,
+				Timestamp: lrs.Clock.Now(),
+			}
+
 			status.KeepReason = reason
 			return DecisionKeep, status
 		} else {
-			return DecisionDrop, NewCentralTraceStatus(traceID, DecisionDrop, lrs.Clock.Now())
+			return DecisionDrop, &CentralTraceStatus{
+				TraceID:   traceID,
+				State:     DecisionDrop,
+				Timestamp: lrs.Clock.Now(),
+			}
 		}
 	}
 	// wasn't in the cache, look in all the other states
@@ -212,7 +224,13 @@ spanLoop:
 		case Unknown:
 			// we don't have a state for this trace, so we create it
 			state = Collecting
-			lrs.states[Collecting][span.TraceID] = NewCentralTraceStatus(span.TraceID, Collecting, lrs.Clock.Now())
+			lrs.states[Collecting][span.TraceID] = &CentralTraceStatus{
+				TraceID:         span.TraceID,
+				State:           Collecting,
+				Timestamp:       lrs.Clock.Now(),
+				Metadata:        make(map[string]interface{}),
+				SamplerSelector: span.samplerSelector,
+			}
 			lrs.traces[span.TraceID] = &CentralTrace{TraceID: span.TraceID}
 		}
 
@@ -391,8 +409,6 @@ func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceS
 			// use the one we have in the statuses list
 			lrs.states[DecisionKeep][status.TraceID] = status
 			delete(lrs.states[AwaitingDecision], status.TraceID)
-			// also remove it from the current traces list
-			delete(lrs.traces, status.TraceID)
 		}
 	}
 	return nil

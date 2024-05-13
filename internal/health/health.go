@@ -55,6 +55,7 @@ type Health struct {
 	timeouts map[string]time.Duration
 	timeLeft map[string]time.Duration
 	readies  map[string]bool
+	alives   map[string]bool
 	mut      sync.RWMutex
 	done     chan struct{}
 	startstop.Starter
@@ -74,6 +75,7 @@ func (h *Health) Start() error {
 	h.timeouts = make(map[string]time.Duration)
 	h.timeLeft = make(map[string]time.Duration)
 	h.readies = make(map[string]bool)
+	h.alives = make(map[string]bool)
 	h.done = make(chan struct{})
 	go h.ticker()
 	return nil
@@ -146,6 +148,10 @@ func (h *Health) Ready(source string, ready bool) {
 	}
 	h.readies[source] = ready
 	h.timeLeft[source] = h.timeouts[source]
+	if !h.alives[source] {
+		h.alives[source] = true
+		h.Logger.Info().WithField("source", source).Logf("Health.Ready reporting source alive")
+	}
 	h.Metrics.Gauge("is_ready", h.checkReady())
 	h.Metrics.Gauge("is_alive", h.checkAlive())
 }
@@ -162,8 +168,9 @@ func (h *Health) IsAlive() bool {
 func (h *Health) checkAlive() bool {
 	// if any counter is 0, we're dead
 	for source, a := range h.timeLeft {
-		if a == 0 {
+		if a == 0 && h.alives[source] {
 			h.Logger.Error().WithField("source", source).Logf("IsAlive: source dead due to timeout")
+			h.alives[source] = false
 			return false
 		}
 	}
