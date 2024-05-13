@@ -1403,6 +1403,10 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		cfg.GetTraceTimeoutVal = time.Duration(500 * time.Microsecond)
 	}
 
+	if cfg.GetCollectionConfigVal.MemoryCycleDuration == 0 {
+		cfg.GetCollectionConfigVal.MemoryCycleDuration = duration("1s")
+	}
+
 	collector.isTest = true
 	var basicStore centralstore.BasicStorer
 	switch storeType {

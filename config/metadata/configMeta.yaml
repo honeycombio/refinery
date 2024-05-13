@@ -1313,6 +1313,20 @@ groups:
           normal timeout period for shutting down without forcibly terminating
           the process.
 
+      - name: MemoryCycleDuration
+        type: duration
+        valuetype: nondefault
+        default: 10s
+        validations:
+          - type: nonzero
+        reload: false
+        summary: is the cycle time between memory checks.
+        description: >
+          This setting controls the amount of time that Refinery waits between
+          checking its memory usage. This is somewhat expensive, so it's best
+          not to do it too often, but in situations where bursts of traffic can
+          cause memory pressure, it can be useful to check more frequently.
+
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >
