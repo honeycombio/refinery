@@ -127,7 +127,6 @@ func (lrs *LocalStore) findTraceStatus(traceID string) (CentralTraceState, *Cent
 				return DecisionKeep, status
 			}
 			// we don't have more information, so we return what we have
-			// status := NewCentralTraceStatus(traceID, DecisionKeep, lrs.Clock.Now())
 			status := &CentralTraceStatus{
 				TraceID:   traceID,
 				State:     DecisionKeep,
