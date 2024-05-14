@@ -69,15 +69,6 @@ type CentralTraceStatus struct {
 // ensure that CentralTraceStatus implements KeptTrace
 var _ cache.KeptTrace = (*CentralTraceStatus)(nil)
 
-func NewCentralTraceStatus(traceID string, state CentralTraceState, timestamp time.Time) *CentralTraceStatus {
-	return &CentralTraceStatus{
-		TraceID:   traceID,
-		State:     state,
-		Timestamp: timestamp,
-		Metadata:  make(map[string]interface{}),
-	}
-}
-
 func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 	c := *s
 	c.Metadata = make(map[string]interface{}, len(s.Metadata))

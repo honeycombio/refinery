@@ -1320,10 +1320,8 @@ groups:
 
       - name: MemoryCycleDuration
         type: duration
-        valuetype: nondefault
+        valuetype: nonzero
         default: 10s
-        validations:
-          - type: nonzero
         reload: false
         summary: is the cycle time between memory checks.
         description: >

@@ -105,7 +105,7 @@ func (c *CentralCollector) Start() error {
 	collectorCfg := c.Config.GetCollectionConfig()
 
 	// we're a health check reporter so register ourselves for each of our major routines
-	c.Health.Register(receiverHealth, 5*c.Config.GetSendTickerValue())
+	c.Health.Register(receiverHealth, time.Duration(5*collectorCfg.MemoryCycleDuration))
 	c.Health.Register(deciderHealth, 5*collectorCfg.GetDeciderCycleDuration())
 	c.Health.Register(senderHealth, 5*collectorCfg.GetSenderCycleDuration())
 
@@ -384,18 +384,36 @@ func (c *CentralCollector) receive() error {
 		case <-c.done:
 			return nil
 		case <-memTicker.Chan():
+			_, span := otelutil.StartSpanMulti(context.Background(), c.Tracer, "CentralCollector.receive",
+				map[string]interface{}{
+					"incoming_queue_length": len(c.incoming),
+					"select":                "checkAlloc",
+				})
 			c.checkAlloc()
-
+			span.End()
 		case sp, ok := <-c.incoming:
 			if !ok {
 				return nil
 			}
+			_, span := otelutil.StartSpanMulti(context.Background(), c.Tracer, "CentralCollector.receive",
+				map[string]interface{}{
+					"incoming_queue_length": len(c.incoming),
+					"select":                "incoming",
+				})
 			err := c.processSpan(sp)
 			if err != nil {
+				otelutil.AddException(span, err)
 				c.Logger.Error().Logf("error processing span: %s", err)
 			}
+			span.End()
 		case <-c.reload:
+			_, span := otelutil.StartSpanMulti(context.Background(), c.Tracer, "CentralCollector.receive",
+				map[string]interface{}{
+					"incoming_queue_length": len(c.incoming),
+					"select":                "reload",
+				})
 			c.reloadConfig()
+			span.End()
 		}
 	}
 
@@ -721,8 +739,10 @@ func (c *CentralCollector) checkAlloc() {
 	maxAlloc := inMemConfig.GetMaxAlloc()
 
 	var mem runtime.MemStats
+	// We originally used to call runtime.GC() here, but we no longer thing it's necessary.
+	// Leaving it commented out for now in case we need to re-enable it.
 	// Manually GC here - so we can get a more accurate picture of memory usage
-	runtime.GC()
+	// runtime.GC()
 	runtime.ReadMemStats(&mem)
 	c.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
