@@ -374,7 +374,6 @@ func (c *CentralCollector) receive() error {
 	}
 
 	for {
-		_, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.receive", "incoming_queue_length", len(c.incoming))
 		// record channel lengths as histogram but also as gauges
 		c.Metrics.Histogram("collector_incoming_queue", float64(len(c.incoming)))
 		c.Metrics.Gauge("collector_incoming_queue_length", float64(len(c.incoming)))
@@ -383,30 +382,39 @@ func (c *CentralCollector) receive() error {
 
 		select {
 		case <-c.done:
-			otelutil.AddSpanField(span, "done", "c.done closed")
-			span.End()
 			return nil
 		case <-memTicker.Chan():
-			otelutil.AddSpanField(span, "select", "checkAlloc")
+			_, span := otelutil.StartSpanMulti(context.Background(), c.Tracer, "CentralCollector.receive",
+				map[string]interface{}{
+					"incoming_queue_length": len(c.incoming),
+					"select":                "checkAlloc",
+				})
 			c.checkAlloc()
-
+			span.End()
 		case sp, ok := <-c.incoming:
-			otelutil.AddSpanField(span, "select", "incoming")
 			if !ok {
-				otelutil.AddSpanField(span, "done", "c.incoming closed")
-				span.End()
 				return nil
 			}
+			_, span := otelutil.StartSpanMulti(context.Background(), c.Tracer, "CentralCollector.receive",
+				map[string]interface{}{
+					"incoming_queue_length": len(c.incoming),
+					"select":                "incoming",
+				})
 			err := c.processSpan(sp)
 			if err != nil {
 				otelutil.AddException(span, err)
 				c.Logger.Error().Logf("error processing span: %s", err)
 			}
+			span.End()
 		case <-c.reload:
-			otelutil.AddSpanField(span, "select", "reload")
+			_, span := otelutil.StartSpanMulti(context.Background(), c.Tracer, "CentralCollector.receive",
+				map[string]interface{}{
+					"incoming_queue_length": len(c.incoming),
+					"select":                "reload",
+				})
 			c.reloadConfig()
+			span.End()
 		}
-		span.End()
 	}
 
 }
