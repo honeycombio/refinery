@@ -505,6 +505,7 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 	defer span.End()
 	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, c.Config.GetCollectionConfig().GetDeciderBatchSize())
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 

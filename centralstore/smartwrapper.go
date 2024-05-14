@@ -139,7 +139,7 @@ func (w *SmartWrapper) processSpans(ctx context.Context) {
 		w.Metrics.Gauge("smartstore_write_span_batch_count", len(spans))
 		err := w.BasicStore.WriteSpans(ctx, spans)
 		if err != nil {
-			w.Logger.Debug().Logf("error writing span: %s", err)
+			w.Logger.Error().Logf("error writing span: %s", err)
 		}
 	}
 

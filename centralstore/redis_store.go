@@ -434,7 +434,9 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(ctx context.Context, n int) (
 	}
 
 	if len(traceIDs) == 0 {
-		return nil, errors.New("failed to get traces for needing decisions")
+		err := errors.New("failed to get traces for needing decisions")
+		span.RecordError(err)
+		return nil, err
 	}
 
 	return traceIDs, nil
@@ -1230,7 +1232,9 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 	}
 
 	if len(result) == 0 {
-		return nil, fmt.Errorf("failed to apply state change %s for traces %v", stateChange.string(), traceIDs)
+		err := fmt.Errorf("failed to apply state change %s for traces %v", stateChange.string(), traceIDs)
+		span.RecordError(err)
+		return nil, err
 	}
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"result": result,
