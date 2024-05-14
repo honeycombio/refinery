@@ -168,9 +168,11 @@ func (h *Health) IsAlive() bool {
 func (h *Health) checkAlive() bool {
 	// if any counter is 0, we're dead
 	for source, a := range h.timeLeft {
-		if a == 0 && h.alives[source] {
-			h.Logger.Error().WithField("source", source).Logf("IsAlive: source dead due to timeout")
-			h.alives[source] = false
+		if a == 0 {
+			if h.alives[source] {
+				h.Logger.Error().WithField("source", source).Logf("IsAlive: source dead due to timeout")
+				h.alives[source] = false
+			}
 			return false
 		}
 	}
