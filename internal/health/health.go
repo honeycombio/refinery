@@ -158,13 +158,13 @@ func (h *Health) Ready(source string, ready bool) {
 
 // IsAlive returns true if all registered services are alive
 func (h *Health) IsAlive() bool {
-	h.mut.RLock()
-	defer h.mut.RUnlock()
+	h.mut.Lock()
+	defer h.mut.Unlock()
 	return h.checkAlive()
 }
 
 // checkAlive returns true if all registered services are alive
-// only call with the lock held
+// only call with a write lock held
 func (h *Health) checkAlive() bool {
 	// if any counter is 0, we're dead
 	for source, a := range h.timeLeft {
