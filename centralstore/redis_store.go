@@ -21,6 +21,9 @@ import (
 )
 
 const (
+	// if a new refinery is started after the trace has passed its trace retention time,
+	// a late span could be sent to the new refinery. The new refinery will not have the trace
+	// decision in memory, so it may make a different decision than the original refinery.
 	defaultTraceRetention  = 15 * time.Minute
 	defaultReaperBatchSize = 400
 	redigoTimestamp        = "2006-01-02 15:04:05.999999 -0700 MST"
