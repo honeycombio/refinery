@@ -505,6 +505,7 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 	defer span.End()
 	tracesIDs, err := c.Store.GetTracesNeedingDecision(ctx, c.Config.GetCollectionConfig().GetDeciderBatchSize())
 	if err != nil {
+		span.RecordError(err)
 		return err
 	}
 
@@ -742,7 +743,7 @@ func (c *CentralCollector) checkAlloc() {
 	// We originally used to call runtime.GC() here, but we no longer thing it's necessary.
 	// Leaving it commented out for now in case we need to re-enable it.
 	// Manually GC here - so we can get a more accurate picture of memory usage
-	// runtime.GC()
+	runtime.GC()
 	runtime.ReadMemStats(&mem)
 	c.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
