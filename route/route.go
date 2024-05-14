@@ -769,11 +769,17 @@ type cacheItem struct {
 // get queries the cached items, returning cache hits that have not expired.
 // Cache missed use the configured getFn to populate the cache.
 func (c *environmentCache) get(key string) (string, error) {
+	// get read lock so that we don't attempt to read from the map
+	// while another routine has a write lock and is actively writing
+	// to the map.
+	c.mutex.RLock()
 	if item, ok := c.items[key]; ok {
 		if time.Now().Before(item.expiresAt) {
+			c.mutex.RUnlock()
 			return item.value, nil
 		}
 	}
+	c.mutex.RUnlock()
 
 	// get write lock early so we don't execute getFn in parallel so the
 	// the result will be cached before the next lock is acquired to prevent
