@@ -622,7 +622,6 @@ type TestRedisBasicStore struct {
 func NewTestRedisBasicStore(ctx context.Context, t *testing.T) *TestRedisBasicStore {
 	cfg := config.MockConfig{
 		StoreOptions: config.SmartWrapperOptions{
-			MaxTraceRetention: duration("1m"),
 			ReaperRunInterval: duration("1m"),
 		},
 		SampleCache: config.SampleCacheConfig{

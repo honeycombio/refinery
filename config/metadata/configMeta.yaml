@@ -298,7 +298,12 @@ groups:
           After the trace decision has been made, Refinery retains a record of
           that decision for a period of time. When additional spans (including
           the root span) arrive, they will be kept or dropped based on the
-          original decision.
+          original decision. 
+
+          When running Refinery with Redis as the central store, this timer is
+          also used to determine how long to keep trace decisions in Redis.
+          Refinery will keep trace decisions in Redis for 10 times the value of
+          this timer or 15 minutes, whichever is greater.
 
           If particularly long-lived traces are present in your data, then you
           should increase this timer. Note that this increase will also
@@ -1962,19 +1967,6 @@ groups:
           decision from Refinery after assigning it; the only reason this should
           happen is if a Refinery crashes or is forcibly shut down. TODO: not
           sure we need to expose this.
-
-      - name: MaxTraceRetention
-        firstVersion: v2.6
-        type: duration
-        valuetype: nondefault
-        default: 24h
-        reload: true
-        summary: is the maximum duration for which a trace is retained in the central store.
-        description: >
-          This value determines how long traces are retained in the central
-          store as a hedge against a potential memory leak. Traces older than
-          this value will be deleted. Under normal operation, this timeout
-          should never be invoked. TODO: don't expose this?
 
       - name: ReaperRunInterval
         firstVersion: v2.6

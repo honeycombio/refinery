@@ -241,7 +241,6 @@ type SmartWrapperOptions struct {
 	SendDelay          Duration `yaml:"SendDelay" default:"2s"`
 	TraceTimeout       Duration `yaml:"TraceTimeout" default:"60s"`
 	DecisionTimeout    Duration `yaml:"DecisionTimeout" default:"3s"`
-	MaxTraceRetention  Duration `yaml:"MaxTraceRetention" default:"24h"`
 	ReaperRunInterval  Duration `yaml:"ReaperRunInterval" default:"1h"`
 }
 

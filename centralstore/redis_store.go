@@ -21,10 +21,12 @@ import (
 )
 
 const (
-	expirationForTraceStatus   = 24 * time.Hour
-	expirationForTraceState    = 24 * time.Hour
-	defaultPendingWorkCapacity = 10000
-	redigoTimestamp            = "2006-01-02 15:04:05.999999 -0700 MST"
+	// if a new refinery is started after the trace has passed its trace retention time,
+	// a late span could be sent to the new refinery. The new refinery will not have the trace
+	// decision in memory, so it may make a different decision than the original refinery.
+	defaultTraceRetention  = 15 * time.Minute
+	defaultReaperBatchSize = 400
+	redigoTimestamp        = "2006-01-02 15:04:05.999999 -0700 MST"
 
 	metricsKey          = "refinery:metrics"
 	traceStatusCountKey = "refinery:trace_status_count"
@@ -75,7 +77,7 @@ func (r *RedisBasicStore) Start() error {
 
 	stateProcessorCfg := traceStateProcessorConfig{
 		reaperRunInterval:       time.Duration(opt.ReaperRunInterval),
-		maxTraceRetention:       time.Duration(opt.MaxTraceRetention),
+		maxTraceRetention:       time.Duration(opt.TraceTimeout * 10),
 		changeState:             r.RedisClient.NewScript(stateChangeKey, stateChangeScript),
 		getTraceNeedingDecision: r.RedisClient.NewScript(tracesNeedingDecisionScriptKey, tracesNeedingDecisionScript),
 	}
@@ -417,8 +419,13 @@ func (r *RedisBasicStore) GetTracesNeedingDecision(ctx context.Context, n int) (
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
+	expirationDuration := time.Duration(r.Config.GetCentralStoreOptions().TraceTimeout)
+	if expirationDuration < defaultTraceRetention {
+		expirationDuration = defaultTraceRetention
+	}
+
 	traceIDs, err := r.states.config.getTraceNeedingDecision.DoStrings(ctx, conn,
-		validStateChangeEventsKey, n, expirationForTraceState.Seconds(), time.Now().UnixMicro())
+		validStateChangeEventsKey, n, expirationDuration.Seconds(), time.Now().UnixMicro())
 	if err != nil {
 		if errors.Is(err, redis.ErrKeyNotFound) {
 			return nil, nil
@@ -680,6 +687,11 @@ func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, cspans [
 	})
 	defer spanStatus.End()
 
+	expirationDuration := time.Duration(t.config.GetCentralStoreOptions().TraceTimeout)
+	if expirationDuration < defaultTraceRetention {
+		expirationDuration = defaultTraceRetention
+	}
+
 	commands := make([]redis.Command, 0, 3*len(cspans))
 	for _, span := range cspans {
 		// prevent storing signaling spans sent from central collector
@@ -697,7 +709,7 @@ func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, cspans [
 		args := redis.Args().AddFlat(trace)
 
 		commands = append(commands, redis.NewMultiSetHashCommand(traceStatusKey, args))
-		commands = append(commands, redis.NewExpireCommand(traceStatusKey, expirationForTraceStatus.Seconds()))
+		commands = append(commands, redis.NewExpireCommand(traceStatusKey, expirationDuration.Seconds()))
 		commands = append(commands, redis.NewINCRCommand(traceStatusCountKey))
 	}
 
@@ -975,8 +987,8 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
 	}
-	if cfg.maxTraceRetention == 0 {
-		cfg.maxTraceRetention = 24 * time.Hour
+	if cfg.maxTraceRetention < defaultTraceRetention {
+		cfg.maxTraceRetention = defaultTraceRetention
 	}
 	s := &traceStateProcessor{
 		states: []CentralTraceState{
@@ -1091,32 +1103,6 @@ func (t *traceStateProcessor) traceIDsByState(ctx context.Context, conn redis.Co
 	return results, nil
 }
 
-func (t *traceStateProcessor) traceIDsWithTimestamp(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs []string) (map[string]time.Time, error) {
-	_, span := otelutil.StartSpanMulti(ctx, t.tracer, "traceIDsWithTimestamp", map[string]interface{}{
-		"state":   state,
-		"cmd":     "ZMSCORE",
-		"num_ids": len(traceIDs),
-	})
-	defer span.End()
-
-	timestamps, err := conn.ZMScore(t.stateNameKey(state), traceIDs)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-
-	traces := make(map[string]time.Time, len(timestamps))
-	for i, value := range timestamps {
-		if value == 0 {
-			// it didn't exist, skip it
-			continue
-		}
-		traces[traceIDs[i]] = time.UnixMicro(value)
-	}
-
-	return traces, nil
-}
-
 func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state CentralTraceState, traceID string) bool {
 	_, span := otelutil.StartSpanMulti(ctx, t.tracer, "exists", map[string]interface{}{
 		"trace_id": traceID,
@@ -1201,7 +1187,7 @@ func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client re
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
-		traceIDs, err := conn.ZRangeByScoreString(t.stateNameKey(state), 0, t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro(), 100, 0)
+		traceIDs, err := conn.ZRangeByScoreString(t.stateNameKey(state), 0, t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro(), defaultReaperBatchSize, 0)
 		if err != nil {
 			span.RecordError(err)
 			otelutil.AddSpanFields(span, map[string]interface{}{
@@ -1214,6 +1200,7 @@ func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client re
 		// remove the traceIDs from the state map
 		err = t.remove(ctx, conn, state, traceIDs...)
 		if err != nil {
+			span.RecordError(err)
 			continue
 		}
 	}
@@ -1232,7 +1219,7 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 	}
 
 	args := redis.Args(validStateChangeEventsKey, stateChange.current.String(), stateChange.next.String(),
-		expirationForTraceState.Seconds(), t.clock.Now().UnixMicro()).AddFlat(traceIDs)
+		t.config.maxTraceRetention.Seconds(), t.clock.Now().UnixMicro()).AddFlat(traceIDs)
 
 	result, err := t.config.changeState.DoStrings(ctx,
 		conn, args...)
