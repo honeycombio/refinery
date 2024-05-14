@@ -105,7 +105,7 @@ func (c *CentralCollector) Start() error {
 	collectorCfg := c.Config.GetCollectionConfig()
 
 	// we're a health check reporter so register ourselves for each of our major routines
-	c.Health.Register(receiverHealth, 5*c.Config.GetSendTickerValue())
+	c.Health.Register(receiverHealth, time.Duration(5*collectorCfg.MemoryCycleDuration))
 	c.Health.Register(deciderHealth, 5*collectorCfg.GetDeciderCycleDuration())
 	c.Health.Register(senderHealth, 5*collectorCfg.GetSenderCycleDuration())
 
@@ -374,6 +374,7 @@ func (c *CentralCollector) receive() error {
 	}
 
 	for {
+		_, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.receive", "incoming_queue_length", len(c.incoming))
 		// record channel lengths as histogram but also as gauges
 		c.Metrics.Histogram("collector_incoming_queue", float64(len(c.incoming)))
 		c.Metrics.Gauge("collector_incoming_queue_length", float64(len(c.incoming)))
@@ -382,21 +383,30 @@ func (c *CentralCollector) receive() error {
 
 		select {
 		case <-c.done:
+			otelutil.AddSpanField(span, "done", "c.done closed")
+			span.End()
 			return nil
 		case <-memTicker.Chan():
+			otelutil.AddSpanField(span, "select", "checkAlloc")
 			c.checkAlloc()
 
 		case sp, ok := <-c.incoming:
+			otelutil.AddSpanField(span, "select", "incoming")
 			if !ok {
+				otelutil.AddSpanField(span, "done", "c.incoming closed")
+				span.End()
 				return nil
 			}
 			err := c.processSpan(sp)
 			if err != nil {
+				otelutil.AddException(span, err)
 				c.Logger.Error().Logf("error processing span: %s", err)
 			}
 		case <-c.reload:
+			otelutil.AddSpanField(span, "select", "reload")
 			c.reloadConfig()
 		}
+		span.End()
 	}
 
 }
