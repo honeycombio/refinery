@@ -1244,8 +1244,7 @@ func (t *traceStateProcessor) applyStateChange(ctx context.Context, conn redis.C
 }
 
 const tracesNeedingDecisionScriptKey = 1
-const tracesNeedingDecisionScript = `
-		local possibleStateChangeEvents = KEYS[1]
+const tracesNeedingDecisionScript = validStateChangeEventsScript + `
 		local batchSize = ARGV[1]
 		local ttl = ARGV[2]
 		local timestamp = ARGV[3]
@@ -1258,6 +1257,7 @@ const tracesNeedingDecisionScript = `
    			-- myTable is empty
 			return -1
 		end
+
   -- iterate through the traceIDs and move them to the next state
   for i, traceID in ipairs(traceIDs) do
     -- unfortunately, Lua doesn't support "continue" statement in for loops.
@@ -1294,8 +1294,7 @@ const tracesNeedingDecisionScript = `
 // 3. If the current state matches with the state submitted by the client, check if the state change event is valid
 // 4. If the state change event is valid, add the trace to the next state sorted set and remove it from the current state sorted set
 const stateChangeKey = 1
-const stateChangeScript = `
-  local possibleStateChangeEvents = KEYS[1]
+const stateChangeScript = validStateChangeEventsScript + `
   local previousState = ARGV[1]
   local nextState = ARGV[2]
   local ttl = ARGV[3]
@@ -1343,7 +1342,7 @@ const traceStateChangeScript = `
 	   -- check if the state change event is valid
 	   -- this formatting logic should match with the formatting for the stateChangeEvent struct
 	   local stateChangeEvent = string.format("%s-%s", currentState, nextState)
-	   local changeEventIsValid = redis.call('SISMEMBER', possibleStateChangeEvents, stateChangeEvent)
+	   local changeEventIsValid = redis.call('SISMEMBER', validStateChangeEvents, stateChangeEvent)
 
 	   if (changeEventIsValid == 0) then
 	     do break end
@@ -1377,6 +1376,24 @@ func ensureValidStateChangeEvents(client redis.Client) error {
 		newTraceStateChangeEvent(AwaitingDecision, DecisionDrop).string(),
 	)
 }
+
+// validStateChangeEventsScript is a lua script that ensures the valid state change events are present in redis
+// If the valid state change events set doesn't exist, it will be created and populated with the valid state change events
+// NOTE: the events value should match the string value from stateChangeEvent struct
+const validStateChangeEventsScript = `
+  local validStateChangeEvents = KEYS[1]
+
+  local eventsExist = redis.call('EXISTS', validStateChangeEvents)
+  if (eventsExist ~= 1) then
+	local result = redis.call('SADD', validStateChangeEvents, "unknown-collecting",
+	"collecting-decision_delay", "decision_delay-ready_to_decide",
+	"ready_to_decide-awaiting_decision", "awaiting_decision-ready_to_decide",
+	"awaiting_decision-decision_keep", "awaiting_decision-decision_drop")
+	if (result == 0) then
+	  return redis.error_reply("Failed to add valid state change events")
+	end
+  end
+`
 
 type stateChangeEvent struct {
 	current CentralTraceState
