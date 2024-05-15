@@ -1,5 +1,19 @@
 # Refinery Changelog
 
+## 2.5.1 2024-05-15
+
+### Fixes
+
+- fix: Clarify what has-root-span does (#1114) | [Phillip Carter](https://github.com/cartermp)
+- fix: Add validation for ingest keys (#1066) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Deal with locking issues at startup (#1060) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Update cache lookup to use read lock (#1145) | [Joshua Jones](https://github.com/senojj)
+
+### Maintenance
+
+- maint: Bump protobuf (#1058) | [Kent Quirk](https://github.com/kentquirk)
+- maint(deps): bump the minor-patch group with 4 updates (#1073) | [dependabot[bot]](https://github.com/dependabot[bot])
+
 ## 2.5.0 2024-03-12
 
 The main feature is support of Honeycomb Classic ingest keys; there is also a performance improvement for the new
