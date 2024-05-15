@@ -200,6 +200,37 @@ func TestRedisBasicStore_applyStateChange_NoTraces(t *testing.T) {
 	assert.Nil(t, result)
 }
 
+func TestRedisBasicStore_applyStateChange_RedisRestart(t *testing.T) {
+	ctx := context.Background()
+	testRedis := &redis.TestService{}
+	testRedis.Start()
+
+	ts := newTestTraceStateProcessor(t, testRedis, nil, noop.NewTracerProvider().Tracer("test"))
+	require.NoError(t, ts.init(testRedis))
+	defer ts.Stop()
+
+	conn := testRedis.Get()
+	stateChange := newTraceStateChangeEvent(Unknown, Collecting)
+	result, err := ts.applyStateChange(ctx, conn, stateChange, []string{"traceID0"})
+	require.Nil(t, err)
+	assert.Len(t, result, 1)
+	conn.Close()
+
+	testRedis.Stop()
+	conn = testRedis.Get()
+	_, err = ts.applyStateChange(ctx, conn, stateChange, []string{"traceID1"})
+	require.Error(t, err)
+	conn.Close()
+
+	testRedis.Start()
+	conn = testRedis.Get()
+	_, err = ts.applyStateChange(ctx, conn, stateChange, []string{"traceID1"})
+	require.Nil(t, err)
+	assert.Len(t, result, 1)
+	conn.Close()
+	testRedis.Stop()
+}
+
 func TestRedisBasicStore_ChangeTraceStatus_NoTraces(t *testing.T) {
 	ctx := context.Background()
 
