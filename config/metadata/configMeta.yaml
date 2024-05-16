@@ -1978,7 +1978,7 @@ groups:
 
       - name: ReaperBatchSize
         firstVersion: v3.0
-        type: duration
+        type: int
         valuetype: nondefault
         default: 500
         reload: false
