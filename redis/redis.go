@@ -26,6 +26,7 @@ type Script interface {
 	Load(conn Conn) error
 	Do(ctx context.Context, conn Conn, keysAndArgs ...any) (any, error)
 	DoStrings(ctx context.Context, conn Conn, keysAndArgs ...any) ([]string, error)
+	DoInt(ctx context.Context, conn Conn, keysAndArgs ...any) (int, error)
 	SendHash(ctx context.Context, conn Conn, keysAndArgs ...any) error
 	Send(ctx context.Context, conn Conn, keysAndArgs ...any) error
 }
@@ -83,13 +84,13 @@ type Conn interface {
 
 	ZAdd(string, []any) error
 	ZRange(string, int, int) ([]string, error)
-	ZRangeByScoreString(key string, minScore int64, maxScore int64, count, offset int) ([]string, error)
 	ZScore(string, string) (int64, error)
 	ZMScore(string, []string) ([]int64, error)
 	ZCard(string) (int64, error)
 	ZExist(string, string) (bool, error)
 	ZRemove(string, []string) error
 	ZRandom(string, int) ([]string, error)
+	ZCount(string, int64, int64) (int64, error)
 	TTL(string) (int64, error)
 
 	ReceiveStrings(int) ([]string, error)
@@ -661,21 +662,6 @@ func (c *DefaultConn) ZRange(key string, start, stop int) ([]string, error) {
 	return redis.Strings(c.conn.Do("ZRANGE", key, start, stop))
 }
 
-func (c *DefaultConn) ZRangeByScoreString(key string, minScore int64, maxScore int64, count, offset int) ([]string, error) {
-	start := strconv.FormatInt(minScore, 10)
-	if minScore == 0 {
-		start = "-inf"
-	}
-	stop := strconv.FormatInt(maxScore, 10)
-	if maxScore == 0 {
-		stop = "+inf"
-	}
-
-	// return all members with scores between start and stop excluding stop
-	// "(" is used to exclude the stop value
-	return redis.Strings(c.conn.Do("ZRANGE", key, start, "("+stop, "BYSCORE", "LIMIT", offset, count))
-}
-
 func (c *DefaultConn) ZScore(key string, member string) (int64, error) {
 	return redis.Int64(c.conn.Do("ZSCORE", key, member))
 }
@@ -911,6 +897,12 @@ func (s *DefaultScript) DoStrings(ctx context.Context, conn Conn, keysAndArgs ..
 	return redis.Strings(result, err)
 }
 
+func (s *DefaultScript) DoInt(ctx context.Context, conn Conn, keysAndArgs ...any) (int, error) {
+	defaultConn := conn.(*DefaultConn)
+	result, err := s.script.Do(defaultConn.conn, keysAndArgs...)
+	return redis.Int(result, err)
+}
+
 func (s *DefaultScript) Do(ctx context.Context, conn Conn, keysAndArgs ...any) (any, error) {
 	defaultConn := conn.(*DefaultConn)
 	return s.script.DoContext(ctx, defaultConn.conn, keysAndArgs...)
@@ -1000,6 +992,19 @@ func NewGetHashCommand(key string, field string) command {
 		name: "HGET",
 		args: redis.Args{key, field},
 	}
+}
+
+func (c *DefaultConn) ZCount(key string, start int64, stop int64) (int64, error) {
+	startArg := strconv.FormatInt(start, 10)
+	stopArg := strconv.FormatInt(stop, 10)
+	if start == 0 {
+		startArg = "-inf"
+	}
+
+	if stop == -1 {
+		stopArg = "+inf"
+	}
+	return redis.Int64(c.conn.Do("ZCOUNT", key, startArg, stopArg))
 }
 
 func (c *DefaultConn) RPushTTL(key string, member string, expiration time.Duration) (bool, error) {

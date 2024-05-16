@@ -729,7 +729,9 @@ func newTestTraceStateProcessor(_ *testing.T, redisClient redis.Client, clock cl
 	}
 	ts := &testTraceStateProcessor{
 		traceStateProcessor: newTraceStateProcessor(traceStateProcessorConfig{
-			changeState: redisClient.NewScript(stateChangeKey, stateChangeScript),
+			changeState:             redisClient.NewScript(stateChangeKey, stateChangeScript),
+			getTraceNeedingDecision: redisClient.NewScript(tracesNeedingDecisionScriptKey, tracesNeedingDecisionScript),
+			removeExpiredTraces:     redisClient.NewScript(removeExpiredTracesKey, removeExpiredTracesScript),
 		}, clock, tracer),
 		clock: clock,
 	}

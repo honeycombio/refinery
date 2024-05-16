@@ -241,7 +241,8 @@ type SmartWrapperOptions struct {
 	SendDelay          Duration `yaml:"SendDelay" default:"2s"`
 	TraceTimeout       Duration `yaml:"TraceTimeout" default:"60s"`
 	DecisionTimeout    Duration `yaml:"DecisionTimeout" default:"3s"`
-	ReaperRunInterval  Duration `yaml:"ReaperRunInterval" default:"1h"`
+	ReaperRunInterval  Duration `yaml:"ReaperRunInterval" default:"10s"`
+	ReaperBatchSize    int      `yaml:"ReaperBatchSize" default:"500"`
 }
 
 func (c CollectionConfig) GetShutdownDelay() time.Duration {

@@ -77,9 +77,11 @@ func (r *RedisBasicStore) Start() error {
 
 	stateProcessorCfg := traceStateProcessorConfig{
 		reaperRunInterval:       time.Duration(opt.ReaperRunInterval),
+		reaperBatchSize:         opt.ReaperBatchSize,
 		maxTraceRetention:       time.Duration(opt.TraceTimeout * 10),
 		changeState:             r.RedisClient.NewScript(stateChangeKey, stateChangeScript),
 		getTraceNeedingDecision: r.RedisClient.NewScript(tracesNeedingDecisionScriptKey, tracesNeedingDecisionScript),
+		removeExpiredTraces:     r.RedisClient.NewScript(removeExpiredTracesKey, removeExpiredTracesScript),
 	}
 
 	stateProcessor := newTraceStateProcessor(stateProcessorCfg, r.Clock, r.Tracer)
@@ -88,6 +90,8 @@ func (r *RedisBasicStore) Start() error {
 	if err != nil {
 		return err
 	}
+
+	r.Config.RegisterReloadCallback(r.reloadConfig)
 
 	r.traces = newTraceStatusStore(r.Clock, r.Tracer, r.RedisClient.NewScript(keepTraceKey, keepTraceScript), r.Config)
 	r.states = stateProcessor
@@ -158,11 +162,11 @@ func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 
 	for _, state := range r.states.states {
 		// get the state counts
-		traceIDs, err := r.states.traceIDsByState(ctx, conn, state, time.Time{}, time.Time{}, -1)
+		count, err := conn.ZCount(r.states.stateNameKey(state), 0, -1)
 		if err != nil {
 			return err
 		}
-		r.Metrics.Gauge(metricsPrefixCount+string(state), len(traceIDs))
+		r.Metrics.Gauge(metricsPrefixCount+string(state), count)
 	}
 
 	count, err := r.traces.count(ctx, conn)
@@ -568,6 +572,10 @@ func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *Centra
 	return nil
 }
 
+func (r *RedisBasicStore) reloadConfig() {
+	r.states.reloadConfig(r.Config)
+}
+
 func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, states map[string]CentralTraceState) error {
 	ctx, span := r.Tracer.Start(ctx, "getTraceStates")
 	defer span.End()
@@ -970,10 +978,13 @@ func addToSpanHash(span *CentralSpan) (redis.Command, error) {
 // on it's current state.
 
 type traceStateProcessorConfig struct {
-	reaperRunInterval       time.Duration
-	maxTraceRetention       time.Duration
+	reaperRunInterval time.Duration
+	reaperBatchSize   int
+	maxTraceRetention time.Duration
+
 	changeState             redis.Script
 	getTraceNeedingDecision redis.Script
+	removeExpiredTraces     redis.Script
 }
 
 type traceStateProcessor struct {
@@ -988,6 +999,9 @@ type traceStateProcessor struct {
 func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock, tracer trace.Tracer) *traceStateProcessor {
 	if cfg.reaperRunInterval == 0 {
 		cfg.reaperRunInterval = 10 * time.Second
+	}
+	if cfg.reaperBatchSize == 0 {
+		cfg.reaperBatchSize = 500
 	}
 	if cfg.maxTraceRetention < defaultTraceRetention {
 		cfg.maxTraceRetention = defaultTraceRetention
@@ -1008,6 +1022,12 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 	}
 
 	return s
+}
+
+func (t *traceStateProcessor) reloadConfig(cfg config.Config) {
+	t.config.maxTraceRetention = time.Duration(cfg.GetCentralStoreOptions().TraceTimeout) * 10
+	t.config.reaperBatchSize = cfg.GetCentralStoreOptions().ReaperBatchSize
+	t.config.reaperRunInterval = time.Duration(cfg.GetCentralStoreOptions().ReaperRunInterval)
 }
 
 // init ensures that the valid state change events are stored in a set in redis
@@ -1069,40 +1089,6 @@ func (t *traceStateProcessor) randomTraceIDsByState(ctx context.Context, conn re
 	}
 	otelutil.AddSpanField(span, "num_ids", len(ids))
 	return ids, err
-}
-
-// traceIDsByState returns the traceIDs that are in a given trace state.
-// If startTime is not zero, it will return traceIDs that have been in the state since startTime.
-// If endTime is not zero, it will return traceIDs that have been in the state until endTime.
-// If n is not zero, it will return at most n traceIDs.
-func (t *traceStateProcessor) traceIDsByState(ctx context.Context, conn redis.Conn, state CentralTraceState, startTime time.Time, endTime time.Time, n int) ([]string, error) {
-	_, span := t.tracer.Start(ctx, "traceIDsByState")
-	defer span.End()
-
-	start := startTime.UnixMicro()
-	if startTime.IsZero() {
-		start = 0
-	}
-
-	end := endTime.UnixMicro()
-	if endTime.IsZero() {
-		end = 0
-	}
-
-	results, err := conn.ZRangeByScoreString(t.stateNameKey(state), start, end, n, 0)
-	if err != nil {
-		span.RecordError(err)
-		return nil, err
-	}
-	otelutil.AddSpanFields(span, map[string]interface{}{
-		"cmd":     "ZRANGEBYSCORE",
-		"state":   state,
-		"num_ids": len(results),
-		"start":   start,
-		"end":     end,
-		"n":       n,
-	})
-	return results, nil
 }
 
 func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state CentralTraceState, traceID string) bool {
@@ -1171,6 +1157,7 @@ func (t *traceStateProcessor) cleanupExpiredTraces(redis redis.Client) {
 		case <-ticker.Chan():
 			// cannot defer here!
 			ctx, span := t.tracer.Start(context.Background(), "cleanupExpiredTraces")
+			otelutil.AddSpanField(span, "interval", t.config.reaperRunInterval.String())
 			t.removeExpiredTraces(ctx, redis)
 			span.End()
 		}
@@ -1180,7 +1167,6 @@ func (t *traceStateProcessor) cleanupExpiredTraces(redis redis.Client) {
 func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client redis.Client) {
 	ctx, span := otelutil.StartSpanMulti(ctx, t.tracer, "removeExpiredTraces", map[string]interface{}{
 		"num_states": len(t.states),
-		"cmd":        "ZRANGEBYSCORE",
 	})
 	defer span.End()
 
@@ -1189,22 +1175,16 @@ func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client re
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
-		traceIDs, err := conn.ZRangeByScoreString(t.stateNameKey(state), 0, t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro(), defaultReaperBatchSize, 0)
-		if err != nil {
-			span.RecordError(err)
-			otelutil.AddSpanFields(span, map[string]interface{}{
-				"state": state,
-				"error": err.Error(),
-			})
-			return
-		}
+		replies, err := t.config.removeExpiredTraces.DoInt(ctx, conn, t.stateNameKey(state),
+			t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro(),
+			t.config.reaperBatchSize)
 
-		// remove the traceIDs from the state map
-		err = t.remove(ctx, conn, state, traceIDs...)
 		if err != nil {
 			span.RecordError(err)
 			continue
 		}
+
+		otelutil.AddSpanField(span, state.String(), replies)
 	}
 
 }
@@ -1429,4 +1409,17 @@ const keepTraceScript = `
 	end
 
 	return 1
+`
+
+const removeExpiredTracesKey = 1
+const removeExpiredTracesScript = `
+	local stateKey = KEYS[1]
+	local expirationTime = ARGV[1]
+	local batchSize = ARGV[2]
+
+	local traces = redis.call('ZRANGE', stateKey,
+	"-inf", expirationTime, "byscore", "limit", 0, batchSize)
+
+	local result = redis.call('ZREM', stateKey, unpack(traces))
+	return result
 `

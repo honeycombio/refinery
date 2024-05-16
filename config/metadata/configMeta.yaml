@@ -298,7 +298,7 @@ groups:
           After the trace decision has been made, Refinery retains a record of
           that decision for a period of time. When additional spans (including
           the root span) arrive, they will be kept or dropped based on the
-          original decision. 
+          original decision.
 
           When running Refinery with Redis as the central store, this timer is
           also used to determine how long to keep trace decisions in Redis.
@@ -1104,7 +1104,6 @@ groups:
           metrics from Redis server. It may be useful to increase this value in
           high-throughput environments. By setting this value to 0, the metrics
           retrieval will be disabled.
-
 
       - name: Strategy
         v1group: PeerManagement
@@ -1970,9 +1969,20 @@ groups:
         firstVersion: v2.6
         type: duration
         valuetype: nondefault
-        default: 1h
+        default: 10s
         reload: true
         summary: is the interval at which the reaper runs to clean up expired traces.
         description: >
           This value determines how often the reaper runs to clean up expired traces
           in the central store. TODO: don't expose this?
+
+      - name: ReaperBatchSize
+        firstVersion: v3.0
+        type: duration
+        valuetype: nondefault
+        default: 500
+        reload: false
+        summary: is the maximum number of traces to be included for deleting expired traces in a single request.
+        description: >
+          This value determines how many traces the reaper will delete in a single
+          request.
