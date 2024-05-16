@@ -1981,7 +1981,7 @@ groups:
         type: duration
         valuetype: nondefault
         default: 500
-        reload: false
+        reload: true
         summary: is the maximum number of traces to be included for deleting expired traces in a single request.
         description: >
           This value determines how many traces the reaper will delete in a single
