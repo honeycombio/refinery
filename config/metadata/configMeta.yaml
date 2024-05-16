@@ -1957,7 +1957,7 @@ groups:
         type: duration
         valuetype: nondefault
         default: 3s
-        reload: true
+        reload: false
         summary: is the time the central store will wait to receive a trace decision from Refinery
         description: >
           This value controls how long the central store will wait for a trace
@@ -1970,7 +1970,7 @@ groups:
         type: duration
         valuetype: nondefault
         default: 10s
-        reload: true
+        reload: false
         summary: is the interval at which the reaper runs to clean up expired traces.
         description: >
           This value determines how often the reaper runs to clean up expired traces
@@ -1981,7 +1981,7 @@ groups:
         type: duration
         valuetype: nondefault
         default: 500
-        reload: true
+        reload: false
         summary: is the maximum number of traces to be included for deleting expired traces in a single request.
         description: >
           This value determines how many traces the reaper will delete in a single

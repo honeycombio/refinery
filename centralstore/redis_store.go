@@ -91,8 +91,6 @@ func (r *RedisBasicStore) Start() error {
 		return err
 	}
 
-	r.Config.RegisterReloadCallback(r.reloadConfig)
-
 	r.traces = newTraceStatusStore(r.Clock, r.Tracer, r.RedisClient.NewScript(keepTraceKey, keepTraceScript), r.Config)
 	r.states = stateProcessor
 
@@ -572,10 +570,6 @@ func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *Centra
 	return nil
 }
 
-func (r *RedisBasicStore) reloadConfig() {
-	r.states.reload <- r.Config.GetCentralStoreOptions()
-}
-
 func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, states map[string]CentralTraceState) error {
 	ctx, span := r.Tracer.Start(ctx, "getTraceStates")
 	defer span.End()
@@ -992,7 +986,6 @@ type traceStateProcessor struct {
 	config traceStateProcessorConfig
 	clock  clockwork.Clock
 	done   chan struct{}
-	reload chan config.SmartWrapperOptions
 
 	tracer trace.Tracer
 }
@@ -1023,12 +1016,6 @@ func newTraceStateProcessor(cfg traceStateProcessorConfig, clock clockwork.Clock
 	}
 
 	return s
-}
-
-func (t *traceStateProcessor) reloadCfg(cfg config.SmartWrapperOptions) {
-	t.config.reaperRunInterval = time.Duration(cfg.ReaperRunInterval)
-	t.config.reaperBatchSize = cfg.ReaperBatchSize
-	t.config.maxTraceRetention = time.Duration(cfg.TraceTimeout) * 10
 }
 
 // init ensures that the valid state change events are stored in a set in redis
@@ -1111,6 +1098,20 @@ func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state
 	return exist
 }
 
+func (t *traceStateProcessor) remove(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs ...string) error {
+	_, span := otelutil.StartSpanMulti(ctx, t.tracer, "remove", map[string]interface{}{
+		"state":      state,
+		"cmd":        "ZREMOVE",
+		"num_traces": len(traceIDs),
+	})
+	defer span.End()
+	if len(traceIDs) == 0 {
+		return nil
+	}
+
+	return conn.ZRemove(t.stateNameKey(state), traceIDs)
+}
+
 func (t *traceStateProcessor) toNextState(ctx context.Context, conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) ([]string, error) {
 	if len(traceIDs) == 0 {
 		return nil, nil
@@ -1141,8 +1142,6 @@ func (t *traceStateProcessor) cleanupExpiredTraces(redis redis.Client) {
 		select {
 		case <-t.done:
 			return
-		case cfg := <-t.reload:
-			t.reloadCfg(cfg)
 		case <-ticker.Chan():
 			// cannot defer here!
 			ctx, span := t.tracer.Start(context.Background(), "cleanupExpiredTraces")
