@@ -229,8 +229,10 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 			}
 		}
 		// we have to make sure the health check says we're alive but not accepting data during shutdown
-		c.Health.Ready(receiverHealth, false)
-		c.Health.Ready(deciderHealth, false)
+		c.Health.Unregister(receiverHealth)
+		c.Health.Unregister(deciderHealth)
+		// reregister the sender health check to a much longer time so we can finish sending traces
+		c.Health.Register(senderHealth, 5*time.Second)
 		c.Health.Ready(senderHealth, true)
 		return nil
 	}); err != nil {
