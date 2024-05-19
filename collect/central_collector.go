@@ -931,7 +931,7 @@ func (c *CentralCollector) checkAlloc() {
 	c.Metrics.Gauge("collector_cache_size", totalTraces)
 
 	percentage := float64(totalToRemove) / float64(totalTraces)
-	traceIDs := c.SpanCache.GetOldest(percentage)
+	traceIDs := c.SpanCache.GetHighImpactTraceIDs(percentage)
 
 	ctx := context.Background()
 	totalDataSizeSent := 0

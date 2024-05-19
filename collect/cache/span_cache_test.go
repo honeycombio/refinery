@@ -103,8 +103,8 @@ func TestGetOldest(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			// test that we can retrieve the oldest span
-			traceIDs := c.GetOldest(0.1)
+			// test that we can retrieve the highest-impact span
+			traceIDs := c.GetHighImpactTraceIDs(0.1)
 			require.Len(t, traceIDs, 2)
 			assert.Equal(t, ids[0], traceIDs[0])
 			assert.Equal(t, ids[1], traceIDs[1])
@@ -235,42 +235,6 @@ func BenchmarkSpanCacheGetTraceIDs(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				c.GetTraceIDs(50)
-			}
-		})
-	}
-}
-
-func BenchmarkSpanCacheGetOldest(b *testing.B) {
-	for _, typ := range []string{"basic"} {
-		c := getCache(typ, clockwork.NewFakeClock())
-		b.Run(typ, func(b *testing.B) {
-
-			c.(startstop.Starter).Start()
-
-			ids := make([]string, b.N)
-			for i := 0; i < b.N; i++ {
-				ids[i] = genID(32)
-			}
-			evt := types.Event{
-				APIHost: "apihost",
-				APIKey:  "apikey",
-				Dataset: "dataset",
-			}
-
-			for i := 0; i < b.N; i++ {
-				evt.Data = map[string]any{"field": genID(b.N%20 + 1)}
-				span := &types.Span{
-					TraceID:     ids[i],
-					Event:       evt,
-					ArrivalTime: c.GetClock().Now(),
-				}
-				c.Set(span)
-				c.GetClock().(clockwork.FakeClock).Advance(time.Millisecond)
-			}
-			b.ResetTimer()
-
-			for i := 0; i < b.N; i++ {
-				c.GetOldest(.1)
 			}
 		})
 	}

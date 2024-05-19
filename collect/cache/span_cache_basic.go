@@ -78,7 +78,10 @@ func (sc *SpanCache_basic) Get(traceID string) *types.Trace {
 	return trace
 }
 
-func (sc *SpanCache_basic) GetOldest(fract float64) []string {
+// Returns the desired fraction of the highest-impact trace IDs in the cache.
+// (e.g. if fract is 0.1, returns the heaviest 10% of trace IDs)
+// Impact is defined as the product of memory use and duration.
+func (sc *SpanCache_basic) GetHighImpactTraceIDs(fract float64) []string {
 	if fract <= 0 {
 		return nil
 	}
