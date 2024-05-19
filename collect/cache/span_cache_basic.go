@@ -151,21 +151,21 @@ func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 	return sc.current[sc.nextix : sc.nextix+n]
 }
 
-// This gets all the traceIDs that are older than TraceTimeout + 2*SendDelay.
+// This gets all the traceIDs that are older than 2*(TraceTimeout+SendDelay).
 // These are traces that should have been decided but we didn't see a published
-// a decision. This is used to help clean up the cache and in situations where
-// the cache has data but we didn't get the published decision (probably because
-// we got a late span just after booting up).
+// decision. This is used to help clean up the cache and in situations where the
+// cache has data but we didn't get the published decision (probably because we
+// got a late span just after booting up).
 func (sc *SpanCache_basic) GetOldTraceIDs() []string {
-	oldTime := sc.Cfg.GetTraceTimeout() + 2*sc.Cfg.GetSendDelay()
-	cutoff := sc.Clock.Now().Add(-oldTime)
+	cutoffDuration := 2 * (sc.Cfg.GetTraceTimeout() + sc.Cfg.GetSendDelay())
+	cutoffTime := sc.Clock.Now().Add(-cutoffDuration)
 	ids := make([]string, 0)
 
 	sc.mut.RLock()
 	defer sc.mut.RUnlock()
 
 	for traceID := range sc.cache {
-		if sc.cache[traceID].ArrivalTime.Before(cutoff) {
+		if sc.cache[traceID].ArrivalTime.Before(cutoffTime) {
 			ids = append(ids, traceID)
 		}
 	}
