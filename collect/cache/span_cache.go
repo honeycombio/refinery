@@ -23,6 +23,8 @@ type SpanCache interface {
 	// Returns up to n trace IDs from the cache; successive calls will return
 	// different trace IDs until all have been returned, then it will start over.
 	GetTraceIDs(n int) []string
+	// Returns all trace IDs in the cache that are older than a cutoff time.
+	GetOldTraceIDs() []string
 	// Removes a trace from the cache by traceID. If no trace with the traceID exists,
 	// does nothing.
 	Remove(traceID string)

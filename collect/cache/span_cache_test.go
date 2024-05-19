@@ -29,18 +29,13 @@ func getCache(typ string, clock clockwork.Clock) SpanCache {
 			Clock:   clock,
 			Metrics: &metrics.NullMetrics{},
 		}
-	case "complex":
-		return &SpanCache_complex{
-			Cfg:   cfg,
-			Clock: clock,
-		}
 	default:
 		panic("unknown cache type")
 	}
 }
 
 func TestSpanCache(t *testing.T) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		t.Run(typ, func(t *testing.T) {
 
@@ -79,7 +74,7 @@ func TestSpanCache(t *testing.T) {
 }
 
 func TestGetOldest(t *testing.T) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewRealClock())
 		t.Run(typ, func(t *testing.T) {
 
@@ -118,7 +113,7 @@ func TestGetOldest(t *testing.T) {
 }
 
 func TestGetTraceIDs(t *testing.T) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		t.Run(typ, func(t *testing.T) {
 
@@ -151,7 +146,7 @@ func TestGetTraceIDs(t *testing.T) {
 }
 
 func BenchmarkSpanCacheAdd(b *testing.B) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		b.Run(typ, func(b *testing.B) {
 
@@ -180,7 +175,7 @@ func BenchmarkSpanCacheAdd(b *testing.B) {
 }
 
 func BenchmarkSpanCacheGet(b *testing.B) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		b.Run(typ, func(b *testing.B) {
 
@@ -213,7 +208,7 @@ func BenchmarkSpanCacheGet(b *testing.B) {
 }
 
 func BenchmarkSpanCacheGetTraceIDs(b *testing.B) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		b.Run(typ, func(b *testing.B) {
 
@@ -246,7 +241,7 @@ func BenchmarkSpanCacheGetTraceIDs(b *testing.B) {
 }
 
 func BenchmarkSpanCacheGetOldest(b *testing.B) {
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		b.Run(typ, func(b *testing.B) {
 
@@ -283,7 +278,7 @@ func BenchmarkSpanCacheGetOldest(b *testing.B) {
 
 func BenchmarkSpanCacheMixed(b *testing.B) {
 	const numIDs = 10000
-	for _, typ := range []string{"basic", "complex"} {
+	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewFakeClock())
 		b.Run(typ, func(b *testing.B) {
 

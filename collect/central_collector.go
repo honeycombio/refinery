@@ -13,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/logger"
@@ -72,6 +73,7 @@ type CentralCollector struct {
 	SamplerFactory *sample.SamplerFactory      `inject:""`
 	Health         health.Recorder             `inject:""`
 	SpanCache      cache.SpanCache             `inject:""`
+	Gossip         gossip.Gossiper             `inject:"gossip"`
 
 	// whenever samplersByDestination is accessed, it should be protected by
 	// the mut mutex
@@ -86,6 +88,11 @@ type CentralCollector struct {
 	senderCycle  *Cycle
 	deciderCycle *Cycle
 	metricsCycle *Cycle
+	cleanupCycle *Cycle
+
+	// can't close these because gossip doesn't unre
+	keepChan chan string
+	dropChan chan string
 
 	hostname string
 
@@ -98,6 +105,8 @@ const (
 	receiverHealth = "receiver"
 	deciderHealth  = "decider"
 	senderHealth   = "sender"
+	gossip_keep    = "keep"
+	gossip_drop    = "drop"
 )
 
 func (c *CentralCollector) Start() error {
@@ -123,6 +132,7 @@ func (c *CentralCollector) Start() error {
 	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
 	c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
+	c.cleanupCycle = NewCycle(c.Clock, c.Config.GetTraceTimeout(), c.done)
 
 	c.Metrics.Register("collector_sender_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
@@ -143,7 +153,8 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("spans_waiting", "updown")
 	c.Metrics.Register("dropped_from_stress", "counter")
 	c.Metrics.Register("kept_from_stress", "counter")
-	c.Metrics.Register("collector_send_trace", "counter")
+	c.Metrics.Register("collector_keep_trace", "counter")
+	c.Metrics.Register("collector_drop_trace", "counter")
 	c.Metrics.Register("collector_decide_trace", "counter")
 	c.Metrics.Register("decider_decided_per_second", "histogram")
 	c.Metrics.Register("decider_considered_per_second", "histogram")
@@ -164,6 +175,7 @@ func (c *CentralCollector) Start() error {
 	c.eg.Go(c.receive)
 	c.eg.Go(c.send)
 	c.eg.Go(c.decide)
+	c.eg.Go(c.cleanup)
 	c.eg.Go(func() error {
 		return c.metricsCycle.Run(context.Background(), func(ctx context.Context) error {
 			if err := c.Store.RecordMetrics(ctx); err != nil {
@@ -173,6 +185,17 @@ func (c *CentralCollector) Start() error {
 			return nil
 		})
 	})
+
+	maxTime := 100 * time.Millisecond
+	maxCount := 100
+	c.keepChan = make(chan string, maxCount)
+	c.dropChan = make(chan string, maxCount)
+	go c.debounceTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
+	go c.debounceTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
+
+	// subscribe to the Keep and Drop decisions
+	c.Gossip.Subscribe(gossip_keep, c.onKeepMessage)
+	c.Gossip.Subscribe(gossip_drop, c.onDropMessage)
 	return nil
 }
 
@@ -181,10 +204,13 @@ func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
-
 	if err := c.eg.Wait(); err != nil {
 		c.Logger.Error().Logf("error waiting for goroutines to finish: %s", err)
 	}
+
+	// can't close these because gossip doesn't know how to unregister
+	// close(c.keepChan)
+	// close(c.dropChan)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay())
@@ -464,10 +490,12 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 			c.sendSpans(status)
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
+			c.Metrics.Increment("collector_keep_trace")
 
 		case centralstore.DecisionDrop:
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
 		default:
 			// this shouldn't happen, but we want to be safe about it.
 			// we don't want to send traces that are in any other state;
@@ -478,10 +506,140 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 			}).Logf("unexpected state for trace")
 			continue
 		}
-		c.Metrics.Increment("collector_send_trace")
 	}
 
 	return nil
+}
+
+// we listen for messages on the gossip channels for keep and drop decisions.
+// These messages are trace IDs; when the decision is made, we publish the trace ID
+// on the appropriate channel.
+func (c *CentralCollector) onKeepMessage(data []byte) {
+	traceID := string(data)
+	c.keepChan <- traceID
+}
+
+func (c *CentralCollector) onDropMessage(data []byte) {
+	traceID := string(data)
+	c.dropChan <- traceID
+}
+
+// debounceTraceIDChannel listens on the provided chan and forwards up to maxCount
+// trace IDs to the supplied function (fewer if the channel goes maxTime without
+// receiving any trace IDs). We do this so we can batch up trace IDs and make
+// fewer calls to the central store.
+func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]string), maxTime time.Duration, maxCount int) {
+	ticker := c.Clock.NewTicker(maxTime)
+	defer ticker.Stop()
+	traceIDs := make([]string, 0, maxCount)
+	send := false
+	for {
+		select {
+		case <-c.done:
+			return
+		case traceID := <-ch:
+			// if we get a trace ID, add it to the list
+			traceIDs = append(traceIDs, traceID)
+			// if we reached the max count, we need to send
+			if len(traceIDs) >= maxCount {
+				send = true
+			}
+			// we got one, so reset the ticker so it doesn't fire
+			ticker.Reset(maxTime)
+		case <-ticker.Chan():
+			// ticker fired, so send what we have
+			send = true
+		}
+		// if we need to send, do so
+		if send && len(traceIDs) > 0 {
+			f(traceIDs)
+			traceIDs = traceIDs[:0]
+			send = false
+		}
+	}
+}
+
+// keepTraces needs to retrieve the status of the traces from the central store
+// so that it can attach the metadata as needed
+func (c *CentralCollector) keepTraces(ids []string) {
+	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.keepTraces", "num_ids", len(ids))
+	defer span.End()
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep)
+	if err != nil {
+		c.Logger.Error().Logf("error getting status for traces: %s", err)
+	}
+
+	for _, status := range statuses {
+		c.sendSpans(status)
+		c.SpanCache.Remove(status.TraceID)
+		c.Metrics.Increment("collector_keep_trace")
+	}
+}
+
+// dropTraces doesn't need to retrieve the status of the traces from the central store
+// because it's only removing the traces from the cache
+func (c *CentralCollector) dropTraces(ids []string) {
+	_, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.dropTraces", "num_ids", len(ids))
+	defer span.End()
+	for _, traceID := range ids {
+		c.SpanCache.Remove(traceID)
+		c.Metrics.Increment("collector_drop_trace")
+	}
+}
+
+// The cleanup task is responsible for removing traces from the cache that have
+// been around for too long. This is a hedge against process restarts where the
+// gossiped message was lost or happened before we existed.
+func (c *CentralCollector) cleanup() error {
+	return c.cleanupCycle.Run(context.Background(), func(ctx context.Context) error {
+		c.cleanupTraces(ctx)
+		c.Metrics.Increment("collector_cleanup_runs")
+		return nil
+	})
+}
+
+// Cleanup traces asks for old (expired) trace IDs from the cache and then gets the status
+// (either keep or drop) from the central store, and then dispatches them appropriately.
+// In a stable refinery cluster, this should be a no-op.
+func (c *CentralCollector) cleanupTraces(ctx context.Context) {
+	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.cleanupTraces")
+	defer span.End()
+	ids := c.SpanCache.GetOldTraceIDs()
+	otelutil.AddSpanField(span, "num_ids", len(ids))
+
+	c.Metrics.Histogram("collector_cleanup_batch_count", len(ids))
+	if len(ids) == 0 {
+		return
+	}
+
+	var tracesConsidered float64
+	now := c.Clock.Now()
+	defer func() {
+		sendTime := c.Clock.Since(now)
+		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
+	}()
+
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
+	if err != nil {
+		c.Logger.Error().Logf("error getting status for traces in cleanupTraces: %s", err)
+	}
+
+	for _, status := range statuses {
+		switch status.State {
+		case centralstore.DecisionKeep:
+			c.sendSpans(status)
+			c.SpanCache.Remove(status.TraceID)
+			tracesConsidered++
+			c.Metrics.Increment("collector_keep_trace")
+
+		case centralstore.DecisionDrop:
+			c.SpanCache.Remove(status.TraceID)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+		default:
+			continue
+		}
+	}
 }
 
 func (c *CentralCollector) decide() error {
@@ -662,8 +820,10 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		if shouldSend {
 			state = centralstore.DecisionKeep
 			status.KeepReason = reason
+			c.Gossip.Publish(gossip_keep, []byte(trace.TraceID))
 		} else {
 			state = centralstore.DecisionDrop
+			c.Gossip.Publish(gossip_drop, []byte(trace.TraceID))
 		}
 		status.State = state
 		status.Rate = rate
