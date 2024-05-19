@@ -116,7 +116,11 @@ func (c *CentralCollector) Start() error {
 	// we're a health check reporter so register ourselves for each of our major routines
 	c.Health.Register(receiverHealth, time.Duration(5*collectorCfg.MemoryCycleDuration))
 	c.Health.Register(deciderHealth, 5*collectorCfg.GetDeciderCycleDuration())
-	c.Health.Register(senderHealth, 5*collectorCfg.GetSenderCycleDuration())
+
+	// the sender health check should only be run if we're using it
+	if !collectorCfg.UseDecisionGossip {
+		c.Health.Register(senderHealth, 5*collectorCfg.GetSenderCycleDuration())
+	}
 
 	c.done = make(chan struct{})
 
@@ -130,9 +134,12 @@ func (c *CentralCollector) Start() error {
 
 	// The cycles manage a periodic task and also provide some test hooks
 	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
-	c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
-	c.cleanupCycle = NewCycle(c.Clock, c.Config.GetTraceTimeout(), c.done)
+	if collectorCfg.UseDecisionGossip {
+		c.cleanupCycle = NewCycle(c.Clock, c.Config.GetTraceTimeout(), c.done)
+	} else {
+		c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
+	}
 
 	c.Metrics.Register("collector_sender_batch_count", "histogram")
 	c.Metrics.Register("collector_decider_batch_count", "histogram")
@@ -173,9 +180,12 @@ func (c *CentralCollector) Start() error {
 	// spin up one collector because this is a single threaded collector
 	c.eg = &errgroup.Group{}
 	c.eg.Go(c.receive)
-	c.eg.Go(c.send)
 	c.eg.Go(c.decide)
-	c.eg.Go(c.cleanup)
+	if collectorCfg.UseDecisionGossip {
+		c.eg.Go(c.cleanup)
+	} else {
+		c.eg.Go(c.send)
+	}
 	c.eg.Go(func() error {
 		return c.metricsCycle.Run(context.Background(), func(ctx context.Context) error {
 			if err := c.Store.RecordMetrics(ctx); err != nil {
@@ -524,10 +534,12 @@ func (c *CentralCollector) onDropMessage(data []byte) {
 	c.dropChan <- traceID
 }
 
-// debounceTraceIDChannel listens on the provided chan and forwards up to maxCount
-// trace IDs to the supplied function (fewer if the channel goes maxTime without
-// receiving any trace IDs). We do this so we can batch up trace IDs and make
-// fewer calls to the central store.
+// debounceTraceIDChannel listens on the provided chan and forwards up to
+// maxCount trace IDs to the supplied function (fewer if the channel goes
+// maxTime without receiving any trace IDs). We do this so we can batch up trace
+// IDs and make fewer calls to the central store. Note that this routine is run
+// only if traces are arriving, so we can't use it or the functions it calls as
+// a readiness check.
 func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]string), maxTime time.Duration, maxCount int) {
 	ticker := c.Clock.NewTicker(maxTime)
 	defer ticker.Stop()

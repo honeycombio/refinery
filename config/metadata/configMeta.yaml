@@ -1329,6 +1329,15 @@ groups:
           not to do it too often, but in situations where bursts of traffic can
           cause memory pressure, it can be useful to check more frequently.
 
+      - name: UseDecisionGossip
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: controls whether Refinery uses the new decision gossip system.
+        description: >
+          This is a temporary setting that will be removed before 3.0 is released.
+
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >

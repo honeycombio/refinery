@@ -207,8 +207,8 @@ type RedisPeerManagementConfig struct {
 	Password         string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode         string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
 	Database         int      `yaml:"Database"`
-	UseTLS           bool     `yaml:"UseTLS" `
-	UseTLSInsecure   bool     `yaml:"UseTLSInsecure" `
+	UseTLS           bool     `yaml:"UseTLS"`
+	UseTLSInsecure   bool     `yaml:"UseTLSInsecure"`
 	Timeout          Duration `yaml:"Timeout" default:"5s"`
 	Prefix           string   `yaml:"Prefix" default:"refinery"`
 	MaxIdle          int      `yaml:"MaxIdle" default:"30"`
@@ -230,6 +230,7 @@ type CollectionConfig struct {
 	MaxAlloc                MemorySize `yaml:"MaxAlloc"`
 	ShutdownDelay           Duration   `yaml:"ShutdownDelay" default:"30s"`
 	MemoryCycleDuration     Duration   `yaml:"MemoryCycleDuration" default:"10s"`
+	UseDecisionGossip       bool       `yaml:"UseDecisionGossip"`
 }
 
 type SmartWrapperOptions struct {
