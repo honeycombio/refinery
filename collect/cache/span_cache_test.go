@@ -21,6 +21,7 @@ func getCache(typ string, clock clockwork.Clock) SpanCache {
 			CacheCapacity: 10000,
 		},
 		GetTraceTimeoutVal: 10 * time.Second,
+		GetSendDelayVal:    2 * time.Second,
 	}
 	switch typ {
 	case "basic":
@@ -73,7 +74,7 @@ func TestSpanCache(t *testing.T) {
 	}
 }
 
-func TestGetOldest(t *testing.T) {
+func TestGetHighImpact(t *testing.T) {
 	for _, typ := range []string{"basic"} {
 		c := getCache(typ, clockwork.NewRealClock())
 		t.Run(typ, func(t *testing.T) {
@@ -141,6 +142,62 @@ func TestGetTraceIDs(t *testing.T) {
 			thirdBatch := c.GetTraceIDs(5)
 			require.NotEqualValues(t, firstBatch, secondBatch)
 			require.NotNil(t, thirdBatch)
+		})
+	}
+}
+
+func TestGetOldest(t *testing.T) {
+	for _, typ := range []string{"basic"} {
+		fakeClock := clockwork.NewFakeClock()
+		c := getCache(typ, fakeClock) // sets up a cache with a 10s timeout and 2s send delay
+		t.Run(typ, func(t *testing.T) {
+
+			err := c.(startstop.Starter).Start()
+			require.NoError(t, err)
+
+			const numIDs = 10
+			ids := make([]string, numIDs)
+			for i := 0; i < numIDs; i++ {
+				ids[i] = genID(32)
+			}
+			evt := types.Event{
+				APIHost: "apihost",
+				APIKey:  "apikey",
+				Dataset: "dataset",
+			}
+			for i := 0; i < numIDs; i++ {
+				// we want cache impact to be highest first
+				evt.Data = map[string]any{"field": genID(30 - i)}
+				span := &types.Span{
+					TraceID:     ids[i],
+					Event:       evt,
+					ArrivalTime: c.GetClock().Now(),
+				}
+				err := c.Set(span)
+				require.NoError(t, err)
+				fakeClock.Advance(1 * time.Second)
+			}
+
+			// now we have 10 spans, each 1s apart
+			// after 2s more, none should be available from GetOldTraceIDs
+			fakeClock.Advance(2 * time.Second)
+			// give ourselves a little time to process the spans
+			fakeClock.Advance(400 * time.Millisecond)
+			traceIDs := c.GetOldTraceIDs()
+			require.Len(t, traceIDs, 0)
+
+			// After 13s more, the first 2 spans should be available from GetOldTraceIDs
+			// (10s timeout + 2s send delay)*2 + 1s
+			fakeClock.Advance(13 * time.Second)
+			traceIDs = c.GetOldTraceIDs()
+			require.Len(t, traceIDs, 2)
+			assert.Equal(t, ids[0], traceIDs[0])
+			assert.Equal(t, ids[1], traceIDs[1])
+
+			// after another 8s, all spans should be available
+			fakeClock.Advance(8 * time.Second)
+			traceIDs = c.GetOldTraceIDs()
+			require.Len(t, traceIDs, 10)
 		})
 	}
 }
