@@ -45,7 +45,7 @@ func TestRoundTripChanRedis(t *testing.T) {
 	require.NoError(t, g.Publish("test", []byte("hi")))
 	require.NoError(t, g.Publish("test2", []byte("bye")))
 
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		time.Sleep(100 * time.Millisecond)
 		return len(ch) == 1 && len(ch2) == 1
 	}, 5*time.Second, 200*time.Millisecond)
