@@ -46,6 +46,7 @@ type StressRelief struct {
 	stayOnUntil        time.Time
 	minDuration        time.Duration
 	identification     string
+	stressGossipCh     chan []byte
 
 	eg *errgroup.Group
 
@@ -104,46 +105,59 @@ func (s *StressRelief) Start() error {
 	s.stressLevels = make(map[string]stressReport)
 	s.done = make(chan struct{})
 
-	s.eg = &errgroup.Group{}
-
 	s.Health.Register(stressReliefHealthSource, 5*calculationInterval)
 
 	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
 	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
-	if err := s.Gossip.Subscribe("stress_level", s.onStressLevelMessage); err != nil {
-		return err
-	}
-
-	// start our monitor goroutine that periodically calls recalc
-	s.eg.Go(func() error {
-		tick := time.NewTicker(calculationInterval)
-		defer tick.Stop()
-		for {
-			select {
-			case <-tick.C:
-				currentLevel := s.Recalc()
-				// publish the stress level to the rest of the cluster
-				msg := stressLevelMessage{
-					level: currentLevel,
-					id:    s.identification,
-				}
-				err := s.Gossip.Publish("stress_level", msg.ToBytes())
-				if err != nil {
-					s.Logger.Error().Logf("error publishing stress level: %s", err)
-				} else {
-					s.Health.Ready(stressReliefHealthSource, true)
-				}
-			case <-s.done:
-				s.Logger.Debug().Logf("Stopping StressRelief system")
-				return nil
-			}
-		}
-
-	})
+	s.stressGossipCh = s.Gossip.Subscribe("stress_level", 20)
+	s.eg = &errgroup.Group{}
+	s.eg.Go(s.monitor)
 
 	return nil
+}
+
+func (s *StressRelief) monitor() error {
+	tick := time.NewTicker(calculationInterval)
+	defer tick.Stop()
+	for {
+		select {
+		case <-tick.C:
+			currentLevel := s.Recalc()
+			// publish the stress level to the rest of the cluster
+			msg := stressLevelMessage{
+				level: currentLevel,
+				id:    s.identification,
+			}
+			err := s.Gossip.Publish("stress_level", msg.ToBytes())
+			if err != nil {
+				s.Logger.Error().Logf("error publishing stress level: %s", err)
+			} else {
+				s.Health.Ready(stressReliefHealthSource, true)
+			}
+
+		case data := <-s.stressGossipCh:
+			msg, err := newMessageFromBytes(data)
+			if err != nil {
+				s.Logger.Error().Logf("error parsing stress level message: %s", err)
+				continue
+			}
+
+			s.lock.Lock()
+			s.stressLevels[msg.id] = stressReport{
+				key:       msg.id,
+				level:     msg.level,
+				timestamp: s.Clock.Now(),
+			}
+			s.lock.Unlock()
+
+		case <-s.done:
+			s.Logger.Debug().Logf("Stopping StressRelief system")
+			return nil
+		}
+	}
+
 }
 
 func (s *StressRelief) Stop() error {
@@ -309,22 +323,6 @@ func (s *StressRelief) deterministicFraction() uint {
 
 	// round to the nearest integer
 	return uint(float64(s.overallStressLevel-s.activateLevel)/float64(100-s.activateLevel)*100 + 0.5)
-}
-
-func (s *StressRelief) onStressLevelMessage(data []byte) {
-	msg, err := newMessageFromBytes(data)
-	if err != nil {
-		s.Logger.Error().Logf("error parsing stress level message: %s", err)
-		return
-	}
-
-	s.lock.Lock()
-	s.stressLevels[msg.id] = stressReport{
-		key:       msg.id,
-		level:     msg.level,
-		timestamp: s.Clock.Now(),
-	}
-	s.lock.Unlock()
 }
 
 type stressReport struct {
