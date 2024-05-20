@@ -91,7 +91,7 @@ type CentralCollector struct {
 	metricsCycle *Cycle
 	cleanupCycle *Cycle
 
-	// can't close these because gossip doesn't unre
+	// can't close these because gossip doesn't unregister itself
 	keepChan chan string
 	dropChan chan string
 
@@ -671,6 +671,7 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
+		span.RecordError(err)
 		c.Logger.Error().Logf("error getting status for traces in cleanupTraces: %s", err)
 	}
 
