@@ -8,8 +8,9 @@ import (
 
 // InMemoryGossip is a Gossiper that uses an in-memory channel
 type InMemoryGossip struct {
-	channel     chan []byte
-	subscribers map[string][]func(data []byte)
+	channel        chan []byte
+	subscribers    map[string][]func(data []byte)
+	subscribeChans map[string][]chan []byte
 
 	done chan struct{}
 	eg   *errgroup.Group
@@ -43,6 +44,19 @@ func (g *InMemoryGossip) Subscribe(channel string, callback func(data []byte)) e
 	return nil
 }
 
+func (g *InMemoryGossip) SubscribeChan(channel string, depth int) chan []byte {
+	select {
+	case <-g.done:
+		return nil
+	default:
+	}
+
+	ch := make(chan []byte, depth)
+	g.subscribeChans[channel] = append(g.subscribeChans[channel], ch)
+
+	return ch
+}
+
 func (g *InMemoryGossip) Start() error {
 	g.channel = make(chan []byte, 10)
 	g.eg = &errgroup.Group{}
@@ -60,6 +74,12 @@ func (g *InMemoryGossip) Start() error {
 
 				for _, cb := range callbacks {
 					cb(msg.data)
+				}
+				for _, ch := range g.subscribeChans[msg.key] {
+					select {
+					case ch <- msg.data:
+					default:
+					}
 				}
 			}
 		}

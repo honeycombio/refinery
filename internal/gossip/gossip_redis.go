@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/facebookgo/startstop"
@@ -21,9 +22,10 @@ type GossipRedis struct {
 	Logger logger.Logger `inject:""`
 	eg     *errgroup.Group
 
-	lock        sync.RWMutex
-	subscribers map[string][]func(data []byte)
-	done        chan struct{}
+	lock           sync.RWMutex
+	subscribers    map[string][]func(data []byte)
+	subscribeChans map[string][]chan []byte
+	done           chan struct{}
 
 	startstop.Stopper
 }
@@ -36,6 +38,7 @@ func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
 	g.subscribers = make(map[string][]func(data []byte))
+	g.subscribeChans = make(map[string][]chan []byte)
 
 	g.eg.Go(func() error {
 		for {
@@ -47,9 +50,18 @@ func (g *GossipRedis) Start() error {
 					msg := newMessageFromBytes(b)
 					g.lock.RLock()
 					callbacks := g.subscribers[msg.key]
+					chans := g.subscribeChans[msg.key]
 					g.lock.RUnlock()
 					for _, cb := range callbacks {
 						cb(msg.data)
+					}
+					// we never block on sending to a subscriber; if it's full, we drop the message
+					for _, ch := range chans {
+						select {
+						case ch <- msg.data:
+						default:
+							fmt.Println("dropped message", msg.key, string(msg.data))
+						}
 					}
 				}, g.done, "refinery-gossip")
 				if err != nil {
@@ -82,6 +94,23 @@ func (g *GossipRedis) Subscribe(channel string, cb func(data []byte)) error {
 
 	return nil
 
+}
+
+// SubscribeChan returns a channel that will receive messages from the Gossip channel.
+// The channel has a buffer of depth; if the buffer is full, messages will be dropped.
+func (g *GossipRedis) SubscribeChan(channel string, depth int) chan []byte {
+	select {
+	case <-g.done:
+		return nil
+	default:
+	}
+
+	ch := make(chan []byte, depth)
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	g.subscribeChans[channel] = append(g.subscribeChans[channel], ch)
+
+	return ch
 }
 
 // Publish sends a message to all subscribers of a given channel.
