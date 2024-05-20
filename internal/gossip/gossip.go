@@ -12,10 +12,10 @@ type Gossiper interface {
 	// Publish sends a message to all peers listening on the channel
 	Publish(channel string, value []byte) error
 
-	// SubscribeChan returns a Go channel that will receive messages from the Gossip channel
+	// Subscribe returns a Go channel that will receive messages from the Gossip channel
 	// (Redis already called the thing we listen to a channel, so we have to live with that)
 	// The channel has a buffer of depth; if the buffer is full, messages will be dropped.
-	SubscribeChan(channel string, depth int) chan []byte
+	Subscribe(channel string, depth int) chan []byte
 
 	startstop.Starter
 	startstop.Stopper
