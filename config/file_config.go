@@ -231,6 +231,9 @@ type CollectionConfig struct {
 	ShutdownDelay           Duration   `yaml:"ShutdownDelay" default:"30s"`
 	MemoryCycleDuration     Duration   `yaml:"MemoryCycleDuration" default:"10s"`
 	UseDecisionGossip       bool       `yaml:"UseDecisionGossip"`
+	AggregationInterval     Duration   `yaml:"AggregationInterval" default:"50ms"`
+	AggregationCount        int        `yaml:"AggregationCount" default:"500"`
+	AggregationConcurrency  int        `yaml:"AggregationConcurrency" default:"4"`
 }
 
 type SmartWrapperOptions struct {

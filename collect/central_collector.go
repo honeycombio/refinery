@@ -86,6 +86,7 @@ type CentralCollector struct {
 
 	done         chan struct{}
 	eg           *errgroup.Group
+	egAgg        *errgroup.Group // errorgroup for the trace aggregation goroutines
 	senderCycle  *Cycle
 	deciderCycle *Cycle
 	metricsCycle *Cycle
@@ -199,15 +200,27 @@ func (c *CentralCollector) Start() error {
 	})
 
 	// do we need these to be configurable?
-	maxTime := 500 * time.Millisecond
-	maxCount := 100
+	maxTime := time.Duration(collectorCfg.AggregationInterval)
+	if maxTime <= 0 {
+		maxTime = 100 * time.Millisecond
+	}
+	maxCount := collectorCfg.AggregationCount
+	if maxCount <= 0 {
+		maxCount = 500
+	}
+	maxConcurrency := collectorCfg.AggregationConcurrency
+	if maxConcurrency <= 0 {
+		maxConcurrency = 4
+	}
+	c.egAgg = &errgroup.Group{}
+	c.egAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
 	c.keepChan = c.Gossip.Subscribe(gossip_keep, maxCount)
 	c.dropChan = c.Gossip.Subscribe(gossip_drop, maxCount)
 
-	go c.debounceTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
-	go c.debounceTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
+	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
+	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
 
 	return nil
 }
@@ -520,39 +533,28 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 	return nil
 }
 
-// helper function to recalculate max time and clamp it within reasonable bounds
-func adjustMaxTime(t time.Duration, factor float64) time.Duration {
-	t = time.Duration(float64(t) * factor)
-	if t < 10*time.Millisecond {
-		t = 10 * time.Millisecond
-	}
-	if t > 1*time.Second {
-		t = 1 * time.Second
-	}
-	return t
-}
+// aggregateTraceIDChannel listens on the provided chan for up to maxTime or
+// until it receives maxCount trace IDs. As long as there's at least one, it
+// forwards them in aggregate to the supplied processing function. We do this so we can batch up trace
+// IDs and make fewer calls to the central store.
+//
+// The process function is called in a goroutine and there's no guarantee that the goroutines won't
+// overlap. The concurrency max of these goroutines is controlled by the errorgroup called egAgg.
+//
+// The function should return any traceIDs that aren't processed immediately;
+// they will be sent again eventually.
+func (c *CentralCollector) aggregateTraceIDChannel(
+	ch chan []byte, process func([]string) []string, maxTime time.Duration, maxCount int) {
 
-// debounceTraceIDChannel listens on the provided chan and forwards up to
-// maxCount trace IDs to the supplied function (fewer if the channel goes
-// maxTime without receiving any trace IDs). We do this so we can batch up trace
-// IDs and make fewer calls to the central store. Note that this routine is run
-// only if traces are arriving, so we can't use it or the functions it calls as
-// a readiness check.
-// The function should return any traceIDs that aren't processed immediately; they
-// will be sent again in the next batch.
-// We try to adaptively adjust the maxTime based on how many traceIDs we're getting in a single batch.
-// If we get the maxCount, we shorten it by 20%, and if we get 0 or 1 for two consecutive batches, we
-// lengthen it by 20%. We also try to adjust the maxTime based on how many traceIDs we're getting back
-// from the central store. If we get more than half of maxCount back, we should back off a bit as well.
-func (c *CentralCollector) debounceTraceIDChannel(ch chan []byte, f func([]string) []string, maxTime time.Duration, maxCount int) {
 	ticker := c.Clock.NewTicker(maxTime)
 	defer ticker.Stop()
 	traceIDs := make([]string, 0, maxCount)
 	send := false
-	lessThanTwo := false
 	for {
 		select {
 		case <-c.done:
+			// wait for any goroutines to end before returning
+			c.egAgg.Wait()
 			return
 		case traceIDbytes := <-ch:
 			traceID := string(traceIDbytes)
@@ -561,32 +563,35 @@ func (c *CentralCollector) debounceTraceIDChannel(ch chan []byte, f func([]strin
 			// if we reached the max count, we need to send
 			if len(traceIDs) >= maxCount {
 				send = true
-				maxTime = adjustMaxTime(maxTime, 0.8)
 			}
-			// we got one, so reset the ticker so it doesn't fire
-			ticker.Reset(maxTime)
 		case <-ticker.Chan():
 			// ticker fired, so send what we have
 			send = true
-			if len(traceIDs) < 2 {
-				if lessThanTwo {
-					maxTime = adjustMaxTime(maxTime, 1.2)
-				}
-				lessThanTwo = true
-			} else {
-				lessThanTwo = false
-			}
 		}
 		// if we need to send, do so
 		if send && len(traceIDs) > 0 {
-			// we get back the ones that didn't process immediately
-			notready := f(traceIDs)
-			if len(notready) > maxCount/2 {
-				// if we have more than half the batch returned, we may be having trouble keeping up
-				// so we should back off a bit
-				maxTime = adjustMaxTime(maxTime, 1.2)
-			}
-			traceIDs = append(traceIDs[:0], notready...)
+			// copy the traceIDs so we can clear the list
+			idsToProcess := make([]string, len(traceIDs))
+			copy(idsToProcess, traceIDs)
+			// clear the list
+			traceIDs = traceIDs[:0]
+
+			// now process the result in a goroutine so we can keep listening
+			c.egAgg.Go(func() error {
+				// we get back the ones that didn't process immediately
+				notready := process(idsToProcess)
+				// put any unused traceIDs back into the channel but do it a bit
+				// slowly (we're still in our goroutine here)
+				for _, id := range notready {
+					select {
+					case ch <- []byte(id):
+						c.Clock.Sleep(1 * time.Millisecond)
+					case <-c.done:
+						return nil
+					}
+				}
+				return nil
+			})
 			send = false
 		}
 	}

@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+	"golang.org/x/sync/errgroup"
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
@@ -1500,12 +1501,15 @@ func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []strin
 	}, 5*time.Second, 20*time.Millisecond)
 }
 
-func Test_debounce(t *testing.T) {
+func Test_aggregate(t *testing.T) {
 	t.Parallel()
 	fakeClock := clockwork.NewRealClock()
+	eg := &errgroup.Group{}
+	eg.SetLimit(1)
 	c := CentralCollector{
 		Clock: fakeClock,
 		done:  make(chan struct{}),
+		egAgg: eg,
 	}
 
 	ch := make(chan []byte, 15)
@@ -1518,16 +1522,16 @@ func Test_debounce(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		c.debounceTraceIDChannel(ch, f, 20*time.Millisecond, 10)
+		c.aggregateTraceIDChannel(ch, f, 20*time.Millisecond, 10)
 		wg.Done()
 	}()
 
-	// 4 items should go through in one shot
+	// 4 items should go through in the first group
 	for i := 0; i < 4; i++ {
 		ch <- []byte(fmt.Sprintf("item%d", i))
 		fakeClock.Sleep(2 * time.Millisecond)
 	}
-	fakeClock.Sleep(20 * time.Millisecond)
+	fakeClock.Sleep(17 * time.Millisecond)
 	select {
 	case result := <-resultch:
 		require.Equal(t, 4, len(result))
