@@ -159,6 +159,9 @@ func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 	defer unlock()
 
 	for _, state := range r.states.states {
+		if state == DecisionDrop || state == DecisionKeep {
+			continue
+		}
 		// get the state counts
 		count, err := conn.ZCount(r.states.stateNameKey(state), 0, -1)
 		if err != nil {
@@ -1163,6 +1166,9 @@ func (t *traceStateProcessor) removeExpiredTraces(ctx context.Context, client re
 
 	// get the traceIDs that have been in the state for longer than the expiration time
 	for _, state := range t.states {
+		if state == DecisionKeep || state == DecisionDrop {
+			continue
+		}
 		replies, err := t.config.removeExpiredTraces.DoInt(ctx, conn, t.stateNameKey(state),
 			t.clock.Now().Add(-t.config.maxTraceRetention).UnixMicro(),
 			t.config.reaperBatchSize)
@@ -1321,7 +1327,10 @@ const traceStateChangeScript = `
 
 	   -- the construction of the key for the sorted set should match with the stateNameKey function
 	   -- in the traceStateProcessor struct
-	   local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
+
+	   if (nextState ~= "decision_keep") and (nextState ~= "decision_drop") then
+		local added = redis.call('ZADD', string.format("%s:traces", nextState), "NX", timestamp, traceID)
+	   end
 
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
