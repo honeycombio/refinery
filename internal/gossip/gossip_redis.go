@@ -2,7 +2,6 @@ package gossip
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/facebookgo/startstop"
@@ -54,7 +53,10 @@ func (g *GossipRedis) Start() error {
 						select {
 						case ch <- msg.data:
 						default:
-							fmt.Println("dropped message", msg.key, string(msg.data))
+							g.Logger.Debug().WithFields(map[string]interface{}{
+								"channel": msg.key,
+								"msg":     string(msg.data),
+							}).Logf("Unable to forward message")
 						}
 					}
 				}, g.done, "refinery-gossip")
