@@ -1006,6 +1006,10 @@ func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 		c.Logger.Error().WithField("trace_id", status.TraceID).Logf("trace not found in cache")
 		return
 	}
+	if !trace.TryMarkTraceForSending() {
+		// someone else beat us to it, so get out of here
+		return
+	}
 
 	traceDur := time.Since(trace.ArrivalTime)
 	c.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
