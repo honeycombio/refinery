@@ -22,9 +22,9 @@ type GossipRedis struct {
 	Logger logger.Logger `inject:""`
 	eg     *errgroup.Group
 
-	lock           sync.RWMutex
-	subscribeChans map[string][]chan []byte
-	done           chan struct{}
+	lock          sync.RWMutex
+	subscriptions map[string][]chan []byte
+	done          chan struct{}
 
 	startstop.Stopper
 }
@@ -36,7 +36,7 @@ type GossipRedis struct {
 func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
-	g.subscribeChans = make(map[string][]chan []byte)
+	g.subscriptions = make(map[string][]chan []byte)
 
 	g.eg.Go(func() error {
 		for {
@@ -47,7 +47,7 @@ func (g *GossipRedis) Start() error {
 				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
 					msg := newMessageFromBytes(b)
 					g.lock.RLock()
-					chans := g.subscribeChans[msg.key]
+					chans := g.subscriptions[msg.key]
 					g.lock.RUnlock()
 					// we never block on sending to a subscriber; if it's full, we drop the message
 					for _, ch := range chans {
@@ -74,9 +74,9 @@ func (g *GossipRedis) Stop() error {
 	return g.eg.Wait()
 }
 
-// SubscribeChan returns a channel that will receive messages from the Gossip channel.
+// Subscribe returns a channel that will receive messages from the Gossip channel.
 // The channel has a buffer of depth; if the buffer is full, messages will be dropped.
-func (g *GossipRedis) SubscribeChan(channel string, depth int) chan []byte {
+func (g *GossipRedis) Subscribe(channel string, depth int) chan []byte {
 	select {
 	case <-g.done:
 		return nil
@@ -86,7 +86,7 @@ func (g *GossipRedis) SubscribeChan(channel string, depth int) chan []byte {
 	ch := make(chan []byte, depth)
 	g.lock.Lock()
 	defer g.lock.Unlock()
-	g.subscribeChans[channel] = append(g.subscribeChans[channel], ch)
+	g.subscriptions[channel] = append(g.subscriptions[channel], ch)
 
 	return ch
 }

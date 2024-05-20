@@ -32,10 +32,10 @@ func TestRoundTripChanRedis(t *testing.T) {
 
 	require.NoError(t, g.Start())
 
-	ch := g.SubscribeChan("test", 10)
+	ch := g.Subscribe("test", 10)
 	require.NotNil(t, ch)
 
-	ch2 := g.SubscribeChan("test2", 10)
+	ch2 := g.Subscribe("test2", 10)
 	require.NotNil(t, ch2)
 
 	// This test is flaky unless we throw away the first message
@@ -72,10 +72,10 @@ func TestRoundTripChanInMem(t *testing.T) {
 
 	require.NoError(t, g.Start())
 
-	ch := g.SubscribeChan("test", 10)
+	ch := g.Subscribe("test", 10)
 	require.NotNil(t, ch)
 
-	ch2 := g.SubscribeChan("test2", 10)
+	ch2 := g.Subscribe("test2", 10)
 	require.NotNil(t, ch2)
 
 	// Test that we can publish a message

@@ -111,7 +111,7 @@ func (s *StressRelief) Start() error {
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
 	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
-	s.stressGossipCh = s.Gossip.SubscribeChan("stress_level", 20)
+	s.stressGossipCh = s.Gossip.Subscribe("stress_level", 20)
 	s.eg = &errgroup.Group{}
 	s.eg.Go(s.monitor)
 

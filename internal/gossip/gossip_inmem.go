@@ -9,8 +9,8 @@ import (
 
 // InMemoryGossip is a Gossiper that uses an in-memory channel
 type InMemoryGossip struct {
-	gossipCh       chan []byte
-	subscribeChans map[string][]chan []byte
+	gossipCh      chan []byte
+	subscriptions map[string][]chan []byte
 
 	done chan struct{}
 	mut  sync.RWMutex
@@ -34,7 +34,7 @@ func (g *InMemoryGossip) Publish(channel string, value []byte) error {
 	return nil
 }
 
-func (g *InMemoryGossip) SubscribeChan(channel string, depth int) chan []byte {
+func (g *InMemoryGossip) Subscribe(channel string, depth int) chan []byte {
 	select {
 	case <-g.done:
 		return nil
@@ -43,7 +43,7 @@ func (g *InMemoryGossip) SubscribeChan(channel string, depth int) chan []byte {
 
 	ch := make(chan []byte, depth)
 	g.mut.Lock()
-	g.subscribeChans[channel] = append(g.subscribeChans[channel], ch)
+	g.subscriptions[channel] = append(g.subscriptions[channel], ch)
 	g.mut.Unlock()
 
 	return ch
@@ -52,7 +52,7 @@ func (g *InMemoryGossip) SubscribeChan(channel string, depth int) chan []byte {
 func (g *InMemoryGossip) Start() error {
 	g.gossipCh = make(chan []byte, 10)
 	g.eg = &errgroup.Group{}
-	g.subscribeChans = make(map[string][]chan []byte)
+	g.subscriptions = make(map[string][]chan []byte)
 	g.done = make(chan struct{})
 
 	g.eg.Go(func() error {
@@ -63,7 +63,7 @@ func (g *InMemoryGossip) Start() error {
 			case value := <-g.gossipCh:
 				msg := newMessageFromBytes(value)
 				g.mut.RLock()
-				for _, ch := range g.subscribeChans[msg.key] {
+				for _, ch := range g.subscriptions[msg.key] {
 					select {
 					case ch <- msg.data:
 					default:
