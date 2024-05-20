@@ -1510,8 +1510,9 @@ func Test_debounce(t *testing.T) {
 
 	ch := make(chan string, 15)
 	resultch := make(chan []string, 5)
-	f := func(a []string) {
+	f := func(a []string) []string {
 		resultch <- a
+		return nil
 	}
 
 	wg := sync.WaitGroup{}

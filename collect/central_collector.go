@@ -13,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
@@ -169,6 +170,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_receiver_runs", "counter")
 	c.Metrics.Register("collector_sender_runs", "counter")
 	c.Metrics.Register("collector_decider_runs", "counter")
+	c.Metrics.Register("collector_cleanup_runs", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -196,8 +198,10 @@ func (c *CentralCollector) Start() error {
 		})
 	})
 
-	maxTime := 100 * time.Millisecond
+	// do we need these to be configurable?
+	maxTime := 500 * time.Millisecond
 	maxCount := 100
+	// these channels are closed when the debouncer is done
 	c.keepChan = make(chan string, maxCount)
 	c.dropChan = make(chan string, maxCount)
 	go c.debounceTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
@@ -214,13 +218,10 @@ func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
+	c.reload = nil // so we don't accidentally send on it
 	if err := c.eg.Wait(); err != nil {
 		c.Logger.Error().Logf("error waiting for goroutines to finish: %s", err)
 	}
-
-	// can't close these because gossip doesn't know how to unregister
-	// close(c.keepChan)
-	// close(c.dropChan)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay())
@@ -534,17 +535,36 @@ func (c *CentralCollector) onDropMessage(data []byte) {
 	c.dropChan <- traceID
 }
 
+// helper function to recalculate max time and clamp it within reasonable bounds
+func adjustMaxTime(t time.Duration, factor float64) time.Duration {
+	t = time.Duration(float64(t) * factor)
+	if t < 10*time.Millisecond {
+		t = 10 * time.Millisecond
+	}
+	if t > 1*time.Second {
+		t = 1 * time.Second
+	}
+	return t
+}
+
 // debounceTraceIDChannel listens on the provided chan and forwards up to
 // maxCount trace IDs to the supplied function (fewer if the channel goes
 // maxTime without receiving any trace IDs). We do this so we can batch up trace
 // IDs and make fewer calls to the central store. Note that this routine is run
 // only if traces are arriving, so we can't use it or the functions it calls as
 // a readiness check.
-func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]string), maxTime time.Duration, maxCount int) {
+// The function should return any traceIDs that aren't processed immediately; they
+// will be sent again in the next batch.
+// We try to adaptively adjust the maxTime based on how many traceIDs we're getting in a single batch.
+// If we get the maxCount, we shorten it by 20%, and if we get 0 or 1 for two consecutive batches, we
+// lengthen it by 20%. We also try to adjust the maxTime based on how many traceIDs we're getting back
+// from the central store. If we get more than half of maxCount back, we should back off a bit as well.
+func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]string) []string, maxTime time.Duration, maxCount int) {
 	ticker := c.Clock.NewTicker(maxTime)
 	defer ticker.Stop()
 	traceIDs := make([]string, 0, maxCount)
 	send := false
+	lessThanTwo := false
 	for {
 		select {
 		case <-c.done:
@@ -555,17 +575,32 @@ func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]strin
 			// if we reached the max count, we need to send
 			if len(traceIDs) >= maxCount {
 				send = true
+				maxTime = adjustMaxTime(maxTime, 0.8)
 			}
 			// we got one, so reset the ticker so it doesn't fire
 			ticker.Reset(maxTime)
 		case <-ticker.Chan():
 			// ticker fired, so send what we have
 			send = true
+			if len(traceIDs) < 2 {
+				if lessThanTwo {
+					maxTime = adjustMaxTime(maxTime, 1.2)
+				}
+				lessThanTwo = true
+			} else {
+				lessThanTwo = false
+			}
 		}
 		// if we need to send, do so
 		if send && len(traceIDs) > 0 {
-			f(traceIDs)
-			traceIDs = traceIDs[:0]
+			// we get back the ones that didn't process immediately
+			notready := f(traceIDs)
+			if len(notready) > maxCount/2 {
+				// if we have more than half the batch returned, we may be having trouble keeping up
+				// so we should back off a bit
+				maxTime = adjustMaxTime(maxTime, 1.2)
+			}
+			traceIDs = append(traceIDs[:0], notready...)
 			send = false
 		}
 	}
@@ -573,7 +608,7 @@ func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]strin
 
 // keepTraces needs to retrieve the status of the traces from the central store
 // so that it can attach the metadata as needed
-func (c *CentralCollector) keepTraces(ids []string) {
+func (c *CentralCollector) keepTraces(ids []string) []string {
 	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.keepTraces", "num_ids", len(ids))
 	defer span.End()
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep)
@@ -581,22 +616,26 @@ func (c *CentralCollector) keepTraces(ids []string) {
 		c.Logger.Error().Logf("error getting status for traces: %s", err)
 	}
 
+	idset := generics.NewSet(ids...)
 	for _, status := range statuses {
 		c.sendSpans(status)
 		c.SpanCache.Remove(status.TraceID)
+		idset.Remove(status.TraceID)
 		c.Metrics.Increment("collector_keep_trace")
 	}
+	return idset.Members()
 }
 
 // dropTraces doesn't need to retrieve the status of the traces from the central store
 // because it's only removing the traces from the cache
-func (c *CentralCollector) dropTraces(ids []string) {
+func (c *CentralCollector) dropTraces(ids []string) []string {
 	_, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.dropTraces", "num_ids", len(ids))
 	defer span.End()
 	for _, traceID := range ids {
 		c.SpanCache.Remove(traceID)
 		c.Metrics.Increment("collector_drop_trace")
 	}
+	return nil
 }
 
 // The cleanup task is responsible for removing traces from the cache that have

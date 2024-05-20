@@ -43,6 +43,7 @@ func (g *InMemoryGossip) Publish(channel string, value []byte) error {
 		return errors.New("gossip has been stopped")
 	case g.channel <- msg.ToBytes():
 	default:
+		// drop the message if the channel is full
 	}
 	return nil
 }
@@ -59,7 +60,7 @@ func (g *InMemoryGossip) Subscribe(channel string, callback func(data []byte)) e
 }
 
 func (g *InMemoryGossip) Start() error {
-	g.channel = make(chan []byte, 10)
+	g.channel = make(chan []byte, 100)
 	g.eg = &errgroup.Group{}
 	g.subscribers = make(map[string][]func(data []byte))
 	g.done = make(chan struct{})
