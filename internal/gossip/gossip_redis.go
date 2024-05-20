@@ -23,7 +23,6 @@ type GossipRedis struct {
 	eg     *errgroup.Group
 
 	lock           sync.RWMutex
-	subscribers    map[string][]func(data []byte)
 	subscribeChans map[string][]chan []byte
 	done           chan struct{}
 
@@ -37,7 +36,6 @@ type GossipRedis struct {
 func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
-	g.subscribers = make(map[string][]func(data []byte))
 	g.subscribeChans = make(map[string][]chan []byte)
 
 	g.eg.Go(func() error {
@@ -49,12 +47,8 @@ func (g *GossipRedis) Start() error {
 				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
 					msg := newMessageFromBytes(b)
 					g.lock.RLock()
-					callbacks := g.subscribers[msg.key]
 					chans := g.subscribeChans[msg.key]
 					g.lock.RUnlock()
-					for _, cb := range callbacks {
-						cb(msg.data)
-					}
 					// we never block on sending to a subscriber; if it's full, we drop the message
 					for _, ch := range chans {
 						select {
@@ -78,22 +72,6 @@ func (g *GossipRedis) Start() error {
 func (g *GossipRedis) Stop() error {
 	close(g.done)
 	return g.eg.Wait()
-}
-
-// Subscribe registers a callback for a given channel.
-func (g *GossipRedis) Subscribe(channel string, cb func(data []byte)) error {
-	select {
-	case <-g.done:
-		return errors.New("gossip has been stopped")
-	default:
-	}
-
-	g.lock.Lock()
-	defer g.lock.Unlock()
-	g.subscribers[channel] = append(g.subscribers[channel], cb)
-
-	return nil
-
 }
 
 // SubscribeChan returns a channel that will receive messages from the Gossip channel.
