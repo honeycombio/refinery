@@ -218,7 +218,6 @@ func (c *CentralCollector) Stop() error {
 	close(c.done)
 	close(c.incoming)
 	close(c.reload)
-	c.reload = nil // so we don't accidentally send on it
 	if err := c.eg.Wait(); err != nil {
 		c.Logger.Error().Logf("error waiting for goroutines to finish: %s", err)
 	}
