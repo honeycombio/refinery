@@ -1508,7 +1508,7 @@ func Test_debounce(t *testing.T) {
 		done:  make(chan struct{}),
 	}
 
-	ch := make(chan string, 15)
+	ch := make(chan []byte, 15)
 	resultch := make(chan []string, 5)
 	f := func(a []string) []string {
 		resultch <- a
@@ -1524,7 +1524,7 @@ func Test_debounce(t *testing.T) {
 
 	// 4 items should go through in one shot
 	for i := 0; i < 4; i++ {
-		ch <- fmt.Sprintf("item%d", i)
+		ch <- []byte(fmt.Sprintf("item%d", i))
 		fakeClock.Sleep(2 * time.Millisecond)
 	}
 	fakeClock.Sleep(20 * time.Millisecond)
@@ -1537,7 +1537,7 @@ func Test_debounce(t *testing.T) {
 
 	// 10 items should go through
 	for i := 0; i < 12; i++ {
-		ch <- fmt.Sprintf("item%d", i)
+		ch <- []byte(fmt.Sprintf("item%d", i))
 		fakeClock.Sleep(1 * time.Millisecond)
 	}
 	fakeClock.Sleep(20 * time.Millisecond)

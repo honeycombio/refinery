@@ -92,8 +92,8 @@ type CentralCollector struct {
 	cleanupCycle *Cycle
 
 	// can't close these because gossip doesn't unregister itself
-	keepChan chan string
-	dropChan chan string
+	keepChan chan []byte
+	dropChan chan []byte
 
 	hostname string
 
@@ -201,15 +201,14 @@ func (c *CentralCollector) Start() error {
 	// do we need these to be configurable?
 	maxTime := 500 * time.Millisecond
 	maxCount := 100
-	// these channels are closed when the debouncer is done
-	c.keepChan = make(chan string, maxCount)
-	c.dropChan = make(chan string, maxCount)
+
+	// subscribe to the Keep and Drop decisions
+	c.keepChan = c.Gossip.Subscribe(gossip_keep, maxCount)
+	c.dropChan = c.Gossip.Subscribe(gossip_drop, maxCount)
+
 	go c.debounceTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
 	go c.debounceTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
 
-	// subscribe to the Keep and Drop decisions
-	c.Gossip.Subscribe(gossip_keep, c.onKeepMessage)
-	c.Gossip.Subscribe(gossip_drop, c.onDropMessage)
 	return nil
 }
 
@@ -521,19 +520,6 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 	return nil
 }
 
-// we listen for messages on the gossip channels for keep and drop decisions.
-// These messages are trace IDs; when the decision is made, we publish the trace ID
-// on the appropriate channel.
-func (c *CentralCollector) onKeepMessage(data []byte) {
-	traceID := string(data)
-	c.keepChan <- traceID
-}
-
-func (c *CentralCollector) onDropMessage(data []byte) {
-	traceID := string(data)
-	c.dropChan <- traceID
-}
-
 // helper function to recalculate max time and clamp it within reasonable bounds
 func adjustMaxTime(t time.Duration, factor float64) time.Duration {
 	t = time.Duration(float64(t) * factor)
@@ -558,7 +544,7 @@ func adjustMaxTime(t time.Duration, factor float64) time.Duration {
 // If we get the maxCount, we shorten it by 20%, and if we get 0 or 1 for two consecutive batches, we
 // lengthen it by 20%. We also try to adjust the maxTime based on how many traceIDs we're getting back
 // from the central store. If we get more than half of maxCount back, we should back off a bit as well.
-func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]string) []string, maxTime time.Duration, maxCount int) {
+func (c *CentralCollector) debounceTraceIDChannel(ch chan []byte, f func([]string) []string, maxTime time.Duration, maxCount int) {
 	ticker := c.Clock.NewTicker(maxTime)
 	defer ticker.Stop()
 	traceIDs := make([]string, 0, maxCount)
@@ -568,7 +554,8 @@ func (c *CentralCollector) debounceTraceIDChannel(ch chan string, f func([]strin
 		select {
 		case <-c.done:
 			return
-		case traceID := <-ch:
+		case traceIDbytes := <-ch:
+			traceID := string(traceIDbytes)
 			// if we get a trace ID, add it to the list
 			traceIDs = append(traceIDs, traceID)
 			// if we reached the max count, we need to send
