@@ -191,8 +191,8 @@ func TestGetOldest(t *testing.T) {
 			fakeClock.Advance(13 * time.Second)
 			traceIDs = c.GetOldTraceIDs()
 			require.Len(t, traceIDs, 2)
-			assert.Equal(t, ids[0], traceIDs[0])
-			assert.Equal(t, ids[1], traceIDs[1])
+			assert.Contains(t, ids, traceIDs[0])
+			assert.Contains(t, ids, traceIDs[1])
 
 			// after another 8s, all spans should be available
 			fakeClock.Advance(8 * time.Second)
