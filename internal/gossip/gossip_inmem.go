@@ -32,7 +32,7 @@ func (g *InMemoryGossip) Publish(channel string, value []byte) error {
 		return errors.New("gossip has been stopped")
 	case g.gossipCh <- msg.ToBytes():
 	default:
-		g.Logger.Debug().WithFields(map[string]interface{}{
+		g.Logger.Warn().WithFields(map[string]interface{}{
 			"channel": channel,
 			"msg":     string(value),
 		}).Logf("Unable to publish message")
@@ -73,7 +73,7 @@ func (g *InMemoryGossip) Start() error {
 					select {
 					case ch <- msg.data:
 					default:
-						g.Logger.Debug().WithFields(map[string]interface{}{
+						g.Logger.Warn().WithFields(map[string]interface{}{
 							"channel": msg.key,
 							"msg":     string(msg.data),
 						}).Logf("Unable to forward message")

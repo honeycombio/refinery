@@ -53,7 +53,7 @@ func (g *GossipRedis) Start() error {
 						select {
 						case ch <- msg.data:
 						default:
-							g.Logger.Debug().WithFields(map[string]interface{}{
+							g.Logger.Warn().WithFields(map[string]interface{}{
 								"channel": msg.key,
 								"msg":     string(msg.data),
 							}).Logf("Unable to forward message")
@@ -61,7 +61,7 @@ func (g *GossipRedis) Start() error {
 					}
 				}, g.done, "refinery-gossip")
 				if err != nil {
-					g.Logger.Debug().Logf("Error listening to refinery-gossip channel: %v", err)
+					g.Logger.Warn().Logf("Error listening to refinery-gossip channel: %v", err)
 				}
 			}
 		}
