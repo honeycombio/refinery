@@ -30,6 +30,7 @@ import (
 // status and make it available to the system.
 type Recorder interface {
 	Register(source string, timeout time.Duration)
+	Unregister(source string)
 	Ready(source string, ready bool)
 }
 
@@ -130,6 +131,21 @@ func (h *Health) Register(source string, timeout time.Duration) {
 	}
 }
 
+// Unregister a service with the health system. This marks the service as not
+// ready and removes it from the alive tracking. It also means that it no longer
+// needs to report in. If it does report in, the report will be ignored.
+func (h *Health) Unregister(source string) {
+	h.mut.Lock()
+	defer h.mut.Unlock()
+	delete(h.timeouts, source)
+	delete(h.timeLeft, source)
+	delete(h.alives, source)
+
+	// we don't remove it from readies, but we mark it as not ready;
+	// an unregistered services can never be ready.
+	h.readies[source] = false
+}
+
 // Ready is called by services to indicate their readiness to receive traffic.
 // If any service is not ready, the system as a whole is not ready.
 // Even unready services will be marked as alive as long as they report in.
@@ -137,7 +153,12 @@ func (h *Health) Ready(source string, ready bool) {
 	h.mut.Lock()
 	defer h.mut.Unlock()
 	if _, ok := h.timeouts[source]; !ok {
-		h.Logger.Error().WithField("source", source).Logf("Health.Ready called for unregistered source")
+		// if a source has an entry in readies but not in timeouts, it means
+		// it was unregistered. This is not an error.
+		if _, ok := h.readies[source]; !ok {
+			// but if it was never registered, it IS an error
+			h.Logger.Error().WithField("source", source).Logf("Health.Ready called for unregistered source")
+		}
 		return
 	}
 	if h.readies[source] != ready {
