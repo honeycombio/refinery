@@ -244,7 +244,6 @@ func (c *CentralCollector) Stop() error {
 	c.Health.Unregister(deciderHealth)
 	// reregister the sender health check to a much longer time so we can finish sending traces
 	c.Health.Register(senderHealth, 5*time.Second)
-	c.Health.Ready(senderHealth, true)
 
 	if err := c.shutdown(ctx); err != nil {
 		c.Logger.Error().Logf("error shutting down collector: %s", err)
@@ -276,7 +275,8 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 	sendCtx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay()/2)
 	defer cancel()
 
-	if err := sendCycle.Run(sendCtx, func(ctx context.Context) error {
+	// this is the function that will be called by the sender cycle during shutdown
+	shutdownMonitor := func(ctx context.Context) error {
 		err := c.sendTraces(ctx)
 		if err != nil {
 			c.Logger.Error().Logf("during shutdown - error processing remaining traces: %s", err)
@@ -284,9 +284,12 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 				return err
 			}
 		}
+		c.Health.Ready(senderHealth, true)
 		return nil
-	}); err != nil {
-		// this is expected to happen whenever long traces haven't finished during shutdown;
+	}
+
+	if err := sendCycle.Run(sendCtx, shutdownMonitor); err != nil {
+		// this is expected to happen whenever long traces haven't finished sending during shutdown;
 		// log it, but it's not an error
 		if errors.Is(err, context.DeadlineExceeded) {
 			c.Logger.Info().Logf("traces did not drain in time for shutdown -- forwarding remaining spans")
