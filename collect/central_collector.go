@@ -608,6 +608,7 @@ func (c *CentralCollector) keepTraces(ids []string) []string {
 	ids = slices.DeleteFunc(ids, func(id string) bool {
 		return c.SpanCache.Get(id) == nil
 	})
+	otelutil.AddSpanField(span, "num_ids_after_filter", len(ids))
 
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep)
 	if err != nil {
