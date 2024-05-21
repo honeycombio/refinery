@@ -96,6 +96,9 @@ func (r *RedisBasicStore) Start() error {
 
 	// register metrics for each state
 	for _, state := range r.states.states {
+		if state == DecisionDrop || state == DecisionKeep {
+			continue
+		}
 		r.Metrics.Register(metricsPrefixCount+string(state), "gauge")
 	}
 

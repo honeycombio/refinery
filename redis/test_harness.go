@@ -78,7 +78,7 @@ func (s *TestService) GetPubSubConn() PubSubConn {
 	}
 }
 
-func (s *TestService) ListenPubSubChannels(onStart func() error, onMessage func(string, []byte), shutdown <-chan struct{}, channels ...string) error {
+func (s *TestService) ListenPubSubChannels(onStart func() error, onMessage func(string, []byte), onHealthCheck func(string), shutdown <-chan struct{}, channels ...string) error {
 	return nil
 }
 

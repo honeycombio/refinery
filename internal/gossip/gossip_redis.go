@@ -5,10 +5,13 @@ import (
 	"sync"
 
 	"github.com/facebookgo/startstop"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/redis"
 	"golang.org/x/sync/errgroup"
 )
+
+const gossipRedisHealth = "gossip-redis"
 
 var _ Gossiper = &GossipRedis{}
 
@@ -17,8 +20,9 @@ var _ Gossiper = &GossipRedis{}
 // It multiplexes messages to subscribers based on the channel
 // name.
 type GossipRedis struct {
-	Redis  redis.Client  `inject:"redis"`
-	Logger logger.Logger `inject:""`
+	Redis  redis.Client    `inject:"redis"`
+	Logger logger.Logger   `inject:""`
+	Health health.Recorder `inject:""`
 	eg     *errgroup.Group
 
 	lock          sync.RWMutex
@@ -59,10 +63,12 @@ func (g *GossipRedis) Start() error {
 							}).Logf("Unable to forward message")
 						}
 					}
-				}, g.done, "refinery-gossip")
+				}, g.onHealthCheck, g.done, "refinery-gossip")
 				if err != nil {
 					g.Logger.Warn().Logf("Error listening to refinery-gossip channel: %v", err)
 				}
+
+				g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*5)
 			}
 		}
 
@@ -72,6 +78,7 @@ func (g *GossipRedis) Start() error {
 }
 
 func (g *GossipRedis) Stop() error {
+	g.Health.Unregister(gossipRedisHealth)
 	close(g.done)
 	return g.eg.Wait()
 }
@@ -110,4 +117,8 @@ func (g *GossipRedis) Publish(channel string, value []byte) error {
 	}
 
 	return conn.Publish("refinery-gossip", msg.ToBytes())
+}
+
+func (g *GossipRedis) onHealthCheck(data string) {
+	g.Health.Ready(gossipRedisHealth, true)
 }
