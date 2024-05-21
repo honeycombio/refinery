@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,9 +27,16 @@ func TestRoundTripChanRedis(t *testing.T) {
 	}
 	require.NoError(t, redis.Start())
 	defer redis.Stop()
+	healthCheck := &health.Health{
+		Clock: clockwork.NewRealClock(),
+	}
+	require.NoError(t, healthCheck.Start())
+	defer healthCheck.Stop()
+
 	g := &GossipRedis{
 		Redis:  redis,
 		Logger: &logger.NullLogger{},
+		Health: healthCheck,
 	}
 
 	require.NoError(t, g.Start())

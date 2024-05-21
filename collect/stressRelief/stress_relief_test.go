@@ -183,13 +183,14 @@ func newStressRelief(t *testing.T, clock clockwork.Clock) (*StressRelief, func()
 		},
 		Metrics: metric,
 	}
-	channel := &gossip.GossipRedis{
-		Redis: db,
-	}
 	healthCheck := &health.Health{
 		Clock: clock,
 	}
 	require.NoError(t, healthCheck.Start())
+	channel := &gossip.GossipRedis{
+		Redis:  db,
+		Health: healthCheck,
+	}
 	sr := &StressRelief{
 		Gossip:          channel,
 		Clock:           clock,
