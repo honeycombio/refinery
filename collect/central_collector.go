@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
@@ -602,6 +603,12 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 func (c *CentralCollector) keepTraces(ids []string) []string {
 	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.keepTraces", "num_ids", len(ids))
 	defer span.End()
+	// check to make sure that we're tracking at least one span for each trace ID we're given
+	// if we're not, there's no point in further worrying about it for this refinery
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		return c.SpanCache.Get(id) == nil
+	})
+
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep)
 	if err != nil {
 		c.Logger.Error().Logf("error getting status for traces: %s", err)
