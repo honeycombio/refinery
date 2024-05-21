@@ -41,7 +41,7 @@ func (g *GossipRedis) Start() error {
 	g.done = make(chan struct{})
 	g.subscriptions = make(map[string][]chan []byte)
 
-	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*5)
+	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*2)
 
 	g.eg.Go(func() error {
 		for {
@@ -50,6 +50,8 @@ func (g *GossipRedis) Start() error {
 				return nil
 			default:
 				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
+					g.Health.Ready(gossipRedisHealth, true)
+
 					msg := newMessageFromBytes(b)
 					g.lock.RLock()
 					chans := g.subscriptions[msg.key]
