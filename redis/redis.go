@@ -12,13 +12,14 @@ import (
 	"github.com/gofrs/uuid/v5"
 	"github.com/gomodule/redigo/redis"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
 )
 
 // A ping is set to the server with this period to test for the health of
 // the connection and server.
-const healthCheckPeriod = time.Minute
+const HealthCheckPeriod = time.Minute
 
 var ErrKeyNotFound = errors.New("key not found")
 
@@ -35,7 +36,7 @@ type Client interface {
 	Get() Conn
 	GetContext(context.Context) (Conn, error)
 	NewScript(keyCount int, src string) Script
-	ListenPubSubChannels(func() error, func(string, []byte), <-chan struct{}, ...string) error
+	ListenPubSubChannels(func() error, func(string, []byte), func(string), <-chan struct{}, ...string) error
 	GetPubSubConn() PubSubConn
 	startstop.Starter
 	startstop.Stopper
@@ -124,6 +125,7 @@ type DefaultClient struct {
 	pool    *redis.Pool
 	Config  config.RedisConfig `inject:""`
 	Metrics metrics.Metrics    `inject:"genericMetrics"`
+	Health  health.Recorder    `inject:""`
 
 	// An overwritable clockwork.Clock for test injection
 	Clock clockwork.Clock
@@ -143,7 +145,7 @@ type DefaultScript struct {
 
 func buildOptions(c config.RedisConfig) []redis.DialOption {
 	options := []redis.DialOption{
-		redis.DialReadTimeout(healthCheckPeriod + 10*time.Second),
+		redis.DialReadTimeout(HealthCheckPeriod + 10*time.Second),
 		redis.DialConnectTimeout(30 * time.Second),
 		redis.DialDatabase(c.GetRedisDatabase()),
 	}
@@ -272,7 +274,7 @@ func (d *DefaultClient) GetPubSubConn() PubSubConn {
 // onStart function is called after the channels are subscribed. The onMessage
 // function is called for each message.
 func (d *DefaultClient) ListenPubSubChannels(onStart func() error,
-	onMessage func(channel string, data []byte), shutdown <-chan struct{},
+	onMessage func(channel string, data []byte), onHealthCheck func(data string), shutdown <-chan struct{},
 	channels ...string) error {
 	// Read timeout on server should be greater than ping period.
 	c := d.pool.Get()
@@ -293,6 +295,8 @@ func (d *DefaultClient) ListenPubSubChannels(onStart func() error,
 			case error:
 				done <- n
 				return
+			case redis.Pong:
+				onHealthCheck(n.Data)
 			case redis.Message:
 				onMessage(n.Channel, n.Data)
 			case redis.Subscription:
@@ -315,7 +319,7 @@ func (d *DefaultClient) ListenPubSubChannels(onStart func() error,
 		}
 	}()
 
-	ticker := time.NewTicker(healthCheckPeriod)
+	ticker := time.NewTicker(HealthCheckPeriod)
 	defer ticker.Stop()
 loop:
 	for {
