@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -31,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
+	"golang.org/x/sync/errgroup"
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
@@ -1442,6 +1445,7 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		{Value: sw},
 		{Value: collector},
 		{Value: &health.Health{}},
+		{Value: &gossip.InMemoryGossip{}, Name: "gossip"},
 	}
 	g := inject.Graph{}
 	require.NoError(t, g.Provide(objects...))
@@ -1495,4 +1499,71 @@ func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []strin
 		}
 		return count == len(traceIDs)
 	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func Test_aggregate(t *testing.T) {
+	t.Parallel()
+	fakeClock := clockwork.NewRealClock()
+	eg := &errgroup.Group{}
+	eg.SetLimit(1)
+	c := CentralCollector{
+		Clock: fakeClock,
+		done:  make(chan struct{}),
+		egAgg: eg,
+	}
+
+	ch := make(chan []byte, 15)
+	resultch := make(chan []string, 5)
+	f := func(a []string) []string {
+		resultch <- a
+		return nil
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		c.aggregateTraceIDChannel(ch, f, 20*time.Millisecond, 10)
+		wg.Done()
+	}()
+
+	// 4 items should go through in the first group
+	for i := 0; i < 4; i++ {
+		ch <- []byte(fmt.Sprintf("item%d", i))
+		fakeClock.Sleep(2 * time.Millisecond)
+	}
+	fakeClock.Sleep(17 * time.Millisecond)
+	select {
+	case result := <-resultch:
+		require.Equal(t, 4, len(result))
+	default:
+		t.Fatal("expected result")
+	}
+
+	// 10 items should go through
+	for i := 0; i < 12; i++ {
+		ch <- []byte(fmt.Sprintf("item%d", i))
+		fakeClock.Sleep(1 * time.Millisecond)
+	}
+	fakeClock.Sleep(20 * time.Millisecond)
+	select {
+	case result := <-resultch:
+		require.Equal(t, 10, len(result))
+	default:
+		t.Fatal("expected result")
+	}
+
+	// now we should get the other 2
+	fakeClock.Sleep(20 * time.Millisecond)
+	select {
+	case result := <-resultch:
+		require.Equal(t, 2, len(result))
+	default:
+		t.Fatal("expected result")
+	}
+
+	close(c.done)
+	fakeClock.Sleep(20 * time.Millisecond)
+	wg.Wait()
+
+	require.True(t, true)
 }

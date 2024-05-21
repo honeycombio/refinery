@@ -18,6 +18,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -504,6 +505,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &peer.MockPeers{}},
 		&inject.Object{Value: &cache.CuckooSentCache{}},
 		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: &gossip.InMemoryGossip{}, Name: "gossip"},
 	)
 	if err != nil {
 		t.Error(err)

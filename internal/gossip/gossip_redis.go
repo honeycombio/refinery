@@ -21,9 +21,9 @@ type GossipRedis struct {
 	Logger logger.Logger `inject:""`
 	eg     *errgroup.Group
 
-	lock        sync.RWMutex
-	subscribers map[string][]func(data []byte)
-	done        chan struct{}
+	lock          sync.RWMutex
+	subscriptions map[string][]chan []byte
+	done          chan struct{}
 
 	startstop.Stopper
 }
@@ -35,7 +35,7 @@ type GossipRedis struct {
 func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
-	g.subscribers = make(map[string][]func(data []byte))
+	g.subscriptions = make(map[string][]chan []byte)
 
 	g.eg.Go(func() error {
 		for {
@@ -46,14 +46,22 @@ func (g *GossipRedis) Start() error {
 				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
 					msg := newMessageFromBytes(b)
 					g.lock.RLock()
-					callbacks := g.subscribers[msg.key]
+					chans := g.subscriptions[msg.key]
 					g.lock.RUnlock()
-					for _, cb := range callbacks {
-						cb(msg.data)
+					// we never block on sending to a subscriber; if it's full, we drop the message
+					for _, ch := range chans {
+						select {
+						case ch <- msg.data:
+						default:
+							g.Logger.Warn().WithFields(map[string]interface{}{
+								"channel": msg.key,
+								"msg":     string(msg.data),
+							}).Logf("Unable to forward message")
+						}
 					}
 				}, g.done, "refinery-gossip")
 				if err != nil {
-					g.Logger.Debug().Logf("Error listening to refinery-gossip channel: %v", err)
+					g.Logger.Warn().Logf("Error listening to refinery-gossip channel: %v", err)
 				}
 			}
 		}
@@ -68,20 +76,21 @@ func (g *GossipRedis) Stop() error {
 	return g.eg.Wait()
 }
 
-// Subscribe registers a callback for a given channel.
-func (g *GossipRedis) Subscribe(channel string, cb func(data []byte)) error {
+// Subscribe returns a channel that will receive messages from the Gossip channel.
+// The channel has a buffer of depth; if the buffer is full, messages will be dropped.
+func (g *GossipRedis) Subscribe(channel string, depth int) chan []byte {
 	select {
 	case <-g.done:
-		return errors.New("gossip has been stopped")
+		return nil
 	default:
 	}
 
+	ch := make(chan []byte, depth)
 	g.lock.Lock()
 	defer g.lock.Unlock()
-	g.subscribers[channel] = append(g.subscribers[channel], cb)
+	g.subscriptions[channel] = append(g.subscriptions[channel], ch)
 
-	return nil
-
+	return ch
 }
 
 // Publish sends a message to all subscribers of a given channel.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
@@ -85,6 +86,21 @@ type Trace struct {
 	// This is used to memoize the impact calculation so that it doesn't get
 	// calculated over and over during a sort.
 	totalImpact int
+
+	mut       sync.Mutex
+	BeingSent bool
+}
+
+// TryMarkTraceForSending atomically marks a trace as being sent, and returns true if it was
+// able to do so. If the trace is already marked as being sent, it returns false.
+func (t *Trace) TryMarkTraceForSending() bool {
+	t.mut.Lock()
+	defer t.mut.Unlock()
+	if t.BeingSent {
+		return false
+	}
+	t.BeingSent = true
+	return true
 }
 
 // AddSpan adds a span to this trace
