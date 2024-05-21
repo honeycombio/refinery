@@ -239,6 +239,13 @@ func (c *CentralCollector) Stop() error {
 	ctx, cancel := context.WithTimeout(ctx, c.Config.GetCollectionConfig().GetShutdownDelay())
 	defer cancel()
 
+	// we have to make sure the health check says we're alive but not accepting data during shutdown
+	c.Health.Unregister(receiverHealth)
+	c.Health.Unregister(deciderHealth)
+	// reregister the sender health check to a much longer time so we can finish sending traces
+	c.Health.Register(senderHealth, 5*time.Second)
+	c.Health.Ready(senderHealth, true)
+
 	if err := c.shutdown(ctx); err != nil {
 		c.Logger.Error().Logf("error shutting down collector: %s", err)
 	}
@@ -277,12 +284,6 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 				return err
 			}
 		}
-		// we have to make sure the health check says we're alive but not accepting data during shutdown
-		c.Health.Unregister(receiverHealth)
-		c.Health.Unregister(deciderHealth)
-		// reregister the sender health check to a much longer time so we can finish sending traces
-		c.Health.Register(senderHealth, 5*time.Second)
-		c.Health.Ready(senderHealth, true)
 		return nil
 	}); err != nil {
 		// this is expected to happen whenever long traces haven't finished during shutdown;
