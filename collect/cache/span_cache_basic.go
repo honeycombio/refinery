@@ -78,7 +78,10 @@ func (sc *SpanCache_basic) Get(traceID string) *types.Trace {
 	return trace
 }
 
-func (sc *SpanCache_basic) GetOldest(fract float64) []string {
+// Returns the desired fraction of the highest-impact trace IDs in the cache.
+// (e.g. if fract is 0.1, returns the heaviest 10% of trace IDs)
+// Impact is defined as the product of memory use and duration.
+func (sc *SpanCache_basic) GetHighImpactTraceIDs(fract float64) []string {
 	if fract <= 0 {
 		return nil
 	}
@@ -122,12 +125,11 @@ func (sc *SpanCache_basic) GetOldest(fract float64) []string {
 }
 
 // This gets a batch of up to n traceIDs from the cache; it's used to get a
-// batch of traceIDs to process in parallel. It snapshots the active map and
-// returns a slice of traceIDs that were current at the time of the call. It
-// will return successive slices of traceIDs until it has returned all of them,
-// then it will start over from a fresh snapshot.
-// GetTraceIDs is not concurrency-safe; it is intended to be called from a
-// single goroutine.
+// batch of traceIDs to process in parallel. It snapshots the active map (into
+// current) and returns a slice of traceIDs that were current at the time of the
+// call. It will return successive slices of traceIDs until it has returned all
+// of them, then it will start over from a fresh snapshot. GetTraceIDs is not
+// concurrency-safe; it is intended to be called from a single goroutine.
 func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 	// this is the only function that looks at current or nextix so it
 	// doesn't need to lock those fields
@@ -150,6 +152,27 @@ func (sc *SpanCache_basic) GetTraceIDs(n int) []string {
 	}()
 
 	return sc.current[sc.nextix : sc.nextix+n]
+}
+
+// This gets all the traceIDs that are older than 2*(TraceTimeout+SendDelay).
+// These are traces that should have been decided but we didn't see a published
+// decision. This is used to help clean up the cache and in situations where the
+// cache has data but we didn't get the published decision (probably because we
+// got a late span just after booting up).
+func (sc *SpanCache_basic) GetOldTraceIDs() []string {
+	cutoffDuration := 2 * (sc.Cfg.GetTraceTimeout() + sc.Cfg.GetSendDelay())
+	cutoffTime := sc.Clock.Now().Add(-cutoffDuration)
+	ids := make([]string, 0)
+
+	sc.mut.RLock()
+	defer sc.mut.RUnlock()
+
+	for traceID := range sc.cache {
+		if sc.cache[traceID].ArrivalTime.Before(cutoffTime) {
+			ids = append(ids, traceID)
+		}
+	}
+	return ids
 }
 
 func (sc *SpanCache_basic) Remove(traceID string) {

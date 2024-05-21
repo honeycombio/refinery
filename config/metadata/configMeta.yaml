@@ -1329,6 +1329,47 @@ groups:
           not to do it too often, but in situations where bursts of traffic can
           cause memory pressure, it can be useful to check more frequently.
 
+      - name: UseDecisionGossip
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: controls whether Refinery uses the new decision gossip system.
+        description: >
+          This is a temporary setting that will be removed before 3.0 is released.
+
+      - name: AggregationInterval
+        type: duration
+        valuetype: nonzero
+        default: 50ms
+        reload: false
+        summary: is the interval used to aggregate traceIDs before dispatching them.
+        description: >
+          This setting controls the interval between aggregating traceIDs. It
+          is normally not necessary to adjust this value.
+
+      - name: AggregationCount
+        type: int
+        valuetype: nonzero
+        default: 500
+        reload: false
+        summary: is the maximum number of traceIDs to aggregate before dispatching them.
+        description: >
+          This setting controls the number of traceIDs that are aggregated
+          before they are dispatched. It is normally not necessary to adjust
+          this value.
+
+      - name: AggregationConcurrency
+        type: int
+        valuetype: nonzero
+        default: 4
+        reload: false
+        summary: is the maximum concurrency to use when aggregating traceIDs.
+        description: >
+          This setting controls the number of concurrent traceID aggregators
+          that Refinery will use when aggregating traceIDs. It is normally not
+          necessary to adjust this value.
+
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >
