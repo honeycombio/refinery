@@ -41,6 +41,8 @@ func (g *GossipRedis) Start() error {
 	g.done = make(chan struct{})
 	g.subscriptions = make(map[string][]chan []byte)
 
+	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*5)
+
 	g.eg.Go(func() error {
 		for {
 			select {
@@ -68,7 +70,6 @@ func (g *GossipRedis) Start() error {
 					g.Logger.Warn().Logf("Error listening to refinery-gossip channel: %v", err)
 				}
 
-				g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*5)
 			}
 		}
 
