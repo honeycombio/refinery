@@ -195,7 +195,15 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 		o.counters[name] = ctr
 	case "gauge":
 		var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-			result.Observe(o.values[name])
+			// this callback is invoked from outside this function call, so we
+			// need to Rlock when we read the values map. We don't know how long
+			// Observe() takes, so we make a copy of the value and unlock before
+			// calling Observe.
+			o.lock.RLock()
+			v := o.values[name]
+			o.lock.RUnlock()
+
+			result.Observe(v)
 			return nil
 		}
 		g, err := o.meter.Float64ObservableGauge(name,
