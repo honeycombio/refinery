@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 2.5.2 2024-05-22
+
+This release fixes a race condition in OTel Metrics that caused Refinery to crash.
+This update is recommended for everyone who has OTelMetrics enabled.
+
+### Fixes
+
+- fix: correct race condition in OTel metrics (#1165) | [Kent Quirk](https://github.com/kentquirk)
+
+Thanks to [Joshua Jones](https://github.com/senojj) for the [bug report](https://github.com/honeycombio/refinery/issues/1156) and diagnosis.
+
 ## 2.5.1 2024-05-15
 
 ### Fixes
