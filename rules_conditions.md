@@ -61,10 +61,10 @@ Rules:
     - Name: Drop any big traces
       Drop: true
       Conditions:
-        Field: "?.NUM_DESCENDANTS"
-        Operator: ">"
-        Value: 1000
-        Datatype: int
+        - Field: "?.NUM_DESCENDANTS"
+          Operator: ">"
+          Value: 1000
+          Datatype: int
 
 ```
 
