@@ -25,7 +25,7 @@ const (
 	// doesn't check in.
 	peerEntryTimeout = 10 * time.Second
 
-	defaultPeerInfoChannelSize = 20
+	defaultPeerInfoChannelSize = 100
 )
 
 var _ Peers = (*PeerStore)(nil)
