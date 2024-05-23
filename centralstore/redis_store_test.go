@@ -178,14 +178,16 @@ func TestRedisBasicStore_GetStatusForTraces(t *testing.T) {
 
 	keepTraceID := "keep-trace-in-cache"
 	dropTraceID := "drop-trace-in-cache"
-	store.DecisionCache.Record(&CentralTraceStatus{
-		TraceID: keepTraceID,
-		State:   DecisionKeep,
-	}, true, "test")
-	store.DecisionCache.Record(&CentralTraceStatus{
-		TraceID: dropTraceID,
-		State:   DecisionDrop,
-	}, false, "test")
+	require.NoError(t, store.RecordTraceDecision(ctx, &CentralTraceStatus{
+		TraceID:    keepTraceID,
+		State:      DecisionKeep,
+		KeepReason: "test",
+	}))
+	require.NoError(t, store.RecordTraceDecision(ctx, &CentralTraceStatus{
+		TraceID:    dropTraceID,
+		State:      DecisionDrop,
+		KeepReason: "test",
+	}))
 
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		// when we ask for a trace that is in the decision cache, we should get the status from the cache
@@ -569,9 +571,9 @@ func TestRedisBasicStore_RecordTraceDecision(t *testing.T) {
 	keepTraceID := "traceID0"
 	dropTraceID := "traceID1"
 
-	err := store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: keepTraceID, State: DecisionKeep, KeepReason: "test"}, true, "kept")
+	err := store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: keepTraceID, State: DecisionKeep, KeepReason: "test"})
 	require.NoError(t, err)
-	err = store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: dropTraceID, State: DecisionDrop}, false, "dropped")
+	err = store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: dropTraceID, State: DecisionDrop})
 	require.NoError(t, err)
 
 	conn := store.RedisClient.Get()
@@ -583,7 +585,7 @@ func TestRedisBasicStore_RecordTraceDecision(t *testing.T) {
 	for _, s := range status {
 		if s.TraceID == keepTraceID {
 			assert.Equal(t, DecisionKeep, s.State)
-			assert.Equal(t, "kept", s.KeepReason)
+			assert.Equal(t, "test", s.KeepReason)
 		} else if s.TraceID == dropTraceID {
 			assert.Equal(t, DecisionDrop, s.State)
 		}

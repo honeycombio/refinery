@@ -413,13 +413,25 @@ func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceS
 	return nil
 }
 
-func (lrs *LocalStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error {
+func (lrs *LocalStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus) error {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.RecordTraceDecision")
 	defer span.End()
+
+	var keep bool
+	switch trace.State {
+	case DecisionKeep:
+		keep = true
+	case DecisionDrop:
+		keep = false
+	default:
+		return fmt.Errorf("invalid state %s", trace.State)
+
+	}
+
 	lrs.mutex.Lock()
 	defer lrs.mutex.Unlock()
 	if keep {
-		lrs.DecisionCache.Record(trace, keep, reason)
+		lrs.DecisionCache.Record(trace, keep, trace.KeepReason)
 	} else {
 		lrs.DecisionCache.Dropped(trace.TraceID)
 	}

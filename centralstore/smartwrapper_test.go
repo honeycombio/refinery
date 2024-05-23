@@ -418,7 +418,7 @@ func TestSetTraceStatuses(t *testing.T) {
 					assert.Equal(t, DecisionKeep, status.State)
 					assert.Equal(t, "because", status.KeepReason)
 				} else {
-					assert.Equal(t, DecisionDrop, status.State)
+					assert.Equal(t, DecisionDrop, status.State, status.TraceID)
 				}
 			}
 		})
