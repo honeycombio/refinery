@@ -32,8 +32,14 @@ func (m message) ToBytes() []byte {
 
 func newMessageFromBytes(b []byte) message {
 	splits := bytes.SplitN(b, []byte(":"), 2)
+
+	var data []byte
+	if len(splits) == 2 {
+		data = splits[1]
+	}
+
 	return message{
 		key:  string(splits[0]),
-		data: splits[1],
+		data: data,
 	}
 }
