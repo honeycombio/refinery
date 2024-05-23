@@ -1266,6 +1266,16 @@ groups:
           of trace decisions Refinery can make in one second. It is rarely
           necessary to adjust this value.
 
+      - name: CleanupCycleDuration
+        type: duration
+        valuetype: nondefault
+        default: 5s
+        reload: false
+        summary: is the duration between cleanup batches.
+        description: >
+          This setting controls the interval that Refinery uses for running the cleanup
+          cycle in its memory cache. It is rarely necessary to adjust this value.
+
       - name: SenderCycleDuration
         type: duration
         valuetype: nondefault
