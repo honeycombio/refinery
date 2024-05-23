@@ -7,7 +7,6 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
