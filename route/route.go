@@ -929,4 +929,7 @@ func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
 	// handle OTLP trace requests
 	otlpMuxxer.HandleFunc("/traces", r.postOTLPTrace).Name("otlp")
 	otlpMuxxer.HandleFunc("/traces/", r.postOTLPTrace).Name("otlp")
+
+	otlpMuxxer.HandleFunc("/logs", r.postOTLPLogs).Name("otlp")
+	otlpMuxxer.HandleFunc("/logs/", r.postOTLPLogs).Name("otlp")
 }
