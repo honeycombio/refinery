@@ -579,6 +579,8 @@ func TestRedisBasicStore_RecordTraceDecision(t *testing.T) {
 	conn := store.RedisClient.Get()
 	defer conn.Close()
 
+	// give decision drop cache a chance to update
+	time.Sleep(10 * time.Millisecond)
 	status, err := store.GetStatusForTraces(ctx, []string{keepTraceID, dropTraceID}, DecisionKeep, DecisionDrop)
 	require.NoError(t, err)
 	require.Len(t, status, 2)
