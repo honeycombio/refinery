@@ -223,6 +223,7 @@ type CollectionConfig struct {
 	TraceFetcherConcurrency int        `yaml:"TraceFetcherConcurrency" default:"10"`
 	SenderBatchSize         int        `yaml:"SenderBatchSize" default:"1000"`
 	SenderCycleDuration     Duration   `yaml:"SenderCycleDuration" default:"100ms"`
+	CleanupCycleDuration    Duration   `yaml:"CleanupCycleDuration" default:"5s"`
 	DeciderCycleDuration    Duration   `yaml:"DeciderCycleDuration" default:"100ms"`
 	DeciderBatchSize        int        `yaml:"DeciderBatchSize" default:"1000"`
 	AvailableMemory         MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
@@ -284,6 +285,10 @@ func (c CollectionConfig) GetSenderBatchSize() int {
 
 func (c CollectionConfig) GetSenderCycleDuration() time.Duration {
 	return time.Duration(c.SenderCycleDuration)
+}
+
+func (c CollectionConfig) GetCleanupCycleDuration() time.Duration {
+	return time.Duration(c.CleanupCycleDuration)
 }
 
 func (c CollectionConfig) GetDeciderCycleDuration() time.Duration {
