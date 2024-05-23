@@ -42,9 +42,10 @@ type PeerStore struct {
 	peerLock sync.RWMutex
 	peers    map[string]time.Time
 
-	callbackLock sync.RWMutex
-	callbacks    []func(PeerInfo)
-	publishChan  chan PeerInfo
+	publishChan chan PeerInfo
+
+	subscriptionLock sync.RWMutex
+	subscriptions    []chan PeerInfo
 
 	wg sync.WaitGroup
 }
@@ -56,6 +57,7 @@ func (p *PeerStore) Start() error {
 	p.done = make(chan struct{})
 	p.peers = make(map[string]time.Time)
 	p.wg = sync.WaitGroup{}
+	p.subscriptions = make([]chan PeerInfo, 0)
 
 	p.wg.Add(1)
 	go p.watchPeers()
@@ -74,10 +76,12 @@ func (p *PeerStore) Stop() error {
 }
 
 // Subscribe adds a callback to be called when new peer info is received.
-func (p *PeerStore) Subscribe(callback func(PeerInfo)) {
-	p.callbackLock.Lock()
-	defer p.callbackLock.Unlock()
-	p.callbacks = append(p.callbacks, callback)
+func (p *PeerStore) Subscribe() <-chan PeerInfo {
+	ch := make(chan PeerInfo, defaultPeerInfoChannelSize)
+	p.subscriptionLock.Lock()
+	p.subscriptions = append(p.subscriptions, ch)
+	p.subscriptionLock.Unlock()
+	return ch
 }
 
 // PublishPeerInfo sends peer info to the rest of the cluster.
@@ -118,20 +122,18 @@ func (p *PeerStore) HostID() string {
 		return p.identification
 	}
 
+	var identification string
 	// We need to identify ourselves to the cluster. We'll use the hostname if we can, but if we can't, we'll use a UUID.
-	if hostname, err := os.Hostname(); err == nil && hostname != "" {
-		return hostname
+	hostname, err := os.Hostname()
+	if err == nil && hostname != "" {
+		identification = hostname
 	}
-	if p.identification == "" {
-		id, err := uuid.NewV7()
-		if err != nil {
-			panic("failed to generate a UUID for the StressRelief system")
-		}
-		return id.String()
-
+	id, err := uuid.NewV7()
+	if err != nil {
+		panic("failed to generate a UUID for the StressRelief system")
 	}
 
-	return ""
+	return identification + "-" + id.String()
 }
 
 // publish sends peer info from this host to the rest of the cluster.
@@ -152,11 +154,6 @@ func (p *PeerStore) publish() {
 			tk.Reset(keepAliveInterval)
 		case <-tk.Chan():
 			msg = PeerInfo{id: p.identification}
-		default:
-		}
-
-		if msg.id == "" {
-			continue
 		}
 
 		if err := p.Gossip.Publish("peer-info", msg.ToBytes()); err != nil {
@@ -181,12 +178,11 @@ func (p *PeerStore) watchPeers() {
 				continue
 			}
 
-			p.callbackLock.RLock()
-			for _, callback := range p.callbacks {
-				// don't block on any of the callbacks.
-				go callback(info)
+			p.subscriptionLock.RLock()
+			for _, ch := range p.subscriptions {
+				ch <- info
 			}
-			p.callbackLock.RUnlock()
+			p.subscriptionLock.RUnlock()
 
 			p.peerLock.Lock()
 			p.peers[info.id] = p.Clock.Now()

@@ -9,9 +9,14 @@ import (
 
 // Peers provides information about all peers in a Refinery cluster.
 type Peers interface {
-	Subscribe(func(PeerInfo))
+	// Subscribe returns a channel that will receive updates from other active peers.
+	Subscribe() <-chan PeerInfo
+	// PublishPeerInfo sends information about the local peer to other peers.
 	PublishPeerInfo(PeerInfo) error
+	// GetPeerCount returns the number of active peers.
+	// This includes the local peer.
 	GetPeerCount() int
+	// HostID returns the unique identifier for the local peer.
 	HostID() string
 
 	startstop.Starter

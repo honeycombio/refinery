@@ -29,18 +29,8 @@ func TestPeers(t *testing.T) {
 	require.NoError(t, peer1.Start())
 	require.NoError(t, peer2.Start())
 
-	called := make(chan struct{})
-	peer1CallBack := func(msg PeerInfo) {
-		called <- struct{}{}
-		require.Equal(t, []byte("peer2"), msg.Data)
-	}
-	peer1.Subscribe(peer1CallBack)
-
-	peer2CallBack := func(msg PeerInfo) {
-		called <- struct{}{}
-		require.Equal(t, []byte("peer1"), msg.Data)
-	}
-	peer2.Subscribe(peer2CallBack)
+	peer1Chan := peer1.Subscribe()
+	peer2Chan := peer2.Subscribe()
 
 	peer1.PublishPeerInfo(PeerInfo{
 		Data: []byte("peer1"),
@@ -50,8 +40,14 @@ func TestPeers(t *testing.T) {
 		Data: []byte("peer2"),
 	})
 
-	for i := 0; i < 2; i++ {
-		<-called
+	for msg := range peer1Chan {
+		require.Equal(t, []byte("peer2"), msg.Data)
+		break
+	}
+
+	for msg := range peer2Chan {
+		require.Equal(t, []byte("peer1"), msg.Data)
+		break
 	}
 
 	require.Equal(t, 2, peer1.GetPeerCount())

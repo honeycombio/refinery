@@ -44,7 +44,7 @@ type StressRelief struct {
 	stressed           bool
 	stayOnUntil        time.Time
 	minDuration        time.Duration
-	peerChan           chan peer.PeerInfo
+	peerChan           <-chan peer.PeerInfo
 
 	eg *errgroup.Group
 
@@ -97,7 +97,7 @@ func (s *StressRelief) Start() error {
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
 	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
-	s.Peer.Subscribe(s.onPeerUpdate)
+	s.peerChan = s.Peer.Subscribe()
 	s.eg = &errgroup.Group{}
 	s.eg.Go(s.monitor)
 
@@ -121,28 +121,25 @@ func (s *StressRelief) monitor() error {
 				s.Health.Ready(stressReliefHealthSource, true)
 			}
 
+		case msg := <-s.peerChan:
+			level, err := newMessageFromBytes(msg.Data)
+			if err != nil {
+				s.Logger.Error().Logf("error parsing stress level message: %s", err)
+				continue
+			}
+
+			s.lock.Lock()
+			s.stressLevels[msg.ID()] = stressReport{
+				key:       msg.ID(),
+				level:     level,
+				timestamp: s.Clock.Now(),
+			}
+			s.lock.Unlock()
 		case <-s.done:
 			s.Logger.Debug().Logf("Stopping StressRelief system")
 			return nil
 		}
 	}
-
-}
-
-func (s *StressRelief) onPeerUpdate(info peer.PeerInfo) {
-	level, err := newMessageFromBytes(info.Data)
-	if err != nil {
-		s.Logger.Debug().Logf("error parsing stress level message: %s", err)
-		return
-	}
-
-	s.lock.Lock()
-	s.stressLevels[info.ID()] = stressReport{
-		key:       info.ID(),
-		level:     level,
-		timestamp: s.Clock.Now(),
-	}
-	s.lock.Unlock()
 
 }
 
