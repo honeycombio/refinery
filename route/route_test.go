@@ -20,7 +20,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
-	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -35,7 +34,6 @@ import (
 	tracev1 "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/gorilla/mux"
-	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc/metadata"
@@ -490,7 +488,6 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
-		&inject.Object{Value: &TestSharder{}},
 		&inject.Object{Value: trace.Tracer(noop.Tracer{}), Name: "tracer"},
 		&inject.Object{Value: clockwork.NewRealClock()},
 		&inject.Object{Value: basicStore},
@@ -502,7 +499,6 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &stressRelief.MockStressReliever{}, Name: "stressRelief"},
-		&inject.Object{Value: &peer.MockPeers{}},
 		&inject.Object{Value: &cache.CuckooSentCache{}},
 		&inject.Object{Value: &health.Health{}},
 		&inject.Object{Value: &gossip.InMemoryGossip{}, Name: "gossip"},
@@ -514,23 +510,6 @@ func TestDependencyInjection(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-type TestSharder struct{}
-
-func (s *TestSharder) MyShard() sharder.Shard { return nil }
-
-func (s *TestSharder) WhichShard(string) sharder.Shard {
-	return &TestShard{
-		addr: "http://localhost:12345",
-	}
-}
-
-type TestShard struct {
-	addr string
-}
-
-func (s *TestShard) Equals(other sharder.Shard) bool { return true }
-func (s *TestShard) GetAddress() string              { return s.addr }
 
 func TestEnvironmentCache(t *testing.T) {
 	t.Run("calls getFn on cache miss", func(t *testing.T) {
