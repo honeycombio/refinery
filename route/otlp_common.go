@@ -7,16 +7,16 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-func (r *Router) processOTLPRequest(
+func (router *Router) processOTLPRequest(
 	ctx context.Context,
 	batches []huskyotlp.Batch,
 	apiKey string) error {
 
 	var requestID types.RequestIDContextKey
-	apiHost := r.Config.GetHoneycombAPI()
+	apiHost := router.Config.GetHoneycombAPI()
 
 	// get environment name - will be empty for legacy keys
-	environment, err := r.getEnvironmentName(apiKey)
+	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
 		return nil
 	}
@@ -33,8 +33,8 @@ func (r *Router) processOTLPRequest(
 				Timestamp:   ev.Timestamp,
 				Data:        ev.Attributes,
 			}
-			if err = r.processEvent(event, requestID); err != nil {
-				r.Logger.Error().Logf("Error processing event: " + err.Error())
+			if err = router.processEvent(event, requestID); err != nil {
+				router.Logger.Error().Logf("Error processing event: " + err.Error())
 			}
 		}
 	}
