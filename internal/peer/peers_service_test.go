@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/internal/gossip"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,7 +61,9 @@ func TestPeers(t *testing.T) {
 func TestPeer_GetPeerCount(t *testing.T) {
 	// be able to get the count of peers
 	peer1Clock := clockwork.NewFakeClock()
-	gossip := &gossip.InMemoryGossip{}
+	gossip := &gossip.InMemoryGossip{
+		Logger: &logger.NullLogger{},
+	}
 	gossip.Start()
 	peer1 := &PeerStore{
 		identification: "peer1",
