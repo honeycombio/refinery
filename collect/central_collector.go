@@ -676,7 +676,10 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
+	allStates := []centralstore.CentralTraceState{centralstore.DecisionKeep, centralstore.DecisionDrop, centralstore.Unknown, centralstore.Collecting,
+		centralstore.DecisionDelay, centralstore.ReadyToDecide}
+
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, allStates...)
 	if err != nil {
 		span.RecordError(err)
 		c.Logger.Error().Logf("error getting status for traces in cleanupTraces: %s", err)

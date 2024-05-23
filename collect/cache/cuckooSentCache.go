@@ -42,6 +42,11 @@ type KeptTrace interface {
 	SentReason() uint
 }
 
+type Span interface {
+	Trace() string
+	SpanType() types.SpanType
+}
+
 func NewKeptTraceCacheEntry(t KeptTrace) *keptTraceCacheEntry {
 	if t == nil {
 		return &keptTraceCacheEntry{}
@@ -86,9 +91,9 @@ func (t *keptTraceCacheEntry) SpanCount() uint {
 }
 
 // Count records additional spans in the cache record.
-func (t *keptTraceCacheEntry) Count(s *types.Span) {
+func (t *keptTraceCacheEntry) Count(s Span) {
 	t.eventCount++
-	switch s.Type() {
+	switch s.SpanType() {
 	case types.SpanTypeEvent:
 		t.spanEventCount++
 	case types.SpanTypeLink:
@@ -129,7 +134,7 @@ func (t *cuckooDroppedRecord) SpanCount() uint {
 	return 0
 }
 
-func (t *cuckooDroppedRecord) Count(*types.Span) {
+func (t *cuckooDroppedRecord) Count(Span) {
 }
 
 func (t *cuckooDroppedRecord) Reason() uint {
@@ -222,16 +227,16 @@ func (c *CuckooSentCache) Dropped(traceID string) bool {
 	return c.dropped.Check(traceID)
 }
 
-func (c *CuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool) {
+func (c *CuckooSentCache) Check(span Span) (TraceSentRecord, string, bool) {
 	// was it dropped?
-	if c.dropped.Check(span.TraceID) {
+	if c.dropped.Check(span.Trace()) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
 		return &cuckooDroppedRecord{}, "", false
 	}
 	// was it kept?
 	c.keptMut.Lock()
 	defer c.keptMut.Unlock()
-	if sentRecord, found := c.kept.Get(span.TraceID); found {
+	if sentRecord, found := c.kept.Get(span.Trace()); found {
 		// if we kept it, then this span being checked needs counting too
 		sentRecord.Count(span)
 		reason, _ := c.sentReasons.Get(uint(sentRecord.reason))

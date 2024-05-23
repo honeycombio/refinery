@@ -186,7 +186,7 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 				assert.Equal(t, numberOfTraces*10, len(transmission.Events))
 				assert.Equal(t, "aoeu", transmission.Events[0].Dataset)
 				assert.Equal(t, "test", transmission.Events[0].Environment)
-				assert.Equal(t, TraceSendGotRoot, transmission.Events[0].Data["meta.refinery.send_reason"])
+				assert.Equal(t, TraceSendGotRoot, transmission.Events[0].Data["meta.refinery.send_reason"], transmission.Events[0])
 				assert.Equal(t, "deterministic/always", transmission.Events[0].Data["meta.refinery.reason"])
 				transmission.Mux.RUnlock()
 			}, 5*time.Second, 100*time.Millisecond)

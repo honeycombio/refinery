@@ -24,6 +24,15 @@ type CentralSpan struct {
 	IsRoot          bool
 }
 
+// can you come up with another name for this fucntion?
+func (s *CentralSpan) Trace() string {
+	return s.TraceID
+}
+
+func (s *CentralSpan) SpanType() types.SpanType {
+	return s.Type
+}
+
 func (s *CentralSpan) Fields() map[string]interface{} {
 	if s.KeyFields == nil {
 		return s.AllFields
