@@ -165,6 +165,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("kept_from_stress", "counter")
 	c.Metrics.Register("collector_keep_trace", "counter")
 	c.Metrics.Register("collector_drop_trace", "counter")
+	c.Metrics.Register("collector_drop_old_trace", "counter")
 	c.Metrics.Register("collector_decide_trace", "counter")
 	c.Metrics.Register("decider_decided_per_second", "histogram")
 	c.Metrics.Register("decider_considered_per_second", "histogram")
@@ -693,9 +694,11 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
 			c.Metrics.Increment("collector_drop_trace")
+
 		default:
-			// if we don't know what to we did with the trace, and it's already
-			// this old, we just need to drop it, but let's record that we did
+			// if we didn't find the trace, but it's already
+			// this old, we need to drop it so it doesn't live forever.
+			// but let's record that we did.
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
 			c.Metrics.Increment("collector_drop_old_trace")
