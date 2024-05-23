@@ -139,7 +139,7 @@ func (c *CentralCollector) Start() error {
 	c.metricsCycle = NewCycle(c.Clock, c.Config.GetSendTickerValue(), c.done)
 	c.deciderCycle = NewCycle(c.Clock, collectorCfg.GetDeciderCycleDuration(), c.done)
 	if collectorCfg.UseDecisionGossip {
-		c.cleanupCycle = NewCycle(c.Clock, c.Config.GetTraceTimeout(), c.done)
+		c.cleanupCycle = NewCycle(c.Clock, collectorCfg.GetCleanupCycleDuration(), c.done)
 	} else {
 		c.senderCycle = NewCycle(c.Clock, collectorCfg.GetSenderCycleDuration(), c.done)
 	}
@@ -694,6 +694,11 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 			tracesConsidered++
 			c.Metrics.Increment("collector_drop_trace")
 		default:
+			// if we don't know what to we did with the trace, and it's already
+			// this old, we just need to drop it, but let's record that we did
+			c.SpanCache.Remove(status.TraceID)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_old_trace")
 			continue
 		}
 	}
