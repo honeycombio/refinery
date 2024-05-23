@@ -238,7 +238,7 @@ func TestOTLPHandler(t *testing.T) {
 				request.Header = http.Header{}
 				request.Header.Set("content-type", tC.requestContentType)
 				response := httptest.NewRecorder()
-				router.postOTLP(response, request)
+				router.postOTLPTrace(response, request)
 
 				assert.Equal(t, tC.expectedResponseStatus, response.Code)
 				assert.Equal(t, tC.expectedResponseContentType, response.Header().Get("content-type"))

@@ -28,7 +28,7 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result, err := huskyotlp.TranslateLogsRequestFromReader(req.Body, ri)
+	result, err := huskyotlp.TranslateLogsRequestFromReader(req.Context(), req.Body, ri)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrUpstreamFailed, err)
 		return
@@ -55,7 +55,7 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	result, err := huskyotlp.TranslateLogsRequest(req, ri)
+	result, err := huskyotlp.TranslateLogsRequest(ctx, req, ri)
 	if err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}

@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+
 	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/types"
 )
@@ -12,11 +13,7 @@ func (r *Router) processOTLPRequest(
 	apiKey string) error {
 
 	var requestID types.RequestIDContextKey
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		r.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
-		return err
-	}
+	apiHost := r.Config.GetHoneycombAPI()
 
 	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
