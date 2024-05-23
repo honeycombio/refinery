@@ -294,11 +294,6 @@ func TestLogsOTLPHandler(t *testing.T) {
 
 func createLogsRecords() []*logs.LogRecord {
 	now := time.Now()
-	// generating the test OTLP trace data
-	// traceId := make([]byte, 16)
-	// spanId := make([]byte, 8)
-	// rand.Read(traceId)
-	// rand.Read(spanId)
 	return []*logs.LogRecord{
 		{
 			TimeUnixNano: uint64(now.UnixNano()),
@@ -314,8 +309,6 @@ func createLogsRecords() []*logs.LogRecord {
 				},
 			},
 			SeverityText: "INFO",
-			// TraceId:      traceId,
-			// SpanId:       spanId,
 		},
 	}
 }
