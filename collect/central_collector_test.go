@@ -21,6 +21,7 @@ import (
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -1444,6 +1445,7 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 		{Value: collector},
 		{Value: &health.Health{}},
 		{Value: &gossip.InMemoryGossip{}, Name: "gossip"},
+		{Value: &peer.PeerStore{}},
 	}
 	g := inject.Graph{}
 	require.NoError(t, g.Provide(objects...))

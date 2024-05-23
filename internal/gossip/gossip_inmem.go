@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/honeycombio/refinery/logger"
@@ -30,6 +31,13 @@ func (g *InMemoryGossip) Publish(channel string, value []byte) error {
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
+	default:
+	}
+
+	select {
+	case <-g.done:
+		return errors.New("gossip has been stopped")
+
 	case g.gossipCh <- msg.ToBytes():
 	default:
 		g.Logger.Warn().WithFields(map[string]interface{}{
@@ -66,6 +74,13 @@ func (g *InMemoryGossip) Start() error {
 			select {
 			case <-g.done:
 				return nil
+			default:
+			}
+
+			select {
+			case <-g.done:
+				return nil
+
 			case value := <-g.gossipCh:
 				msg := newMessageFromBytes(value)
 				g.mut.RLock()
@@ -89,6 +104,9 @@ func (g *InMemoryGossip) Start() error {
 
 func (g *InMemoryGossip) Stop() error {
 	close(g.done)
+
+	fmt.Println("in memory close")
+
 	close(g.gossipCh)
 	return g.eg.Wait()
 }

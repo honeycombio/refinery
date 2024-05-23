@@ -30,6 +30,7 @@ import (
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -230,6 +231,7 @@ func main() {
 		{Value: samplerFactory},
 		{Value: channels, Name: "gossip"},
 		{Value: stressRelief, Name: "stressRelief"},
+		{Value: &peer.PeerStore{}},
 		{Value: tracer, Name: "tracer"},
 		{Value: clockwork.NewRealClock()},
 		{Value: basicStore},
