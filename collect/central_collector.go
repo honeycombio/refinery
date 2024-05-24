@@ -379,7 +379,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		status.State = centralstore.DecisionDrop
 	}
 
-	err := c.Store.RecordTraceDecision(ctx, status, keep, reason)
+	err := c.Store.RecordTraceDecision(ctx, status)
 	if err != nil {
 		span.RecordError(err)
 		return true, err
