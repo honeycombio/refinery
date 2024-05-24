@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -34,6 +36,8 @@ const (
 	metricsPrefixCount      = "redisstore_count_"
 	metricsPrefixMemory     = "redisstore_memory_"
 	metricsPrefixConnection = "redisstore_conn_"
+
+	decisionKeepInMemoryOnly = "%?"
 )
 
 var _ BasicStorer = (*RedisBasicStore)(nil)
@@ -324,17 +328,13 @@ func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*Centra
 	}, errors.Join(errs...)
 }
 
+// GetStatusForTraces returns the status of the traces with the given traceIDs. It only return the status of the trace if a trace's state is one of the statesToCheck.
 func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []string, statesToCheck ...CentralTraceState) ([]*CentralTraceStatus, error) {
 	ctx, span := otelutil.StartSpanWith(ctx, r.Tracer, "GetStatusForTraces", "num_traces", len(traceIDs))
 	defer span.End()
 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
-
-	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, r.RedisClient, traceIDs)
-	if err != nil {
-		return nil, err
-	}
 
 	validStates := make(map[CentralTraceState]struct{}, len(statesToCheck))
 	var decisionMade bool
@@ -344,39 +344,73 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		decisionMade = decisionMade || state == DecisionKeep || state == DecisionDrop
 	}
 
-	statuses := make([]*CentralTraceStatus, 0, len(statusMapFromRedis))
+	// if we are looking for decision states, we need to check the decision cache
+	// first to see if we have a decision for the traceID.
+	// If a trace is in decision drop state, we don't need to fetch the trace status from redis
+	// because we don't store any metadata for traces in decision drop state.
+	// If a trace is in decision keep state, we need to check if the metadata is stored in redis.
+	// This is done through checking the suffix of the reason string in the decision cache.
+	// If the suffix is decisionKeepInMemoryOnly, we don't need to fetch the trace status from redis.
+	// Otherwise, we need to fetch the trace status from redis in order to get metadata for the trace.
+	var requestToRedis []string
+	statuses := make([]*CentralTraceStatus, 0)
+
+	if decisionMade {
+		requestToRedis = make([]string, 0)
+		for _, traceID := range traceIDs {
+			record, reason, found := r.DecisionCache.Test(traceID)
+			if !found {
+				requestToRedis = append(requestToRedis, traceID)
+				continue
+			}
+			status := &CentralTraceStatus{
+				TraceID:   traceID,
+				Timestamp: r.Clock.Now(),
+			}
+
+			if record.Kept() {
+				// only decisions made during stress relief doesn't
+				// have any metadata stored in redis. Therefore, we
+				// don't need to fetch trace status from redis
+				if strings.HasSuffix(reason, decisionKeepInMemoryOnly) {
+					status.State = DecisionKeep
+					status.KeepReason = strings.TrimSuffix(reason, decisionKeepInMemoryOnly)
+					status.Rate = record.Rate()
+					status.Count = uint32(record.DescendantCount())
+					status.EventCount = uint32(record.SpanEventCount())
+					status.LinkCount = uint32(record.SpanLinkCount())
+					statuses = append(statuses, status)
+					continue
+				}
+
+				requestToRedis = append(requestToRedis, traceID)
+				continue
+			}
+
+			status.State = DecisionDrop
+			status.Count = uint32(record.DescendantCount())
+			status.EventCount = uint32(record.SpanEventCount())
+			status.LinkCount = uint32(record.SpanLinkCount())
+			statuses = append(statuses, status)
+		}
+	} else {
+		requestToRedis = traceIDs
+	}
+
+	statusMapFromRedis, err := r.traces.getTraceStatuses(ctx, r.RedisClient, requestToRedis)
+	if err != nil {
+		return nil, err
+	}
+
+	// grow the slice to avoid reallocation
+	statuses = slices.Grow(statuses, len(statusMapFromRedis))
+
 	for _, status := range statusMapFromRedis {
 		// only include statuses that are in the statesToCheck list.
 		// exception: if a trace decision was made during stress relief, we need to
 		// find the trace state from the decision cache instead of redis
 		_, ok := validStates[status.State]
 		if !ok {
-			if decisionMade {
-				//we still need to grab the trace state from decision cache since
-				// trace decisions are only stored in memory during stress relief
-				record, reason, found := r.DecisionCache.Test(status.TraceID)
-				if !found {
-					r.DecisionCache.Dropped(status.TraceID)
-					continue
-				}
-
-				if record.Kept() {
-					status.State = DecisionKeep
-					status.KeepReason = reason
-					status.Rate = record.Rate()
-					status.Count = uint32(record.DescendantCount())
-					status.EventCount = uint32(record.SpanEventCount())
-					status.LinkCount = uint32(record.SpanLinkCount())
-					statuses = append(statuses, status)
-				} else {
-					status.State = DecisionDrop
-					status.Count = uint32(record.DescendantCount())
-					status.EventCount = uint32(record.SpanEventCount())
-					status.LinkCount = uint32(record.SpanLinkCount())
-					statuses = append(statuses, status)
-				}
-
-			}
 			continue
 		}
 		statuses = append(statuses, status)
@@ -554,6 +588,11 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	// remove span list
 	spanListKeys := make([]string, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
+		if successMap != nil {
+			if _, ok := successMap[traceID]; !ok {
+				continue
+			}
+		}
 		spanListKeys = append(spanListKeys, spansHashByTraceIDKey(traceID))
 	}
 
@@ -567,9 +606,21 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 
 // RecordTraceDecision records the decision made about a trace.
 // Note: Currently, the decision is only recorded in memory.
-func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error {
+// The reason is decorated with a suffix to indicate that it is only stored in memory.
+func (r *RedisBasicStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus) error {
 	_, span := r.Tracer.Start(ctx, "RecordTraceDecision")
 	defer span.End()
+
+	var keep bool
+	switch trace.State {
+	case DecisionKeep:
+		keep = true
+	case DecisionDrop:
+		keep = false
+	default:
+		return fmt.Errorf("invalid trace state: %s", trace.State)
+	}
+	reason := trace.KeepReason + decisionKeepInMemoryOnly
 
 	r.DecisionCache.Record(trace, keep, reason)
 
@@ -697,7 +748,9 @@ func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, cspans [
 	})
 	defer spanStatus.End()
 
-	expirationDuration := time.Duration(t.config.GetCentralStoreOptions().TraceTimeout)
+	// default trace retention is 2x the trace timeout + send delay
+	// this should be the same as the timeout for spanCache.GetOldTraceIDs
+	expirationDuration := time.Duration(2 * (t.config.GetCentralStoreOptions().TraceTimeout + t.config.GetCentralStoreOptions().SendDelay))
 	if expirationDuration < defaultTraceRetention {
 		expirationDuration = defaultTraceRetention
 	}
@@ -836,6 +889,9 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 		found := 0
 		_, span := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker", i)
 		worker := func(traceID string) *CentralTraceStatus {
+			if traceID == "" {
+				return nil
+			}
 			status := &centralTraceStatusRedis{}
 			err := conn.GetStructHash(t.traceStatusKey(traceID), status)
 			queries++
