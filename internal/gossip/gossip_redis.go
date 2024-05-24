@@ -25,8 +25,9 @@ type GossipRedis struct {
 	Health health.Recorder `inject:""`
 	eg     *errgroup.Group
 
+	subscriptions map[Channel][]chan []byte
+	channels      map[string]Channel
 	lock          sync.RWMutex
-	subscriptions map[string][]chan []byte
 	done          chan struct{}
 
 	startstop.Stopper
@@ -39,7 +40,8 @@ type GossipRedis struct {
 func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
-	g.subscriptions = make(map[string][]chan []byte)
+	g.subscriptions = make(map[Channel][]chan []byte)
+	g.channels = make(map[string]Channel)
 
 	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*2)
 
@@ -49,23 +51,21 @@ func (g *GossipRedis) Start() error {
 			case <-g.done:
 				return nil
 			default:
-				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
+				err := g.Redis.ListenPubSubChannels(nil, func(_ string, b []byte) {
 					g.Health.Ready(gossipRedisHealth, true)
 
-					msg := newMessageFromBytes(b)
+					msg := Message(b)
 					g.lock.RLock()
-					chans := g.subscriptions[msg.key]
+					chans := g.subscriptions[msg.Channel()]
 					g.lock.RUnlock()
-					// we never block on sending to a subscriber; if it's full, we drop the message
-					for _, ch := range chans {
-						select {
-						case ch <- msg.data:
-						default:
-							g.Logger.Warn().WithFields(map[string]interface{}{
-								"channel": msg.key,
-								"msg":     string(msg.data),
-							}).Logf("Unable to forward message")
-						}
+					// now start goroutines to send the message to all subscribers in parallel
+					// we don't want to block the Redis listener or other subscribers
+					for i := range chans {
+						ch := chans[i]
+						g.eg.Go(func() error {
+							ch <- msg.Data()
+							return nil
+						})
 					}
 				}, g.onHealthCheck, g.done, "refinery-gossip")
 				if err != nil {
@@ -88,7 +88,7 @@ func (g *GossipRedis) Stop() error {
 
 // Subscribe returns a channel that will receive messages from the Gossip channel.
 // The channel has a buffer of depth; if the buffer is full, messages will be dropped.
-func (g *GossipRedis) Subscribe(channel string, depth int) chan []byte {
+func (g *GossipRedis) Subscribe(channel Channel, depth int) chan []byte {
 	select {
 	case <-g.done:
 		return nil
@@ -104,7 +104,7 @@ func (g *GossipRedis) Subscribe(channel string, depth int) chan []byte {
 }
 
 // Publish sends a message to all subscribers of a given channel.
-func (g *GossipRedis) Publish(channel string, value []byte) error {
+func (g *GossipRedis) Publish(channel Channel, value []byte) error {
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
@@ -114,12 +114,20 @@ func (g *GossipRedis) Publish(channel string, value []byte) error {
 	conn := g.Redis.GetPubSubConn()
 	defer conn.Close()
 
-	msg := message{
-		key:  channel,
-		data: value,
-	}
+	msg := NewMessage(channel, value)
 
-	return conn.Publish("refinery-gossip", msg.ToBytes())
+	return conn.Publish("refinery-gossip", msg.Bytes())
+}
+
+func (g *GossipRedis) GetChannel(name string) Channel {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	if ch, ok := g.channels[name]; ok {
+		return ch
+	}
+	ch := Channel(len(g.channels))
+	g.channels[name] = ch
+	return ch
 }
 
 func (g *GossipRedis) onHealthCheck(data string) {

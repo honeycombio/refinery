@@ -107,7 +107,7 @@ func TestStressRelief_Peer(t *testing.T) {
 			level: 0,
 			id:    "peer",
 		}
-		require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
+		require.NoError(t, sr.Gossip.Publish(sr.Gossip.GetChannel(stressChannelName), msg.ToBytes()))
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
@@ -119,7 +119,7 @@ func TestStressRelief_Peer(t *testing.T) {
 			level: 5,
 			id:    "peer",
 		}
-		require.NoError(t, sr.Gossip.Publish("stress_level", msg.ToBytes()))
+		require.NoError(t, sr.Gossip.Publish(sr.Gossip.GetChannel(stressChannelName), msg.ToBytes()))
 
 		clock.Advance(time.Second * 1)
 		return !sr.Stressed()

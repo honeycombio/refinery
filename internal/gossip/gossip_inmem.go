@@ -12,7 +12,8 @@ import (
 type InMemoryGossip struct {
 	Logger        logger.Logger `inject:""`
 	gossipCh      chan []byte
-	subscriptions map[string][]chan []byte
+	subscriptions map[Channel][]chan []byte
+	channels      map[string]Channel
 
 	done chan struct{}
 	mut  sync.RWMutex
@@ -21,26 +22,17 @@ type InMemoryGossip struct {
 
 var _ Gossiper = &InMemoryGossip{}
 
-func (g *InMemoryGossip) Publish(channel string, value []byte) error {
-	msg := message{
-		key:  channel,
-		data: value,
-	}
-
+func (g *InMemoryGossip) Publish(channel Channel, value []byte) error {
+	msg := NewMessage(channel, value)
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
-	case g.gossipCh <- msg.ToBytes():
-	default:
-		g.Logger.Warn().WithFields(map[string]interface{}{
-			"channel": channel,
-			"msg":     string(value),
-		}).Logf("Unable to publish message")
+	case g.gossipCh <- msg.Bytes():
 	}
 	return nil
 }
 
-func (g *InMemoryGossip) Subscribe(channel string, depth int) chan []byte {
+func (g *InMemoryGossip) Subscribe(channel Channel, depth int) chan []byte {
 	select {
 	case <-g.done:
 		return nil
@@ -58,7 +50,8 @@ func (g *InMemoryGossip) Subscribe(channel string, depth int) chan []byte {
 func (g *InMemoryGossip) Start() error {
 	g.gossipCh = make(chan []byte, 10)
 	g.eg = &errgroup.Group{}
-	g.subscriptions = make(map[string][]chan []byte)
+	g.subscriptions = make(map[Channel][]chan []byte)
+	g.channels = make(map[string]Channel)
 	g.done = make(chan struct{})
 
 	g.eg.Go(func() error {
@@ -67,19 +60,19 @@ func (g *InMemoryGossip) Start() error {
 			case <-g.done:
 				return nil
 			case value := <-g.gossipCh:
-				msg := newMessageFromBytes(value)
+				msg := Message(value)
 				g.mut.RLock()
-				for _, ch := range g.subscriptions[msg.key] {
-					select {
-					case ch <- msg.data:
-					default:
-						g.Logger.Warn().WithFields(map[string]interface{}{
-							"channel": msg.key,
-							"msg":     string(msg.data),
-						}).Logf("Unable to forward message")
-					}
-				}
+				chans := g.subscriptions[msg.Channel()]
 				g.mut.RUnlock()
+				// now start goroutines to send the message to all subscribers in parallel
+				// we don't want to block the Redis listener or other subscribers
+				for i := range chans {
+					ch := chans[i]
+					g.eg.Go(func() error {
+						ch <- msg.Data()
+						return nil
+					})
+				}
 			}
 		}
 	})
@@ -91,4 +84,15 @@ func (g *InMemoryGossip) Stop() error {
 	close(g.done)
 	close(g.gossipCh)
 	return g.eg.Wait()
+}
+
+func (g *InMemoryGossip) GetChannel(name string) Channel {
+	g.mut.Lock()
+	defer g.mut.Unlock()
+	if ch, ok := g.channels[name]; ok {
+		return ch
+	}
+	ch := Channel(len(g.channels))
+	g.channels[name] = ch
+	return ch
 }

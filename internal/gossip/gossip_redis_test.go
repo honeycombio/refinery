@@ -40,19 +40,22 @@ func TestRoundTripChanRedis(t *testing.T) {
 	}
 
 	require.NoError(t, g.Start())
+	chTest := g.GetChannel("test")
+	chTest2 := g.GetChannel("test2")
+	chJunk := g.GetChannel("junk")
 
-	ch := g.Subscribe("test", 10)
+	ch := g.Subscribe(chTest, 10)
 	require.NotNil(t, ch)
 
-	ch2 := g.Subscribe("test2", 10)
+	ch2 := g.Subscribe(chTest2, 10)
 	require.NotNil(t, ch2)
 
 	// This test is flaky unless we throw away the first message
-	g.Publish("throwaway", []byte("nevermind"))
+	g.Publish(chJunk, []byte("nevermind"))
 
 	// Test that we can publish a message
-	require.NoError(t, g.Publish("test", []byte("hi")))
-	require.NoError(t, g.Publish("test2", []byte("bye")))
+	require.NoError(t, g.Publish(chTest, []byte("hi")))
+	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 
 	require.Eventually(t, func() bool {
 		time.Sleep(100 * time.Millisecond)
@@ -81,15 +84,18 @@ func TestRoundTripChanInMem(t *testing.T) {
 
 	require.NoError(t, g.Start())
 
-	ch := g.Subscribe("test", 10)
+	chTest := g.GetChannel("test")
+	chTest2 := g.GetChannel("test2")
+
+	ch := g.Subscribe(chTest, 10)
 	require.NotNil(t, ch)
 
-	ch2 := g.Subscribe("test2", 10)
+	ch2 := g.Subscribe(chTest2, 10)
 	require.NotNil(t, ch2)
 
 	// Test that we can publish a message
-	require.NoError(t, g.Publish("test", []byte("hi")))
-	require.NoError(t, g.Publish("test2", []byte("bye")))
+	require.NoError(t, g.Publish(chTest, []byte("hi")))
+	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 
 	assert.Eventually(t, func() bool {
 		time.Sleep(100 * time.Millisecond)
