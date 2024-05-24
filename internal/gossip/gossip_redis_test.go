@@ -50,10 +50,18 @@ func TestRoundTripChanRedis(t *testing.T) {
 	ch2 := g.Subscribe(chTest2, 10)
 	require.NotNil(t, ch2)
 
-	// This test is flaky unless we throw away the first message
-	g.Publish(chJunk, []byte("nevermind"))
+	// deflaking -- pause to give subscriptions time to be set up
+	time.Sleep(100 * time.Millisecond)
+	// publish a junk message to get health check running
+	require.NoError(t, g.Publish(chJunk, []byte("nevermind")))
 
-	// Test that we can publish a message
+	// deflaking -- pause to give subscriptions time to be set up
+	// don't continue until we say we're ready
+	assert.Eventually(t, func() bool {
+		return healthCheck.IsReady()
+	}, 5*time.Second, 200*time.Millisecond)
+
+	// Test that we can publish messages
 	require.NoError(t, g.Publish(chTest, []byte("hi")))
 	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 

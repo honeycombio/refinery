@@ -56,7 +56,7 @@ func (g *GossipRedis) Start() error {
 
 					msg := Message(b)
 					g.lock.RLock()
-					chans := g.subscriptions[msg.Channel()]
+					chans := g.subscriptions[msg.Channel()][:] // copy the slice to avoid holding the lock while sending
 					g.lock.RUnlock()
 					// now start goroutines to send the message to all subscribers in parallel
 					// we don't want to block the Redis listener or other subscribers
@@ -71,7 +71,6 @@ func (g *GossipRedis) Start() error {
 				if err != nil {
 					g.Logger.Warn().Logf("Error listening to refinery-gossip channel: %v", err)
 				}
-
 			}
 		}
 
