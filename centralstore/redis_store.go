@@ -895,6 +895,9 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 			if err != nil {
 				if errors.Is(err, redis.ErrKeyNotFound) {
 					status.TraceID = traceID
+					status.State = Unknown.String()
+					status.Timestamp = t.clock.Now().UnixMicro()
+
 					return normalizeCentralTraceStatusRedis(status)
 				}
 				statusSpan.RecordError(err)

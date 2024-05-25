@@ -30,7 +30,9 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 
 	status, err := store.GetStatusForTraces(ctx, []string{traceID}, Unknown)
 	require.NoError(t, err)
-	require.Len(t, status, 0)
+	require.Len(t, status, 1)
+	require.Equal(t, Unknown, status[0].State)
+	require.Equal(t, traceID, status[0].TraceID)
 
 	testcases := []struct {
 		name               string
