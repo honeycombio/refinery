@@ -1,6 +1,7 @@
 package gossip
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -66,6 +67,7 @@ func TestRoundTripChanRedis(t *testing.T) {
 	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 
 	require.Eventually(t, func() bool {
+		fmt.Println("message counts", len(ch), len(ch2))
 		return len(ch) == 1 && len(ch2) == 1
 	}, 5*time.Second, 200*time.Millisecond)
 
