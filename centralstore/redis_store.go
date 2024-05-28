@@ -231,6 +231,7 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 			if span.SpanID == "" {
 				continue
 			}
+
 			shouldIncrementCounts = append(shouldIncrementCounts, span)
 			continue
 		case Collecting:
@@ -626,6 +627,8 @@ func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, s
 	states := make(map[string]CentralTraceState, len(spans))
 	for _, span := range spans {
 		states[span.TraceID] = Unknown
+		// check if the trace is in the cache, if so, we can skip the redis query
+		// this also makes sure that the span count is incremented in the cache
 		tracerec, _, found := r.DecisionCache.Check(span)
 		if !found {
 			// if the trace is not in the cache, we need to retrieve its state from redis
@@ -633,7 +636,14 @@ func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, s
 			continue
 		}
 
+		// if we already know the state of the trace, we shouldn't count it as a cache hit
+		// again
+		if _, ok := states[span.TraceID]; ok {
+			continue
+		}
+
 		cacheHitCount++
+
 		if tracerec.Kept() {
 			states[span.TraceID] = DecisionKeep
 		} else {
@@ -642,9 +652,13 @@ func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, s
 	}
 	otelutil.AddSpanField(span, "cache_hit_count", cacheHitCount)
 
+	// if all traces are in the cache, we can return the states directly
 	if cacheHitCount == len(states) {
 		return states, nil
 	}
+
+	// remove duplicated trace ids in the notFound list
+	notFound = slices.Compact(notFound)
 
 	results, err := r.traces.getTraceStates(ctx, conn, notFound)
 	if err != nil {
