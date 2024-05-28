@@ -47,6 +47,10 @@ func (s *CentralSpan) SetSamplerSelector(key string) {
 
 type CentralTraceState string
 
+// AllTraceStates is a list of all possible trace states.
+var AllTraceStates = []CentralTraceState{DecisionKeep, DecisionDrop, Unknown, Collecting,
+	DecisionDelay, ReadyToDecide, AwaitingDecision}
+
 const (
 	Unknown          CentralTraceState = "unknown"
 	Collecting       CentralTraceState = "collecting"
