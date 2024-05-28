@@ -42,7 +42,20 @@ func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
 	g.subscriptions = make(map[Channel][]chan []byte)
-	g.channels = make(map[string]Channel)
+	// these are constant strings to make sure that everyone is using the same channel numbers
+	// for the same channel names, with a fallback to support testing.
+	// All unknown channels are assigned a new channel ID of an uppercase letter, starting
+	// with 'A'. This is to avoid collisions with the ASCII values of the known channels.
+	// This is mainly for testing; if you're using a channel that isn't in the list, you should
+	// add it to the list because it's not guaranteed that you'll get the same channel on
+	// multiple machines.
+	g.channels = map[string]Channel{
+		ChannelKeep:   'k',
+		ChannelDrop:   'd',
+		ChannelStress: 's',
+		ChannelTest1:  '1',
+		ChannelTest2:  '2',
+	}
 
 	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*2)
 
@@ -126,7 +139,14 @@ func (g *GossipRedis) GetChannel(name string) Channel {
 	if ch, ok := g.channels[name]; ok {
 		return ch
 	}
-	ch := Channel(len(g.channels))
+	ch := Channel('A')
+	for _, v := range g.channels {
+		if v == ch {
+			ch++
+		}
+	}
+
+	g.Logger.Warn().Logf("Creating new gossip channel %s with value %c.", name, ch)
 	g.channels[name] = ch
 	return ch
 }

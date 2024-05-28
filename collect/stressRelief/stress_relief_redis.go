@@ -57,8 +57,6 @@ type StressRelief struct {
 	stressLevels map[string]stressReport
 }
 
-const stressChannelName = "stress_health"
-
 func (s *StressRelief) Start() error {
 	s.Logger.Debug().Logf("Starting StressRelief system")
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
@@ -113,7 +111,7 @@ func (s *StressRelief) Start() error {
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
 	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
-	s.stressGossipCh = s.Gossip.Subscribe(s.Gossip.GetChannel(stressChannelName), 20)
+	s.stressGossipCh = s.Gossip.Subscribe(s.Gossip.GetChannel(gossip.ChannelStress), 20)
 	s.eg = &errgroup.Group{}
 	s.eg.Go(s.monitor)
 
@@ -123,7 +121,7 @@ func (s *StressRelief) Start() error {
 func (s *StressRelief) monitor() error {
 	tick := time.NewTicker(calculationInterval)
 	defer tick.Stop()
-	gossipchan := s.Gossip.GetChannel(stressChannelName)
+	gossipchan := s.Gossip.GetChannel(gossip.ChannelStress)
 	for {
 		select {
 		case <-tick.C:

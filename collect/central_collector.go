@@ -108,8 +108,6 @@ const (
 	receiverHealth = "receiver"
 	deciderHealth  = "decider"
 	senderHealth   = "sender"
-	gossip_keep    = "keep"
-	gossip_drop    = "drop"
 )
 
 func (c *CentralCollector) Start() error {
@@ -218,8 +216,8 @@ func (c *CentralCollector) Start() error {
 	c.egAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
-	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip_keep), maxCount)
-	c.dropChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip_drop), maxCount)
+	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelKeep), maxCount)
+	c.dropChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelDrop), maxCount)
 
 	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
 	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
@@ -795,8 +793,8 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
 	defer spanTraces.End()
 
-	gossip_keep_channel := c.Gossip.GetChannel(gossip_keep)
-	gossip_drop_channel := c.Gossip.GetChannel(gossip_drop)
+	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
+	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
 
 	for _, trace := range traces {
 		if trace == nil {

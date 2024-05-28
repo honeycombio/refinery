@@ -4,6 +4,14 @@ import (
 	"github.com/facebookgo/startstop"
 )
 
+const (
+	ChannelKeep   = "keep"
+	ChannelDrop   = "drop"
+	ChannelStress = "stress_health"
+	ChannelTest1  = "test1"
+	ChannelTest2  = "test2"
+)
+
 // Gossiper is an interface for broadcasting messages to all receivers
 // subscribed to a channel
 type Gossiper interface {
