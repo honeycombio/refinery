@@ -62,7 +62,7 @@ func (g *InMemoryGossip) Start() error {
 			case value := <-g.gossipCh:
 				msg := Message(value)
 				g.mut.RLock()
-				chans := g.subscriptions[msg.Channel()]
+				chans := g.subscriptions[msg.Channel()][:] // copy the slice to avoid holding the lock while sending
 				g.mut.RUnlock()
 				// now start goroutines to send the message to all subscribers in parallel
 				// we don't want to block the Redis listener or other subscribers
