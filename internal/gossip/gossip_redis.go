@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/facebookgo/startstop"
@@ -55,6 +56,7 @@ func (g *GossipRedis) Start() error {
 					g.Health.Ready(gossipRedisHealth, true)
 
 					msg := Message(b)
+					fmt.Printf("Received message: channel %d, %s\n", msg.Channel(), string(msg.Data()))
 					g.lock.RLock()
 					chans := g.subscriptions[msg.Channel()][:] // copy the slice to avoid holding the lock while sending
 					g.lock.RUnlock()
