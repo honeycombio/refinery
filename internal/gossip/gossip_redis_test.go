@@ -41,11 +41,13 @@ func TestRoundTripChanRedis(t *testing.T) {
 	}
 
 	require.NoError(t, g.Start())
-	chTest := g.GetChannel("test")
-	chTest2 := g.GetChannel("test2")
+	test1Name := "test1" + time.Now().String()
+	test2Name := "test2" + time.Now().String()
+	chTest1 := g.GetChannel(test1Name)
+	chTest2 := g.GetChannel(test2Name)
 	chJunk := g.GetChannel("junk")
 
-	ch := g.Subscribe(chTest, 10)
+	ch := g.Subscribe(chTest1, 10)
 	require.NotNil(t, ch)
 
 	ch2 := g.Subscribe(chTest2, 10)
@@ -63,7 +65,7 @@ func TestRoundTripChanRedis(t *testing.T) {
 	}, 5*time.Second, 200*time.Millisecond)
 
 	// Test that we can publish messages
-	require.NoError(t, g.Publish(chTest, []byte("hi")))
+	require.NoError(t, g.Publish(chTest1, []byte("hi")))
 	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 
 	require.Eventually(t, func() bool {
