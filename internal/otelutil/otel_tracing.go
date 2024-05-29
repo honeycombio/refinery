@@ -97,7 +97,8 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 			otelconfig.WithTracesEnabled(true),
 			otelconfig.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
 			otelconfig.WithHeaders(map[string]string{
-				"x-honeycomb-team": cfg.APIKey,
+				"x-honeycomb-team":    cfg.APIKey,
+				"x-honeycomb-dataset": cfg.Dataset,
 			}),
 		)
 		if err != nil {
