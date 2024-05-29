@@ -668,17 +668,6 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 	if len(ids) == 0 {
 		return
 	}
-	for _, t := range ids {
-		trace := c.SpanCache.Get(t)
-		if trace == nil {
-			continue
-		}
-		data := make(map[string]interface{}, 0)
-		data["trace_id"] = t
-		data["arrival_time"] = trace.ArrivalTime
-		data["span_coutn"] = len(trace.GetSpans())
-		c.Logger.Info().WithFields(data).Logf("old traces")
-	}
 
 	var tracesConsidered float64
 	now := c.Clock.Now()

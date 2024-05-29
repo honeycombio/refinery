@@ -623,8 +623,8 @@ func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, s
 	defer span.End()
 
 	var cacheHitCount int
-	notFound := make([]string, 0)
-	states := make(map[string]CentralTraceState, len(spans))
+	notFound := generics.NewSet[string]()
+	states := make(map[string]CentralTraceState, min(len(spans), 80))
 	for _, span := range spans {
 		states[span.TraceID] = Unknown
 		// check if the trace is in the cache, if so, we can skip the redis query
@@ -632,7 +632,7 @@ func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, s
 		tracerec, _, found := r.DecisionCache.Check(span)
 		if !found {
 			// if the trace is not in the cache, we need to retrieve its state from redis
-			notFound = append(notFound, span.TraceID)
+			notFound.Add(span.TraceID)
 			continue
 		}
 
@@ -657,10 +657,7 @@ func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, s
 		return states, nil
 	}
 
-	// remove duplicated trace ids in the notFound list
-	notFound = slices.Compact(notFound)
-
-	results, err := r.traces.getTraceStates(ctx, conn, notFound)
+	results, err := r.traces.getTraceStates(ctx, conn, notFound.Members())
 	if err != nil {
 		return nil, err
 	}
