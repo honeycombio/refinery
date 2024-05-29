@@ -2,18 +2,17 @@ package stressRelief
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
-	"github.com/gofrs/uuid/v5"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/jonboulle/clockwork"
@@ -22,14 +21,17 @@ import (
 
 var _ StressReliever = &StressRelief{}
 
-const stressReliefHealthSource = "stress_relief"
+const (
+	stressReliefHealthSource = "stress_relief"
+	peerMessagePrefix        = "sr"
+)
 
 var calculationInterval = 100 * time.Millisecond
 
 type StressRelief struct {
 	RefineryMetrics metrics.Metrics `inject:"genericMetrics"`
 	Logger          logger.Logger   `inject:""`
-	Gossip          gossip.Gossiper `inject:"gossip"`
+	Peer            peer.Peers      `inject:""`
 	Clock           clockwork.Clock `inject:""`
 	Health          health.Recorder `inject:""`
 	done            chan struct{}
@@ -45,8 +47,7 @@ type StressRelief struct {
 	stressed           bool
 	stayOnUntil        time.Time
 	minDuration        time.Duration
-	identification     string
-	stressGossipCh     chan []byte
+	peerChan           <-chan peer.PeerInfo
 
 	eg *errgroup.Group
 
@@ -90,18 +91,6 @@ func (s *StressRelief) Start() error {
 		//{Numerator: "redisstore_memory_used_total", }
 	}
 
-	// We need to identify ourselves to the cluster. We'll use the hostname if we can, but if we can't, we'll use a UUID.
-	if hostname, err := os.Hostname(); err == nil && hostname != "" {
-		s.identification = hostname
-	}
-	if s.identification == "" {
-		id, err := uuid.NewV7()
-		if err != nil {
-			panic("failed to generate a UUID for the StressRelief system")
-		}
-
-		s.identification = id.String()
-	}
 	s.stressLevels = make(map[string]stressReport)
 	s.done = make(chan struct{})
 
@@ -111,7 +100,7 @@ func (s *StressRelief) Start() error {
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
 	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
-	s.stressGossipCh = s.Gossip.Subscribe(s.Gossip.GetChannel(gossip.ChannelStress), 20)
+	s.peerChan = s.Peer.Subscribe()
 	s.eg = &errgroup.Group{}
 	s.eg.Go(s.monitor)
 
@@ -121,38 +110,34 @@ func (s *StressRelief) Start() error {
 func (s *StressRelief) monitor() error {
 	tick := time.NewTicker(calculationInterval)
 	defer tick.Stop()
-	gossipchan := s.Gossip.GetChannel(gossip.ChannelStress)
 	for {
 		select {
 		case <-tick.C:
 			currentLevel := s.Recalc()
 			// publish the stress level to the rest of the cluster
-			msg := stressLevelMessage{
-				level: currentLevel,
-				id:    s.identification,
-			}
-			err := s.Gossip.Publish(gossipchan, msg.ToBytes())
+			err := s.Peer.PublishPeerInfo(peer.PeerInfo{
+				Data: peerMessageToBytes(currentLevel),
+			})
 			if err != nil {
 				s.Logger.Error().Logf("error publishing stress level: %s", err)
 			} else {
 				s.Health.Ready(stressReliefHealthSource, true)
 			}
 
-		case data := <-s.stressGossipCh:
-			msg, err := newMessageFromBytes(data)
+		case msg := <-s.peerChan:
+			level, err := newMessageFromBytes(msg.Data)
 			if err != nil {
 				s.Logger.Error().Logf("error parsing stress level message: %s", err)
 				continue
 			}
 
 			s.lock.Lock()
-			s.stressLevels[msg.id] = stressReport{
-				key:       msg.id,
-				level:     msg.level,
+			s.stressLevels[msg.ID()] = stressReport{
+				key:       msg.ID(),
+				level:     level,
 				timestamp: s.Clock.Now(),
 			}
 			s.lock.Unlock()
-
 		case <-s.done:
 			s.Logger.Debug().Logf("Stopping StressRelief system")
 			return nil
@@ -341,7 +326,7 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 	// we need to calculate the stress level from the levels we've been given
 	// and then publish it to the cluster
 	report := stressReport{
-		key:       s.identification,
+		key:       s.Peer.HostID(),
 		level:     level,
 		timestamp: s.Clock.Now(),
 	}
@@ -349,7 +334,7 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.stressLevels[s.identification] = report
+	s.stressLevels[report.key] = report
 	var total float64
 	availablePeers := 0
 	for _, report := range s.stressLevels {
@@ -373,28 +358,23 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 	return uint(math.Sqrt(total / float64(availablePeers)))
 }
 
-// stressLevelMessage is used to communicate stress levels between refinery instances
-// it contains the stress level and the id of the instance that reported it.
-type stressLevelMessage struct {
-	level uint
-	id    string
+func peerMessageToBytes(level uint) []byte {
+	return []byte(peerMessagePrefix + "/" + strconv.Itoa(int(level)))
 }
 
-func (s *stressLevelMessage) ToBytes() []byte {
-	return []byte(fmt.Sprintf("%s/%d", s.id, s.level))
-}
-
-func newMessageFromBytes(b []byte) (stressLevelMessage, error) {
+func newMessageFromBytes(b []byte) (uint, error) {
 	parts := bytes.SplitN(b, []byte("/"), 2)
 	if len(parts) != 2 {
-		return stressLevelMessage{}, fmt.Errorf("invalid message format: %s", b)
+		return 0, fmt.Errorf("invalid message format: %s", b)
 	}
+
+	if string(parts[0]) != peerMessagePrefix {
+		return 0, errors.New("invalid message type")
+	}
+
 	level, err := strconv.Atoi(string(parts[1]))
 	if err != nil {
-		return stressLevelMessage{}, fmt.Errorf("invalid level: %s", parts[1])
+		return 0, fmt.Errorf("invalid level: %s", parts[1])
 	}
-	return stressLevelMessage{
-		id:    string(parts[0]),
-		level: uint(level),
-	}, nil
+	return uint(level), nil
 }

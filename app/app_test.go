@@ -33,6 +33,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -183,6 +184,7 @@ func newStartedApp(
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &health.Health{}},
 		&inject.Object{Value: &stressRelief.StressRelief{}, Name: "stressRelief"},
+		&inject.Object{Value: &peer.PeerStore{}},
 		&inject.Object{Value: &a},
 	)
 	require.NoError(t, err)

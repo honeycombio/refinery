@@ -24,6 +24,9 @@ var _ Gossiper = &InMemoryGossip{}
 
 func (g *InMemoryGossip) Publish(channel Channel, value []byte) error {
 	msg := NewMessage(channel, value)
+	if len(msg) == 0 {
+		return errors.New("empty message")
+	}
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
@@ -59,6 +62,7 @@ func (g *InMemoryGossip) Start() error {
 			select {
 			case <-g.done:
 				return nil
+
 			case value := <-g.gossipCh:
 				msg := Message(value)
 				g.mut.RLock()

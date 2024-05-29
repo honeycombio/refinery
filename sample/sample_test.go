@@ -7,9 +7,12 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/gossip"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -74,7 +77,9 @@ func TestDependencyInjection(t *testing.T) {
 	var g inject.Graph
 	err := g.Provide(
 		&inject.Object{Value: &SamplerFactory{}},
-
+		&inject.Object{Value: clockwork.NewRealClock()},
+		&inject.Object{Value: &gossip.InMemoryGossip{}, Name: "gossip"},
+		&inject.Object{Value: &peer.PeerStore{}},
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
@@ -106,7 +111,6 @@ func TestDatasetPrefix(t *testing.T) {
 }
 
 func TestTotalThroughputClusterSize(t *testing.T) {
-	t.Skip()
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
 	)
@@ -124,10 +128,10 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 
 	factory := SamplerFactory{
 		Config:  c,
+		Peer:    &peer.MockPeerStore{PeerCount: 2},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
 	}
-	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
@@ -137,7 +141,6 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 }
 
 func TestEMAThroughputClusterSize(t *testing.T) {
-	t.Skip()
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
 	)
@@ -155,10 +158,10 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 
 	factory := SamplerFactory{
 		Config:  c,
+		Peer:    &peer.MockPeerStore{PeerCount: 2},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
 	}
-	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
@@ -168,7 +171,6 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 }
 
 func TestWindowedThroughputClusterSize(t *testing.T) {
-	t.Skip()
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
 	)
@@ -186,10 +188,10 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 
 	factory := SamplerFactory{
 		Config:  c,
+		Peer:    &peer.MockPeerStore{PeerCount: 2},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
 	}
-	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)

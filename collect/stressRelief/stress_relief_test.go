@@ -10,6 +10,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -21,7 +22,7 @@ import (
 // for a given metrics data.
 func TestStressRelief_Monitor(t *testing.T) {
 	clock := clockwork.NewFakeClock()
-	sr, stop := newStressRelief(t, clock)
+	sr, stop := newStressRelief(t, clock, nil)
 	defer stop()
 	require.NoError(t, sr.Start())
 	defer sr.Stop()
@@ -70,7 +71,9 @@ func TestStressRelief_Monitor(t *testing.T) {
 // based on the stress level of a peer.
 func TestStressRelief_Peer(t *testing.T) {
 	clock := clockwork.NewFakeClock()
-	sr, stop := newStressRelief(t, clock)
+	channel := &gossip.InMemoryGossip{}
+
+	sr, stop := newStressRelief(t, clock, channel)
 	defer stop()
 	require.NoError(t, sr.Start())
 	defer sr.Stop()
@@ -101,13 +104,22 @@ func TestStressRelief_Peer(t *testing.T) {
 
 	// when a peer just started up, it should not affect the stress level of the
 	// cluster overall stress level
+	peer2 := &peer.MockPeerStore{
+		Identification: "peer2",
+		PeerStore: peer.PeerStore{
+			Gossip: channel,
+			Clock:  clock,
+		},
+	}
+	peer2.Start()
+	defer peer2.Stop()
+
 	require.Eventually(t, func() bool {
 		// pretend another refinery just started up
-		msg := stressLevelMessage{
-			level: 0,
-			id:    "peer",
+		msg := peer.PeerInfo{
+			Data: peerMessageToBytes(0),
 		}
-		require.NoError(t, sr.Gossip.Publish(sr.Gossip.GetChannel(gossip.ChannelStress), msg.ToBytes()))
+		require.NoError(t, peer2.PublishPeerInfo(msg))
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
@@ -115,11 +127,10 @@ func TestStressRelief_Peer(t *testing.T) {
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
 	require.Eventually(t, func() bool {
-		msg := stressLevelMessage{
-			level: 5,
-			id:    "peer",
+		msg := peer.PeerInfo{
+			Data: peerMessageToBytes(5),
 		}
-		require.NoError(t, sr.Gossip.Publish(sr.Gossip.GetChannel(gossip.ChannelStress), msg.ToBytes()))
+		require.NoError(t, peer2.PublishPeerInfo(msg))
 
 		clock.Advance(time.Second * 1)
 		return !sr.Stressed()
@@ -168,7 +179,7 @@ func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
 	require.False(t, sr.ShouldSampleDeterministically(droppedTraceID))
 }
 
-func newStressRelief(t *testing.T, clock clockwork.Clock) (*StressRelief, func()) {
+func newStressRelief(t *testing.T, clock clockwork.Clock, channel gossip.Gossiper) (*StressRelief, func()) {
 	// Create a new StressRelief object
 	metric := &metrics.MockMetrics{}
 	metric.Start()
@@ -183,29 +194,37 @@ func newStressRelief(t *testing.T, clock clockwork.Clock) (*StressRelief, func()
 		},
 		Metrics: metric,
 	}
+	require.NoError(t, db.Start())
+
 	healthCheck := &health.Health{
 		Clock: clock,
 	}
 	require.NoError(t, healthCheck.Start())
-	channel := &gossip.GossipRedis{
-		Redis:  db,
-		Health: healthCheck,
+	if channel == nil {
+		channel = &gossip.GossipRedis{
+			Redis:  db,
+			Health: healthCheck,
+		}
 	}
+	peers := &peer.PeerStore{
+		Gossip: channel,
+		Clock:  clock,
+	}
+	require.NoError(t, channel.Start())
+	require.NoError(t, peers.Start())
 	sr := &StressRelief{
-		Gossip:          channel,
+		Peer:            peers,
 		Clock:           clock,
 		Logger:          &logger.NullLogger{},
 		RefineryMetrics: metric,
 		Health:          healthCheck,
 	}
 
-	require.NoError(t, db.Start())
-	require.NoError(t, channel.Start())
-
 	return sr, func() {
+		require.NoError(t, peers.Stop())
 		require.NoError(t, channel.Stop())
 		require.NoError(t, db.Stop())
-		require.NoError(t, healthCheck.Stop())
 		require.NoError(t, metric.Stop())
+		require.NoError(t, healthCheck.Stop())
 	}
 }

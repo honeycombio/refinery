@@ -50,9 +50,9 @@ func (g *GossipRedis) Start() error {
 	// This are all to avoid collisions with the ASCII values of the known channels and make it possible
 	// for tests to run in parallel.
 	g.channels = map[string]Channel{
-		ChannelKeep:   'k',
-		ChannelDrop:   'd',
-		ChannelStress: 's',
+		ChannelKeep: 'k',
+		ChannelDrop: 'd',
+		ChannelPeer: 'p',
 	}
 
 	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*2)
@@ -116,6 +116,11 @@ func (g *GossipRedis) Subscribe(channel Channel, depth int) chan []byte {
 
 // Publish sends a message to all subscribers of a given channel.
 func (g *GossipRedis) Publish(channel Channel, value []byte) error {
+	msg := NewMessage(channel, value)
+	if len(msg) == 0 {
+		return errors.New("empty message")
+	}
+
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
@@ -124,8 +129,6 @@ func (g *GossipRedis) Publish(channel Channel, value []byte) error {
 
 	conn := g.Redis.GetPubSubConn()
 	defer conn.Close()
-
-	msg := NewMessage(channel, value)
 
 	return conn.Publish("refinery-gossip", msg.Bytes())
 }
