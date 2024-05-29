@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/facebookgo/startstop"
@@ -25,8 +26,9 @@ type GossipRedis struct {
 	Health health.Recorder `inject:""`
 	eg     *errgroup.Group
 
+	subscriptions map[Channel][]chan []byte
+	channels      map[string]Channel
 	lock          sync.RWMutex
-	subscriptions map[string][]chan []byte
 	done          chan struct{}
 
 	startstop.Stopper
@@ -39,7 +41,19 @@ type GossipRedis struct {
 func (g *GossipRedis) Start() error {
 	g.eg = &errgroup.Group{}
 	g.done = make(chan struct{})
-	g.subscriptions = make(map[string][]chan []byte)
+	g.subscriptions = make(map[Channel][]chan []byte)
+	// these are constant strings to make sure that everyone is using the same channel numbers
+	// for the same channel names, with a fallback to support testing.
+	// channels whose name starts with "test" will be assigned a channel ID based on the 5th character
+	// of the name.
+	// Any other channel name is invalid and will panic.
+	// This are all to avoid collisions with the ASCII values of the known channels and make it possible
+	// for tests to run in parallel.
+	g.channels = map[string]Channel{
+		ChannelKeep: 'k',
+		ChannelDrop: 'd',
+		ChannelPeer: 'p',
+	}
 
 	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*2)
 
@@ -49,29 +63,26 @@ func (g *GossipRedis) Start() error {
 			case <-g.done:
 				return nil
 			default:
-				err := g.Redis.ListenPubSubChannels(nil, func(channel string, b []byte) {
+				err := g.Redis.ListenPubSubChannels(nil, func(_ string, b []byte) {
 					g.Health.Ready(gossipRedisHealth, true)
 
-					msg := newMessageFromBytes(b)
+					msg := Message(b)
 					g.lock.RLock()
-					chans := g.subscriptions[msg.key]
+					chans := g.subscriptions[msg.Channel()][:] // copy the slice to avoid holding the lock while sending
 					g.lock.RUnlock()
-					// we never block on sending to a subscriber; if it's full, we drop the message
-					for _, ch := range chans {
-						select {
-						case ch <- msg.data:
-						default:
-							g.Logger.Warn().WithFields(map[string]interface{}{
-								"channel": msg.key,
-								"msg":     string(msg.data),
-							}).Logf("Unable to forward message")
-						}
+					// now start goroutines to send the message to all subscribers in parallel
+					// we don't want to block the Redis listener or other subscribers
+					for i := range chans {
+						ch := chans[i]
+						g.eg.Go(func() error {
+							ch <- msg.Data()
+							return nil
+						})
 					}
 				}, g.onHealthCheck, g.done, "refinery-gossip")
 				if err != nil {
 					g.Logger.Warn().Logf("Error listening to refinery-gossip channel: %v", err)
 				}
-
 			}
 		}
 
@@ -88,7 +99,7 @@ func (g *GossipRedis) Stop() error {
 
 // Subscribe returns a channel that will receive messages from the Gossip channel.
 // The channel has a buffer of depth; if the buffer is full, messages will be dropped.
-func (g *GossipRedis) Subscribe(channel string, depth int) chan []byte {
+func (g *GossipRedis) Subscribe(channel Channel, depth int) chan []byte {
 	select {
 	case <-g.done:
 		return nil
@@ -104,7 +115,7 @@ func (g *GossipRedis) Subscribe(channel string, depth int) chan []byte {
 }
 
 // Publish sends a message to all subscribers of a given channel.
-func (g *GossipRedis) Publish(channel string, value []byte) error {
+func (g *GossipRedis) Publish(channel Channel, value []byte) error {
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
@@ -114,12 +125,28 @@ func (g *GossipRedis) Publish(channel string, value []byte) error {
 	conn := g.Redis.GetPubSubConn()
 	defer conn.Close()
 
-	msg := message{
-		key:  channel,
-		data: value,
+	msg := NewMessage(channel, value)
+
+	return conn.Publish("refinery-gossip", msg.Bytes())
+}
+
+func (g *GossipRedis) GetChannel(name string) Channel {
+	g.lock.Lock()
+	defer g.lock.Unlock()
+	if ch, ok := g.channels[name]; ok {
+		return ch
 	}
 
-	return conn.Publish("refinery-gossip", msg.ToBytes())
+	var ch Channel
+	if strings.HasPrefix(name, "test") {
+		ch = Channel(name[4]) // yes, this will panic if you don't specify a 5th character
+	} else {
+		panic("unknown channel name!") // this is a programming error, not a runtime error
+	}
+
+	g.Logger.Warn().Logf("Creating test gossip channel %s with value %c.", name, ch)
+	g.channels[name] = ch
+	return ch
 }
 
 func (g *GossipRedis) onHealthCheck(data string) {

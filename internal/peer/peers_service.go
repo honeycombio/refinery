@@ -32,7 +32,7 @@ func (p PeerInfo) ID() string {
 	return p.id
 }
 
-func (p PeerInfo) ToBytes() []byte {
+func (p PeerInfo) Bytes() []byte {
 	return append([]byte(p.id+"/"), p.Data...)
 }
 

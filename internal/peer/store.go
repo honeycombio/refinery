@@ -2,7 +2,6 @@ package peer
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -52,7 +51,7 @@ type PeerStore struct {
 
 func (p *PeerStore) Start() error {
 	p.identification = p.HostID()
-	p.peerChan = p.Gossip.Subscribe("peer-info", defaultPeerInfoChannelSize)
+	p.peerChan = p.Gossip.Subscribe(p.Gossip.GetChannel(gossip.ChannelPeer), defaultPeerInfoChannelSize)
 	p.publishChan = make(chan PeerInfo, defaultPeerInfoChannelSize)
 	p.done = make(chan struct{})
 	p.peers = make(map[string]time.Time)
@@ -69,7 +68,6 @@ func (p *PeerStore) Start() error {
 
 func (p *PeerStore) Stop() error {
 	close(p.done)
-	fmt.Println("closing peer store")
 	close(p.publishChan)
 	p.wg.Wait()
 	return nil
@@ -143,6 +141,7 @@ func (p *PeerStore) publish() {
 
 	tk := p.Clock.NewTicker(keepAliveInterval)
 	defer tk.Stop()
+	peerChan := p.Gossip.GetChannel(gossip.ChannelPeer)
 
 	for {
 		var msg PeerInfo
@@ -156,7 +155,7 @@ func (p *PeerStore) publish() {
 			msg = PeerInfo{id: p.identification}
 		}
 
-		if err := p.Gossip.Publish("peer-info", msg.ToBytes()); err != nil {
+		if err := p.Gossip.Publish(peerChan, msg.Bytes()); err != nil {
 			logrus.WithError(err).Error("failed to publish peer info")
 		}
 	}

@@ -108,8 +108,6 @@ const (
 	receiverHealth = "receiver"
 	deciderHealth  = "decider"
 	senderHealth   = "sender"
-	gossip_keep    = "keep"
-	gossip_drop    = "drop"
 )
 
 func (c *CentralCollector) Start() error {
@@ -218,8 +216,8 @@ func (c *CentralCollector) Start() error {
 	c.egAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
-	c.keepChan = c.Gossip.Subscribe(gossip_keep, maxCount)
-	c.dropChan = c.Gossip.Subscribe(gossip_drop, maxCount)
+	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelKeep), maxCount)
+	c.dropChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelDrop), maxCount)
 
 	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
 	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
@@ -379,7 +377,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		status.State = centralstore.DecisionDrop
 	}
 
-	err := c.Store.RecordTraceDecision(ctx, status, keep, reason)
+	err := c.Store.RecordTraceDecision(ctx, status)
 	if err != nil {
 		span.RecordError(err)
 		return true, err
@@ -794,6 +792,10 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 
 	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
 	defer spanTraces.End()
+
+	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
+	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
+
 	for _, trace := range traces {
 		if trace == nil {
 			continue
@@ -885,10 +887,10 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		if shouldSend {
 			state = centralstore.DecisionKeep
 			status.KeepReason = reason
-			c.Gossip.Publish(gossip_keep, []byte(trace.TraceID))
+			c.Gossip.Publish(gossip_keep_channel, []byte(trace.TraceID))
 		} else {
 			state = centralstore.DecisionDrop
-			c.Gossip.Publish(gossip_drop, []byte(trace.TraceID))
+			c.Gossip.Publish(gossip_drop_channel, []byte(trace.TraceID))
 		}
 		status.State = state
 		status.Rate = rate
