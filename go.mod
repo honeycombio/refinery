@@ -10,6 +10,7 @@ require (
 	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371
 	github.com/facebookgo/inject v0.0.0-20180706035515-f23751cae28b
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
+	github.com/golang/snappy v0.0.4
 	github.com/gomodule/redigo v1.9.2
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.7

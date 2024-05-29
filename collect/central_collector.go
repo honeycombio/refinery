@@ -1,7 +1,9 @@
 package collect
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/collect/stressRelief"
@@ -562,11 +565,16 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			// wait for any goroutines to end before returning
 			c.egAgg.Wait()
 			return
-		case traceIDbytes := <-ch:
-			traceID := string(traceIDbytes)
+		case msgBytes := <-ch:
+			// unmarshal the message into a slice of trace IDs
+			msgIDs, err := decompress(msgBytes)
+			if err != nil {
+				c.Logger.Error().Logf("error decompressing trace IDs: %s", err)
+				continue
+			}
 			// if we get a trace ID, add it to the list
-			traceIDs = append(traceIDs, traceID)
-			// if we reached the max count, we need to send
+			traceIDs = append(traceIDs, msgIDs...)
+			// if we exceeded the max count, we need to send
 			if len(traceIDs) >= maxCount {
 				send = true
 			}
@@ -722,6 +730,30 @@ func (c *CentralCollector) decide() error {
 	})
 }
 
+func compress(traceIDs []string) ([]byte, error) {
+	var buf bytes.Buffer
+	compr := snappy.NewBufferedWriter(&buf)
+	enc := gob.NewEncoder(compr)
+	err := enc.Encode(traceIDs)
+	if err != nil {
+		return nil, err
+	}
+	compr.Close()
+	return buf.Bytes(), nil
+}
+
+func decompress(data []byte) ([]string, error) {
+	buf := bytes.NewBuffer(data)
+	compr := snappy.NewReader(buf)
+	dec := gob.NewDecoder(compr)
+	var traceIDs []string
+	err := dec.Decode(&traceIDs)
+	if err != nil {
+		return nil, err
+	}
+	return traceIDs, nil
+}
+
 func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 	ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.makeDecision")
 	defer span.End()
@@ -796,6 +828,8 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 
 	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
 	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
+	keptIDs := make([]string, 0)
+	droppedIDs := make([]string, 0)
 
 	for _, trace := range traces {
 		if trace == nil {
@@ -888,16 +922,36 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		if shouldSend {
 			state = centralstore.DecisionKeep
 			status.KeepReason = reason
-			c.Gossip.Publish(gossip_keep_channel, []byte(trace.TraceID))
+			keptIDs = append(keptIDs, trace.TraceID)
+			// c.Gossip.Publish(gossip_keep_channel, []byte(trace.TraceID))
 		} else {
 			state = centralstore.DecisionDrop
-			c.Gossip.Publish(gossip_drop_channel, []byte(trace.TraceID))
+			droppedIDs = append(droppedIDs, trace.TraceID)
+			// c.Gossip.Publish(gossip_drop_channel, []byte(trace.TraceID))
 		}
 		status.State = state
 		status.Rate = rate
 		stateMap[status.TraceID] = status
 		c.Metrics.Increment("collector_decide_trace")
 		span.End()
+	}
+
+	if len(keptIDs) > 0 {
+		data, err := compress(keptIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing kept trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_keep_channel, data)
+		}
+	}
+
+	if len(droppedIDs) > 0 {
+		data, err := compress(droppedIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing dropped trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_drop_channel, data)
+		}
 	}
 
 	updatedStatuses := make([]*centralstore.CentralTraceStatus, 0, len(stateMap))

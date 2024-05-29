@@ -1527,11 +1527,11 @@ func Test_aggregate(t *testing.T) {
 	}()
 
 	// 4 items should go through in the first group
-	for i := 0; i < 4; i++ {
-		ch <- []byte(fmt.Sprintf("item%d", i))
-		fakeClock.Sleep(2 * time.Millisecond)
-	}
-	fakeClock.Sleep(17 * time.Millisecond)
+	traceIDs := []string{"item1", "item2", "item3", "item4"}
+	data, err := compress(traceIDs)
+	require.NoError(t, err)
+	ch <- data
+	fakeClock.Sleep(25 * time.Millisecond)
 	select {
 	case result := <-resultch:
 		require.Equal(t, 4, len(result))
@@ -1539,9 +1539,10 @@ func Test_aggregate(t *testing.T) {
 		t.Fatal("expected result")
 	}
 
-	// 10 items should go through
+	// 10 items should go through one at a time
 	for i := 0; i < 12; i++ {
-		ch <- []byte(fmt.Sprintf("item%d", i))
+		data, _ := compress([]string{fmt.Sprintf("item%d", i)})
+		ch <- data
 		fakeClock.Sleep(1 * time.Millisecond)
 	}
 	fakeClock.Sleep(20 * time.Millisecond)
@@ -1566,4 +1567,40 @@ func Test_aggregate(t *testing.T) {
 	wg.Wait()
 
 	require.True(t, true)
+}
+
+func TestCompressRoundTrip(t *testing.T) {
+	t.Parallel()
+	// create a random payload
+	payload := make([]string, 1000)
+	for i := range payload {
+		payload[i] = fmt.Sprintf("%032x%032x", rand.Int63(), rand.Int63())
+	}
+
+	// compress it
+	compressed, err := compress(payload)
+	require.NoError(t, err)
+
+	// decompress it
+	decompressed, err := decompress(compressed)
+	require.NoError(t, err)
+
+	// check that the decompressed payload is the same as the original
+	require.Equal(t, payload, decompressed)
+}
+
+func BenchmarkCompressRoundTrip(b *testing.B) {
+	// create a random payload
+	payload := make([]string, 100)
+	for i := range payload {
+		payload[i] = fmt.Sprintf("%032x%032x", rand.Int63(), rand.Int63())
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// compress it
+		compressed, _ := compress(payload)
+		// decompress it
+		decompress(compressed)
+	}
 }
