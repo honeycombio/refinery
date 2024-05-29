@@ -21,7 +21,10 @@ import (
 
 var _ StressReliever = &StressRelief{}
 
-const stressReliefHealthSource = "stress_relief"
+const (
+	stressReliefHealthSource = "stress_relief"
+	peerMessagePrefix        = "sr"
+)
 
 var calculationInterval = 100 * time.Millisecond
 
@@ -356,7 +359,7 @@ func (s *StressRelief) clusterStressLevel(level uint) uint {
 }
 
 func peerMessageToBytes(level uint) []byte {
-	return []byte(fmt.Sprintf("stress_level/%d", level))
+	return []byte(peerMessagePrefix + "/" + strconv.Itoa(int(level)))
 }
 
 func newMessageFromBytes(b []byte) (uint, error) {
@@ -365,7 +368,7 @@ func newMessageFromBytes(b []byte) (uint, error) {
 		return 0, fmt.Errorf("invalid message format: %s", b)
 	}
 
-	if string(parts[0]) != "stress_level" {
+	if string(parts[0]) != peerMessagePrefix {
 		return 0, errors.New("invalid message type")
 	}
 
