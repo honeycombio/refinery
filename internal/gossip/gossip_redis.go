@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/facebookgo/startstop"
@@ -43,17 +44,15 @@ func (g *GossipRedis) Start() error {
 	g.subscriptions = make(map[Channel][]chan []byte)
 	// these are constant strings to make sure that everyone is using the same channel numbers
 	// for the same channel names, with a fallback to support testing.
-	// All unknown channels are assigned a new channel ID of an uppercase letter, starting
-	// with 'A'. This is to avoid collisions with the ASCII values of the known channels.
-	// This is mainly for testing; if you're using a channel that isn't in the list, you should
-	// add it to the list because it's not guaranteed that you'll get the same channel on
-	// multiple machines.
+	// channels whose name starts with "test" will be assigned a channel ID based on the 5th character
+	// of the name.
+	// Any other channel name is invalid and will panic.
+	// This are all to avoid collisions with the ASCII values of the known channels and make it possible
+	// for tests to run in parallel.
 	g.channels = map[string]Channel{
 		ChannelKeep:   'k',
 		ChannelDrop:   'd',
 		ChannelStress: 's',
-		ChannelTest1:  '1',
-		ChannelTest2:  '2',
 	}
 
 	g.Health.Register(gossipRedisHealth, redis.HealthCheckPeriod*2)
@@ -137,14 +136,15 @@ func (g *GossipRedis) GetChannel(name string) Channel {
 	if ch, ok := g.channels[name]; ok {
 		return ch
 	}
-	ch := Channel('A')
-	for _, v := range g.channels {
-		if v == ch {
-			ch++
-		}
+
+	var ch Channel
+	if strings.HasPrefix(name, "test") {
+		ch = Channel(name[4]) // yes, this will panic if you don't specify a 5th character
+	} else {
+		panic("unknown channel name!") // this is a programming error, not a runtime error
 	}
 
-	g.Logger.Warn().Logf("Creating new gossip channel %s with value %c.", name, ch)
+	g.Logger.Warn().Logf("Creating test gossip channel %s with value %c.", name, ch)
 	g.channels[name] = ch
 	return ch
 }

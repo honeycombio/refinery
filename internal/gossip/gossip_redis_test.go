@@ -40,11 +40,12 @@ func TestRoundTripChanRedis(t *testing.T) {
 	}
 
 	require.NoError(t, g.Start())
-	test1Name := "test1" + time.Now().String()
-	test2Name := "test2" + time.Now().String()
+	// these channel names should not be duplicated in any other test
+	test1Name := "testA"
+	test2Name := "testB"
 	chTest1 := g.GetChannel(test1Name)
 	chTest2 := g.GetChannel(test2Name)
-	chJunk := g.GetChannel("junk")
+	chJunk := g.GetChannel("testJ")
 
 	ch := g.Subscribe(chTest1, 10)
 	require.NotNil(t, ch)
@@ -93,7 +94,7 @@ func TestRoundTripChanInMem(t *testing.T) {
 
 	require.NoError(t, g.Start())
 
-	chTest := g.GetChannel("test")
+	chTest := g.GetChannel("test1")
 	chTest2 := g.GetChannel("test2")
 
 	ch := g.Subscribe(chTest, 10)
