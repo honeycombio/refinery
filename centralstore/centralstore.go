@@ -24,6 +24,15 @@ type CentralSpan struct {
 	IsRoot          bool
 }
 
+// Trace returns the trace ID of the span.
+func (s *CentralSpan) Trace() string {
+	return s.TraceID
+}
+
+func (s *CentralSpan) SpanType() types.SpanType {
+	return s.Type
+}
+
 func (s *CentralSpan) Fields() map[string]interface{} {
 	if s.KeyFields == nil {
 		return s.AllFields
@@ -37,6 +46,10 @@ func (s *CentralSpan) SetSamplerSelector(key string) {
 }
 
 type CentralTraceState string
+
+// AllTraceStates is a list of all possible trace states.
+var AllTraceStates = []CentralTraceState{DecisionKeep, DecisionDrop, Unknown, Collecting,
+	DecisionDelay, ReadyToDecide, AwaitingDecision}
 
 const (
 	Unknown          CentralTraceState = "unknown"

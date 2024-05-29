@@ -674,7 +674,7 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.AllTraceStates...)
 	if err != nil {
 		span.RecordError(err)
 		c.Logger.Error().Logf("error getting status for traces in cleanupTraces: %s", err)
@@ -699,6 +699,7 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 			// but let's record that we did.
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
+			c.Logger.Info().WithField("trace_id", status.TraceID).Logf("dropping old trace")
 			c.Metrics.Increment("collector_drop_old_trace")
 			continue
 		}
