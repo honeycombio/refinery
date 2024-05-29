@@ -221,10 +221,10 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel gossip.Gossipe
 	}
 
 	return sr, func() {
+		require.NoError(t, peers.Stop())
 		require.NoError(t, channel.Stop())
 		require.NoError(t, db.Stop())
-		require.NoError(t, healthCheck.Stop())
 		require.NoError(t, metric.Stop())
-		require.NoError(t, peers.Stop())
+		require.NoError(t, healthCheck.Stop())
 	}
 }
