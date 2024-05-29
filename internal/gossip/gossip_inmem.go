@@ -24,9 +24,6 @@ var _ Gossiper = &InMemoryGossip{}
 
 func (g *InMemoryGossip) Publish(channel Channel, value []byte) error {
 	msg := NewMessage(channel, value)
-	if len(msg) == 0 {
-		return errors.New("empty message")
-	}
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
@@ -63,7 +60,10 @@ func (g *InMemoryGossip) Start() error {
 			case <-g.done:
 				return nil
 
-			case value := <-g.gossipCh:
+			case value, ok := <-g.gossipCh:
+				if !ok {
+					return nil
+				}
 				msg := Message(value)
 				g.mut.RLock()
 				chans := g.subscriptions[msg.Channel()][:] // copy the slice to avoid holding the lock while sending

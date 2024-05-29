@@ -116,16 +116,13 @@ func (g *GossipRedis) Subscribe(channel Channel, depth int) chan []byte {
 
 // Publish sends a message to all subscribers of a given channel.
 func (g *GossipRedis) Publish(channel Channel, value []byte) error {
-	msg := NewMessage(channel, value)
-	if len(msg) == 0 {
-		return errors.New("empty message")
-	}
-
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
 	default:
 	}
+
+	msg := NewMessage(channel, value)
 
 	conn := g.Redis.GetPubSubConn()
 	defer conn.Close()
