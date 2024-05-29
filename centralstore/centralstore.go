@@ -24,7 +24,7 @@ type CentralSpan struct {
 	IsRoot          bool
 }
 
-// can you come up with another name for this fucntion?
+// Trace returns the trace ID of the span.
 func (s *CentralSpan) Trace() string {
 	return s.TraceID
 }

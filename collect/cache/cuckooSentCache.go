@@ -42,8 +42,11 @@ type KeptTrace interface {
 	SentReason() uint
 }
 
+// SpanRecorder is an interface for a span that can be recorded in the CuckooSentCache.
 type SpanRecorder interface {
+	// Trace returns the trace ID of the span.
 	Trace() string
+	// SpanType returns the type of the span.
 	SpanType() types.SpanType
 }
 
