@@ -28,8 +28,6 @@ func (g *InMemoryGossip) Publish(channel Channel, value []byte) error {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
 	case g.gossipCh <- msg.Bytes():
-	default:
-		return errors.New("gossip channel is full")
 	}
 	return nil
 }
