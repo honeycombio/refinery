@@ -2,7 +2,6 @@ package gossip
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/honeycombio/refinery/logger"
@@ -25,6 +24,9 @@ var _ Gossiper = &InMemoryGossip{}
 
 func (g *InMemoryGossip) Publish(channel Channel, value []byte) error {
 	msg := NewMessage(channel, value)
+	if len(msg) == 0 {
+		return errors.New("empty message")
+	}
 	select {
 	case <-g.done:
 		return errors.New("gossip has been stopped")
@@ -62,7 +64,6 @@ func (g *InMemoryGossip) Start() error {
 				return nil
 
 			case value := <-g.gossipCh:
-				fmt.Println("value", value)
 				msg := Message(value)
 				g.mut.RLock()
 				chans := g.subscriptions[msg.Channel()][:] // copy the slice to avoid holding the lock while sending
