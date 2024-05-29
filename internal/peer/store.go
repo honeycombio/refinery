@@ -2,6 +2,7 @@ package peer
 
 import (
 	"errors"
+	"maps"
 	"os"
 	"sync"
 	"time"
@@ -101,13 +102,11 @@ func (p *PeerStore) GetPeerCount() int {
 	p.peerLock.Lock()
 	defer p.peerLock.Unlock()
 
-	for id, ts := range p.peers {
-		if p.Clock.Since(ts) > peerEntryTimeout {
-			delete(p.peers, id)
-		}
-	}
+	maps.DeleteFunc(p.peers, func(id string, ts time.Time) bool {
+		return p.Clock.Since(ts) > peerEntryTimeout
+	})
 
-	// If we're the only peer, we should return 1.
+	// If we're the only peer, we won't be in the peer list, so we should return 1.
 	if len(p.peers) == 0 {
 		return 1
 	}
@@ -115,13 +114,15 @@ func (p *PeerStore) GetPeerCount() int {
 	return len(p.peers) + 1
 }
 
+// HostID returns the unique identifier for this host.
+// If the host has a hostname, it will be used as part of the identifier.
+// Otherwise, a UUID will be generated.
 func (p *PeerStore) HostID() string {
 	if p.identification != "" {
 		return p.identification
 	}
 
 	var identification string
-	// We need to identify ourselves to the cluster. We'll use the hostname if we can, but if we can't, we'll use a UUID.
 	hostname, err := os.Hostname()
 	if err == nil && hostname != "" {
 		identification = hostname
@@ -129,6 +130,10 @@ func (p *PeerStore) HostID() string {
 	id, err := uuid.NewV7()
 	if err != nil {
 		panic("failed to generate a UUID for the StressRelief system")
+	}
+
+	if identification == "" {
+		return id.String()
 	}
 
 	return identification + "-" + id.String()
@@ -173,6 +178,8 @@ func (p *PeerStore) watchPeers() {
 				logrus.WithError(err).Error("failed to decode peer info")
 				continue
 			}
+
+			// Ignore our own messages.
 			if info.id == p.identification {
 				continue
 			}
