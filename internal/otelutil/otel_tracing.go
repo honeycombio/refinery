@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 
 	"github.com/honeycombio/otel-config-go/otelconfig"
@@ -14,6 +15,9 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 )
+
+var classicKeyRegex = regexp.MustCompile(`^[a-f0-9]*$`)
+var classicIngestKeyRegex = regexp.MustCompile(`^hc[a-z]ic_[a-z0-9]*$`)
 
 // telemetry helpers
 
@@ -89,6 +93,14 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 
 		var sampleRatio float64 = 1.0 / float64(sampleRate)
 
+		headers := map[string]string{
+			"x-honeycomb-team": cfg.APIKey,
+		}
+
+		if isClassicKey(cfg.APIKey) {
+			headers["x-honeycomb-dataset"] = cfg.Dataset
+		}
+
 		otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
 			otelconfig.WithExporterProtocol(protocol),
 			otelconfig.WithServiceName(cfg.Dataset),
@@ -96,10 +108,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 			otelconfig.WithMetricsEnabled(false),
 			otelconfig.WithTracesEnabled(true),
 			otelconfig.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
-			otelconfig.WithHeaders(map[string]string{
-				"x-honeycomb-team":    cfg.APIKey,
-				"x-honeycomb-dataset": cfg.Dataset,
-			}),
+			otelconfig.WithHeaders(headers),
 		)
 		if err != nil {
 			log.Fatalf("failure configuring otel: %v", err)
@@ -108,4 +117,13 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 	}
 	pr := noop.NewTracerProvider()
 	return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
+}
+
+func isClassicKey(key string) bool {
+	if len(key) == 32 {
+		return classicKeyRegex.MatchString(key)
+	} else if len(key) == 64 {
+		return classicIngestKeyRegex.MatchString(key)
+	}
+	return false
 }
