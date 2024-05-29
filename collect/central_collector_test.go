@@ -1540,10 +1540,10 @@ func Test_aggregate(t *testing.T) {
 	}
 
 	// 10 items should go through one at a time
-	for i := 0; i < 12; i++ {
-		data, _ := compress([]string{fmt.Sprintf("item%d", i)})
+	for i := 0; i < 6; i++ {
+		data, _ := compress([]string{fmt.Sprintf("item%d", i), fmt.Sprintf("trace%d", i)})
 		ch <- data
-		fakeClock.Sleep(1 * time.Millisecond)
+		fakeClock.Sleep(2 * time.Millisecond)
 	}
 	fakeClock.Sleep(20 * time.Millisecond)
 	select {
