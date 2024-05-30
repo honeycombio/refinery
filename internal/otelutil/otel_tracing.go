@@ -8,6 +8,7 @@ import (
 
 	"github.com/honeycombio/otel-config-go/otelconfig"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	samplers "go.opentelemetry.io/otel/sdk/trace"
@@ -89,6 +90,14 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 
 		var sampleRatio float64 = 1.0 / float64(sampleRate)
 
+		headers := map[string]string{
+			types.APIKeyHeader: cfg.APIKey,
+		}
+
+		if types.IsLegacyAPIKey(cfg.APIKey) {
+			headers[types.DatasetHeader] = cfg.Dataset
+		}
+
 		otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
 			otelconfig.WithExporterProtocol(protocol),
 			otelconfig.WithServiceName(cfg.Dataset),
@@ -96,9 +105,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 			otelconfig.WithMetricsEnabled(false),
 			otelconfig.WithTracesEnabled(true),
 			otelconfig.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
-			otelconfig.WithHeaders(map[string]string{
-				"x-honeycomb-team": cfg.APIKey,
-			}),
+			otelconfig.WithHeaders(headers),
 		)
 		if err != nil {
 			log.Fatalf("failure configuring otel: %v", err)

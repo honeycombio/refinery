@@ -7,10 +7,10 @@ toolchain go1.21.8
 require (
 	github.com/agnivade/levenshtein v1.1.1
 	github.com/creasty/defaults v1.7.0
-	github.com/davecgh/go-spew v1.1.1
 	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371
 	github.com/facebookgo/inject v0.0.0-20180706035515-f23751cae28b
 	github.com/facebookgo/startstop v0.0.0-20161013234910-bc158412526d
+	github.com/golang/snappy v0.0.4
 	github.com/gomodule/redigo v1.9.2
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.7
@@ -24,7 +24,6 @@ require (
 	github.com/klauspost/compress v1.17.8
 	github.com/panmari/cuckoofilter v1.0.3
 	github.com/pelletier/go-toml/v2 v2.2.2
-	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.0
 	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
 	github.com/sirupsen/logrus v1.9.3
@@ -47,6 +46,7 @@ require (
 
 require (
 	github.com/alicebob/gopher-json v0.0.0-20230218143504-906a9b012302 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20240408141607-282e7b5d6b74 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect

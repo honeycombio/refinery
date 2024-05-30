@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -31,26 +32,21 @@ type ClusterSizer interface {
 
 // SamplerFactory is used to create new samplers with common (injected) resources
 type SamplerFactory struct {
-	Config    config.Config   `inject:""`
-	Logger    logger.Logger   `inject:""`
-	Metrics   metrics.Metrics `inject:"genericMetrics"`
-	peerCount int
-	samplers  []Sampler
+	Config   config.Config   `inject:""`
+	Logger   logger.Logger   `inject:""`
+	Metrics  metrics.Metrics `inject:"genericMetrics"`
+	Peer     peer.Peers      `inject:""`
+	samplers []Sampler
 }
 
 func (s *SamplerFactory) updatePeerCounts() {
 	// all the samplers who want it should use the stored count
 	for _, sampler := range s.samplers {
 		if clusterSizer, ok := sampler.(ClusterSizer); ok {
-			clusterSizer.SetClusterSize(s.peerCount)
+			peerCount := s.Peer.GetPeerCount()
+			clusterSizer.SetClusterSize(peerCount)
 		}
 	}
-}
-
-func (s *SamplerFactory) Start() error {
-	s.peerCount = 1
-	// TODO: register updatePeerCounts to be called whenever the peer count changes
-	return nil
 }
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given

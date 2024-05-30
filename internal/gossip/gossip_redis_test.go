@@ -40,22 +40,35 @@ func TestRoundTripChanRedis(t *testing.T) {
 	}
 
 	require.NoError(t, g.Start())
+	// these channel names should not be duplicated in any other test
+	test1Name := "testA"
+	test2Name := "testB"
+	chTest1 := g.GetChannel(test1Name)
+	chTest2 := g.GetChannel(test2Name)
+	chJunk := g.GetChannel("testJ")
 
-	ch := g.Subscribe("test", 10)
+	ch := g.Subscribe(chTest1, 10)
 	require.NotNil(t, ch)
 
-	ch2 := g.Subscribe("test2", 10)
+	ch2 := g.Subscribe(chTest2, 10)
 	require.NotNil(t, ch2)
 
-	// This test is flaky unless we throw away the first message
-	g.Publish("throwaway", []byte("nevermind"))
+	// deflaking -- pause to give subscriptions time to be set up
+	time.Sleep(100 * time.Millisecond)
+	// publish a junk message to get health check running
+	require.NoError(t, g.Publish(chJunk, []byte("nevermind")))
 
-	// Test that we can publish a message
-	require.NoError(t, g.Publish("test", []byte("hi")))
-	require.NoError(t, g.Publish("test2", []byte("bye")))
+	// deflaking -- pause to give subscriptions time to be set up
+	// don't continue until we say we're ready
+	assert.Eventually(t, func() bool {
+		return healthCheck.IsReady()
+	}, 5*time.Second, 200*time.Millisecond)
+
+	// Test that we can publish messages
+	require.NoError(t, g.Publish(chTest1, []byte("hi")))
+	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 
 	require.Eventually(t, func() bool {
-		time.Sleep(100 * time.Millisecond)
 		return len(ch) == 1 && len(ch2) == 1
 	}, 5*time.Second, 200*time.Millisecond)
 
@@ -81,15 +94,18 @@ func TestRoundTripChanInMem(t *testing.T) {
 
 	require.NoError(t, g.Start())
 
-	ch := g.Subscribe("test", 10)
+	chTest := g.GetChannel("test1")
+	chTest2 := g.GetChannel("test2")
+
+	ch := g.Subscribe(chTest, 10)
 	require.NotNil(t, ch)
 
-	ch2 := g.Subscribe("test2", 10)
+	ch2 := g.Subscribe(chTest2, 10)
 	require.NotNil(t, ch2)
 
 	// Test that we can publish a message
-	require.NoError(t, g.Publish("test", []byte("hi")))
-	require.NoError(t, g.Publish("test2", []byte("bye")))
+	require.NoError(t, g.Publish(chTest, []byte("hi")))
+	require.NoError(t, g.Publish(chTest2, []byte("bye")))
 
 	assert.Eventually(t, func() bool {
 		time.Sleep(100 * time.Millisecond)

@@ -1,7 +1,9 @@
 package collect
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/collect/stressRelief"
@@ -108,8 +111,6 @@ const (
 	receiverHealth = "receiver"
 	deciderHealth  = "decider"
 	senderHealth   = "sender"
-	gossip_keep    = "keep"
-	gossip_drop    = "drop"
 )
 
 func (c *CentralCollector) Start() error {
@@ -218,8 +219,8 @@ func (c *CentralCollector) Start() error {
 	c.egAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
-	c.keepChan = c.Gossip.Subscribe(gossip_keep, maxCount)
-	c.dropChan = c.Gossip.Subscribe(gossip_drop, maxCount)
+	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelKeep), maxCount)
+	c.dropChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelDrop), maxCount)
 
 	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
 	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
@@ -379,7 +380,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		status.State = centralstore.DecisionDrop
 	}
 
-	err := c.Store.RecordTraceDecision(ctx, status, keep, reason)
+	err := c.Store.RecordTraceDecision(ctx, status)
 	if err != nil {
 		span.RecordError(err)
 		return true, err
@@ -564,11 +565,16 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			// wait for any goroutines to end before returning
 			c.egAgg.Wait()
 			return
-		case traceIDbytes := <-ch:
-			traceID := string(traceIDbytes)
+		case msgBytes := <-ch:
+			// unmarshal the message into a slice of trace IDs
+			msgIDs, err := decompress(msgBytes)
+			if err != nil {
+				c.Logger.Error().Logf("error decompressing trace IDs: %s", err)
+				continue
+			}
 			// if we get a trace ID, add it to the list
-			traceIDs = append(traceIDs, traceID)
-			// if we reached the max count, we need to send
+			traceIDs = append(traceIDs, msgIDs...)
+			// if we exceeded the max count, we need to send
 			if len(traceIDs) >= maxCount {
 				send = true
 			}
@@ -676,7 +682,7 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.AllTraceStates...)
 	if err != nil {
 		span.RecordError(err)
 		c.Logger.Error().Logf("error getting status for traces in cleanupTraces: %s", err)
@@ -701,6 +707,7 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 			// but let's record that we did.
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
+			c.Logger.Info().WithField("trace_id", status.TraceID).Logf("dropping old trace")
 			c.Metrics.Increment("collector_drop_old_trace")
 			continue
 		}
@@ -721,6 +728,30 @@ func (c *CentralCollector) decide() error {
 
 		return nil
 	})
+}
+
+func compress(traceIDs []string) ([]byte, error) {
+	var buf bytes.Buffer
+	compr := snappy.NewBufferedWriter(&buf)
+	enc := gob.NewEncoder(compr)
+	err := enc.Encode(traceIDs)
+	if err != nil {
+		return nil, err
+	}
+	compr.Close()
+	return buf.Bytes(), nil
+}
+
+func decompress(data []byte) ([]string, error) {
+	buf := bytes.NewBuffer(data)
+	compr := snappy.NewReader(buf)
+	dec := gob.NewDecoder(compr)
+	var traceIDs []string
+	err := dec.Decode(&traceIDs)
+	if err != nil {
+		return nil, err
+	}
+	return traceIDs, nil
 }
 
 func (c *CentralCollector) makeDecisions(ctx context.Context) error {
@@ -794,6 +825,12 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 
 	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
 	defer spanTraces.End()
+
+	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
+	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
+	keptIDs := make([]string, 0)
+	droppedIDs := make([]string, 0)
+
 	for _, trace := range traces {
 		if trace == nil {
 			continue
@@ -885,16 +922,36 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		if shouldSend {
 			state = centralstore.DecisionKeep
 			status.KeepReason = reason
-			c.Gossip.Publish(gossip_keep, []byte(trace.TraceID))
+			keptIDs = append(keptIDs, trace.TraceID)
+			// c.Gossip.Publish(gossip_keep_channel, []byte(trace.TraceID))
 		} else {
 			state = centralstore.DecisionDrop
-			c.Gossip.Publish(gossip_drop, []byte(trace.TraceID))
+			droppedIDs = append(droppedIDs, trace.TraceID)
+			// c.Gossip.Publish(gossip_drop_channel, []byte(trace.TraceID))
 		}
 		status.State = state
 		status.Rate = rate
 		stateMap[status.TraceID] = status
 		c.Metrics.Increment("collector_decide_trace")
 		span.End()
+	}
+
+	if len(keptIDs) > 0 {
+		data, err := compress(keptIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing kept trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_keep_channel, data)
+		}
+	}
+
+	if len(droppedIDs) > 0 {
+		data, err := compress(droppedIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing dropped trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_drop_channel, data)
+		}
 	}
 
 	updatedStatuses := make([]*centralstore.CentralTraceStatus, 0, len(stateMap))
