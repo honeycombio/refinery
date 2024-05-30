@@ -117,7 +117,11 @@ func (c *CentralCollector) Start() error {
 
 	// we're a health check reporter so register ourselves for each of our major routines
 	c.Health.Register(receiverHealth, time.Duration(5*collectorCfg.MemoryCycleDuration))
-	c.Health.Register(deciderHealth, 5*collectorCfg.GetDeciderCycleDuration())
+	deciderHealthThreshold := collectorCfg.GetDeciderHealthThreshold()
+	if deciderHealthThreshold == 0 {
+		deciderHealthThreshold = 5 * collectorCfg.GetDeciderCycleDuration()
+	}
+	c.Health.Register(deciderHealth, deciderHealthThreshold)
 
 	// the sender health check should only be run if we're using it
 	if !collectorCfg.UseDecisionGossip {

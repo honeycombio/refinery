@@ -226,6 +226,7 @@ type CollectionConfig struct {
 	CleanupCycleDuration    Duration   `yaml:"CleanupCycleDuration" default:"5s"`
 	DeciderCycleDuration    Duration   `yaml:"DeciderCycleDuration" default:"100ms"`
 	DeciderBatchSize        int        `yaml:"DeciderBatchSize" default:"1000"`
+	DeciderHealthThreshold  Duration   `yaml:"DeciderHealthThreshold" default:"2s"`
 	AvailableMemory         MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage     int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc                MemorySize `yaml:"MaxAlloc"`
@@ -293,6 +294,9 @@ func (c CollectionConfig) GetCleanupCycleDuration() time.Duration {
 
 func (c CollectionConfig) GetDeciderCycleDuration() time.Duration {
 	return time.Duration(c.DeciderCycleDuration)
+}
+func (c CollectionConfig) GetDeciderHealthThreshold() time.Duration {
+	return time.Duration(c.DeciderHealthThreshold)
 }
 
 func (c CollectionConfig) GetDeciderBatchSize() int {
