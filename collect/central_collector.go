@@ -1,18 +1,16 @@
 package collect
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/centralstore"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/collect/stressRelief"
@@ -567,7 +565,7 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			return
 		case msgBytes := <-ch:
 			// unmarshal the message into a slice of trace IDs
-			msgIDs, err := decompress(msgBytes)
+			msgIDs, err := decodeBatch(msgBytes)
 			if err != nil {
 				c.Logger.Error().Logf("error decompressing trace IDs: %s", err)
 				continue
@@ -596,13 +594,16 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 				notready := process(idsToProcess)
 				// put any unused traceIDs back into the channel but do it a bit
 				// slowly (we're still in our goroutine here)
-				for _, id := range notready {
-					select {
-					case ch <- []byte(id):
-						c.Clock.Sleep(1 * time.Millisecond)
-					case <-c.done:
-						return nil
-					}
+				ids, err := encodeBatch(notready)
+				if err != nil {
+					c.Logger.Error().Logf("error compressing trace IDs that are not ready to be processed: %s", err)
+					return nil
+				}
+
+				select {
+				case ch <- ids:
+				case <-c.done:
+					return nil
 				}
 				return nil
 			})
@@ -730,28 +731,23 @@ func (c *CentralCollector) decide() error {
 	})
 }
 
-func compress(traceIDs []string) ([]byte, error) {
-	var buf bytes.Buffer
-	compr := snappy.NewBufferedWriter(&buf)
-	enc := gob.NewEncoder(compr)
-	err := enc.Encode(traceIDs)
-	if err != nil {
-		return nil, err
-	}
-	compr.Close()
-	return buf.Bytes(), nil
+// encodeBatch and decodeBatch are used to serialize and deserialize the trace IDs
+// we tried several different methods of encoding and compression:
+// - encoding/gob alone
+// - encoding/gob + gzip
+// - encoding/gob + snappy
+// - encoding/json
+// - snappy alone
+// Turns out that in the context of Redis gossip and the overhead of gossip itself,
+// the best performance was achieved with just making a list of strings.
+
+func encodeBatch(traceIDs []string) ([]byte, error) {
+	s := strings.Join(traceIDs, "\t")
+	return []byte(s), nil
 }
 
-func decompress(data []byte) ([]string, error) {
-	buf := bytes.NewBuffer(data)
-	compr := snappy.NewReader(buf)
-	dec := gob.NewDecoder(compr)
-	var traceIDs []string
-	err := dec.Decode(&traceIDs)
-	if err != nil {
-		return nil, err
-	}
-	return traceIDs, nil
+func decodeBatch(data []byte) ([]string, error) {
+	return strings.Split(string(data), "\t"), nil
 }
 
 func (c *CentralCollector) makeDecisions(ctx context.Context) error {
@@ -936,24 +932,6 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		span.End()
 	}
 
-	if len(keptIDs) > 0 {
-		data, err := compress(keptIDs)
-		if err != nil {
-			c.Logger.Error().Logf("error compressing kept trace IDs: %s", err)
-		} else {
-			c.Gossip.Publish(gossip_keep_channel, data)
-		}
-	}
-
-	if len(droppedIDs) > 0 {
-		data, err := compress(droppedIDs)
-		if err != nil {
-			c.Logger.Error().Logf("error compressing dropped trace IDs: %s", err)
-		} else {
-			c.Gossip.Publish(gossip_drop_channel, data)
-		}
-	}
-
 	updatedStatuses := make([]*centralstore.CentralTraceStatus, 0, len(stateMap))
 	for _, status := range stateMap {
 		if status == nil {
@@ -962,7 +940,30 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		updatedStatuses = append(updatedStatuses, status)
 	}
 
-	return c.Store.SetTraceStatuses(ctx, updatedStatuses)
+	if err := c.Store.SetTraceStatuses(ctx, updatedStatuses); err != nil {
+		return err
+	}
+
+	if len(keptIDs) > 0 {
+		data, err := encodeBatch(keptIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing kept trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_keep_channel, data)
+		}
+	}
+
+	if len(droppedIDs) > 0 {
+		data, err := encodeBatch(droppedIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing dropped trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_drop_channel, data)
+		}
+	}
+
+	return nil
+
 }
 
 func (c *CentralCollector) processSpan(sp *types.Span) error {
