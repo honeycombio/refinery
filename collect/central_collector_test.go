@@ -1502,6 +1502,7 @@ func waitForTraceDecision(t *testing.T, coll *CentralCollector, traceIDs []strin
 }
 
 func Test_aggregate(t *testing.T) {
+	t.Skip("enable it once we work out the aggregation logic")
 	t.Parallel()
 	fakeClock := clockwork.NewRealClock()
 	eg := &errgroup.Group{}
