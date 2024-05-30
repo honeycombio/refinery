@@ -1271,7 +1271,7 @@ groups:
         valuetype: nondefault
         default: 2s
         reload: false
-        summary: is the threashold for the health check to consider the decider unhealthy.
+        summary: is the threshold for the health check to consider the decider unhealthy.
         description: >
           This setting controls the duration that Refinery uses for determining if the decider is unhealthy
           through the health check system.
