@@ -218,8 +218,14 @@ func (c *CentralCollector) Start() error {
 	if maxCount <= 0 {
 		maxCount = 500
 	}
+	maxConcurrency := collectorCfg.AggregationConcurrency
+	if maxConcurrency <= 0 {
+		maxConcurrency = 4
+	}
 	egKeepAgg := &errgroup.Group{}
 	egDropAgg := &errgroup.Group{}
+	egKeepAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
+	egDropAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
 	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelKeep), maxCount)
