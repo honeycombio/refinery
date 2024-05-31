@@ -2,6 +2,7 @@ package cache
 
 import (
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/types"
 )
 
 type TraceSentRecord interface {
@@ -18,7 +19,7 @@ type TraceSentRecord interface {
 	// SpanCount returns the count of child spans in the trace.
 	SpanCount() uint
 	// Count records additional spans in the totals
-	Count(SpanRecorder)
+	Count(*types.Span)
 }
 
 type TraceSentCache interface {
@@ -30,7 +31,7 @@ type TraceSentCache interface {
 	// found, it returns the appropriate TraceSentRecord, the keep reason, and
 	// true, else nil and "" and false. If the trace was kept, it will modify
 	// the record to include count information about the span.
-	Check(span SpanRecorder) (TraceSentRecord, string, bool)
+	Check(span *types.Span) (TraceSentRecord, string, bool)
 	// Test if a trace is in the cache; if found, it returns the appropriate TraceSentRecord and true, else nil and false.
 	// It does not modify the count information.
 	Test(traceID string) (TraceSentRecord, string, bool)

@@ -49,7 +49,8 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 				SendTickerVal:      2 * time.Millisecond,
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 				GetCollectionConfigVal: config.CollectionConfig{
-					CacheCapacity: 3,
+					CacheCapacity:    3,
+					AggregationCount: 1,
 				},
 				GetParallelismVal: 10,
 			}
@@ -59,7 +60,7 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 			stop := startCollector(t, conf, coll, storeType)
 			defer stop()
 
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			var traceID1 = "mytrace"
 
@@ -127,8 +128,8 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 				GetParallelismVal:    10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity:        100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     10,
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -139,7 +140,7 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 
-			collector.senderCycle.Pause()
+			collector.cleanupCycle.Pause()
 			collector.deciderCycle.Pause()
 
 			numberOfTraces := 10
@@ -176,13 +177,11 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 
 			collector.deciderCycle.RunOnce()
 
-			collector.senderCycle.RunOnce()
-
-			count, ok := collector.Metrics.Get("trace_send_kept")
-			require.True(t, ok)
-			assert.Equal(t, float64(numberOfTraces), count)
-
 			require.EventuallyWithT(t, func(collect *assert.CollectT) {
+				count, ok := collector.Metrics.Get("trace_send_kept")
+				require.True(t, ok)
+				assert.Equal(t, float64(numberOfTraces), count)
+
 				transmission.Mux.RLock()
 				assert.Equal(t, numberOfTraces*10, len(transmission.Events))
 				assert.Equal(t, "aoeu", transmission.Events[0].Dataset)
@@ -196,6 +195,7 @@ func TestCentralCollector_ProcessTraces(t *testing.T) {
 }
 
 func TestCentralCollector_Decider(t *testing.T) {
+	numberOfTraces := 10
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
@@ -206,8 +206,8 @@ func TestCentralCollector_Decider(t *testing.T) {
 				GetParallelismVal:    10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     numberOfTraces,
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -218,8 +218,8 @@ func TestCentralCollector_Decider(t *testing.T) {
 			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 			collector.deciderCycle.Pause()
+			collector.cleanupCycle.Pause()
 
-			numberOfTraces := 10
 			traceids := make([]string, 0, numberOfTraces)
 			for tr := 0; tr < numberOfTraces; tr++ {
 				tid := fmt.Sprintf("trace%02d", tr)
@@ -267,6 +267,7 @@ func TestCentralCollector_Decider(t *testing.T) {
 }
 
 func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
+	numOfTraces := 10
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			// The sample rate applied by Refinery in this test's config.
@@ -284,7 +285,7 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    10000,
 					DeciderCycleDuration: config.Duration(1 * time.Second),
-					SenderCycleDuration:  config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
@@ -300,11 +301,11 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			defer stop()
 
 			collector.deciderCycle.Pause()
-			collector.senderCycle.Pause()
+			collector.cleanupCycle.Pause()
 
 			// Generate events until one is sampled and appears on the transmission queue for sending.
-			traceIDs := make([]string, 0, 10)
-			for i := 0; i < 10; i++ {
+			traceIDs := make([]string, 0, numOfTraces)
+			for i := 0; i < numOfTraces; i++ {
 				span := &types.Span{
 					TraceID: fmt.Sprintf("trace-%v", i),
 					ID:      fmt.Sprintf("span%d", i),
@@ -322,8 +323,6 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			collector.deciderCycle.RunOnce()
 
 			waitForTraceDecision(t, collector, traceIDs)
-
-			collector.senderCycle.RunOnce()
 
 			transmission.Mux.RLock()
 			require.Greater(t, len(transmission.Events), 0,
@@ -353,7 +352,6 @@ func TestCentralCollector_OriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			collector.deciderCycle.RunOnce()
 			waitForTraceDecision(t, collector, []string{traceID})
 
-			collector.senderCycle.RunOnce()
 			// Find the Refinery-sampled-and-sent event that had no upstream sampling which
 			// should be the last event on the transmission queue.
 			var noUpstreamSampleRateEvent *types.Event
@@ -380,8 +378,8 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 				SendTickerVal:      2 * time.Millisecond,
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -400,7 +398,7 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			span := &types.Span{
 				TraceID: fmt.Sprintf("trace-%v", 1),
@@ -418,7 +416,6 @@ func TestCentralCollector_TransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *t
 			waitUntilReadyToDecide(t, coll, []string{span.TraceID})
 			coll.deciderCycle.RunOnce()
 			waitForTraceDecision(t, coll, []string{span.TraceID})
-			coll.senderCycle.RunOnce()
 
 			require.Len(t, transmission.Events, 1)
 			assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
@@ -439,8 +436,8 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 				GetParallelismVal:  10,
 				GetCollectionConfigVal: config.CollectionConfig{
 					CacheCapacity:        10,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 				SampleCache: config.SampleCacheConfig{
 					KeptSize:          100,
@@ -457,7 +454,7 @@ func TestCentralCollector_SampleConfigReload(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			dataset := "aoeu"
 
@@ -524,8 +521,8 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 					IncomingQueueSize:    600,
 					SenderBatchSize:      500,
 					DeciderBatchSize:     200,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     100,
 				},
 				StoreOptions: config.SmartWrapperOptions{
 					SpanChannelSize: 500,
@@ -544,7 +541,7 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			totalTraceCount := 300
 			spandata := make([]map[string]interface{}, totalTraceCount)
@@ -598,7 +595,6 @@ func TestCentralCollector_StableMaxAlloc(t *testing.T) {
 			for {
 				time.Sleep(20 * time.Millisecond)
 				coll.deciderCycle.RunOnce()
-				coll.senderCycle.RunOnce()
 
 				numOfTracesInCache = coll.SpanCache.Len()
 				if numOfTracesInCache <= toRemoveTraceCount {
@@ -635,7 +631,7 @@ func TestCentralCollector_AddSpanNoBlock(t *testing.T) {
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    3,
 					DeciderCycleDuration: config.Duration(1 * time.Second),
-					SenderCycleDuration:  config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 			}
 
@@ -686,8 +682,8 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 			}
 
@@ -699,7 +695,7 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			var traceID = "mytrace"
 			for i := 0; i < 4; i++ {
@@ -723,7 +719,6 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 				require.NoError(t, coll.AddSpan(span))
 			}
 			coll.deciderCycle.RunOnce()
-			coll.senderCycle.RunOnce()
 
 			trace := coll.SpanCache.Get(traceID)
 			require.NotNil(t, trace, "after adding the spans, we should have a trace in the cache")
@@ -748,7 +743,6 @@ func TestCentralCollector_AddCountsToRoot(t *testing.T) {
 			waitUntilReadyToDecide(t, coll, []string{traceID})
 			coll.deciderCycle.RunOnce()
 			waitForTraceDecision(t, coll, []string{traceID})
-			coll.senderCycle.RunOnce()
 
 			trace = coll.SpanCache.Get(traceID)
 			require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
@@ -789,8 +783,8 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 			}
 
@@ -802,7 +796,7 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			var traceID = "mytrace"
 
@@ -831,7 +825,6 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 			waitUntilReadyToDecide(t, coll, []string{traceID})
 			coll.deciderCycle.RunOnce()
 			waitForTraceDecision(t, coll, []string{traceID})
-			coll.senderCycle.RunOnce()
 			trace := coll.SpanCache.Get(traceID)
 			require.Nil(t, trace, "trace should have been sent")
 			require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
@@ -850,7 +843,6 @@ func TestCentralCollector_LateRootGetsCounts(t *testing.T) {
 			require.NoError(t, coll.AddSpan(rootSpan))
 			// The trace decision is already made for the late root span
 			waitForTraceDecision(t, coll, []string{traceID})
-			coll.senderCycle.RunOnce()
 
 			trace = coll.SpanCache.Get(traceID)
 			require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
@@ -895,8 +887,8 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    10,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 			}
 
@@ -908,7 +900,7 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			var traceID = "traceABC"
 
@@ -929,7 +921,6 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 			waitUntilReadyToDecide(t, coll, []string{traceID})
 			coll.deciderCycle.RunOnce()
 			waitForTraceDecision(t, coll, []string{traceID})
-			coll.senderCycle.RunOnce()
 			trace := coll.SpanCache.Get(traceID)
 			require.Nil(t, trace, "trace should have been sent")
 			require.Equal(t, 1, len(transmission.Events), "adding a non-root span and waiting should send the span")
@@ -944,13 +935,10 @@ func TestCentralCollector_LateSpanNotDecorated(t *testing.T) {
 				},
 				IsRoot: true,
 			}
-			require.NoError(t, coll.AddSpan(rootSpan))
-			// The trace decision is already made for the late root span
-			waitForTraceDecision(t, coll, []string{traceID})
-			coll.senderCycle.RunOnce()
-
+			// send the root span to the collector synchronously
+			require.NoError(t, coll.processSpan(rootSpan))
 			trace = coll.SpanCache.Get(traceID)
-			require.Nil(t, trace, "after adding a leaf and root span, it should be removed from the cache")
+			require.Nil(t, trace, "trace should already been sent")
 
 			transmission.Mux.RLock()
 			assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -980,8 +968,8 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    5,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -992,7 +980,7 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			var traceID = "trace123"
 
@@ -1023,7 +1011,6 @@ func TestCentralCollector_AddAdditionalAttributes(t *testing.T) {
 			waitUntilReadyToDecide(t, coll, []string{traceID})
 			coll.deciderCycle.RunOnce()
 			waitForTraceDecision(t, coll, []string{traceID})
-			coll.senderCycle.RunOnce()
 
 			transmission.Mux.RLock()
 			assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
@@ -1089,8 +1076,8 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 				},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
+					AggregationCount:     1,
 				},
 			}
 
@@ -1102,7 +1089,7 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 			defer stop()
 
 			coll.deciderCycle.Pause()
-			coll.senderCycle.Pause()
+			coll.cleanupCycle.Pause()
 
 			traceIDs := []string{"trace1", "trace2"}
 
@@ -1131,7 +1118,6 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 			waitUntilReadyToDecide(t, coll, traceIDs)
 			coll.deciderCycle.RunOnce()
 			waitForTraceDecision(t, coll, traceIDs)
-			coll.senderCycle.RunOnce()
 			require.Equal(t, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
 
 			for i, traceID := range traceIDs {
@@ -1157,7 +1143,6 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 			}
 
 			waitForTraceDecision(t, coll, traceIDs)
-			coll.senderCycle.RunOnce()
 
 			transmission.Mux.RLock()
 			assert.Equal(t, 6, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -1183,6 +1168,7 @@ func TestCentralCollector_SpanWithRuleReasons(t *testing.T) {
 }
 
 func TestCentralCollector_Shutdown(t *testing.T) {
+	numberOfTraces := 10
 	for _, storeType := range storeTypes {
 		t.Run(storeType, func(t *testing.T) {
 			conf := &config.MockConfig{
@@ -1195,6 +1181,7 @@ func TestCentralCollector_Shutdown(t *testing.T) {
 					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
 					ShutdownDelay:        config.Duration(500 * time.Millisecond),
+					AggregationCount:     numberOfTraces,
 				},
 			}
 			transmission := &transmit.MockTransmission{}
@@ -1205,10 +1192,9 @@ func TestCentralCollector_Shutdown(t *testing.T) {
 			stop := startCollector(t, conf, collector, storeType)
 			defer stop()
 
-			collector.senderCycle.Pause()
+			collector.cleanupCycle.Pause()
 			collector.deciderCycle.Pause()
 
-			numberOfTraces := 10
 			numberOfSpansPerTrace := 10
 			traceids := make([]string, 0, numberOfTraces)
 			for tr := 0; tr < numberOfTraces; tr++ {
@@ -1269,7 +1255,6 @@ func TestCentralCollector_ProcessSpanImmediately(t *testing.T) {
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize:    100,
-					SenderCycleDuration:  config.Duration(1 * time.Second),
 					DeciderCycleDuration: config.Duration(1 * time.Second),
 				},
 				StressRelief: config.StressReliefConfig{
@@ -1409,6 +1394,11 @@ func startCollector(t *testing.T, cfg *config.MockConfig, collector *CentralColl
 	if cfg.GetCollectionConfigVal.MemoryCycleDuration == 0 {
 		cfg.GetCollectionConfigVal.MemoryCycleDuration = duration("1s")
 	}
+	if cfg.GetCollectionConfigVal.CleanupCycleDuration == 0 {
+		cfg.GetCollectionConfigVal.CleanupCycleDuration = duration("1s")
+	}
+
+	cfg.GetCollectionConfigVal.UseDecisionGossip = true
 
 	collector.isTest = true
 	var basicStore centralstore.BasicStorer
@@ -1510,7 +1500,6 @@ func Test_aggregate(t *testing.T) {
 	c := CentralCollector{
 		Clock: fakeClock,
 		done:  make(chan struct{}),
-		egAgg: eg,
 	}
 
 	ch := make(chan []byte, 15)
@@ -1523,7 +1512,8 @@ func Test_aggregate(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		c.aggregateTraceIDChannel(ch, f, 20*time.Millisecond, 10)
+		eg := &errgroup.Group{}
+		c.aggregateTraceIDChannel(ch, f, eg, 20*time.Millisecond, 10)
 		wg.Done()
 	}()
 

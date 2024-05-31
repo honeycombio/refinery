@@ -208,9 +208,6 @@ type SmartStorer interface {
 
 	// RecordMetrics Populates metric data from the smart store.
 	RecordMetrics(ctx context.Context) error
-
-	// RecordTraceDecision records the decision made by the trace decision engine.
-	RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus) error
 }
 
 // Spec for the central store's internal behavior:
@@ -305,7 +302,4 @@ type BasicStorer interface {
 
 	// RecordMetrics Populates metric data from the basic store.
 	RecordMetrics(ctx context.Context) error
-
-	//RecordTraceDecision records the decision made by the trace decision engine.
-	RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus) error
 }
