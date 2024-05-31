@@ -17,6 +17,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -188,17 +189,22 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	})
 	defer writespan.End()
 
+	traces := generics.NewSet[string]()
+	for _, span := range spans {
+		traces.Add(span.TraceID)
+	}
+
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	states, err := r.getTraceStates(ctx, conn, spans)
+	states, err := r.getTraceStates(ctx, conn, traces.Members())
 	if err != nil {
 		return err
 	}
 
-	collecting := make(map[string]struct{})
+	collecting := generics.NewSet[string]()
 	storeSpans := make([]*CentralSpan, 0, len(spans))
-	newSpans := make([]*CentralSpan, 0, len(spans))
+	newSpans := make(map[string][]*CentralSpan)
 	shouldIncrementCounts := make([]*CentralSpan, 0, len(spans))
 	for _, span := range spans {
 		if span.TraceID == "" {
@@ -219,11 +225,11 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 			continue
 		case Collecting:
 			if span.IsRoot {
-				collecting[span.TraceID] = struct{}{}
+				collecting.Add(span.TraceID)
 			}
 		case DecisionDelay, ReadyToDecide:
 		case Unknown:
-			newSpans = append(newSpans, span)
+			newSpans[span.TraceID] = append(newSpans[span.TraceID], span)
 		}
 
 		if span.SpanID != "" {
@@ -237,7 +243,7 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 		return err
 	}
 
-	err = r.states.addNewTraces(ctx, conn, newSpans)
+	err = r.states.addNewTraces(ctx, conn, maps.Keys(newSpans))
 	if err != nil {
 		return err
 	}
@@ -246,12 +252,7 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 		return err
 	}
 
-	ids := make([]string, 0, len(collecting))
-	for id := range collecting {
-		ids = append(ids, id)
-	}
-
-	_, err = r.states.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), ids...)
+	_, err = r.states.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), collecting.Members()...)
 	if err != nil {
 		return err
 	}
@@ -515,25 +516,12 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	return nil
 }
 
-func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, spans []*CentralSpan) (map[string]CentralTraceState, error) {
+func (r *RedisBasicStore) getTraceStates(ctx context.Context, conn redis.Conn, traceIDs []string) (map[string]CentralTraceState, error) {
 	ctx, span := r.Tracer.Start(ctx, "getTraceStates")
 	defer span.End()
 
-	var cacheHitCount int
-	notFound := generics.NewSet[string]()
-	states := make(map[string]CentralTraceState, min(len(spans), 80))
-	for _, span := range spans {
-		states[span.TraceID] = Unknown
-		notFound.Add(span.TraceID)
-	}
-	otelutil.AddSpanField(span, "cache_hit_count", cacheHitCount)
-
-	// if all traces are in the cache, we can return the states directly
-	if cacheHitCount == len(states) {
-		return states, nil
-	}
-
-	results, err := r.traces.getTraceStates(ctx, conn, notFound.Members())
+	states := make(map[string]CentralTraceState, min(len(traceIDs), 80))
+	results, err := r.traces.getTraceStates(ctx, conn, traceIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -631,27 +619,32 @@ func (t *tracesStore) traceExpirationDuration() time.Duration {
 	return expirationDuration
 }
 
-func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, cspans []*CentralSpan) error {
+func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, traces map[string][]*CentralSpan) error {
 	_, spanStatus := otelutil.StartSpanMulti(ctx, t.tracer, "addStatus", map[string]interface{}{
-		"numSpans": len(cspans),
-		"isScript": true,
+		"numTraces": len(traces),
+		"isScript":  true,
 	})
 	defer spanStatus.End()
 
-	commands := make([]redis.Command, 0, 3*len(cspans))
-	for _, span := range cspans {
-		// prevent storing signaling spans sent from central collector
-		// all actual spans should have a spanID
-		if span.SpanID == "" {
-			continue
-		}
-
+	commands := make([]redis.Command, 0, len(traces))
+	for traceID, spans := range traces {
 		trace := &centralTraceStatusInit{
-			TraceID:    span.TraceID,
-			SamplerKey: span.samplerSelector,
+			TraceID: traceID,
+		}
+		for _, span := range spans {
+			// prevent storing signaling spans sent from central collector
+			// all actual spans should have a spanID
+			if span.SpanID == "" {
+				continue
+			}
+
+			if span.samplerSelector != "" && trace.SamplerKey == "" {
+				trace.SamplerKey = span.samplerSelector
+				break
+			}
 		}
 
-		traceStatusKey := t.traceStatusKey(span.TraceID)
+		traceStatusKey := t.traceStatusKey(traceID)
 		args := redis.Args().AddFlat(trace)
 
 		commands = append(commands, redis.NewMultiSetHashCommand(traceStatusKey, args))
@@ -991,20 +984,15 @@ func (t *traceStateProcessor) Stop() {
 // addTrace stores the traceID into a set and insert the current time into
 // a list. The list is used to keep track of the time the trace was added to
 // the state. The set is used to check if the trace is in the state.
-func (t *traceStateProcessor) addNewTraces(ctx context.Context, conn redis.Conn, spans []*CentralSpan) error {
-	if len(spans) == 0 {
+func (t *traceStateProcessor) addNewTraces(ctx context.Context, conn redis.Conn, traceIDs []string) error {
+	if len(traceIDs) == 0 {
 		return nil
 	}
 
-	ctx, span := otelutil.StartSpanWith(ctx, t.tracer, "addNewTraces", "num_traces", len(spans))
+	ctx, span := otelutil.StartSpanWith(ctx, t.tracer, "addNewTraces", "num_traces", len(traceIDs))
 	defer span.End()
 
-	ids := make([]string, len(spans))
-	for i, s := range spans {
-		ids[i] = s.TraceID
-	}
-
-	_, err := t.applyStateChange(ctx, conn, newTraceStateChangeEvent(Unknown, Collecting), ids)
+	_, err := t.applyStateChange(ctx, conn, newTraceStateChangeEvent(Unknown, Collecting), traceIDs)
 	return err
 }
 

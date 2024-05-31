@@ -455,7 +455,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	defer conn.Close()
 
 	traceID := "traceID0"
-	traceIDToBeRemoved := []*CentralSpan{{TraceID: traceID}}
+	traceIDToBeRemoved := []string{traceID}
 	err := ts.addNewTraces(ctx, conn, traceIDToBeRemoved)
 	require.NoError(t, err)
 	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceID)
@@ -464,7 +464,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 
 	ts.clock.Advance(time.Duration(10 * time.Minute))
 	traceID1 := "traceID1"
-	traceIDToKeep := []*CentralSpan{{TraceID: traceID1}}
+	traceIDToKeep := []string{traceID1}
 	err = ts.addNewTraces(ctx, conn, traceIDToKeep)
 	require.NoError(t, err)
 	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceID1)
@@ -712,11 +712,7 @@ func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, ctx context.
 	_, err := conn.Del(ts.traceStatesKey(traceID))
 	require.NoError(t, err)
 
-	newSpan := []*CentralSpan{
-		{
-			TraceID: traceID,
-		},
-	}
+	newSpan := []string{traceID}
 	require.NoError(t, ts.addNewTraces(ctx, conn, newSpan))
 	if state == Collecting {
 		return
