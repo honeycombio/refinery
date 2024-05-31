@@ -385,6 +385,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 	if !found {
 		rate, keep, reason = c.StressRelief.GetSampleRate(sp.TraceID)
 	} else {
+		c.Metrics.Increment("collector_span_decision_cache_hit")
 		rate = record.Rate()
 		keep = record.Kept()
 	}
@@ -722,6 +723,19 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 		sendTime := c.Clock.Since(now)
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
+
+	// if a trace is dropped, we don't want to send it to the central store
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		if c.DecisionCache.Dropped(id) {
+			c.SpanCache.Remove(id)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+
+			return true
+		}
+
+		return false
+	})
 
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.AllTraceStates...)
 	if err != nil {
