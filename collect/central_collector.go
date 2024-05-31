@@ -177,6 +177,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_sender_runs", "counter")
 	c.Metrics.Register("collector_decider_runs", "counter")
 	c.Metrics.Register("collector_cleanup_runs", "counter")
+	c.Metrics.Register("collector_span_decision_cache_hit", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -527,6 +528,19 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 		sendTime := c.Clock.Since(now)
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
+
+	// if a trace is dropped, we don't want to send it to the central store
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		if c.DecisionCache.Dropped(id) {
+			c.SpanCache.Remove(id)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+
+			return true
+		}
+
+		return false
+	})
 
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
@@ -1009,6 +1023,7 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	// if we do, process the span immediately
 	record, _, found := c.DecisionCache.Check(sp)
 	if found {
+		c.Metrics.Increment("collector_span_decision_cache_hit")
 		if record.Kept() {
 			c.keepTraces([]string{sp.TraceID})
 		} else {
