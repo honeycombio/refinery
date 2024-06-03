@@ -860,8 +860,6 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 	keptIDs := make([]string, 0)
 	droppedIDs := make([]string, 0)
 
-	c.Logger.Error().Logf("deciding on %d traces", len(statuses))
-
 	for _, trace := range traces {
 		if trace == nil {
 			continue

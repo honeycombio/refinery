@@ -1,16 +1,14 @@
 package centralstore
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"time"
 
-	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
@@ -295,7 +293,7 @@ func (r *RedisBasicStore) GetTraces(ctx context.Context, traceIDs ...string) ([]
 		var traceID string
 		for _, s := range d {
 			span := &CentralSpan{}
-			err := decompress(s, span)
+			err := json.Unmarshal(s, span)
 			if err != nil {
 				return nil, err
 			}
@@ -598,7 +596,7 @@ type centralTraceStatusRedis struct {
 func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) (*CentralTraceStatus, error) {
 	metadata := make(map[string]any, 0)
 	if status.Metadata != nil {
-		err := decompress(status.Metadata, &metadata)
+		err := json.Unmarshal(status.Metadata, &metadata)
 		if err != nil {
 			return nil, err
 		}
@@ -725,7 +723,7 @@ func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*
 	metadata := make([]byte, 0)
 	for _, s := range status {
 		if s.Metadata != nil {
-			metadata, err = compress(s.Metadata)
+			metadata, err = json.Marshal(s.Metadata)
 			if err != nil {
 				keepspan.RecordError(err)
 				return err
@@ -921,36 +919,13 @@ func spansHashByTraceIDKey(traceID string) string {
 
 // central span -> blobs
 func addToSpanHash(span *CentralSpan) (redis.Command, error) {
-	data, err := compress(span)
+	data, err := json.Marshal(span)
 	if err != nil {
 		return nil, err
 	}
 
 	// overwrite the span data if it already exists
 	return redis.NewSetHashCommand(spansHashByTraceIDKey(span.TraceID), map[string]any{span.SpanID: data}), nil
-}
-
-func compress(data any) ([]byte, error) {
-	var buf bytes.Buffer
-	compr := snappy.NewBufferedWriter(&buf)
-	enc := gob.NewEncoder(compr)
-	err := enc.Encode(data)
-	if err != nil {
-		return nil, err
-	}
-	compr.Close()
-	return buf.Bytes(), nil
-}
-
-func decompress(data []byte, out any) error {
-	buf := bytes.NewBuffer(data)
-	compr := snappy.NewReader(buf)
-	dec := gob.NewDecoder(compr)
-	err := dec.Decode(out)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // TraceStateProcessor is a map of trace IDs to their state.
