@@ -252,9 +252,9 @@ func TestBasicStoreOperation(t *testing.T) {
 			}, 3*time.Second, 100*time.Millisecond)
 
 			// check that the spans are in the store
-			for _, tid := range traceids {
-				trace, err := store.GetTrace(ctx, tid)
-				assert.NoError(t, err)
+			traces, err := store.GetTraces(ctx, traceids...)
+			assert.NoError(t, err)
+			for _, trace := range traces {
 				if err == nil {
 					assert.Equal(t, 10, len(trace.Spans))
 					assert.NotNil(t, trace.Root)
@@ -486,7 +486,7 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetTrace(ctx, spans[i%100].TraceID)
+		store.GetTraces(ctx, spans[i%100].TraceID)
 	}
 }
 

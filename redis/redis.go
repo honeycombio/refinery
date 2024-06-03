@@ -68,7 +68,7 @@ type Conn interface {
 
 	GetAllStringsHash(string) (map[string]string, error)
 	GetStructHash(string, any) error
-	GetSliceOfStructsHash(string, any) error
+	GetAllByteSliceHash(string) ([][]byte, error)
 	GetFloat64Hash(string) (map[string]float64, error)
 	ListFields(string) ([]string, error)
 	IncrementByHash(string, string, int64) (int64, error)
@@ -95,6 +95,7 @@ type Conn interface {
 	TTL(string) (int64, error)
 
 	ReceiveStrings(int) ([]string, error)
+	ReceiveByteSlice(int) ([][][]byte, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
 	MemoryStats() (map[string]any, error)
@@ -721,12 +722,8 @@ func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
 	return redis.ScanStruct(values, val)
 }
 
-func (c *DefaultConn) GetSliceOfStructsHash(key string, val interface{}) error {
-	values, err := redis.Values(c.conn.Do("HGETALL", key))
-	if err != nil {
-		return err
-	}
-	return redis.ScanSlice(values, val)
+func (c *DefaultConn) GetAllByteSliceHash(key string) ([][]byte, error) {
+	return redis.ByteSlices(c.conn.Do("HVALS", key))
 }
 
 func (c *DefaultConn) ListFields(key string) ([]string, error) {
@@ -841,6 +838,30 @@ func (c *DefaultConn) ReceiveStrings(n int) ([]string, error) {
 		val, err := redis.String(reply, nil)
 		if errors.Is(err, redis.ErrNil) {
 			replies = append(replies, "")
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		replies = append(replies, val)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return replies, nil
+}
+
+func (c *DefaultConn) ReceiveByteSlice(n int) ([][][]byte, error) {
+	replies := make([][][]byte, 0, n)
+	err := c.receive(n, func(reply any, err error) error {
+		if err != nil {
+			return err
+		}
+		val, err := redis.ByteSlices(reply, nil)
+		if errors.Is(err, redis.ErrNil) {
+			replies = append(replies, nil)
 			return nil
 		}
 		if err != nil {
@@ -995,6 +1016,13 @@ func NewGetHashCommand(key string, field string) command {
 	return command{
 		name: "HGET",
 		args: redis.Args{key, field},
+	}
+}
+
+func NewGetAllValuesHashCommand(key string) command {
+	return command{
+		name: "HVALS",
+		args: redis.Args{key},
 	}
 }
 

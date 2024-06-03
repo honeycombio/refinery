@@ -86,11 +86,12 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 			}, 5*time.Second, 500*time.Millisecond)
 
 			ctx := context.Background()
-			trace, err := coll.Store.GetTrace(ctx, traceID1)
+			trace, err := coll.Store.GetTraces(ctx, traceID1)
 			require.NoError(t, err)
-			assert.Equal(t, traceID1, trace.TraceID)
-			assert.Len(t, trace.Spans, 1)
-			assert.Nil(t, trace.Root)
+			require.Len(t, trace, 1)
+			assert.Equal(t, traceID1, trace[0].TraceID)
+			assert.Len(t, trace[0].Spans, 1)
+			assert.Nil(t, trace[0].Root)
 
 			root := &types.Span{
 				TraceID: traceID1,
@@ -108,11 +109,12 @@ func TestCentralCollector_AddSpan(t *testing.T) {
 				trace := coll.SpanCache.Get(traceID1)
 				return trace.RootSpan != nil
 			}, 5*time.Second, 500*time.Millisecond)
-			trace, err = coll.Store.GetTrace(ctx, traceID1)
+			trace, err = coll.Store.GetTraces(ctx, traceID1)
 			require.NoError(t, err)
-			assert.Equal(t, traceID1, trace.TraceID)
-			assert.Len(t, trace.Spans, 2)
-			assert.NotNil(t, trace.Root)
+			require.Len(t, trace, 1)
+			assert.Equal(t, traceID1, trace[0].TraceID)
+			assert.Len(t, trace[0].Spans, 2)
+			assert.NotNil(t, trace[0].Root)
 		})
 	}
 }

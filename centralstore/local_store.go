@@ -222,7 +222,7 @@ spanLoop:
 	return nil
 }
 
-// GetTrace fetches the current state of a trace (including all of its
+// GetTraces fetches the current state of a trace (including all of its
 // spans) from the central store. The trace contains a list of CentralSpans,
 // and these spans will usually (but not always) only contain the key
 // fields. The spans returned from this call should be used for making the
@@ -231,17 +231,19 @@ spanLoop:
 // is Keep. If the trace has a root span, the Root property will be
 // populated. Normally this call will be made after Refinery has been asked
 // to make a trace decision.
-func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
+func (lrs *LocalStore) GetTraces(ctx context.Context, traceIDs ...string) ([]*CentralTrace, error) {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTrace")
 	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
-	if trace, ok := lrs.traces[traceID]; ok {
-		otelutil.AddSpanField(span, "found", true)
-		return trace, nil
+	traces := make([]*CentralTrace, 0, len(traceIDs))
+	for _, id := range traceIDs {
+		if trace, ok := lrs.traces[id]; ok {
+			traces = append(traces, trace)
+		}
 	}
-	otelutil.AddSpanField(span, "found", false)
-	return nil, fmt.Errorf("trace %s not found", traceID)
+
+	return traces, nil
 }
 
 // GetStatusForTraces returns the current state for a list of traces if they

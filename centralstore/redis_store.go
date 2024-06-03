@@ -1,14 +1,16 @@
 package centralstore
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"time"
 
+	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
@@ -264,48 +266,57 @@ func (r *RedisBasicStore) WriteSpans(ctx context.Context, spans []*CentralSpan) 
 	return nil
 }
 
-// GetTrace returns a CentralTrace with the given traceID.
+// GetTraces returns a CentralTrace with the given traceID.
 // if a decision has been made about the trace, the returned value
 // will not contain span data.
-func (r *RedisBasicStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
+func (r *RedisBasicStore) GetTraces(ctx context.Context, traceIDs ...string) ([]*CentralTrace, error) {
 	_, span := r.Tracer.Start(ctx, "GetTrace")
 	defer span.End()
 
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	spans := make([]*CentralSpan, 0)
-	var tmpSpan []struct {
-		SpanID string
-		Span   []byte
+	for _, traceID := range traceIDs {
+		cmd := redis.NewGetAllValuesHashCommand(spansHashByTraceIDKey(traceID))
+		if err := cmd.Send(conn); err != nil {
+			return nil, err
+		}
 	}
 
-	err := conn.GetSliceOfStructsHash(spansHashByTraceIDKey(traceID), &tmpSpan)
+	data, err := conn.ReceiveByteSlice(len(traceIDs))
 	if err != nil {
 		return nil, err
 	}
 
-	errs := make([]error, 0, len(tmpSpan))
-	var rootSpan *CentralSpan
-	for _, d := range tmpSpan {
-		span := &CentralSpan{}
-		err := json.Unmarshal(d.Span, span)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		spans = append(spans, span)
+	traces := make([]*CentralTrace, 0, len(traceIDs))
+	for _, d := range data {
+		spans := make([]*CentralSpan, 0)
+		var rootSpan *CentralSpan
+		var traceID string
+		for _, s := range d {
+			span := &CentralSpan{}
+			err := decompress(s, span)
+			if err != nil {
+				return nil, err
+			}
+			spans = append(spans, span)
+			if traceID == "" {
+				traceID = span.TraceID
+			}
 
-		if span.IsRoot {
-			rootSpan = span
+			if span.IsRoot {
+				rootSpan = span
+			}
 		}
+
+		traces = append(traces, &CentralTrace{
+			TraceID: traceID,
+			Root:    rootSpan,
+			Spans:   spans,
+		})
 	}
 
-	return &CentralTrace{
-		TraceID: traceID,
-		Root:    rootSpan,
-		Spans:   spans,
-	}, errors.Join(errs...)
+	return traces, nil
 }
 
 // GetStatusForTraces returns the status of the traces with the given traceIDs. It only return the status of the trace if a trace's state is one of the statesToCheck.
@@ -584,12 +595,12 @@ type centralTraceStatusRedis struct {
 	Timestamp   int64
 }
 
-func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralTraceStatus {
+func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) (*CentralTraceStatus, error) {
 	metadata := make(map[string]any, 0)
 	if status.Metadata != nil {
-		err := json.Unmarshal(status.Metadata, &metadata)
+		err := decompress(status.Metadata, &metadata)
 		if err != nil {
-			fmt.Println(err)
+			return nil, err
 		}
 	}
 
@@ -605,7 +616,7 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) *CentralT
 		EventCount:      status.EventCount,
 		LinkCount:       status.LinkCount,
 		Timestamp:       time.UnixMicro(status.Timestamp),
-	}
+	}, nil
 }
 
 func (t *tracesStore) traceExpirationDuration() time.Duration {
@@ -714,7 +725,7 @@ func (t *tracesStore) keepTrace(ctx context.Context, conn redis.Conn, status []*
 	metadata := make([]byte, 0)
 	for _, s := range status {
 		if s.Metadata != nil {
-			metadata, err = json.Marshal(s.Metadata)
+			metadata, err = compress(s.Metadata)
 			if err != nil {
 				keepspan.RecordError(err)
 				return err
@@ -778,13 +789,23 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 					status.State = Unknown.String()
 					status.Timestamp = t.clock.Now().UnixMicro()
 
-					return normalizeCentralTraceStatusRedis(status)
+					v, err := normalizeCentralTraceStatusRedis(status)
+					if err != nil {
+						statusSpan.RecordError(err)
+						return nil
+					}
+					return v
 				}
 				statusSpan.RecordError(err)
 				return nil
 			}
 			found++
-			return normalizeCentralTraceStatusRedis(status)
+			v, err := normalizeCentralTraceStatusRedis(status)
+			if err != nil {
+				statusSpan.RecordError(err)
+				return nil
+			}
+			return v
 		}
 		cleanup := func(i int) {
 			conn.Close()
@@ -900,13 +921,36 @@ func spansHashByTraceIDKey(traceID string) string {
 
 // central span -> blobs
 func addToSpanHash(span *CentralSpan) (redis.Command, error) {
-	data, err := json.Marshal(span)
+	data, err := compress(span)
 	if err != nil {
 		return nil, err
 	}
 
 	// overwrite the span data if it already exists
 	return redis.NewSetHashCommand(spansHashByTraceIDKey(span.TraceID), map[string]any{span.SpanID: data}), nil
+}
+
+func compress(data any) ([]byte, error) {
+	var buf bytes.Buffer
+	compr := snappy.NewBufferedWriter(&buf)
+	enc := gob.NewEncoder(compr)
+	err := enc.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	compr.Close()
+	return buf.Bytes(), nil
+}
+
+func decompress(data []byte, out any) error {
+	buf := bytes.NewBuffer(data)
+	compr := snappy.NewReader(buf)
+	dec := gob.NewDecoder(compr)
+	err := dec.Decode(out)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // TraceStateProcessor is a map of trace IDs to their state.
@@ -1354,6 +1398,9 @@ const removeExpiredTracesScript = `
 	local traces = redis.call('ZRANGE', stateKey,
 	"-inf", expirationTime, "byscore", "limit", 0, batchSize)
 
+	if (table.getn(traces) == 0) then
+		return 0
+	end
 	local result = redis.call('ZREM', stateKey, unpack(traces))
 	return result
 `
