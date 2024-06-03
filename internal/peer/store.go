@@ -184,15 +184,18 @@ func (p *PeerStore) watchPeers() {
 				continue
 			}
 
+			p.peerLock.Lock()
+			p.peers[info.id] = p.Clock.Now()
+			p.peerLock.Unlock()
+
+			if len(info.Data) == 0 {
+				continue
+			}
 			p.subscriptionLock.RLock()
 			for _, ch := range p.subscriptions {
 				ch <- info
 			}
 			p.subscriptionLock.RUnlock()
-
-			p.peerLock.Lock()
-			p.peers[info.id] = p.Clock.Now()
-			p.peerLock.Unlock()
 
 		case <-p.done:
 			return

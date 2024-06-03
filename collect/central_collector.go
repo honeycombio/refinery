@@ -69,6 +69,7 @@ type CentralCollector struct {
 	Config         config.Config               `inject:""`
 	Clock          clockwork.Clock             `inject:""`
 	Transmission   transmit.Transmission       `inject:"upstreamTransmission"`
+	DecisionCache  cache.TraceSentCache        `inject:""`
 	Logger         logger.Logger               `inject:""`
 	Metrics        metrics.Metrics             `inject:"genericMetrics"`
 	Tracer         trace.Tracer                `inject:"tracer"`
@@ -88,7 +89,6 @@ type CentralCollector struct {
 
 	done         chan struct{}
 	eg           *errgroup.Group
-	egAgg        *errgroup.Group // errorgroup for the trace aggregation goroutines
 	senderCycle  *Cycle
 	deciderCycle *Cycle
 	metricsCycle *Cycle
@@ -177,6 +177,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_sender_runs", "counter")
 	c.Metrics.Register("collector_decider_runs", "counter")
 	c.Metrics.Register("collector_cleanup_runs", "counter")
+	c.Metrics.Register("collector_span_decision_cache_hit", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -200,6 +201,15 @@ func (c *CentralCollector) Start() error {
 				c.Logger.Error().Logf("error recording metrics: %s", err)
 			}
 
+			m, err := c.DecisionCache.GetMetrics()
+			if err != nil {
+				c.Logger.Error().Logf("error getting decision cache metrics: %s", err)
+			} else {
+				for k, v := range m {
+					c.Metrics.Count("collector_"+k, v)
+				}
+			}
+
 			return nil
 		})
 	})
@@ -217,15 +227,17 @@ func (c *CentralCollector) Start() error {
 	if maxConcurrency <= 0 {
 		maxConcurrency = 4
 	}
-	c.egAgg = &errgroup.Group{}
-	c.egAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
+	egKeepAgg := &errgroup.Group{}
+	egDropAgg := &errgroup.Group{}
+	egKeepAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
+	egDropAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
 	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelKeep), maxCount)
 	c.dropChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelDrop), maxCount)
 
-	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
-	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
+	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, egKeepAgg, maxTime, maxCount)
+	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, egDropAgg, maxTime, maxCount)
 
 	return nil
 }
@@ -356,23 +368,33 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 // If it's part of the deterministic sample, the decision is written to the central store and
 // the span is enqueued for transmission.
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) {
-	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
+	_, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
 
 	if !c.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
 		otelutil.AddSpanField(span, "nondeterministic", 1)
 		return false, nil
 	}
 
-	rate, keep, reason := c.StressRelief.GetSampleRate(sp.TraceID)
+	var keep bool
+	var rate uint
+	status := &centralstore.CentralTraceStatus{
+		TraceID: sp.TraceID,
+	}
+
+	record, reason, found := c.DecisionCache.Check(sp)
+	if !found {
+		rate, keep, reason = c.StressRelief.GetSampleRate(sp.TraceID)
+	} else {
+		c.Metrics.Increment("collector_span_decision_cache_hit")
+		rate = record.Rate()
+		keep = record.Kept()
+	}
+
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"rate":   rate,
 		"keep":   keep,
 		"reason": reason,
 	})
-
-	status := &centralstore.CentralTraceStatus{
-		TraceID: sp.TraceID,
-	}
 
 	if keep {
 		status.State = centralstore.DecisionKeep
@@ -382,11 +404,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		status.State = centralstore.DecisionDrop
 	}
 
-	err := c.Store.RecordTraceDecision(ctx, status)
-	if err != nil {
-		span.RecordError(err)
-		return true, err
-	}
+	c.DecisionCache.Record(status, keep, reason)
 
 	if !keep {
 		c.Metrics.Increment("dropped_from_stress")
@@ -512,6 +530,19 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
 
+	// if a trace is dropped, we don't want to send it to the central store
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		if c.DecisionCache.Dropped(id) {
+			c.SpanCache.Remove(id)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+
+			return true
+		}
+
+		return false
+	})
+
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
 		return err
@@ -555,7 +586,7 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 // The function should return any traceIDs that aren't processed immediately;
 // they will be sent again eventually.
 func (c *CentralCollector) aggregateTraceIDChannel(
-	ch chan []byte, process func([]string) []string, maxTime time.Duration, maxCount int) {
+	ch chan []byte, process func([]string) []string, eg *errgroup.Group, maxTime time.Duration, maxCount int) {
 
 	ticker := c.Clock.NewTicker(maxTime)
 	defer ticker.Stop()
@@ -564,8 +595,7 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 	for {
 		select {
 		case <-c.done:
-			// wait for any goroutines to end before returning
-			c.egAgg.Wait()
+			eg.Wait()
 			return
 		case msgBytes := <-ch:
 			// unmarshal the message into a slice of trace IDs
@@ -584,6 +614,7 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			// ticker fired, so send what we have
 			send = true
 		}
+
 		// if we need to send, do so
 		if send && len(traceIDs) > 0 {
 			// copy the traceIDs so we can clear the list
@@ -593,7 +624,13 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			traceIDs = traceIDs[:0]
 
 			// now process the result in a goroutine so we can keep listening
-			c.egAgg.Go(func() error {
+			eg.Go(func() error {
+				select {
+				case <-c.done:
+					return nil
+				default:
+				}
+
 				// we get back the ones that didn't process immediately
 				notready := process(idsToProcess)
 				// put any unused traceIDs back into the channel but do it a bit
@@ -686,6 +723,19 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 		sendTime := c.Clock.Since(now)
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
+
+	// if a trace is dropped, we don't want to send it to the central store
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		if c.DecisionCache.Dropped(id) {
+			c.SpanCache.Remove(id)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+
+			return true
+		}
+
+		return false
+	})
 
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.AllTraceStates...)
 	if err != nil {
@@ -923,14 +973,15 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 			state = centralstore.DecisionKeep
 			status.KeepReason = reason
 			keptIDs = append(keptIDs, trace.TraceID)
-			// c.Gossip.Publish(gossip_keep_channel, []byte(trace.TraceID))
 		} else {
 			state = centralstore.DecisionDrop
 			droppedIDs = append(droppedIDs, trace.TraceID)
-			// c.Gossip.Publish(gossip_drop_channel, []byte(trace.TraceID))
 		}
 		status.State = state
 		status.Rate = rate
+
+		c.DecisionCache.Record(status, shouldSend, reason)
+
 		stateMap[status.TraceID] = status
 		c.Metrics.Increment("collector_decide_trace")
 		span.End()
@@ -980,6 +1031,19 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	if err != nil {
 		c.Logger.Error().WithField("trace_id", sp.TraceID).Logf("error adding span to cache: %s", err)
 		return err
+	}
+
+	// check if we have a decision for this trace
+	// if we do, process the span immediately
+	record, _, found := c.DecisionCache.Check(sp)
+	if found {
+		c.Metrics.Increment("collector_span_decision_cache_hit")
+		if record.Kept() {
+			c.keepTraces([]string{sp.TraceID})
+		} else {
+			c.dropTraces([]string{sp.TraceID})
+		}
+		return nil
 	}
 
 	trace := c.SpanCache.Get(sp.TraceID)

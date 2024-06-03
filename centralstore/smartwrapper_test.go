@@ -410,8 +410,6 @@ func TestSetTraceStatuses(t *testing.T) {
 			err = store.SetTraceStatuses(ctx, statuses)
 			assert.NoError(t, err)
 
-			// we need to give the dropped traces cache a chance to run or it might not process everything
-			time.Sleep(50 * time.Millisecond)
 			statuses, err = store.GetStatusForTraces(ctx, traces, DecisionDrop, DecisionKeep)
 			assert.NoError(t, err)
 			assert.Equal(t, numberOfTraces, len(statuses))
