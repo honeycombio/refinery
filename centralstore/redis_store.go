@@ -768,18 +768,26 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 
 	// Now create a worker factory that will create a worker that will get the status for a traceID.
 	// We also want telemetry so we do a little bit of prework and a cleanup function.
-	workerFactory := func(i int) (func(traceID string) *CentralTraceStatus, func(int)) {
+	workerFactory := func(i int) (func(traceIDs []string) *CentralTraceStatus, func(int)) {
 		conn := client.Get()
 		queries := 0
 		found := 0
 		_, span := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker", i)
-		worker := func(traceID string) *CentralTraceStatus {
-			if traceID == "" {
+		worker := func(traceIDs []string) []*CentralTraceStatus {
+			if len(traceIDs) == 0 {
 				return nil
 			}
-			status := &centralTraceStatusRedis{}
-			err := conn.GetStructHash(t.traceStatusKey(traceID), status)
-			queries++
+			for _, traceID := range traceIDs {
+				err := redis.NewGetAllHashCommand(t.traceStatusKey(traceID)).Send(conn)
+				if err != nil {
+					statusSpan.RecordError(err)
+					return nil
+				}
+				queries++
+			}
+
+			status := make([]*centralTraceStatusRedis, len(traceIDs))
+			conn.ReceiveStructs(len(traceIDs), status)
 
 			if err != nil {
 				if errors.Is(err, redis.ErrKeyNotFound) {

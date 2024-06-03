@@ -67,7 +67,6 @@ type Conn interface {
 	SetStringTTL(context.Context, string, string, time.Duration) (string, error)
 
 	GetAllStringsHash(string) (map[string]string, error)
-	GetStructHash(string, any) error
 	GetAllByteSliceHash(string) ([][]byte, error)
 	GetFloat64Hash(string) (map[string]float64, error)
 	ListFields(string) ([]string, error)
@@ -96,6 +95,7 @@ type Conn interface {
 
 	ReceiveStrings(int) ([]string, error)
 	ReceiveByteSlice(int) ([][][]byte, error)
+	ReceiveStructs(int) ([]any, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
 	MemoryStats() (map[string]any, error)
@@ -710,16 +710,39 @@ func (c *DefaultConn) GetFloat64Hash(key string) (map[string]float64, error) {
 	return redis.Float64Map(c.conn.Do("HGETALL", key))
 }
 
-func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
-	values, err := redis.Values(c.conn.Do("HGETALL", key))
-	if err != nil {
-		return err
-	}
-	if len(values) == 0 {
-		return ErrKeyNotFound
+func (c *DefaultConn) GetStructHash(keys []string, val []interface{}) error {
+	if len(keys) != len(val) {
+		return errors.New("keys and values must have the same length")
 	}
 
-	return redis.ScanStruct(values, val)
+	errs := make([]error, 0)
+	for _, key := range keys {
+		err := c.conn.Send("HGETALL", key)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+	}
+
+	err := c.conn.Flush()
+	if err != nil {
+		return errors.Join(errs, err)
+	}
+
+	for i, key := range keys {
+		reply, err := c.conn.Receive()
+		if err != nil {
+			errs = append(errs, err)
+		}
+		if reply == nil {
+			continue
+		}
+		if err := redis.ScanStruct(reply, val[i]); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (c *DefaultConn) GetAllByteSliceHash(key string) ([][]byte, error) {
@@ -1021,6 +1044,13 @@ func NewGetHashCommand(key string, field string) command {
 	return command{
 		name: "HGET",
 		args: redis.Args{key, field},
+	}
+}
+
+func NewGetAllHashCommand(key string) command {
+	return command{
+		name: "HGETALL",
+		args: redis.Args{key},
 	}
 }
 
