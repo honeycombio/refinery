@@ -363,6 +363,10 @@ func peerMessageToBytes(level uint) []byte {
 }
 
 func newMessageFromBytes(b []byte) (uint, error) {
+	if len(b) == 0 {
+		return 0, errors.New("empty message")
+	}
+
 	parts := bytes.SplitN(b, []byte("/"), 2)
 	if len(parts) != 2 {
 		return 0, fmt.Errorf("invalid message format: %s", b)

@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
@@ -23,11 +22,10 @@ import (
 // when a trace is Kept, it *also* keeps it in a local store with a short TTL
 // so that all the information is still available while the trace is being sent.
 type LocalStore struct {
-	Config        config.Config        `inject:""`
-	DecisionCache cache.TraceSentCache `inject:""`
-	Metrics       metrics.Metrics      `inject:"genericMetrics"`
-	Tracer        trace.Tracer         `inject:"tracer"`
-	Clock         clockwork.Clock      `inject:""`
+	Config  config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"genericMetrics"`
+	Tracer  trace.Tracer    `inject:"tracer"`
+	Clock   clockwork.Clock `inject:""`
 	// states holds the current state of each trace in a map of the different states
 	// indexed by trace ID.
 	states map[CentralTraceState]statusMap
@@ -40,9 +38,6 @@ type LocalStore struct {
 var _ BasicStorer = (*LocalStore)(nil)
 
 func (lrs *LocalStore) Start() error {
-	if lrs.DecisionCache == nil {
-		return fmt.Errorf("LocalStore requires a DecisionCache")
-	}
 	if lrs.Clock == nil {
 		return fmt.Errorf("LocalStore requires a Clock")
 	}
@@ -60,8 +55,8 @@ func (lrs *LocalStore) Start() error {
 		DecisionDelay,
 		ReadyToDecide,
 		AwaitingDecision,
-		DecisionKeep, // these are also in the decision cache
-		// DecisionDrop, // these are ONLY in the decision cache
+		DecisionKeep,
+		DecisionDrop,
 	}
 	for _, state := range mapStates {
 		// initialize the map for each state
@@ -118,31 +113,6 @@ func (lrs *LocalStore) cleanup() {
 // wasn't found in any state. If the trace is found, the status will be non-nil.
 // Only call this if you're holding a Lock.
 func (lrs *LocalStore) findTraceStatus(traceID string) (CentralTraceState, *CentralTraceStatus) {
-	if tracerec, reason, found := lrs.DecisionCache.Test(traceID); found {
-		// it was in the decision cache
-		if tracerec.Kept() {
-			// but let's look in the local status map to see if we have more information
-			if status, ok := lrs.states[DecisionKeep][traceID]; ok {
-				// we have more information, so we return that
-				return DecisionKeep, status
-			}
-			// we don't have more information, so we return what we have
-			status := &CentralTraceStatus{
-				TraceID:   traceID,
-				State:     DecisionKeep,
-				Timestamp: lrs.Clock.Now(),
-			}
-
-			status.KeepReason = reason
-			return DecisionKeep, status
-		} else {
-			return DecisionDrop, &CentralTraceStatus{
-				TraceID:   traceID,
-				State:     DecisionDrop,
-				Timestamp: lrs.Clock.Now(),
-			}
-		}
-	}
 	// wasn't in the cache, look in all the other states
 	for state, statuses := range lrs.states {
 		if status, ok := statuses[traceID]; ok {
@@ -192,11 +162,6 @@ func (lrs *LocalStore) WriteSpans(ctx context.Context, spans []*CentralSpan) err
 	defer lrs.mutex.Unlock()
 spanLoop:
 	for _, span := range spans {
-		// first let's check if we've already processed and dropped this trace; if so, we're done and
-		// can just ignore the span.
-		if lrs.DecisionCache.Dropped(span.TraceID) {
-			continue
-		}
 
 		// we have to find the state and decide what to do based on that
 		state, _ := lrs.findTraceStatus(span.TraceID)
@@ -257,7 +222,7 @@ spanLoop:
 	return nil
 }
 
-// GetTrace fetches the current state of a trace (including all of its
+// GetTraces fetches the current state of a trace (including all of its
 // spans) from the central store. The trace contains a list of CentralSpans,
 // and these spans will usually (but not always) only contain the key
 // fields. The spans returned from this call should be used for making the
@@ -266,17 +231,19 @@ spanLoop:
 // is Keep. If the trace has a root span, the Root property will be
 // populated. Normally this call will be made after Refinery has been asked
 // to make a trace decision.
-func (lrs *LocalStore) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
+func (lrs *LocalStore) GetTraces(ctx context.Context, traceIDs ...string) ([]*CentralTrace, error) {
 	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.GetTrace")
 	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
-	if trace, ok := lrs.traces[traceID]; ok {
-		otelutil.AddSpanField(span, "found", true)
-		return trace, nil
+	traces := make([]*CentralTrace, 0, len(traceIDs))
+	for _, id := range traceIDs {
+		if trace, ok := lrs.traces[id]; ok {
+			traces = append(traces, trace)
+		}
 	}
-	otelutil.AddSpanField(span, "found", false)
-	return nil, fmt.Errorf("trace %s not found", traceID)
+
+	return traces, nil
 }
 
 // GetStatusForTraces returns the current state for a list of traces if they
@@ -376,16 +343,9 @@ func (lrs *LocalStore) ChangeTraceStatus(ctx context.Context, traceIDs []string,
 	defer lrs.mutex.Unlock()
 	for _, traceID := range traceIDs {
 		if toState == DecisionDrop {
-			// if we're dropping, record it in the decision cache
-			if trace, ok := lrs.states[fromState][traceID]; ok {
-				lrs.DecisionCache.Record(trace, false, "")
-				// and remove it from the states map
-				delete(lrs.states[fromState], traceID)
-				delete(lrs.traces, traceID)
-			}
-		} else {
-			lrs.changeTraceState(traceID, fromState, toState)
+			delete(lrs.traces, traceID)
 		}
+		lrs.changeTraceState(traceID, fromState, toState)
 	}
 	return nil
 }
@@ -401,41 +361,13 @@ func (lrs *LocalStore) KeepTraces(ctx context.Context, statuses []*CentralTraceS
 	defer lrs.mutex.Unlock()
 	for _, status := range statuses {
 		if _, ok := lrs.states[AwaitingDecision][status.TraceID]; ok {
-			// record in the decision cache for the long term
-			lrs.DecisionCache.Record(status, true, status.KeepReason)
-			// and move it to the DecisionKeep state for the short term
+			// move it to the DecisionKeep state for the short term
 			// note that the status we're looking at may have been updated, so we need to
 			// use the one we have in the statuses list
 			lrs.states[DecisionKeep][status.TraceID] = status
 			delete(lrs.states[AwaitingDecision], status.TraceID)
 		}
 	}
-	return nil
-}
-
-func (lrs *LocalStore) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus) error {
-	_, span := otelutil.StartSpan(ctx, lrs.Tracer, "LocalStore.RecordTraceDecision")
-	defer span.End()
-
-	var keep bool
-	switch trace.State {
-	case DecisionKeep:
-		keep = true
-	case DecisionDrop:
-		keep = false
-	default:
-		return fmt.Errorf("invalid state %s", trace.State)
-
-	}
-
-	lrs.mutex.Lock()
-	defer lrs.mutex.Unlock()
-	if keep {
-		lrs.DecisionCache.Record(trace, keep, trace.KeepReason)
-	} else {
-		lrs.DecisionCache.Dropped(trace.TraceID)
-	}
-
 	return nil
 }
 
@@ -446,13 +378,6 @@ func (lrs *LocalStore) RecordMetrics(ctx context.Context) error {
 	defer span.End()
 	lrs.mutex.RLock()
 	defer lrs.mutex.RUnlock()
-	m, err := lrs.DecisionCache.GetMetrics()
-	if err != nil {
-		return err
-	}
-	for k, v := range m {
-		lrs.Metrics.Count("localstore_"+k, v)
-	}
 
 	// add the state counts and trace count
 	m2 := map[string]any{

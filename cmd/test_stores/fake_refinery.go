@@ -132,12 +132,16 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 					go func(status *centralstore.CentralTraceStatus, span3 trace.Span) {
 						defer wg.Done()
 
-						trace, err := fri.Store.GetTrace(getCtx, status.TraceID)
+						traces, err := fri.Store.GetTraces(getCtx, status.TraceID)
 						if err != nil {
 							otelutil.AddException(span3, err)
 						}
-						otelutil.AddSpanField(span3, "span_count", len(trace.Spans))
-						traces = append(traces, trace)
+						var spanCount int
+						for _, trace := range traces {
+							spanCount += len(trace.Spans)
+						}
+						otelutil.AddSpanField(span3, "span_count", spanCount)
+						traces = append(traces, traces...)
 						span3.End()
 					}(status, span3)
 				}
@@ -220,16 +224,21 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 						span3.End()
 						continue
 					}
-					trace, err := fri.Store.GetTrace(getCtx, status.TraceID)
+					traces, err := fri.Store.GetTraces(getCtx, status.TraceID)
 					if err != nil {
 						otelutil.AddException(span3, err)
+					}
+					if len(traces) == 0 {
+						otelutil.AddSpanField(span3, "not_found", true)
+						span3.End()
+						continue
 					}
 					// decision criteria:
 					// we're going to keep:
 					// * traces having status > 500
 					// * traces with POST spans having status >= 400 && <= 403
 					keep := false
-					for _, span := range trace.Spans {
+					for _, span := range traces[0].Spans {
 						operationField, ok := span.KeyFields["operation"]
 						if !ok {
 							otelutil.AddException(span3, fmt.Errorf("missing operation field in span"))
