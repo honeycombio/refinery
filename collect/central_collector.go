@@ -27,6 +27,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -834,50 +835,28 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		return err
 	}
 
-	traces := make([]*centralstore.CentralTrace, len(statuses))
+	if len(statuses) == 0 {
+		return nil
+	}
+
 	stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
 
-	eg := &errgroup.Group{}
-	concurrency := c.Config.GetCollectionConfig().TraceFetcherConcurrency
-	if concurrency <= 0 {
-		concurrency = 10
-	}
-	eg.SetLimit(concurrency)
-	otelutil.AddSpanField(span, "concurrency", concurrency)
-
-	for idx, status := range statuses {
+	for _, status := range statuses {
 		// make a decision on each trace
 		if status.State != centralstore.AwaitingDecision {
 			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
-		currentStatus, currentIdx := status, idx
 		stateMap[status.TraceID] = status
 
-		eg.Go(func() error {
-			ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.makeDecision.getTrace")
-			defer span.End()
-			trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
-			if err != nil {
-				return err
-			}
-			traces[currentIdx] = trace
-			return nil
-		})
 	}
-	err = eg.Wait()
+	traces, err := c.Store.GetTraces(ctx, maps.Keys(stateMap)...)
 	if err != nil {
-		c.Logger.Error().Logf("error getting trace information: %s", err)
-	}
-
-	if len(traces) == 0 {
 		return err
 	}
 
 	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
 	defer spanTraces.End()
 
-	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
-	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
 	keptIDs := make([]string, 0)
 	droppedIDs := make([]string, 0)
 
@@ -999,6 +978,8 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		return err
 	}
 
+	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
+	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
 	if len(keptIDs) > 0 {
 		data, err := encodeBatch(keptIDs)
 		if err != nil {

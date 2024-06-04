@@ -252,9 +252,9 @@ func TestBasicStoreOperation(t *testing.T) {
 			}, 3*time.Second, 100*time.Millisecond)
 
 			// check that the spans are in the store
-			for _, tid := range traceids {
-				trace, err := store.GetTrace(ctx, tid)
-				assert.NoError(t, err)
+			traces, err := store.GetTraces(ctx, traceids...)
+			assert.NoError(t, err)
+			for _, trace := range traces {
 				if err == nil {
 					assert.Equal(t, 10, len(trace.Spans))
 					assert.NotNil(t, trace.Root)
@@ -335,7 +335,11 @@ func TestSetTraceStatuses(t *testing.T) {
 			traceids := generics.NewSetWithCapacity[string](numberOfTraces)
 
 			for tr := 0; tr < numberOfTraces; tr++ {
-				tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
+				tid := fmt.Sprintf("trace%02d", rand.Intn(10000))
+				// on the off chance we get a duplicate, try again
+				if traceids.Contains(tid) {
+					tid = fmt.Sprintf("trace%02d", rand.Intn(10000))
+				}
 				traceids.Add(tid)
 				// write 9 child spans to the store
 				for s := 1; s < 10; s++ {
@@ -486,7 +490,7 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetTrace(ctx, spans[i%100].TraceID)
+		store.GetTraces(ctx, spans[i%100].TraceID)
 	}
 }
 

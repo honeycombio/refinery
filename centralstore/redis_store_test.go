@@ -142,9 +142,10 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 
 	require.NoError(t, store.WriteSpans(ctx, testSpans))
 
-	trace, err := store.GetTrace(ctx, traceID)
+	traces, err := store.GetTraces(ctx, traceID)
 	require.NoError(t, err)
-	require.NotNil(t, trace)
+	require.Len(t, traces, 1)
+	trace := traces[0]
 	require.Equal(t, traceID, trace.TraceID)
 	require.Len(t, trace.Spans, 2)
 	assert.EqualValues(t, testSpans, trace.Spans)
@@ -373,10 +374,10 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	require.Equal(t, DecisionKeep, status[0].State)
 
 	// remove spans linked to trace
-	trace, err := store.GetTrace(ctx, traceID)
+	trace, err := store.GetTraces(ctx, traceID)
 	require.NoError(t, err)
-	require.Empty(t, trace.Spans)
-	require.Nil(t, trace.Root)
+	require.Empty(t, trace[0].Spans)
+	require.Nil(t, trace[0].Root)
 }
 
 func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
@@ -601,7 +602,8 @@ func TestRedisBasicStore_normalizeCentralTraceStatusRedis(t *testing.T) {
 	}
 
 	statusInRedis := &centralTraceStatusRedis{}
-	status := normalizeCentralTraceStatusRedis(statusInRedis)
+	status, err := normalizeCentralTraceStatusRedis(statusInRedis)
+	require.NoError(t, err)
 
 	expected := getFields(&CentralTraceStatus{})
 	after := getFields(status)
