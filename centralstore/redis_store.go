@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sort"
+	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
@@ -360,13 +360,6 @@ func (r *RedisBasicStore) GetStatusForTraces(ctx context.Context, traceIDs []str
 		}
 		statuses = append(statuses, status)
 	}
-
-	sort.SliceStable(statuses, func(i, j int) bool {
-		if statuses[i].Timestamp.IsZero() {
-			return false
-		}
-		return statuses[i].Timestamp.Before(statuses[j].Timestamp)
-	})
 
 	return statuses, nil
 
@@ -759,81 +752,94 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 		return nil, nil
 	}
 
-	// We're going to use generics.FanoutToMap to create a set of parallel workers that will farm
-	// out the work of getting the status for each traceID.
+	results := make(chan *CentralTraceStatus, len(traceIDs))
 
-	// First, calculate the max number of goroutines to use -- half the max active connections configured
-	numGoroutines := t.config.GetParallelism()
-	otelutil.AddSpanField(statusSpan, "num_goroutines", numGoroutines)
+	// divide the traceIDs into batches of 10
+	// to avoid sending too many commands in one go
+	// to redis
+	chunkSize := 10
+	wg := sync.WaitGroup{}
+	for i := 0; i < len(traceIDs); i += chunkSize {
+		end := i + chunkSize
+		if end > len(traceIDs) {
+			end = len(traceIDs)
+		}
 
-	// Now create a worker factory that will create a worker that will get the status for a traceID.
-	// We also want telemetry so we do a little bit of prework and a cleanup function.
-	workerFactory := func(i int) (func(traceIDs []string) *CentralTraceStatus, func(int)) {
-		conn := client.Get()
-		queries := 0
-		found := 0
-		_, span := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker", i)
-		worker := func(traceIDs []string) []*CentralTraceStatus {
-			if len(traceIDs) == 0 {
-				return nil
-			}
-			for _, traceID := range traceIDs {
+		wg.Add(1)
+		go func(ids []string) {
+			defer wg.Done()
+			conn := client.Get()
+			defer conn.Close()
+			for _, traceID := range ids {
 				err := redis.NewGetAllHashCommand(t.traceStatusKey(traceID)).Send(conn)
 				if err != nil {
 					statusSpan.RecordError(err)
+					continue
+				}
+			}
+			statuses := make([]*centralTraceStatusRedis, 0, len(ids))
+			err := conn.ReceiveStructs(len(ids), func(reply []any, err error) error {
+				if err != nil {
+					return err
+				}
+
+				if reply == nil || len(reply) == 0 {
+					statuses = append(statuses, nil)
 					return nil
 				}
-				queries++
-			}
 
-			status := make([]*centralTraceStatusRedis, len(traceIDs))
-			conn.ReceiveStructs(len(traceIDs), status)
+				status := &centralTraceStatusRedis{}
+
+				err = redis.ScanStruct(reply, status)
+				if err != nil {
+					return err
+				}
+
+				statuses = append(statuses, status)
+				return nil
+			})
 
 			if err != nil {
-				if errors.Is(err, redis.ErrKeyNotFound) {
-					status.TraceID = traceID
+				statusSpan.RecordError(err)
+				return
+			}
+
+			for i, s := range statuses {
+				if s == nil {
+					status := &centralTraceStatusRedis{}
+					status.TraceID = ids[i]
 					status.State = Unknown.String()
 					status.Timestamp = t.clock.Now().UnixMicro()
 
 					v, err := normalizeCentralTraceStatusRedis(status)
 					if err != nil {
 						statusSpan.RecordError(err)
-						return nil
+						continue
 					}
-					return v
+					results <- v
+					continue
 				}
-				statusSpan.RecordError(err)
-				return nil
+				v, err := normalizeCentralTraceStatusRedis(s)
+				if err != nil {
+					statusSpan.RecordError(err)
+					continue
+				}
+				results <- v
 			}
-			found++
-			v, err := normalizeCentralTraceStatusRedis(status)
-			if err != nil {
-				statusSpan.RecordError(err)
-				return nil
-			}
-			return v
-		}
-		cleanup := func(i int) {
-			conn.Close()
-			otelutil.AddSpanFields(span, map[string]interface{}{
-				"num_queries": queries,
-				"num_found":   found,
-			})
-			span.End()
-		}
-		return worker, cleanup
-	}
-	// this filters out the nil statuses
-	predicate := func(s *CentralTraceStatus) bool {
-		return s != nil
+		}(traceIDs[i:end])
 	}
 
-	// Now we have all our parts, and this does all the work.
-	statuses := generics.FanoutToMap(traceIDs, numGoroutines, workerFactory, predicate)
-	otelutil.AddSpanField(statusSpan, "num_statuses", len(statuses))
+	wg.Wait()
+	close(results)
+
+	values := make(map[string]*CentralTraceStatus, len(traceIDs))
+
+	for status := range results {
+		values[status.TraceID] = status
+	}
 
 	// Our result is ready
-	return statuses, nil
+	return values, nil
 }
 
 func (t *tracesStore) traceStatusKey(traceID string) string {

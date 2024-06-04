@@ -161,7 +161,7 @@ func (p *PeerStore) publish() {
 		}
 
 		if err := p.Gossip.Publish(peerChan, msg.Bytes()); err != nil {
-			logrus.WithError(err).Error("failed to publish peer info")
+			logrus.WithError(err).Error("failed to publish peer info to gossip channel")
 		}
 	}
 }
