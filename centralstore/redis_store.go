@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
@@ -752,94 +751,87 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 		return nil, nil
 	}
 
-	results := make(chan *CentralTraceStatus, len(traceIDs))
+	workerFactory := func(workerID int) (worker func([]string) map[string]*CentralTraceStatus, cleanup func(int)) {
+		ctx, workerSpan := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker_id", workerID)
 
-	// divide the traceIDs into batches of 10
-	// to avoid sending too many commands in one go
-	// to redis
-	chunkSize := 10
-	wg := sync.WaitGroup{}
-	for i := 0; i < len(traceIDs); i += chunkSize {
-		end := i + chunkSize
-		if end > len(traceIDs) {
-			end = len(traceIDs)
-		}
+		return func(traceIDs []string) map[string]*CentralTraceStatus {
+				_, chunkSpan := otelutil.StartSpanMulti(ctx, t.tracer, "getTraceStatusesWorkerChunk",
+					map[string]any{"worker_id": workerID, "num_ids": len(traceIDs)})
+				defer chunkSpan.End()
 
-		wg.Add(1)
-		go func(ids []string) {
-			defer wg.Done()
-			conn := client.Get()
-			defer conn.Close()
-			for _, traceID := range ids {
-				err := redis.NewGetAllHashCommand(t.traceStatusKey(traceID)).Send(conn)
-				if err != nil {
-					statusSpan.RecordError(err)
-					continue
+				conn := client.Get()
+				defer conn.Close()
+				var found int
+				for _, traceID := range traceIDs {
+					err := redis.NewGetAllHashCommand(t.traceStatusKey(traceID)).Send(conn)
+					if err != nil {
+						chunkSpan.RecordError(err)
+						continue
+					}
 				}
-			}
-			statuses := make([]*centralTraceStatusRedis, 0, len(ids))
-			err := conn.ReceiveStructs(len(ids), func(reply []any, err error) error {
-				if err != nil {
-					return err
-				}
+				statuses := make([]*centralTraceStatusRedis, 0, len(traceIDs))
+				err := conn.ReceiveStructs(len(traceIDs), func(reply []any, err error) error {
+					if err != nil {
+						return err
+					}
 
-				if reply == nil || len(reply) == 0 {
-					statuses = append(statuses, nil)
+					if reply == nil || len(reply) == 0 {
+						statuses = append(statuses, nil)
+						return nil
+					}
+
+					status := &centralTraceStatusRedis{}
+
+					err = redis.ScanStruct(reply, status)
+					if err != nil {
+						return err
+					}
+
+					statuses = append(statuses, status)
+					return nil
+				})
+
+				if err != nil {
+					chunkSpan.RecordError(err)
 					return nil
 				}
 
-				status := &centralTraceStatusRedis{}
+				results := make(map[string]*CentralTraceStatus, len(statuses))
+				for i, s := range statuses {
+					if s == nil {
+						status := &centralTraceStatusRedis{}
+						status.TraceID = traceIDs[i]
+						status.State = Unknown.String()
+						status.Timestamp = t.clock.Now().UnixMicro()
 
-				err = redis.ScanStruct(reply, status)
-				if err != nil {
-					return err
-				}
-
-				statuses = append(statuses, status)
-				return nil
-			})
-
-			if err != nil {
-				statusSpan.RecordError(err)
-				return
-			}
-
-			for i, s := range statuses {
-				if s == nil {
-					status := &centralTraceStatusRedis{}
-					status.TraceID = ids[i]
-					status.State = Unknown.String()
-					status.Timestamp = t.clock.Now().UnixMicro()
-
-					v, err := normalizeCentralTraceStatusRedis(status)
-					if err != nil {
-						statusSpan.RecordError(err)
+						v, err := normalizeCentralTraceStatusRedis(status)
+						if err != nil {
+							chunkSpan.RecordError(err)
+							continue
+						}
+						results[status.TraceID] = v
 						continue
 					}
-					results <- v
-					continue
+					found++
+					v, err := normalizeCentralTraceStatusRedis(s)
+					if err != nil {
+						chunkSpan.RecordError(err)
+						continue
+					}
+					results[s.TraceID] = v
 				}
-				v, err := normalizeCentralTraceStatusRedis(s)
-				if err != nil {
-					statusSpan.RecordError(err)
-					continue
-				}
-				results <- v
+
+				return results
+
+			}, func(_ int) {
+				workerSpan.End()
 			}
-		}(traceIDs[i:end])
 	}
 
-	wg.Wait()
-	close(results)
+	// fanout the traceIDs to multiple workers, 20 traceIDs per worker and maximum 10 workers
+	results := generics.FanoutChunksToMap(traceIDs, 20, 10, workerFactory, nil)
 
-	values := make(map[string]*CentralTraceStatus, len(traceIDs))
-
-	for status := range results {
-		values[status.TraceID] = status
-	}
-
-	// Our result is ready
-	return values, nil
+	return results, nil
 }
 
 func (t *tracesStore) traceStatusKey(traceID string) string {

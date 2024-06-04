@@ -161,3 +161,74 @@ func EasyFanoutToMap[T comparable, U any](input []T, parallelism int, worker fun
 		return worker, nil
 	}, nil)
 }
+
+// FanoutChunksToMap takes a slice of input, a chunk size, a maximum parallelism factor, and a worker factory.
+// It calls the generated worker on every chunk of the input, and returns a (possibly filtered) map of the inputs to the outputs.
+// Only the outputs that pass the predicate (if it is not nil) will be added to the map.
+//
+// The maximum parallelism factor is the maximum number of workers that will be run in parallel. The actual number of workers
+// will be the minimum of the maximum parallelism factor and the number of chunks in the input.
+func FanoutChunksToMap[T comparable, U any](input []T, chunkSize int, maxParallelism int, workerFactory func(int) (worker func([]T) map[T]U, cleanup func(int)), predicate func(U) bool) map[T]U {
+	result := make(map[T]U, 0)
+
+	if chunkSize <= 0 {
+		chunkSize = 1
+	}
+
+	type resultPair struct {
+		key T
+		val U
+	}
+	parallelism := min(maxParallelism, max(len(input)/chunkSize, 1))
+	fanoutChan := make(chan []T, parallelism)
+	faninChan := make(chan resultPair, parallelism)
+
+	// send all the trace IDs to the fanout channel
+	wgFans := sync.WaitGroup{}
+	wgFans.Add(1)
+	go func() {
+		defer wgFans.Done()
+		defer close(fanoutChan)
+		for i := 0; i < len(input); i += chunkSize {
+			end := min(i+chunkSize, len(input))
+			fanoutChan <- input[i:end]
+		}
+	}()
+
+	wgFans.Add(1)
+	go func() {
+		defer wgFans.Done()
+		for r := range faninChan {
+			result[r.key] = r.val
+		}
+	}()
+
+	wgWorkers := sync.WaitGroup{}
+	for i := 0; i < parallelism; i++ {
+		wgWorkers.Add(1)
+		worker, cleanup := workerFactory(i)
+		go func(i int) {
+			defer wgWorkers.Done()
+			if cleanup != nil {
+				defer cleanup(i)
+			}
+			for u := range fanoutChan {
+				products := worker(u)
+				for key, product := range products {
+					if predicate == nil || predicate(product) {
+						faninChan <- resultPair{key: key, val: product}
+					}
+				}
+			}
+		}(i)
+	}
+
+	// wait for the workers to finish
+	wgWorkers.Wait()
+	// now we can close the fanin channel and wait for the fanin goroutine to finish
+	// fanout should already be done but this makes sure we don't lose track of it
+	close(faninChan)
+	wgFans.Wait()
+
+	return result
+}
