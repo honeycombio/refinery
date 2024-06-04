@@ -136,9 +136,11 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 						if err != nil {
 							otelutil.AddException(span3, err)
 						}
+						var spanCount int
 						for _, trace := range traces {
-							otelutil.AddSpanField(span3, "span_count", len(trace.Spans))
+							spanCount += len(trace.Spans)
 						}
+						otelutil.AddSpanField(span3, "span_count", spanCount)
 						traces = append(traces, traces...)
 						span3.End()
 					}(status, span3)
@@ -227,7 +229,7 @@ func (fri *FakeRefineryInstance) runDecider(opts CmdLineOptions, nodeIndex int, 
 						otelutil.AddException(span3, err)
 					}
 					if len(traces) == 0 {
-						otelutil.AddSpanField(span3, "decision", "no trace")
+						otelutil.AddSpanField(span3, "not_found", true)
 						span3.End()
 						continue
 					}

@@ -853,6 +853,11 @@ func (c *DefaultConn) ReceiveStrings(n int) ([]string, error) {
 	return replies, nil
 }
 
+// ReceiveByteSlice receives n replies from a batch of array return values and converts them to
+// a slice of byte slices. If a reply is nil, it will be represented as a nil slice.
+//
+// For example: command `HVALS` returns a slice of byte slices, where each byte slice is a value
+// in the hash. An array of return values from a batch of `HVALS` commands will be a slice of byte slices.
 func (c *DefaultConn) ReceiveByteSlice(n int) ([][][]byte, error) {
 	replies := make([][][]byte, 0, n)
 	err := c.receive(n, func(reply any, err error) error {
