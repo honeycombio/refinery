@@ -281,7 +281,7 @@ func (r *RedisBasicStore) GetTraces(ctx context.Context, traceIDs ...string) ([]
 		}
 	}
 
-	data, err := conn.ReceiveByteSlice(len(traceIDs))
+	data, err := conn.ReceiveByteSlices(len(traceIDs))
 	if err != nil {
 		return nil, err
 	}
