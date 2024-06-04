@@ -280,7 +280,7 @@ func (r *RedisBasicStore) GetTraces(ctx context.Context, traceIDs ...string) ([]
 		}
 	}
 
-	data, err := conn.ReceiveByteSlice(len(traceIDs))
+	data, err := conn.ReceiveByteSlices(len(traceIDs))
 	if err != nil {
 		return nil, err
 	}
@@ -754,14 +754,13 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 	workerFactory := func(workerID int) (worker func([]string) map[string]*CentralTraceStatus, cleanup func(int)) {
 		ctx, workerSpan := otelutil.StartSpanWith(ctx, t.tracer, "getTraceStatusesWorker", "worker_id", workerID)
 
+		conn := client.Get()
+		var found int
 		return func(traceIDs []string) map[string]*CentralTraceStatus {
 				_, chunkSpan := otelutil.StartSpanMulti(ctx, t.tracer, "getTraceStatusesWorkerChunk",
 					map[string]any{"worker_id": workerID, "num_ids": len(traceIDs)})
 				defer chunkSpan.End()
 
-				conn := client.Get()
-				defer conn.Close()
-				var found int
 				for _, traceID := range traceIDs {
 					err := redis.NewGetAllHashCommand(t.traceStatusKey(traceID)).Send(conn)
 					if err != nil {
@@ -824,6 +823,10 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 				return results
 
 			}, func(_ int) {
+				conn.Close()
+				otelutil.AddSpanFields(workerSpan, map[string]interface{}{
+					"num_found": found,
+				})
 				workerSpan.End()
 			}
 	}

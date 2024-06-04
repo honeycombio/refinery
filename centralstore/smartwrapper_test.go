@@ -335,7 +335,11 @@ func TestSetTraceStatuses(t *testing.T) {
 			traceids := generics.NewSetWithCapacity[string](numberOfTraces)
 
 			for tr := 0; tr < numberOfTraces; tr++ {
-				tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
+				tid := fmt.Sprintf("trace%02d", rand.Intn(10000))
+				// on the off chance we get a duplicate, try again
+				if traceids.Contains(tid) {
+					tid = fmt.Sprintf("trace%02d", rand.Intn(10000))
+				}
 				traceids.Add(tid)
 				// write 9 child spans to the store
 				for s := 1; s < 10; s++ {

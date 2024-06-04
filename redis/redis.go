@@ -94,8 +94,8 @@ type Conn interface {
 	TTL(string) (int64, error)
 
 	ReceiveStrings(int) ([]string, error)
-	ReceiveByteSlice(n int) ([][][]byte, error)
 	ReceiveStructs(int, func([]any, error) error) error
+	ReceiveByteSlices(int) ([][][]byte, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
 	MemoryStats() (map[string]any, error)
@@ -841,12 +841,12 @@ func (c *DefaultConn) ReceiveStrings(n int) ([]string, error) {
 	return replies, nil
 }
 
-// ReceiveByteSlice receives n replies from a batch of array return values and converts them to
+// ReceiveByteSlices receives n replies from a batch of array return values and converts them to
 // a slice of byte slices. If a reply is nil, it will be represented as a nil slice.
 //
 // For example: command `HVALS` returns a slice of byte slices, where each byte slice is a value
 // in the hash. An array of return values from a batch of `HVALS` commands will be a slice of byte slices.
-func (c *DefaultConn) ReceiveByteSlice(n int) ([][][]byte, error) {
+func (c *DefaultConn) ReceiveByteSlices(n int) ([][][]byte, error) {
 	replies := make([][][]byte, 0, n)
 	err := c.receive(n, func(reply any, err error) error {
 		if err != nil {
@@ -871,18 +871,14 @@ func (c *DefaultConn) ReceiveByteSlice(n int) ([][][]byte, error) {
 }
 
 func (c *DefaultConn) ReceiveStructs(n int, converter func(reply []any, err error) error) error {
-	err := c.conn.Flush()
-	if err != nil {
-		return err
-	}
-
-	for i := 0; i < n; i++ {
-		err := converter(redis.Values(c.conn.Receive()))
+	return c.receive(n, func(reply any, err error) error {
+		values, err := redis.Values(reply, err)
 		if err != nil {
 			return err
 		}
-	}
-	return nil
+
+		return converter(values, err)
+	})
 }
 
 func (c *DefaultConn) receive(n int, converter func(reply any, err error) error) error {
