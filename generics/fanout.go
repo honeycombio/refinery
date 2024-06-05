@@ -162,12 +162,15 @@ func EasyFanoutToMap[T comparable, U any](input []T, parallelism int, worker fun
 	}, nil)
 }
 
-// FanoutChunksToMap takes a slice of input, a chunk size, a maximum parallelism factor, and a worker factory.
-// It calls the generated worker on every chunk of the input, and returns a (possibly filtered) map of the inputs to the outputs.
-// Only the outputs that pass the predicate (if it is not nil) will be added to the map.
+// FanoutChunksToMap takes a slice of input, a chunk size, a maximum parallelism
+// factor, and a worker factory. It calls the generated worker on every chunk of
+// the input, and returns a (possibly filtered) map of the inputs to the
+// outputs. Only the outputs that pass the predicate (if it is not nil) will be
+// added to the map.
 //
-// The maximum parallelism factor is the maximum number of workers that will be run in parallel. The actual number of workers
-// will be the minimum of the maximum parallelism factor and the number of chunks in the input.
+// The maximum parallelism factor is the maximum number of workers that will be
+// run in parallel. The actual number of workers will be the minimum of the
+// maximum parallelism factor and the number of chunks in the input.
 func FanoutChunksToMap[T comparable, U any](input []T, chunkSize int, maxParallelism int, workerFactory func(int) (worker func([]T) map[T]U, cleanup func(int)), predicate func(U) bool) map[T]U {
 	result := make(map[T]U, 0)
 
