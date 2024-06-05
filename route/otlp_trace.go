@@ -58,6 +58,10 @@ func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTrac
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
+	if !t.router.Config.IsAPIKeyValid(ri.ApiKey) {
+		return nil, huskyotlp.AsGRPCError(fmt.Errorf("api key %s not found in list of authorized keys", ri.ApiKey))
+	}
+
 	result, err := huskyotlp.TranslateTraceRequest(ctx, req, ri)
 	if err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
