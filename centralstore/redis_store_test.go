@@ -711,7 +711,7 @@ func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, ctx context.
 	for _, state := range ts.states {
 		require.NoError(t, ts.remove(ctx, conn, state, traceID))
 	}
-	_, err := conn.Del(ts.traceStatesKey(traceID))
+	_, err := conn.Del(ts.traceStatesKey(traceID)).Do()
 	require.NoError(t, err)
 
 	newSpan := []string{traceID}
