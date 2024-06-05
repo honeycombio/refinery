@@ -441,7 +441,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	t.Run("rejects bad API keys", func(t *testing.T) {
+	t.Run("rejects bad API keys - HTTP", func(t *testing.T) {
 		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
@@ -470,6 +470,24 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
+	t.Run("rejects bad API keys - gRPC", func(t *testing.T) {
+		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
+		// we can't check the error message because it's a grpc error
+		// and husky hides the message if it's not an OTLPError
+		// see https://github.com/honeycombio/husky/blob/main/otlp/errors.go#L33
+		assert.NotNil(t, err)
+		assert.Equal(t, 0, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
