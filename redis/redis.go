@@ -59,7 +59,6 @@ type Conn interface {
 	ListKeys(string) ([]string, error)
 	Scan(string, string, <-chan struct{}) (<-chan string, <-chan error)
 	SetIfNotExistsTTLInt64(string, int64, int) error
-	SetIfNotExistsTTLString(string, string, int) (any, error)
 	SetInt64(string, int64) error
 	SetInt64TTL(string, int64, int) error
 	SetString(string, string) (string, error)
@@ -72,7 +71,7 @@ type Conn interface {
 	ListFields(string) ([]string, error)
 	IncrementByHash(string, string, int64) (int64, error)
 	SetHash(string, any) error
-	SetNXHash(string, any) (any, error)
+	SetNXHash(string, ...any) command
 	SetHashTTL(string, any, time.Duration) (any, error)
 
 	SAdd(string, ...any) error
@@ -96,6 +95,7 @@ type Conn interface {
 	ReceiveStrings(int) ([]string, error)
 	ReceiveStructs(int, func([]any, error) error) error
 	ReceiveByteSlices(int) ([][][]byte, error)
+	ReceiveInt64s(int) ([]int64, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
 	MemoryStats() (map[string]any, error)
@@ -510,10 +510,6 @@ func (c *DefaultConn) MGetStrings(keys ...string) ([]string, error) {
 	return values, nil
 }
 
-func (c *DefaultConn) SetIfNotExistsTTLString(key string, val string, ttlSeconds int) (any, error) {
-	return c.conn.Do("SET", key, val, "EX", ttlSeconds, "NX")
-}
-
 func (c *DefaultConn) IncrementBy(key string, incrVal int64) (int64, error) {
 	return redis.Int64(c.conn.Do("INCRBY", key, incrVal))
 }
@@ -724,27 +720,14 @@ func (c *DefaultConn) SetHash(key string, val interface{}) error {
 	return err
 }
 
-func (c *DefaultConn) SetNXHash(key string, val interface{}) (any, error) {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return nil, err
-	}
-
+func (c *DefaultConn) SetNXHash(key string, val ...interface{}) command {
 	args := redis.Args{key}.AddFlat(val)
-	for i := 1; i < len(args); i += 2 {
-		if err := c.conn.Send("HSETNX", key, args[i], args[i+1]); err != nil {
-			return nil, err
-		}
-	}
 
-	// TODO: How to handle the case of partial success?
-	// redis will only return 1 if the key was set, 0 if it was not
-	// should we return a map of the results?
-	values, err := redis.Values(c.conn.Do("EXEC"))
-	if err != nil {
-		return nil, err
+	return command{
+		name: "HSETNX",
+		args: args,
+		conn: c,
 	}
-
-	return values, nil
 }
 
 func (c *DefaultConn) SetHashTTL(key string, val interface{}, expiration time.Duration) (any, error) {
@@ -815,6 +798,30 @@ func (c *DefaultConn) MemoryStats() (map[string]any, error) {
 	}
 
 	return result, nil
+}
+
+func (c *DefaultConn) ReceiveInt64s(n int) ([]int64, error) {
+	replies := make([]int64, 0, n)
+	err := c.receive(n, func(reply any, err error) error {
+		if err != nil {
+			return err
+		}
+		val, err := redis.Int64(reply, nil)
+		if errors.Is(err, redis.ErrNil) {
+			replies = append(replies, -1)
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		replies = append(replies, val)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return replies, nil
 }
 
 func (c *DefaultConn) ReceiveStrings(n int) ([]string, error) {
@@ -956,10 +963,18 @@ var _ Command = command{}
 type command struct {
 	name string
 	args []any
+	conn Conn
 }
 
-func (c command) Send(conn Conn) error {
-	defaultConn := conn.(*DefaultConn)
+func (c command) Do() (any, error) {
+	defaultConn := c.conn.(*DefaultConn)
+
+	return defaultConn.conn.Do(c.Name(), c.Args()...)
+
+}
+
+func (c command) Send() error {
+	defaultConn := c.conn.(*DefaultConn)
 
 	return defaultConn.conn.Send(c.Name(), c.Args()...)
 }
@@ -977,63 +992,80 @@ type Command interface {
 	Args() []any
 }
 
-func NewSetHashCommand(key string, value interface{}) command {
+func NewGetCommand(key string, conn Conn) command {
+	args := redis.Args{key}
+	return command{
+		name: "GET",
+		args: args,
+		conn: conn,
+	}
+}
+
+func NewSetHashCommand(key string, value interface{}, conn Conn) command {
 	args := redis.Args{key}.AddFlat(value)
 	return command{
 		name: "HSET",
 		args: args,
+		conn: conn,
 	}
 }
 
-func NewMultiSetHashCommand(key string, value any) command {
+func NewMultiSetHashCommand(key string, value any, conn Conn) command {
 	args := redis.Args{key}.AddFlat(value)
 	return command{
 		name: "HMSET",
 		args: args,
+		conn: conn,
 	}
 }
 
-func NewExpireCommand(key string, value any) command {
+func NewExpireCommand(key string, value any, conn Conn) command {
 	args := redis.Args{key}.AddFlat(value)
 	return command{
 		name: "EXPIRE",
 		args: args,
+		conn: conn,
 	}
 }
 
-func NewINCRCommand(key string) command {
+func NewINCRCommand(key string, conn Conn) command {
 	args := redis.Args{key}
 	return command{
 		name: "INCR",
 		args: args,
+		conn: conn,
 	}
 }
 
-func NewIncrByHashCommand(key, field string, incrVal int64) command {
+func NewIncrByHashCommand(key, field string, incrVal int64, conn Conn) command {
 	return command{
 		name: "HINCRBY",
 		args: redis.Args{key, field, incrVal},
+		conn: conn,
 	}
 }
 
-func NewGetHashCommand(key string, field string) command {
+func NewGetHashCommand(key string, field string, conn Conn) command {
 	return command{
 		name: "HGET",
 		args: redis.Args{key, field},
+		conn: conn,
 	}
 }
 
-func NewGetAllHashCommand(key string) command {
+func NewGetAllHashCommand(key string, conn Conn) command {
 	return command{
 		name: "HGETALL",
 		args: redis.Args{key},
+		conn: conn,
 	}
 }
 
-func NewGetAllValuesHashCommand(key string) command {
+func NewGetAllValuesHashCommand(key string, conn Conn) command {
 	return command{
 		name: "HVALS",
 		args: redis.Args{key},
+		conn: conn,
 	}
 }
 
