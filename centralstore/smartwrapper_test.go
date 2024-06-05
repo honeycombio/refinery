@@ -13,6 +13,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -251,9 +252,9 @@ func TestBasicStoreOperation(t *testing.T) {
 			}, 3*time.Second, 100*time.Millisecond)
 
 			// check that the spans are in the store
-			for _, tid := range traceids {
-				trace, err := store.GetTrace(ctx, tid)
-				assert.NoError(t, err)
+			traces, err := store.GetTraces(ctx, traceids...)
+			assert.NoError(t, err)
+			for _, trace := range traces {
 				if err == nil {
 					assert.Equal(t, 10, len(trace.Spans))
 					assert.NotNil(t, trace.Root)
@@ -331,11 +332,15 @@ func TestSetTraceStatuses(t *testing.T) {
 
 			ctx := context.Background()
 			numberOfTraces := 5
-			traceids := make([]string, 0)
+			traceids := generics.NewSetWithCapacity[string](numberOfTraces)
 
 			for tr := 0; tr < numberOfTraces; tr++ {
-				tid := fmt.Sprintf("trace%02d", rand.Intn(1000))
-				traceids = append(traceids, tid)
+				tid := fmt.Sprintf("trace%02d", rand.Intn(10000))
+				// on the off chance we get a duplicate, try again
+				if traceids.Contains(tid) {
+					tid = fmt.Sprintf("trace%02d", rand.Intn(10000))
+				}
+				traceids.Add(tid)
 				// write 9 child spans to the store
 				for s := 1; s < 10; s++ {
 					span := &CentralSpan{
@@ -355,15 +360,16 @@ func TestSetTraceStatuses(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			assert.Equal(t, numberOfTraces, len(traceids))
+			traces := traceids.Members()
+			assert.Equal(t, numberOfTraces, len(traces))
 			assert.Eventually(t, func() bool {
-				states, err := store.GetStatusForTraces(ctx, traceids, Collecting, DecisionDelay, ReadyToDecide)
+				states, err := store.GetStatusForTraces(ctx, traces, Collecting, DecisionDelay, ReadyToDecide)
 				return err == nil && len(states) == numberOfTraces
 			}, 1*time.Second, 100*time.Millisecond)
 
 			// wait for it to reach the Ready state
 			assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-				states, err := store.GetStatusForTraces(ctx, traceids, ReadyToDecide)
+				states, err := store.GetStatusForTraces(ctx, traces, ReadyToDecide)
 				assert.NoError(collect, err)
 				assert.Equal(collect, numberOfTraces, len(states))
 				for _, state := range states {
@@ -377,7 +383,7 @@ func TestSetTraceStatuses(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, numberOfTraces, len(toDecide))
 			sort.Strings(toDecide)
-			expected := traceids[:numberOfTraces]
+			expected := traces[:numberOfTraces]
 			sort.Strings(expected)
 			assert.EqualValues(t, expected, toDecide)
 
@@ -397,7 +403,7 @@ func TestSetTraceStatuses(t *testing.T) {
 			}, 3*time.Second, 100*time.Millisecond)
 
 			for _, status := range statuses {
-				if status.TraceID == traceids[0] {
+				if status.TraceID == traces[0] {
 					status.State = DecisionKeep
 					status.KeepReason = "because"
 				} else {
@@ -408,17 +414,15 @@ func TestSetTraceStatuses(t *testing.T) {
 			err = store.SetTraceStatuses(ctx, statuses)
 			assert.NoError(t, err)
 
-			// we need to give the dropped traces cache a chance to run or it might not process everything
-			time.Sleep(50 * time.Millisecond)
-			statuses, err = store.GetStatusForTraces(ctx, traceids, DecisionDrop, DecisionKeep)
+			statuses, err = store.GetStatusForTraces(ctx, traces, DecisionDrop, DecisionKeep)
 			assert.NoError(t, err)
 			assert.Equal(t, numberOfTraces, len(statuses))
 			for _, status := range statuses {
-				if status.TraceID == traceids[0] {
+				if status.TraceID == traces[0] {
 					assert.Equal(t, DecisionKeep, status.State)
 					assert.Equal(t, "because", status.KeepReason)
 				} else {
-					assert.Equal(t, DecisionDrop, status.State)
+					assert.Equal(t, DecisionDrop, status.State, status.TraceID)
 				}
 			}
 		})
@@ -486,7 +490,7 @@ func BenchmarkStoreGetTrace(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.GetTrace(ctx, spans[i%100].TraceID)
+		store.GetTraces(ctx, spans[i%100].TraceID)
 	}
 }
 

@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -20,7 +19,6 @@ import (
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	"github.com/jonboulle/clockwork"
-	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace"
@@ -35,6 +33,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/gossip"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/redis"
@@ -185,6 +184,7 @@ func newStartedApp(
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &health.Health{}},
 		&inject.Object{Value: &stressRelief.StressRelief{}, Name: "stressRelief"},
+		&inject.Object{Value: &peer.PeerStore{}},
 		&inject.Object{Value: &a},
 	)
 	require.NoError(t, err)
@@ -458,275 +458,6 @@ func TestSamplerKeys(t *testing.T) {
 			}, 5*time.Second, 100*time.Millisecond)
 		})
 	}
-}
-
-func TestEventsEndpoint(t *testing.T) {
-	t.Skip("This is testing deterministic trace sharding, which isn't relevant for Refinery 3.")
-
-	var apps [2]*App
-	var addrs [2]string
-	var senders [2]*transmission.MockSender
-	redisDB := 7
-	for i := range apps {
-		var stop func()
-		basePort := 13000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
-		apps[i], _, stop = newStartedApp(t, senders[i], basePort, redisDB, false, "redis")
-		defer stop()
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
-	}
-
-	// Deliver to host 1, it should be passed to host 0 and emitted there.
-	zEnc, _ := zstd.NewWriter(nil)
-	blob := zEnc.EncodeAll([]byte(`{"foo":"bar","trace.trace_id":"1"}`), nil)
-	req, err := http.NewRequest(
-		"POST",
-		"http://localhost:13000/1/events/dataset",
-		bytes.NewReader(blob),
-	)
-	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "zstd")
-	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
-	req.Header.Set("X-Honeycomb-Samplerate", "10")
-
-	post(t, req)
-	require.Eventually(t, func() bool {
-		events := senders[0].Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
-
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := senders[0].Events()
-		event := events[0]
-		assert.Equal(
-			t,
-			&transmission.Event{
-				APIKey:     legacyAPIKey,
-				Dataset:    "dataset",
-				SampleRate: 10,
-				APIHost:    "http://api.honeycomb.io",
-				Timestamp:  now,
-				Data: map[string]interface{}{
-					"trace.trace_id":                     "1",
-					"foo":                                "bar",
-					"meta.refinery.original_sample_rate": uint(10),
-					"meta.refinery.reason":               "deterministic/always",
-					"meta.event_count":                   1,
-					"meta.span_count":                    1,
-					"meta.span_event_count":              0,
-					"meta.span_link_count":               0,
-				},
-				Metadata: map[string]any{
-					"api_host":    "http://api.honeycomb.io",
-					"dataset":     "dataset",
-					"environment": "",
-					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
-				},
-			},
-			event,
-		)
-	}, 5*time.Second, 200*time.Microsecond)
-
-	// Repeat, but deliver to host 1, it should not be
-	// passed to host 0.
-
-	blob = blob[:0]
-	buf := bytes.NewBuffer(blob)
-	gz := gzip.NewWriter(buf)
-	gz.Write([]byte(`{"foo":"bar","trace.trace_id":"1"}`))
-	gz.Close()
-
-	req, err = http.NewRequest(
-		"POST",
-		"http://localhost:13002/1/events/dataset",
-		buf,
-	)
-	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
-	req.Header.Set("X-Honeycomb-Samplerate", "10")
-
-	post(t, req)
-	require.Eventually(t, func() bool {
-		events := senders[1].Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
-
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := senders[1].Events()
-		event := events[0]
-		assert.Equal(
-			t,
-			&transmission.Event{
-				APIKey:     legacyAPIKey,
-				Dataset:    "dataset",
-				SampleRate: 10,
-				APIHost:    "http://api.honeycomb.io",
-				Timestamp:  now,
-				Data: map[string]interface{}{
-					"trace.trace_id":                     "1",
-					"foo":                                "bar",
-					"meta.refinery.original_sample_rate": uint(10),
-					"meta.refinery.reason":               "deterministic/always - late arriving span",
-					"meta.refinery.send_reason":          "trace_send_late_span",
-					"meta.event_count":                   2,
-					"meta.span_count":                    2,
-					"meta.span_event_count":              0,
-					"meta.span_link_count":               0,
-				},
-				Metadata: map[string]any{
-					"api_host":    "http://api.honeycomb.io",
-					"dataset":     "dataset",
-					"environment": "",
-					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
-				},
-			},
-			event,
-		)
-	}, 3*time.Second, 2*time.Millisecond)
-}
-
-func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
-	t.Skip("This is testing deterministic trace sharding, which isn't relevant for Refinery 3.")
-
-	var apps [2]*App
-	var addrs [2]string
-	var senders [2]*transmission.MockSender
-	redisDB := 9
-	for i := range apps {
-		basePort := 15000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
-		app, _, stop := newStartedApp(t, senders[i], basePort, redisDB, false, "redis")
-		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-		apps[i] = app
-		defer stop()
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
-	}
-
-	traceID := "4"
-	traceData := []byte(fmt.Sprintf(`{"foo":"bar","trace.trace_id":"%s"}`, traceID))
-	// Deliver to host 1, it should be passed to host 0 and emitted there.
-	zEnc, _ := zstd.NewWriter(nil)
-	blob := zEnc.EncodeAll(traceData, nil)
-	req, err := http.NewRequest(
-		"POST",
-		"http://localhost:15002/1/events/dataset",
-		bytes.NewReader(blob),
-	)
-	require.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "zstd")
-	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
-	req.Header.Set("X-Honeycomb-Samplerate", "10")
-
-	post(t, req)
-
-	require.Eventually(t, func() bool {
-		events := senders[1].Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
-
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := senders[1].Events()
-		require.Equal(collect, 1, len(events))
-		event := events[0]
-		assert.Equal(
-			collect,
-			&transmission.Event{
-				APIKey:     nonLegacyAPIKey,
-				Dataset:    "dataset",
-				SampleRate: 10,
-				APIHost:    "http://api.honeycomb.io",
-				Timestamp:  now,
-				Data: map[string]interface{}{
-					"trace.trace_id":                     traceID,
-					"foo":                                "bar",
-					"meta.refinery.original_sample_rate": uint(10),
-					"meta.event_count":                   1,
-					"meta.span_count":                    1,
-					"meta.span_event_count":              0,
-					"meta.span_link_count":               0,
-					"meta.refinery.reason":               "deterministic/always",
-				},
-				Metadata: map[string]any{
-					"api_host":    "http://api.honeycomb.io",
-					"dataset":     "dataset",
-					"environment": "test",
-					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
-				},
-			},
-			event,
-		)
-	}, 5*time.Second, 200*time.Microsecond)
-
-	// Repeat, but deliver to host 1, it should not be
-	// passed to host 0.
-
-	blob = blob[:0]
-	buf := bytes.NewBuffer(blob)
-	gz := gzip.NewWriter(buf)
-	gz.Write(traceData)
-	gz.Close()
-
-	req, err = http.NewRequest(
-		"POST",
-		"http://localhost:15000/1/events/dataset",
-		buf,
-	)
-	assert.NoError(t, err)
-	req.Header.Set("X-Honeycomb-Team", nonLegacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("X-Honeycomb-Event-Time", now.Format(time.RFC3339Nano))
-	req.Header.Set("X-Honeycomb-Samplerate", "10")
-
-	post(t, req)
-	require.Eventually(t, func() bool {
-		events := senders[0].Events()
-		return len(events) == 1
-	}, 5*time.Second, 100*time.Millisecond)
-
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := senders[0].Events()
-		require.Equal(collect, 1, len(events))
-		event := events[0]
-		assert.Equal(
-			collect,
-			&transmission.Event{
-				APIKey:     nonLegacyAPIKey,
-				Dataset:    "dataset",
-				SampleRate: 10,
-				APIHost:    "http://api.honeycomb.io",
-				Timestamp:  now,
-				Data: map[string]interface{}{
-					"trace.trace_id":                     traceID,
-					"foo":                                "bar",
-					"meta.refinery.original_sample_rate": uint(10),
-					"meta.event_count":                   2,
-					"meta.span_count":                    2,
-					"meta.span_event_count":              0,
-					"meta.span_link_count":               0,
-					"meta.refinery.reason":               "deterministic/always - late arriving span",
-					"meta.refinery.send_reason":          "trace_send_late_span",
-				},
-				Metadata: map[string]any{
-					"api_host":    "http://api.honeycomb.io",
-					"dataset":     "dataset",
-					"environment": "test",
-					"enqueued_at": event.Metadata.(map[string]any)["enqueued_at"],
-				},
-			},
-			event,
-		)
-	}, 5*time.Second, 200*time.Microsecond)
-
 }
 
 var (

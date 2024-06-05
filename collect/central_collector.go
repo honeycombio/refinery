@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -68,6 +70,7 @@ type CentralCollector struct {
 	Config         config.Config               `inject:""`
 	Clock          clockwork.Clock             `inject:""`
 	Transmission   transmit.Transmission       `inject:"upstreamTransmission"`
+	DecisionCache  cache.TraceSentCache        `inject:""`
 	Logger         logger.Logger               `inject:""`
 	Metrics        metrics.Metrics             `inject:"genericMetrics"`
 	Tracer         trace.Tracer                `inject:"tracer"`
@@ -87,7 +90,6 @@ type CentralCollector struct {
 
 	done         chan struct{}
 	eg           *errgroup.Group
-	egAgg        *errgroup.Group // errorgroup for the trace aggregation goroutines
 	senderCycle  *Cycle
 	deciderCycle *Cycle
 	metricsCycle *Cycle
@@ -108,8 +110,6 @@ const (
 	receiverHealth = "receiver"
 	deciderHealth  = "decider"
 	senderHealth   = "sender"
-	gossip_keep    = "keep"
-	gossip_drop    = "drop"
 )
 
 func (c *CentralCollector) Start() error {
@@ -118,7 +118,11 @@ func (c *CentralCollector) Start() error {
 
 	// we're a health check reporter so register ourselves for each of our major routines
 	c.Health.Register(receiverHealth, time.Duration(5*collectorCfg.MemoryCycleDuration))
-	c.Health.Register(deciderHealth, 5*collectorCfg.GetDeciderCycleDuration())
+	deciderHealthThreshold := collectorCfg.GetDeciderHealthThreshold()
+	if deciderHealthThreshold == 0 {
+		deciderHealthThreshold = 5 * collectorCfg.GetDeciderCycleDuration()
+	}
+	c.Health.Register(deciderHealth, deciderHealthThreshold)
 
 	// the sender health check should only be run if we're using it
 	if !collectorCfg.UseDecisionGossip {
@@ -174,6 +178,7 @@ func (c *CentralCollector) Start() error {
 	c.Metrics.Register("collector_sender_runs", "counter")
 	c.Metrics.Register("collector_decider_runs", "counter")
 	c.Metrics.Register("collector_cleanup_runs", "counter")
+	c.Metrics.Register("collector_span_decision_cache_hit", "counter")
 
 	if c.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -197,6 +202,15 @@ func (c *CentralCollector) Start() error {
 				c.Logger.Error().Logf("error recording metrics: %s", err)
 			}
 
+			m, err := c.DecisionCache.GetMetrics()
+			if err != nil {
+				c.Logger.Error().Logf("error getting decision cache metrics: %s", err)
+			} else {
+				for k, v := range m {
+					c.Metrics.Count("collector_"+k, v)
+				}
+			}
+
 			return nil
 		})
 	})
@@ -214,15 +228,17 @@ func (c *CentralCollector) Start() error {
 	if maxConcurrency <= 0 {
 		maxConcurrency = 4
 	}
-	c.egAgg = &errgroup.Group{}
-	c.egAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
+	egKeepAgg := &errgroup.Group{}
+	egDropAgg := &errgroup.Group{}
+	egKeepAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
+	egDropAgg.SetLimit(maxConcurrency) // we want to limit the number of goroutines that are aggregating trace IDs
 
 	// subscribe to the Keep and Drop decisions
-	c.keepChan = c.Gossip.Subscribe(gossip_keep, maxCount)
-	c.dropChan = c.Gossip.Subscribe(gossip_drop, maxCount)
+	c.keepChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelKeep), maxCount)
+	c.dropChan = c.Gossip.Subscribe(c.Gossip.GetChannel(gossip.ChannelDrop), maxCount)
 
-	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, maxTime, maxCount)
-	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, maxTime, maxCount)
+	go c.aggregateTraceIDChannel(c.keepChan, c.keepTraces, egKeepAgg, maxTime, maxCount)
+	go c.aggregateTraceIDChannel(c.dropChan, c.dropTraces, egDropAgg, maxTime, maxCount)
 
 	return nil
 }
@@ -353,23 +369,33 @@ func (c *CentralCollector) shutdown(ctx context.Context) error {
 // If it's part of the deterministic sample, the decision is written to the central store and
 // the span is enqueued for transmission.
 func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) {
-	ctx, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
+	_, span := otelutil.StartSpanWith(context.Background(), c.Tracer, "CentralCollector.ProcessSpanImmediately", "trace_id", sp.TraceID)
 
 	if !c.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
 		otelutil.AddSpanField(span, "nondeterministic", 1)
 		return false, nil
 	}
 
-	rate, keep, reason := c.StressRelief.GetSampleRate(sp.TraceID)
+	var keep bool
+	var rate uint
+	status := &centralstore.CentralTraceStatus{
+		TraceID: sp.TraceID,
+	}
+
+	record, reason, found := c.DecisionCache.Check(sp)
+	if !found {
+		rate, keep, reason = c.StressRelief.GetSampleRate(sp.TraceID)
+	} else {
+		c.Metrics.Increment("collector_span_decision_cache_hit")
+		rate = record.Rate()
+		keep = record.Kept()
+	}
+
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"rate":   rate,
 		"keep":   keep,
 		"reason": reason,
 	})
-
-	status := &centralstore.CentralTraceStatus{
-		TraceID: sp.TraceID,
-	}
 
 	if keep {
 		status.State = centralstore.DecisionKeep
@@ -379,11 +405,7 @@ func (c *CentralCollector) ProcessSpanImmediately(sp *types.Span) (bool, error) 
 		status.State = centralstore.DecisionDrop
 	}
 
-	err := c.Store.RecordTraceDecision(ctx, status, keep, reason)
-	if err != nil {
-		span.RecordError(err)
-		return true, err
-	}
+	c.DecisionCache.Record(status, keep, reason)
 
 	if !keep {
 		c.Metrics.Increment("dropped_from_stress")
@@ -509,6 +531,19 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
 
+	// if a trace is dropped, we don't want to send it to the central store
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		if c.DecisionCache.Dropped(id) {
+			c.SpanCache.Remove(id)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+
+			return true
+		}
+
+		return false
+	})
+
 	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
 	if err != nil {
 		return err
@@ -552,7 +587,7 @@ func (c *CentralCollector) sendTraces(ctx context.Context) error {
 // The function should return any traceIDs that aren't processed immediately;
 // they will be sent again eventually.
 func (c *CentralCollector) aggregateTraceIDChannel(
-	ch chan []byte, process func([]string) []string, maxTime time.Duration, maxCount int) {
+	ch chan []byte, process func([]string) []string, eg *errgroup.Group, maxTime time.Duration, maxCount int) {
 
 	ticker := c.Clock.NewTicker(maxTime)
 	defer ticker.Stop()
@@ -561,14 +596,18 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 	for {
 		select {
 		case <-c.done:
-			// wait for any goroutines to end before returning
-			c.egAgg.Wait()
+			eg.Wait()
 			return
-		case traceIDbytes := <-ch:
-			traceID := string(traceIDbytes)
+		case msgBytes := <-ch:
+			// unmarshal the message into a slice of trace IDs
+			msgIDs, err := decodeBatch(msgBytes)
+			if err != nil {
+				c.Logger.Error().Logf("error decompressing trace IDs: %s", err)
+				continue
+			}
 			// if we get a trace ID, add it to the list
-			traceIDs = append(traceIDs, traceID)
-			// if we reached the max count, we need to send
+			traceIDs = append(traceIDs, msgIDs...)
+			// if we exceeded the max count, we need to send
 			if len(traceIDs) >= maxCount {
 				send = true
 			}
@@ -576,6 +615,7 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			// ticker fired, so send what we have
 			send = true
 		}
+
 		// if we need to send, do so
 		if send && len(traceIDs) > 0 {
 			// copy the traceIDs so we can clear the list
@@ -585,18 +625,27 @@ func (c *CentralCollector) aggregateTraceIDChannel(
 			traceIDs = traceIDs[:0]
 
 			// now process the result in a goroutine so we can keep listening
-			c.egAgg.Go(func() error {
+			eg.Go(func() error {
+				select {
+				case <-c.done:
+					return nil
+				default:
+				}
+
 				// we get back the ones that didn't process immediately
 				notready := process(idsToProcess)
 				// put any unused traceIDs back into the channel but do it a bit
 				// slowly (we're still in our goroutine here)
-				for _, id := range notready {
-					select {
-					case ch <- []byte(id):
-						c.Clock.Sleep(1 * time.Millisecond)
-					case <-c.done:
-						return nil
-					}
+				ids, err := encodeBatch(notready)
+				if err != nil {
+					c.Logger.Error().Logf("error compressing trace IDs that are not ready to be processed: %s", err)
+					return nil
+				}
+
+				select {
+				case ch <- ids:
+				case <-c.done:
+					return nil
 				}
 				return nil
 			})
@@ -676,7 +725,20 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 		c.Metrics.Histogram("sender_considered_per_second", tracesConsidered/sendTime.Seconds())
 	}()
 
-	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.DecisionKeep, centralstore.DecisionDrop)
+	// if a trace is dropped, we don't want to send it to the central store
+	ids = slices.DeleteFunc(ids, func(id string) bool {
+		if c.DecisionCache.Dropped(id) {
+			c.SpanCache.Remove(id)
+			tracesConsidered++
+			c.Metrics.Increment("collector_drop_trace")
+
+			return true
+		}
+
+		return false
+	})
+
+	statuses, err := c.Store.GetStatusForTraces(ctx, ids, centralstore.AllTraceStates...)
 	if err != nil {
 		span.RecordError(err)
 		c.Logger.Error().Logf("error getting status for traces in cleanupTraces: %s", err)
@@ -701,6 +763,7 @@ func (c *CentralCollector) cleanupTraces(ctx context.Context) {
 			// but let's record that we did.
 			c.SpanCache.Remove(status.TraceID)
 			tracesConsidered++
+			c.Logger.Info().WithField("trace_id", status.TraceID).Logf("dropping old trace")
 			c.Metrics.Increment("collector_drop_old_trace")
 			continue
 		}
@@ -721,6 +784,25 @@ func (c *CentralCollector) decide() error {
 
 		return nil
 	})
+}
+
+// encodeBatch and decodeBatch are used to serialize and deserialize the trace IDs
+// we tried several different methods of encoding and compression:
+// - encoding/gob alone
+// - encoding/gob + gzip
+// - encoding/gob + snappy
+// - encoding/json
+// - snappy alone
+// Turns out that in the context of Redis gossip and the overhead of gossip itself,
+// the best performance was achieved with just making a list of strings.
+
+func encodeBatch(traceIDs []string) ([]byte, error) {
+	s := strings.Join(traceIDs, "\t")
+	return []byte(s), nil
+}
+
+func decodeBatch(data []byte) ([]string, error) {
+	return strings.Split(string(data), "\t"), nil
 }
 
 func (c *CentralCollector) makeDecisions(ctx context.Context) error {
@@ -753,47 +835,31 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		return err
 	}
 
-	traces := make([]*centralstore.CentralTrace, len(statuses))
+	if len(statuses) == 0 {
+		return nil
+	}
+
 	stateMap := make(map[string]*centralstore.CentralTraceStatus, len(statuses))
 
-	eg := &errgroup.Group{}
-	concurrency := c.Config.GetCollectionConfig().TraceFetcherConcurrency
-	if concurrency <= 0 {
-		concurrency = 10
-	}
-	eg.SetLimit(concurrency)
-	otelutil.AddSpanField(span, "concurrency", concurrency)
-
-	for idx, status := range statuses {
+	for _, status := range statuses {
 		// make a decision on each trace
 		if status.State != centralstore.AwaitingDecision {
 			return fmt.Errorf("unexpected state %s for trace %s", status.State, status.TraceID)
 		}
-		currentStatus, currentIdx := status, idx
 		stateMap[status.TraceID] = status
 
-		eg.Go(func() error {
-			ctx, span := otelutil.StartSpan(ctx, c.Tracer, "CentralCollector.makeDecision.getTrace")
-			defer span.End()
-			trace, err := c.Store.GetTrace(ctx, currentStatus.TraceID)
-			if err != nil {
-				return err
-			}
-			traces[currentIdx] = trace
-			return nil
-		})
 	}
-	err = eg.Wait()
+	traces, err := c.Store.GetTraces(ctx, maps.Keys(stateMap)...)
 	if err != nil {
-		c.Logger.Error().Logf("error getting trace information: %s", err)
-	}
-
-	if len(traces) == 0 {
 		return err
 	}
 
 	ctxTraces, spanTraces := otelutil.StartSpanWith(ctx, c.Tracer, "CentralCollector.makeDecision.traceLoop", "num_traces", len(traces))
 	defer spanTraces.End()
+
+	keptIDs := make([]string, 0)
+	droppedIDs := make([]string, 0)
+
 	for _, trace := range traces {
 		if trace == nil {
 			continue
@@ -885,13 +951,16 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		if shouldSend {
 			state = centralstore.DecisionKeep
 			status.KeepReason = reason
-			c.Gossip.Publish(gossip_keep, []byte(trace.TraceID))
+			keptIDs = append(keptIDs, trace.TraceID)
 		} else {
 			state = centralstore.DecisionDrop
-			c.Gossip.Publish(gossip_drop, []byte(trace.TraceID))
+			droppedIDs = append(droppedIDs, trace.TraceID)
 		}
 		status.State = state
 		status.Rate = rate
+
+		c.DecisionCache.Record(status, shouldSend, reason)
+
 		stateMap[status.TraceID] = status
 		c.Metrics.Increment("collector_decide_trace")
 		span.End()
@@ -905,7 +974,32 @@ func (c *CentralCollector) makeDecisions(ctx context.Context) error {
 		updatedStatuses = append(updatedStatuses, status)
 	}
 
-	return c.Store.SetTraceStatuses(ctx, updatedStatuses)
+	if err := c.Store.SetTraceStatuses(ctx, updatedStatuses); err != nil {
+		return err
+	}
+
+	gossip_keep_channel := c.Gossip.GetChannel(gossip.ChannelKeep)
+	gossip_drop_channel := c.Gossip.GetChannel(gossip.ChannelDrop)
+	if len(keptIDs) > 0 {
+		data, err := encodeBatch(keptIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing kept trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_keep_channel, data)
+		}
+	}
+
+	if len(droppedIDs) > 0 {
+		data, err := encodeBatch(droppedIDs)
+		if err != nil {
+			c.Logger.Error().Logf("error compressing dropped trace IDs: %s", err)
+		} else {
+			c.Gossip.Publish(gossip_drop_channel, data)
+		}
+	}
+
+	return nil
+
 }
 
 func (c *CentralCollector) processSpan(sp *types.Span) error {
@@ -918,6 +1012,19 @@ func (c *CentralCollector) processSpan(sp *types.Span) error {
 	if err != nil {
 		c.Logger.Error().WithField("trace_id", sp.TraceID).Logf("error adding span to cache: %s", err)
 		return err
+	}
+
+	// check if we have a decision for this trace
+	// if we do, process the span immediately
+	record, _, found := c.DecisionCache.Check(sp)
+	if found {
+		c.Metrics.Increment("collector_span_decision_cache_hit")
+		if record.Kept() {
+			c.keepTraces([]string{sp.TraceID})
+		} else {
+			c.dropTraces([]string{sp.TraceID})
+		}
+		return nil
 	}
 
 	trace := c.SpanCache.Get(sp.TraceID)

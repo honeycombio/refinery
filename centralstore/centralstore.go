@@ -24,6 +24,15 @@ type CentralSpan struct {
 	IsRoot          bool
 }
 
+// Trace returns the trace ID of the span.
+func (s *CentralSpan) Trace() string {
+	return s.TraceID
+}
+
+func (s *CentralSpan) SpanType() types.SpanType {
+	return s.Type
+}
+
 func (s *CentralSpan) Fields() map[string]interface{} {
 	if s.KeyFields == nil {
 		return s.AllFields
@@ -37,6 +46,10 @@ func (s *CentralSpan) SetSamplerSelector(key string) {
 }
 
 type CentralTraceState string
+
+// AllTraceStates is a list of all possible trace states.
+var AllTraceStates = []CentralTraceState{DecisionKeep, DecisionDrop, Unknown, Collecting,
+	DecisionDelay, ReadyToDecide, AwaitingDecision}
 
 const (
 	Unknown          CentralTraceState = "unknown"
@@ -154,17 +167,17 @@ type SmartStorer interface {
 	// The only error that can be returned is if the queue is full. This method is non-blocking.
 	WriteSpan(ctx context.Context, span *CentralSpan) error
 
-	// GetTrace fetches the current state of a trace (including all its spans)
+	// GetTraces fetches the current state of a trace (including all its spans)
 	// from the central store. The trace contains a list of CentralSpans, but
 	// note that these spans will usually only contain the key fields. The spans
 	// returned from this call should be used for making the trace decision;
 	// they should not be sent as telemetry unless AllFields is non-null. If the
 	// trace has a root span, it will be the first span in the list.
-	// GetTrace is intended to be used to make a trace decision, so
+	// GetTraces is intended to be used to make a trace decision, so
 	// it has the side effect of moving a trace from ReadyForDecision to
 	// AwaitingDecision. If the trace is not in the ReadyForDecision state,
 	// its state will not be changed.
-	GetTrace(ctx context.Context, traceID string) (*CentralTrace, error)
+	GetTraces(ctx context.Context, traceID ...string) ([]*CentralTrace, error)
 
 	// GetStatusForTraces returns the current state for a list of traces if they
 	// match any of the states passed in, including any reason information if
@@ -195,9 +208,6 @@ type SmartStorer interface {
 
 	// RecordMetrics Populates metric data from the smart store.
 	RecordMetrics(ctx context.Context) error
-
-	// RecordTraceDecision records the decision made by the trace decision engine.
-	RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error
 }
 
 // Spec for the central store's internal behavior:
@@ -252,7 +262,7 @@ type BasicStorer interface {
 	// WriteSpan may be asynchronous and will only return an error if the span could not be written.
 	WriteSpans(ctx context.Context, spans []*CentralSpan) error
 
-	// GetTrace fetches the current state of a trace (including all of its
+	// GetTraces fetches the current state of a trace (including all of its
 	// spans) from the central store. The trace contains a list of CentralSpans,
 	// and these spans will usually (but not always) only contain the key
 	// fields. The spans returned from this call should be used for making the
@@ -261,7 +271,7 @@ type BasicStorer interface {
 	// is Keep. If the trace has a root span, the Root property will be
 	// populated. Normally this call will be made after Refinery has been asked
 	// to make a trace decision.
-	GetTrace(ctx context.Context, traceID string) (*CentralTrace, error)
+	GetTraces(ctx context.Context, traceID ...string) ([]*CentralTrace, error)
 
 	// GetStatusForTraces returns the current state for a list of traces if they
 	// match any of the states passed in, including any reason information if
@@ -292,7 +302,4 @@ type BasicStorer interface {
 
 	// RecordMetrics Populates metric data from the basic store.
 	RecordMetrics(ctx context.Context) error
-
-	//RecordTraceDecision records the decision made by the trace decision engine.
-	RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error
 }

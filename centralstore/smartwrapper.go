@@ -230,17 +230,17 @@ func (w *SmartWrapper) manageStates(ctx context.Context, options config.SmartWra
 	}
 }
 
-// GetTrace fetches the current state of a trace (including all its spans) from
+// GetTraces fetches the current state of a trace (including all its spans) from
 // the central store. The trace contains a list of CentralSpans, but note that
 // these spans will usually only contain the key fields. The spans returned from
 // this call should be used for making the trace decision; they should not be
 // sent as telemetry unless AllFields is non-null. If the trace has a root span,
-// it will be the first span in the list. GetTrace is intended to be used to
+// it will be the first span in the list. GetTraces is intended to be used to
 // make a trace decision, so it has the side effect of moving a trace from
 // ReadyForDecision to AwaitingDecision. If the trace is not in the
 // ReadyForDecision state, its state will not be changed.
-func (w *SmartWrapper) GetTrace(ctx context.Context, traceID string) (*CentralTrace, error) {
-	return w.BasicStore.GetTrace(ctx, traceID)
+func (w *SmartWrapper) GetTraces(ctx context.Context, traceID ...string) ([]*CentralTrace, error) {
+	return w.BasicStore.GetTraces(ctx, traceID...)
 }
 
 // GetStatusForTraces returns the current state for a list of traces,
@@ -321,8 +321,4 @@ func (w *SmartWrapper) RecordMetrics(ctx context.Context) error {
 	w.Metrics.Gauge("smartstore_span_queue_length", float64(len(w.spanChan)))
 
 	return w.BasicStore.RecordMetrics(ctx)
-}
-
-func (w *SmartWrapper) RecordTraceDecision(ctx context.Context, trace *CentralTraceStatus, keep bool, reason string) error {
-	return w.BasicStore.RecordTraceDecision(ctx, trace, keep, reason)
 }

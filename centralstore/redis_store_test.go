@@ -30,7 +30,9 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 
 	status, err := store.GetStatusForTraces(ctx, []string{traceID}, Unknown)
 	require.NoError(t, err)
-	require.Len(t, status, 0)
+	require.Len(t, status, 1)
+	require.Equal(t, Unknown, status[0].State)
+	require.Equal(t, traceID, status[0].TraceID)
 
 	testcases := []struct {
 		name               string
@@ -140,9 +142,10 @@ func TestRedisBasicStore_GetTrace(t *testing.T) {
 
 	require.NoError(t, store.WriteSpans(ctx, testSpans))
 
-	trace, err := store.GetTrace(ctx, traceID)
+	traces, err := store.GetTraces(ctx, traceID)
 	require.NoError(t, err)
-	require.NotNil(t, trace)
+	require.Len(t, traces, 1)
+	trace := traces[0]
 	require.Equal(t, traceID, trace.TraceID)
 	require.Len(t, trace.Spans, 2)
 	assert.EqualValues(t, testSpans, trace.Spans)
@@ -159,7 +162,6 @@ func TestRedisBasicStore_GetStatusForTraces(t *testing.T) {
 	// before the trace is stored in redis, we should get no status
 	status, err := store.GetStatusForTraces(ctx, []string{traceID}, Collecting)
 	require.NoError(t, err)
-
 	require.Len(t, status, 0)
 
 	store.ensureInitialState(t, ctx, store.RedisClient.Get(), traceID, Collecting)
@@ -176,6 +178,7 @@ func TestRedisBasicStore_GetStatusForTraces(t *testing.T) {
 	status, err = store.GetStatusForTraces(ctx, []string{traceID}, AwaitingDecision)
 	require.NoError(t, err)
 	require.Len(t, status, 0)
+
 }
 
 func TestRedisBasicStore_applyStateChange_NoTraces(t *testing.T) {
@@ -364,11 +367,6 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.KeepTraces(ctx, status))
 
-	// make sure it's stored in the decision cache
-	record, _, exist := store.DecisionCache.Test(traceID)
-	require.True(t, exist)
-	require.Equal(t, uint(1), record.DescendantCount())
-
 	// make sure it's state is updated to keep
 	status, err = store.GetStatusForTraces(ctx, []string{traceID}, DecisionKeep)
 	require.NoError(t, err)
@@ -376,10 +374,10 @@ func TestRedisBasicStore_KeepTraces(t *testing.T) {
 	require.Equal(t, DecisionKeep, status[0].State)
 
 	// remove spans linked to trace
-	trace, err := store.GetTrace(ctx, traceID)
+	trace, err := store.GetTraces(ctx, traceID)
 	require.NoError(t, err)
-	require.Empty(t, trace.Spans)
-	require.Nil(t, trace.Root)
+	require.Empty(t, trace[0].Spans)
+	require.Nil(t, trace[0].Root)
 }
 
 func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
@@ -458,7 +456,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 	defer conn.Close()
 
 	traceID := "traceID0"
-	traceIDToBeRemoved := []*CentralSpan{{TraceID: traceID}}
+	traceIDToBeRemoved := []string{traceID}
 	err := ts.addNewTraces(ctx, conn, traceIDToBeRemoved)
 	require.NoError(t, err)
 	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceID)
@@ -467,7 +465,7 @@ func TestRedisBasicStore_Cleanup(t *testing.T) {
 
 	ts.clock.Advance(time.Duration(10 * time.Minute))
 	traceID1 := "traceID1"
-	traceIDToKeep := []*CentralSpan{{TraceID: traceID1}}
+	traceIDToKeep := []string{traceID1}
 	err = ts.addNewTraces(ctx, conn, traceIDToKeep)
 	require.NoError(t, err)
 	_, err = ts.toNextState(ctx, conn, newTraceStateChangeEvent(Collecting, DecisionDelay), traceID1)
@@ -531,36 +529,6 @@ func TestRedisBasicStore_GetMetrics(t *testing.T) {
 	assert.EqualValues(t, 0, count)
 
 	require.NotEmpty(t, store.lastMetricsRecorded)
-}
-
-func TestRedisBasicStore_RecordTraceDecision(t *testing.T) {
-	ctx := context.Background()
-	store := NewTestRedisBasicStore(ctx, t)
-	defer store.Stop()
-
-	keepTraceID := "traceID0"
-	dropTraceID := "traceID1"
-
-	err := store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: keepTraceID, State: DecisionKeep, KeepReason: "test"}, true, "kept")
-	require.NoError(t, err)
-	err = store.RecordTraceDecision(ctx, &CentralTraceStatus{TraceID: dropTraceID, State: DecisionDrop}, false, "dropped")
-	require.NoError(t, err)
-
-	conn := store.RedisClient.Get()
-	defer conn.Close()
-
-	status, err := store.GetStatusForTraces(ctx, []string{keepTraceID, dropTraceID}, DecisionKeep, DecisionDrop)
-	require.NoError(t, err)
-	require.Len(t, status, 2)
-	for _, s := range status {
-		if s.TraceID == keepTraceID {
-			assert.Equal(t, DecisionKeep, s.State)
-			assert.Equal(t, "kept", s.KeepReason)
-		} else if s.TraceID == dropTraceID {
-			assert.Equal(t, DecisionDrop, s.State)
-		}
-	}
-
 }
 
 func TestRedisBasicStore_ValidStateTransition(t *testing.T) {
@@ -634,7 +602,8 @@ func TestRedisBasicStore_normalizeCentralTraceStatusRedis(t *testing.T) {
 	}
 
 	statusInRedis := &centralTraceStatusRedis{}
-	status := normalizeCentralTraceStatusRedis(statusInRedis)
+	status, err := normalizeCentralTraceStatusRedis(statusInRedis)
+	require.NoError(t, err)
 
 	expected := getFields(&CentralTraceStatus{})
 	after := getFields(status)
@@ -745,11 +714,7 @@ func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, ctx context.
 	_, err := conn.Del(ts.traceStatesKey(traceID))
 	require.NoError(t, err)
 
-	newSpan := []*CentralSpan{
-		{
-			TraceID: traceID,
-		},
-	}
+	newSpan := []string{traceID}
 	require.NoError(t, ts.addNewTraces(ctx, conn, newSpan))
 	if state == Collecting {
 		return
