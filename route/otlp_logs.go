@@ -58,6 +58,10 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
+	if !l.router.Config.IsAPIKeyValid(ri.ApiKey) {
+		return nil, huskyotlp.AsGRPCError(fmt.Errorf("api key %s not found in list of authorized keys", ri.ApiKey))
+	}
+
 	result, err := huskyotlp.TranslateLogsRequest(ctx, req, ri)
 	if err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
