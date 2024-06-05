@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 )
@@ -59,7 +61,7 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	}
 
 	if !l.router.Config.IsAPIKeyValid(ri.ApiKey) {
-		return nil, huskyotlp.AsGRPCError(fmt.Errorf("api key %s not found in list of authorized keys", ri.ApiKey))
+		return nil, status.Error(codes.Unauthenticated, fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey))
 	}
 
 	result, err := huskyotlp.TranslateLogsRequest(ctx, req, ri)

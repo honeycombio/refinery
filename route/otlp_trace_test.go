@@ -24,7 +24,9 @@ import (
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -481,10 +483,8 @@ func TestOTLPHandler(t *testing.T) {
 		}
 		traceServer := NewTraceServer(router)
 		_, err := traceServer.Export(ctx, req)
-		// we can't check the error message because it's a grpc error
-		// and husky hides the message if it's not an OTLPError
-		// see https://github.com/honeycombio/husky/blob/main/otlp/errors.go#L33
-		assert.NotNil(t, err)
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Contains(t, err.Error(), "not found in list of authorized keys")
 		assert.Equal(t, 0, len(mockTransmission.Events))
 		mockTransmission.Flush()
 	})
