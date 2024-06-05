@@ -67,7 +67,6 @@ type Conn interface {
 	SetStringTTL(context.Context, string, string, time.Duration) (string, error)
 
 	GetAllStringsHash(string) (map[string]string, error)
-	GetStructHash(string, any) error
 	GetAllByteSliceHash(string) ([][]byte, error)
 	GetFloat64Hash(string) (map[string]float64, error)
 	ListFields(string) ([]string, error)
@@ -95,6 +94,7 @@ type Conn interface {
 	TTL(string) (int64, error)
 
 	ReceiveStrings(int) ([]string, error)
+	ReceiveStructs(int, func([]any, error) error) error
 	ReceiveByteSlices(int) ([][][]byte, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
@@ -710,18 +710,6 @@ func (c *DefaultConn) GetFloat64Hash(key string) (map[string]float64, error) {
 	return redis.Float64Map(c.conn.Do("HGETALL", key))
 }
 
-func (c *DefaultConn) GetStructHash(key string, val interface{}) error {
-	values, err := redis.Values(c.conn.Do("HGETALL", key))
-	if err != nil {
-		return err
-	}
-	if len(values) == 0 {
-		return ErrKeyNotFound
-	}
-
-	return redis.ScanStruct(values, val)
-}
-
 func (c *DefaultConn) GetAllByteSliceHash(key string) ([][]byte, error) {
 	return redis.ByteSlices(c.conn.Do("HVALS", key))
 }
@@ -882,6 +870,17 @@ func (c *DefaultConn) ReceiveByteSlices(n int) ([][][]byte, error) {
 	return replies, nil
 }
 
+func (c *DefaultConn) ReceiveStructs(n int, converter func(reply []any, err error) error) error {
+	return c.receive(n, func(reply any, err error) error {
+		values, err := redis.Values(reply, err)
+		if err != nil {
+			return err
+		}
+
+		return converter(values, err)
+	})
+}
+
 func (c *DefaultConn) receive(n int, converter func(reply any, err error) error) error {
 	err := c.conn.Flush()
 	if err != nil {
@@ -1024,6 +1023,13 @@ func NewGetHashCommand(key string, field string) command {
 	}
 }
 
+func NewGetAllHashCommand(key string) command {
+	return command{
+		name: "HGETALL",
+		args: redis.Args{key},
+	}
+}
+
 func NewGetAllValuesHashCommand(key string) command {
 	return command{
 		name: "HVALS",
@@ -1091,4 +1097,8 @@ func (c *DefaultConn) SAdd(key string, members ...any) error {
 // It returns the result the flattened value of args.
 func Args(args ...any) redis.Args {
 	return redis.Args{}.AddFlat(args)
+}
+
+func ScanStruct(reply []any, out any) error {
+	return redis.ScanStruct(reply, out)
 }

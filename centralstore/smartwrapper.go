@@ -166,6 +166,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	if len(st) == 0 || st == nil {
 		return nil
 	}
+
 	statuses, err := w.BasicStore.GetStatusForTraces(ctx, st, fromState)
 	if err != nil {
 		span.RecordError(err)
