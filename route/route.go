@@ -502,7 +502,11 @@ func (router *Router) processOTLPRequest(
 	apiKey string) error {
 
 	var requestID types.RequestIDContextKey
-	apiHost := router.Config.GetHoneycombAPI()
+	apiHost, err := router.Config.GetHoneycombAPI()
+	if err != nil {
+		router.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
+		return err
+	}
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)

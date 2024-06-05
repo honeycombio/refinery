@@ -12,8 +12,6 @@ import (
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
-	"github.com/honeycombio/refinery/collect"
-	"github.com/honeycombio/refinery/collect/stressRelief"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -45,12 +43,6 @@ func TestLogsOTLPHandler(t *testing.T) {
 	router := &Router{
 		Config: &config.MockConfig{
 			TraceIdFieldNames: []string{"trace.trace_id"},
-		},
-		Collector: &collect.CentralCollector{
-			Transmission: mockTransmission,
-			StressRelief: &stressRelief.MockStressReliever{
-				IsStressed: true, // mimic the collector being stressed so we send events immediately
-			},
 		},
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
