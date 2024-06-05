@@ -72,8 +72,8 @@ github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1 h1:MXRxSU
 github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1/go.mod h1:VvArVnXCHeB+tpxMOLWvaoItNHWYEgOx8Lgs1JoS+cI=
 github.com/honeycombio/dynsampler-go v0.6.0 h1:fs4mrfeFGU5V+ClwpblFzbWqn4Apb+lKlE7Ja5zL22I=
 github.com/honeycombio/dynsampler-go v0.6.0/go.mod h1:pJqWFeoMN3syX74PEvlusieyGBbtIBjmTVjLc3thmK4=
-github.com/honeycombio/husky v0.29.0 h1:1NXXmRynP3/AyFQAKOp/Tt5Aiaxy/mXQmZxT9Q9f+i4=
-github.com/honeycombio/husky v0.29.0/go.mod h1:fvEQ5eUXxOKGyJzUhI6AzUc3xPMDwJbTqTOXlSaDq/4=
+github.com/honeycombio/husky v0.30.0 h1:eCISdKgFq2zwmB0d5miJnBgUV6As5QCKNtEXW94MP2E=
+github.com/honeycombio/husky v0.30.0/go.mod h1:amJNyAKYHWGWrgz+hrLl2OCodbOD2bjR5arceKyh3qw=
 github.com/honeycombio/libhoney-go v1.22.0 h1:JLDVH6IWoFYHhZqjTqrTLC/lX5kiCCjs+pGqlI9SYPk=
 github.com/honeycombio/libhoney-go v1.22.0/go.mod h1:RIaurCpfg5NDWSEV8t3QLcda9dUAiVNyWeHRAaSpN90=
 github.com/honeycombio/opentelemetry-proto-go/otlp v0.19.0-compat h1:fMpIzVAl5C260HisnRWV//vfckZIC4qvn656M3VLLOY=
