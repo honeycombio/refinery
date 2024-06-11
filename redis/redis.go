@@ -731,12 +731,6 @@ func (c *DefaultConn) receive(n int, converter func(reply any, err error) error)
 }
 
 func (c *DefaultConn) Do(commandString string, args ...any) (any, error) {
-	now := c.Clock.Now()
-	defer func() {
-		duration := c.Clock.Since(now)
-		c.metrics.Histogram("redis_request_latency", duration)
-	}()
-
 	return c.conn.Do(commandString, args...)
 }
 

@@ -174,7 +174,7 @@ func (w *SmartWrapper) manageTimeouts(ctx context.Context, timeout time.Duration
 	}
 	traceIDsToChange := make([]string, 0)
 	for _, status := range statuses {
-		if !status.Timestamp.IsZero() && w.Clock.Since(status.Timestamp) > timeout {
+		if !status.LastTimestamp.IsZero() && w.Clock.Since(status.LastTimestamp) > timeout {
 			if status.TraceID == "" {
 				w.Logger.Warn().Logf("Attempted to change state from %s to %s of empty trace id", fromState, toState)
 			} else {
