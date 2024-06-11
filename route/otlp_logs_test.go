@@ -12,9 +12,11 @@ import (
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
@@ -42,6 +44,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	logger := &logger.MockLogger{}
 	router := &Router{
 		Config: &config.MockConfig{
 			TraceIdFieldNames: []string{"trace.trace_id"},
@@ -49,12 +52,17 @@ func TestLogsOTLPHandler(t *testing.T) {
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
 		iopLogger: iopLogger{
-			Logger:         &logger.MockLogger{},
+			Logger:         logger,
 			incomingOrPeer: "incoming",
 		},
-		Logger:           &logger.MockLogger{},
+		Logger:           logger,
 		zstdDecoders:     decoders,
 		environmentCache: newEnvironmentCache(time.Second, nil),
+		Sharder: &sharder.SingleServerSharder{
+			Logger: logger,
+		},
+		Collector:      collect.NewMockCollector(),
+		incomingOrPeer: "incoming",
 	}
 	logsServer := NewLogsServer(router)
 
@@ -258,6 +266,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 
 	t.Run("rejects bad API keys - HTTP", func(t *testing.T) {
 		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
+		defer func() { router.Config.(*config.MockConfig).IsAPIKeyValidFunc = nil }()
 		req := &collectorlogs.ExportLogsServiceRequest{
 			ResourceLogs: []*logs.ResourceLogs{{
 				ScopeLogs: []*logs.ScopeLogs{{
@@ -287,6 +296,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 
 	t.Run("rejects bad API keys - gRPC", func(t *testing.T) {
 		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
+		defer func() { router.Config.(*config.MockConfig).IsAPIKeyValidFunc = nil }()
 		req := &collectorlogs.ExportLogsServiceRequest{
 			ResourceLogs: []*logs.ResourceLogs{{
 				ScopeLogs: []*logs.ScopeLogs{{
@@ -299,6 +309,32 @@ func TestLogsOTLPHandler(t *testing.T) {
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
 		assert.Equal(t, 0, len(mockTransmission.Events))
 		mockTransmission.Flush()
+	})
+
+	t.Run("logs with trace ID are added to collector", func(t *testing.T) {
+		req := &collectorlogs.ExportLogsServiceRequest{
+			ResourceLogs: []*logs.ResourceLogs{{
+				Resource: createResource(),
+				ScopeLogs: []*logs.ScopeLogs{{
+					LogRecords: []*logs.LogRecord{{
+						TimeUnixNano: uint64(time.Now().UnixNano()),
+						Attributes: []*common.KeyValue{{
+							Key: "trace.trace_id",
+							Value: &common.AnyValue{
+								Value: &common.AnyValue_StringValue{StringValue: "1234567890abcdef"},
+							},
+						}},
+					}},
+				}},
+			}},
+		}
+		_, err := logsServer.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		assert.Equal(t, 0, len(mockTransmission.Events))
+		mockTransmission.Flush()
+		assert.Equal(t, 1, len(router.Collector.(*collect.MockCollector).Spans))
 	})
 }
 
