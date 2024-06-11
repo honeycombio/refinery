@@ -31,6 +31,8 @@ import (
 	// grpc/gzip compressor, auto registers on import
 	_ "google.golang.org/grpc/encoding/gzip"
 
+	huskyotlp "github.com/honeycombio/husky/otlp"
+
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -39,6 +41,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
+	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
@@ -224,9 +227,14 @@ func (r *Router) LnS(incomingOrPeer string) {
 				Timeout:               time.Duration(grpcConfig.KeepAliveTimeout),
 			}),
 		}
-		traceServer := NewTraceServer(r)
 		r.grpcServer = grpc.NewServer(serverOpts...)
+
+		traceServer := NewTraceServer(r)
 		collectortrace.RegisterTraceServiceServer(r.grpcServer, traceServer)
+
+		logsServer := NewLogsServer(r)
+		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
+
 		grpc_health_v1.RegisterHealthServer(r.grpcServer, r)
 		go r.grpcServer.Serve(l)
 	}
@@ -486,6 +494,45 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.Write(response)
+}
+
+func (router *Router) processOTLPRequest(
+	ctx context.Context,
+	batches []huskyotlp.Batch,
+	apiKey string) error {
+
+	var requestID types.RequestIDContextKey
+	apiHost, err := router.Config.GetHoneycombAPI()
+	if err != nil {
+		router.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
+		return err
+	}
+
+	// get environment name - will be empty for legacy keys
+	environment, err := router.getEnvironmentName(apiKey)
+	if err != nil {
+		return nil
+	}
+
+	for _, batch := range batches {
+		for _, ev := range batch.Events {
+			event := &types.Event{
+				Context:     ctx,
+				APIHost:     apiHost,
+				APIKey:      apiKey,
+				Dataset:     batch.Dataset,
+				Environment: environment,
+				SampleRate:  uint(ev.SampleRate),
+				Timestamp:   ev.Timestamp,
+				Data:        ev.Attributes,
+			}
+			if err = router.processEvent(event, requestID); err != nil {
+				router.Logger.Error().Logf("Error processing event: " + err.Error())
+			}
+		}
+	}
+
+	return nil
 }
 
 func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
@@ -915,6 +962,10 @@ func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
 	otlpMuxxer := muxxer.PathPrefix("/v1/").Methods("POST").Subrouter()
 
 	// handle OTLP trace requests
-	otlpMuxxer.HandleFunc("/traces", r.postOTLP).Name("otlp")
-	otlpMuxxer.HandleFunc("/traces/", r.postOTLP).Name("otlp")
+	otlpMuxxer.HandleFunc("/traces", r.postOTLPTrace).Name("otlp_traces")
+	otlpMuxxer.HandleFunc("/traces/", r.postOTLPTrace).Name("otlp_traces")
+
+	// handle OTLP logs requests
+	otlpMuxxer.HandleFunc("/logs", r.postOTLPLogs).Name("otlp_logs")
+	otlpMuxxer.HandleFunc("/logs/", r.postOTLPLogs).Name("otlp_logs")
 }

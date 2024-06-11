@@ -10,15 +10,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 )
 
-func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
+func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 
-	if err := ri.ValidateTracesHeaders(); err != nil {
+	if err := ri.ValidateLogsHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
-			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
+			r.handlerReturnWithError(w, ErrInvalidContentType, err)
 		} else {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		}
@@ -30,7 +30,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result, err := huskyotlp.TranslateTraceRequestFromReader(req.Context(), req.Body, ri)
+	result, err := huskyotlp.TranslateLogsRequestFromReader(req.Context(), req.Body, ri)
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
@@ -44,34 +44,34 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	_ = huskyotlp.WriteOtlpHttpTraceSuccessResponse(w, req)
 }
 
-type TraceServer struct {
+type LogsServer struct {
 	router *Router
-	collectortrace.UnimplementedTraceServiceServer
+	collectorlogs.UnimplementedLogsServiceServer
 }
 
-func NewTraceServer(router *Router) *TraceServer {
-	traceServer := TraceServer{router: router}
-	return &traceServer
+func NewLogsServer(router *Router) *LogsServer {
+	logsServer := LogsServer{router: router}
+	return &logsServer
 }
 
-func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
+func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsServiceRequest) (*collectorlogs.ExportLogsServiceResponse, error) {
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
-	if err := ri.ValidateTracesHeaders(); err != nil {
+	if err := ri.ValidateLogsHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if !t.router.Config.IsAPIKeyValid(ri.ApiKey) {
+	if !l.router.Config.IsAPIKeyValid(ri.ApiKey) {
 		return nil, status.Error(codes.Unauthenticated, fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey))
 	}
 
-	result, err := huskyotlp.TranslateTraceRequest(ctx, req, ri)
+	result, err := huskyotlp.TranslateLogsRequest(ctx, req, ri)
 	if err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := t.router.processOTLPRequest(ctx, result.Batches, ri.ApiKey); err != nil {
+	if err := l.router.processOTLPRequest(ctx, result.Batches, ri.ApiKey); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	return &collectortrace.ExportTraceServiceResponse{}, nil
+	return &collectorlogs.ExportLogsServiceResponse{}, nil
 }

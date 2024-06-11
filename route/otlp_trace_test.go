@@ -24,7 +24,9 @@ import (
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -238,7 +240,7 @@ func TestOTLPHandler(t *testing.T) {
 				request.Header = http.Header{}
 				request.Header.Set("content-type", tC.requestContentType)
 				response := httptest.NewRecorder()
-				router.postOTLP(response, request)
+				router.postOTLPTrace(response, request)
 
 				assert.Equal(t, tC.expectedResponseStatus, response.Code)
 				assert.Equal(t, tC.expectedResponseContentType, response.Header().Get("content-type"))
@@ -267,7 +269,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -303,7 +305,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -342,7 +344,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -369,7 +371,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 		assert.Equal(t, "{}", w.Body.String())
 
@@ -441,7 +443,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	t.Run("rejects bad API keys", func(t *testing.T) {
+	t.Run("rejects bad API keys - HTTP", func(t *testing.T) {
 		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
@@ -462,7 +464,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
 		w := httptest.NewRecorder()
-		router.postOTLP(w, request)
+		router.postOTLPTrace(w, request)
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "not found in list of authorized keys")
 
@@ -470,6 +472,22 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
+	t.Run("rejects bad API keys - gRPC", func(t *testing.T) {
+		router.Config.(*config.MockConfig).IsAPIKeyValidFunc = func(k string) bool { return false }
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
+		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Contains(t, err.Error(), "not found in list of authorized keys")
+		assert.Equal(t, 0, len(mockTransmission.Events))
+		mockTransmission.Flush()
+	})
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
