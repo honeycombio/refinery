@@ -1177,7 +1177,7 @@ func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 				reason = status.KeepReason
 			}
 			var sendReason string
-			if sp.ArrivalTime.After(status.Timestamp) {
+			if sp.ArrivalTime.After(status.LastTimestamp) {
 				if reason == "" {
 					reason = "late arriving span"
 				} else {
@@ -1210,6 +1210,13 @@ func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 			}
 			sp.Data[k] = v
 		}
+
+		stateDurPrefix := "meta.refinery.since_prev_state_ms."
+		sp.Data[stateDurPrefix+centralstore.Collecting.String()] = status.StateTimestamps[centralstore.Collecting].Sub(trace.ArrivalTime).Milliseconds()
+		sp.Data[stateDurPrefix+centralstore.DecisionDelay.String()] = status.StateTimestamps[centralstore.DecisionDelay].Sub(status.StateTimestamps[centralstore.Collecting]).Milliseconds()
+		sp.Data[stateDurPrefix+centralstore.ReadyToDecide.String()] = status.StateTimestamps[centralstore.ReadyToDecide].Sub(status.StateTimestamps[centralstore.DecisionDelay]).Milliseconds()
+		sp.Data[stateDurPrefix+centralstore.AwaitingDecision.String()] = status.StateTimestamps[centralstore.AwaitingDecision].Sub(status.StateTimestamps[centralstore.ReadyToDecide]).Milliseconds()
+		sp.Data[stateDurPrefix+centralstore.DecisionKeep.String()] = status.LastTimestamp.Sub(status.StateTimestamps[centralstore.AwaitingDecision]).Milliseconds()
 
 		if c.hostname != "" && c.Config.GetAddHostMetadataToTrace() {
 			sp.Data["meta.refinery.sender.host.name"] = c.hostname

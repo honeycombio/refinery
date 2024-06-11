@@ -469,12 +469,6 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	conn := r.RedisClient.Get()
 	defer conn.Close()
 
-	// store keep reason in status
-	err := r.traces.keepTrace(ctx, conn, statuses)
-	if err != nil {
-		return err
-	}
-
 	traceIDs := make([]string, 0, len(statuses))
 	for _, status := range statuses {
 		traceIDs = append(traceIDs, status.TraceID)
@@ -495,6 +489,12 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 		for _, id := range succeed {
 			successMap[id] = struct{}{}
 		}
+	}
+
+	// store keep reason in status
+	err = r.traces.keepTrace(ctx, conn, statuses)
+	if err != nil {
+		return err
 	}
 
 	// remove span list
@@ -569,13 +569,18 @@ type centralTraceStatusReason struct {
 }
 
 type centralTraceStatusRedis struct {
-	TraceID    string
-	State      string
-	Count      uint32
-	EventCount uint32
-	LinkCount  uint32
-	SamplerKey string
-	Timestamp  int64
+	TraceID       string
+	State         string
+	Count         uint32
+	EventCount    uint32
+	LinkCount     uint32
+	SamplerKey    string
+	LastTimestamp int64
+	// the redis key format should match with the string format of CentralTraceState
+	CollectingTimestamp       int64 `redis:"collecting"`
+	DecisionDelayTimestamp    int64 `redis:"decision_delay"`
+	ReadyToDecideTimestamp    int64 `redis:"ready_to_decide"`
+	AwaitingDecisionTimestamp int64 `redis:"awaiting_decision"`
 
 	KeepRecord []byte
 }
@@ -593,6 +598,23 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) (*Central
 		reason.Metadata = make(map[string]interface{})
 	}
 
+	stateTimestamps := make(map[CentralTraceState]time.Time, 0)
+	if status.CollectingTimestamp != 0 {
+		stateTimestamps[Collecting] = time.UnixMicro(status.CollectingTimestamp)
+	}
+
+	if status.DecisionDelayTimestamp != 0 {
+		stateTimestamps[DecisionDelay] = time.UnixMicro(status.DecisionDelayTimestamp)
+	}
+
+	if status.ReadyToDecideTimestamp != 0 {
+		stateTimestamps[ReadyToDecide] = time.UnixMicro(status.ReadyToDecideTimestamp)
+	}
+
+	if status.AwaitingDecisionTimestamp != 0 {
+		stateTimestamps[AwaitingDecision] = time.UnixMicro(status.AwaitingDecisionTimestamp)
+	}
+
 	return &CentralTraceStatus{
 		TraceID:         status.TraceID,
 		State:           CentralTraceState(status.State),
@@ -600,7 +622,8 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) (*Central
 		Count:           status.Count,
 		EventCount:      status.EventCount,
 		LinkCount:       status.LinkCount,
-		Timestamp:       time.UnixMicro(status.Timestamp),
+		LastTimestamp:   time.UnixMicro(status.LastTimestamp),
+		StateTimestamps: stateTimestamps,
 		KeepReason:      reason.KeepReason,
 		Rate:            reason.Rate,
 		Metadata:        reason.Metadata,
@@ -794,7 +817,7 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 						status := &centralTraceStatusRedis{}
 						status.TraceID = traceIDs[i]
 						status.State = Unknown.String()
-						status.Timestamp = t.clock.Now().UnixMicro()
+						status.LastTimestamp = t.clock.Now().UnixMicro()
 
 						v, err := normalizeCentralTraceStatusRedis(status)
 						if err != nil {
@@ -1293,7 +1316,7 @@ const traceStateChangeScript = `
 
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
-	   local status = redis.call("HSET", string.format("%s:status", traceID), "State", nextState, "Timestamp", timestamp)
+	   local status = redis.call("HSET", string.format("%s:status", traceID), "State", nextState, "LastTimestamp", timestamp, nextState, timestamp)
 `
 
 const validStateChangeEventsKey = "valid-state-change-events"
