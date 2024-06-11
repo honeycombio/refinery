@@ -466,9 +466,6 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_traces", len(statuses))
-	conn := r.RedisClient.Get()
-	defer conn.Close()
-
 	traceIDs := make([]string, 0, len(statuses))
 	for _, status := range statuses {
 		traceIDs = append(traceIDs, status.TraceID)
@@ -477,6 +474,9 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	if len(traceIDs) == 0 {
 		return nil
 	}
+
+	conn := r.RedisClient.Get()
+	defer conn.Close()
 
 	succeed, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(AwaitingDecision, DecisionKeep), traceIDs...)
 	if err != nil {
