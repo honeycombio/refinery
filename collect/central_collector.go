@@ -1212,6 +1212,7 @@ func (c *CentralCollector) sendSpans(status *centralstore.CentralTraceStatus) {
 		}
 
 		stateDurPrefix := "meta.refinery.since_prev_state_ms."
+		sp.Data["meta.refinery.trace_arrival_ms"] = trace.ArrivalTime.UnixMilli()
 		sp.Data[stateDurPrefix+centralstore.Collecting.String()] = status.StateTimestamps[centralstore.Collecting].Sub(trace.ArrivalTime).Milliseconds()
 		sp.Data[stateDurPrefix+centralstore.DecisionDelay.String()] = status.StateTimestamps[centralstore.DecisionDelay].Sub(status.StateTimestamps[centralstore.Collecting]).Milliseconds()
 		sp.Data[stateDurPrefix+centralstore.ReadyToDecide.String()] = status.StateTimestamps[centralstore.ReadyToDecide].Sub(status.StateTimestamps[centralstore.DecisionDelay]).Milliseconds()
