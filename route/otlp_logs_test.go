@@ -56,6 +56,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		zstdDecoders:     decoders,
 		environmentCache: newEnvironmentCache(time.Second, nil),
 	}
+	logsServer := NewLogsServer(router)
 
 	t.Run("can receive OTLP over gRPC", func(t *testing.T) {
 		req := &collectorlogs.ExportLogsServiceRequest{
@@ -65,7 +66,6 @@ func TestLogsOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		logsServer := NewLogsServer(router)
 		_, err := logsServer.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
@@ -294,7 +294,6 @@ func TestLogsOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		logsServer := NewLogsServer(router)
 		_, err := logsServer.Export(ctx, req)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
