@@ -190,7 +190,7 @@ func TestCentralCollector_Sender(t *testing.T) {
 				assert.Equal(t, "test", transmission.Events[0].Environment)
 				assert.Equal(t, TraceSendGotRoot, transmission.Events[0].Data["meta.refinery.send_reason"])
 				assert.Equal(t, "deterministic/always", transmission.Events[0].Data["meta.refinery.reason"])
-				//assert.NotEmpty(t, transmission.Events[0].Data["meta.refinery.since_prev_state_ms.collecting"])
+				assert.GreaterOrEqual(t, transmission.Events[0].Data["meta.refinery.since_prev_state_ms.collecting"], 0)
 				assert.NotEmpty(t, transmission.Events[0].Data["meta.refinery.since_prev_state_ms.decision_delay"])
 				assert.NotEmpty(t, transmission.Events[0].Data["meta.refinery.since_prev_state_ms.ready_to_decide"])
 				assert.NotEmpty(t, transmission.Events[0].Data["meta.refinery.since_prev_state_ms.awaiting_decision"])
