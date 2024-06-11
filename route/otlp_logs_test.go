@@ -336,6 +336,26 @@ func TestLogsOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 		assert.Equal(t, 1, len(router.Collector.(*collect.MockCollector).Spans))
 	})
+
+	t.Run("logs without trace ID are added to transmission", func(t *testing.T) {
+		req := &collectorlogs.ExportLogsServiceRequest{
+			ResourceLogs: []*logs.ResourceLogs{{
+				Resource: createResource(),
+				ScopeLogs: []*logs.ScopeLogs{{
+					LogRecords: []*logs.LogRecord{{
+						TimeUnixNano: uint64(time.Now().UnixNano()),
+					}},
+				}},
+			}},
+		}
+		_, err := logsServer.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		assert.Equal(t, 1, len(mockTransmission.Events))
+		mockTransmission.Flush()
+		assert.Equal(t, 0, len(router.Collector.(*collect.MockCollector).Spans))
+	})
 }
 
 func createLogsRecords() []*logs.LogRecord {
