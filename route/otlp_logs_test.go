@@ -40,6 +40,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 	mockMetrics.Start()
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
+	mockCollector := collect.NewMockCollector()
 	decoders, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
@@ -61,7 +62,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		Sharder: &sharder.SingleServerSharder{
 			Logger: logger,
 		},
-		Collector:      collect.NewMockCollector(),
+		Collector:      mockCollector,
 		incomingOrPeer: "incoming",
 	}
 	logsServer := NewLogsServer(router)
@@ -335,6 +336,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		assert.Equal(t, 0, len(mockTransmission.Events))
 		mockTransmission.Flush()
 		assert.Equal(t, 1, len(router.Collector.(*collect.MockCollector).Spans))
+		mockCollector.Flush()
 	})
 
 	t.Run("logs without trace ID are added to transmission", func(t *testing.T) {
@@ -355,6 +357,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		assert.Equal(t, 1, len(mockTransmission.Events))
 		mockTransmission.Flush()
 		assert.Equal(t, 0, len(router.Collector.(*collect.MockCollector).Spans))
+		mockCollector.Flush()
 	})
 }
 

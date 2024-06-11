@@ -36,4 +36,14 @@ func (m *MockCollector) Stressed() bool {
 	return false
 }
 
+func (m *MockCollector) Flush() {
+	for {
+		select {
+		case <-m.Spans:
+		default:
+			return
+		}
+	}
+}
+
 var _ Collector = (*MockCollector)(nil)
