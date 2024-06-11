@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-11 at 14:44:30 UTC.
+It was automatically generated on 2024-06-11 at 20:19:56 UTC.
 
 ## The Config file
 
@@ -957,6 +957,17 @@ A trace without a `parent_id` is assumed to be a root span.
 - Eligible for live reload.
 - Type: `stringarray`
 - Example: `trace.parent_id,parentId`
+
+### `LogCorrelationNames`
+
+LogCorrelationNames is the list of field names to use for the correlation ID.
+
+The first field in the list that is present in an event will be used as the log correlation ID.
+If none of the fields are present, then Refinery treats the event as not being part of a group and forwards it immediately to Honeycomb.
+
+- Eligible for live reload.
+- Type: `stringarray`
+- Example: `request_id,session.id`
 
 ## gRPC Server Parameters
 

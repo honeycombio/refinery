@@ -254,8 +254,9 @@ type SpecializedConfig struct {
 }
 
 type IDFieldsConfig struct {
-	TraceNames  []string `yaml:"TraceNames" default:"[\"trace.trace_id\",\"traceId\"]"`
-	ParentNames []string `yaml:"ParentNames" default:"[\"trace.parent_id\",\"parentId\"]"`
+	TraceNames          []string `yaml:"TraceNames" default:"[\"trace.trace_id\",\"traceId\"]"`
+	ParentNames         []string `yaml:"ParentNames" default:"[\"trace.parent_id\",\"parentId\"]"`
+	LogCorrelationNames []string `yaml:"LogCorrelationNames" default:"[]"`
 }
 
 // GRPCServerParameters allow you to configure the GRPC ServerParameters used
@@ -899,6 +900,13 @@ func (f *fileConfig) GetParentIdFieldNames() []string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.IDFieldNames.ParentNames
+}
+
+func (f *fileConfig) GetLogCorrelationFieldNames() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.IDFieldNames.LogCorrelationNames
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {

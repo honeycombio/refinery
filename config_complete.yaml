@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-03-12 at 17:25:49 UTC from ../../config.yaml using a template generated on 2024-03-12 at 17:25:37 UTC
+# created on 2024-06-11 at 20:19:56 UTC from ../../config.yaml using a template generated on 2024-06-11 at 20:19:53 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -995,6 +995,19 @@ IDFields:
     # ParentNames:
       # - trace.parent_id
       # - parentId
+
+    ## LogCorrelationNames is the list of field names to use for the
+    ## correlation ID.
+    ##
+    ## The first field in the list that is present in an event will be used
+    ## as the log correlation ID. If none of the fields are present, then
+    ## Refinery treats the event as not being part of a group and forwards it
+    ## immediately to Honeycomb.
+    ##
+    ## Eligible for live reload.
+    # LogCorrelationNames:
+      # - request_id
+      # - session.id
 
 ############################
 ## gRPC Server Parameters ##
