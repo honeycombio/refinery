@@ -47,50 +47,24 @@ type Conn interface {
 	AcquireLock(string, time.Duration) (bool, func() error)
 	AcquireLockWithRetries(context.Context, string, time.Duration, int, time.Duration) (bool, func() error)
 	Close() error
-	Del(...string) (int64, error)
-	Exists(string) (bool, error)
-	GetInt64(string) (int64, error)
-	GetInt64NoDefault(string) (int64, error)
-	GetString(context.Context, string) (string, error)
-	GetStrings(...string) ([]string, error)
-	MGetStrings(...string) ([]string, error)
-	IncrementAndExpire(string, time.Duration) error
-	IncrementBy(string, int64) (int64, error)
-	ListKeys(string) ([]string, error)
-	Scan(string, string, <-chan struct{}) (<-chan string, <-chan error)
-	SetIfNotExistsTTLInt64(string, int64, int) error
-	SetInt64(string, int64) error
-	SetInt64TTL(string, int64, int) error
-	SetString(string, string) (string, error)
-	SetStringsTTL([]string, []string, time.Duration) ([]any, error)
-	SetStringTTL(context.Context, string, string, time.Duration) (string, error)
+	Del(...string) command
+	Get(string) command
+	Expire(string, time.Duration) command
+	Increment(string) command
 
-	GetAllStringsHash(string) (map[string]string, error)
-	GetAllByteSliceHash(string) ([][]byte, error)
-	GetFloat64Hash(string) (map[string]float64, error)
-	ListFields(string) ([]string, error)
-	IncrementByHash(string, string, int64) (int64, error)
-	SetHash(string, any) error
+	HGet(string, string) command
+	HGetAll(string) command
+	HGetAllValues(string) command
+	HMSet(string, any) command
+	HIncrementBy(string, string, int64) command
+
 	SetNXHash(string, ...any) command
-	SetHashTTL(string, any, time.Duration) (any, error)
+	SAdd(string, ...any) command
 
-	SAdd(string, ...any) error
-
-	RPush(string, any) error
-	RPushTTL(string, string, time.Duration) (bool, error)
-	LRange(string, int, int) ([]any, error)
-	LIndexString(string, int) (string, error)
-
-	ZAdd(string, []any) error
-	ZRange(string, int, int) ([]string, error)
-	ZScore(string, string) (int64, error)
-	ZMScore(string, []string) ([]int64, error)
-	ZCard(string) (int64, error)
-	ZExist(string, string) (bool, error)
-	ZRemove(string, []string) error
-	ZRandom(string, int) ([]string, error)
-	ZCount(string, int64, int64) (int64, error)
-	TTL(string) (int64, error)
+	ZScore(string, string) command
+	ZRemove(string, []string) command
+	ZRandom(string, int) command
+	ZCount(string, int64, int64) command
 
 	ReceiveStrings(int) ([]string, error)
 	ReceiveStructs(int, func([]any, error) error) error
@@ -98,6 +72,8 @@ type Conn interface {
 	ReceiveInt64s(int) ([]int64, error)
 	Do(string, ...any) (any, error)
 	Exec(...Command) error
+	// Flush flushes all buffered commands to the server.
+	Flush() error
 	MemoryStats() (map[string]any, error)
 }
 
@@ -357,40 +333,6 @@ func (c *DefaultClient) NewScript(keyCount int, src string) Script {
 	}
 }
 
-func (c *DefaultConn) Close() error {
-	return c.conn.Close()
-}
-
-func (c *DefaultConn) Del(keys ...string) (int64, error) {
-	args := redis.Args{}.AddFlat(keys)
-	return redis.Int64(c.conn.Do("DEL", args...))
-}
-
-func (c *DefaultConn) Exists(key string) (bool, error) {
-	return redis.Bool(c.conn.Do("EXISTS", key))
-}
-
-func (c *DefaultConn) GetInt64(key string) (int64, error) {
-	v, err := c.GetInt64NoDefault(key)
-	if err == redis.ErrNil {
-		return 0, nil
-	}
-	return v, err
-}
-
-func (c *DefaultConn) GetInt64NoDefault(key string) (int64, error) {
-	return redis.Int64(c.conn.Do("GET", key))
-}
-
-func (c *DefaultConn) SetString(key, val string) (string, error) {
-	return redis.String(c.conn.Do("SET", key, val))
-}
-
-func (c *DefaultConn) SetStringTTL(ctx context.Context, key, val string, ttl time.Duration) (string, error) {
-	val, err := redis.String(c.conn.Do("SET", key, val, "EX", int(ttl/time.Second)))
-	return val, err
-}
-
 // AcquireLock attempts to acquire a lock for the given cacheKey
 // returns a boolean indicating success, and a function that will unlock the lock.
 func (c *DefaultConn) AcquireLock(key string, ttl time.Duration) (bool, func() error) {
@@ -449,275 +391,101 @@ func (c *DefaultConn) AcquireLockWithRetries(ctx context.Context, key string, tt
 	return false, func() error { return nil }
 }
 
-func (c *DefaultConn) SetStringsTTL(keys, vals []string, ttl time.Duration) ([]any, error) {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return nil, err
-	}
-	for i := range keys {
-		if err := c.conn.Send("SET", keys[i], vals[i], "EX", int(ttl/time.Second)); err != nil {
-			return nil, err
-		}
-	}
-	// TODO: values is always "OK", but we should be able to get the values
-	// for the items in the batch
-	values, err := redis.Values(c.conn.Do("EXEC"))
-	if err != nil {
-		return nil, err
-	}
-
-	return values, nil
+func (c *DefaultConn) Close() error {
+	return c.conn.Close()
 }
 
-func (c *DefaultConn) GetString(ctx context.Context, key string) (string, error) {
-
-	v, err := redis.String(c.conn.Do("GET", key))
-	if err == redis.ErrNil {
-		return "", nil
+func (c *DefaultConn) Del(keys ...string) command {
+	args := redis.Args{}.AddFlat(keys)
+	return command{
+		name: "DEL",
+		args: args,
+		conn: c,
 	}
-	return v, err
 }
 
-func (c *DefaultConn) GetStrings(keys ...string) ([]string, error) {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return nil, err
+func (c *DefaultConn) Exists(key string) command {
+	return command{
+		name: "EXISTS",
+		args: redis.Args{key},
+		conn: c,
 	}
-	for _, key := range keys {
-		if err := c.conn.Send("GET", key); err != nil {
-			return nil, err
-		}
-	}
-	values, err := redis.Values(c.conn.Do("EXEC"))
-	if err != nil {
-		return nil, err
-	}
-	r := make([]string, 0)
-	if err = redis.ScanSlice(values, &r); err != nil {
-		return nil, err
-	}
-	return r, nil
 }
 
-func (c *DefaultConn) MGetStrings(keys ...string) ([]string, error) {
-	args := make([]any, len(keys))
-	for i, k := range keys {
-		args[i] = k
+func (c *DefaultConn) Expire(key string, ttl time.Duration) command {
+	return command{
+		name: "EXPIRE",
+		args: redis.Args{key, ttl.Seconds()},
+		conn: c,
 	}
+}
 
-	values, err := redis.Strings(c.conn.Do("MGET", args...))
-	if err != nil {
-		return nil, err
+func (c *DefaultConn) Get(key string) command {
+	return command{
+		name: "GET",
+		args: redis.Args{key},
+		conn: c,
 	}
-	return values, nil
-}
-
-func (c *DefaultConn) IncrementBy(key string, incrVal int64) (int64, error) {
-	return redis.Int64(c.conn.Do("INCRBY", key, incrVal))
-}
-
-func (c *DefaultConn) SetInt64(key string, val int64) error {
-	_, err := c.conn.Do("SET", key, val)
-	return err
-}
-
-func (c *DefaultConn) SetInt64TTL(key string, val int64, ttl int) error {
-	_, err := c.conn.Do("SET", key, val, "EX", ttl)
-	return err
-}
-
-func (c *DefaultConn) IncrementAndExpire(key string, ttl time.Duration) error {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return err
-	}
-	if err := c.conn.Send("INCR", key); err != nil {
-		return err
-	}
-	if err := c.conn.Send("EXPIRE", key, int(ttl/time.Second)); err != nil {
-		return err
-	}
-	_, err := c.conn.Do("EXEC")
-	return err
-}
-
-func (c *DefaultConn) SetIfNotExistsTTLInt64(key string, val int64, ttlSeconds int) error {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return err
-	}
-	if err := c.conn.Send("SETNX", key, val); err != nil {
-		return err
-	}
-	if err := c.conn.Send("EXPIRE", key, ttlSeconds); err != nil {
-		return err
-	}
-	_, err := c.conn.Do("EXEC")
-	return err
-}
-
-func (c *DefaultConn) ListKeys(prefix string) ([]string, error) {
-	return redis.Strings(c.conn.Do("KEYS", prefix))
-}
-
-func (c *DefaultConn) GetTTL(key string) (int64, error) {
-	return redis.Int64(c.conn.Do("TTL", key))
-}
-
-func (c *DefaultConn) Scan(pattern, count string, cancel <-chan struct{}) (<-chan string, <-chan error) {
-	keyChan := make(chan string)
-	errChan := make(chan error)
-
-	go func() {
-		cursor := "0"
-	Loop:
-		for {
-			select {
-			case <-cancel:
-				break Loop
-			default:
-			}
-
-			values, err := redis.Values(c.conn.Do("SCAN", cursor, "MATCH", pattern, "COUNT", count))
-			if err != nil {
-				errChan <- err
-				break
-			}
-			if len(values) != 2 {
-				errChan <- errors.New("unexpected response format from redis")
-				break
-			}
-
-			cursor, err = redis.String(values[0], nil)
-			if err != nil {
-				select {
-				case errChan <- err:
-					// we wrote to the channel, break
-					break Loop
-				case <-cancel:
-					break Loop
-				}
-			}
-
-			keys, err := redis.Strings(values[1], nil)
-			if err != nil {
-				select {
-				case errChan <- err:
-					// we wrote to the channel, break
-					break Loop
-				case <-cancel:
-
-					break Loop
-				}
-			}
-
-			for _, key := range keys {
-				select {
-				case keyChan <- key:
-					// we wrote to the channel, keep looping
-				case <-cancel:
-					break Loop
-				}
-			}
-
-			// redis will return 0 when we have iterated over the entire set
-			if cursor == "0" {
-				break
-			}
-		}
-
-		close(errChan)
-		close(keyChan)
-	}()
-
-	return keyChan, errChan
-}
-
-func (c *DefaultConn) RPush(key string, val any) error {
-	_, err := c.conn.Do("RPUSH", key, val)
-	return err
-}
-
-func (c *DefaultConn) LRange(key string, start int, end int) ([]any, error) {
-	return redis.Values(c.conn.Do("LRANGE", key, start, end))
-}
-
-func (c *DefaultConn) LIndexString(key string, index int) (string, error) {
-	result, err := redis.String(c.conn.Do("LINDEX", key, index))
-	if err == redis.ErrNil {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	return result, nil
 }
 
 // ZAdd adds a member to a sorted set at key with a score, only if the member does not already exist
-func (c *DefaultConn) ZAdd(key string, args []interface{}) error {
+func (c *DefaultConn) ZAdd(key string, args []interface{}) command {
 	argsList := redis.Args{key, "NX"}.AddFlat(args)
-	_, err := c.conn.Do("ZADD", argsList...)
-	if err == redis.ErrNil {
-		return nil
+	return command{
+		name: "ZADD",
+		args: argsList,
+		conn: c,
 	}
-	return err
 }
 
-func (c *DefaultConn) ZRange(key string, start, stop int) ([]string, error) {
-	return redis.Strings(c.conn.Do("ZRANGE", key, start, stop))
-}
-
-func (c *DefaultConn) ZScore(key string, member string) (int64, error) {
-	return redis.Int64(c.conn.Do("ZSCORE", key, member))
-}
-
-func (c *DefaultConn) ZMScore(key string, members []string) ([]int64, error) {
-	args := redis.Args{key}.AddFlat(members)
-	return redis.Int64s(c.conn.Do("ZMSCORE", args...))
-}
-
-func (c *DefaultConn) ZCard(key string) (int64, error) {
-	return redis.Int64(c.conn.Do("ZCARD", key))
-}
-
-func (c *DefaultConn) ZExist(key string, member string) (bool, error) {
-	value, err := redis.Int64(c.conn.Do("ZSCORE", key, member))
-	if err != nil {
-		return false, err
+func (c *DefaultConn) ZRange(key string, start, stop int) command {
+	return command{
+		name: "ZRANGE",
+		args: redis.Args{key, start, stop},
+		conn: c,
 	}
-	return value != 0, nil
 }
 
-func (c *DefaultConn) ZRandom(key string, count int) ([]string, error) {
-	return redis.Strings(c.conn.Do("ZRANDMEMBER", key, count))
+func (c *DefaultConn) ZScore(key string, member string) command {
+	return command{
+		name: "ZSCORE",
+		args: redis.Args{key, member},
+		conn: c,
+	}
 }
 
-func (c *DefaultConn) ZRemove(key string, members []string) error {
+func (c *DefaultConn) ZMScore(key string, members []string) command {
 	args := redis.Args{key}.AddFlat(members)
-	_, err := c.conn.Do("ZREM", args...)
-	return err
+	return command{
+		name: "ZMSCORE",
+		args: args,
+		conn: c,
+	}
 }
 
-func (c *DefaultConn) TTL(key string) (int64, error) {
-	return redis.Int64(c.conn.Do("TTL", key))
+func (c *DefaultConn) ZCard(key string) command {
+	return command{
+		name: "ZCARD",
+		args: redis.Args{key},
+		conn: c,
+	}
 }
 
-func (c *DefaultConn) GetAllStringsHash(key string) (map[string]string, error) {
-	return redis.StringMap(c.conn.Do("HGETALL", key))
+func (c *DefaultConn) ZRandom(key string, count int) command {
+	return command{
+		name: "ZRANDMEMBER",
+		args: redis.Args{key, count},
+		conn: c,
+	}
 }
 
-func (c *DefaultConn) GetFloat64Hash(key string) (map[string]float64, error) {
-	return redis.Float64Map(c.conn.Do("HGETALL", key))
-}
-
-func (c *DefaultConn) GetAllByteSliceHash(key string) ([][]byte, error) {
-	return redis.ByteSlices(c.conn.Do("HVALS", key))
-}
-
-func (c *DefaultConn) ListFields(key string) ([]string, error) {
-	return redis.Strings(c.conn.Do("HKEYS", key))
-}
-
-func (c *DefaultConn) SetHash(key string, val interface{}) error {
-	args := redis.Args{key}.AddFlat(val)
-	_, err := c.conn.Do("HSET", args...)
-	return err
+func (c *DefaultConn) ZRemove(key string, members []string) command {
+	args := redis.Args{key}.AddFlat(members)
+	return command{
+		name: "ZREM",
+		args: args,
+		conn: c,
+	}
 }
 
 func (c *DefaultConn) SetNXHash(key string, val ...interface{}) command {
@@ -730,33 +498,88 @@ func (c *DefaultConn) SetNXHash(key string, val ...interface{}) command {
 	}
 }
 
-func (c *DefaultConn) SetHashTTL(key string, val interface{}, expiration time.Duration) (any, error) {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return nil, err
-	}
-	args := redis.Args{key}.AddFlat(val)
-	err := c.conn.Send("HSET", args...)
-	if err != nil {
-		return nil, err
+func (c *DefaultConn) ZCount(key string, start int64, stop int64) command {
+	startArg := strconv.FormatInt(start, 10)
+	stopArg := strconv.FormatInt(stop, 10)
+	if start == 0 {
+		startArg = "-inf"
 	}
 
-	err = c.conn.Send("EXPIRE", key, expiration.Seconds(), "NX")
-	if err != nil {
-		return nil, err
-	}
-	// TODO: values is always "OK", but we should be able to get the values
-	// for the items in the batch
-	values, err := redis.Values(c.conn.Do("EXEC"))
-	if err != nil {
-		return nil, err
+	if stop == -1 {
+		stopArg = "+inf"
 	}
 
-	return values, nil
+	return command{
+		name: "ZCOUNT",
+		args: redis.Args{key, startArg, stopArg},
+		conn: c,
+	}
 }
 
-// returns the value after the increment
-func (c *DefaultConn) IncrementByHash(key, field string, incrVal int64) (int64, error) {
-	return redis.Int64(c.conn.Do("HINCRBY", key, field, incrVal))
+func (c *DefaultConn) Increment(key string) command {
+	return command{
+		name: "INCR",
+		args: redis.Args{key},
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) HIncrementBy(key string, field string, amount int64) command {
+	return command{
+		name: "HINCRBY",
+		args: redis.Args{key, field, amount},
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) HGet(key string, field string) command {
+	return command{
+		name: "HGET",
+		args: redis.Args{key, field},
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) HSet(key string, field string, value interface{}) command {
+	return command{
+		name: "HSET",
+		args: redis.Args{key, field, value},
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) HMSet(key string, values any) command {
+	args := redis.Args{key}.AddFlat(values)
+	return command{
+		name: "HMSET",
+		args: args,
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) HGetAll(key string) command {
+	return command{
+		name: "HGETALL",
+		args: redis.Args{key},
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) HGetAllValues(key string) command {
+	return command{
+		name: "HVALS",
+		args: redis.Args{key},
+		conn: c,
+	}
+}
+
+func (c *DefaultConn) SAdd(key string, members ...any) command {
+	args := redis.Args{key}.Add(members...)
+	return command{
+		name: "SADD",
+		args: args,
+		conn: c,
+	}
 }
 
 func (c *DefaultConn) Exec(commands ...Command) error {
@@ -778,6 +601,10 @@ func (c *DefaultConn) Exec(commands ...Command) error {
 	}
 
 	return nil
+}
+
+func (c *DefaultConn) Flush() error {
+	return c.conn.Flush()
 }
 
 // MemoryStats returns the memory statistics reported by the redis server
@@ -966,13 +793,30 @@ type command struct {
 	conn Conn
 }
 
+// Do executes the command and returns the result from redis.
 func (c command) Do() (any, error) {
 	defaultConn := c.conn.(*DefaultConn)
 
-	return defaultConn.conn.Do(c.Name(), c.Args()...)
+	resp, err := defaultConn.conn.Do(c.Name(), c.Args()...)
+	if err != nil {
+		if errors.Is(err, redis.ErrNil) {
+			return nil, ErrKeyNotFound
+		}
+	}
 
+	return resp, nil
 }
 
+func (c command) DoStrings() ([]string, error) {
+	return redis.Strings(c.Do())
+}
+
+func (c command) DoInt64() (int64, error) {
+	return redis.Int64(c.Do())
+}
+
+// Send buffers the command in the connection's write buffer.
+// The command is sent to redis when the connection's Flush method is called.
 func (c command) Send() error {
 	defaultConn := c.conn.(*DefaultConn)
 
@@ -990,139 +834,6 @@ func (c command) Name() string {
 type Command interface {
 	Name() string
 	Args() []any
-}
-
-func NewGetCommand(key string, conn Conn) command {
-	args := redis.Args{key}
-	return command{
-		name: "GET",
-		args: args,
-		conn: conn,
-	}
-}
-
-func NewSetHashCommand(key string, value interface{}, conn Conn) command {
-	args := redis.Args{key}.AddFlat(value)
-	return command{
-		name: "HSET",
-		args: args,
-		conn: conn,
-	}
-}
-
-func NewMultiSetHashCommand(key string, value any, conn Conn) command {
-	args := redis.Args{key}.AddFlat(value)
-	return command{
-		name: "HMSET",
-		args: args,
-		conn: conn,
-	}
-}
-
-func NewExpireCommand(key string, value any, conn Conn) command {
-	args := redis.Args{key}.AddFlat(value)
-	return command{
-		name: "EXPIRE",
-		args: args,
-		conn: conn,
-	}
-}
-
-func NewINCRCommand(key string, conn Conn) command {
-	args := redis.Args{key}
-	return command{
-		name: "INCR",
-		args: args,
-		conn: conn,
-	}
-}
-
-func NewIncrByHashCommand(key, field string, incrVal int64, conn Conn) command {
-	return command{
-		name: "HINCRBY",
-		args: redis.Args{key, field, incrVal},
-		conn: conn,
-	}
-}
-
-func NewGetHashCommand(key string, field string, conn Conn) command {
-	return command{
-		name: "HGET",
-		args: redis.Args{key, field},
-		conn: conn,
-	}
-}
-
-func NewGetAllHashCommand(key string, conn Conn) command {
-	return command{
-		name: "HGETALL",
-		args: redis.Args{key},
-		conn: conn,
-	}
-}
-
-func NewGetAllValuesHashCommand(key string, conn Conn) command {
-	return command{
-		name: "HVALS",
-		args: redis.Args{key},
-		conn: conn,
-	}
-}
-
-func (c *DefaultConn) ZCount(key string, start int64, stop int64) (int64, error) {
-	startArg := strconv.FormatInt(start, 10)
-	stopArg := strconv.FormatInt(stop, 10)
-	if start == 0 {
-		startArg = "-inf"
-	}
-
-	if stop == -1 {
-		stopArg = "+inf"
-	}
-	return redis.Int64(c.conn.Do("ZCOUNT", key, startArg, stopArg))
-}
-
-func (c *DefaultConn) RPushTTL(key string, member string, expiration time.Duration) (bool, error) {
-	if err := c.conn.Send("MULTI"); err != nil {
-		return false, err
-	}
-
-	err := c.conn.Send("RPUSH", key, member)
-	if err != nil {
-		return false, err
-	}
-
-	err = c.conn.Send("EXPIRE", key, expiration.Seconds())
-	if err != nil {
-		return false, err
-	}
-	// TODO: values is always "OK", but we should be able to get the values
-	// for the items in the batch
-	results, err := redis.Int64s(c.conn.Do("EXEC"))
-	if err != nil {
-		return false, err
-	}
-
-	if len(results) != 2 {
-		return false, errors.New("unexpected response format from redis")
-	}
-
-	if results[0] == 0 {
-		return false, errors.New("failed to add member to set")
-	}
-
-	// TODO: do we care if the ttl is not set?
-
-	return true, nil
-}
-
-func (c *DefaultConn) SAdd(key string, members ...any) error {
-	args := redis.Args{key}.Add(members...)
-	_, err := c.conn.Do("SADD", args...)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // Args is a helper function to convert a list of arguments to a redis.Args

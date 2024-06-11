@@ -127,63 +127,6 @@ func TestAcquireLockWithRetriesTTLExceeded(t *testing.T) {
 	require.NoError(t, clearLock3())
 }
 
-func Test_MGetSetings(t *testing.T) {
-	ctx := context.Background()
-
-	h := NewRedisTestHarness(ctx, t)
-	defer h.Stop(ctx)
-
-	redis := h.Redis.Client.Get()
-	defer redis.Close()
-
-	redis.SetString("foo", "fooval")
-	redis.SetString("bar", "barval")
-
-	vals, err := redis.MGetStrings("foo", "bar", "baz")
-	require.NoError(t, err)
-	require.EqualValues(t, []string{"fooval", "barval", ""}, vals)
-}
-
-func Test_SetStringTTL(t *testing.T) {
-	ctx := context.Background()
-
-	h := NewRedisTestHarness(ctx, t)
-	defer h.Stop(ctx)
-
-	redis := h.Redis.Client.Get()
-	defer redis.Close()
-
-	ttlDays := 30
-	ttl := time.Duration(ttlDays*24) * time.Hour
-
-	_, err := redis.SetStringTTL(ctx, "foo", "fooval", ttl)
-	require.NoError(t, err)
-
-	val, err := redis.GetString(ctx, "foo")
-	require.NoError(t, err)
-	require.Equal(t, "fooval", val)
-}
-
-func Test_SetStringsTTL(t *testing.T) {
-	ctx := context.Background()
-
-	h := NewRedisTestHarness(ctx, t)
-	defer h.Stop(ctx)
-
-	redis := h.Redis.Client.Get()
-	defer redis.Close()
-
-	ttlDays := 30
-	ttl := time.Duration(ttlDays*24) * time.Hour
-
-	_, err := redis.SetStringsTTL([]string{"foo", "bar"}, []string{"fooval", "barval"}, ttl)
-	require.NoError(t, err)
-
-	vals, err := redis.GetStrings("foo", "bar", "baz")
-	require.NoError(t, err)
-	require.EqualValues(t, []string{"fooval", "barval", ""}, vals)
-}
-
 func createArbitraryUniqueKey() string {
 	return uuid.Must(uuid.NewV4()).String()
 }
