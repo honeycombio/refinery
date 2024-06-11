@@ -962,9 +962,10 @@ func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
 	otlpMuxxer := muxxer.PathPrefix("/v1/").Methods("POST").Subrouter()
 
 	// handle OTLP trace requests
-	otlpMuxxer.HandleFunc("/traces", r.postOTLPTrace).Name("otlp")
-	otlpMuxxer.HandleFunc("/traces/", r.postOTLPTrace).Name("otlp")
+	otlpMuxxer.HandleFunc("/traces", r.postOTLPTrace).Name("otlp_traces")
+	otlpMuxxer.HandleFunc("/traces/", r.postOTLPTrace).Name("otlp_traces")
 
-	otlpMuxxer.HandleFunc("/logs", r.postOTLPLogs).Name("otlp")
-	otlpMuxxer.HandleFunc("/logs/", r.postOTLPLogs).Name("otlp")
+	// handle OTLP logs requests
+	otlpMuxxer.HandleFunc("/logs", r.postOTLPLogs).Name("otlp_logs")
+	otlpMuxxer.HandleFunc("/logs/", r.postOTLPLogs).Name("otlp_logs")
 }
