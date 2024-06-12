@@ -10,9 +10,9 @@ if [[ -n "${CIRCLE_BRANCH}" ]]; then
     TAGS="${CIRCLE_BUILD_NUM},branch-${BRANCH_TAG}"
 fi
 
-# We only want to tag main with latest on ECR
+# Latest main gets the dev tag
 if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
-    TAGS+=",latest"
+    TAGS+=",dev"
 fi
 
 # Local builds just get "dev" for version

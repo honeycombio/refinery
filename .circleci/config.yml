@@ -266,7 +266,7 @@ workflows:
             tags:
               only: /^v.*/
             branches:
-              ignore: /.*/
+              only: main
       - publish_s3:
           context: Honeycomb Secrets for Public Repos
           requires:
@@ -276,7 +276,7 @@ workflows:
             tags:
               only: /^v.*/
             branches:
-              ignore: /.*/
+              only: main
       - publish_docker_to_dockerhub:
           context: Honeycomb Secrets for Public Repos
           requires:
@@ -286,4 +286,4 @@ workflows:
             tags:
               only: /^v.*/
             branches:
-              ignore: /.*/
+              only: main
