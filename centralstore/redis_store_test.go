@@ -105,12 +105,15 @@ func TestRedisBasicStore_TraceStatus(t *testing.T) {
 			require.NotNil(t, status[0])
 			assert.Equal(t, tc.expectedState, status[0].State)
 			if i == 0 {
-				initialTimestamp = status[0].Timestamp
+				initialTimestamp = status[0].LastTimestamp
 			}
-			assert.NotNil(t, status[0].Timestamp)
+			assert.NotNil(t, status[0].LastTimestamp)
 			if i > 0 {
-				assert.Equal(t, initialTimestamp, status[0].Timestamp)
+				assert.Equal(t, initialTimestamp, status[0].LastTimestamp)
 			}
+
+			assert.NotNil(t, status[0].StateTimestamps)
+			assert.NotEmpty(t, status[0].StateTimestamps[tc.expectedState])
 
 			assert.Equal(t, tc.expectedEventCount, status[0].SpanEventCount())
 			assert.Equal(t, tc.expectedLinkCount, status[0].SpanLinkCount())
@@ -274,7 +277,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, waitingStatus, 1)
 	assert.Equal(t, DecisionDelay, waitingStatus[0].State)
-	assert.True(t, waitingStatus[0].Timestamp.After(collectingStatus[0].Timestamp))
+	assert.True(t, waitingStatus[0].LastTimestamp.After(collectingStatus[0].LastTimestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, DecisionDelay, ReadyToDecide))
@@ -283,7 +286,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, readyStatus, 1)
 	assert.Equal(t, ReadyToDecide, readyStatus[0].State)
-	assert.True(t, readyStatus[0].Timestamp.After(waitingStatus[0].Timestamp))
+	assert.True(t, readyStatus[0].LastTimestamp.After(waitingStatus[0].LastTimestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, ReadyToDecide, AwaitingDecision))
@@ -292,7 +295,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, awaitingStatus, 1)
 	assert.Equal(t, AwaitingDecision, awaitingStatus[0].State)
-	assert.True(t, awaitingStatus[0].Timestamp.After(readyStatus[0].Timestamp))
+	assert.True(t, awaitingStatus[0].LastTimestamp.After(readyStatus[0].LastTimestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, AwaitingDecision, ReadyToDecide))
@@ -301,7 +304,7 @@ func TestRedisBasicStore_ChangeTraceStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, readyStatus, 1)
 	assert.Equal(t, ReadyToDecide, readyStatus[0].State)
-	assert.True(t, readyStatus[0].Timestamp.After(awaitingStatus[0].Timestamp))
+	assert.True(t, readyStatus[0].LastTimestamp.After(awaitingStatus[0].LastTimestamp))
 
 	store.clock.Advance(time.Duration(1 * time.Second))
 	require.NoError(t, store.ChangeTraceStatus(ctx, []string{span.TraceID}, ReadyToDecide, AwaitingDecision))
@@ -398,7 +401,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	require.Equal(t, Collecting, status[0].State)
-	initialTimestamp := status[0].Timestamp
+	initialTimestamp := status[0].LastTimestamp
 
 	store.clock.Advance(1 * time.Second)
 	var wg sync.WaitGroup
@@ -438,7 +441,7 @@ func TestRedisBasicStore_ConcurrentStateChange(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, status, 1)
 	assert.Equal(t, AwaitingDecision, status[0].State)
-	assert.True(t, status[0].Timestamp.After(initialTimestamp))
+	assert.True(t, status[0].LastTimestamp.After(initialTimestamp))
 }
 
 func TestRedisBasicStore_Cleanup(t *testing.T) {
@@ -711,7 +714,7 @@ func (ts *testTraceStateProcessor) ensureInitialState(t *testing.T, ctx context.
 	for _, state := range ts.states {
 		require.NoError(t, ts.remove(ctx, conn, state, traceID))
 	}
-	_, err := conn.Del(ts.traceStatesKey(traceID))
+	_, err := conn.Del(ts.traceStatesKey(traceID)).Do()
 	require.NoError(t, err)
 
 	newSpan := []string{traceID}

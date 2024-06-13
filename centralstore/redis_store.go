@@ -153,7 +153,7 @@ func (r *RedisBasicStore) RecordMetrics(ctx context.Context) error {
 			continue
 		}
 		// get the state counts
-		count, err := conn.ZCount(r.states.stateNameKey(state), 0, -1)
+		count, err := conn.ZCount(r.states.stateNameKey(state), 0, -1).DoInt64()
 		if err != nil {
 			return err
 		}
@@ -274,7 +274,7 @@ func (r *RedisBasicStore) GetTraces(ctx context.Context, traceIDs ...string) ([]
 	defer conn.Close()
 
 	for _, traceID := range traceIDs {
-		if err := redis.NewGetAllValuesHashCommand(spansHashByTraceIDKey(traceID), conn).Send(); err != nil {
+		if err := conn.HGetAllValues(spansHashByTraceIDKey(traceID)).Send(); err != nil {
 			return nil, err
 		}
 	}
@@ -445,7 +445,7 @@ func (r *RedisBasicStore) ChangeTraceStatus(ctx context.Context, traceIDs []stri
 			spanListKeys = append(spanListKeys, spansHashByTraceIDKey(traceID))
 		}
 
-		_, err = conn.Del(spanListKeys...)
+		_, err = conn.Del(spanListKeys...).Do()
 		if err != nil {
 			return err
 		}
@@ -466,15 +466,6 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	defer span.End()
 
 	otelutil.AddSpanField(span, "num_traces", len(statuses))
-	conn := r.RedisClient.Get()
-	defer conn.Close()
-
-	// store keep reason in status
-	err := r.traces.keepTrace(ctx, conn, statuses)
-	if err != nil {
-		return err
-	}
-
 	traceIDs := make([]string, 0, len(statuses))
 	for _, status := range statuses {
 		traceIDs = append(traceIDs, status.TraceID)
@@ -483,6 +474,9 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 	if len(traceIDs) == 0 {
 		return nil
 	}
+
+	conn := r.RedisClient.Get()
+	defer conn.Close()
 
 	succeed, err := r.states.toNextState(ctx, conn, newTraceStateChangeEvent(AwaitingDecision, DecisionKeep), traceIDs...)
 	if err != nil {
@@ -497,6 +491,12 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 		}
 	}
 
+	// store keep reason in status
+	err = r.traces.keepTrace(ctx, conn, statuses)
+	if err != nil {
+		return err
+	}
+
 	// remove span list
 	spanListKeys := make([]string, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
@@ -508,7 +508,7 @@ func (r *RedisBasicStore) KeepTraces(ctx context.Context, statuses []*CentralTra
 		spanListKeys = append(spanListKeys, spansHashByTraceIDKey(traceID))
 	}
 
-	_, err = conn.Del(spanListKeys...)
+	_, err = conn.Del(spanListKeys...).Do()
 	if err != nil {
 		return err
 	}
@@ -569,13 +569,18 @@ type centralTraceStatusReason struct {
 }
 
 type centralTraceStatusRedis struct {
-	TraceID    string
-	State      string
-	Count      uint32
-	EventCount uint32
-	LinkCount  uint32
-	SamplerKey string
-	Timestamp  int64
+	TraceID       string
+	State         string
+	Count         uint32
+	EventCount    uint32
+	LinkCount     uint32
+	SamplerKey    string
+	LastTimestamp int64
+	// the redis key format should match with the string format of CentralTraceState
+	CollectingTimestamp       int64 `redis:"collecting"`
+	DecisionDelayTimestamp    int64 `redis:"decision_delay"`
+	ReadyToDecideTimestamp    int64 `redis:"ready_to_decide"`
+	AwaitingDecisionTimestamp int64 `redis:"awaiting_decision"`
 
 	KeepRecord []byte
 }
@@ -593,6 +598,23 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) (*Central
 		reason.Metadata = make(map[string]interface{})
 	}
 
+	stateTimestamps := make(map[CentralTraceState]time.Time, 0)
+	if status.CollectingTimestamp != 0 {
+		stateTimestamps[Collecting] = time.UnixMicro(status.CollectingTimestamp)
+	}
+
+	if status.DecisionDelayTimestamp != 0 {
+		stateTimestamps[DecisionDelay] = time.UnixMicro(status.DecisionDelayTimestamp)
+	}
+
+	if status.ReadyToDecideTimestamp != 0 {
+		stateTimestamps[ReadyToDecide] = time.UnixMicro(status.ReadyToDecideTimestamp)
+	}
+
+	if status.AwaitingDecisionTimestamp != 0 {
+		stateTimestamps[AwaitingDecision] = time.UnixMicro(status.AwaitingDecisionTimestamp)
+	}
+
 	return &CentralTraceStatus{
 		TraceID:         status.TraceID,
 		State:           CentralTraceState(status.State),
@@ -600,7 +622,8 @@ func normalizeCentralTraceStatusRedis(status *centralTraceStatusRedis) (*Central
 		Count:           status.Count,
 		EventCount:      status.EventCount,
 		LinkCount:       status.LinkCount,
-		Timestamp:       time.UnixMicro(status.Timestamp),
+		LastTimestamp:   time.UnixMicro(status.LastTimestamp),
+		StateTimestamps: stateTimestamps,
 		KeepReason:      reason.KeepReason,
 		Rate:            reason.Rate,
 		Metadata:        reason.Metadata,
@@ -646,9 +669,9 @@ func (t *tracesStore) addStatuses(ctx context.Context, conn redis.Conn, traces m
 		traceStatusKey := t.traceStatusKey(traceID)
 		args := redis.Args().AddFlat(trace)
 
-		commands = append(commands, redis.NewMultiSetHashCommand(traceStatusKey, args, conn))
-		commands = append(commands, redis.NewExpireCommand(traceStatusKey, t.traceExpirationDuration().Seconds(), conn))
-		commands = append(commands, redis.NewINCRCommand(traceStatusCountKey, conn))
+		commands = append(commands, conn.HMSet(traceStatusKey, args))
+		commands = append(commands, conn.Expire(traceStatusKey, t.traceExpirationDuration()))
+		commands = append(commands, conn.Increment(traceStatusCountKey))
 	}
 
 	err := conn.Exec(commands...)
@@ -669,7 +692,7 @@ func (t *tracesStore) getTraceStates(ctx context.Context, conn redis.Conn, trace
 
 	states := make(map[string]CentralTraceState, len(traceIDs))
 	for _, id := range traceIDs {
-		if err := redis.NewGetHashCommand(t.traceStatusKey(id), "State", conn).Send(); err != nil {
+		if err := conn.HGet(t.traceStatusKey(id), "State").Send(); err != nil {
 			span.RecordError(err)
 			return nil, err
 		}
@@ -756,7 +779,7 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 				defer chunkSpan.End()
 
 				for _, traceID := range traceIDs {
-					if err := redis.NewGetAllHashCommand(t.traceStatusKey(traceID), conn).Send(); err != nil {
+					if err := conn.HGetAll(t.traceStatusKey(traceID)).Send(); err != nil {
 						chunkSpan.RecordError(err)
 					}
 
@@ -794,7 +817,7 @@ func (t *tracesStore) getTraceStatuses(ctx context.Context, client redis.Client,
 						status := &centralTraceStatusRedis{}
 						status.TraceID = traceIDs[i]
 						status.State = Unknown.String()
-						status.Timestamp = t.clock.Now().UnixMicro()
+						status.LastTimestamp = t.clock.Now().UnixMicro()
 
 						v, err := normalizeCentralTraceStatusRedis(status)
 						if err != nil {
@@ -840,7 +863,7 @@ func (t *tracesStore) count(ctx context.Context, conn redis.Conn) (int64, error)
 	defer span.End()
 
 	// read the value from trace status count key
-	return conn.GetInt64(traceStatusCountKey)
+	return conn.Get(traceStatusCountKey).DoInt64()
 }
 
 // storeSpan stores the span in the spans hash and increments the span count for the trace.
@@ -864,7 +887,7 @@ func (t *tracesStore) storeSpans(ctx context.Context, conn redis.Conn, spans []*
 			return err
 		}
 
-		commands[i+1] = redis.NewExpireCommand(spansHashByTraceIDKey(span.TraceID), t.traceExpirationDuration().Seconds(), conn)
+		commands[i+1] = conn.Expire(spansHashByTraceIDKey(span.TraceID), t.traceExpirationDuration())
 		commands[i+2] = t.incrementSpanCountsCMD(span.TraceID, span.Type, conn)
 	}
 
@@ -890,7 +913,7 @@ func (t *tracesStore) incrementSpanCounts(ctx context.Context, conn redis.Conn, 
 	for i := 0; i < len(commands); i += 2 {
 		span := spans[i/2]
 		commands[i] = t.incrementSpanCountsCMD(span.TraceID, span.Type, conn)
-		commands[i+1] = redis.NewExpireCommand(t.traceStatusKey(span.TraceID), t.traceExpirationDuration().Seconds(), conn)
+		commands[i+1] = conn.Expire(t.traceStatusKey(span.TraceID), t.traceExpirationDuration())
 	}
 
 	err := conn.Exec(commands...)
@@ -912,7 +935,7 @@ func (t *tracesStore) incrementSpanCountsCMD(traceID string, spanType types.Span
 		field = "Count"
 	}
 
-	return redis.NewIncrByHashCommand(t.traceStatusKey(traceID), field, 1, conn)
+	return conn.HIncrementBy(t.traceStatusKey(traceID), field, 1)
 }
 
 func spansHashByTraceIDKey(traceID string) string {
@@ -927,7 +950,7 @@ func addToSpanHash(span *CentralSpan, conn redis.Conn) (redis.Command, error) {
 	}
 
 	// overwrite the span data if it already exists
-	return redis.NewSetHashCommand(spansHashByTraceIDKey(span.TraceID), map[string]any{span.SpanID: data}, conn), nil
+	return conn.HMSet(spansHashByTraceIDKey(span.TraceID), map[string]any{span.SpanID: data}), nil
 }
 
 // TraceStateProcessor is a map of trace IDs to their state.
@@ -1031,7 +1054,7 @@ func (t *traceStateProcessor) randomTraceIDsByState(ctx context.Context, conn re
 	_, span := t.tracer.Start(ctx, "randomTraceIDsByState")
 	defer span.End()
 
-	ids, err := conn.ZRandom(t.stateNameKey(state), n)
+	ids, err := conn.ZRandom(t.stateNameKey(state), n).DoStrings()
 	if err != nil {
 		span.RecordError(err)
 		return nil, err
@@ -1049,14 +1072,14 @@ func (t *traceStateProcessor) exists(ctx context.Context, conn redis.Conn, state
 	})
 	defer span.End()
 
-	exist, err := conn.ZExist(t.stateNameKey(state), traceID)
+	exist, err := conn.ZScore(t.stateNameKey(state), traceID).DoInt64()
 	if err != nil {
 		return false
 	}
 
 	otelutil.AddSpanField(span, "exists", exist)
 
-	return exist
+	return exist != 0
 }
 
 func (t *traceStateProcessor) remove(ctx context.Context, conn redis.Conn, state CentralTraceState, traceIDs ...string) error {
@@ -1070,7 +1093,8 @@ func (t *traceStateProcessor) remove(ctx context.Context, conn redis.Conn, state
 		return nil
 	}
 
-	return conn.ZRemove(t.stateNameKey(state), traceIDs)
+	_, err := conn.ZRemove(t.stateNameKey(state), traceIDs).Do()
+	return err
 }
 
 func (t *traceStateProcessor) toNextState(ctx context.Context, conn redis.Conn, changeEvent stateChangeEvent, traceIDs ...string) ([]string, error) {
@@ -1292,7 +1316,7 @@ const traceStateChangeScript = `
 
 	   local removed = redis.call('ZREM', string.format("%s:traces", currentState), traceID)
 
-	   local status = redis.call("HSET", string.format("%s:status", traceID), "State", nextState, "Timestamp", timestamp)
+	   local status = redis.call("HSET", string.format("%s:status", traceID), "State", nextState, "LastTimestamp", timestamp, nextState, timestamp)
 `
 
 const validStateChangeEventsKey = "valid-state-change-events"
@@ -1301,7 +1325,7 @@ func ensureValidStateChangeEvents(client redis.Client) error {
 	conn := client.Get()
 	defer conn.Close()
 
-	return conn.SAdd(validStateChangeEventsKey,
+	_, err := conn.SAdd(validStateChangeEventsKey,
 		newTraceStateChangeEvent(Unknown, Collecting).string(),
 		newTraceStateChangeEvent(Collecting, DecisionDelay).string(),
 		newTraceStateChangeEvent(DecisionDelay, ReadyToDecide).string(),
@@ -1309,7 +1333,8 @@ func ensureValidStateChangeEvents(client redis.Client) error {
 		newTraceStateChangeEvent(AwaitingDecision, ReadyToDecide).string(),
 		newTraceStateChangeEvent(AwaitingDecision, DecisionKeep).string(),
 		newTraceStateChangeEvent(AwaitingDecision, DecisionDrop).string(),
-	)
+	).Do()
+	return err
 }
 
 // validStateChangeEventsScript is a lua script that ensures the valid state change events are present in redis

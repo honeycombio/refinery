@@ -90,7 +90,7 @@ func (lrs *LocalStore) cleanup() {
 			lrs.mutex.RLock()
 			deletes := make([]string, 0)
 			for traceID, status := range lrs.states[DecisionKeep] {
-				if lrs.Clock.Since(status.Timestamp) > cleanupTTL {
+				if lrs.Clock.Since(status.LastTimestamp) > cleanupTTL {
 					deletes = append(deletes, traceID)
 				}
 			}
@@ -141,7 +141,7 @@ func (lrs *LocalStore) changeTraceState(traceID string, fromState, toState Centr
 
 	status.State = toState
 	lrs.states[toState][traceID] = status
-	status.Timestamp = time.Now()
+	status.LastTimestamp = time.Now()
 	delete(lrs.states[fromState], traceID)
 	return true
 }
@@ -191,7 +191,7 @@ spanLoop:
 			lrs.states[Collecting][span.TraceID] = &CentralTraceStatus{
 				TraceID:         span.TraceID,
 				State:           Collecting,
-				Timestamp:       lrs.Clock.Now(),
+				LastTimestamp:   lrs.Clock.Now(),
 				Metadata:        make(map[string]interface{}),
 				SamplerSelector: span.samplerSelector,
 			}

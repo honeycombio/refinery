@@ -73,10 +73,11 @@ type CentralTraceStatus struct {
 	KeepReason      string
 	SamplerSelector string
 	reasonIndex     uint      // this is the cache ID for the reason
-	Timestamp       time.Time // this is the last time the trace state was changed
-	Count           uint32    // number of spans in the trace
-	EventCount      uint32    // number of span events in the trace
-	LinkCount       uint32    // number of span links in the trace
+	LastTimestamp   time.Time // this is the last time the trace state was changed
+	StateTimestamps map[CentralTraceState]time.Time
+	Count           uint32 // number of spans in the trace
+	EventCount      uint32 // number of span events in the trace
+	LinkCount       uint32 // number of span links in the trace
 }
 
 // ensure that CentralTraceStatus implements KeptTrace
@@ -92,10 +93,9 @@ func (s *CentralTraceStatus) Clone() *CentralTraceStatus {
 }
 
 type CentralTrace struct {
-	TraceID   string
-	Timestamp uint64
-	Root      *CentralSpan
-	Spans     []*CentralSpan
+	TraceID string
+	Root    *CentralSpan
+	Spans   []*CentralSpan
 }
 
 func (t *CentralTrace) ID() string {
