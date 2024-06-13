@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -611,4 +612,110 @@ func TestGRPCHealthProbeWatch(t *testing.T) {
 
 	sentMessage := mockServer.GetSentMessages()[0]
 	assert.Equal(t, grpc_health_v1.HealthCheckResponse_SERVING, sentMessage.Status)
+}
+
+func TestGetDatasetFromRequest(t *testing.T) {
+	testCases := []struct {
+		name                string
+		datasetName         string
+		expectedDatasetName string
+		expectedError       error
+	}{
+		{
+			name:          "empty dataset name",
+			datasetName:   "",
+			expectedError: fmt.Errorf("missing dataset name"),
+		},
+		{
+			name:          "dataset name with invalid URL encoding",
+			datasetName:   "foo%2",
+			expectedError: url.EscapeError("%2"),
+		},
+		{
+			name:                "normal dataset name",
+			datasetName:         "foo",
+			expectedDatasetName: "foo",
+		},
+		{
+			name:                "dataset name with numbers",
+			datasetName:         "foo123",
+			expectedDatasetName: "foo123",
+		},
+		{
+			name:                "dataset name with hyphen",
+			datasetName:         "foo-bar",
+			expectedDatasetName: "foo-bar",
+		},
+		{
+			name:                "dataset name with underscore",
+			datasetName:         "foo_bar",
+			expectedDatasetName: "foo_bar",
+		},
+		{
+			name:                "dataset name with tilde",
+			datasetName:         "foo~bar",
+			expectedDatasetName: "foo~bar",
+		},
+		{
+			name:                "dataset name with period",
+			datasetName:         "foo.bar",
+			expectedDatasetName: "foo.bar",
+		},
+		{
+			name:                "dataset name with URL encoded hyphen",
+			datasetName:         "foo%2Dbar",
+			expectedDatasetName: "foo-bar",
+		},
+		{
+			name:                "dataset name with URL encoded underscore",
+			datasetName:         "foo%5Fbar",
+			expectedDatasetName: "foo_bar",
+		},
+		{
+			name:                "dataset name with URL encoded tilde",
+			datasetName:         "foo%7Ebar",
+			expectedDatasetName: "foo~bar",
+		},
+		{
+			name:                "dataset name with URL encoded period",
+			datasetName:         "foo%2Ebar",
+			expectedDatasetName: "foo.bar",
+		},
+		{
+			name:                "dataset name with URL encoded forward slash",
+			datasetName:         "foo%2Fbar",
+			expectedDatasetName: "foo/bar",
+		},
+		{
+			name:                "dataset name with URL encoded colon",
+			datasetName:         "foo%3Abar",
+			expectedDatasetName: "foo:bar",
+		},
+		{
+			name:                "dataset name with URL encoded square brackets",
+			datasetName:         "foo%5Bbar%5D",
+			expectedDatasetName: "foo[bar]",
+		},
+		{
+			name:                "dataset name with URL encoded parentheses",
+			datasetName:         "foo%28bar%29",
+			expectedDatasetName: "foo(bar)",
+		},
+		{
+			name:                "dataset name with URL encoded curly braces",
+			datasetName:         "foo%7Bbar%7D",
+			expectedDatasetName: "foo{bar}",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, _ := http.NewRequest("GET", "/1/events/dataset", nil)
+			req = mux.SetURLVars(req, map[string]string{"datasetName": tc.datasetName})
+
+			dataset, err := getDatasetFromRequest(req)
+			assert.Equal(t, tc.expectedError, err)
+			assert.Equal(t, tc.expectedDatasetName, dataset)
+		})
+	}
 }

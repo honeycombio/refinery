@@ -168,6 +168,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
+	authedMuxxer.UseEncodedPath()
 	authedMuxxer.Use(r.apiKeyChecker)
 
 	// handle events and batches
@@ -388,8 +389,10 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 		sampleRate = 1
 	}
 	eventTime := getEventTime(req.Header.Get(types.TimestampHeader))
-	vars := mux.Vars(req)
-	dataset := vars["datasetName"]
+	dataset, err := getDatasetFromRequest(req)
+	if err != nil {
+		return nil, err
+	}
 
 	apiHost, err := r.Config.GetHoneycombAPI()
 	if err != nil {
@@ -678,8 +681,10 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey
 	eventTime := bev.getEventTime()
 	// TODO move the following 3 lines outside of this loop; they could be done
 	// once for the entire batch instead of in every event.
-	vars := mux.Vars(req)
-	dataset := vars["datasetName"]
+	dataset, err := getDatasetFromRequest(req)
+	if err != nil {
+		return nil, err
+	}
 	apiHost, err := r.Config.GetHoneycombAPI()
 	if err != nil {
 		return nil, err
@@ -968,4 +973,17 @@ func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
 	// handle OTLP logs requests
 	otlpMuxxer.HandleFunc("/logs", r.postOTLPLogs).Name("otlp_logs")
 	otlpMuxxer.HandleFunc("/logs/", r.postOTLPLogs).Name("otlp_logs")
+}
+
+func getDatasetFromRequest(req *http.Request) (string, error) {
+	dataset := mux.Vars(req)["datasetName"]
+	if dataset == "" {
+		return "", fmt.Errorf("missing dataset name")
+	}
+	dataset, err := url.PathUnescape(dataset)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println("dataset", dataset)
+	return dataset, nil
 }
