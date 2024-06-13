@@ -68,7 +68,15 @@ func (r *RedisMetricsRecorder) monitor() {
 				timestamp := r.Clock.Now().UnixMicro()
 				allmetrics["timestamp"] = float64(timestamp / 1_000_000.0)
 				conn := r.RedisClient.Get()
-				conn.SetHashTTL("Refinery_Metrics_"+r.prefix, allmetrics, r.reportingFreq*2)
+				if err := conn.SetNXHash("Refinery_Metrics_"+r.prefix, allmetrics).Send(); err != nil {
+					r.Logger.Error().Logf("failed to set metrics in redis")
+					continue
+				}
+				if err := conn.Expire("Refinery_Metrics_"+r.prefix, r.reportingFreq*2).Send(); err != nil {
+					r.Logger.Error().Logf("failed to set expiration for metrics in redis")
+				}
+
+				conn.Flush()
 				conn.Close()
 			}
 		case <-r.done:
