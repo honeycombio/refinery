@@ -984,6 +984,5 @@ func getDatasetFromRequest(req *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("dataset", dataset)
 	return dataset, nil
 }
