@@ -472,17 +472,15 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment, apiHost, dataset)
-		if err != nil {
-			batchedResponses = append(
-				batchedResponses,
-				&BatchResponse{
-					Status: http.StatusBadRequest,
-					Error:  fmt.Sprintf("failed to convert to event: %s", err.Error()),
-				},
-			)
-			debugLog.WithField("error", err).Logf("event from batch failed to process event")
-			continue
+		ev := &types.Event{
+			Context:     req.Context(),
+			APIHost:     apiHost,
+			APIKey:      apiKey,
+			Dataset:     dataset,
+			Environment: environment,
+			SampleRate:  bev.getSampleRate(),
+			Timestamp:   bev.getEventTime(),
+			Data:        bev.Data,
 		}
 
 		err = r.processEvent(ev, reqID)
@@ -682,23 +680,6 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	return reader, nil
 }
 
-func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey string, environment string, apiHost string, dataset string) (*types.Event, error) {
-	sampleRate := bev.SampleRate
-	if sampleRate == 0 {
-		sampleRate = 1
-	}
-	return &types.Event{
-		Context:     req.Context(),
-		APIHost:     apiHost,
-		APIKey:      apiKey,
-		Dataset:     dataset,
-		Environment: environment,
-		SampleRate:  uint(sampleRate),
-		Timestamp:   bev.getEventTime(),
-		Data:        bev.Data,
-	}, nil
-}
-
 type batchedEvent struct {
 	Timestamp        string                 `json:"time"`
 	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
@@ -712,6 +693,13 @@ func (b *batchedEvent) getEventTime() time.Time {
 	}
 
 	return getEventTime(b.Timestamp)
+}
+
+func (b *batchedEvent) getSampleRate() uint {
+	if b.SampleRate == 0 {
+		return defaultSampleRate
+	}
+	return uint(b.SampleRate)
 }
 
 // getEventTime tries to guess the time format in our time header!
