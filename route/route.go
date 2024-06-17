@@ -450,6 +450,15 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	dataset, err := getDatasetFromRequest(req)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+	}
+	apiHost, err := r.Config.GetHoneycombAPI()
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+	}
+
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
 		apiKey = req.Header.Get(types.APIKeyHeaderShort)
@@ -463,7 +472,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment)
+		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment, dataset, apiHost)
 		if err != nil {
 			batchedResponses = append(
 				batchedResponses,
@@ -673,7 +682,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	return reader, nil
 }
 
-func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey string, environment string) (*types.Event, error) {
+func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey string, environment string, apiHost string, dataset string) (*types.Event, error) {
 	sampleRate := bev.SampleRate
 	if sampleRate == 0 {
 		sampleRate = 1
@@ -681,14 +690,6 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey
 	eventTime := bev.getEventTime()
 	// TODO move the following 3 lines outside of this loop; they could be done
 	// once for the entire batch instead of in every event.
-	dataset, err := getDatasetFromRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return nil, err
-	}
 	return &types.Event{
 		Context:     req.Context(),
 		APIHost:     apiHost,
