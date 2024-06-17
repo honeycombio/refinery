@@ -19,6 +19,7 @@ require (
 	github.com/honeycombio/husky v0.30.0
 	github.com/honeycombio/libhoney-go v1.23.1
 	github.com/jessevdk/go-flags v1.5.0
+	github.com/jonboulle/clockwork v0.4.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.17.8
 	github.com/panmari/cuckoofilter v1.0.3
