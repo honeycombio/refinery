@@ -1,5 +1,18 @@
 # Refinery Changelog
 
+## 2.6.0 2024-06-17
+
+### Features
+
+- feat: Allow URL encoded dataset in libhoney endpoint paths (#1199) | @MikeGoldsmith
+- feat: Add OTLP log endpoints (gRPC & HTTP) (#1187) | @MikeGoldsmith
+
+### Maintenance
+
+- maint: Bump libhoney-go to v1.23.1 (#1200) | @MikeGoldsmith
+- maint: bump libhoney-go to v1.23.0 (#1192) | @MikeGoldsmith
+- maint: bump Husky to v0.30.0 (#1190) | @TylerHelmuth
+
 ## 2.5.2 2024-05-22
 
 This release fixes a race condition in OTel Metrics that caused Refinery to crash.

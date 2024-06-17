@@ -2,6 +2,14 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.6.0
+
+This release introduces support for OpenTelemetry Logs over both gRPC and HTTP.
+Log records that are associated with a trace by including a TraceID are sampled alongside the trace's spans.
+Log records that do not have a TraceID are treated like regular events and forwarded directly to Honeycomb.
+
+It also includes support for URL encoded dataset names in the non-OpenTelemetry URL paths.
+
 ## Version 2.5.2
 
 This release fixes a race condition in OTel Metrics that caused Refinery to crash.
