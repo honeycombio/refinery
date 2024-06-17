@@ -1,5 +1,15 @@
 # Refinery Changelog
 
+## 2.6.1 2024-06-17
+
+### Fixes
+
+- fix: Don’t consider log events as root spans (#1208) | @MikeGoldsmith
+
+### Maintenance
+
+- maint(deps): bump the minor-patch group with 9 updates (#1198) | @dependabot
+
 ## 2.6.0 2024-06-17
 
 ### Features
