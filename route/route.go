@@ -687,9 +687,6 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey
 	if sampleRate == 0 {
 		sampleRate = 1
 	}
-	eventTime := bev.getEventTime()
-	// TODO move the following 3 lines outside of this loop; they could be done
-	// once for the entire batch instead of in every event.
 	return &types.Event{
 		Context:     req.Context(),
 		APIHost:     apiHost,
@@ -697,7 +694,7 @@ func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey
 		Dataset:     dataset,
 		Environment: environment,
 		SampleRate:  uint(sampleRate),
-		Timestamp:   eventTime,
+		Timestamp:   bev.getEventTime(),
 		Data:        bev.Data,
 	}, nil
 }
