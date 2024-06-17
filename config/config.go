@@ -146,6 +146,8 @@ type Config interface {
 
 	GetIdentifierInterfaceName() (string, error)
 
+	GetOTelTracingConfig() OTelTracingConfig
+
 	GetUseIPV6Identifier() (bool, error)
 
 	GetRedisIdentifier() (string, error)

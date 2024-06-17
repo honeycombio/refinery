@@ -58,6 +58,7 @@ type MockConfig struct {
 	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
+	GetOTelTracingConfigVal          OTelTracingConfig
 	GetSendDelayErr                  error
 	GetSendDelayVal                  time.Duration
 	GetBatchTimeoutVal               time.Duration
@@ -293,6 +294,13 @@ func (m *MockConfig) GetOTelMetricsConfig() OTelMetricsConfig {
 	defer m.Mux.RUnlock()
 
 	return m.GetOTelMetricsConfigVal
+}
+
+func (m *MockConfig) GetOTelTracingConfig() OTelTracingConfig {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetOTelTracingConfigVal
 }
 
 func (m *MockConfig) GetSendDelay() (time.Duration, error) {
