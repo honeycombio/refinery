@@ -4,9 +4,10 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.6.0
 
-This release introduces support for OpenTelemetry Logs over both gRPC and HTTP.
-Log records that are associated with a trace by including a TraceID are sampled alongside the trace's spans.
-Log records that do not have a TraceID are treated like regular events and forwarded directly to Honeycomb.
+With this release, Refinery begins the process of integrating multiple telemetry signal types by handling logs as well as traces.
+Refinery now handles the OpenTelemetry `/logs` endpoints over both gRPC and HTTP:
+- Log records that are associated with a trace by including a TraceID are sampled alongside the trace's spans.
+- Log records that do not have a TraceID are treated like regular events and forwarded directly to Honeycomb.
 
 It also includes support for URL encoded dataset names in the non-OpenTelemetry URL paths.
 
