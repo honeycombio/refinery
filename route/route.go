@@ -472,7 +472,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment, dataset, apiHost)
+		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment, apiHost, dataset)
 		if err != nil {
 			batchedResponses = append(
 				batchedResponses,
