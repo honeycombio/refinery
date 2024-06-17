@@ -45,7 +45,7 @@ func TestFanoutWithPredicate(t *testing.T) {
 func TestFanoutWithCleanup(t *testing.T) {
 	input := []int{1, 2, 3, 4, 5}
 	parallelism := 4
-	cleanupTotal := 0
+	cleanups := []int{}
 	mut := sync.Mutex{}
 	workerFactory := func(i int) (func(int) int, func(int)) {
 		worker := func(i int) int {
@@ -53,7 +53,7 @@ func TestFanoutWithCleanup(t *testing.T) {
 		}
 		cleanup := func(i int) {
 			mut.Lock()
-			cleanupTotal += i
+			cleanups = append(cleanups, i)
 			mut.Unlock()
 		}
 		return worker, cleanup
@@ -61,7 +61,7 @@ func TestFanoutWithCleanup(t *testing.T) {
 
 	result := Fanout(input, parallelism, workerFactory, nil)
 	assert.ElementsMatch(t, []int{2, 4, 6, 8, 10}, result)
-	assert.Equal(t, 6, cleanupTotal) // 0 + 1 + 2 + 3
+	assert.ElementsMatch(t, []int{0, 1, 2, 3}, cleanups)
 }
 
 var expected = map[int]int{
@@ -106,7 +106,7 @@ func TestFanoutMapWithPredicate(t *testing.T) {
 func TestFanoutMapWithCleanup(t *testing.T) {
 	input := []int{1, 2, 3, 4, 5}
 	parallelism := 4
-	cleanupTotal := 0
+	cleanups := []int{}
 	mut := sync.Mutex{}
 	workerFactory := func(i int) (func(int) int, func(int)) {
 		worker := func(i int) int {
@@ -114,7 +114,7 @@ func TestFanoutMapWithCleanup(t *testing.T) {
 		}
 		cleanup := func(i int) {
 			mut.Lock()
-			cleanupTotal += i
+			cleanups = append(cleanups, i)
 			mut.Unlock()
 		}
 		return worker, cleanup
@@ -122,7 +122,7 @@ func TestFanoutMapWithCleanup(t *testing.T) {
 
 	result := FanoutToMap(input, parallelism, workerFactory, nil)
 	assert.EqualValues(t, expected, result)
-	assert.Equal(t, 6, cleanupTotal) // 0 + 1 + 2 + 3
+	assert.ElementsMatch(t, []int{0, 1, 2, 3}, cleanups)
 }
 
 func TestEasyFanout(t *testing.T) {
