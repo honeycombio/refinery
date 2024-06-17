@@ -706,6 +706,16 @@ func TestGetDatasetFromRequest(t *testing.T) {
 			datasetName:         "foo%7Bbar%7D",
 			expectedDatasetName: "foo{bar}",
 		},
+		{
+			name:                "dataset name with URL encoded percent",
+			datasetName:         "foo%25bar",
+			expectedDatasetName: "foo%bar",
+		},
+		{
+			name:                "dataset name with URL encoded ampersand",
+			datasetName:         "foo%26bar",
+			expectedDatasetName: "foo&bar",
+		},
 	}
 
 	for _, tc := range testCases {
