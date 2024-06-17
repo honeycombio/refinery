@@ -168,6 +168,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
+	authedMuxxer.UseEncodedPath()
 	authedMuxxer.Use(r.apiKeyChecker)
 
 	// handle events and batches
@@ -388,8 +389,10 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 		sampleRate = 1
 	}
 	eventTime := getEventTime(req.Header.Get(types.TimestampHeader))
-	vars := mux.Vars(req)
-	dataset := vars["datasetName"]
+	dataset, err := getDatasetFromRequest(req)
+	if err != nil {
+		return nil, err
+	}
 
 	apiHost, err := r.Config.GetHoneycombAPI()
 	if err != nil {
@@ -447,6 +450,15 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	dataset, err := getDatasetFromRequest(req)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+	}
+	apiHost, err := r.Config.GetHoneycombAPI()
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+	}
+
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
 		apiKey = req.Header.Get(types.APIKeyHeaderShort)
@@ -460,17 +472,15 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev, err := r.batchedEventToEvent(req, bev, apiKey, environment)
-		if err != nil {
-			batchedResponses = append(
-				batchedResponses,
-				&BatchResponse{
-					Status: http.StatusBadRequest,
-					Error:  fmt.Sprintf("failed to convert to event: %s", err.Error()),
-				},
-			)
-			debugLog.WithField("error", err).Logf("event from batch failed to process event")
-			continue
+		ev := &types.Event{
+			Context:     req.Context(),
+			APIHost:     apiHost,
+			APIKey:      apiKey,
+			Dataset:     dataset,
+			Environment: environment,
+			SampleRate:  bev.getSampleRate(),
+			Timestamp:   bev.getEventTime(),
+			Data:        bev.Data,
 		}
 
 		err = r.processEvent(ev, reqID)
@@ -670,32 +680,6 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	return reader, nil
 }
 
-func (r *Router) batchedEventToEvent(req *http.Request, bev batchedEvent, apiKey string, environment string) (*types.Event, error) {
-	sampleRate := bev.SampleRate
-	if sampleRate == 0 {
-		sampleRate = 1
-	}
-	eventTime := bev.getEventTime()
-	// TODO move the following 3 lines outside of this loop; they could be done
-	// once for the entire batch instead of in every event.
-	vars := mux.Vars(req)
-	dataset := vars["datasetName"]
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return nil, err
-	}
-	return &types.Event{
-		Context:     req.Context(),
-		APIHost:     apiHost,
-		APIKey:      apiKey,
-		Dataset:     dataset,
-		Environment: environment,
-		SampleRate:  uint(sampleRate),
-		Timestamp:   eventTime,
-		Data:        bev.Data,
-	}, nil
-}
-
 type batchedEvent struct {
 	Timestamp        string                 `json:"time"`
 	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
@@ -709,6 +693,13 @@ func (b *batchedEvent) getEventTime() time.Time {
 	}
 
 	return getEventTime(b.Timestamp)
+}
+
+func (b *batchedEvent) getSampleRate() uint {
+	if b.SampleRate == 0 {
+		return defaultSampleRate
+	}
+	return uint(b.SampleRate)
 }
 
 // getEventTime tries to guess the time format in our time header!
@@ -968,4 +959,16 @@ func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
 	// handle OTLP logs requests
 	otlpMuxxer.HandleFunc("/logs", r.postOTLPLogs).Name("otlp_logs")
 	otlpMuxxer.HandleFunc("/logs/", r.postOTLPLogs).Name("otlp_logs")
+}
+
+func getDatasetFromRequest(req *http.Request) (string, error) {
+	dataset := mux.Vars(req)["datasetName"]
+	if dataset == "" {
+		return "", fmt.Errorf("missing dataset name")
+	}
+	dataset, err := url.PathUnescape(dataset)
+	if err != nil {
+		return "", err
+	}
+	return dataset, nil
 }
