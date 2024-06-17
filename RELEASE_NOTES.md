@@ -2,6 +2,13 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.6.1
+
+This is a bug fix release. 
+In the log handling logic newly introduced in v2.6.0, Refinery would incorrectly consider log events to be root spans in a trace.
+After this fix, log events can never be root spans.
+This is recommended for everyone who wants to use the new log handling capabilities.
+
 ## Version 2.6.0
 
 With this release, Refinery begins the process of integrating multiple telemetry signal types by handling logs as well as traces.
