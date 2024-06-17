@@ -1364,3 +1364,66 @@ func TestSpanWithRuleReasons(t *testing.T) {
 	}
 	transmission.Mux.RUnlock()
 }
+
+func TestIsRootSpan(t *testing.T) {
+	tesCases := []struct {
+		name     string
+		span     *types.Span
+		expected bool
+	}{
+		{
+			name: "root span - no parent id",
+			span: &types.Span{
+				Event: types.Event{
+					Data: map[string]interface{}{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "non-root span - empty parent id",
+			span: &types.Span{
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"trace.parent_id": "",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "non-root span - parent id",
+			span: &types.Span{
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"trace.parent_id": "some-id",
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "non-root span - no parent id but has signal_type of log",
+			span: &types.Span{
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"meta.signal_type": "log",
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	collector := &InMemCollector{
+		Config: &config.MockConfig{
+			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		},
+	}
+
+	for _, tc := range tesCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, collector.isRootSpan(tc.span))
+		})
+	}
+}
