@@ -4,7 +4,9 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.6.1
 
-This is a bug fix release for in the newly introduced log handling logic where it would consider log events as root spans in a trace.
+This is a bug fix release. 
+In the log handling logic newly introduced in v2.6.0, Refinery would incorrectly consider log events to be root spans in a trace.
+After this fix, log events can never be root spans.
 This is recommended for everyone who wants to use the new log handling capabilities.
 
 ## Version 2.6.0
