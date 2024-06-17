@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-03-08 at 14:51:11 UTC
+# automatically generated on 2024-06-11 at 20:19:55 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -109,6 +109,10 @@ IDFields:
   ParentNames: 
     - "trace.parent_id"
     - parentId
+
+  LogCorrelationNames: 
+    - request_id
+    - "session.id"
 
 GRPCServerParameters:
   Enabled: true

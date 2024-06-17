@@ -865,6 +865,7 @@ func TestHoneycombIdFieldsConfig(t *testing.T) {
 		"General.ConfigurationVersion", 2,
 		"IDFields.TraceNames", []string{"first", "second"},
 		"IDFields.ParentNames", []string{"zero", "one"},
+		"IDFields.LogCorrelationNames", []string{"uno", "dos"},
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -875,6 +876,7 @@ func TestHoneycombIdFieldsConfig(t *testing.T) {
 
 	assert.Equal(t, []string{"first", "second"}, c.GetTraceIdFieldNames())
 	assert.Equal(t, []string{"zero", "one"}, c.GetParentIdFieldNames())
+	assert.Equal(t, []string{"uno", "dos"}, c.GetLogCorrelationFieldNames())
 }
 
 func TestHoneycombIdFieldsConfigDefault(t *testing.T) {

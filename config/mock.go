@@ -89,6 +89,7 @@ type MockConfig struct {
 	AdditionalAttributes             map[string]string
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
+	LogCorrelationNames              []string
 	CfgMetadata                      []ConfigMetadata
 
 	Mux sync.RWMutex
@@ -518,6 +519,13 @@ func (f *MockConfig) GetParentIdFieldNames() []string {
 	defer f.Mux.RUnlock()
 
 	return f.ParentIdFieldNames
+}
+
+func (f *MockConfig) GetLogCorrelationFieldNames() []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.LogCorrelationNames
 }
 
 func (f *MockConfig) GetConfigMetadata() []ConfigMetadata {

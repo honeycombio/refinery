@@ -944,6 +944,17 @@ A trace without a `parent_id` is assumed to be a root span.
 - Type: `stringarray`
 - Example: `trace.parent_id,parentId`
 
+### `LogCorrelationNames`
+
+`LogCorrelationNames` is the list of field names to use for the correlation ID.
+
+The first field in the list that is present in an event will be used as the log correlation ID.
+If none of the fields are present, then Refinery treats the event as not being part of a group and forwards it immediately to Honeycomb.
+
+- Eligible for live reload.
+- Type: `stringarray`
+- Example: `request_id,session.id`
+
 ## gRPC Server Parameters
 
 `GRPCServerParameters` controls the parameters of the gRPC server used to receive OpenTelemetry data in gRPC format.

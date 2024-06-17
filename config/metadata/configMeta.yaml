@@ -1250,6 +1250,21 @@ groups:
           as the parent ID. A trace without a `parent_id` is assumed to be a
           root span.
 
+      - name: LogCorrelationNames
+        type: stringarray
+        valuetype: stringarray
+        example: "request_id,session.id"
+        reload: true
+        validations:
+          - type: elementType
+            arg: string
+        summary: is the list of field names to use for the correlation ID.
+        description: >
+          The first field in the list that is present in an event will be used
+          as the log correlation ID. If none of the fields are present, then
+          Refinery treats the event as not being part of a group and forwards it
+          immediately to Honeycomb.
+
   - name: GRPCServerParameters
     title: "gRPC Server Parameters"
     description: >
