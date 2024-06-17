@@ -8,6 +8,14 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+// Notes for the future: we implemented a Redis-based PubSub system using 3
+// different libraries: go-redis, redigo, and rueidis. All three implementations
+// perform similarly, but go-redis is definitely the easiest to use for PubSub.
+// The rueidis library is probably the fastest for high-performance Redis use
+// when you want Redis to be a database or cache, and it has some nice features
+// like automatic pipelining, but it's pretty low-level and the documentation is
+// poor. Redigo is feeling pretty old at this point.
+
 // GoRedisPubSub is a PubSub implementation that uses Redis as the message broker
 // and the go-redis library to interact with Redis.
 type GoRedisPubSub struct {
@@ -121,8 +129,6 @@ func (t *GoRedisTopic) Subscribe(ctx context.Context) <-chan string {
 
 // Close shuts down the topic and unsubscribes all subscribers
 func (t *GoRedisTopic) Close() {
-	t.mut.Lock()
-	defer t.mut.Unlock()
 	t.once.Do(func() {
 		close(t.done)
 	})

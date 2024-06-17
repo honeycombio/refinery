@@ -20,7 +20,7 @@ type LocalTopic struct {
 	subscribers []chan string
 	done        chan struct{}
 	mut         sync.RWMutex
-	closed      bool
+	once        sync.Once
 }
 
 func NewLocalPubSub() *LocalPubSub {
@@ -41,7 +41,6 @@ func (ps *LocalPubSub) NewTopic(ctx context.Context, topic string) Topic {
 		pubChan:     make(chan string, 10),
 		subscribers: make([]chan string, 0),
 		done:        make(chan struct{}),
-		closed:      false,
 	}
 
 	go func() {
@@ -106,11 +105,7 @@ func (t *LocalTopic) Subscribe(ctx context.Context) <-chan string {
 
 // Close shuts down the topic and unsubscribes all subscribers
 func (t *LocalTopic) Close() {
-	t.mut.Lock()
-	defer t.mut.Unlock()
-	if t.closed {
-		return
-	}
-	close(t.done)
-	t.closed = true
+	t.once.Do(func() {
+		close(t.done)
+	})
 }
