@@ -575,6 +575,11 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 }
 
 func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
+	// log event should never be considered a root span, check for that first
+	if signalType, _ := sp.Data["meta.signal_type"]; signalType == "log" {
+		return false
+	}
+	// check if the event has a parent id using the configured parent id field names
 	for _, parentIdFieldName := range i.Config.GetParentIdFieldNames() {
 		parentId := sp.Data[parentIdFieldName]
 		if _, ok := parentId.(string); ok {
