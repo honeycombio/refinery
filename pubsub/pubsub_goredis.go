@@ -23,7 +23,7 @@ type GoRedisTopic struct {
 	subscribers []chan string
 	done        chan struct{}
 	mut         sync.RWMutex
-	closed      bool
+	once        sync.Once
 }
 
 func NewGoRedisPubSub() *GoRedisPubSub {
@@ -53,7 +53,6 @@ func (ps *GoRedisPubSub) NewTopic(ctx context.Context, topic string) Topic {
 		redisSub:    ps.rdb.Subscribe(ctx, topic),
 		subscribers: make([]chan string, 0),
 		done:        make(chan struct{}),
-		closed:      false,
 	}
 
 	go func() {
@@ -124,9 +123,7 @@ func (t *GoRedisTopic) Subscribe(ctx context.Context) <-chan string {
 func (t *GoRedisTopic) Close() {
 	t.mut.Lock()
 	defer t.mut.Unlock()
-	if t.closed {
-		return
-	}
-	close(t.done)
-	t.closed = true
+	t.once.Do(func() {
+		close(t.done)
+	})
 }
