@@ -73,11 +73,8 @@ func (s *SetWithTTL[T]) cleanup() int {
 // It also removes any items that have expired.
 func (s *SetWithTTL[T]) Members() []T {
 	s.cleanup()
-	members := make([]T, 0, len(s.Items))
 	s.mut.RLock()
-	for member := range s.Items {
-		members = append(members, member)
-	}
+	members := maps.Keys(s.Items)
 	s.mut.RUnlock()
 	sort.Slice(members, func(i, j int) bool {
 		return cmp.Less(members[i], members[j])
