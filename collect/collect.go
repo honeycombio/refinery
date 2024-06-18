@@ -141,7 +141,7 @@ func (i *InMemCollector) Start() error {
 }
 
 // sendReloadSignal will trigger the collector reloading its config, eventually.
-func (i *InMemCollector) sendReloadSignal() {
+func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 	// non-blocking insert of the signal here so we don't leak goroutines
 	select {
 	case i.reload <- struct{}{}:
