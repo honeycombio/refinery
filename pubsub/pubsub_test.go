@@ -15,14 +15,17 @@ import (
 var types = []string{"goredis", "local"}
 
 func newPubSub(typ string) pubsub.PubSub {
+	var ps pubsub.PubSub
 	switch typ {
 	case "goredis":
-		return pubsub.NewGoRedisPubSub()
+		ps = &pubsub.GoRedisPubSub{}
 	case "local":
-		return pubsub.NewLocalPubSub()
+		ps = &pubsub.LocalPubSub{}
 	default:
 		panic("unknown pubsub type")
 	}
+	ps.Start()
+	return ps
 }
 
 func TestPubSubBasics(t *testing.T) {

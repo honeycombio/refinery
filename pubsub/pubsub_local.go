@@ -4,12 +4,14 @@ import (
 	"context"
 	"sync"
 
+	"github.com/honeycombio/refinery/config"
 	"golang.org/x/exp/maps"
 )
 
 // LocalPubSub is a PubSub implementation that uses local channels to send messages; it does
 // not communicate with any external processes.
 type LocalPubSub struct {
+	Config *config.Config `inject:""`
 	topics map[string]*LocalTopic
 	mut    sync.RWMutex
 }
@@ -23,10 +25,14 @@ type LocalTopic struct {
 	once        sync.Once
 }
 
-func NewLocalPubSub() *LocalPubSub {
-	return &LocalPubSub{
-		topics: make(map[string]*LocalTopic),
-	}
+func (ps *LocalPubSub) Start() error {
+	ps.topics = make(map[string]*LocalTopic)
+	return nil
+}
+
+func (ps *LocalPubSub) Stop() error {
+	ps.Close()
+	return nil
 }
 
 // assert that LocalPubSub implements PubSub
@@ -81,6 +87,7 @@ func (ps *LocalPubSub) NewTopic(ctx context.Context, topic string) Topic {
 func (ps *LocalPubSub) Close() {
 	ps.mut.Lock()
 	topics := maps.Values(ps.topics)
+	ps.topics = make(map[string]*LocalTopic)
 	ps.mut.Unlock()
 
 	for _, t := range topics {

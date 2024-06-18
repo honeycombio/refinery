@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/exp/maps"
 )
@@ -19,6 +20,7 @@ import (
 // GoRedisPubSub is a PubSub implementation that uses Redis as the message broker
 // and the go-redis library to interact with Redis.
 type GoRedisPubSub struct {
+	Config *config.Config `inject:""`
 	rdb    *redis.Client
 	topics map[string]*GoRedisTopic
 	mut    sync.RWMutex
@@ -34,18 +36,21 @@ type GoRedisTopic struct {
 	once        sync.Once
 }
 
-func NewGoRedisPubSub() *GoRedisPubSub {
-
+func (ps *GoRedisPubSub) Start() error {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
 
-	return &GoRedisPubSub{
-		rdb:    rdb,
-		topics: make(map[string]*GoRedisTopic),
-	}
+	ps.rdb = rdb
+	ps.topics = make(map[string]*GoRedisTopic)
+	return nil
+}
+
+func (ps *GoRedisPubSub) Stop() error {
+	ps.Close()
+	return nil
 }
 
 // assert that GoRedisPubSub implements PubSub

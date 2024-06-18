@@ -1,6 +1,10 @@
 package pubsub
 
-import "context"
+import (
+	"context"
+
+	"github.com/facebookgo/startstop"
+)
 
 // general usage:
 // pubsub := pubsub.NewXXXPubSub()
@@ -22,6 +26,11 @@ type PubSub interface {
 	NewTopic(ctx context.Context, topic string) Topic
 	// Close shuts down all topics and the pubsub connection.
 	Close()
+
+	// we want to embed startstop.Starter and startstop.Stopper so that we
+	// can participate in injection
+	startstop.Starter
+	startstop.Stopper
 }
 
 type Topic interface {
