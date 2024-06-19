@@ -120,6 +120,9 @@ func TestPubSubLatency(t *testing.T) {
 		t.Run(typ, func(t *testing.T) {
 			ps := newPubSub(typ)
 			topic := ps.NewTopic(ctx, "name")
+			var count, total, tmin, tmax int64
+			mut := sync.Mutex{}
+
 			wg := sync.WaitGroup{}
 			wg.Add(2)
 			go func() {
@@ -127,13 +130,19 @@ func TestPubSubLatency(t *testing.T) {
 					err := topic.Publish(ctx, fmt.Sprintf("%d", time.Now().UnixNano()))
 					require.NoError(t, err)
 				}
-				// give the subscribers a chance to catch up
-				// before we close the topic
-				time.Sleep(500 * time.Millisecond)
+
+				// now wait for all messages to arrive
+				require.Eventually(t, func() bool {
+					mut.Lock()
+					done := count == messageCount
+					mut.Unlock()
+					return done
+				}, 5*time.Second, 100*time.Millisecond)
+
 				topic.Close()
 				wg.Done()
 			}()
-			var count, total, tmin, tmax int64
+
 			go func() {
 				ch := topic.Subscribe(ctx)
 				for msg := range ch {
@@ -149,7 +158,9 @@ func TestPubSubLatency(t *testing.T) {
 					if latency > tmax {
 						tmax = latency
 					}
+					mut.Lock()
 					count++
+					mut.Unlock()
 				}
 				wg.Done()
 			}()
