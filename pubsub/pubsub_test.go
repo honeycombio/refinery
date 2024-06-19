@@ -127,7 +127,9 @@ func TestPubSubLatency(t *testing.T) {
 					err := topic.Publish(ctx, fmt.Sprintf("%d", time.Now().UnixNano()))
 					require.NoError(t, err)
 				}
-				time.Sleep(100 * time.Millisecond)
+				// give the subscribers a chance to catch up
+				// before we close the topic
+				time.Sleep(500 * time.Millisecond)
 				topic.Close()
 				wg.Done()
 			}()
