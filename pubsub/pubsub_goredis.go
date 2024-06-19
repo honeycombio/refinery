@@ -20,15 +20,15 @@ import (
 // GoRedisPubSub is a PubSub implementation that uses Redis as the message broker
 // and the go-redis library to interact with Redis.
 type GoRedisPubSub struct {
-	Config *config.Config `inject:""`
-	rdb    *redis.Client
+	Config config.Config `inject:""`
+	client *redis.Client
 	topics map[string]*GoRedisTopic
 	mut    sync.RWMutex
 }
 
 type GoRedisTopic struct {
 	topic       string
-	rdb         *redis.Client // duplicating this avoids a lock
+	client      *redis.Client // duplicating this avoids a lock
 	redisSub    *redis.PubSub
 	subscribers []chan string
 	done        chan struct{}
@@ -37,13 +37,43 @@ type GoRedisTopic struct {
 }
 
 func (ps *GoRedisPubSub) Start() error {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // no password set
-		DB:       0,  // use default DB
-	})
+	options := &redis.Options{}
+	authcode := ""
 
-	ps.rdb = rdb
+	if ps.Config != nil {
+		host, err := ps.Config.GetRedisHost()
+		if err != nil {
+			return err
+		}
+		username, err := ps.Config.GetRedisUsername()
+		if err != nil {
+			return err
+		}
+		pw, err := ps.Config.GetRedisPassword()
+		if err != nil {
+			return err
+		}
+
+		authcode, err = ps.Config.GetRedisAuthCode()
+		if err != nil {
+			return err
+		}
+
+		options.Addr = host
+		options.Username = username
+		options.Password = pw
+		options.DB = ps.Config.GetRedisDatabase()
+	}
+	client := redis.NewClient(options)
+
+	// if an authcode was provided, use it to authenticate the connection
+	if authcode != "" {
+		if err := client.Conn().Auth(context.Background(), authcode).Err(); err != nil {
+			return err
+		}
+	}
+
+	ps.client = client
 	ps.topics = make(map[string]*GoRedisTopic)
 	return nil
 }
@@ -61,9 +91,9 @@ var _ PubSub = (*GoRedisPubSub)(nil)
 // subscribers to the topic.
 func (ps *GoRedisPubSub) NewTopic(ctx context.Context, topic string) Topic {
 	t := &GoRedisTopic{
-		rdb:         ps.rdb,
+		client:      ps.client,
 		topic:       topic,
-		redisSub:    ps.rdb.Subscribe(ctx, topic),
+		redisSub:    ps.client.Subscribe(ctx, topic),
 		subscribers: make([]chan string, 0),
 		done:        make(chan struct{}),
 	}
@@ -111,12 +141,12 @@ func (ps *GoRedisPubSub) Close() {
 	for _, t := range topics {
 		t.Close()
 	}
-	ps.rdb.Close()
+	ps.client.Close()
 }
 
 // Publish sends a message to all subscribers of the topic
 func (t *GoRedisTopic) Publish(ctx context.Context, message string) error {
-	err := t.rdb.Publish(ctx, t.topic, message).Err()
+	err := t.client.Publish(ctx, t.topic, message).Err()
 	if err != nil {
 		return err
 	}
