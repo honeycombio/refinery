@@ -242,10 +242,10 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	return hash, nil
 }
 
-// ConfigHashMetrics takes a config hash and returns a decimal value for use in metrics.
-// The decimal value is the last 4 characters of the config hash, converted to decimal.
-// If the config hash is too short, or if there is an error converting the hash to decimal,
-// an error is returned.
+// ConfigHashMetrics takes a config hash and returns a integer value for use in metrics.
+// The value is the last 4 characters of the config hash, converted to an integer.
+// If the config hash is too short, or if there is an error converting the hash to an integer,
+// it returns 0.
 func ConfigHashMetrics(hash string) int64 {
 	// get last 4 characters of config hash
 	if len(hash) < 4 {
