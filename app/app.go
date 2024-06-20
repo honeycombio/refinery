@@ -39,19 +39,11 @@ func (a *App) Start() error {
 				"rulesHash":  rulesHash,
 			}).Logf("configuration change was detected and the configuration was reloaded.")
 
-			cfgMetric, err := config.ConfigHashMetrics(configHash)
-			if err != nil {
-				a.Logger.Error().Logf("error calculating config hash metrics: %s", err)
-			} else {
-				a.Metrics.Gauge("config_hash", cfgMetric)
-			}
+			cfgMetric := config.ConfigHashMetrics(configHash)
+			ruleMetric := config.ConfigHashMetrics(rulesHash)
 
-			ruleMetric, err := config.ConfigHashMetrics(rulesHash)
-			if err != nil {
-				a.Logger.Error().Logf("error calculating config hash metrics: %s", err)
-			} else {
-				a.Metrics.Gauge("rule_config_hash", ruleMetric)
-			}
+			a.Metrics.Gauge("config_hash", cfgMetric)
+			a.Metrics.Gauge("rule_config_hash", ruleMetric)
 
 		}
 

@@ -246,16 +246,16 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 // The decimal value is the last 4 characters of the config hash, converted to decimal.
 // If the config hash is too short, or if there is an error converting the hash to decimal,
 // an error is returned.
-func ConfigHashMetrics(hash string) (int64, error) {
+func ConfigHashMetrics(hash string) int64 {
 	// get last 4 characters of config hash
 	if len(hash) < 4 {
-		return 0, fmt.Errorf("config hash is too short: %s", hash)
+		return 0
 	}
 	suffix := hash[len(hash)-4:]
 	CfgDecimal, err := strconv.ParseInt(suffix, 16, 64)
 	if err != nil {
-		return 0, fmt.Errorf("error converting config hash to decimal: %v", err)
+		return 0
 	}
 
-	return CfgDecimal, nil
+	return CfgDecimal
 }

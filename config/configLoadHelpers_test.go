@@ -135,21 +135,15 @@ func Test_ConfigHashMetrics(t *testing.T) {
 		name     string
 		hash     string
 		expected int64
-		hasError bool
 	}{
 		{name: "valid hash", hash: "7f1237f7db723f4e874a7a8269081a77", expected: 6775},
-		{name: "invalid length", hash: "1a8", hasError: true},
+		{name: "invalid length", hash: "1a8", expected: 0},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := ConfigHashMetrics(tc.hash)
-			if tc.hasError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tc.expected, result)
-			}
+			result := ConfigHashMetrics(tc.hash)
+			require.Equal(t, tc.expected, result)
 		})
 	}
 }
