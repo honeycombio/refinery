@@ -38,7 +38,7 @@ type fileConfig struct {
 	rulesConfig   *V2SamplerConfig
 	rulesHash     string
 	opts          *CmdEnv
-	callbacks     []func()
+	callbacks     []ConfigReloadCallback
 	errorCallback func(error)
 	done          chan struct{}
 	ticker        *time.Ticker
@@ -412,7 +412,7 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 		os.Exit(0)
 	}
 
-	cfg.callbacks = make([]func(), 0)
+	cfg.callbacks = make([]ConfigReloadCallback, 0)
 	cfg.errorCallback = errorCallback
 
 	if cfg.mainConfig.General.ConfigReloadInterval > 0 {
@@ -451,8 +451,9 @@ func (f *fileConfig) monitor() {
 			f.rulesConfig = cfg.rulesConfig
 			f.rulesHash = cfg.rulesHash
 			f.mux.Unlock() // can't defer -- routine never ends, and callbacks will deadlock
+
 			for _, cb := range f.callbacks {
-				cb()
+				cb(cfg.mainHash, cfg.rulesHash)
 			}
 		}
 	}
@@ -469,7 +470,7 @@ func (f *fileConfig) Stop() {
 	}
 }
 
-func (f *fileConfig) RegisterReloadCallback(cb func()) {
+func (f *fileConfig) RegisterReloadCallback(cb ConfigReloadCallback) {
 	f.mux.Lock()
 	defer f.mux.Unlock()
 

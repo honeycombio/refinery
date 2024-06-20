@@ -122,7 +122,7 @@ func (h *HoneycombLogger) readResponses() {
 	}
 }
 
-func (h *HoneycombLogger) reloadBuilder() {
+func (h *HoneycombLogger) reloadBuilder(cfgHash, ruleHash string) {
 	h.Debug().Logf("reloading config for Honeycomb logger")
 	// preserve log level
 	h.level = h.Config.GetLoggerLevel()

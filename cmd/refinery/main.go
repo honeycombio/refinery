@@ -96,12 +96,6 @@ func main() {
 		fmt.Println("Config and Rules validated successfully.")
 		os.Exit(0)
 	}
-	c.RegisterReloadCallback(func() {
-		if a.Logger != nil {
-			a.Logger.Info().Logf("configuration change was detected and the configuration was reloaded")
-		}
-	})
-
 	// get desired implementation for each dependency to inject
 	lgr := logger.GetLoggerImplementation(c)
 	collector := collect.GetCollectorImplementation(c)

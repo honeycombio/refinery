@@ -9,7 +9,7 @@ import (
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	Callbacks                        []func()
+	Callbacks                        []ConfigReloadCallback
 	IsAPIKeyValidFunc                func(string) bool
 	GetCollectorTypeErr              error
 	GetCollectorTypeVal              string
@@ -99,11 +99,11 @@ func (m *MockConfig) ReloadConfig() {
 	defer m.Mux.RUnlock()
 
 	for _, callback := range m.Callbacks {
-		callback()
+		callback("", "")
 	}
 }
 
-func (m *MockConfig) RegisterReloadCallback(callback func()) {
+func (m *MockConfig) RegisterReloadCallback(callback ConfigReloadCallback) {
 	m.Mux.Lock()
 	m.Callbacks = append(m.Callbacks, callback)
 	m.Mux.Unlock()

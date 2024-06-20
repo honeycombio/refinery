@@ -21,7 +21,7 @@ type Config interface {
 	// consumers of configuration set config values on startup, they should
 	// check their values haven't changed and re-start anything that needs
 	// restarting with the new values.
-	RegisterReloadCallback(callback func())
+	RegisterReloadCallback(callback ConfigReloadCallback)
 
 	// GetListenAddr returns the address and port on which to listen for
 	// incoming events
@@ -190,6 +190,8 @@ type Config interface {
 
 	GetParentIdFieldNames() []string
 }
+
+type ConfigReloadCallback func(configHash, ruleCfgHash string)
 
 type ConfigMetadata struct {
 	Type     string `json:"type"`

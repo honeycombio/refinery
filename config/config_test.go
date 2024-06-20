@@ -212,7 +212,7 @@ func TestReload(t *testing.T) {
 
 	ch := make(chan interface{}, 1)
 
-	c.RegisterReloadCallback(func() {
+	c.RegisterReloadCallback(func(cfgHash, ruleHash string) {
 		close(ch)
 	})
 
