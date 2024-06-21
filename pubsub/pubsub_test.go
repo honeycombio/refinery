@@ -57,7 +57,6 @@ func TestPubSubBasics(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			ps.Close()
 		})
 	}
 }
@@ -107,7 +106,6 @@ func TestPubSubMultiTopic(t *testing.T) {
 				}(i)
 			}
 			wg.Wait()
-			ps.Close()
 			// validate that all the topics each add up to the desired total
 			for i := 0; i < topicCount; i++ {
 				require.Equal(t, expectedTotal*(i+1), totals[i])
@@ -167,7 +165,6 @@ func TestPubSubLatency(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			ps.Close()
 			require.Equal(t, int64(messageCount), count)
 			require.True(t, total > 0)
 			average := total / int64(count)
@@ -217,7 +214,6 @@ func BenchmarkPubSub(b *testing.B) {
 				wg.Done()
 			}()
 			wg.Wait()
-			ps.Close()
 			require.Equal(b, b.N, count)
 		})
 	}
@@ -236,7 +232,6 @@ func BenchmarkPubSubMultiTopic(b *testing.B) {
 			}
 			mut := sync.RWMutex{}
 			count := 0
-			counts := make([]int, topicCount)
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
@@ -262,14 +257,12 @@ func BenchmarkPubSubMultiTopic(b *testing.B) {
 					for range sub.Channel() {
 						mut.Lock()
 						count++
-						counts[ix]++
 						mut.Unlock()
 					}
 					wg.Done()
 				}(i)
 			}
 			wg.Wait()
-			ps.Close()
 		})
 	}
 }

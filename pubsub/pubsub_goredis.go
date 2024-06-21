@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -20,6 +21,7 @@ import (
 // and the go-redis library to interact with Redis.
 type GoRedisPubSub struct {
 	Config config.Config `inject:""`
+	Logger logger.Logger `inject:""`
 	client *redis.Client
 	subs   []*GoRedisSubscription
 	mut    sync.RWMutex
@@ -33,6 +35,7 @@ type GoRedisSubscription struct {
 	pubsub *redis.PubSub
 	ch     chan string
 	done   chan struct{}
+	once   sync.Once
 }
 
 // Ensure that GoRedisSubscription implements Subscription
@@ -125,6 +128,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string) Subscripti
 				select {
 				case sub.ch <- msg.Payload:
 				default:
+					ps.Logger.Warn().WithField("topic", topic).Logf("Dropping subscription message because channel is full")
 				}
 			}
 		}
@@ -137,6 +141,8 @@ func (s *GoRedisSubscription) Channel() <-chan string {
 }
 
 func (s *GoRedisSubscription) Close() {
-	s.pubsub.Close()
-	close(s.done)
+	s.once.Do(func() {
+		s.pubsub.Close()
+		close(s.done)
+	})
 }
