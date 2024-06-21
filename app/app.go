@@ -26,9 +26,28 @@ type App struct {
 // program will exit.
 func (a *App) Start() error {
 	a.Logger.Debug().Logf("Starting up App...")
+	a.Metrics.Register("config_hash", "gauge")
+	a.Metrics.Register("rule_config_hash", "gauge")
 
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
+
+	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
+		if a.Logger != nil {
+			a.Logger.Warn().WithFields(map[string]interface{}{
+				"configHash": configHash,
+				"rulesHash":  rulesHash,
+			}).Logf("configuration change was detected and the configuration was reloaded.")
+
+			cfgMetric := config.ConfigHashMetrics(configHash)
+			ruleMetric := config.ConfigHashMetrics(rulesHash)
+
+			a.Metrics.Gauge("config_hash", cfgMetric)
+			a.Metrics.Gauge("rule_config_hash", ruleMetric)
+
+		}
+
+	})
 
 	// launch our main routers to listen for incoming event traffic from both peers
 	// and external sources

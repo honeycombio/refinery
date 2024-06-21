@@ -83,7 +83,7 @@ func (d *DefaultTransmission) Start() error {
 	return nil
 }
 
-func (d *DefaultTransmission) reloadTransmissionBuilder() {
+func (d *DefaultTransmission) reloadTransmissionBuilder(cfgHash, ruleHash string) {
 	d.Logger.Debug().Logf("reloading transmission config")
 	upstreamAPI, err := d.Config.GetHoneycombAPI()
 	if err != nil {

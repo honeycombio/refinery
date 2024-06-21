@@ -92,7 +92,7 @@ func (h *LegacyMetrics) Start() error {
 	return nil
 }
 
-func (h *LegacyMetrics) reloadBuilder() {
+func (h *LegacyMetrics) reloadBuilder(cfgHash, ruleHash string) {
 	h.Logger.Debug().Logf("reloading config for honeycomb metrics reporter")
 	mc := h.Config.GetLegacyMetricsConfig()
 	h.libhClient.Close()

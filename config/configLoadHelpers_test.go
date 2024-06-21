@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func Test_formatFromFilename(t *testing.T) {
@@ -124,6 +126,24 @@ func Test_loadMemsize(t *testing.T) {
 			if !reflect.DeepEqual(tt.into, tt.want) {
 				t.Errorf("load() = %#v, want %#v", tt.into, tt.want)
 			}
+		})
+	}
+}
+
+func Test_ConfigHashMetrics(t *testing.T) {
+	testcases := []struct {
+		name     string
+		hash     string
+		expected int64
+	}{
+		{name: "valid hash", hash: "7f1237f7db723f4e874a7a8269081a77", expected: 6775},
+		{name: "invalid length", hash: "1a8", expected: 0},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ConfigHashMetrics(tc.hash)
+			require.Equal(t, tc.expected, result)
 		})
 	}
 }

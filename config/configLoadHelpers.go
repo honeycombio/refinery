@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 
 	"github.com/creasty/defaults"
 	"github.com/pelletier/go-toml/v2"
@@ -239,4 +240,22 @@ func readConfigInto(dest any, location string, opts *CmdEnv) (string, error) {
 	}
 
 	return hash, nil
+}
+
+// ConfigHashMetrics takes a config hash and returns a integer value for use in metrics.
+// The value is the last 4 characters of the config hash, converted to an integer.
+// If the config hash is too short, or if there is an error converting the hash to an integer,
+// it returns 0.
+func ConfigHashMetrics(hash string) int64 {
+	// get last 4 characters of config hash
+	if len(hash) < 4 {
+		return 0
+	}
+	suffix := hash[len(hash)-4:]
+	CfgDecimal, err := strconv.ParseInt(suffix, 16, 64)
+	if err != nil {
+		return 0
+	}
+
+	return CfgDecimal
 }
