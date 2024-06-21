@@ -78,7 +78,7 @@ func TestPubSubMultiTopic(t *testing.T) {
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				for j := 0; j < topicCount; j++ {
 					for i := 0; i < messageCount; i++ {
 						// we want a different sum for each topic
