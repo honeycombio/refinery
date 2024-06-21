@@ -90,30 +90,28 @@ func (ps *GoRedisPubSub) Stop() error {
 
 func (ps *GoRedisPubSub) Close() {
 	ps.mut.Lock()
-	defer ps.mut.Unlock()
 	for _, sub := range ps.subs {
 		sub.Close()
 	}
 	ps.subs = nil
+	ps.mut.Unlock()
 	ps.client.Close()
 }
 
 func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) error {
-	ps.mut.RLock()
-	defer ps.mut.RUnlock()
 	return ps.client.Publish(ctx, topic, message).Err()
 }
 
 func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string) Subscription {
-	ps.mut.Lock()
-	defer ps.mut.Unlock()
 	sub := &GoRedisSubscription{
 		topic:  topic,
 		pubsub: ps.client.Subscribe(ctx, topic),
 		ch:     make(chan string, 100),
 		done:   make(chan struct{}),
 	}
+	ps.mut.Lock()
 	ps.subs = append(ps.subs, sub)
+	ps.mut.Unlock()
 	go func() {
 		redisch := sub.pubsub.Channel()
 		for {
