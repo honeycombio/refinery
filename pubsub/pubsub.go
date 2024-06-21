@@ -8,22 +8,23 @@ import (
 
 // general usage:
 // pubsub := pubsub.NewXXXPubSub()
-// topic := pubsub.NewTopic(ctx, "name")
-// topic.Publish(ctx, "message")
-// ch := topic.Subscribe(ctx)
-// for msg := range ch {
+// pubsub.Start()
+// defer pubsub.Stop()
+// ctx := context.Background()
+// pubsub.Publish(ctx, "topic", "message")
+// sub := pubsub.Subscribe(ctx, "topic")
+// for msg := range sub.Channel() {
 // 	fmt.Println(msg)
 // }
-// topic.Close() // optional if you want to close the topic independently
+// sub.Close()  // optional
 // pubsub.Close()
 
 type PubSub interface {
-	// NewTopic creates a new topic with the given name.
-	// When a topic is created, it is stored in the topics map and a goroutine is
-	// started to listen for messages on the topic; each message is sent to all
-	// subscribers to the topic. Close the topic to stop the goroutine and all subscriber
-	// channels.
-	NewTopic(ctx context.Context, topic string) Topic
+	// Publish sends a message to all subscribers of the specified topic.
+	Publish(ctx context.Context, topic, message string) error
+	// Subscribe returns a Subscription that will receive all messages published to the specified topic.
+	// There is no unsubscribe method; close the subscription to stop receiving messages.
+	Subscribe(ctx context.Context, topic string) Subscription
 	// Close shuts down all topics and the pubsub connection.
 	Close()
 
@@ -33,13 +34,10 @@ type PubSub interface {
 	startstop.Stopper
 }
 
-type Topic interface {
-	// Publish sends a message to all subscribers of the topic.
-	Publish(ctx context.Context, message string) error
-	// Subscribe returns a channel that will receive all messages published to the topic.
-	// There is no unsubscribe method; close the topic to stop receiving messages.
-	Subscribe(ctx context.Context) <-chan string
-	// Close shuts down the topic and all subscriber channels. Calling this is optional;
+type Subscription interface {
+	// Channel returns the channel that will receive all messages published to the topic.
+	Channel() <-chan string
+	// Close stops the subscription and closes the channel. Calling this is optional;
 	// the topic will be closed when the pubsub connection is closed.
 	Close()
 }

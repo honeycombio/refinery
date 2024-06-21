@@ -5,114 +5,98 @@ import (
 	"sync"
 
 	"github.com/honeycombio/refinery/config"
-	"golang.org/x/exp/maps"
 )
 
 // LocalPubSub is a PubSub implementation that uses local channels to send messages; it does
 // not communicate with any external processes.
 type LocalPubSub struct {
 	Config *config.Config `inject:""`
-	topics map[string]*LocalTopic
+	subs   []*LocalSubscription
+	topics map[string]chan string
 	mut    sync.RWMutex
 }
 
-type LocalTopic struct {
-	topic       string
-	pubChan     chan string
-	subscribers []chan string
-	done        chan struct{}
-	mut         sync.RWMutex
-	once        sync.Once
+// Ensure that LocalPubSub implements PubSub
+var _ PubSub = (*LocalPubSub)(nil)
+
+type LocalSubscription struct {
+	topic string
+	ch    chan string
+	done  chan struct{}
 }
 
+// Ensure that LocalSubscription implements Subscription
+var _ Subscription = (*LocalSubscription)(nil)
+
+// Start initializes the LocalPubSub
 func (ps *LocalPubSub) Start() error {
-	ps.topics = make(map[string]*LocalTopic)
+	ps.subs = make([]*LocalSubscription, 0)
+	ps.topics = make(map[string]chan string)
 	return nil
 }
 
+// Stop shuts down the LocalPubSub
 func (ps *LocalPubSub) Stop() error {
 	ps.Close()
 	return nil
 }
 
-// assert that LocalPubSub implements PubSub
-var _ PubSub = (*LocalPubSub)(nil)
-
-// when a topic is created, it is stored in the topics map and a goroutine is
-// started to listen for messages on the topic; each message is sent to all
-// subscribers to the topic.
-func (ps *LocalPubSub) NewTopic(ctx context.Context, topic string) Topic {
-	t := &LocalTopic{
-		topic:       topic,
-		pubChan:     make(chan string, 10),
-		subscribers: make([]chan string, 0),
-		done:        make(chan struct{}),
-	}
-
-	go func() {
-		for {
-			select {
-			case msg := <-t.pubChan:
-				t.mut.RLock()
-				subscribers := t.subscribers
-				t.mut.RUnlock()
-				for _, sub := range subscribers {
-					select {
-					case sub <- msg:
-					case <-t.done:
-						return
-					}
-				}
-			case <-t.done:
-				close(t.pubChan)
-				t.mut.RLock()
-				subscribers := t.subscribers
-				for _, sub := range subscribers {
-					close(sub)
-				}
-				t.subscribers = nil
-				t.mut.RUnlock()
-				return
-			}
-		}
-	}()
-
-	ps.mut.Lock()
-	ps.topics[topic] = t
-	ps.mut.Unlock()
-	return t
-}
-
-// Close shuts down all topics and the redis connection
 func (ps *LocalPubSub) Close() {
 	ps.mut.Lock()
-	topics := maps.Values(ps.topics)
-	ps.topics = make(map[string]*LocalTopic)
-	ps.mut.Unlock()
-
-	for _, t := range topics {
-		t.Close()
+	defer ps.mut.Unlock()
+	for _, sub := range ps.subs {
+		sub.Close()
 	}
+	ps.subs = nil
 }
 
-// Publish sends a message to all subscribers of the topic
-func (t *LocalTopic) Publish(ctx context.Context, message string) error {
-	t.pubChan <- message
+func (ps *LocalPubSub) ensureTopic(topic string) chan string {
+	if _, ok := ps.topics[topic]; !ok {
+		ps.topics[topic] = make(chan string, 100)
+	}
+	return ps.topics[topic]
+}
+
+func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error {
+	ps.mut.RLock()
+	ch := ps.ensureTopic(topic)
+	ps.mut.RUnlock()
+	select {
+	case ch <- message:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	return nil
 }
 
-// Subscribe returns a channel that will receive all messages published to the topic
-func (t *LocalTopic) Subscribe(ctx context.Context) <-chan string {
-	ch := make(chan string)
-	t.mut.Lock()
-	t.subscribers = append(t.subscribers, ch)
-	t.mut.Unlock()
-	return ch
+func (ps *LocalPubSub) Subscribe(ctx context.Context, topic string) Subscription {
+	ps.mut.Lock()
+	defer ps.mut.Unlock()
+	ch := ps.ensureTopic(topic)
+	sub := &LocalSubscription{
+		topic: topic,
+		ch:    ch,
+		done:  make(chan struct{}),
+	}
+	ps.subs = append(ps.subs, sub)
+	go func() {
+		for {
+			select {
+			case <-sub.done:
+				close(ch)
+				return
+			case msg := <-ch:
+				sub.ch <- msg
+			}
+		}
+	}()
+	return sub
 }
 
-// Close shuts down the topic and unsubscribes all subscribers
-func (t *LocalTopic) Close() {
-	t.once.Do(func() {
-		close(t.done)
-	})
+func (s *LocalSubscription) Channel() <-chan string {
+	return s.ch
+}
+
+func (s *LocalSubscription) Close() {
+	close(s.done)
 }

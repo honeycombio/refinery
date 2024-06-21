@@ -6,7 +6,6 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/redis/go-redis/v9"
-	"golang.org/x/exp/maps"
 )
 
 // Notes for the future: we implemented a Redis-based PubSub system using 3
@@ -22,19 +21,22 @@ import (
 type GoRedisPubSub struct {
 	Config config.Config `inject:""`
 	client *redis.Client
-	topics map[string]*GoRedisTopic
+	subs   []*GoRedisSubscription
 	mut    sync.RWMutex
 }
 
-type GoRedisTopic struct {
-	topic       string
-	client      *redis.Client // duplicating this avoids a lock
-	redisSub    *redis.PubSub
-	subscribers []chan string
-	done        chan struct{}
-	mut         sync.RWMutex
-	once        sync.Once
+// Ensure that GoRedisPubSub implements PubSub
+var _ PubSub = (*GoRedisPubSub)(nil)
+
+type GoRedisSubscription struct {
+	topic  string
+	pubsub *redis.PubSub
+	ch     chan string
+	done   chan struct{}
 }
+
+// Ensure that GoRedisSubscription implements Subscription
+var _ Subscription = (*GoRedisSubscription)(nil)
 
 func (ps *GoRedisPubSub) Start() error {
 	options := &redis.Options{}
@@ -74,7 +76,7 @@ func (ps *GoRedisPubSub) Start() error {
 	}
 
 	ps.client = client
-	ps.topics = make(map[string]*GoRedisTopic)
+	ps.subs = make([]*GoRedisSubscription, 0)
 	return nil
 }
 
@@ -83,88 +85,58 @@ func (ps *GoRedisPubSub) Stop() error {
 	return nil
 }
 
-// assert that GoRedisPubSub implements PubSub
-var _ PubSub = (*GoRedisPubSub)(nil)
-
-// when a topic is created, it is stored in the topics map and a goroutine is
-// started to listen for messages on the topic; each message is sent to all
-// subscribers to the topic.
-func (ps *GoRedisPubSub) NewTopic(ctx context.Context, topic string) Topic {
-	t := &GoRedisTopic{
-		client:      ps.client,
-		topic:       topic,
-		redisSub:    ps.client.Subscribe(ctx, topic),
-		subscribers: make([]chan string, 0),
-		done:        make(chan struct{}),
-	}
-
-	go func() {
-		for {
-			select {
-			case msg := <-t.redisSub.Channel():
-				t.mut.RLock()
-				subscribers := t.subscribers
-				t.mut.RUnlock()
-				for _, sub := range subscribers {
-					select {
-					case sub <- msg.Payload:
-					case <-t.done:
-						return
-					}
-				}
-			case <-t.done:
-				t.redisSub.Close()
-				t.mut.RLock()
-				subscribers := t.subscribers
-				for _, sub := range subscribers {
-					close(sub)
-				}
-				t.subscribers = nil
-				t.mut.RUnlock()
-				return
-			}
-		}
-	}()
-
-	ps.mut.Lock()
-	ps.topics[topic] = t
-	ps.mut.Unlock()
-	return t
-}
-
-// Close shuts down all topics and the redis connection
 func (ps *GoRedisPubSub) Close() {
 	ps.mut.Lock()
-	topics := maps.Values(ps.topics)
-	ps.mut.Unlock()
-
-	for _, t := range topics {
-		t.Close()
+	defer ps.mut.Unlock()
+	for _, sub := range ps.subs {
+		sub.Close()
 	}
+	ps.subs = nil
 	ps.client.Close()
 }
 
-// Publish sends a message to all subscribers of the topic
-func (t *GoRedisTopic) Publish(ctx context.Context, message string) error {
-	err := t.client.Publish(ctx, t.topic, message).Err()
-	if err != nil {
-		return err
+func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) error {
+	ps.mut.RLock()
+	defer ps.mut.RUnlock()
+	return ps.client.Publish(ctx, topic, message).Err()
+}
+
+func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string) Subscription {
+	ps.mut.Lock()
+	defer ps.mut.Unlock()
+	sub := &GoRedisSubscription{
+		topic:  topic,
+		pubsub: ps.client.Subscribe(ctx, topic),
+		ch:     make(chan string, 100),
+		done:   make(chan struct{}),
 	}
-	return nil
+	ps.subs = append(ps.subs, sub)
+	go func() {
+		redisch := sub.pubsub.Channel()
+		for {
+			select {
+			case <-sub.done:
+				close(sub.ch)
+				return
+			case msg := <-redisch:
+				if msg == nil {
+					continue
+				}
+				select {
+				case sub.ch <- msg.Payload:
+				default:
+				}
+			}
+		}
+	}()
+	return sub
 }
 
-// Subscribe returns a channel that will receive all messages published to the topic
-func (t *GoRedisTopic) Subscribe(ctx context.Context) <-chan string {
-	ch := make(chan string)
-	t.mut.Lock()
-	t.subscribers = append(t.subscribers, ch)
-	t.mut.Unlock()
-	return ch
+func (s *GoRedisSubscription) Channel() <-chan string {
+	return s.ch
 }
 
-// Close shuts down the topic and unsubscribes all subscribers
-func (t *GoRedisTopic) Close() {
-	t.once.Do(func() {
-		close(t.done)
-	})
+func (s *GoRedisSubscription) Close() {
+	s.pubsub.Close()
+	close(s.done)
 }
