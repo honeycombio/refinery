@@ -126,6 +126,7 @@ func TestPubSubLatency(t *testing.T) {
 			wg := sync.WaitGroup{}
 			wg.Add(2)
 			go func() {
+				time.Sleep(300 * time.Millisecond)
 				for i := 0; i < messageCount; i++ {
 					err := ps.Publish(ctx, "topic", fmt.Sprintf("%d", time.Now().UnixNano()))
 					require.NoError(t, err)
