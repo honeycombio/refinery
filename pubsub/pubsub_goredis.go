@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"github.com/honeycombio/refinery/config"
@@ -22,7 +23,7 @@ import (
 type GoRedisPubSub struct {
 	Config config.Config `inject:""`
 	Logger logger.Logger `inject:""`
-	client *redis.Client
+	client redis.UniversalClient
 	subs   []*GoRedisSubscription
 	mut    sync.RWMutex
 }
@@ -42,7 +43,7 @@ type GoRedisSubscription struct {
 var _ Subscription = (*GoRedisSubscription)(nil)
 
 func (ps *GoRedisPubSub) Start() error {
-	options := &redis.Options{}
+	options := &redis.UniversalOptions{}
 	authcode := ""
 
 	if ps.Config != nil {
@@ -64,16 +65,22 @@ func (ps *GoRedisPubSub) Start() error {
 			return err
 		}
 
-		options.Addr = host
+		// we may have multiple hosts, separated by commas, so split them up and
+		// use them as the addrs for the client (if there are multiples, it will
+		// create a cluster client)
+		hosts := strings.Split(host, ",")
+		options.Addrs = hosts
 		options.Username = username
 		options.Password = pw
 		options.DB = ps.Config.GetRedisDatabase()
 	}
-	client := redis.NewClient(options)
+	client := redis.NewUniversalClient(options)
 
 	// if an authcode was provided, use it to authenticate the connection
 	if authcode != "" {
-		if err := client.Conn().Auth(context.Background(), authcode).Err(); err != nil {
+		pipe := client.Pipeline()
+		pipe.Auth(context.Background(), authcode)
+		if _, err := pipe.Exec(context.Background()); err != nil {
 			return err
 		}
 	}
