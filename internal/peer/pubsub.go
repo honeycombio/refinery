@@ -81,7 +81,7 @@ func (p *pubsubPeers) Start() error {
 	p.callbacks = make([]func(), 0)
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers")
 
-	myname, err := getIdentifierFromInterfaces(p.Config)
+	myaddr, err := publicAddr(p.Config)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func (p *pubsubPeers) Start() error {
 			case <-ticker.Chan():
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
-				p.PubSub.Publish(ctx, "peers", "register "+myname)
+				p.PubSub.Publish(ctx, "peers", "register "+myaddr)
 				cancel()
 			case msg := <-p.sub.Channel():
 				parts := strings.Split(msg, " ")
@@ -120,11 +120,11 @@ func (p *pubsubPeers) Start() error {
 
 func (p *pubsubPeers) Stop() error {
 	// unregister ourselves
-	myname, err := getIdentifierFromInterfaces(p.Config)
+	myaddr, err := publicAddr(p.Config)
 	if err != nil {
 		return err
 	}
-	p.PubSub.Publish(context.Background(), "peers", "unregister "+myname)
+	p.PubSub.Publish(context.Background(), "peers", "unregister "+myaddr)
 	close(p.done)
 	return nil
 }
@@ -144,8 +144,40 @@ func (p *pubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
 	p.callbacks = append(p.callbacks, callback)
 }
 
-// Scan network interfaces to determine an identifier from either IP or hostname.
-func getIdentifierFromInterfaces(c config.Config) (string, error) {
+func publicAddr(c config.Config) (string, error) {
+	// compute the public version of my peer listen address
+	listenAddr, _ := c.GetPeerListenAddr()
+	// first, extract the port
+	_, port, err := net.SplitHostPort(listenAddr)
+
+	if err != nil {
+		return "", err
+	}
+
+	var myIdentifier string
+
+	// If RedisIdentifier is set, use as identifier.
+	if redisIdentifier, _ := c.GetRedisIdentifier(); redisIdentifier != "" {
+		myIdentifier = redisIdentifier
+		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
+	} else {
+		// Otherwise, determine identifier from network interface.
+		myIdentifier, err = getIdentifierFromInterface(c)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
+
+	return publicListenAddr, nil
+}
+
+// getIdentifierFromInterface returns a string that uniquely identifies this
+// host in the network. If an interface is specified, it will scan it to
+// determine an identifier from the first IP address on that interface.
+// Otherwise, it will use the hostname.
+func getIdentifierFromInterface(c config.Config) (string, error) {
 	myIdentifier, _ := os.Hostname()
 	identifierInterfaceName, _ := c.GetIdentifierInterfaceName()
 

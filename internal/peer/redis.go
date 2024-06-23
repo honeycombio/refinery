@@ -3,8 +3,6 @@ package peer
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
-	"net"
 	"slices"
 	"sort"
 	"sync"
@@ -259,32 +257,4 @@ func buildOptions(c config.Config) []redis.DialOption {
 	}
 
 	return options
-}
-
-func publicAddr(c config.Config) (string, error) {
-	// compute the public version of my peer listen address
-	listenAddr, _ := c.GetPeerListenAddr()
-	_, port, err := net.SplitHostPort(listenAddr)
-
-	if err != nil {
-		return "", err
-	}
-
-	var myIdentifier string
-
-	// If RedisIdentifier is set, use as identifier.
-	if redisIdentifier, _ := c.GetRedisIdentifier(); redisIdentifier != "" {
-		myIdentifier = redisIdentifier
-		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
-	} else {
-		// Otherwise, determine identifier from network interface.
-		myIdentifier, err = getIdentifierFromInterfaces(c)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
-
-	return publicListenAddr, nil
 }
