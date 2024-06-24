@@ -1220,8 +1220,11 @@ groups:
         valuetype: bool
         default: false
         reload: true
-        summary: asdfasdf
-        description: asdfasdf
+        summary: When enabled, strings in FieldsToPropagateFromRoot will be interpreted as regex patterns.
+        description: >
+          When enabled, the fields listed in FieldsToPropagateFromRoot are interpreted as regex patterns. Fields from the root span will be propagated to other spans if the field key matches any of the regex patterns.
+          Enabling this field may affect Refinery's CPU usage.
+          Enabling this field does nothing if not values are provided for FieldsToPropagateFromRoot.
 
       - name: FieldsToPropagateFromRoot
         type: stringarray
@@ -1232,8 +1235,13 @@ groups:
         validations:
           - type: validRegex
             arg: string
-        summary: asdfasdf
-        description: asdfasdf
+        summary: Add specified fields from root span to all other spans in the trace.
+        description: >
+          The fields specified in this list will be copied from the root span to all other spans in the trace where the field does not exist.
+          When fields also specified in the AdditionalAttributes list, the values from the AdditionalAttributes list will be used.
+          The fields will only be copied when the root span arrives before TraceTimeout. Any spans arriving after TraceTimeout will not have the fields copied.
+          By default fields are identified by their exact name, but if UseRegexForFieldsToPropagateFromRoot is enable, this list will be interpreted as regex patterns. Fields from the root span will be propagated to other spans if the field key matches any of the regex patterns.
+          Using regex is much less performant.
 
   - name: IDFields
     title: "ID Fields"
