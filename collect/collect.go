@@ -694,7 +694,9 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 			}
 		} else if trace.RootSpan != nil {
 			for _, field := range i.Config.GetFieldsToPropagateFromRoot() {
-				sp.Data[field] = trace.RootSpan.Data[field]
+				if _, ok := sp.Data[field]; !ok {
+					sp.Data[field] = trace.RootSpan.Data[field]
+				}
 			}
 		}
 
