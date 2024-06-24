@@ -1225,7 +1225,9 @@ groups:
             arg: string
         summary: Add specified fields from root span to all other spans in the trace.
         description: >
-          This is a description
+          The fields specified in this list will be copied from the root span to all other spans in the trace.
+          When fields also specified in the AdditionalAttributes list, the values from the AdditionalAttributes list will be used.
+          The fields will only be copied when the root span arrives before TraceTimeout. Any spans arriving after TraceTimeout will not have the fields copied.
 
   - name: IDFields
     title: "ID Fields"
