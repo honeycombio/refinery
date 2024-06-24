@@ -692,8 +692,10 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 			} else if i.Config.GetAddSpanCountToRoot() {
 				sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 			}
-		} else {
-
+		} else if trace.RootSpan != nil {
+			for _, field := range i.Config.GetFieldsToPropagateFromRoot() {
+				sp.Data[field] = trace.RootSpan.Data[field]
+			}
 		}
 
 		isDryRun := i.Config.GetIsDryRun()

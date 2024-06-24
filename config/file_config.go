@@ -927,7 +927,7 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	return f.mainConfig.Specialized.AdditionalAttributes
 }
 
-func (f *fileConfig) FieldsToPropagateFromRoot() []string {
+func (f *fileConfig) GetFieldsToPropagateFromRoot() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 

@@ -190,7 +190,7 @@ type Config interface {
 
 	GetParentIdFieldNames() []string
 
-	FieldsToPropagateFromRoot() []string
+	GetFieldsToPropagateFromRoot() []string
 }
 
 type ConfigReloadCallback func(configHash, ruleCfgHash string)

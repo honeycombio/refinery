@@ -2,4 +2,8 @@ General:
   ConfigurationVersion: 2
   MinRefineryVersion: v2.0
 
+Specialized:
+  FieldsToPropagateFromRoot:
+    -
+
 
