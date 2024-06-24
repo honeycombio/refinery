@@ -1215,6 +1215,18 @@ groups:
           For example, it could be used for naming a Refinery cluster. Both
           keys and values must be strings.
 
+      - name: FieldsToPropagateFromRoot
+        type: stringarray
+        valuetype: stringarray
+        example: ""
+        reload: true
+        validations:
+          - type: elementType
+            arg: string
+        summary: Add specified fields from root span to all other spans in the trace.
+        description: >
+          This is a description
+
   - name: IDFields
     title: "ID Fields"
     description: >

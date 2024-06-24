@@ -533,3 +533,10 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 
 	return f.AdditionalAttributes
 }
+
+func (f *MockConfig) GetAdditionalAttributes() map[string]string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.AdditionalAttributes
+}

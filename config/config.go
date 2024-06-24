@@ -189,6 +189,8 @@ type Config interface {
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string
+
+	FieldsToPropagateFromRoot() []string
 }
 
 type ConfigReloadCallback func(configHash, ruleCfgHash string)

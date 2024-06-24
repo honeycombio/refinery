@@ -251,6 +251,7 @@ type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
 	CompressPeerCommunication *DefaultTrue      `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
+	FieldsToPropagateFromRoot []string          `yaml:"FieldsToPropagateFromRoot" default:"[]"`
 }
 
 type IDFieldsConfig struct {
@@ -924,4 +925,11 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Specialized.AdditionalAttributes
+}
+
+func (f *fileConfig) FieldsToPropagateFromRoot() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Specialized.FieldsToPropagateFromRoot
 }
