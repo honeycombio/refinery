@@ -3,9 +3,10 @@ General:
   MinRefineryVersion: v2.0
 
 Specialized:
-  UseRegexForFieldsToPropagateFromRoot: false
+  UseRegexForFieldsToPropagateFromRoot: true
   FieldsToPropagateFromRoot:
     - foo
+    - "["
 
 GRPCServerParameters:
   Enabled: true

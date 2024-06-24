@@ -363,6 +363,15 @@ func (m *Metadata) Validate(data map[string]any) []string {
 						}
 					}
 				}
+			case "validRegex":
+				if list, ok := v.([]string); ok {
+					for _, vv := range list {
+						fmt.Println("validating regex", vv)
+						if _, err := regexp.Compile(vv); err != nil {
+							errors = append(errors, fmt.Sprintf("field %s contains invalid regex %s", k, vv))
+						}
+					}
+				}
 			case "required", "requiredInGroup", "requiredWith", "conflictsWith":
 				// these are handled below
 			default:

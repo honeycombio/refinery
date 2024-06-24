@@ -1225,11 +1225,12 @@ groups:
 
       - name: FieldsToPropagateFromRoot
         type: stringarray
-        valuetype: stringarray
+        valuetype: conditional
+        extra: "eq UseRegexForFieldsToPropagateFromRoot true"
         example: ""
         reload: true
         validations:
-          - type: elementType
+          - type: validRegex
             arg: string
         summary: asdfasdf
         description: asdfasdf
