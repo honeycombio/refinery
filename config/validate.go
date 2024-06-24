@@ -364,10 +364,13 @@ func (m *Metadata) Validate(data map[string]any) []string {
 					}
 				}
 			case "validRegex":
-				if list, ok := v.([]string); ok {
+				if list, ok := v.([]any); ok {
 					for _, vv := range list {
-						fmt.Println("validating regex", vv)
-						if _, err := regexp.Compile(vv); err != nil {
+						strv, ok := vv.(string)
+						if !ok {
+							errors = append(errors, fmt.Sprintf("field %s contains invalid regex %v", k, vv))
+						}
+						if _, err := regexp.Compile(strv); err != nil {
 							errors = append(errors, fmt.Sprintf("field %s contains invalid regex %s", k, vv))
 						}
 					}

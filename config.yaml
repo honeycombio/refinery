@@ -6,7 +6,6 @@ Specialized:
   UseRegexForFieldsToPropagateFromRoot: true
   FieldsToPropagateFromRoot:
     - foo
-    - "["
 
 GRPCServerParameters:
   Enabled: true
