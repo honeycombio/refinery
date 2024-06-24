@@ -87,7 +87,7 @@ type MockConfig struct {
 	SampleCache                      SampleCacheConfig
 	StressRelief                     StressReliefConfig
 	AdditionalAttributes             map[string]string
-	FieldsToPropagateFromRoot        []string
+	FieldsToPropagateFromRoot        FieldsToPropagateFromRoot
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
 	CfgMetadata                      []ConfigMetadata
@@ -535,7 +535,7 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	return f.AdditionalAttributes
 }
 
-func (f *MockConfig) GetFieldsToPropagateFromRoot() []string {
+func (f *MockConfig) GetFieldsToPropagateFromRoot() FieldsToPropagateFromRoot {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 

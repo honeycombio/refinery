@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -248,10 +249,12 @@ type BufferSizeConfig struct {
 }
 
 type SpecializedConfig struct {
-	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
-	CompressPeerCommunication *DefaultTrue      `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
-	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
-	FieldsToPropagateFromRoot []string          `yaml:"FieldsToPropagateFromRoot" default:"[]"`
+	EnvironmentCacheTTL                  Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
+	CompressPeerCommunication            *DefaultTrue      `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
+	AdditionalAttributes                 map[string]string `yaml:"AdditionalAttributes" default:"{}"`
+	UseRegexForFieldsToPropagateFromRoot bool              `yaml:"UseRegexForFieldsToPropagateFromRoot" default:"false"`
+	FieldsToPropagateFromRoot            []string          `yaml:"FieldsToPropagateFromRoot" default:"[]"`
+	temp                                 *FieldsToPropagateFromRoot
 }
 
 type IDFieldsConfig struct {
@@ -927,9 +930,40 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	return f.mainConfig.Specialized.AdditionalAttributes
 }
 
-func (f *fileConfig) GetFieldsToPropagateFromRoot() []string {
+type FieldsToPropagateFromRoot struct {
+	UsesRegex bool
+	Fields    []string
+	Match     func(string) bool
+}
+
+func (f *fileConfig) GetFieldsToPropagateFromRoot() FieldsToPropagateFromRoot {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Specialized.FieldsToPropagateFromRoot
+	if f.mainConfig.Specialized.temp != nil {
+		return *f.mainConfig.Specialized.temp
+	}
+
+	x := FieldsToPropagateFromRoot{
+		UsesRegex: f.mainConfig.Specialized.UseRegexForFieldsToPropagateFromRoot,
+		Fields:    f.mainConfig.Specialized.FieldsToPropagateFromRoot,
+	}
+	if x.UsesRegex {
+		regexes := make([]*regexp.Regexp, len(x.Fields))
+		for i, field := range x.Fields {
+			regexes[i] = regexp.MustCompile(field)
+		}
+		x.Match = func(s string) bool {
+			for _, r := range regexes {
+				if r.MatchString(s) {
+					return true
+				}
+			}
+			return false
+		}
+	}
+
+	f.mainConfig.Specialized.temp = &x
+
+	return x
 }

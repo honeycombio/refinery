@@ -693,9 +693,20 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 				sp.Data["meta.span_count"] = int64(trace.DescendantCount())
 			}
 		} else if trace.RootSpan != nil {
-			for _, field := range i.Config.GetFieldsToPropagateFromRoot() {
-				if _, ok := sp.Data[field]; !ok {
-					sp.Data[field] = trace.RootSpan.Data[field]
+			x := i.Config.GetFieldsToPropagateFromRoot()
+			if x.UsesRegex {
+				for k, v := range trace.RootSpan.Data {
+					if _, ok := sp.Data[k]; !ok {
+						if x.Match(k) {
+							sp.Data[k] = v
+						}
+					}
+				}
+			} else {
+				for _, field := range x.Fields {
+					if _, ok := sp.Data[field]; !ok {
+						sp.Data[field] = trace.RootSpan.Data[field]
+					}
 				}
 			}
 		}

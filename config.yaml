@@ -3,7 +3,10 @@ General:
   MinRefineryVersion: v2.0
 
 Specialized:
+  UseRegexForFieldsToPropagateFromRoot: false
   FieldsToPropagateFromRoot:
-    -
+    - foo
 
-
+GRPCServerParameters:
+  Enabled: true
+  ListenAddr: 0.0.0.0:4317

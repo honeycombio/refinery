@@ -1215,6 +1215,14 @@ groups:
           For example, it could be used for naming a Refinery cluster. Both
           keys and values must be strings.
 
+      - name: UseRegexForFieldsToPropagateFromRoot
+        type: bool
+        valuetype: bool
+        default: false
+        reload: true
+        summary: asdfasdf
+        description: asdfasdf
+
       - name: FieldsToPropagateFromRoot
         type: stringarray
         valuetype: stringarray
@@ -1223,11 +1231,8 @@ groups:
         validations:
           - type: elementType
             arg: string
-        summary: Add specified fields from root span to all other spans in the trace.
-        description: >
-          The fields specified in this list will be copied from the root span to all other spans in the trace.
-          When fields also specified in the AdditionalAttributes list, the values from the AdditionalAttributes list will be used.
-          The fields will only be copied when the root span arrives before TraceTimeout. Any spans arriving after TraceTimeout will not have the fields copied.
+        summary: asdfasdf
+        description: asdfasdf
 
   - name: IDFields
     title: "ID Fields"
