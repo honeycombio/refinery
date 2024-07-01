@@ -34,9 +34,10 @@ var _ PubSub = (*GoRedisPubSub)(nil)
 type GoRedisSubscription struct {
 	topic  string
 	pubsub *redis.PubSub
-	ch     chan string
+	cb     func(msg string)
 	done   chan struct{}
 	once   sync.Once
+	mut    sync.RWMutex
 }
 
 // Ensure that GoRedisSubscription implements Subscription
@@ -109,11 +110,11 @@ func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) err
 	return ps.client.Publish(ctx, topic, message).Err()
 }
 
-func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string) Subscription {
+func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback func(string)) Subscription {
 	sub := &GoRedisSubscription{
 		topic:  topic,
 		pubsub: ps.client.Subscribe(ctx, topic),
-		ch:     make(chan string, 100),
+		cb:     callback,
 		done:   make(chan struct{}),
 	}
 	ps.mut.Lock()
@@ -124,30 +125,27 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string) Subscripti
 		for {
 			select {
 			case <-sub.done:
-				close(sub.ch)
+				sub.mut.Lock()
+				sub.cb = nil
+				sub.mut.Unlock()
 				return
 			case msg := <-redisch:
 				if msg == nil {
 					continue
 				}
-				select {
-				case sub.ch <- msg.Payload:
-				default:
-					ps.Logger.Warn().WithField("topic", topic).Logf("Dropping subscription message because channel is full")
+				sub.mut.RLock()
+				if sub.cb != nil {
+					go sub.cb(msg.Payload)
 				}
+				sub.mut.RUnlock()
 			}
 		}
 	}()
 	return sub
 }
 
-func (s *GoRedisSubscription) Channel() <-chan string {
-	return s.ch
-}
-
 func (s *GoRedisSubscription) Close() {
 	s.once.Do(func() {
-		s.pubsub.Close()
 		close(s.done)
 	})
 }
