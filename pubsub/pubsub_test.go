@@ -53,6 +53,7 @@ func TestPubSubBasics(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range types {
 		t.Run(typ, func(t *testing.T) {
+			fmt.Println("testing", typ)
 			ps := newPubSub(typ)
 
 			l1 := &pubsubListener{}
