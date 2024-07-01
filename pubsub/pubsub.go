@@ -11,11 +11,10 @@ import (
 // pubsub.Start()
 // defer pubsub.Stop()
 // ctx := context.Background()
-// pubsub.Publish(ctx, "topic", "message")
-// sub := pubsub.Subscribe(ctx, "topic")
-// for msg := range sub.Channel() {
+// sub := pubsub.Subscribe(ctx, "topic", func(msg string) {
 // 	fmt.Println(msg)
 // }
+// pubsub.Publish(ctx, "topic", "message")
 // sub.Close()  // optional
 // pubsub.Close()
 
