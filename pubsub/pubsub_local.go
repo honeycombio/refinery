@@ -13,7 +13,6 @@ import (
 type LocalPubSub struct {
 	Config *config.Config `inject:""`
 	topics map[string][]*LocalSubscription
-	done   chan struct{}
 	mut    sync.RWMutex
 }
 
@@ -33,7 +32,6 @@ var _ Subscription = (*LocalSubscription)(nil)
 // Start initializes the LocalPubSub
 func (ps *LocalPubSub) Start() error {
 	ps.topics = make(map[string][]*LocalSubscription)
-	ps.done = make(chan struct{})
 	return nil
 }
 
@@ -46,7 +44,6 @@ func (ps *LocalPubSub) Stop() error {
 func (ps *LocalPubSub) Close() {
 	ps.mut.Lock()
 	defer ps.mut.Unlock()
-	close(ps.done)
 	for _, subs := range ps.topics {
 		for i := range subs {
 			subs[i].cb = nil

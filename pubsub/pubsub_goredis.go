@@ -110,6 +110,10 @@ func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) err
 	return ps.client.Publish(ctx, topic, message).Err()
 }
 
+// Subscribe creates a new Subscription to the given topic, and calls the provided callback
+// whenever a message is received on that topic.
+// Note that the same topic is Subscribed to multiple times, this will incur a separate
+// connection to Redis for each Subscription.
 func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback func(string)) Subscription {
 	sub := &GoRedisSubscription{
 		topic:  topic,
