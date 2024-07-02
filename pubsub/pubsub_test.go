@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/pubsub"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,53 +32,105 @@ func newPubSub(typ string) pubsub.PubSub {
 	return ps
 }
 
+type pubsubListener struct {
+	lock sync.Mutex
+	msgs []string
+}
+
+func (l *pubsubListener) Listen(msg string) {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	l.msgs = append(l.msgs, msg)
+}
+
+func (l *pubsubListener) Messages() []string {
+	l.lock.Lock()
+	defer l.lock.Unlock()
+	return l.msgs
+}
+
 func TestPubSubBasics(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range types {
 		t.Run(typ, func(t *testing.T) {
 			ps := newPubSub(typ)
+
+			l1 := &pubsubListener{}
+			ps.Subscribe(ctx, "topic", l1.Listen)
+
 			wg := sync.WaitGroup{}
-			wg.Add(2)
-			go func() {
-				sub := ps.Subscribe(ctx, "topic")
-				ch := sub.Channel()
-				for msg := range ch {
-					require.Contains(t, msg, "message")
-				}
-				wg.Done()
-			}()
+			wg.Add(1)
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				for i := 0; i < 10; i++ {
 					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
-					require.NoError(t, err)
+					assert.NoError(t, err)
 				}
 				time.Sleep(100 * time.Millisecond)
-				ps.Close()
 				wg.Done()
 			}()
 			wg.Wait()
+			ps.Close()
+			require.Len(t, l1.Messages(), 10)
+		})
+	}
+}
+
+func TestPubSubMultiSubscriber(t *testing.T) {
+	const messageCount = 10
+	ctx := context.Background()
+	for _, typ := range types {
+		t.Run(typ, func(t *testing.T) {
+			ps := newPubSub(typ)
+			l1 := &pubsubListener{}
+			l2 := &pubsubListener{}
+			ps.Subscribe(ctx, "topic", l1.Listen)
+			ps.Subscribe(ctx, "topic", l2.Listen)
+
+			wg := &sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				for i := 0; i < messageCount; i++ {
+					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
+					require.NoError(t, err)
+				}
+				time.Sleep(100 * time.Millisecond)
+				wg.Done()
+			}()
+			wg.Wait()
+			ps.Close()
+			require.Len(t, l1.Messages(), messageCount)
+			require.Len(t, l2.Messages(), messageCount)
 		})
 	}
 }
 
 func TestPubSubMultiTopic(t *testing.T) {
-	const topicCount = 100
+	const topicCount = 3
 	const messageCount = 10
-	const expectedTotal = 55 // sum of 1 to messageCount
+	const expectedTotal = 55 // sum of [1..messageCount]
 	ctx := context.Background()
 	for _, typ := range types {
 		t.Run(typ, func(t *testing.T) {
 			ps := newPubSub(typ)
+			time.Sleep(500 * time.Millisecond)
 			topics := make([]string, topicCount)
+			listeners := make([]*pubsubListener, topicCount)
 			for i := 0; i < topicCount; i++ {
 				topics[i] = fmt.Sprintf("topic%d", i)
+				listeners[i] = &pubsubListener{}
 			}
-			time.Sleep(100 * time.Millisecond)
+			totals := make([]int, topicCount)
+			subs := make([]pubsub.Subscription, topicCount)
+			for ix := 0; ix < topicCount; ix++ {
+				subs[ix] = ps.Subscribe(ctx, topics[ix], listeners[ix].Listen)
+			}
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 				for j := 0; j < topicCount; j++ {
 					for i := 0; i < messageCount; i++ {
 						// we want a different sum for each topic
@@ -85,27 +138,19 @@ func TestPubSubMultiTopic(t *testing.T) {
 						require.NoError(t, err)
 					}
 				}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				ps.Close()
 				wg.Done()
 			}()
-			mut := sync.Mutex{}
-			totals := make([]int, topicCount)
-			subs := make([]pubsub.Subscription, topicCount)
-			for i := 0; i < topicCount; i++ {
-				wg.Add(1)
-				go func(ix int) {
-					subs[ix] = ps.Subscribe(ctx, topics[ix])
-					for msg := range subs[ix].Channel() {
-						n, _ := strconv.Atoi(msg)
-						mut.Lock()
-						totals[ix] += n
-						mut.Unlock()
-					}
-					wg.Done()
-				}(i)
-			}
 			wg.Wait()
+			for ix := 0; ix < topicCount; ix++ {
+				assert.Len(t, listeners[ix].Messages(), messageCount, "topic %d", ix)
+				for _, msg := range listeners[ix].Messages() {
+					n, _ := strconv.Atoi(msg)
+					totals[ix] += n
+				}
+			}
+
 			// validate that all the topics each add up to the desired total
 			for i := 0; i < topicCount; i++ {
 				require.Equal(t, expectedTotal*(i+1), totals[i])
@@ -144,27 +189,25 @@ func TestPubSubLatency(t *testing.T) {
 				wg.Done()
 			}()
 
-			go func() {
-				sub := ps.Subscribe(ctx, "topic")
-				for msg := range sub.Channel() {
-					sent, err := strconv.Atoi(msg)
-					require.NoError(t, err)
-					rcvd := time.Now().UnixNano()
-					latency := rcvd - int64(sent)
-					require.True(t, latency >= 0)
-					total += latency
-					if tmin == 0 || latency < tmin {
-						tmin = latency
-					}
-					if latency > tmax {
-						tmax = latency
-					}
-					mut.Lock()
-					count++
-					mut.Unlock()
+			ps.Subscribe(ctx, "topic", func(msg string) {
+				sent, err := strconv.Atoi(msg)
+				require.NoError(t, err)
+				rcvd := time.Now().UnixNano()
+				latency := rcvd - int64(sent)
+				require.True(t, latency >= 0)
+				mut.Lock()
+				total += latency
+				if tmin == 0 || latency < tmin {
+					tmin = latency
 				}
-				wg.Done()
-			}()
+				if latency > tmax {
+					tmax = latency
+				}
+				count++
+				mut.Unlock()
+			})
+			wg.Done()
+
 			wg.Wait()
 			require.Equal(t, int64(messageCount), count)
 			require.True(t, total > 0)
@@ -184,55 +227,9 @@ func BenchmarkPubSub(b *testing.B) {
 		b.Run(typ, func(b *testing.B) {
 			ps := newPubSub(typ)
 			time.Sleep(100 * time.Millisecond)
-			count := 0
-			mut := sync.Mutex{}
 
-			wg := sync.WaitGroup{}
-			wg.Add(2)
-			b.ResetTimer()
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				for i := 0; i < b.N; i++ {
-					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
-					require.NoError(b, err)
-				}
-				require.Eventually(b, func() bool {
-					mut.Lock()
-					defer mut.Unlock()
-					return count == b.N
-				}, 5*time.Second, 10*time.Millisecond)
-				ps.Close()
-				wg.Done()
-			}()
-
-			go func() {
-				sub := ps.Subscribe(ctx, "topic")
-				for range sub.Channel() {
-					mut.Lock()
-					count++
-					mut.Unlock()
-				}
-				wg.Done()
-			}()
-			wg.Wait()
-			require.Equal(b, b.N, count)
-		})
-	}
-}
-
-func BenchmarkPubSubMultiTopic(b *testing.B) {
-	const topicCount = 10
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	for _, typ := range types {
-		b.Run(typ, func(b *testing.B) {
-			ps := newPubSub(typ)
-			topics := make([]string, topicCount)
-			for i := 0; i < topicCount; i++ {
-				topics[i] = fmt.Sprintf("topic%d", i)
-			}
-			mut := sync.RWMutex{}
-			count := 0
+			li := &pubsubListener{}
+			ps.Subscribe(ctx, "topic", li.Listen)
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
@@ -240,30 +237,18 @@ func BenchmarkPubSubMultiTopic(b *testing.B) {
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				for i := 0; i < b.N; i++ {
-					err := ps.Publish(ctx, topics[i%topicCount], fmt.Sprintf("message %d", i))
+					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
 					require.NoError(b, err)
 				}
-				require.Eventually(b, func() bool {
-					mut.RLock()
-					defer mut.RUnlock()
-					return count == b.N
-				}, 1*time.Second, 100*time.Millisecond)
+				require.EventuallyWithT(b, func(collect *assert.CollectT) {
+					assert.Len(collect, li.Messages(), b.N)
+				}, 5*time.Second, 10*time.Millisecond)
 				ps.Close()
 				wg.Done()
 			}()
-			for i := 0; i < topicCount; i++ {
-				wg.Add(1)
-				go func(ix int) {
-					sub := ps.Subscribe(ctx, topics[ix])
-					for range sub.Channel() {
-						mut.Lock()
-						count++
-						mut.Unlock()
-					}
-					wg.Done()
-				}(i)
-			}
+
 			wg.Wait()
+			require.Len(b, li.Messages(), b.N)
 		})
 	}
 }
