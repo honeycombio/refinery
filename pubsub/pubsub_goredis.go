@@ -37,7 +37,6 @@ type GoRedisSubscription struct {
 	cb     func(msg string)
 	done   chan struct{}
 	once   sync.Once
-	mut    sync.RWMutex
 }
 
 // Ensure that GoRedisSubscription implements Subscription
