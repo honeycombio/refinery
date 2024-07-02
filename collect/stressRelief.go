@@ -1,25 +1,32 @@
 package collect
 
 import (
+	"context"
 	"fmt"
 	"math"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
+	"github.com/gofrs/uuid/v5"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
+	"github.com/jonboulle/clockwork"
 )
 
 type StressReliever interface {
 	Start() error
 	UpdateFromConfig(cfg config.StressReliefConfig) error
 	Recalc()
-	StressLevel() uint
 	Stressed() bool
 	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
+	ShouldSampleDeterministically(traceID string) bool
 }
 
 type MockStressReliever struct{}
@@ -27,11 +34,12 @@ type MockStressReliever struct{}
 func (m *MockStressReliever) Start() error                                         { return nil }
 func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) error { return nil }
 func (m *MockStressReliever) Recalc()                                              {}
-func (m *MockStressReliever) StressLevel() uint                                    { return 0 }
 func (m *MockStressReliever) Stressed() bool                                       { return false }
 func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
 	return 1, false, ""
 }
+
+func (m *MockStressReliever) ShouldSampleDeterministically(traceID string) bool { return false }
 
 // hashSeed is a random value to seed the hash generator for the sampler.
 // We want it to be a constant that's the same across all nodes so that they
@@ -46,26 +54,39 @@ const (
 	Always
 )
 
+type stressReport struct {
+	key   string
+	level uint
+	// we need to expire these reports after a certian amount of time
+	timestamp time.Time
+}
+
 type StressRelief struct {
-	mode            StressReliefMode
-	activateLevel   uint
-	deactivateLevel uint
-	sampleRate      uint64
-	upperBound      uint64
-	stressLevel     uint
-	reason          string
-	formula         string
-	stressed        bool
-	stayOnUntil     time.Time
-	minDuration     time.Duration
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
 	Logger          logger.Logger   `inject:""`
-	Health          health.Recorder `inject:""`
+	Health          health.Health   `inject:""`
+	PubSub          pubsub.PubSub   `inject:""`
+	Clock           clockwork.Clock `inject:""`
 	Done            chan struct{}
+
+	mode               StressReliefMode
+	hostID             string
+	activateLevel      uint
+	deactivateLevel    uint
+	sampleRate         uint64
+	upperBound         uint64
+	overallStressLevel uint
+	reason             string
+	formula            string
+	stressed           bool
+	stayOnUntil        time.Time
+	minDuration        time.Duration
 
 	algorithms map[string]func(string, string) float64
 	calcs      []StressReliefCalculation
-	lock       sync.RWMutex
+
+	lock         sync.RWMutex
+	stressLevels map[string]stressReport
 }
 
 const StressReliefHealthKey = "stress_relief"
@@ -99,6 +120,26 @@ func (s *StressRelief) Start() error {
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
 	}
 
+	var hostID string
+	if hostname, err := os.Hostname(); err == nil {
+		hostID = hostname
+	}
+	if hostID == "" {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("failed to generate host ID: %s", err)
+		}
+
+		hostID = id.String()
+	}
+
+	s.hostID = hostID
+	s.stressLevels = make(map[string]stressReport)
+
+	// Subscribe to the stress relief topic so we can react to stress level
+	// changes in the cluster.
+	s.PubSub.Subscribe(context.Background(), "refinery-stress-level", s.onStressLevelUpdate)
+
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
 	go func(s *StressRelief) {
@@ -107,7 +148,11 @@ func (s *StressRelief) Start() error {
 		for {
 			select {
 			case <-tick.C:
-				s.Recalc()
+				currentLevel := s.Recalc()
+				err := s.PubSub.Publish(context.Background(), "refinery-stress-relief", newStressReliefMessage(currentLevel, "local").String())
+				if err != nil {
+					s.Logger.Error().Logf("failed to publish stress level: %s", err)
+				}
 				s.Health.Ready(StressReliefHealthKey, true)
 			case <-s.Done:
 				s.Health.Unregister(StressReliefHealthKey)
@@ -119,7 +164,55 @@ func (s *StressRelief) Start() error {
 	return nil
 }
 
-func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
+type stressReliefMessage struct {
+	level  uint
+	peerID string
+}
+
+func newStressReliefMessage(level uint, peerID string) *stressReliefMessage {
+	return &stressReliefMessage{level: level, peerID: peerID}
+}
+
+func (msg *stressReliefMessage) String() string {
+	return msg.peerID + ":" + fmt.Sprint(msg.level)
+}
+
+func unmarshalStressRelifMessage(msg string) (*stressReliefMessage, error) {
+	if len(msg) < 2 {
+		return nil, fmt.Errorf("empty message")
+	}
+
+	parts := strings.SplitAfter(msg, ":")
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("invalid message format")
+	}
+
+	level, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return newStressReliefMessage(uint(level), parts[0]), nil
+}
+
+func (s *StressRelief) onStressLevelUpdate(ctx context.Context, msg string) {
+	stressMsg, err := unmarshalStressRelifMessage(msg)
+	if err != nil {
+		s.Logger.Error().Logf("failed to unmarshal stress relief message: %s", err)
+		return
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.stressLevels[stressMsg.peerID] = stressReport{
+		key:       stressMsg.peerID,
+		level:     stressMsg.level,
+		timestamp: s.Clock.Now(),
+	}
+}
+
+func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -127,17 +220,6 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 	case "never", "":
 		s.mode = Never
 	case "monitor":
-		// If we're switching into monitor mode from some other state (which
-		// happens on startup), we will start up in stressed mode for a
-		// configurable time to try to make sure that we can handle the load
-		// before we start processing it in earnest. This is to help address the
-		// problem of trying to bring a new node into an already-overloaded
-		// cluster. If the time is 0 we won't do this at all.
-		if s.mode != Monitor && cfg.MinimumStartupDuration != 0 {
-			s.stressed = true
-			s.stayOnUntil = time.Now().Add(time.Duration(cfg.MinimumStartupDuration))
-			s.Logger.Warn().WithField("stress_level", s.stressLevel).WithField("reason", "MinimumStartupDuration").Logf("StressRelief has been activated")
-		}
 		s.mode = Monitor
 	case "always":
 		s.mode = Always
@@ -168,8 +250,6 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) error {
 	// uint64. In the case where the sample rate is 1, this should sample every
 	// value.
 	s.upperBound = math.MaxUint64 / s.sampleRate
-
-	return nil
 }
 
 func clamp(f float64, min float64, max float64) float64 {
@@ -273,28 +353,34 @@ type StressReliefCalculation struct {
 // We want to calculate the stress from various values around the system. Each key value
 // can be reported as a key-value.
 // This should be called periodically.
-func (s *StressRelief) Recalc() {
+func (s *StressRelief) Recalc() uint {
 	// we have multiple queues to watch, and for each we calculate a stress level for that queue, which is
 	// 100 * the fraction of its capacity in use. Our overall stress level is the max of those values.
 	// We track the config value that is under stress as "reason".
 
-	var level float64
+	var maximumLevel float64
 	var reason string
 	var formula string
 	for _, c := range s.calcs {
 		stress := 100 * s.algorithms[c.Algorithm](c.Numerator, c.Denominator)
-		if stress > level {
-			level = stress
+		if stress > maximumLevel {
+			maximumLevel = stress
 			reason = c.Reason
 			formula = fmt.Sprintf("%s(%v/%v)=%v", c.Algorithm, c.Numerator, c.Denominator, stress)
 		}
 	}
-	s.Logger.Debug().WithField("stress_level", level).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
+	s.Logger.Debug().WithField("stress_level", maximumLevel).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
+
+	s.RefineryMetrics.Gauge("individual_stress_level", float64(maximumLevel))
+	localLevel := uint(maximumLevel)
+
+	clusterStressLevel := s.clusterStressLevel(localLevel)
+	s.RefineryMetrics.Gauge("cluster_stress_level", clusterStressLevel)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.stressLevel = uint(level)
+	s.overallStressLevel = clusterStressLevel
 	s.reason = reason
 	s.formula = formula
 
@@ -305,28 +391,70 @@ func (s *StressRelief) Recalc() {
 		s.stressed = true
 	case Monitor:
 		// If it's off, should we activate it?
-		if !s.stressed && s.stressLevel >= s.activateLevel {
+		if !s.stressed && s.overallStressLevel >= s.activateLevel {
 			s.stressed = true
-			s.Logger.Warn().WithField("stress_level", s.stressLevel).WithField("stress_formula", s.formula).WithField("reason", s.reason).Logf("StressRelief has been activated")
+			s.Logger.Warn().WithField("cluster_stress_level", s.overallStressLevel).WithField("stress_formula", s.formula).WithField("reason", s.reason).Logf("StressRelief has been activated")
 		}
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
-		if s.stressed && s.stressLevel >= s.deactivateLevel {
+		if s.stressed && s.overallStressLevel >= s.deactivateLevel {
 			s.stayOnUntil = time.Now().Add(s.minDuration)
 		}
 		// If it's on, should we deactivate it?
-		if s.stressed && s.stressLevel < s.deactivateLevel && time.Now().After(s.stayOnUntil) {
+		if s.stressed && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
-			s.Logger.Warn().WithField("stress_level", s.stressLevel).Logf("StressRelief has been deactivated")
+			s.Logger.Warn().WithField("cluster_stress_level", s.overallStressLevel).Logf("StressRelief has been deactivated")
 		}
 	}
+
+	if s.stressed {
+		s.RefineryMetrics.Gauge("stress_relief_activated", 1)
+	} else {
+		s.RefineryMetrics.Gauge("stress_relief_activated", 0)
+	}
+
+	return localLevel
 }
 
-func (s *StressRelief) StressLevel() uint {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.stressLevel
+// clusterStressLevel calculates the overall stress level for the cluster
+// by using the stress levels reported by each node.
+// It uses the geometric mean of the stress levels reported by each node to
+// calculate the overall stress level for the cluster.
+func (s *StressRelief) clusterStressLevel(localLevel uint) uint {
+	// we need to calculate the stress level from the levels we've been given
+	// and then publish it to the cluster
+	report := stressReport{
+		key:       s.hostID,
+		level:     localLevel,
+		timestamp: s.Clock.Now(),
+	}
+
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.stressLevels[report.key] = report
+	var total float64
+	availablePeers := 0
+	for _, report := range s.stressLevels {
+		// TODO: maybe make the expiration time configurable
+		if s.Clock.Since(report.timestamp) > 5*time.Second {
+			delete(s.stressLevels, report.key)
+			continue
+		}
+		// we don't want to include peers that are just starting up
+		if report.level == 0 {
+			continue
+		}
+		availablePeers++
+		total += float64(report.level * report.level)
+	}
+
+	if availablePeers == 0 {
+		availablePeers = 1
+	}
+
+	return uint(math.Sqrt(total / float64(availablePeers)))
 }
 
 // Stressed() indicates whether the system should act as if it's stressed.
@@ -345,4 +473,30 @@ func (s *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reas
 	}
 	hash := wyhash.Hash([]byte(traceID), hashSeed)
 	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic/" + s.reason
+}
+
+// ShouldSampleDeterministically returns true if the trace should be deterministically sampled.
+// It uses the traceID to calculate a hash and then divides it by the maximum possible value
+// to get a percentage. If the percentage is less than the deterministic fraction, it returns true.
+func (s *StressRelief) ShouldSampleDeterministically(traceID string) bool {
+	samplePercentage := s.deterministicFraction()
+	hash := wyhash.Hash([]byte(traceID), hashSeed)
+
+	return float64(hash)/float64(math.MaxUint64)*100 < float64(samplePercentage)
+}
+
+// deterministicFraction returns the fraction of traces that should be deterministic sampled
+// It calculates the result by using the stress level as the fraction between the activation
+// level and 100%. The result is rounded to the nearest integer.
+//
+// for example:
+// - if the stress level is 90 and the activation level is 80, the result will be 50
+// - meaning that 50% of the traces should be deterministic sampled
+func (s *StressRelief) deterministicFraction() uint {
+	if s.overallStressLevel < s.activateLevel {
+		return 0
+	}
+
+	// round to the nearest integer
+	return uint(float64(s.overallStressLevel-s.activateLevel)/float64(100-s.activateLevel)*100 + 0.5)
 }

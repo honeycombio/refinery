@@ -28,8 +28,10 @@ func (m *MockCollector) GetStressedSampleRate(traceID string) (rate uint, keep b
 	return 0, false, ""
 }
 
-func (m *MockCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampleRate uint, reason string) {
+func (m *MockCollector) ProcessSpanImmediately(sp *types.Span) (bool, bool) {
 	m.Spans <- sp
+
+	return true, true
 }
 
 func (m *MockCollector) Stressed() bool {
