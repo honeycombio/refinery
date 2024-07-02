@@ -822,7 +822,7 @@ groups:
         v1name: Type
         type: string
         valuetype: choice
-        choices: ["redis", "file"]
+        choices: ["pubsub", "redis", "file"]
         default: "file"
         reload: false
         validations:
@@ -834,8 +834,13 @@ groups:
           `file` means that Refinery gets its peer list from
           the Peers list in this config file.
 
-          `redis` means that Refinery self-registers with a Redis instance and
-          gets its peer list from there.
+          `pubsub` means that Refinery uses a Publish/Subscribe mechanism,
+          implemented on Redis, to propagate peer lists much more quickly than
+          the legacy mechanism. This is the recommended setting, especially for
+          new installations.
+
+          `redis` is the legacy mechanism where Refinery keeps a peer list as
+          data within a Redis instance.
 
       - name: Identifier
         v1group: PeerManagement
@@ -902,9 +907,8 @@ groups:
   - name: RedisPeerManagement
     title: "Redis Peer Management"
     description: >
-      controls how the Refinery cluster communicates
-      between peers when using Redis. Only applies when `PeerManagement.Type`
-      is "redis".
+      controls how the Refinery cluster communicates between peers when using
+      Redis. Does not apply when `PeerManagement.Type` is "file".
 
     fields:
       - name: Host
@@ -977,6 +981,8 @@ groups:
           Refinery clusters or multiple applications want to share a single
           Redis instance. It may not be blank.
 
+          Only applies when using the `redis` peer management type.
+
       - name: Database
         v1group: PeerManagement
         v1name: Database
@@ -996,6 +1002,8 @@ groups:
           Redis instance storing the peer membership. It might be useful to set
           this in any situation where multiple Refinery clusters or multiple
           applications want to share a single Redis instance.
+
+          Only applies when using the `redis` peer management type.
 
       - name: UseTLS
         v1group: PeerManagement

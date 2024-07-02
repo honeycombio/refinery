@@ -29,3 +29,11 @@ func (p *filePeers) RegisterUpdatedPeersCallback(callback func()) {
 	// otherwise do nothing since they never change
 	callback()
 }
+
+func (p *filePeers) Start() error {
+	return nil
+}
+
+func (p *filePeers) Stop() error {
+	return nil
+}

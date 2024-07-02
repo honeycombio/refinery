@@ -3,12 +3,7 @@ package peer
 import (
 	"context"
 	"crypto/tls"
-	"errors"
-	"fmt"
-	"net"
-	"os"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -16,23 +11,6 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/redimem"
 	"github.com/sirupsen/logrus"
-)
-
-const (
-	// refreshCacheInterval is how frequently this host will re-register itself
-	// with Redis. This should happen about 3x during each timeout phase in order
-	// to allow multiple timeouts to fail and yet still keep the host in the mix.
-	// Falling out of Redis will result in re-hashing the host-trace affinity and
-	// will cause broken traces for those that fall on both sides of the rehashing.
-	// This is why it's important to ensure hosts stay in the pool.
-	refreshCacheInterval = 3 * time.Second
-
-	// peerEntryTimeout is how long redis will wait before expiring a peer that
-	// doesn't check in. The ratio of refresh to peer timeout should be 1/3. Redis
-	// timeouts are in seconds and entries can last up to 2 seconds longer than
-	// their expected timeout (in my load testing), so the lower bound for this
-	// timer should be ... 5sec?
-	peerEntryTimeout = 10 * time.Second
 )
 
 type redisPeers struct {
@@ -145,6 +123,15 @@ func (p *redisPeers) GetPeers() ([]string, error) {
 
 func (p *redisPeers) RegisterUpdatedPeersCallback(cb func()) {
 	p.callbacks = append(p.callbacks, cb)
+}
+
+// old-style redis peers don't need to start or stop but they do need the functions
+func (p *redisPeers) Start() error {
+	return nil
+}
+
+func (p *redisPeers) Stop() error {
+	return nil
 }
 
 // registerSelf inserts self into the peer list and updates self's entry on a
@@ -269,78 +256,6 @@ func buildOptions(c config.Config) []redis.DialOption {
 	}
 
 	return options
-}
-
-func publicAddr(c config.Config) (string, error) {
-	// compute the public version of my peer listen address
-	listenAddr, _ := c.GetPeerListenAddr()
-	_, port, err := net.SplitHostPort(listenAddr)
-
-	if err != nil {
-		return "", err
-	}
-
-	var myIdentifier string
-
-	// If RedisIdentifier is set, use as identifier.
-	if redisIdentifier, _ := c.GetRedisIdentifier(); redisIdentifier != "" {
-		myIdentifier = redisIdentifier
-		logrus.WithField("identifier", myIdentifier).Info("using specified RedisIdentifier from config")
-	} else {
-		// Otherwise, determine identifier from network interface.
-		myIdentifier, err = getIdentifierFromInterfaces(c)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
-
-	return publicListenAddr, nil
-}
-
-// Scan network interfaces to determine an identifier from either IP or hostname.
-func getIdentifierFromInterfaces(c config.Config) (string, error) {
-	myIdentifier, _ := os.Hostname()
-	identifierInterfaceName, _ := c.GetIdentifierInterfaceName()
-
-	if identifierInterfaceName != "" {
-		ifc, err := net.InterfaceByName(identifierInterfaceName)
-		if err != nil {
-			logrus.WithError(err).WithField("interface", identifierInterfaceName).
-				Error("IdentifierInterfaceName set but couldn't find interface by that name")
-			return "", err
-		}
-		addrs, err := ifc.Addrs()
-		if err != nil {
-			logrus.WithError(err).WithField("interface", identifierInterfaceName).
-				Error("IdentifierInterfaceName set but couldn't list addresses")
-			return "", err
-		}
-		var ipStr string
-		for _, addr := range addrs {
-			// ParseIP doesn't know what to do with the suffix
-			ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
-			ipv6, _ := c.GetUseIPV6Identifier()
-			if ipv6 && ip.To16() != nil {
-				ipStr = fmt.Sprintf("[%s]", ip.String())
-				break
-			}
-			if !ipv6 && ip.To4() != nil {
-				ipStr = ip.String()
-				break
-			}
-		}
-		if ipStr == "" {
-			err = errors.New("could not find a valid IP to use from interface")
-			logrus.WithField("interface", ifc.Name).WithError(err)
-			return "", err
-		}
-		myIdentifier = ipStr
-		logrus.WithField("identifier", myIdentifier).WithField("interface", ifc.Name).Info("using identifier from interface")
-	}
-
-	return myIdentifier, nil
 }
 
 // equal tells whether a and b contain the same elements.
