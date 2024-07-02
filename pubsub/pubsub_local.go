@@ -9,10 +9,10 @@ import (
 
 // LocalPubSub is a PubSub implementation that uses local channels to send messages; it does
 // not communicate with any external processes.
+// subs are individual channels for each subscription
 type LocalPubSub struct {
 	Config *config.Config `inject:""`
-	subs   []*LocalSubscription
-	topics map[string]chan string
+	topics map[string][]*LocalSubscription
 	mut    sync.RWMutex
 }
 
@@ -20,9 +20,10 @@ type LocalPubSub struct {
 var _ PubSub = (*LocalPubSub)(nil)
 
 type LocalSubscription struct {
+	ps    *LocalPubSub
 	topic string
-	ch    chan string
-	done  chan struct{}
+	cb    func(string)
+	mut   sync.RWMutex
 }
 
 // Ensure that LocalSubscription implements Subscription
@@ -30,8 +31,7 @@ var _ Subscription = (*LocalSubscription)(nil)
 
 // Start initializes the LocalPubSub
 func (ps *LocalPubSub) Start() error {
-	ps.subs = make([]*LocalSubscription, 0)
-	ps.topics = make(map[string]chan string)
+	ps.topics = make(map[string][]*LocalSubscription)
 	return nil
 }
 
@@ -44,59 +44,51 @@ func (ps *LocalPubSub) Stop() error {
 func (ps *LocalPubSub) Close() {
 	ps.mut.Lock()
 	defer ps.mut.Unlock()
-	for _, sub := range ps.subs {
-		sub.Close()
+	for _, subs := range ps.topics {
+		for i := range subs {
+			subs[i].cb = nil
+		}
 	}
-	ps.subs = nil
+	ps.topics = make(map[string][]*LocalSubscription, 0)
 }
 
-func (ps *LocalPubSub) ensureTopic(topic string) chan string {
+func (ps *LocalPubSub) ensureTopic(topic string) {
 	if _, ok := ps.topics[topic]; !ok {
-		ps.topics[topic] = make(chan string, 100)
+		ps.topics[topic] = make([]*LocalSubscription, 0)
 	}
-	return ps.topics[topic]
 }
 
 func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error {
-	ps.mut.RLock()
-	ch := ps.ensureTopic(topic)
-	ps.mut.RUnlock()
-	select {
-	case ch <- message:
-	case <-ctx.Done():
-		return ctx.Err()
+	ps.mut.Lock()
+	defer ps.mut.Unlock()
+	ps.ensureTopic(topic)
+	for _, sub := range ps.topics[topic] {
+		// don't wait around for slow consumers
+		if sub.cb != nil {
+			go sub.cb(message)
+		}
 	}
 	return nil
 }
 
-func (ps *LocalPubSub) Subscribe(ctx context.Context, topic string) Subscription {
+func (ps *LocalPubSub) Subscribe(ctx context.Context, topic string, callback func(msg string)) Subscription {
 	ps.mut.Lock()
-	defer ps.mut.Unlock()
-	ch := ps.ensureTopic(topic)
-	sub := &LocalSubscription{
-		topic: topic,
-		ch:    ch,
-		done:  make(chan struct{}),
-	}
-	ps.subs = append(ps.subs, sub)
-	go func() {
-		for {
-			select {
-			case <-sub.done:
-				close(ch)
-				return
-			case msg := <-ch:
-				sub.ch <- msg
-			}
-		}
-	}()
+	ps.ensureTopic(topic)
+	sub := &LocalSubscription{ps: ps, topic: topic, cb: callback}
+	ps.topics[topic] = append(ps.topics[topic], sub)
+	ps.mut.Unlock()
 	return sub
 }
 
-func (s *LocalSubscription) Channel() <-chan string {
-	return s.ch
-}
-
 func (s *LocalSubscription) Close() {
-	close(s.done)
+	s.ps.mut.RLock()
+	for _, sub := range s.ps.topics[s.topic] {
+		if sub == s {
+			sub.mut.Lock()
+			sub.cb = nil
+			sub.mut.Unlock()
+			return
+		}
+	}
+	s.ps.mut.RUnlock()
 }

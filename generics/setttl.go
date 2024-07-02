@@ -50,6 +50,7 @@ func (s *SetWithTTL[T]) Remove(es ...T) {
 }
 
 // Contains returns true if the SetWithTTL contains `e`.
+// We don't have to clean up first because the test checks the TTL.
 func (s *SetWithTTL[T]) Contains(e T) bool {
 	s.mut.RLock()
 	item, ok := s.Items[e]
