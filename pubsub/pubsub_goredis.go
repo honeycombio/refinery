@@ -37,7 +37,6 @@ type GoRedisSubscription struct {
 	cb     func(msg string)
 	done   chan struct{}
 	once   sync.Once
-	mut    sync.RWMutex
 }
 
 // Ensure that GoRedisSubscription implements Subscription
@@ -129,19 +128,12 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback f
 		for {
 			select {
 			case <-sub.done:
-				sub.mut.Lock()
-				sub.cb = nil
-				sub.mut.Unlock()
 				return
 			case msg := <-redisch:
 				if msg == nil {
 					continue
 				}
-				sub.mut.RLock()
-				if sub.cb != nil {
-					go sub.cb(msg.Payload)
-				}
-				sub.mut.RUnlock()
+				go sub.cb(msg.Payload)
 			}
 		}
 	}()
