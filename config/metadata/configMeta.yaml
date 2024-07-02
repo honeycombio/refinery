@@ -740,6 +740,79 @@ groups:
           compression costs may outweigh the benefits, in which case `none`
           may be used.
 
+  - name: OTelTracing
+    title: "OpenTelemetry Tracing"
+    description: contains configuration for Refinery's own tracing.
+    fields:
+      - name: Enabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v2.6
+        summary: controls whether to send Refinery's own otel traces.
+        description: >
+          The setting specifies if Refinery sends traces.
+
+      - name: APIHost
+        type: url
+        valuetype: nondefault
+        default: "https://api.honeycomb.io"
+        reload: false
+        firstversion: v2.6
+        summary: is the URL of the OpenTelemetry API to which traces will be sent.
+        description: >
+          Refinery's internal traces will be sent to the `/v1/traces`
+          endpoint on this host.
+
+      - name: APIKey
+        type: string
+        pattern: apikey
+        valuetype: nondefault
+        default: ""
+        example: "SetThisToAHoneycombKey"
+        reload: false
+        firstversion: v2.6
+        envvar: REFINERY_HONEYCOMB_TRACES_API_KEY, REFINERY_HONEYCOMB_API_KEY
+        commandline: otel-traces-api-key
+        validations:
+          - type: format
+            arg: apikey
+        summary: is the API key used to send Refinery's traces to Honeycomb.
+        description: >
+          It is recommended that you create a separate team and key for
+          Refinery telemetry.
+
+          If this is blank, then Refinery will not set the Honeycomb-specific
+          headers for OpenTelemetry, and your `APIHost` must be set to a
+          valid OpenTelemetry endpoint.
+
+      - name: Dataset
+        type: string
+        valuetype: nondefault
+        default: "Refinery Traces"
+        reload: false
+        validations:
+          - type: notempty
+        firstversion: v2.6
+        summary: is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
+        description: >
+          Only used if `APIKey` is specified.
+
+      - name: SampleRate
+        type: int
+        valuetype: nondefault
+        default: 100
+        validations:
+          - type: minimum
+            arg: 1
+        reload: true
+        summary: is the rate at which Refinery samples its own traces.
+        description: >
+          This is the Honeycomb sample rate used to sample traces sent by Refinery. Since each
+          incoming span generates multiple outgoing spans, a sample rate of at least 100 is
+          strongly advised.
+
   - name: PeerManagement
     title: "Peer Management"
     description: controls how the Refinery cluster communicates between peers.

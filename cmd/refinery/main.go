@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	_ "go.uber.org/automaxprocs"
 	"golang.org/x/exp/slices"
 
@@ -23,6 +25,7 @@ import (
 	"github.com/honeycombio/refinery/app"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -198,6 +201,18 @@ func main() {
 		oTelMetrics = &metrics.OTelMetrics{}
 	}
 
+	resourceLib := "refinery"
+	resourceVer := version
+	tracer := trace.Tracer(noop.Tracer{})
+	shutdown := func() {}
+
+	if c.GetOTelTracingConfig().Enabled {
+		// let's set up some OTel tracing
+		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer)
+	}
+
+	defer shutdown()
+
 	// we need to include all the metrics types so we can inject them in case they're needed
 	var g inject.Graph
 	if opts.Debug {
@@ -216,6 +231,8 @@ func main() {
 		{Value: legacyMetrics, Name: "legacyMetrics"},
 		{Value: promMetrics, Name: "promMetrics"},
 		{Value: oTelMetrics, Name: "otelMetrics"},
+		{Value: tracer, Name: "tracer"},
+
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
