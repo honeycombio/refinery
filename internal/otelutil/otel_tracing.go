@@ -77,41 +77,46 @@ func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, field
 }
 
 func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string) (tracer trace.Tracer, shutdown func()) {
+	if !cfg.Enabled {
+		pr := noop.NewTracerProvider()
+		return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
+	}
+
+	var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
+
+	cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
+	apihost := fmt.Sprintf("%s:443", cfg.APIHost)
+
+	sampleRate := cfg.SampleRate
+	if sampleRate < 1 {
+		sampleRate = 1
+	}
+
+	var sampleRatio float64 = 1.0 / float64(sampleRate)
+
+	// set up honeycomb specific headers if an API key is provided
+	headers := make(map[string]string)
 	if cfg.APIKey != "" {
-		var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
-
-		cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
-		apihost := fmt.Sprintf("%s:443", cfg.APIHost)
-
-		sampleRate := cfg.SampleRate
-		if sampleRate < 1 {
-			sampleRate = 1
-		}
-
-		var sampleRatio float64 = 1.0 / float64(sampleRate)
-
-		headers := map[string]string{
+		headers = map[string]string{
 			types.APIKeyHeader: cfg.APIKey,
 		}
 
 		if types.IsLegacyAPIKey(cfg.APIKey) {
 			headers[types.DatasetHeader] = cfg.Dataset
 		}
-
-		otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
-			otelconfig.WithExporterProtocol(protocol),
-			otelconfig.WithServiceName(cfg.Dataset),
-			otelconfig.WithTracesExporterEndpoint(apihost),
-			otelconfig.WithMetricsEnabled(false),
-			otelconfig.WithTracesEnabled(true),
-			otelconfig.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
-			otelconfig.WithHeaders(headers),
-		)
-		if err != nil {
-			log.Fatalf("failure configuring otel: %v", err)
-		}
-		return otel.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), otelshutdown
 	}
-	pr := noop.NewTracerProvider()
-	return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
+
+	otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
+		otelconfig.WithExporterProtocol(protocol),
+		otelconfig.WithServiceName(cfg.Dataset),
+		otelconfig.WithTracesExporterEndpoint(apihost),
+		otelconfig.WithMetricsEnabled(false),
+		otelconfig.WithTracesEnabled(true),
+		otelconfig.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
+		otelconfig.WithHeaders(headers),
+	)
+	if err != nil {
+		log.Fatalf("failure configuring otel: %v", err)
+	}
+	return otel.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), otelshutdown
 }

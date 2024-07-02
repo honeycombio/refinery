@@ -21,6 +21,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 	"gopkg.in/alexcesaro/statsd.v2"
 
 	"github.com/honeycombio/libhoney-go"
@@ -192,6 +193,7 @@ func newStartedApp(
 		&inject.Object{Value: transmit.NewDefaultTransmission(upstreamClient, metricsr, "upstream"), Name: "upstreamTransmission"},
 		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, metricsr, "peer"), Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
+		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
 		&inject.Object{Value: collector},
 		&inject.Object{Value: metricsr, Name: "metrics"},
 		&inject.Object{Value: metricsr, Name: "genericMetrics"},

@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,9 +10,12 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
@@ -50,6 +54,7 @@ const (
 type InMemCollector struct {
 	Config         config.Config          `inject:""`
 	Logger         logger.Logger          `inject:""`
+	Tracer         trace.Tracer           `inject:"tracer"`
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
 	Metrics        metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory `inject:""`
@@ -381,7 +386,9 @@ func (i *InMemCollector) sendTracesInCache(now time.Time) {
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
 func (i *InMemCollector) processSpan(sp *types.Span) {
+	ctx, span := otelutil.StartSpan(context.Background(), i.Tracer, "processSpan")
 	defer func() {
+		span.End()
 		i.Metrics.Increment("span_processed")
 		i.Metrics.Down("spans_waiting")
 	}()
@@ -394,7 +401,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
 			// having none at all
-			i.dealWithSentTrace(sr, sentReason, sp)
+			i.dealWithSentTrace(ctx, sr, sentReason, sp)
 			return
 		}
 		// trace hasn't already been sent (or this span is really old); let's
@@ -427,13 +434,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	if trace.Sent {
 		if sr, reason, found := i.sampleTraceCache.Check(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
-			i.dealWithSentTrace(sr, reason, sp)
+			i.dealWithSentTrace(ctx, sr, reason, sp)
 			return
 		}
 		// trace has already been sent, but this is not in the sent cache.
 		// we will just use the default late span reason as the sent reason which is
 		// set inside the dealWithSentTrace function
-		i.dealWithSentTrace(cache.NewKeptTraceCacheEntry(trace), "", sp)
+		i.dealWithSentTrace(ctx, cache.NewKeptTraceCacheEntry(trace), "", sp)
 	}
 
 	// great! trace is live. add the span.
@@ -495,7 +502,14 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span, keep bool, sampl
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason string, sp *types.Span) {
+func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, sentReason string, sp *types.Span) {
+	ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
+		"trace_id":    sp.TraceID,
+		"sent_reason": sentReason,
+		"hostname":    i.hostname,
+	})
+	defer span.End()
+
 	if i.Config.GetAddRuleReasonToTrace() {
 		var metaReason string
 		if len(sentReason) > 0 {
@@ -512,6 +526,10 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason 
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	keep := tr.Kept()
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"keep":      keep,
+		"is_dryrun": isDryRun,
+	})
 
 	if isDryRun {
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
@@ -528,7 +546,8 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason 
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		mergeTraceAndSpanSampleRates(sp, tr.Rate(), isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
-		if i.isRootSpan(sp) {
+		isRootSpan := i.isRootSpan(sp)
+		if isRootSpan {
 			if i.Config.GetAddCountsToRoot() {
 				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
@@ -537,8 +556,8 @@ func (i *InMemCollector) dealWithSentTrace(tr cache.TraceSentRecord, sentReason 
 			} else if i.Config.GetAddSpanCountToRoot() {
 				sp.Data["meta.span_count"] = int64(tr.DescendantCount())
 			}
-
 		}
+		otelutil.AddSpanField(span, "is_root_span", isRootSpan)
 		i.Metrics.Increment(TraceSendLateSpan)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)

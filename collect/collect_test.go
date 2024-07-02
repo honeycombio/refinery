@@ -12,6 +12,7 @@ import (
 	"github.com/facebookgo/inject"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
@@ -41,6 +42,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 	return &InMemCollector{
 		Config:       conf,
 		Logger:       &logger.NullLogger{},
+		Tracer:       noop.NewTracerProvider().Tracer("test"),
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
 		StressRelief: &MockStressReliever{},
@@ -743,6 +745,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &InMemCollector{}},
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
+		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
