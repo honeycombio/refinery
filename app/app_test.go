@@ -85,17 +85,6 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	}
 }
 
-type testPeers struct {
-	peers []string
-}
-
-func (p *testPeers) GetPeers() ([]string, error) {
-	return p.peers, nil
-}
-
-func (p *testPeers) RegisterUpdatedPeersCallback(callback func()) {
-}
-
 func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
@@ -331,8 +320,8 @@ func TestPeerRouting(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:11001",
 			"http://localhost:11003",
 		},
@@ -464,8 +453,8 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 func TestEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:13001",
 			"http://localhost:13003",
 		},
@@ -580,8 +569,8 @@ func TestEventsEndpoint(t *testing.T) {
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:15001",
 			"http://localhost:15003",
 		},
@@ -843,8 +832,8 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		},
 	}
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:12001",
 			"http://localhost:12003",
 			"http://localhost:12005",
