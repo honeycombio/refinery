@@ -782,6 +782,7 @@ groups:
         description: >
           It is recommended that you create a separate team and key for
           Refinery telemetry.
+
           If this is blank, then Refinery will not set the Honeycomb-specific
           headers for OpenTelemetry, and your `APIHost` must be set to a
           valid OpenTelemetry endpoint.
