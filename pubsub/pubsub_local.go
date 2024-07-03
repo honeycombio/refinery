@@ -11,7 +11,7 @@ import (
 // not communicate with any external processes.
 // subs are individual channels for each subscription
 type LocalPubSub struct {
-	Config *config.Config `inject:""`
+	Config config.Config `inject:""`
 	topics map[string][]*LocalSubscription
 	mut    sync.RWMutex
 }

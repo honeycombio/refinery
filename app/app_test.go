@@ -114,8 +114,7 @@ func newStartedApp(
 
 	var err error
 	if peers == nil {
-		peers, err = peer.NewPeers(context.Background(), c, make(chan struct{}))
-		assert.NoError(t, err)
+		peers = &peer.FilePeers{Cfg: c}
 	}
 
 	a := App{}

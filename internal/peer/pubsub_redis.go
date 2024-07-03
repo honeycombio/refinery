@@ -71,7 +71,7 @@ func (p *peerCommand) marshal() string {
 	return string(p.action) + p.peer
 }
 
-type pubsubPeers struct {
+type RedisPubsubPeers struct {
 	Config config.Config   `inject:""`
 	PubSub pubsub.PubSub   `inject:""`
 	Clock  clockwork.Clock `inject:""`
@@ -83,21 +83,8 @@ type pubsubPeers struct {
 	done      chan struct{}
 }
 
-// NewPubsubPeers returns a peers collection backed by a pubsub system.
-// It expects members to publish their own presence to the pubsub system every so often
-// as determined by refreshCacheInterval. If they fail to do after peerEntryTimeout, they
-// will be removed from the list of peers.
-// They can also remove themselves from the list of peers by publishing an "unregister" message.
-// The register message is just "register address" and the unregister message is "unregister address".
-func newPubsubPeers(c config.Config) (Peers, error) {
-	return &pubsubPeers{
-		Config: c,
-		Clock:  clockwork.NewRealClock(),
-	}, nil
-}
-
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
-func (p *pubsubPeers) checkHash() {
+func (p *RedisPubsubPeers) checkHash() {
 	peers := p.peers.Members()
 	newhash := hashList(peers)
 	if newhash != p.hash {
@@ -108,7 +95,7 @@ func (p *pubsubPeers) checkHash() {
 	}
 }
 
-func (p *pubsubPeers) listen(msg string) {
+func (p *RedisPubsubPeers) listen(msg string) {
 	cmd := &peerCommand{}
 	if !cmd.unmarshal(msg) {
 		return
@@ -122,7 +109,7 @@ func (p *pubsubPeers) listen(msg string) {
 	p.checkHash()
 }
 
-func (p *pubsubPeers) Start() error {
+func (p *RedisPubsubPeers) Start() error {
 	p.peers = generics.NewSetWithTTL[string](peerEntryTimeout)
 	if p.PubSub == nil {
 		return errors.New("injected pubsub is nil")
@@ -157,7 +144,7 @@ func (p *pubsubPeers) Start() error {
 	return nil
 }
 
-func (p *pubsubPeers) Stop() error {
+func (p *RedisPubsubPeers) Stop() error {
 	// unregister ourselves
 	myaddr, err := publicAddr(p.Config)
 	if err != nil {
@@ -168,7 +155,7 @@ func (p *pubsubPeers) Stop() error {
 	return nil
 }
 
-func (p *pubsubPeers) GetPeers() ([]string, error) {
+func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 	// we never want to return an empty list of peers, so if the system returns
 	// an empty list, return a single peer (its name doesn't really matter).
 	// This keeps the sharding logic happy.
@@ -179,7 +166,7 @@ func (p *pubsubPeers) GetPeers() ([]string, error) {
 	return peers, nil
 }
 
-func (p *pubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
+func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
 	p.callbacks = append(p.callbacks, callback)
 }
 
