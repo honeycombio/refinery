@@ -1,7 +1,6 @@
 package sharder
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -30,8 +29,7 @@ func TestWhichShard(t *testing.T) {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	filePeers, err := peer.NewPeers(context.Background(), config, done)
-	assert.Equal(t, nil, err)
+	filePeers := &peer.FilePeers{Cfg: config}
 	sharder := DeterministicSharder{
 		Config: config,
 		Logger: &logger.NullLogger{},
@@ -73,8 +71,7 @@ func TestWhichShardAtEdge(t *testing.T) {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	filePeers, err := peer.NewPeers(context.Background(), config, done)
-	assert.Equal(t, nil, err)
+	filePeers := &peer.FilePeers{Cfg: config}
 	sharder := DeterministicSharder{
 		Config: config,
 		Logger: &logger.NullLogger{},
@@ -125,8 +122,7 @@ func BenchmarkShardBulk(b *testing.B) {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	filePeers, err := peer.NewPeers(context.Background(), config, done)
-	assert.Equal(b, nil, err)
+	filePeers := &peer.FilePeers{Cfg: config}
 	sharder := DeterministicSharder{
 		Config: config,
 		Logger: &logger.NullLogger{},
@@ -172,8 +168,7 @@ func TestShardBulk(t *testing.T) {
 				}
 				done := make(chan struct{})
 				defer close(done)
-				filePeers, err := peer.NewPeers(context.Background(), config, done)
-				assert.NoError(t, err, "NewPeers should succeed")
+				filePeers := &peer.FilePeers{Cfg: config}
 				sharder := DeterministicSharder{
 					Config: config,
 					Logger: &logger.NullLogger{},
@@ -245,8 +240,7 @@ func TestShardDrop(t *testing.T) {
 				}
 				done := make(chan struct{})
 				defer close(done)
-				filePeers, err := peer.NewPeers(context.Background(), config, done)
-				assert.Equal(t, nil, err)
+				filePeers := &peer.FilePeers{Cfg: config}
 				sharder := DeterministicSharder{
 					Config: config,
 					Logger: &logger.NullLogger{},
@@ -329,8 +323,7 @@ func TestShardAddHash(t *testing.T) {
 				}
 				done := make(chan struct{})
 				defer close(done)
-				filePeers, err := peer.NewPeers(context.Background(), config, done)
-				assert.Equal(t, nil, err)
+				filePeers := &peer.FilePeers{Cfg: config}
 				sharder := DeterministicSharder{
 					Config: config,
 					Logger: &logger.NullLogger{},
@@ -411,8 +404,7 @@ func BenchmarkDeterministicShard(b *testing.B) {
 			}
 			done := make(chan struct{})
 			defer close(done)
-			filePeers, err := peer.NewPeers(context.Background(), config, done)
-			assert.Equal(b, nil, err)
+			filePeers := &peer.FilePeers{Cfg: config}
 			sharder := DeterministicSharder{
 				Config: config,
 				Logger: &logger.NullLogger{},

@@ -86,17 +86,6 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	}
 }
 
-type testPeers struct {
-	peers []string
-}
-
-func (p *testPeers) GetPeers() ([]string, error) {
-	return p.peers, nil
-}
-
-func (p *testPeers) RegisterUpdatedPeersCallback(callback func()) {
-}
-
 func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
@@ -126,8 +115,7 @@ func newStartedApp(
 
 	var err error
 	if peers == nil {
-		peers, err = peer.NewPeers(context.Background(), c, make(chan struct{}))
-		assert.NoError(t, err)
+		peers = &peer.FilePeers{Cfg: c}
 	}
 
 	a := App{}
@@ -333,15 +321,14 @@ func TestPeerRouting(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:11001",
 			"http://localhost:11003",
 		},
 	}
 
 	var apps [2]*App
-	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		var graph inject.Graph
@@ -349,8 +336,6 @@ func TestPeerRouting(t *testing.T) {
 		senders[i] = &transmission.MockSender{}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
@@ -466,15 +451,14 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 func TestEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:13001",
 			"http://localhost:13003",
 		},
 	}
 
 	var apps [2]*App
-	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		var graph inject.Graph
@@ -482,8 +466,6 @@ func TestEventsEndpoint(t *testing.T) {
 		senders[i] = &transmission.MockSender{}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
@@ -582,15 +564,14 @@ func TestEventsEndpoint(t *testing.T) {
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:15001",
 			"http://localhost:15003",
 		},
 	}
 
 	var apps [2]*App
-	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		basePort := 15000 + (i * 2)
@@ -600,8 +581,6 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
 		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
 	// this traceID was chosen because it hashes to the appropriate shard for this
@@ -845,8 +824,8 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		},
 	}
 
-	peers := &testPeers{
-		peers: []string{
+	peers := &peer.MockPeers{
+		Peers: []string{
 			"http://localhost:12001",
 			"http://localhost:12003",
 			"http://localhost:12005",

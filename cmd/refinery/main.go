@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -29,6 +28,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/service/debug"
 	"github.com/honeycombio/refinery/sharder"
@@ -113,14 +113,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.GetPeerTimeout())
-	defer cancel()
-	done := make(chan struct{})
-	peers, err := peer.NewPeers(ctx, c, done)
-
+	var peers peer.Peers
+	var pubsubber pubsub.PubSub
+	ptype, err := c.GetPeerManagementType()
 	if err != nil {
-		fmt.Printf("unable to load peers: %+v\n", err)
-		os.Exit(1)
+		panic(err)
+	}
+	switch ptype {
+	case "file":
+		peers = &peer.FilePeers{Cfg: c}
+		// we know FilePeers doesn't need to be Started, so we can ask it how many peers we have.
+		// if we only have one, we can use the local pubsub implementation.
+		peerList, err := peers.GetPeers()
+		if err != nil {
+			panic(err)
+		}
+		if len(peerList) == 1 {
+			pubsubber = &pubsub.LocalPubSub{}
+		} else {
+			pubsubber = &pubsub.GoRedisPubSub{}
+		}
+	case "redis":
+		pubsubber = &pubsub.GoRedisPubSub{}
+		peers = &peer.RedisPubsubPeers{}
+	default:
+		// this should have been caught by validation
+		panic("invalid config option 'PeerManagement.Type'")
 	}
 
 	// upstreamTransport is the http transport used to send things on to Honeycomb
@@ -182,6 +200,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	done := make(chan struct{})
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
 	peerTransmission := transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer")
@@ -221,6 +240,7 @@ func main() {
 	objects := []*inject.Object{
 		{Value: c},
 		{Value: peers},
+		{Value: pubsubber},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
 		{Value: peerTransport, Name: "peerTransport"},
