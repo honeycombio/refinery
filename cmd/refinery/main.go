@@ -121,7 +121,7 @@ func main() {
 	}
 	switch ptype {
 	case "file":
-		peers = &peer.FilePeers{}
+		peers = &peer.FilePeers{Cfg: c}
 		// we know FilePeers doesn't need to be Started, so we can ask it how many peers we have.
 		// if we only have one, we can use the local pubsub implementation.
 		peerList, err := peers.GetPeers()
