@@ -327,7 +327,6 @@ func TestPeerRouting(t *testing.T) {
 	}
 
 	var apps [2]*App
-	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		var graph inject.Graph
@@ -335,8 +334,6 @@ func TestPeerRouting(t *testing.T) {
 		senders[i] = &transmission.MockSender{}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
@@ -460,7 +457,6 @@ func TestEventsEndpoint(t *testing.T) {
 	}
 
 	var apps [2]*App
-	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		var graph inject.Graph
@@ -468,8 +464,6 @@ func TestEventsEndpoint(t *testing.T) {
 		senders[i] = &transmission.MockSender{}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
@@ -576,7 +570,6 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	}
 
 	var apps [2]*App
-	var addrs [2]string
 	var senders [2]*transmission.MockSender
 	for i := range apps {
 		basePort := 15000 + (i * 2)
@@ -586,8 +579,6 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
 		defer startstop.Stop(graph.Objects(), nil)
-
-		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
 	// this traceID was chosen because it hashes to the appropriate shard for this
