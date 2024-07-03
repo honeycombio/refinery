@@ -110,7 +110,6 @@ func (p *RedisPubsubPeers) listen(msg string) {
 }
 
 func (p *RedisPubsubPeers) Start() error {
-	p.peers = generics.NewSetWithTTL[string](peerEntryTimeout)
 	if p.PubSub == nil {
 		return errors.New("injected pubsub is nil")
 	}
