@@ -822,7 +822,7 @@ groups:
         v1name: Type
         type: string
         valuetype: choice
-        choices: ["pubsub", "redis", "file"]
+        choices: ["redis", "file"]
         default: "file"
         reload: false
         validations:
@@ -831,16 +831,13 @@ groups:
         description: >
           Peer management is the mechanism by which Refinery locates its peers.
 
-          `file` means that Refinery gets its peer list from
-          the Peers list in this config file.
+          `file` means that Refinery gets its peer list from the Peers list in
+          this config file.
 
-          `pubsub` means that Refinery uses a Publish/Subscribe mechanism,
+          `redis` means that Refinery uses a Publish/Subscribe mechanism,
           implemented on Redis, to propagate peer lists much more quickly than
           the legacy mechanism. This is the recommended setting, especially for
           new installations.
-
-          `redis` is the legacy mechanism where Refinery keeps a peer list as
-          data within a Redis instance.
 
       - name: Identifier
         v1group: PeerManagement
@@ -972,6 +969,7 @@ groups:
         default: "refinery"
         example: "customPrefix"
         reload: false
+        lastversion: v2.6
         validations:
           - type: notempty
         summary: is a string used as a prefix for the keys in Redis while
@@ -981,8 +979,6 @@ groups:
           Refinery clusters or multiple applications want to share a single
           Redis instance. It may not be blank.
 
-          Only applies when using the `redis` peer management type.
-
       - name: Database
         v1group: PeerManagement
         v1name: Database
@@ -991,6 +987,7 @@ groups:
         default: 0
         example: 1
         reload: false
+        lastversion: v2.6
         validations:
           - type: minimum
             arg: 0
@@ -1002,8 +999,6 @@ groups:
           Redis instance storing the peer membership. It might be useful to set
           this in any situation where multiple Refinery clusters or multiple
           applications want to share a single Redis instance.
-
-          Only applies when using the `redis` peer management type.
 
       - name: UseTLS
         v1group: PeerManagement
