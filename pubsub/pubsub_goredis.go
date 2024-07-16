@@ -7,6 +7,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -21,11 +22,12 @@ import (
 // GoRedisPubSub is a PubSub implementation that uses Redis as the message broker
 // and the go-redis library to interact with Redis.
 type GoRedisPubSub struct {
-	Config config.Config `inject:""`
-	Logger logger.Logger `inject:""`
-	client redis.UniversalClient
-	subs   []*GoRedisSubscription
-	mut    sync.RWMutex
+	Config  config.Config   `inject:""`
+	Logger  logger.Logger   `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
+	client  redis.UniversalClient
+	subs    []*GoRedisSubscription
+	mut     sync.RWMutex
 }
 
 // Ensure that GoRedisPubSub implements PubSub
@@ -45,6 +47,9 @@ var _ Subscription = (*GoRedisSubscription)(nil)
 func (ps *GoRedisPubSub) Start() error {
 	options := &redis.UniversalOptions{}
 	authcode := ""
+
+	ps.Metrics.Register("redis_pubsub_published", "counter")
+	ps.Metrics.Register("redis_pubsub_received", "counter")
 
 	if ps.Config != nil {
 		host, err := ps.Config.GetRedisHost()
@@ -106,6 +111,7 @@ func (ps *GoRedisPubSub) Close() {
 }
 
 func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) error {
+	ps.Metrics.Count("redis_pubsub_published", 1)
 	return ps.client.Publish(ctx, topic, message).Err()
 }
 
@@ -133,6 +139,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback f
 				if msg == nil {
 					continue
 				}
+				ps.Metrics.Count("redis_pubsub_received", 1)
 				go sub.cb(msg.Payload)
 			}
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
@@ -72,9 +73,10 @@ func (p *peerCommand) marshal() string {
 }
 
 type RedisPubsubPeers struct {
-	Config config.Config   `inject:""`
-	PubSub pubsub.PubSub   `inject:""`
-	Clock  clockwork.Clock `inject:""`
+	Config  config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
+	PubSub  pubsub.PubSub   `inject:""`
+	Clock   clockwork.Clock `inject:""`
 
 	peers     *generics.SetWithTTL[string]
 	hash      uint64
@@ -93,6 +95,8 @@ func (p *RedisPubsubPeers) checkHash() {
 			go cb()
 		}
 	}
+	p.Metrics.Gauge("num_peers", float64(len(peers)))
+	p.Metrics.Gauge("peer_hash", float64(p.hash))
 }
 
 func (p *RedisPubsubPeers) listen(msg string) {
@@ -100,6 +104,7 @@ func (p *RedisPubsubPeers) listen(msg string) {
 	if !cmd.unmarshal(msg) {
 		return
 	}
+	p.Metrics.Count("peer_messages", 1)
 	switch cmd.action {
 	case Unregister:
 		p.peers.Remove(cmd.peer)
@@ -118,6 +123,10 @@ func (p *RedisPubsubPeers) Start() error {
 	p.peers = generics.NewSetWithTTL[string](peerEntryTimeout)
 	p.callbacks = make([]func(), 0)
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
+
+	p.Metrics.Register("num_peers", "gauge")
+	p.Metrics.Register("peer_hash", "gauge")
+	p.Metrics.Register("peer_messages", "counter")
 
 	myaddr, err := publicAddr(p.Config)
 	if err != nil {

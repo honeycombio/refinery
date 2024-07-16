@@ -12,6 +12,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
@@ -57,6 +58,7 @@ func newPeers(c config.Config) (Peers, error) {
 		{Value: c},
 		{Value: peers},
 		{Value: pubsubber},
+		{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		{Value: &logger.NullLogger{}},
 		{Value: clockwork.NewFakeClock()},
 	}
