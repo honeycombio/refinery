@@ -12,6 +12,7 @@ import (
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 var types = []string{
@@ -23,10 +24,12 @@ func newPubSub(typ string) pubsub.PubSub {
 	var ps pubsub.PubSub
 	m := &metrics.NullMetrics{}
 	m.Start()
+	tracer := noop.NewTracerProvider().Tracer("test")
 	switch typ {
 	case "goredis":
 		ps = &pubsub.GoRedisPubSub{
 			Metrics: m,
+			Tracer:  tracer,
 		}
 	case "local":
 		ps = &pubsub.LocalPubSub{
