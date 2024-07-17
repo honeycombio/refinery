@@ -8,6 +8,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,7 +30,7 @@ func TestWhichShard(t *testing.T) {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	filePeers := &peer.FilePeers{Cfg: config}
+	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 	sharder := DeterministicSharder{
 		Config: config,
 		Logger: &logger.NullLogger{},
@@ -71,7 +72,7 @@ func TestWhichShardAtEdge(t *testing.T) {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	filePeers := &peer.FilePeers{Cfg: config}
+	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 	sharder := DeterministicSharder{
 		Config: config,
 		Logger: &logger.NullLogger{},
@@ -122,7 +123,7 @@ func BenchmarkShardBulk(b *testing.B) {
 	}
 	done := make(chan struct{})
 	defer close(done)
-	filePeers := &peer.FilePeers{Cfg: config}
+	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 	sharder := DeterministicSharder{
 		Config: config,
 		Logger: &logger.NullLogger{},
@@ -168,7 +169,7 @@ func TestShardBulk(t *testing.T) {
 				}
 				done := make(chan struct{})
 				defer close(done)
-				filePeers := &peer.FilePeers{Cfg: config}
+				filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 				sharder := DeterministicSharder{
 					Config: config,
 					Logger: &logger.NullLogger{},
@@ -240,7 +241,7 @@ func TestShardDrop(t *testing.T) {
 				}
 				done := make(chan struct{})
 				defer close(done)
-				filePeers := &peer.FilePeers{Cfg: config}
+				filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 				sharder := DeterministicSharder{
 					Config: config,
 					Logger: &logger.NullLogger{},
@@ -323,7 +324,7 @@ func TestShardAddHash(t *testing.T) {
 				}
 				done := make(chan struct{})
 				defer close(done)
-				filePeers := &peer.FilePeers{Cfg: config}
+				filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 				sharder := DeterministicSharder{
 					Config: config,
 					Logger: &logger.NullLogger{},
@@ -404,7 +405,7 @@ func BenchmarkDeterministicShard(b *testing.B) {
 			}
 			done := make(chan struct{})
 			defer close(done)
-			filePeers := &peer.FilePeers{Cfg: config}
+			filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 			sharder := DeterministicSharder{
 				Config: config,
 				Logger: &logger.NullLogger{},

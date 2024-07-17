@@ -115,7 +115,7 @@ func newStartedApp(
 
 	var err error
 	if peers == nil {
-		peers = &peer.FilePeers{Cfg: c}
+		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
 	}
 
 	a := App{}
