@@ -19,11 +19,13 @@ import (
 	"github.com/facebookgo/startstop"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
+	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 
 	"github.com/honeycombio/refinery/app"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -121,8 +123,9 @@ func main() {
 	}
 	switch ptype {
 	case "file":
-		peers = &peer.FilePeers{Cfg: c}
-		// we know FilePeers doesn't need to be Started, so we can ask it how many peers we have.
+		// we want to use the file peers object to ask if we have only one peer, so we need to instantiate it
+		// with a dummy metrics object. we'll replace it with the real one later.
+		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
 		// if we only have one, we can use the local pubsub implementation.
 		peerList, err := peers.GetPeers()
 		if err != nil {
@@ -133,6 +136,8 @@ func main() {
 		} else {
 			pubsubber = &pubsub.GoRedisPubSub{}
 		}
+		// now erase the peers Metrics object so that it will get injected with the right one later
+		peers.(*peer.FilePeers).Metrics = nil
 	case "redis":
 		pubsubber = &pubsub.GoRedisPubSub{}
 		peers = &peer.RedisPubsubPeers{}
@@ -252,7 +257,7 @@ func main() {
 		{Value: promMetrics, Name: "promMetrics"},
 		{Value: oTelMetrics, Name: "otelMetrics"},
 		{Value: tracer, Name: "tracer"},
-
+		{Value: clockwork.NewRealClock()},
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
 		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
@@ -260,6 +265,7 @@ func main() {
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
+		{Value: health.Health{}},
 		{Value: &a},
 	}
 	err = g.Provide(objects...)

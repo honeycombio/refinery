@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
@@ -19,18 +21,14 @@ import (
 
 const (
 	// refreshCacheInterval is how frequently this host will re-register itself
-	// with Redis. This should happen about 3x during each timeout phase in order
-	// to allow multiple timeouts to fail and yet still keep the host in the mix.
-	// Falling out of Redis will result in re-hashing the host-trace affinity and
-	// will cause broken traces for those that fall on both sides of the rehashing.
-	// This is why it's important to ensure hosts stay in the pool.
+	// by publishing their address. This should happen about 3x during each
+	// timeout phase in order to allow multiple timeouts to fail and yet still
+	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
 
-	// peerEntryTimeout is how long redis will wait before expiring a peer that
-	// doesn't check in. The ratio of refresh to peer timeout should be 1/3. Redis
-	// timeouts are in seconds and entries can last up to 2 seconds longer than
-	// their expected timeout (in my load testing), so the lower bound for this
-	// timer should be ... 5sec?
+	// peerEntryTimeout is how long we will wait before expiring a peer that
+	// doesn't check in. The ratio of refresh to peer timeout should be about
+	// 1/3; we overshoot because we add a jitter to the refresh interval.
 	peerEntryTimeout = 10 * time.Second
 )
 
@@ -72,9 +70,10 @@ func (p *peerCommand) marshal() string {
 }
 
 type RedisPubsubPeers struct {
-	Config config.Config   `inject:""`
-	PubSub pubsub.PubSub   `inject:""`
-	Clock  clockwork.Clock `inject:""`
+	Config  config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
+	PubSub  pubsub.PubSub   `inject:""`
+	Clock   clockwork.Clock `inject:""`
 
 	peers     *generics.SetWithTTL[string]
 	hash      uint64
@@ -93,6 +92,8 @@ func (p *RedisPubsubPeers) checkHash() {
 			go cb()
 		}
 	}
+	p.Metrics.Gauge("num_peers", float64(len(peers)))
+	p.Metrics.Gauge("peer_hash", float64(p.hash))
 }
 
 func (p *RedisPubsubPeers) listen(msg string) {
@@ -100,6 +101,7 @@ func (p *RedisPubsubPeers) listen(msg string) {
 	if !cmd.unmarshal(msg) {
 		return
 	}
+	p.Metrics.Count("peer_messages", 1)
 	switch cmd.action {
 	case Unregister:
 		p.peers.Remove(cmd.peer)
@@ -119,6 +121,10 @@ func (p *RedisPubsubPeers) Start() error {
 	p.callbacks = make([]func(), 0)
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
 
+	p.Metrics.Register("num_peers", "gauge")
+	p.Metrics.Register("peer_hash", "gauge")
+	p.Metrics.Register("peer_messages", "counter")
+
 	myaddr, err := publicAddr(p.Config)
 	if err != nil {
 		return err
@@ -126,7 +132,11 @@ func (p *RedisPubsubPeers) Start() error {
 
 	// periodically refresh our presence in the list of peers, and update peers as they come in
 	go func() {
-		ticker := p.Clock.NewTicker(refreshCacheInterval)
+		// we want our refresh cache interval to vary from peer to peer so they
+		// don't always hit redis at the same time, so we add a random jitter of up
+		// to 20% of the interval
+		interval := refreshCacheInterval + time.Duration(rand.Int63n(int64(refreshCacheInterval/5)))
+		ticker := p.Clock.NewTicker(interval)
 		for {
 			select {
 			case <-p.done:

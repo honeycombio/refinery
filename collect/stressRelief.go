@@ -8,6 +8,7 @@ import (
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 )
@@ -59,6 +60,7 @@ type StressRelief struct {
 	minDuration     time.Duration
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
 	Logger          logger.Logger   `inject:""`
+	Health          health.Recorder `inject:""`
 	Done            chan struct{}
 
 	algorithms map[string]func(string, string) float64
@@ -66,9 +68,14 @@ type StressRelief struct {
 	lock       sync.RWMutex
 }
 
+const StressReliefHealthKey = "stress_relief"
+
 func (s *StressRelief) Start() error {
 	s.Logger.Debug().Logf("Starting StressRelief system")
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
+
+	// register with health
+	s.Health.Register(StressReliefHealthKey, 3*time.Second)
 
 	// We use an algorithms map so that we can name these algorithms, which makes it easier for several things:
 	// - change our mind about which algorithm to use
@@ -93,6 +100,7 @@ func (s *StressRelief) Start() error {
 	}
 
 	// start our monitor goroutine that periodically calls recalc
+	// and also reports that it's healthy
 	go func(s *StressRelief) {
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
@@ -100,7 +108,9 @@ func (s *StressRelief) Start() error {
 			select {
 			case <-tick.C:
 				s.Recalc()
+				s.Health.Ready(StressReliefHealthKey, true)
 			case <-s.Done:
+				s.Health.Unregister(StressReliefHealthKey)
 				s.Logger.Debug().Logf("Stopping StressRelief system")
 				return
 			}

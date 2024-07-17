@@ -17,10 +17,12 @@ import (
 	"github.com/facebookgo/inject"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -485,6 +487,8 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
+		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: clockwork.NewFakeClock()},
 	)
 	if err != nil {
 		t.Error(err)

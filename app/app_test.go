@@ -18,6 +18,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/jonboulle/clockwork"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,7 @@ import (
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -115,7 +117,7 @@ func newStartedApp(
 
 	var err error
 	if peers == nil {
-		peers = &peer.FilePeers{Cfg: c}
+		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
 	}
 
 	a := App{}
@@ -189,6 +191,8 @@ func newStartedApp(
 		&inject.Object{Value: metricsr, Name: "peerMetrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
+		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: clockwork.NewRealClock()},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)
@@ -273,9 +277,11 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for span to be sent.
-	time.Sleep(2 * a.Config.GetSendTickerValue())
-	events := sender.Events()
-	require.Len(t, events, 1)
+	var events []*transmission.Event
+	require.Eventually(t, func() bool {
+		events = sender.Events()
+		return len(events) == 1
+	}, 2*time.Second, 2*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])
