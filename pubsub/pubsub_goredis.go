@@ -144,6 +144,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 	ps.subs = append(ps.subs, sub)
 	ps.mut.Unlock()
 	go func() {
+		receiveRootCtx := context.Background()
 		redisch := sub.pubsub.Channel()
 		for {
 			select {
@@ -153,18 +154,18 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 				if msg == nil {
 					continue
 				}
-				ctx, span := otelutil.StartSpanMulti(context.Background(), ps.Tracer, "GoRedisPubSub.Receive", map[string]interface{}{
+				receiveCtx, span := otelutil.StartSpanMulti(receiveRootCtx, ps.Tracer, "GoRedisPubSub.Receive", map[string]interface{}{
 					"topic":              topic,
 					"message_queue_size": len(redisch),
 					"message":            msg.Payload,
 				})
 				ps.Metrics.Count("redis_pubsub_received", 1)
 
-				go func(ctx context.Context, span trace.Span) {
+				go func(cbCtx context.Context, span trace.Span) {
 					defer span.End()
 
-					sub.cb(ctx, msg.Payload)
-				}(ctx, span)
+					sub.cb(cbCtx, msg.Payload)
+				}(receiveCtx, span)
 			}
 		}
 	}()
