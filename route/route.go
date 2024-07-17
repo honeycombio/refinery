@@ -214,6 +214,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		IdleTimeout: r.Config.GetHTTPIdleTimeout(),
 	}
 
+	r.donech = make(chan struct{})
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
