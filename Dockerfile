@@ -15,7 +15,7 @@ ADD . .
 
 RUN CGO_ENABLED=0 \
     GOOS=linux \
-    GOARCH=amd64 \
+    GOARCH=arm64 \
     go build -ldflags "-X main.BuildID=${BUILD_ID}" \
     -o refinery \
     ./cmd/refinery
