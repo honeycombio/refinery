@@ -5,7 +5,10 @@ import (
 	"strings"
 	"sync"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/redis/go-redis/v9"
@@ -25,6 +28,7 @@ type GoRedisPubSub struct {
 	Config  config.Config   `inject:""`
 	Logger  logger.Logger   `inject:""`
 	Metrics metrics.Metrics `inject:"metrics"`
+	Tracer  trace.Tracer    `inject:"tracer"`
 	client  redis.UniversalClient
 	subs    []*GoRedisSubscription
 	mut     sync.RWMutex
@@ -36,7 +40,7 @@ var _ PubSub = (*GoRedisPubSub)(nil)
 type GoRedisSubscription struct {
 	topic  string
 	pubsub *redis.PubSub
-	cb     func(msg string)
+	cb     SubscriptionCallback
 	done   chan struct{}
 	once   sync.Once
 }
@@ -111,6 +115,13 @@ func (ps *GoRedisPubSub) Close() {
 }
 
 func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) error {
+	ctx, span := otelutil.StartSpanMulti(ctx, ps.Tracer, "GoRedisPubSub.Publish", map[string]interface{}{
+		"topic":   topic,
+		"message": message,
+	})
+
+	defer span.End()
+
 	ps.Metrics.Count("redis_pubsub_published", 1)
 	return ps.client.Publish(ctx, topic, message).Err()
 }
@@ -119,7 +130,10 @@ func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) err
 // whenever a message is received on that topic.
 // Note that the same topic is Subscribed to multiple times, this will incur a separate
 // connection to Redis for each Subscription.
-func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback func(string)) Subscription {
+func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription {
+	ctx, span := otelutil.StartSpanWith(ctx, ps.Tracer, "GoRedisPubSub.Subscribe", "topic", topic)
+	defer span.End()
+
 	sub := &GoRedisSubscription{
 		topic:  topic,
 		pubsub: ps.client.Subscribe(ctx, topic),
@@ -139,8 +153,18 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback f
 				if msg == nil {
 					continue
 				}
+				ctx, span := otelutil.StartSpanMulti(context.Background(), ps.Tracer, "GoRedisPubSub.Receive", map[string]interface{}{
+					"topic":              topic,
+					"message_queue_size": len(redisch),
+					"message":            msg.Payload,
+				})
 				ps.Metrics.Count("redis_pubsub_received", 1)
-				go sub.cb(msg.Payload)
+
+				go func(ctx context.Context, span trace.Span) {
+					defer span.End()
+
+					sub.cb(ctx, msg.Payload)
+				}(ctx, span)
 			}
 		}
 	}()

@@ -44,7 +44,7 @@ type pubsubListener struct {
 	msgs []string
 }
 
-func (l *pubsubListener) Listen(msg string) {
+func (l *pubsubListener) Listen(ctx context.Context, msg string) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	l.msgs = append(l.msgs, msg)
@@ -196,7 +196,7 @@ func TestPubSubLatency(t *testing.T) {
 				wg.Done()
 			}()
 
-			ps.Subscribe(ctx, "topic", func(msg string) {
+			ps.Subscribe(ctx, "topic", func(ctx context.Context, msg string) {
 				sent, err := strconv.Atoi(msg)
 				require.NoError(t, err)
 				rcvd := time.Now().UnixNano()

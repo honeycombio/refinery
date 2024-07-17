@@ -96,7 +96,7 @@ func (p *RedisPubsubPeers) checkHash() {
 	p.Metrics.Gauge("peer_hash", float64(p.hash))
 }
 
-func (p *RedisPubsubPeers) listen(msg string) {
+func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	cmd := &peerCommand{}
 	if !cmd.unmarshal(msg) {
 		return
