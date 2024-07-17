@@ -25,6 +25,7 @@ import (
 	"github.com/honeycombio/refinery/app"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -264,6 +265,7 @@ func main() {
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
+		{Value: health.Health{}},
 		{Value: &a},
 	}
 	err = g.Provide(objects...)
