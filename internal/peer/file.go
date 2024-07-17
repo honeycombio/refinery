@@ -1,9 +1,13 @@
 package peer
 
-import "github.com/honeycombio/refinery/config"
+import (
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
+)
 
 type FilePeers struct {
-	Cfg config.Config `inject:""`
+	Cfg     config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
 }
 
 func (p *FilePeers) GetPeers() ([]string, error) {
@@ -14,6 +18,7 @@ func (p *FilePeers) GetPeers() ([]string, error) {
 	if len(peers) == 0 {
 		peers = []string{"http://127.0.0.1:8081"}
 	}
+	p.Metrics.Gauge("num_file_peers", float64(len(peers)))
 	return peers, err
 }
 
@@ -24,6 +29,7 @@ func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
 }
 
 func (p *FilePeers) Start() error {
+	p.Metrics.Register("num_file_peers", "gauge")
 	return nil
 }
 

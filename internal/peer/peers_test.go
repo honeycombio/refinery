@@ -12,6 +12,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
@@ -29,7 +30,8 @@ func newPeers(c config.Config) (Peers, error) {
 	switch ptype {
 	case "file":
 		peers = &FilePeers{
-			Cfg: c,
+			Cfg:     c,
+			Metrics: &metrics.NullMetrics{},
 		}
 		// we know FilePeers doesn't need to be Started, so as long as we gave it a Cfg above,
 		// we can ask it how many peers we have.
@@ -57,6 +59,7 @@ func newPeers(c config.Config) (Peers, error) {
 		{Value: c},
 		{Value: peers},
 		{Value: pubsubber},
+		{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		{Value: &logger.NullLogger{}},
 		{Value: clockwork.NewFakeClock()},
 	}

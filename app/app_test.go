@@ -115,7 +115,7 @@ func newStartedApp(
 
 	var err error
 	if peers == nil {
-		peers = &peer.FilePeers{Cfg: c}
+		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
 	}
 
 	a := App{}
@@ -273,9 +273,11 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for span to be sent.
-	time.Sleep(2 * a.Config.GetSendTickerValue())
-	events := sender.Events()
-	require.Len(t, events, 1)
+	var events []*transmission.Event
+	require.Eventually(t, func() bool {
+		events = sender.Events()
+		return len(events) == 1
+	}, 2*time.Second, 2*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])

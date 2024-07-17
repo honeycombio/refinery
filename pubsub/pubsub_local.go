@@ -5,15 +5,17 @@ import (
 	"sync"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/metrics"
 )
 
 // LocalPubSub is a PubSub implementation that uses local channels to send messages; it does
 // not communicate with any external processes.
 // subs are individual channels for each subscription
 type LocalPubSub struct {
-	Config config.Config `inject:""`
-	topics map[string][]*LocalSubscription
-	mut    sync.RWMutex
+	Config  config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
+	topics  map[string][]*LocalSubscription
+	mut     sync.RWMutex
 }
 
 // Ensure that LocalPubSub implements PubSub
@@ -32,6 +34,8 @@ var _ Subscription = (*LocalSubscription)(nil)
 // Start initializes the LocalPubSub
 func (ps *LocalPubSub) Start() error {
 	ps.topics = make(map[string][]*LocalSubscription)
+	ps.Metrics.Register("local_pubsub_published", "counter")
+	ps.Metrics.Register("local_pubsub_received", "counter")
 	return nil
 }
 
@@ -62,6 +66,8 @@ func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error
 	ps.mut.Lock()
 	defer ps.mut.Unlock()
 	ps.ensureTopic(topic)
+	ps.Metrics.Count("local_pubsub_published", 1)
+	ps.Metrics.Count("local_pubsub_received", len(ps.topics[topic]))
 	for _, sub := range ps.topics[topic] {
 		// don't wait around for slow consumers
 		if sub.cb != nil {

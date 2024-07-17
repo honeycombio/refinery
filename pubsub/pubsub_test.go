@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,11 +21,17 @@ var types = []string{
 
 func newPubSub(typ string) pubsub.PubSub {
 	var ps pubsub.PubSub
+	m := &metrics.NullMetrics{}
+	m.Start()
 	switch typ {
 	case "goredis":
-		ps = &pubsub.GoRedisPubSub{}
+		ps = &pubsub.GoRedisPubSub{
+			Metrics: m,
+		}
 	case "local":
-		ps = &pubsub.LocalPubSub{}
+		ps = &pubsub.LocalPubSub{
+			Metrics: m,
+		}
 	default:
 		panic("unknown pubsub type")
 	}
