@@ -1384,7 +1384,7 @@ func TestIsRootSpan(t *testing.T) {
 			expected: true,
 		},
 		{
-			name: "non-root span - empty parent id",
+			name: "root span - empty parent id",
 			span: &types.Span{
 				Event: types.Event{
 					Data: map[string]interface{}{
@@ -1392,7 +1392,7 @@ func TestIsRootSpan(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		{
 			name: "non-root span - parent id",
