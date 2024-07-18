@@ -18,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 func newPeers(c config.Config) (Peers, error) {
@@ -46,7 +47,10 @@ func newPeers(c config.Config) (Peers, error) {
 			pubsubber = &pubsub.GoRedisPubSub{}
 		}
 	case "redis":
-		pubsubber = &pubsub.GoRedisPubSub{}
+		pubsubber = &pubsub.GoRedisPubSub{
+			Metrics: &metrics.NullMetrics{},
+			Tracer:  noop.NewTracerProvider().Tracer("test"),
+		}
 		peers = &RedisPubsubPeers{}
 	default:
 		// this should have been caught by validation

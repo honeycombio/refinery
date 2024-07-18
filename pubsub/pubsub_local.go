@@ -24,7 +24,7 @@ var _ PubSub = (*LocalPubSub)(nil)
 type LocalSubscription struct {
 	ps    *LocalPubSub
 	topic string
-	cb    func(string)
+	cb    SubscriptionCallback
 	mut   sync.RWMutex
 }
 
@@ -71,13 +71,13 @@ func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error
 	for _, sub := range ps.topics[topic] {
 		// don't wait around for slow consumers
 		if sub.cb != nil {
-			go sub.cb(message)
+			go sub.cb(ctx, message)
 		}
 	}
 	return nil
 }
 
-func (ps *LocalPubSub) Subscribe(ctx context.Context, topic string, callback func(msg string)) Subscription {
+func (ps *LocalPubSub) Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription {
 	ps.mut.Lock()
 	ps.ensureTopic(topic)
 	sub := &LocalSubscription{ps: ps, topic: topic, cb: callback}
