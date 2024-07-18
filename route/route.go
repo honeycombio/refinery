@@ -23,6 +23,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
+	healthserver "google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sharder"
@@ -59,6 +61,7 @@ const (
 type Router struct {
 	Config               config.Config         `inject:""`
 	Logger               logger.Logger         `inject:""`
+	Health               health.Reporter       `inject:""`
 	HTTPTransport        *http.Transport       `inject:"upstreamTransport"`
 	UpstreamTransmission transmit.Transmission `inject:"upstreamTransmission"`
 	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
@@ -84,8 +87,10 @@ type Router struct {
 	server     *http.Server
 	grpcServer *grpc.Server
 	doneWG     sync.WaitGroup
+	donech     chan struct{}
 
 	environmentCache *environmentCache
+	hsrv             *healthserver.Server
 }
 
 type BatchResponse struct {
@@ -152,8 +157,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.Use(r.requestLogger)
 	muxxer.Use(r.panicCatcher)
 
-	// answer a basic health check locally
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
+	muxxer.HandleFunc("/ready", r.ready).Name("local readiness")
 	muxxer.HandleFunc("/panic", r.panic).Name("intentional panic")
 	muxxer.HandleFunc("/version", r.version).Name("report version info")
 
@@ -209,6 +214,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		IdleTimeout: r.Config.GetHTTPIdleTimeout(),
 	}
 
+	r.donech = make(chan struct{})
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
@@ -236,7 +242,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 		logsServer := NewLogsServer(r)
 		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
 
-		grpc_health_v1.RegisterHealthServer(r.grpcServer, r)
+		// health check -- manufactured by grpc health package
+		r.hsrv = healthserver.NewServer()
+		grpc_health_v1.RegisterHealthServer(r.grpcServer, r.hsrv)
+		r.startGRPCHealthMonitor()
+
 		go r.grpcServer.Serve(l)
 	}
 
@@ -262,13 +272,35 @@ func (r *Router) Stop() error {
 	if r.grpcServer != nil {
 		r.grpcServer.GracefulStop()
 	}
+	close(r.donech)
 	r.doneWG.Wait()
 	return nil
 }
 
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
-	r.iopLogger.Debug().Logf("answered /x/alive check")
-	w.Write([]byte(`{"source":"refinery","alive":"yes"}`))
+	r.iopLogger.Debug().Logf("answered /alive check")
+
+	alive := r.Health.IsAlive()
+	r.Metrics.Gauge("is_alive", alive)
+	if !alive {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "no"}, "json")
+		return
+	}
+	r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "yes"}, "json")
+}
+
+func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
+	r.iopLogger.Debug().Logf("answered /ready check")
+
+	ready := r.Health.IsReady()
+	r.Metrics.Gauge("is_ready", ready)
+	if !ready {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "no"}, "json")
+		return
+	}
+	r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "yes"}, "json")
 }
 
 func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
@@ -945,6 +977,46 @@ func (r *Router) Watch(req *grpc_health_v1.HealthCheckRequest, server grpc_healt
 	return server.Send(&grpc_health_v1.HealthCheckResponse{
 		Status: grpc_health_v1.HealthCheckResponse_SERVING,
 	})
+}
+
+// startGRPCHealthMonitor starts a goroutine that periodically checks the health of the system and updates the grpc health server
+func (r *Router) startGRPCHealthMonitor() {
+	const (
+		system      = "" // empty string represents the generic health of the whole system (corresponds to "ready")
+		systemReady = "ready"
+		systemAlive = "alive"
+	)
+	r.iopLogger.Debug().Logf("running grpc health monitor")
+
+	setStatus := func(svc string, stat bool) {
+		if stat {
+			r.hsrv.SetServingStatus(svc, grpc_health_v1.HealthCheckResponse_SERVING)
+		} else {
+			r.hsrv.SetServingStatus(svc, grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+		}
+	}
+
+	r.doneWG.Add(1)
+	go func() {
+		defer r.doneWG.Done()
+		// TODO: Does this time need to be configurable?
+		watchticker := time.NewTicker(3 * time.Second)
+		defer watchticker.Stop()
+		for {
+			select {
+			case <-watchticker.C:
+				alive := r.Health.IsAlive()
+				ready := r.Health.IsReady()
+
+				// we can just update everything because the grpc health server will only send updates if the status changes
+				setStatus(systemReady, ready)
+				setStatus(systemAlive, alive)
+				setStatus(system, ready && alive)
+			case <-r.donech:
+				return
+			}
+		}
+	}()
 }
 
 // AddOTLPMuxxer adds muxxer for OTLP requests
