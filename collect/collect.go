@@ -601,7 +601,7 @@ func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
 	// check if the event has a parent id using the configured parent id field names
 	for _, parentIdFieldName := range i.Config.GetParentIdFieldNames() {
 		parentId := sp.Data[parentIdFieldName]
-		if _, ok := parentId.(string); ok {
+		if _, ok := parentId.(string); ok && parentId != "" {
 			return false
 		}
 	}
