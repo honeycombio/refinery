@@ -265,7 +265,7 @@ func main() {
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
-		{Value: health.Health{}},
+		{Value: &health.Health{}},
 		{Value: &a},
 	}
 	err = g.Provide(objects...)
