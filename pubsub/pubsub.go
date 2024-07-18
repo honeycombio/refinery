@@ -26,7 +26,7 @@ type PubSub interface {
 	// There is no unsubscribe method; close the subscription to stop receiving messages.
 	// The subscription only exists to provide a way to stop receiving messages; if you don't need to stop,
 	// you can ignore the return value.
-	Subscribe(ctx context.Context, topic string, callback func(msg string)) Subscription
+	Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription
 	// Close shuts down all topics and the pubsub connection.
 	Close()
 
@@ -35,6 +35,9 @@ type PubSub interface {
 	startstop.Starter
 	startstop.Stopper
 }
+
+// SubscriptionCallback is the function signature for a subscription callback.
+type SubscriptionCallback func(context.Context, string)
 
 type Subscription interface {
 	// Close stops the subscription which means the callback will no longer be called.

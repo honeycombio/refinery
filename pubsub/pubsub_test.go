@@ -12,6 +12,7 @@ import (
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 var types = []string{
@@ -23,10 +24,12 @@ func newPubSub(typ string) pubsub.PubSub {
 	var ps pubsub.PubSub
 	m := &metrics.NullMetrics{}
 	m.Start()
+	tracer := noop.NewTracerProvider().Tracer("test")
 	switch typ {
 	case "goredis":
 		ps = &pubsub.GoRedisPubSub{
 			Metrics: m,
+			Tracer:  tracer,
 		}
 	case "local":
 		ps = &pubsub.LocalPubSub{
@@ -44,7 +47,7 @@ type pubsubListener struct {
 	msgs []string
 }
 
-func (l *pubsubListener) Listen(msg string) {
+func (l *pubsubListener) Listen(ctx context.Context, msg string) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	l.msgs = append(l.msgs, msg)
@@ -196,7 +199,7 @@ func TestPubSubLatency(t *testing.T) {
 				wg.Done()
 			}()
 
-			ps.Subscribe(ctx, "topic", func(msg string) {
+			ps.Subscribe(ctx, "topic", func(ctx context.Context, msg string) {
 				sent, err := strconv.Atoi(msg)
 				require.NoError(t, err)
 				rcvd := time.Now().UnixNano()
