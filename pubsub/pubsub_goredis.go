@@ -161,11 +161,11 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 				})
 				ps.Metrics.Count("redis_pubsub_received", 1)
 
-				go func(cbCtx context.Context, span trace.Span) {
+				go func(cbCtx context.Context, span trace.Span, payload string) {
 					defer span.End()
 
-					sub.cb(cbCtx, msg.Payload)
-				}(receiveCtx, span)
+					sub.cb(cbCtx, payload)
+				}(receiveCtx, span, msg.Payload)
 			}
 		}
 	}()
