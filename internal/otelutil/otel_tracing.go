@@ -10,13 +10,10 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
-	"go.opentelemetry.io/contrib/propagators/b3"
-	"go.opentelemetry.io/contrib/propagators/ot"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	samplers "go.opentelemetry.io/otel/sdk/trace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -130,13 +127,6 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 	if err != nil {
 		log.Fatalf("failure configuring otel trace exporter: %v", err)
 	}
-
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		b3.New(b3.WithInjectEncoding(b3.B3MultipleHeader)),
-		propagation.Baggage{},
-		propagation.TraceContext{},
-		ot.OT{},
-	))
 
 	bsp := sdktrace.NewBatchSpanProcessor(exporter)
 	otel.SetTracerProvider(sdktrace.NewTracerProvider(
