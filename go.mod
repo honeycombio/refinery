@@ -34,12 +34,12 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/tidwall/gjson v1.17.1
 	github.com/vmihailenco/msgpack/v5 v5.4.1
-	go.opentelemetry.io/otel v1.28.0
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.28.0
-	go.opentelemetry.io/otel/metric v1.28.0
-	go.opentelemetry.io/otel/sdk v1.28.0
-	go.opentelemetry.io/otel/sdk/metric v1.28.0
-	go.opentelemetry.io/otel/trace v1.28.0
+	go.opentelemetry.io/otel v1.27.0
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.27.0
+	go.opentelemetry.io/otel/metric v1.27.0
+	go.opentelemetry.io/otel/sdk v1.27.0
+	go.opentelemetry.io/otel/sdk/metric v1.27.0
+	go.opentelemetry.io/otel/trace v1.27.0
 	go.opentelemetry.io/proto/otlp v1.3.1
 	go.uber.org/automaxprocs v1.5.3
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e
@@ -62,7 +62,6 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20240513124658-fba389f38bae // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
