@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,7 +24,11 @@ func Test_publicAddr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := publicAddr(tt.c)
+			peers := &RedisPubsubPeers{
+				Config: tt.c,
+				Logger: &logger.NullLogger{},
+			}
+			got, err := peers.publicAddr()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("publicAddr() error = %v, wantErr %v", err, tt.wantErr)
 				return
