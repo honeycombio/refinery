@@ -29,17 +29,25 @@ type StressReliever interface {
 	ShouldSampleDeterministically(traceID string) bool
 }
 
-type MockStressReliever struct{}
+var _ StressReliever = &MockStressReliever{}
 
-func (m *MockStressReliever) Start() error                                         { return nil }
-func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) error { return nil }
-func (m *MockStressReliever) Recalc()                                              {}
-func (m *MockStressReliever) Stressed() bool                                       { return false }
-func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
-	return 1, false, ""
+type MockStressReliever struct {
+	IsStressed              bool
+	SampleDeterministically bool
+	SampleRate              uint
+	ShouldKeep              bool
 }
 
-func (m *MockStressReliever) ShouldSampleDeterministically(traceID string) bool { return false }
+func (m *MockStressReliever) Start() error                                   { return nil }
+func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) {}
+func (m *MockStressReliever) Recalc() uint                                   { return 0 }
+func (m *MockStressReliever) Stressed() bool                                 { return m.IsStressed }
+func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	return m.SampleRate, m.ShouldKeep, "mock"
+}
+func (m *MockStressReliever) ShouldSampleDeterministically(traceID string) bool {
+	return m.SampleDeterministically
+}
 
 // hashSeed is a random value to seed the hash generator for the sampler.
 // We want it to be a constant that's the same across all nodes so that they
