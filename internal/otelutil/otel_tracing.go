@@ -2,16 +2,22 @@ package otelutil
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 
-	"github.com/honeycombio/otel-config-go/otelconfig"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"
 	samplers "go.opentelemetry.io/otel/sdk/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -82,10 +88,11 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
 	}
 
-	var protocol otelconfig.Protocol = otelconfig.ProtocolHTTPProto
-
 	cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
-	apihost := fmt.Sprintf("%s:443", cfg.APIHost)
+	apihost, err := url.Parse(fmt.Sprintf("%s:443", cfg.APIHost))
+	if err != nil {
+		log.Fatalf("failed to parse otel API host: %v", err)
+	}
 
 	sampleRate := cfg.SampleRate
 	if sampleRate < 1 {
@@ -106,17 +113,30 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		}
 	}
 
-	otelshutdown, err := otelconfig.ConfigureOpenTelemetry(
-		otelconfig.WithExporterProtocol(protocol),
-		otelconfig.WithServiceName(cfg.Dataset),
-		otelconfig.WithTracesExporterEndpoint(apihost),
-		otelconfig.WithMetricsEnabled(false),
-		otelconfig.WithTracesEnabled(true),
-		otelconfig.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
-		otelconfig.WithHeaders(headers),
+	tlsconfig := &tls.Config{}
+	secureOption := otlptracehttp.WithTLSClientConfig(tlsconfig)
+	exporter, err := otlptrace.New(
+		context.Background(),
+		otlptracehttp.NewClient(
+			secureOption,
+			otlptracehttp.WithEndpoint(apihost.Host),
+			otlptracehttp.WithHeaders(headers),
+			otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
+		),
 	)
 	if err != nil {
-		log.Fatalf("failure configuring otel: %v", err)
+		log.Fatalf("failure configuring otel trace exporter: %v", err)
 	}
-	return otel.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), otelshutdown
+
+	bsp := sdktrace.NewBatchSpanProcessor(exporter)
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(
+		sdktrace.WithSpanProcessor(bsp),
+		sdktrace.WithSampler(samplers.TraceIDRatioBased(sampleRatio)),
+		sdktrace.WithResource(resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceNameKey.String(cfg.Dataset))),
+	))
+
+	return otel.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {
+		bsp.Shutdown(context.Background())
+		exporter.Shutdown(context.Background())
+	}
 }
