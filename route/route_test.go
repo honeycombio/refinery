@@ -478,7 +478,6 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
-		&inject.Object{Value: clockwork.NewRealClock()},
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},

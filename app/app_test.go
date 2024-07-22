@@ -184,7 +184,6 @@ func newStartedApp(
 		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, metricsr, "peer"), Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
-		&inject.Object{Value: clockwork.NewRealClock()},
 		&inject.Object{Value: collector},
 		&inject.Object{Value: metricsr, Name: "metrics"},
 		&inject.Object{Value: metricsr, Name: "genericMetrics"},
