@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
-	"github.com/gofrs/uuid/v5"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -65,7 +64,7 @@ const (
 type stressReport struct {
 	key   string
 	level uint
-	// we need to expire these reports after a certian amount of time
+	// we need to expire these reports after a certain amount of time
 	timestamp time.Time
 }
 
@@ -76,6 +75,7 @@ type StressRelief struct {
 	Logger          logger.Logger   `inject:""`
 	Health          health.Recorder `inject:""`
 	PubSub          pubsub.PubSub   `inject:""`
+	Peer            peer.Peers      `inject:""`
 	Clock           clockwork.Clock `inject:""`
 	Done            chan struct{}
 
@@ -135,20 +135,12 @@ func (s *StressRelief) Start() error {
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
 	}
 
-	var hostID string
-	if hostname, err := os.Hostname(); err == nil {
-		hostID = hostname
-	}
-	if hostID == "" {
-		id, err := uuid.NewV7()
-		if err != nil {
-			return fmt.Errorf("failed to generate host ID: %s", err)
-		}
-
-		hostID = id.String()
+	var err error
+	s.hostID, err = s.Peer.GetInstanceID()
+	if err != nil {
+		return fmt.Errorf("failed to get host ID: %w", err)
 	}
 
-	s.hostID = hostID
 	s.stressLevels = make(map[string]stressReport)
 
 	// Subscribe to the stress relief topic so we can react to stress level
@@ -192,16 +184,12 @@ func (msg *stressReliefMessage) String() string {
 	return msg.peerID + ":" + fmt.Sprint(msg.level)
 }
 
-func unmarshalStressRelifMessage(msg string) (*stressReliefMessage, error) {
+func unmarshalStressReliefMessage(msg string) (*stressReliefMessage, error) {
 	if len(msg) < 2 {
 		return nil, fmt.Errorf("empty message")
 	}
 
-	parts := strings.SplitAfter(msg, ":")
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid message format")
-	}
-
+	parts := strings.SplitN(msg, ":", 2)
 	level, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return nil, err
@@ -211,7 +199,7 @@ func unmarshalStressRelifMessage(msg string) (*stressReliefMessage, error) {
 }
 
 func (s *StressRelief) onStressLevelUpdate(ctx context.Context, msg string) {
-	stressMsg, err := unmarshalStressRelifMessage(msg)
+	stressMsg, err := unmarshalStressReliefMessage(msg)
 	if err != nil {
 		s.Logger.Error().Logf("failed to unmarshal stress relief message: %s", err)
 		return
@@ -452,8 +440,7 @@ func (s *StressRelief) clusterStressLevel(localLevel uint) uint {
 	var total float64
 	availablePeers := 0
 	for _, report := range s.stressLevels {
-		// TODO: maybe make the expiration time configurable
-		if s.Clock.Since(report.timestamp) > 5*time.Second {
+		if s.Clock.Since(report.timestamp) > peer.PeerEntryTimeout {
 			delete(s.stressLevels, report.key)
 			continue
 		}

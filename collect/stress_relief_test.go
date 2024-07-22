@@ -10,6 +10,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -35,7 +36,6 @@ func TestStressRelief_Monitor(t *testing.T) {
 		DeactivationLevel:         50,
 		SamplingRate:              2,
 		MinimumActivationDuration: config.Duration(5 * time.Second),
-		MinimumStartupDuration:    config.Duration(time.Second),
 	}
 
 	// On startup, the stress relief should not be active
@@ -90,7 +90,6 @@ func TestStressRelief_Peer(t *testing.T) {
 		DeactivationLevel:         65,
 		SamplingRate:              2,
 		MinimumActivationDuration: config.Duration(5 * time.Second),
-		MinimumStartupDuration:    config.Duration(time.Second),
 	}
 
 	// On startup, the stress relief should not be active
@@ -194,16 +193,21 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 	}
 	require.NoError(t, healthReporter.Start())
 
+	peer := &peer.MockPeers{}
+	require.NoError(t, peer.Start())
+
 	sr := &StressRelief{
 		Clock:           clock,
 		Logger:          logger,
 		RefineryMetrics: metric,
 		PubSub:          channel,
 		Health:          healthReporter,
+		Peer:            peer,
 	}
 
 	return sr, func() {
 		require.NoError(t, healthReporter.Stop())
+		require.NoError(t, peer.Stop())
 		require.NoError(t, channel.Stop())
 	}
 }

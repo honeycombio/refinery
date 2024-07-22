@@ -20,16 +20,16 @@ import (
 )
 
 const (
+	// PeerEntryTimeout is how long we will wait before expiring a peer that
+	// doesn't check in. The ratio of refresh to peer timeout should be about
+	// 1/3; we overshoot because we add a jitter to the refresh interval.
+	PeerEntryTimeout = 10 * time.Second
+
 	// refreshCacheInterval is how frequently this host will re-register itself
 	// by publishing their address. This should happen about 3x during each
 	// timeout phase in order to allow multiple timeouts to fail and yet still
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
-
-	// peerEntryTimeout is how long we will wait before expiring a peer that
-	// doesn't check in. The ratio of refresh to peer timeout should be about
-	// 1/3; we overshoot because we add a jitter to the refresh interval.
-	peerEntryTimeout = 10 * time.Second
 )
 
 type peerAction string
@@ -117,7 +117,7 @@ func (p *RedisPubsubPeers) Start() error {
 	}
 
 	p.done = make(chan struct{})
-	p.peers = generics.NewSetWithTTL[string](peerEntryTimeout)
+	p.peers = generics.NewSetWithTTL[string](PeerEntryTimeout)
 	p.callbacks = make([]func(), 0)
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
 
@@ -173,6 +173,10 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 		peers = []string{"http://127.0.0.1:8081"}
 	}
 	return peers, nil
+}
+
+func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
+	return getIdentifierFromInterface(p.Config)
 }
 
 func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
