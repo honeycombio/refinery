@@ -64,7 +64,7 @@ type stressReport struct {
 type StressRelief struct {
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
 	Logger          logger.Logger   `inject:""`
-	Health          health.Health   `inject:""`
+	Health          health.Recorder `inject:""`
 	PubSub          pubsub.PubSub   `inject:""`
 	Clock           clockwork.Clock `inject:""`
 	Done            chan struct{}
