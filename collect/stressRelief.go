@@ -187,7 +187,7 @@ func unmarshalStressRelifMessage(msg string) (*stressReliefMessage, error) {
 		return nil, fmt.Errorf("invalid message format")
 	}
 
-	level, err := strconv.ParseUint(parts[1], 10, 64)
+	level, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return nil, err
 	}
