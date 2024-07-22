@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -68,7 +69,12 @@ func TestStressRelief_Monitor(t *testing.T) {
 // based on the stress level of a peer.
 func TestStressRelief_Peer(t *testing.T) {
 	clock := clockwork.NewFakeClock()
-	channel := &pubsub.LocalPubSub{}
+	metric := &metrics.MockMetrics{}
+	metric.Start()
+	channel := &pubsub.LocalPubSub{
+		Metrics: metric,
+	}
+	require.NoError(t, channel.Start())
 
 	sr, stop := newStressRelief(t, clock, channel)
 	defer stop()
@@ -175,17 +181,29 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 	}
 
 	if channel == nil {
-		channel = &pubsub.LocalPubSub{}
+		channel = &pubsub.LocalPubSub{
+			Metrics: metric,
+		}
 	}
 	require.NoError(t, channel.Start())
+	logger := &logger.NullLogger{}
+	healthReporter := &health.Health{
+		Clock:   clock,
+		Metrics: metric,
+		Logger:  logger,
+	}
+	require.NoError(t, healthReporter.Start())
+
 	sr := &StressRelief{
 		Clock:           clock,
-		Logger:          &logger.NullLogger{},
+		Logger:          logger,
 		RefineryMetrics: metric,
 		PubSub:          channel,
+		Health:          healthReporter,
 	}
 
 	return sr, func() {
+		require.NoError(t, healthReporter.Stop())
 		require.NoError(t, channel.Stop())
 	}
 }
