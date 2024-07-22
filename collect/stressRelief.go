@@ -22,8 +22,8 @@ import (
 
 type StressReliever interface {
 	Start() error
-	UpdateFromConfig(cfg config.StressReliefConfig) error
-	Recalc()
+	UpdateFromConfig(cfg config.StressReliefConfig)
+	Recalc() uint
 	Stressed() bool
 	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
 	ShouldSampleDeterministically(traceID string) bool
@@ -61,6 +61,8 @@ type stressReport struct {
 	timestamp time.Time
 }
 
+var _ StressReliever = &StressRelief{}
+
 type StressRelief struct {
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
 	Logger          logger.Logger   `inject:""`
@@ -97,6 +99,11 @@ func (s *StressRelief) Start() error {
 
 	// register with health
 	s.Health.Register(StressReliefHealthKey, 3*time.Second)
+
+	// register stress level metrics
+	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
+	s.RefineryMetrics.Register("individual_stress_level", "gauge")
+	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
 	// We use an algorithms map so that we can name these algorithms, which makes it easier for several things:
 	// - change our mind about which algorithm to use
@@ -149,7 +156,7 @@ func (s *StressRelief) Start() error {
 			select {
 			case <-tick.C:
 				currentLevel := s.Recalc()
-				err := s.PubSub.Publish(context.Background(), "refinery-stress-relief", newStressReliefMessage(currentLevel, "local").String())
+				err := s.PubSub.Publish(context.Background(), "refinery-stress-relief", newStressReliefMessage(currentLevel, s.hostID).String())
 				if err != nil {
 					s.Logger.Error().Logf("failed to publish stress level: %s", err)
 				}
