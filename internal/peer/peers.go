@@ -7,6 +7,7 @@ import (
 // Peers holds the collection of peers for the cluster
 type Peers interface {
 	GetPeers() ([]string, error)
+	GetInstanceID() (string, error)
 	RegisterUpdatedPeersCallback(callback func())
 	// make it injectable
 	startstop.Starter

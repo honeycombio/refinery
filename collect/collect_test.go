@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/facebookgo/inject"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -746,6 +747,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
+		&inject.Object{Value: clockwork.NewRealClock()},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
