@@ -197,7 +197,7 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 }
 
 func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
-	return getIdentifierFromInterface(p.Config)
+	return p.getIdentifierFromInterface()
 }
 
 func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
