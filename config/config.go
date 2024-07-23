@@ -10,18 +10,24 @@ const (
 
 // Config defines the interface the rest of the code uses to get items from the
 // config. There are different implementations of the config using different
-// backends to store the config. FileConfig is the default and uses a
-// TOML-formatted config file. RedisPeerFileConfig uses a redis cluster to store
-// the list of peers and then falls back to a filesystem config file for all
-// other config elements.
+// backends to store the config.
 
 type Config interface {
 	// RegisterReloadCallback takes a name and a function that will be called
-	// when the configuration is reloaded. This will happen infrequently. If
+	// whenever the configuration is reloaded. This will happen infrequently. If
 	// consumers of configuration set config values on startup, they should
 	// check their values haven't changed and re-start anything that needs
-	// restarting with the new values.
+	// restarting with the new values. The callback is passed the two hashes
+	// for config and rules so that the caller can decide if they need to
+	// reconfigure anything.
 	RegisterReloadCallback(callback ConfigReloadCallback)
+
+	// Reload forces the config to attempt to reload its values. If the config
+	// checksum has changed, the reload callbacks will be called.
+	Reload()
+
+	// GetHashes returns the current config and rule hashes
+	GetHashes() (cfg string, rules string)
 
 	// GetListenAddr returns the address and port on which to listen for
 	// incoming events

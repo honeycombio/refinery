@@ -508,7 +508,7 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.Mux.Lock()
 	conf.GetCollectionConfigVal.CacheCapacity = 2
 	conf.Mux.Unlock()
-	conf.ReloadConfig()
+	conf.Reload()
 
 	assert.Eventually(t, func() bool {
 		coll.mutex.RLock()
@@ -525,7 +525,7 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.Mux.Lock()
 	conf.GetCollectionConfigVal.CacheCapacity = 1
 	conf.Mux.Unlock()
-	conf.ReloadConfig()
+	conf.Reload()
 
 	expectedEvents = 2
 	assert.Eventually(t, check, 60*wait, wait, "expected another trace evicted and sent")
@@ -574,7 +574,7 @@ func TestSampleConfigReload(t *testing.T) {
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
-	conf.ReloadConfig()
+	conf.Reload()
 
 	assert.Eventually(t, func() bool {
 		coll.mutex.Lock()

@@ -45,7 +45,7 @@ func TestWhichShard(t *testing.T) {
 		"should select a peer for a trace")
 
 	config.GetPeersVal = []string{}
-	config.ReloadConfig()
+	config.Reload()
 	assert.Equal(t, shard.GetAddress(), sharder.WhichShard(traceID).GetAddress(),
 		"should select the same peer if peer list becomes empty")
 }
@@ -87,7 +87,7 @@ func TestWhichShardAtEdge(t *testing.T) {
 		"should select a peer for a trace")
 
 	config.GetPeersVal = []string{}
-	config.ReloadConfig()
+	config.Reload()
 	assert.Equal(t, shard.GetAddress(), sharder.WhichShard(traceID).GetAddress(),
 		"should select the same peer if peer list becomes empty")
 }

@@ -430,6 +430,42 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	return cfg, err
 }
 
+// Reload attempts to reload the configuration; if it has changed, it stores the
+// new data and calls the reload callbacks.
+func (f *fileConfig) Reload() {
+	// reread the configs
+	cfg, err := newFileConfig(f.opts)
+	if err != nil {
+		f.errorCallback(err)
+		return
+	}
+
+	// if nothing's changed, we're fine
+	if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
+		return
+	}
+
+	// otherwise, update our state and call the callbacks
+	f.mux.Lock()
+	f.mainConfig = cfg.mainConfig
+	f.mainHash = cfg.mainHash
+	f.rulesConfig = cfg.rulesConfig
+	f.rulesHash = cfg.rulesHash
+	f.mux.Unlock() // can't defer -- we don't want callbacks to deadlock
+
+	for _, cb := range f.callbacks {
+		cb(cfg.mainHash, cfg.rulesHash)
+	}
+}
+
+// GetHashes returns the current hash values for the main and rules configs.
+func (f *fileConfig) GetHashes() (cfg string, rules string) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainHash, f.rulesHash
+}
+
 func (f *fileConfig) monitor() {
 	f.done = make(chan struct{})
 	// adjust the time by +/- 10% to avoid everyone reloading at the same time
@@ -440,29 +476,7 @@ func (f *fileConfig) monitor() {
 		case <-f.done:
 			return
 		case <-f.ticker.C:
-			// reread the configs
-			cfg, err := newFileConfig(f.opts)
-			if err != nil {
-				f.errorCallback(err)
-				continue
-			}
-
-			// if nothing's changed, we're fine
-			if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
-				continue
-			}
-
-			// otherwise, update our state and call the callbacks
-			f.mux.Lock()
-			f.mainConfig = cfg.mainConfig
-			f.mainHash = cfg.mainHash
-			f.rulesConfig = cfg.rulesConfig
-			f.rulesHash = cfg.rulesHash
-			f.mux.Unlock() // can't defer -- routine never ends, and callbacks will deadlock
-
-			for _, cb := range f.callbacks {
-				cb(cfg.mainHash, cfg.rulesHash)
-			}
+			f.Reload()
 		}
 	}
 }

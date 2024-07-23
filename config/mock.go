@@ -91,11 +91,13 @@ type MockConfig struct {
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
 	CfgMetadata                      []ConfigMetadata
+	CfgHash                          string
+	RulesHash                        string
 
 	Mux sync.RWMutex
 }
 
-func (m *MockConfig) ReloadConfig() {
+func (m *MockConfig) Reload() {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
@@ -108,6 +110,13 @@ func (m *MockConfig) RegisterReloadCallback(callback ConfigReloadCallback) {
 	m.Mux.Lock()
 	m.Callbacks = append(m.Callbacks, callback)
 	m.Mux.Unlock()
+}
+
+func (m *MockConfig) GetHashes() (string, string) {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.CfgHash, m.RulesHash
 }
 
 func (m *MockConfig) IsAPIKeyValid(key string) bool {
