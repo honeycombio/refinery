@@ -77,7 +77,6 @@ update-licenses: install-tools
 
 .PHONY: verify-licenses
 verify-licenses:
-	rm -rf temp; \
 	go-licenses save --save_path temp ./cmd/refinery; \
     if diff temp LICENSES > /dev/null; then \
       echo "Passed"; \
