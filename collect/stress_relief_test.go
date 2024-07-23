@@ -109,7 +109,7 @@ func TestStressRelief_Peer(t *testing.T) {
 			level:  90,
 			peerID: "peer1",
 		}
-		require.NoError(t, channel.Publish(context.Background(), "refinery-stress-level", msg.String()))
+		require.NoError(t, channel.Publish(context.Background(), stressReliefTopic, msg.String()))
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
@@ -121,7 +121,7 @@ func TestStressRelief_Peer(t *testing.T) {
 			level:  10,
 			peerID: "peer1",
 		}
-		require.NoError(t, channel.Publish(context.Background(), "refinery-stress-level", msg.String()))
+		require.NoError(t, channel.Publish(context.Background(), stressReliefTopic, msg.String()))
 
 		clock.Advance(time.Second * 1)
 		return !sr.Stressed()
