@@ -19,6 +19,8 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+const stressReliefTopic = "refinery-stress-relief"
+
 type StressReliever interface {
 	Start() error
 	UpdateFromConfig(cfg config.StressReliefConfig)
@@ -145,7 +147,7 @@ func (s *StressRelief) Start() error {
 
 	// Subscribe to the stress relief topic so we can react to stress level
 	// changes in the cluster.
-	s.PubSub.Subscribe(context.Background(), "refinery-stress-level", s.onStressLevelUpdate)
+	s.PubSub.Subscribe(context.Background(), stressReliefTopic, s.onStressLevelUpdate)
 
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
@@ -156,7 +158,7 @@ func (s *StressRelief) Start() error {
 			select {
 			case <-tick.C:
 				currentLevel := s.Recalc()
-				err := s.PubSub.Publish(context.Background(), "refinery-stress-relief", newStressReliefMessage(currentLevel, s.hostID).String())
+				err := s.PubSub.Publish(context.Background(), stressReliefTopic, newStressReliefMessage(currentLevel, s.hostID).String())
 				if err != nil {
 					s.Logger.Error().Logf("failed to publish stress level: %s", err)
 				}
