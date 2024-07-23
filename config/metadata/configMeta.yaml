@@ -1655,3 +1655,25 @@ groups:
         summary: is the minimum time that Stress Relief will stay enabled once activated.
         description: >
           This setting helps to prevent oscillations.
+
+      - name: MinimumStartupDuration
+        v1group: StressRelief
+        v1name: MinimumStartupDuration
+        type: duration
+        valuetype: nondefault
+        lastversion: v2.6
+        default: 3s
+        reload: true
+        summary: is the minimum time that Stress Relief will stay enabled.
+        description: >
+          This setting is used when switching into Monitor mode.
+
+          When Stress Relief is enabled, it will start up in stressed mode
+          for at least this set duration of time to try to make sure that
+          Refinery can handle the load before it begins processing it in
+          earnest. This is to help address the problem of trying to bring a new
+          node into an already-overloaded cluster.
+
+          If this duration is `0`, then Refinery will not start in stressed
+          mode, which will provide faster startup at the possible cost of
+          startup instability.
