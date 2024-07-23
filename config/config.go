@@ -134,6 +134,9 @@ type Config interface {
 	// GetAllSamplerRules returns all rules in a single map, including the default rules
 	GetAllSamplerRules() (*V2SamplerConfig, error)
 
+	// GetGeneralConfig returns the config specific to General
+	GetGeneralConfig() GeneralConfig
+
 	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
 	GetLegacyMetricsConfig() LegacyMetricsConfig
 

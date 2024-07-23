@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -40,8 +39,6 @@ type fileConfig struct {
 	opts          *CmdEnv
 	callbacks     []ConfigReloadCallback
 	errorCallback func(error)
-	done          chan struct{}
-	ticker        *time.Ticker
 	mux           sync.RWMutex
 	lastLoadTime  time.Time
 }
@@ -423,10 +420,6 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	cfg.callbacks = make([]ConfigReloadCallback, 0)
 	cfg.errorCallback = errorCallback
 
-	if cfg.mainConfig.General.ConfigReloadInterval > 0 {
-		go cfg.monitor()
-	}
-
 	return cfg, err
 }
 
@@ -464,32 +457,6 @@ func (f *fileConfig) GetHashes() (cfg string, rules string) {
 	defer f.mux.RUnlock()
 
 	return f.mainHash, f.rulesHash
-}
-
-func (f *fileConfig) monitor() {
-	f.done = make(chan struct{})
-	// adjust the time by +/- 10% to avoid everyone reloading at the same time
-	reload := time.Duration(float64(f.mainConfig.General.ConfigReloadInterval) * (0.9 + 0.2*rand.Float64()))
-	f.ticker = time.NewTicker(time.Duration(reload))
-	for {
-		select {
-		case <-f.done:
-			return
-		case <-f.ticker.C:
-			f.Reload()
-		}
-	}
-}
-
-// Stop halts the monitor goroutine
-func (f *fileConfig) Stop() {
-	if f.ticker != nil {
-		f.ticker.Stop()
-	}
-	if f.done != nil {
-		close(f.done)
-		f.done = nil
-	}
 }
 
 func (f *fileConfig) RegisterReloadCallback(cb ConfigReloadCallback) {
@@ -866,6 +833,13 @@ func (f *fileConfig) GetDatasetPrefix() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.General.DatasetPrefix
+}
+
+func (f *fileConfig) GetGeneralConfig() GeneralConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.General
 }
 
 func (f *fileConfig) GetQueryAuthToken() string {

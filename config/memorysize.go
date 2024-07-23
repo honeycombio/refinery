@@ -25,7 +25,7 @@ const (
 	Pi = 1024 * Ti
 	Ei = 1024 * Pi
 
-	invalidSizeError = "invalid size: %s"
+	InvalidSizeError = "invalid size: %s"
 )
 
 var unitSlice = []uint64{
@@ -116,7 +116,7 @@ func (m *MemorySize) UnmarshalText(text []byte) error {
 	r := regexp.MustCompile(`^\s*(?P<number>[0-9._]+)(?P<unit>[a-zA-Z]*)\s*$`)
 	matches := r.FindStringSubmatch(strings.ToLower(txt))
 	if matches == nil {
-		return fmt.Errorf(invalidSizeError, txt)
+		return fmt.Errorf(InvalidSizeError, txt)
 	}
 
 	var number float64
@@ -131,7 +131,7 @@ func (m *MemorySize) UnmarshalText(text []byte) error {
 		case "number":
 			number, err = strconv.ParseFloat(matches[i], 64)
 			if err != nil {
-				return fmt.Errorf(invalidSizeError, text)
+				return fmt.Errorf(InvalidSizeError, text)
 			}
 		case "unit":
 			unit = matches[i]
@@ -146,7 +146,7 @@ func (m *MemorySize) UnmarshalText(text []byte) error {
 	} else {
 		scalar, ok := unitMap[unit]
 		if !ok {
-			return fmt.Errorf(invalidSizeError, text)
+			return fmt.Errorf(InvalidSizeError, text)
 		}
 		*m = MemorySize(number * float64(scalar))
 	}

@@ -1,23 +1,23 @@
-package config
+package config_test
 
 import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
 
-func getConfig(args []string) (Config, error) {
-	opts, err := NewCmdEnvOptions(args)
+func getConfig(args []string) (config.Config, error) {
+	opts, err := config.NewCmdEnvOptions(args)
 	if err != nil {
 		return nil, err
 	}
-	return NewConfig(opts, func(err error) {})
+	return config.NewConfig(opts, func(err error) {})
 }
 
 // creates two temporary yaml files from the strings passed in and returns their filenames
@@ -195,94 +195,6 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	}
 }
 
-func TestReload(t *testing.T) {
-	cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
-	rm := makeYAML("ConfigVersion", 2)
-	config, rules := createTempConfigs(t, cm, rm)
-	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
-	assert.NoError(t, err)
-
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
-		t.Error("received", d, "expected", "0.0.0.0:8080")
-	}
-
-	wg := &sync.WaitGroup{}
-
-	ch := make(chan interface{}, 1)
-
-	c.RegisterReloadCallback(func(cfgHash, ruleHash string) {
-		close(ch)
-	})
-
-	// Hey race detector, we're doing some concurrent config reads.
-	// That's cool, right?
-	go func() {
-		tick := time.NewTicker(time.Millisecond)
-		defer tick.Stop()
-		for {
-			c.GetListenAddr()
-			select {
-			case <-ch:
-				return
-			case <-tick.C:
-			}
-		}
-	}()
-
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ch:
-		case <-time.After(5 * time.Second):
-			t.Error("No callback")
-		}
-	}()
-
-	if file, err := os.OpenFile(config, os.O_RDWR, 0644); err == nil {
-		cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:9000")
-		file.WriteString(cm)
-		file.Close()
-	}
-
-	wg.Wait()
-
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
-		t.Error("received", d, "expected", "0.0.0.0:9000")
-	}
-
-}
-
-func TestReloadDisabled(t *testing.T) {
-	cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(0*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
-	rm := makeYAML("ConfigVersion", 2)
-	config, rules := createTempConfigs(t, cm, rm)
-	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
-	assert.NoError(t, err)
-
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
-		t.Error("received", d, "expected", "0.0.0.0:8080")
-	}
-
-	if file, err := os.OpenFile(config, os.O_RDWR, 0644); err == nil {
-		// Since we disabled reload checking this should not change anything
-		cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(0*time.Second), "Network.ListenAddr", "0.0.0.0:9000")
-		file.WriteString(cm)
-		file.Close()
-	}
-
-	time.Sleep(5 * time.Second)
-
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
-		t.Error("received", d, "expected", "0.0.0.0:8080")
-	}
-}
-
 func TestReadDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
@@ -321,7 +233,7 @@ func TestReadDefaults(t *testing.T) {
 
 	d, name, err := c.GetSamplerConfigForDestName("dataset-doesnt-exist")
 	assert.NoError(t, err)
-	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)
 }
 
@@ -331,21 +243,21 @@ func TestReadRulesConfig(t *testing.T) {
 
 	d, name, err := c.GetSamplerConfigForDestName("doesnt-exist")
 	assert.NoError(t, err)
-	assert.IsType(t, &DeterministicSamplerConfig{}, d)
+	assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)
 
 	d, name, err = c.GetSamplerConfigForDestName("env1")
 	assert.NoError(t, err)
-	assert.IsType(t, &DynamicSamplerConfig{}, d)
+	assert.IsType(t, &config.DynamicSamplerConfig{}, d)
 	assert.Equal(t, "DynamicSampler", name)
 
 	d, name, err = c.GetSamplerConfigForDestName("env4")
 	assert.NoError(t, err)
 	switch r := d.(type) {
-	case *RulesBasedSamplerConfig:
+	case *config.RulesBasedSamplerConfig:
 		assert.Len(t, r.Rules, 6)
 
-		var rule *RulesBasedSamplerRule
+		var rule *config.RulesBasedSamplerRule
 
 		rule = r.Rules[0]
 		assert.True(t, rule.Drop)
@@ -445,13 +357,13 @@ func TestDryRun(t *testing.T) {
 func TestMaxAlloc(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.MaxAlloc", 17179869184)
 	rm := makeYAML("ConfigVersion", 2)
-	config, rules := createTempConfigs(t, cm, rm)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	expected := MemorySize(16 * 1024 * 1024 * 1024)
+	expected := config.MemorySize(16 * 1024 * 1024 * 1024)
 	inMemConfig, err := c.GetCollectionConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
@@ -508,13 +420,13 @@ func TestPeerAndIncomingQueueSize(t *testing.T) {
 func TestAvailableMemoryCmdLine(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.AvailableMemory", 2_000_000_000)
 	rm := makeYAML("ConfigVersion", 2)
-	config, rules := createTempConfigs(t, cm, rm)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules, "--available-memory", "2.5Gib"})
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules, "--available-memory", "2.5Gib"})
 	assert.NoError(t, err)
 
-	expected := MemorySize(2*1024*1024*1024 + 512*1024*1024)
+	expected := config.MemorySize(2*1024*1024*1024 + 512*1024*1024)
 	inMemConfig, err := c.GetCollectionConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.AvailableMemory)
@@ -541,34 +453,34 @@ func TestGetSamplerTypes(t *testing.T) {
 		"Samplers.dataset4.TotalThroughputSampler.GoalThroughputPerSec", 100,
 		"Samplers.dataset4.TotalThroughputSampler.FieldList", []string{"request.method"},
 	)
-	config, rules := createTempConfigs(t, cm, rm)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	if d, name, err := c.GetSamplerConfigForDestName("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
-		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+		assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 		assert.Equal(t, "DeterministicSampler", name)
 	}
 
 	if d, name, err := c.GetSamplerConfigForDestName("dataset 1"); assert.Equal(t, nil, err) {
-		assert.IsType(t, &DynamicSamplerConfig{}, d)
+		assert.IsType(t, &config.DynamicSamplerConfig{}, d)
 		assert.Equal(t, "DynamicSampler", name)
 	}
 
 	if d, name, err := c.GetSamplerConfigForDestName("dataset2"); assert.Equal(t, nil, err) {
-		assert.IsType(t, &DeterministicSamplerConfig{}, d)
+		assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 		assert.Equal(t, "DeterministicSampler", name)
 	}
 
 	if d, name, err := c.GetSamplerConfigForDestName("dataset3"); assert.Equal(t, nil, err) {
-		assert.IsType(t, &EMADynamicSamplerConfig{}, d)
+		assert.IsType(t, &config.EMADynamicSamplerConfig{}, d)
 		assert.Equal(t, "EMADynamicSampler", name)
 	}
 
 	if d, name, err := c.GetSamplerConfigForDestName("dataset4"); assert.Equal(t, nil, err) {
-		assert.IsType(t, &TotalThroughputSamplerConfig{}, d)
+		assert.IsType(t, &config.TotalThroughputSamplerConfig{}, d)
 		assert.Equal(t, "TotalThroughputSampler", name)
 	}
 }
@@ -577,10 +489,10 @@ func TestDefaultSampler(t *testing.T) {
 	t.Skip("This tests for a default sampler, but we are currently not requiring explicit default samplers.")
 	cm := makeYAML("General.ConfigurationVersion", 2)
 	rm := makeYAML("ConfigVersion", 2)
-	config, rules := createTempConfigs(t, cm, rm)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 
 	assert.NoError(t, err)
 
@@ -589,7 +501,7 @@ func TestDefaultSampler(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "DeterministicSampler", name)
 
-	assert.IsType(t, &DeterministicSamplerConfig{}, s)
+	assert.IsType(t, &config.DeterministicSamplerConfig{}, s)
 }
 
 func TestHoneycombLoggerConfig(t *testing.T) {
@@ -650,10 +562,10 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 		"GRPCServerParameters.ListenAddr", "localhost:4343",
 	)
 	rm := makeYAML("ConfigVersion", 2)
-	config, rules := createTempConfigs(t, cm, rm)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
-	defer os.Remove(config)
-	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	assert.Equal(t, true, c.GetGRPCEnabled())
@@ -663,15 +575,15 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 	assert.Equal(t, "localhost:4343", a)
 
 	grpcConfig := c.GetGRPCConfig()
-	assert.Equal(t, DefaultTrue(true), *grpcConfig.Enabled)
+	assert.Equal(t, config.DefaultTrue(true), *grpcConfig.Enabled)
 	assert.Equal(t, "localhost:4343", grpcConfig.ListenAddr)
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionIdle))
 	assert.Equal(t, 3*time.Minute, time.Duration(grpcConfig.MaxConnectionAge))
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.MaxConnectionAgeGrace))
 	assert.Equal(t, 1*time.Minute, time.Duration(grpcConfig.KeepAlive))
 	assert.Equal(t, 20*time.Second, time.Duration(grpcConfig.KeepAliveTimeout))
-	assert.Equal(t, MemorySize(5*1_000_000), grpcConfig.MaxSendMsgSize)
-	assert.Equal(t, MemorySize(5*1_000_000), grpcConfig.MaxRecvMsgSize)
+	assert.Equal(t, config.MemorySize(5*1_000_000), grpcConfig.MaxSendMsgSize)
+	assert.Equal(t, config.MemorySize(5*1_000_000), grpcConfig.MaxRecvMsgSize)
 }
 
 func TestStdoutLoggerConfig(t *testing.T) {
@@ -920,7 +832,7 @@ func TestMemorySizeUnmarshal(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		expected MemorySize
+		expected config.MemorySize
 	}{
 		{
 			name:     "single letter",
@@ -1030,7 +942,7 @@ func TestMemorySizeUnmarshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var m MemorySize
+			var m config.MemorySize
 			err := m.UnmarshalText([]byte(tt.input))
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, m)
@@ -1054,9 +966,9 @@ func TestMemorySizeUnmarshalInvalid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var m MemorySize
+			var m config.MemorySize
 			err := m.UnmarshalText([]byte(tt.input))
-			assert.Contains(t, err.Error(), fmt.Sprintf(invalidSizeError, tt.input))
+			assert.Contains(t, err.Error(), fmt.Sprintf(config.InvalidSizeError, tt.input))
 		})
 	}
 }
@@ -1064,7 +976,7 @@ func TestMemorySizeUnmarshalInvalid(t *testing.T) {
 func TestMemorySizeMarshal(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    MemorySize
+		input    config.MemorySize
 		expected string
 	}{
 		{
@@ -1074,57 +986,57 @@ func TestMemorySizeMarshal(t *testing.T) {
 		},
 		{
 			name:     "ei",
-			input:    MemorySize(3 * Ei),
+			input:    config.MemorySize(3 * config.Ei),
 			expected: "3Ei",
 		},
 		{
 			name:     "e",
-			input:    MemorySize(3 * E),
+			input:    config.MemorySize(3 * config.E),
 			expected: "3E",
 		},
 		{
 			name:     "pi",
-			input:    MemorySize(3 * Pi),
+			input:    config.MemorySize(3 * config.Pi),
 			expected: "3Pi",
 		},
 		{
 			name:     "p",
-			input:    MemorySize(3 * P),
+			input:    config.MemorySize(3 * config.P),
 			expected: "3P",
 		},
 		{
 			name:     "gi",
-			input:    MemorySize(3 * Gi),
+			input:    config.MemorySize(3 * config.Gi),
 			expected: "3Gi",
 		},
 		{
 			name:     "g",
-			input:    MemorySize(3 * G),
+			input:    config.MemorySize(3 * config.G),
 			expected: "3G",
 		},
 		{
 			name:     "mi",
-			input:    MemorySize(3 * Mi),
+			input:    config.MemorySize(3 * config.Mi),
 			expected: "3Mi",
 		},
 		{
 			name:     "m",
-			input:    MemorySize(3 * M),
+			input:    config.MemorySize(3 * config.M),
 			expected: "3M",
 		},
 		{
 			name:     "ki",
-			input:    MemorySize(3 * Ki),
+			input:    config.MemorySize(3 * config.Ki),
 			expected: "3Ki",
 		},
 		{
 			name:     "k",
-			input:    MemorySize(3 * K),
+			input:    config.MemorySize(3 * config.K),
 			expected: "3K",
 		},
 		{
 			name:     "b",
-			input:    MemorySize(3),
+			input:    config.MemorySize(3),
 			expected: "3",
 		},
 	}

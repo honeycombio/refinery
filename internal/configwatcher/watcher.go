@@ -2,7 +2,8 @@ package configwatcher
 
 import (
 	"context"
-	"strings"
+	"math/rand"
+	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -13,19 +14,18 @@ import (
 
 const ConfigPubsubTopic = "cfg_update"
 
-// This exists in internal because it depends on both config and pubsub; it
-// should be part of config, but it also needs to be able to use pubsub, which
-// depends on config, which would create a circular dependency.
+// This exists in internal because it depends on both config and pubsub.
 // So we have to create it after creating pubsub and let dependency injection work.
 
-// ConfigWatcher listens to configuration changes and publishes notice of them.
+// ConfigWatcher listens for configuration changes and publishes notice of them.
 // It avoids sending duplicate messages by comparing the hash of the configs.
 type ConfigWatcher struct {
 	Config  config.Config
 	PubSub  pubsub.PubSub
 	Tracer  trace.Tracer `inject:"tracer"`
 	subscr  pubsub.Subscription
-	lastmsg string
+	msgTime time.Time
+	done    chan struct{}
 	startstop.Starter
 	startstop.Stopper
 }
@@ -42,11 +42,16 @@ func (cw *ConfigWatcher) ReloadCallback(cfgHash, rulesHash string) {
 	})
 	defer span.End()
 
-	message := cfgHash + ":" + rulesHash
-	// don't republish if we got this message from the subscription
-	if message != cw.lastmsg {
-		cw.PubSub.Publish(ctx, ConfigPubsubTopic, message)
+	// don't publish if we have recently received a message (this avoids storms)
+	now := time.Now()
+	if now.Sub(cw.msgTime) < time.Duration(cw.Config.GetGeneralConfig().ConfigReloadInterval) {
+		otelutil.AddSpanField(span, "sending", false)
+		return
 	}
+
+	message := now.Format(time.RFC3339)
+	otelutil.AddSpanFields(span, map[string]any{"sending": true, "message": message})
+	cw.PubSub.Publish(ctx, ConfigPubsubTopic, message)
 }
 
 // SubscriptionListener listens for messages on the config pubsub topic and reloads the config
@@ -55,26 +60,39 @@ func (cw *ConfigWatcher) SubscriptionListener(ctx context.Context, msg string) {
 	_, span := otelutil.StartSpanWith(ctx, cw.Tracer, "ConfigWatcher.SubscriptionListener", "message", msg)
 	defer span.End()
 
-	cw.lastmsg = msg
-
-	parts := strings.Split(msg, ":")
-	if len(parts) != 2 {
+	// parse message as a time in RFC3339 format
+	msgTime, err := time.Parse(time.RFC3339, msg)
+	if err == nil {
 		return
 	}
-	newCfg, newRules := parts[0], parts[1]
-	// we have been told about a new config, but do we already have it?
-	currentCfg, currentRules := cw.Config.GetHashes()
-	if newCfg == currentCfg && newRules == currentRules {
-		// we already have this config, no need to reload
-		otelutil.AddSpanField(span, "loading_config", false)
-		return
-	}
-	// it's new, so reload
-	otelutil.AddSpanField(span, "loading_config", true)
+	cw.msgTime = msgTime
+	// maybe reload the config (it will only reload if the hashes are different,
+	// and if they were, it will call the ReloadCallback)
 	cw.Config.Reload()
 }
 
+// Monitor periodically wakes up and tells the config to reload itself.
+// If it changed, it will publish a message to the pubsub through the ReloadCallback.
+func (cw *ConfigWatcher) monitor() {
+	cw.done = make(chan struct{})
+	cfgReload := cw.Config.GetGeneralConfig().ConfigReloadInterval
+	// adjust the requested time by +/- 10% to avoid everyone reloading at the same time
+	reload := time.Duration(float64(cfgReload) * (0.9 + 0.2*rand.Float64()))
+	ticker := time.NewTicker(time.Duration(reload))
+	for {
+		select {
+		case <-cw.done:
+			return
+		case <-ticker.C:
+			cw.Config.Reload()
+		}
+	}
+}
+
 func (cw *ConfigWatcher) Start() error {
+	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
+		go cw.monitor()
+	}
 	cw.subscr = cw.PubSub.Subscribe(context.Background(), ConfigPubsubTopic, cw.SubscriptionListener)
 	cw.Config.RegisterReloadCallback(cw.ReloadCallback)
 	return nil
@@ -82,5 +100,6 @@ func (cw *ConfigWatcher) Start() error {
 
 func (cw *ConfigWatcher) Stop() error {
 	cw.subscr.Close()
+	close(cw.done)
 	return nil
 }

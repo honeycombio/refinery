@@ -55,6 +55,7 @@ type MockConfig struct {
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeErr                error
 	GetMetricsTypeVal                string
+	GetGeneralConfigVal              GeneralConfig
 	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
@@ -282,6 +283,13 @@ func (m *MockConfig) GetUseTLSInsecure() (bool, error) {
 	defer m.Mux.RUnlock()
 
 	return m.GetUseTLSInsecureVal, m.GetUseTLSInsecureErr
+}
+
+func (m *MockConfig) GetGeneralConfig() GeneralConfig {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetGeneralConfigVal
 }
 
 func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
