@@ -152,16 +152,32 @@ func (s *StressRelief) Start() error {
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
 	go func(s *StressRelief) {
+		// only publish stress level if it has changed or if it's been a while since the last publish
+		const maxTicksBetweenReports = 30
+		var (
+			lastLevel   uint = 0
+			tickCounter      = 0
+		)
+
 		tick := time.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {
 			case <-tick.C:
 				currentLevel := s.Recalc()
-				err := s.PubSub.Publish(context.Background(), stressReliefTopic, newStressReliefMessage(currentLevel, s.hostID).String())
-				if err != nil {
-					s.Logger.Error().Logf("failed to publish stress level: %s", err)
+
+				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
+					err := s.PubSub.Publish(context.Background(), stressReliefTopic, newStressReliefMessage(currentLevel, s.hostID).String())
+					if err != nil {
+						s.Logger.Error().Logf("failed to publish stress level: %s", err)
+					}
+
+					lastLevel = currentLevel
+					tickCounter = 0
 				}
+
+				tickCounter++
+
 				s.Health.Ready(StressReliefHealthKey, true)
 			case <-s.Done:
 				s.Health.Unregister(StressReliefHealthKey)
@@ -174,8 +190,8 @@ func (s *StressRelief) Start() error {
 }
 
 type stressReliefMessage struct {
-	level  uint
 	peerID string
+	level  uint
 }
 
 func newStressReliefMessage(level uint, peerID string) *stressReliefMessage {
