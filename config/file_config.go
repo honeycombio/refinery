@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -40,8 +39,6 @@ type fileConfig struct {
 	opts          *CmdEnv
 	callbacks     []ConfigReloadCallback
 	errorCallback func(error)
-	done          chan struct{}
-	ticker        *time.Ticker
 	mux           sync.RWMutex
 	lastLoadTime  time.Time
 }
@@ -423,59 +420,43 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	cfg.callbacks = make([]ConfigReloadCallback, 0)
 	cfg.errorCallback = errorCallback
 
-	if cfg.mainConfig.General.ConfigReloadInterval > 0 {
-		go cfg.monitor()
-	}
-
 	return cfg, err
 }
 
-func (f *fileConfig) monitor() {
-	f.done = make(chan struct{})
-	// adjust the time by +/- 10% to avoid everyone reloading at the same time
-	reload := time.Duration(float64(f.mainConfig.General.ConfigReloadInterval) * (0.9 + 0.2*rand.Float64()))
-	f.ticker = time.NewTicker(time.Duration(reload))
-	for {
-		select {
-		case <-f.done:
-			return
-		case <-f.ticker.C:
-			// reread the configs
-			cfg, err := newFileConfig(f.opts)
-			if err != nil {
-				f.errorCallback(err)
-				continue
-			}
+// Reload attempts to reload the configuration; if it has changed, it stores the
+// new data and calls the reload callbacks.
+func (f *fileConfig) Reload() {
+	// reread the configs
+	cfg, err := newFileConfig(f.opts)
+	if err != nil {
+		f.errorCallback(err)
+		return
+	}
 
-			// if nothing's changed, we're fine
-			if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
-				continue
-			}
+	// if nothing's changed, we're fine
+	if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
+		return
+	}
 
-			// otherwise, update our state and call the callbacks
-			f.mux.Lock()
-			f.mainConfig = cfg.mainConfig
-			f.mainHash = cfg.mainHash
-			f.rulesConfig = cfg.rulesConfig
-			f.rulesHash = cfg.rulesHash
-			f.mux.Unlock() // can't defer -- routine never ends, and callbacks will deadlock
+	// otherwise, update our state and call the callbacks
+	f.mux.Lock()
+	f.mainConfig = cfg.mainConfig
+	f.mainHash = cfg.mainHash
+	f.rulesConfig = cfg.rulesConfig
+	f.rulesHash = cfg.rulesHash
+	f.mux.Unlock() // can't defer -- we don't want callbacks to deadlock
 
-			for _, cb := range f.callbacks {
-				cb(cfg.mainHash, cfg.rulesHash)
-			}
-		}
+	for _, cb := range f.callbacks {
+		cb(cfg.mainHash, cfg.rulesHash)
 	}
 }
 
-// Stop halts the monitor goroutine
-func (f *fileConfig) Stop() {
-	if f.ticker != nil {
-		f.ticker.Stop()
-	}
-	if f.done != nil {
-		close(f.done)
-		f.done = nil
-	}
+// GetHashes returns the current hash values for the main and rules configs.
+func (f *fileConfig) GetHashes() (cfg string, rules string) {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainHash, f.rulesHash
 }
 
 func (f *fileConfig) RegisterReloadCallback(cb ConfigReloadCallback) {
@@ -852,6 +833,13 @@ func (f *fileConfig) GetDatasetPrefix() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.General.DatasetPrefix
+}
+
+func (f *fileConfig) GetGeneralConfig() GeneralConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.General
 }
 
 func (f *fileConfig) GetQueryAuthToken() string {

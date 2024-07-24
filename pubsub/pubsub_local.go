@@ -34,6 +34,9 @@ var _ Subscription = (*LocalSubscription)(nil)
 // Start initializes the LocalPubSub
 func (ps *LocalPubSub) Start() error {
 	ps.topics = make(map[string][]*LocalSubscription)
+	if ps.Metrics == nil {
+		ps.Metrics = &metrics.NullMetrics{}
+	}
 	ps.Metrics.Register("local_pubsub_published", "counter")
 	ps.Metrics.Register("local_pubsub_received", "counter")
 	return nil
@@ -64,11 +67,14 @@ func (ps *LocalPubSub) ensureTopic(topic string) {
 
 func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error {
 	ps.mut.Lock()
-	defer ps.mut.Unlock()
 	ps.ensureTopic(topic)
 	ps.Metrics.Count("local_pubsub_published", 1)
 	ps.Metrics.Count("local_pubsub_received", len(ps.topics[topic]))
-	for _, sub := range ps.topics[topic] {
+	// make a copy of our subs so we don't hold the lock while calling them
+	subs := make([]*LocalSubscription, 0, len(ps.topics[topic]))
+	subs = append(subs, ps.topics[topic]...)
+	ps.mut.Unlock()
+	for _, sub := range subs {
 		// don't wait around for slow consumers
 		if sub.cb != nil {
 			go sub.cb(ctx, message)
@@ -88,7 +94,11 @@ func (ps *LocalPubSub) Subscribe(ctx context.Context, topic string, callback Sub
 
 func (s *LocalSubscription) Close() {
 	s.ps.mut.RLock()
-	for _, sub := range s.ps.topics[s.topic] {
+	// make a copy of our subs so we don't hold the lock while calling them
+	subs := make([]*LocalSubscription, 0, len(s.ps.topics[s.topic]))
+	subs = append(subs, s.ps.topics[s.topic]...)
+	s.ps.mut.RUnlock()
+	for _, sub := range subs {
 		if sub == s {
 			sub.mut.Lock()
 			sub.cb = nil
@@ -96,5 +106,4 @@ func (s *LocalSubscription) Close() {
 			return
 		}
 	}
-	s.ps.mut.RUnlock()
 }

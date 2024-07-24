@@ -92,11 +92,12 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpan(span)
-
 	time.Sleep(conf.SendTickerVal * 2)
+
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
+	// * remove the trace from the cache
 	// * remove the trace from the cache
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
@@ -508,7 +509,7 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.Mux.Lock()
 	conf.GetCollectionConfigVal.CacheCapacity = 2
 	conf.Mux.Unlock()
-	conf.ReloadConfig()
+	conf.Reload()
 
 	assert.Eventually(t, func() bool {
 		coll.mutex.RLock()
@@ -525,7 +526,7 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.Mux.Lock()
 	conf.GetCollectionConfigVal.CacheCapacity = 1
 	conf.Mux.Unlock()
-	conf.ReloadConfig()
+	conf.Reload()
 
 	expectedEvents = 2
 	assert.Eventually(t, check, 60*wait, wait, "expected another trace evicted and sent")
@@ -574,7 +575,7 @@ func TestSampleConfigReload(t *testing.T) {
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
-	conf.ReloadConfig()
+	conf.Reload()
 
 	assert.Eventually(t, func() bool {
 		coll.mutex.Lock()
