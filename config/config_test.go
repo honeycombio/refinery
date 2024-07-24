@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/configwatcher"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 )
@@ -192,6 +195,107 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 
 	if d := c.GetLegacyMetricsConfig(); d.APIKey != key {
 		t.Error("received", d, "expected", key)
+	}
+}
+
+func TestReload(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", config.Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
+	rm := makeYAML("ConfigVersion", 2)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	pubsub := &pubsub.LocalPubSub{
+		Config: c,
+	}
+	pubsub.Start()
+	defer pubsub.Stop()
+	watcher := &configwatcher.ConfigWatcher{
+		Config: c,
+		PubSub: pubsub,
+	}
+	watcher.Start()
+	defer watcher.Stop()
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+		t.Error("received", d, "expected", "0.0.0.0:8080")
+	}
+
+	wg := &sync.WaitGroup{}
+
+	ch := make(chan interface{}, 1)
+
+	c.RegisterReloadCallback(func(cfgHash, ruleHash string) {
+		close(ch)
+	})
+
+	// Hey race detector, we're doing some concurrent config reads.
+	// That's cool, right?
+	go func() {
+		tick := time.NewTicker(time.Millisecond)
+		defer tick.Stop()
+		for {
+			c.GetListenAddr()
+			select {
+			case <-ch:
+				return
+			case <-tick.C:
+			}
+		}
+	}()
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Error("No callback")
+			close(ch)
+		}
+	}()
+
+	if file, err := os.OpenFile(cfg, os.O_RDWR, 0644); err == nil {
+		cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", config.Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:9000")
+		file.WriteString(cm)
+		file.Close()
+	}
+
+	wg.Wait()
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
+		t.Error("received", d, "expected", "0.0.0.0:9000")
+	}
+
+}
+
+func TestReloadDisabled(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", config.Duration(0*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
+	rm := makeYAML("ConfigVersion", 2)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(cfg)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+		t.Error("received", d, "expected", "0.0.0.0:8080")
+	}
+
+	if file, err := os.OpenFile(cfg, os.O_RDWR, 0644); err == nil {
+		// Since we disabled reload checking this should not change anything
+		cm := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", config.Duration(0*time.Second), "Network.ListenAddr", "0.0.0.0:9000")
+		file.WriteString(cm)
+		file.Close()
+	}
+
+	time.Sleep(5 * time.Second)
+
+	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+		t.Error("received", d, "expected", "0.0.0.0:8080")
 	}
 }
 

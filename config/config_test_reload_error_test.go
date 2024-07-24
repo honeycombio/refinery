@@ -1,6 +1,6 @@
-//go:build all || !race
+//xxgo:build all || !race
 
-package config
+package config_test
 
 import (
 	"os"
@@ -8,13 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/configwatcher"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestErrorReloading(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,
-		"General.ConfigReloadInterval", Duration(1*time.Second),
+		"General.ConfigReloadInterval", config.Duration(1*time.Second),
 		"Network.ListenAddr", "0.0.0.0:8080",
 		"HoneycombLogger.APIKey", "SetThisToAHoneycombKey",
 	)
@@ -22,19 +25,31 @@ func TestErrorReloading(t *testing.T) {
 		"RulesVersion", 2,
 		"Samplers.__default__.DeterministicSampler.SampleRate", 5,
 	)
-	config, rules := createTempConfigs(t, cm, rm)
+	cfg, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
-	defer os.Remove(config)
+	defer os.Remove(cfg)
 
-	opts, err := NewCmdEnvOptions([]string{"--config", config, "--rules_config", rules})
+	opts, err := config.NewCmdEnvOptions([]string{"--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	ch := make(chan interface{}, 1)
-	c, err := NewConfig(opts, func(err error) { ch <- 1 })
+	c, err := config.NewConfig(opts, func(err error) { ch <- 1 })
 	assert.NoError(t, err)
 
+	pubsub := &pubsub.LocalPubSub{
+		Config: c,
+	}
+	pubsub.Start()
+	defer pubsub.Stop()
+	watcher := &configwatcher.ConfigWatcher{
+		Config: c,
+		PubSub: pubsub,
+	}
+	watcher.Start()
+	defer watcher.Stop()
+
 	d, name, _ := c.GetSamplerConfigForDestName("dataset5")
-	if _, ok := d.(DeterministicSamplerConfig); ok {
+	if _, ok := d.(config.DeterministicSamplerConfig); ok {
 		t.Error("type received", d, "expected", "DeterministicSampler")
 	}
 	if name != "DeterministicSampler" {
@@ -67,7 +82,7 @@ func TestErrorReloading(t *testing.T) {
 
 	// config should error and not update sampler to invalid type
 	d, _, _ = c.GetSamplerConfigForDestName("dataset5")
-	if _, ok := d.(DeterministicSamplerConfig); ok {
+	if _, ok := d.(config.DeterministicSamplerConfig); ok {
 		t.Error("received", d, "expected", "DeterministicSampler")
 	}
 }

@@ -93,16 +93,17 @@ func TestAddRootSpan(t *testing.T) {
 	}
 	coll.AddSpan(span)
 
-	time.Sleep(conf.SendTickerVal * 2)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
-	transmission.Mux.RLock()
-	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
-	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
-	transmission.Mux.RUnlock()
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Nil(c, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+		transmission.Mux.RLock()
+		assert.Equal(c, 1, len(transmission.Events), "adding a root span should send the span")
+		assert.Equal(c, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
+		transmission.Mux.RUnlock()
+	}, conf.SendTickerVal*2, 100*time.Millisecond)
 
 	span = &types.Span{
 		TraceID: traceID2,
@@ -112,16 +113,17 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
-	transmission.Mux.RLock()
-	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
-	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
-	transmission.Mux.RUnlock()
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.Nil(c, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+		transmission.Mux.RLock()
+		assert.Equal(c, 2, len(transmission.Events), "adding another root span should send the span")
+		assert.Equal(c, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
+		transmission.Mux.RUnlock()
+	}, conf.SendTickerVal*2, 100*time.Millisecond)
 }
 
 // #490, SampleRate getting stomped could cause confusion if sampling was
