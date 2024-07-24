@@ -66,7 +66,8 @@ When Refinery receives telemetry using an API key associated with a Honeycomb Cl
 Refinery will attempt to read its configuration and check for changes at approximately this interval.
 This time is varied by a random amount up to 10% to avoid all instances refreshing together.
 In installations where configuration changes are handled by restarting Refinery, which is often the case when using Kubernetes, disable this feature with a value of `0s`.
-If the config file is being loaded from a URL, it may be wise to increase this value to avoid overloading the file server.
+As of Refinery v2.7, news of a configuration change is immediately propagated to all peers, and they will attempt to reload their configurations.
+Note that external factors (for example, Kubernetes ConfigMaps) may cause delays in propagating configuration changes.
 
 - Not eligible for live reload.
 - Type: `duration`

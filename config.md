@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-07-23 at 19:52:23 UTC.
+It was automatically generated on 2024-07-24 at 20:24:30 UTC.
 
 ## The Config file
 
@@ -91,7 +91,8 @@ ConfigReloadInterval is the average interval between attempts at reloading the c
 Refinery will attempt to read its configuration and check for changes at approximately this interval.
 This time is varied by a random amount up to 10% to avoid all instances refreshing together.
 In installations where configuration changes are handled by restarting Refinery, which is often the case when using Kubernetes, disable this feature with a value of `0s`.
-If the config file is being loaded from a URL, it may be wise to increase this value to avoid overloading the file server.
+As of Refinery v2.7, news of a configuration change is immediately propagated to all peers, and they will attempt to reload their configurations.
+Note that external factors (for example, Kubernetes ConfigMaps) may cause delays in propagating configuration changes.
 
 - Not eligible for live reload.
 - Type: `duration`
