@@ -3,12 +3,14 @@ package configwatcher
 import (
 	"context"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/pubsub"
+	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -23,10 +25,12 @@ const ConfigPubsubTopic = "cfg_update"
 type ConfigWatcher struct {
 	Config  config.Config
 	PubSub  pubsub.PubSub
-	Tracer  trace.Tracer `inject:"tracer"`
+	Tracer  trace.Tracer    `inject:"tracer"`
+	Clock   clockwork.Clock `inject:""`
 	subscr  pubsub.Subscription
 	msgTime time.Time
 	done    chan struct{}
+	mut     sync.RWMutex
 	startstop.Starter
 	startstop.Stopper
 }
@@ -45,7 +49,10 @@ func (cw *ConfigWatcher) ReloadCallback(cfgHash, rulesHash string) {
 
 	// don't publish if we have recently received a message (this avoids storms)
 	now := time.Now()
-	if now.Sub(cw.msgTime) < time.Duration(cw.Config.GetGeneralConfig().ConfigReloadInterval) {
+	cw.mut.RLock()
+	msgTime := cw.msgTime
+	cw.mut.RUnlock()
+	if now.Sub(msgTime) < time.Duration(cw.Config.GetGeneralConfig().ConfigReloadInterval) {
 		otelutil.AddSpanField(span, "sending", false)
 		return
 	}
@@ -63,10 +70,12 @@ func (cw *ConfigWatcher) SubscriptionListener(ctx context.Context, msg string) {
 
 	// parse message as a time in RFC3339 format
 	msgTime, err := time.Parse(time.RFC3339, msg)
-	if err == nil {
+	if err != nil {
 		return
 	}
+	cw.mut.Lock()
 	cw.msgTime = msgTime
+	cw.mut.Unlock()
 	// maybe reload the config (it will only reload if the hashes are different,
 	// and if they were, it will call the ReloadCallback)
 	cw.Config.Reload()
@@ -103,7 +112,7 @@ func (cw *ConfigWatcher) Start() error {
 }
 
 func (cw *ConfigWatcher) Stop() error {
-	cw.subscr.Close()
 	close(cw.done)
+	cw.subscr.Close()
 	return nil
 }
