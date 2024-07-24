@@ -23,8 +23,8 @@ const ConfigPubsubTopic = "cfg_update"
 // ConfigWatcher listens for configuration changes and publishes notice of them.
 // It avoids sending duplicate messages by comparing the hash of the configs.
 type ConfigWatcher struct {
-	Config  config.Config
-	PubSub  pubsub.PubSub
+	Config  config.Config   `inject:""`
+	PubSub  pubsub.PubSub   `inject:""`
 	Tracer  trace.Tracer    `inject:"tracer"`
 	Clock   clockwork.Clock `inject:""`
 	subscr  pubsub.Subscription
