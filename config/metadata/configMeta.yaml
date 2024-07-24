@@ -73,9 +73,10 @@ groups:
           where configuration changes are handled by restarting Refinery, which
           is often the case when using Kubernetes, disable this feature with a
           value of `0s`. As of Refinery v2.7, news of a configuration change is
-          immediately propagated to all peers, and they will reload their
-          configurations. In a large cluster, this time can be safely set to a
-          higher value.
+          immediately propagated to all peers, and they will attempt to reload
+          their configurations. Note that external factors (for example,
+          Kubernetes ConfigMaps) may cause delays in propagating configuration
+          changes.
 
   - name: Network
     title: "Network Configuration"
