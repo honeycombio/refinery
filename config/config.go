@@ -191,6 +191,8 @@ type Config interface {
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string
+
+	GetLogCorrelationFieldNames() []string
 }
 
 type ConfigReloadCallback func(configHash, ruleCfgHash string)
