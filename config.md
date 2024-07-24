@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-03-11 at 14:44:30 UTC.
+It was automatically generated on 2024-07-24 at 20:24:30 UTC.
 
 ## The Config file
 
@@ -37,6 +37,7 @@ The remainder of this document describes the sections within the file and the fi
 - [Prometheus Metrics](#prometheus-metrics)
 - [Legacy Metrics](#legacy-metrics)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
+- [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
 - [Redis Peer Management](#redis-peer-management)
 - [Collection Settings](#collection-settings)
@@ -90,7 +91,8 @@ ConfigReloadInterval is the average interval between attempts at reloading the c
 Refinery will attempt to read its configuration and check for changes at approximately this interval.
 This time is varied by a random amount up to 10% to avoid all instances refreshing together.
 In installations where configuration changes are handled by restarting Refinery, which is often the case when using Kubernetes, disable this feature with a value of `0s`.
-If the config file is being loaded from a URL, it may be wise to increase this value to avoid overloading the file server.
+As of Refinery v2.7, news of a configuration change is immediately propagated to all peers, and they will attempt to reload their configurations.
+Note that external factors (for example, Kubernetes ConfigMaps) may cause delays in propagating configuration changes.
 
 - Not eligible for live reload.
 - Type: `duration`
@@ -621,6 +623,61 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Default: `gzip`
 - Options: `none`, `gzip`
 
+## OpenTelemetry Tracing
+
+`OTelTracing` contains configuration for Refinery's own tracing.
+### `Enabled`
+
+Enabled controls whether to send Refinery's own otel traces.
+
+The setting specifies if Refinery sends traces.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `APIHost`
+
+APIHost is the URL of the OpenTelemetry API to which traces will be sent.
+
+Refinery's internal traces will be sent to the `/v1/traces` endpoint on this host.
+
+- Not eligible for live reload.
+- Type: `url`
+- Default: `https://api.honeycomb.io`
+
+### `APIKey`
+
+APIKey is the API key used to send Refinery's traces to Honeycomb.
+
+It is recommended that you create a separate team and key for Refinery telemetry.
+If this is blank, then Refinery will not set the Honeycomb-specific headers for OpenTelemetry, and your `APIHost` must be set to a valid OpenTelemetry endpoint.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `SetThisToAHoneycombKey`
+- Environment variable: `REFINERY_HONEYCOMB_TRACES_API_KEY, REFINERY_HONEYCOMB_API_KEY`
+
+### `Dataset`
+
+Dataset is the Honeycomb dataset to which Refinery sends its OpenTelemetry metrics.
+
+Only used if `APIKey` is specified.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `Refinery Traces`
+
+### `SampleRate`
+
+SampleRate is the rate at which Refinery samples its own traces.
+
+This is the Honeycomb sample rate used to sample traces sent by Refinery.
+Since each incoming span generates multiple outgoing spans, a sample rate of at least 100 is strongly advised.
+
+- Eligible for live reload.
+- Type: `int`
+- Default: `100`
+
 ## Peer Management
 
 `PeerManagement` controls how the Refinery cluster communicates between peers.
@@ -630,7 +687,8 @@ Type is the type of peer management to use.
 
 Peer management is the mechanism by which Refinery locates its peers.
 `file` means that Refinery gets its peer list from the Peers list in this config file.
-`redis` means that Refinery self-registers with a Redis instance and gets its peer list from there.
+`redis` means that Refinery uses a Publish/Subscribe mechanism, implemented on Redis, to propagate peer lists much more quickly than the legacy mechanism.
+This is the recommended setting, especially for new installations.
 
 - Not eligible for live reload.
 - Type: `string`
@@ -685,7 +743,7 @@ The format is a list of strings of the form "scheme://host:port".
 ## Redis Peer Management
 
 `RedisPeerManagement` controls how the Refinery cluster communicates between peers when using Redis.
-Only applies when `PeerManagement.Type` is "redis".
+Does not apply when `PeerManagement.Type` is "file".
 
 ### `Host`
 
@@ -727,29 +785,6 @@ Many Redis installations do not use this field.
 - Not eligible for live reload.
 - Type: `string`
 - Environment variable: `REFINERY_REDIS_AUTH_CODE`
-
-### `Prefix`
-
-Prefix is a string used as a prefix for the keys in Redis while storing the peer membership.
-
-It might be useful to override this in any situation where multiple Refinery clusters or multiple applications want to share a single Redis instance.
-It may not be blank.
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `refinery`
-- Example: `customPrefix`
-
-### `Database`
-
-Database is the database number to use for the Redis instance storing the peer membership.
-
-An integer from 0-15 indicating the database number to use for the Redis instance storing the peer membership.
-It might be useful to set this in any situation where multiple Refinery clusters or multiple applications want to share a single Redis instance.
-
-- Not eligible for live reload.
-- Type: `int`
-- Example: `1`
 
 ### `UseTLS`
 
@@ -1172,17 +1207,4 @@ This setting helps to prevent oscillations.
 - Eligible for live reload.
 - Type: `duration`
 - Default: `10s`
-
-### `MinimumStartupDuration`
-
-MinimumStartupDuration is the minimum time that Stress Relief will stay enabled.
-
-This setting is used when switching into Monitor mode.
-When Stress Relief is enabled, it will start up in stressed mode for at least this set duration of time to try to make sure that Refinery can handle the load before it begins processing it in earnest.
-This is to help address the problem of trying to bring a new node into an already-overloaded cluster.
-If this duration is `0`, then Refinery will not start in stressed mode, which will provide faster startup at the possible cost of startup instability.
-
-- Eligible for live reload.
-- Type: `duration`
-- Default: `3s`
 

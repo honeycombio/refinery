@@ -1664,6 +1664,7 @@ groups:
         v1name: MinimumStartupDuration
         type: duration
         valuetype: nondefault
+        lastversion: v2.6
         default: 3s
         reload: true
         summary: is the minimum time that Stress Relief will stay enabled.
