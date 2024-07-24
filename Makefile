@@ -68,21 +68,18 @@ clean:
 
 .PHONY: install-tools
 install-tools:
-	go install github.com/google/go-licenses@v1.0.0
+	go install github.com/google/go-licenses/v2@v2.0.0-alpha.1
 
 .PHONY: update-licenses
 update-licenses: install-tools
 	rm -rf LICENSES; \
-	go-licenses save --save_path LICENSES ./cmd/refinery;
+	go-licenses save --save_path LICENSES --ignore "github.com/honeycombio/refinery" ./cmd/refinery;
 
 .PHONY: verify-licenses
-verify-licenses:
-	echo "Passed"
-
-skipped-verify-licenses: install-tools
-	rm -rf temp; \
-	go-licenses save --save_path temp ./cmd/refinery; \
-    if diff temp LICENSES > /dev/null; then \
+verify-licenses: install-tools
+	go-licenses save --save_path temp --ignore "github.com/honeycombio/refinery" ./cmd/refinery; \
+	chmod +r temp; \
+    if diff temp LICENSES; then \
       echo "Passed"; \
       rm -rf temp; \
     else \
