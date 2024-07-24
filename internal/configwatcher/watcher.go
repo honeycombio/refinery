@@ -10,6 +10,7 @@ import (
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/pubsub"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 const ConfigPubsubTopic = "cfg_update"
@@ -90,6 +91,9 @@ func (cw *ConfigWatcher) monitor() {
 }
 
 func (cw *ConfigWatcher) Start() error {
+	if cw.Tracer == nil {
+		cw.Tracer = noop.NewTracerProvider().Tracer("test")
+	}
 	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
 		go cw.monitor()
 	}
