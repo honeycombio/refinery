@@ -1,4 +1,4 @@
-//xxgo:build all || !race
+//go:build all || !race
 
 package config_test
 
