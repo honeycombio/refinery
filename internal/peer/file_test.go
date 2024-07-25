@@ -10,9 +10,9 @@ func TestFilePeers(t *testing.T) {
 	peers := []string{"peer"}
 
 	c := &config.MockConfig{
-		PeerManagementType: "file",
-		GetPeersVal:        peers,
-		GetListenAddrVal:   "10.244.0.114:8080",
+		PeerManagementType:   "file",
+		GetPeersVal:          peers,
+		GetPeerListenAddrVal: "10.244.0.114:8081",
 	}
 	p, err := newPeers(c)
 	if err != nil {

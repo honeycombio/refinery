@@ -60,7 +60,7 @@ func (p *FilePeers) Stop() error {
 }
 
 func (p *FilePeers) publicAddr() (string, error) {
-	addr, err := p.Cfg.GetListenAddr()
+	addr, err := p.Cfg.GetPeerListenAddr()
 	if err != nil {
 		return "", err
 	}

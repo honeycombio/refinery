@@ -1,10 +1,5 @@
 package peer
 
-import (
-	"math/rand"
-	"strconv"
-)
-
 var _ Peers = (*MockPeers)(nil)
 
 type MockPeers struct {
@@ -25,8 +20,8 @@ func (p *MockPeers) RegisterUpdatedPeersCallback(callback func()) {
 }
 
 func (p *MockPeers) Start() error {
-	if len(p.ID) == 0 {
-		p.ID = strconv.Itoa(rand.Intn(10000))
+	if len(p.ID) == 0 && len(p.Peers) > 0 {
+		p.ID = p.Peers[0]
 	}
 	return nil
 }
