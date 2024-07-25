@@ -2,9 +2,43 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.7.0
+
+This release is a transitional release, laying the groundwork for substantial future changes to Refinery.
+
+### Publish/Subscribe on Redis
+In this release, Redis is no longer a database for storing a list of peers.
+Instead, it is used as a more general publish/subscribe framework for rapidly sharing information between nodes in the cluster.
+Things that are shared with this connection are:
+
+- Peer membership
+- Stress levels
+- News of configuration changes
+
+Because of this mechanism, Refinery will now react more quickly to changes in any of these factors.
+In particular, all of the nodes in the cluster will now go into and out of stress relief together.
+Also, when one node detects a configuration change, all of its peers will be told about it immediately.
+
+In particular, Refinery now publishes individual stress levels between peers.
+Nodes calculate a cluster stress level as a weighted average (with nodes that are more stressed getting more weight).
+All of the nodes should now enter or leave stress relief at approximately the same time.
+
+### Metrics changes
+There have also been some minor changes to metrics in this release:
+
+The metric called `stress_level` has been split into `individual_stress_level` (the stress level as seen by a single node) and `cluster_stress_level` (the aggregated cluster level). If you were using the `stress_level` metric in SLOs, boards or triggers, you must update as the metric is no longer being sent.
+
+There is also a new pair of metrics, `config_hash` and `rule_config_hash`.
+These are numeric Gauge metrics that are set to the numeric value of the last 4 hex digits of the hash of the current config files.
+These can be used to track that all refineries are using the same configuration file.
+
+### Disabling Redis and using a static list of peers
+Specifying `PeerManagement.Type=file` will cause Refinery to use the fixed list of peers found in the configuration.
+This means that Refinery will operate without sharing changes to peers, stress, or configuration, as it has in previous releases.
+
 ## Version 2.6.1
 
-This is a bug fix release. 
+This is a bug fix release.
 In the log handling logic newly introduced in v2.6.0, Refinery would incorrectly consider log events to be root spans in a trace.
 After this fix, log events can never be root spans.
 This is recommended for everyone who wants to use the new log handling capabilities.
