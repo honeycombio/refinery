@@ -1,6 +1,7 @@
 package peer
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/honeycombio/refinery/config"
@@ -22,7 +23,12 @@ func (p *FilePeers) GetPeers() ([]string, error) {
 	// logic happy.
 	peers, err := p.Cfg.GetPeers()
 	if len(peers) == 0 {
-		peers = []string{"http://127.0.0.1:8081"}
+		addr, err := p.publicAddr()
+		if err != nil {
+			return nil, err
+
+		}
+		peers = []string{addr}
 	}
 	p.Metrics.Gauge("num_file_peers", float64(len(peers)))
 	return peers, err
@@ -58,10 +64,10 @@ func (p *FilePeers) publicAddr() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	host, _, err := net.SplitHostPort(addr)
+	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return "", err
 	}
 
-	return host, nil
+	return fmt.Sprintf("http://%s:%s", host, port), nil
 }

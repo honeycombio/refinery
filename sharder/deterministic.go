@@ -1,9 +1,6 @@
 package sharder
 
 import (
-	"fmt"
-	"net"
-	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -13,7 +10,6 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 // These are random bits to make sure we differentiate between different
@@ -23,41 +19,54 @@ const (
 	peerSeed     uint64 = 6789531204236
 )
 
-// DetShard implements Shard
-type DetShard struct {
-	scheme   string
-	ipOrHost string
-	port     string
-}
-
 type hashShard struct {
 	uhash      uint64
 	shardIndex int
 }
 
-func (d *DetShard) Equals(other Shard) bool {
-	otherDetshard, ok := other.(*DetShard)
+var _ Shard = detShard("")
+
+// detShard implements Shard
+type detShard string
+
+// GetHashesFor generates a number of hashShards for a given detShard by repeatedly hashing the
+// seed with itself. The intent is to generate a repeatable pseudo-random sequence.
+func (d detShard) GetHashesFor(index int, n int, seed uint64) []hashShard {
+	hashes := make([]hashShard, 0)
+	addr := d.GetAddress()
+	for i := 0; i < n; i++ {
+		hashes = append(hashes, hashShard{
+			uhash:      wyhash.Hash([]byte(addr), seed),
+			shardIndex: index,
+		})
+		// generate another seed from the previous seed; we want this to be the same
+		// sequence for everything.
+		seed = wyhash.Hash([]byte("anything"), seed)
+	}
+	return hashes
+}
+func (d detShard) Equals(other Shard) bool {
+	otherDetshard, ok := other.(detShard)
 	if !ok {
 		// can't be equal if it's a different kind of Shard!
 		return false
 	}
 	// only basic types in this struct; we can use == hooray
-	return *d == *otherDetshard
+	return d == otherDetshard
 }
 
-type SortableShardList []*DetShard
+// GetAddress returns the Shard's address in a usable form
+func (d detShard) GetAddress() string {
+	return string(d)
+}
+
+type SortableShardList []detShard
 
 func (s SortableShardList) Len() int      { return len(s) }
 func (s SortableShardList) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 func (s SortableShardList) Less(i, j int) bool {
-	if s[i].ipOrHost != s[j].ipOrHost {
-		return s[i].ipOrHost < s[j].ipOrHost
-	}
-	if s[i].scheme != s[j].scheme {
-		return s[i].scheme < s[j].scheme
-	}
-	return s[i].port < s[j].port
+	return s[i] < s[j]
 }
 
 func (s SortableShardList) Equals(other SortableShardList) bool {
@@ -72,39 +81,16 @@ func (s SortableShardList) Equals(other SortableShardList) bool {
 	return true
 }
 
-// GetAddress returns the Shard's address in a usable form
-func (d *DetShard) GetAddress() string {
-	return fmt.Sprintf("%s://%s:%s", d.scheme, d.ipOrHost, d.port)
-}
-
-func (d *DetShard) String() string {
-	return d.GetAddress()
-}
-
-// GetHashesFor generates a number of hashShards for a given DetShard by repeatedly hashing the
-// seed with itself. The intent is to generate a repeatable pseudo-random sequence.
-func (d *DetShard) GetHashesFor(index int, n int, seed uint64) []hashShard {
-	hashes := make([]hashShard, 0)
-	addr := d.GetAddress()
-	for i := 0; i < n; i++ {
-		hashes = append(hashes, hashShard{
-			uhash:      wyhash.Hash([]byte(addr), seed),
-			shardIndex: index,
-		})
-		// generate another seed from the previous seed; we want this to be the same
-		// sequence for everything.
-		seed = wyhash.Hash([]byte("anything"), seed)
-	}
-	return hashes
-}
+// make sure DeterministicSharder implements Sharder
+var _ Sharder = (*DeterministicSharder)(nil)
 
 type DeterministicSharder struct {
 	Config config.Config `inject:""`
 	Logger logger.Logger `inject:""`
 	Peers  peer.Peers    `inject:""`
 
-	myShard *DetShard
-	peers   []*DetShard
+	myShard detShard
+	peers   []detShard
 	hashes  []hashShard
 
 	peerLock sync.RWMutex
@@ -123,95 +109,28 @@ func (d *DeterministicSharder) Start() error {
 	})
 
 	// Try up to 5 times to find myself in the peer list before giving up
-	var found bool
-	var selfIndexIntoPeerList int
+	var self string
+	var err error
 	for j := 0; j < 5; j++ {
-		err := d.loadPeerList()
-		if err != nil {
-			return err
-		}
-
-		// get my listen address for peer traffic for the Port number
-		listenAddr, err := d.Config.GetPeerListenAddr()
-		if err != nil {
-			return errors.Wrap(err, "failed to get listen addr config")
-		}
-		_, localPort, err := net.SplitHostPort(listenAddr)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse listen addr into host:port")
-		}
-		d.Logger.Debug().Logf("picked up local peer port of %s", localPort)
-
-		var localIPs []string
-
-		// If RedisIdentifier is an IP, use as localIPs value.
-		if redisIdentifier, err := d.Config.GetRedisIdentifier(); err == nil && redisIdentifier != "" {
-			if ip := net.ParseIP(redisIdentifier); ip != nil {
-				d.Logger.Debug().Logf("Using RedisIdentifier as public IP: %s", redisIdentifier)
-				localIPs = []string{redisIdentifier}
-			}
-		}
-
-		// Otherwise, get my local interfaces' IPs.
-		if len(localIPs) == 0 {
-			localAddrs, err := net.InterfaceAddrs()
-			if err != nil {
-				return errors.Wrap(err, "failed to get local interface list to initialize sharder")
-			}
-			localIPs = make([]string, len(localAddrs))
-			for i, addr := range localAddrs {
-				addrStr := addr.String()
-				ip, _, err := net.ParseCIDR(addrStr)
-				if err != nil {
-					return errors.Wrap(err, fmt.Sprintf("failed to parse CIDR for local IP %s", addrStr))
-				}
-				localIPs[i] = ip.String()
-			}
-		}
-
 		// go through peer list, resolve each address, see if any of them match any
 		// local interface. Note that this assumes only one instance of Refinery per
 		// host can run.
-		for i, peerShard := range d.peers {
-			d.Logger.Debug().WithFields(logrus.Fields{
-				"peer": peerShard,
-				"self": localIPs,
-			}).Logf("Considering peer looking for self")
-			peerIPList, err := net.LookupHost(peerShard.ipOrHost)
-			if err != nil {
-				// TODO something better than fail to start if peer is missing
-				return errors.Wrap(err, fmt.Sprintf("couldn't resolve peer hostname %s", peerShard.ipOrHost))
-			}
-			for _, peerIP := range peerIPList {
-				for _, ipAddr := range localIPs {
-					if peerIP == ipAddr {
-						if peerShard.port == localPort {
-							d.Logger.Debug().WithField("peer", peerShard).Logf("Found myself in peer list")
-							found = true
-							selfIndexIntoPeerList = i
-						} else {
-							d.Logger.Debug().WithFields(logrus.Fields{
-								"peer":         peerShard,
-								"expectedPort": localPort,
-							}).Logf("Peer port mismatch")
-						}
-					}
+		self, err = d.Peers.GetInstanceID()
+		if err == nil {
+			for _, peerShard := range d.peers {
+				if self == peerShard.GetAddress() {
+					d.myShard = peerShard
+					return nil
 				}
 			}
 		}
-		if found {
-			break
-		}
+
 		d.Logger.Debug().Logf("Failed to find self in peer list; waiting 5sec and trying again")
 		time.Sleep(5 * time.Second)
 	}
-	if !found {
-		d.Logger.Debug().Logf("list of current peers: %+v", d.peers)
-		return errors.New("failed to find self in the peer list")
-	}
-	d.myShard = d.peers[selfIndexIntoPeerList]
 
-	return nil
+	d.Logger.Error().WithFields(map[string]interface{}{"peers": d.peers, "self": self}).Logf("list of current peers")
+	return errors.New("failed to find self in the peer list")
 }
 
 // loadPeerList will run every time any config changes (not only when the list
@@ -231,17 +150,9 @@ func (d *DeterministicSharder) loadPeerList() error {
 
 	// turn the peer list into a list of shards
 	// and a list of hashes
-	newPeers := make([]*DetShard, len(peerList))
+	newPeers := make([]detShard, len(peerList))
 	for ix, peer := range peerList {
-		peerURL, err := url.Parse(peer)
-		if err != nil {
-			return errors.Wrap(err, "couldn't parse peer as a URL")
-		}
-		peerShard := &DetShard{
-			scheme:   peerURL.Scheme,
-			ipOrHost: peerURL.Hostname(),
-			port:     peerURL.Port(),
-		}
+		peerShard := detShard(peer)
 		newPeers[ix] = peerShard
 	}
 
@@ -282,7 +193,7 @@ func (d *DeterministicSharder) loadPeerList() error {
 	// if the peer list changed, load the new list
 	d.peerLock.RLock()
 	if !SortableShardList(d.peers).Equals(newPeers) {
-		d.Logger.Info().Logf("Peer list has changed. New peer list: %+v", newPeers)
+		d.Logger.Info().WithField("peers", newPeers).Logf("Peer list has changed.")
 		d.peerLock.RUnlock()
 		d.peerLock.Lock()
 		d.peers = newPeers
