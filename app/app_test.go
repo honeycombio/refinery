@@ -327,12 +327,7 @@ func TestPeerRouting(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()
 
-	peers := &peer.MockPeers{
-		Peers: []string{
-			"http://localhost:11001",
-			"http://localhost:11003",
-		},
-	}
+	peerList := []string{"http://localhost:11001", "http://localhost:11003"}
 
 	var apps [2]*App
 	var senders [2]*transmission.MockSender
@@ -340,6 +335,10 @@ func TestPeerRouting(t *testing.T) {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
+		peers := &peer.MockPeers{
+			Peers: peerList,
+			ID:    peerList[i],
+		}
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
 	}
@@ -457,11 +456,9 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 func TestEventsEndpoint(t *testing.T) {
 	t.Parallel()
 
-	peers := &peer.MockPeers{
-		Peers: []string{
-			"http://localhost:13001",
-			"http://localhost:13003",
-		},
+	peerList := []string{
+		"http://localhost:13001",
+		"http://localhost:13003",
 	}
 
 	var apps [2]*App
@@ -470,6 +467,11 @@ func TestEventsEndpoint(t *testing.T) {
 		var graph inject.Graph
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
+		peers := &peer.MockPeers{
+			Peers: peerList,
+			ID:    peerList[i],
+		}
+
 		apps[i], graph = newStartedApp(t, senders[i], basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
 	}
@@ -570,11 +572,9 @@ func TestEventsEndpoint(t *testing.T) {
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 
-	peers := &peer.MockPeers{
-		Peers: []string{
-			"http://localhost:15001",
-			"http://localhost:15003",
-		},
+	peerList := []string{
+		"http://localhost:15001",
+		"http://localhost:15003",
 	}
 
 	var apps [2]*App
@@ -582,6 +582,11 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	for i := range apps {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmission.MockSender{}
+		peers := &peer.MockPeers{
+			Peers: peerList,
+			ID:    peerList[i],
+		}
+
 		app, graph := newStartedApp(t, senders[i], basePort, peers, false)
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
@@ -830,14 +835,12 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		},
 	}
 
-	peers := &peer.MockPeers{
-		Peers: []string{
-			"http://localhost:12001",
-			"http://localhost:12003",
-			"http://localhost:12005",
-			"http://localhost:12007",
-			"http://localhost:12009",
-		},
+	peerList := []string{
+		"http://localhost:12001",
+		"http://localhost:12003",
+		"http://localhost:12005",
+		"http://localhost:12007",
+		"http://localhost:12009",
 	}
 
 	var apps [5]*App
@@ -845,6 +848,11 @@ func BenchmarkDistributedTraces(b *testing.B) {
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 12000 + (i * 2)
+		peers := &peer.MockPeers{
+			Peers: peerList,
+			ID:    peerList[i],
+		}
+
 		apps[i], graph = newStartedApp(b, sender, basePort, peers, false)
 		defer startstop.Stop(graph.Objects(), nil)
 

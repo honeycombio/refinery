@@ -199,7 +199,7 @@ func newStressReliefMessage(level uint, peerID string) *stressReliefMessage {
 }
 
 func (msg *stressReliefMessage) String() string {
-	return msg.peerID + ":" + fmt.Sprint(msg.level)
+	return msg.peerID + "|" + fmt.Sprint(msg.level)
 }
 
 func unmarshalStressReliefMessage(msg string) (*stressReliefMessage, error) {
@@ -207,7 +207,7 @@ func unmarshalStressReliefMessage(msg string) (*stressReliefMessage, error) {
 		return nil, fmt.Errorf("empty message")
 	}
 
-	parts := strings.SplitN(msg, ":", 2)
+	parts := strings.SplitN(msg, "|", 2)
 	level, err := strconv.Atoi(parts[1])
 	if err != nil {
 		return nil, err
