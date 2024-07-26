@@ -8,18 +8,18 @@ Network:
 
 Logger:
   Type: stdout
-  Level: debug
+  Level: info
 
 LegacyMetrics:
   Enabled: true
   Dataset: refinery_metrics
-  APIKey: HTab42OXw838zcJDH3eJEH
+  APIKey: $REFINERY_HONEYCOMB_API_KEY
   APIHost: https://api-dogfood.honeycomb.io
 
 OTelMetrics:
   Enabled: true
   Dataset: refinery_metrics_otel
-  APIKey: HTab42OXw838zcJDH3eJEH
+  APIKey: $REFINERY_HONEYCOMB_API_KEY
   APIHost: https://api-dogfood.honeycomb.io
 
 RefineryTelemetry:
