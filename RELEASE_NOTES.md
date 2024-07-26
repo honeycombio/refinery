@@ -20,9 +20,9 @@ When one node detects a configuration change, all of its peers will be told abou
 
 In addition, Refinery now publishes individual stress levels between peers.
 Nodes calculate a cluster stress level as a weighted average (with nodes that are more stressed getting more weight).
-An individual node can enter stress relief as before.
-This can happen, for example, when a single giant trace is concentrated on one node.
-If the cluster as a whole is being stressed by a general burst in traffic, all of the nodes should now enter or leave stress relief at approximately the same time.
+If an individual node is stressed, it can enter stress relief individually.
+This may happen, for example, when a single giant trace is concentrated on one node.
+If the cluster as a whole is being stressed by a general burst in traffic, the entire cluster should now enter or leave stress relief at approximately the same time.
 
 ### Health checks now include both liveness and readiness
 
@@ -41,7 +41,8 @@ In this release, this will only happen when a Refinery node is shutting down.
 ### Metrics changes
 There have also been some minor changes to metrics in this release:
 
-The metric called `stress_level` has been split into `individual_stress_level` (the stress level as seen by a single node) and `cluster_stress_level` (the aggregated cluster level). If you were using the `stress_level` metric in SLOs, boards or triggers, you must update as the metric is no longer being sent.
+We hae two new metrics called `individual_stress_level` (the stress level as seen by a single node) and `cluster_stress_level` (the aggregated cluster level).
+The `stress_level` metric indicates the maximum of the two values; it is this value which is used to determine whether an individual node activates stress relief.
 
 There is also a new pair of metrics, `config_hash` and `rule_config_hash`.
 These are numeric Gauge metrics that are set to the numeric value of the last 4 hex digits of the hash of the current config files.
