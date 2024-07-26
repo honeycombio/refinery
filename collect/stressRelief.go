@@ -160,11 +160,11 @@ func (s *StressRelief) Start() error {
 			tickCounter      = 0
 		)
 
-		tick := time.NewTicker(100 * time.Millisecond)
+		tick := s.Clock.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {
-			case <-tick.C:
+			case <-tick.Chan():
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
