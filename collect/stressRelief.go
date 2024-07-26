@@ -35,8 +35,8 @@ var _ StressReliever = &MockStressReliever{}
 type MockStressReliever struct {
 	IsStressed              bool
 	SampleDeterministically bool
-	SampleRate              uint
 	ShouldKeep              bool
+	SampleRate              uint
 }
 
 func (m *MockStressReliever) Start() error                                   { return nil }
@@ -99,6 +99,8 @@ type StressRelief struct {
 
 	lock         sync.RWMutex
 	stressLevels map[string]stressReport
+	// only used in tests
+	disableStressLevelReport bool
 }
 
 const StressReliefHealthKey = "stress_relief"
@@ -113,6 +115,7 @@ func (s *StressRelief) Start() error {
 	// register stress level metrics
 	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
 	s.RefineryMetrics.Register("individual_stress_level", "gauge")
+	s.RefineryMetrics.Register("stress_level", "gauge")
 	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
 
 	// We use an algorithms map so that we can name these algorithms, which makes it easier for several things:
@@ -151,19 +154,23 @@ func (s *StressRelief) Start() error {
 
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
+
 	go func(s *StressRelief) {
 		// only publish stress level if it has changed or if it's been a while since the last publish
+		if s.disableStressLevelReport {
+			return
+		}
 		const maxTicksBetweenReports = 30
 		var (
 			lastLevel   uint = 0
 			tickCounter      = 0
 		)
 
-		tick := time.NewTicker(100 * time.Millisecond)
+		tick := s.Clock.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
 			select {
-			case <-tick.C:
+			case <-tick.Chan():
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
@@ -390,7 +397,7 @@ func (s *StressRelief) Recalc() uint {
 			formula = fmt.Sprintf("%s(%v/%v)=%v", c.Algorithm, c.Numerator, c.Denominator, stress)
 		}
 	}
-	s.Logger.Debug().WithField("stress_level", maximumLevel).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
+	s.Logger.Debug().WithField("individual_stress_level", maximumLevel).WithField("stress_formula", s.formula).WithField("reason", reason).Logf("calculated stress level")
 
 	s.RefineryMetrics.Gauge("individual_stress_level", float64(maximumLevel))
 	localLevel := uint(maximumLevel)
@@ -401,7 +408,11 @@ func (s *StressRelief) Recalc() uint {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.overallStressLevel = clusterStressLevel
+	// The overall stress level is the max of the individual and cluster stress levels
+	// If a single node is under significant stress, it can activate stress relief mode
+	s.overallStressLevel = uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
+	s.RefineryMetrics.Gauge("stress_level", s.overallStressLevel)
+
 	s.reason = reason
 	s.formula = formula
 
@@ -414,18 +425,28 @@ func (s *StressRelief) Recalc() uint {
 		// If it's off, should we activate it?
 		if !s.stressed && s.overallStressLevel >= s.activateLevel {
 			s.stressed = true
-			s.Logger.Warn().WithField("cluster_stress_level", s.overallStressLevel).WithField("stress_formula", s.formula).WithField("reason", s.reason).Logf("StressRelief has been activated")
+			s.Logger.Warn().WithFields(map[string]interface{}{
+				"individual_stress_level": localLevel,
+				"cluster_stress_level":    clusterStressLevel,
+				"stress_level":            s.overallStressLevel,
+				"stress_formula":          s.formula,
+				"reason":                  s.reason,
+			}).Logf("StressRelief has been activated")
 		}
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
 		if s.stressed && s.overallStressLevel >= s.deactivateLevel {
-			s.stayOnUntil = time.Now().Add(s.minDuration)
+			s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
 		}
 		// If it's on, should we deactivate it?
 		if s.stressed && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
-			s.Logger.Warn().WithField("cluster_stress_level", s.overallStressLevel).Logf("StressRelief has been deactivated")
+			s.Logger.Warn().WithFields(map[string]interface{}{
+				"individual_stress_level": localLevel,
+				"cluster_stress_level":    clusterStressLevel,
+				"stress_level":            s.overallStressLevel,
+			}).Logf("StressRelief has been deactivated")
 		}
 	}
 
