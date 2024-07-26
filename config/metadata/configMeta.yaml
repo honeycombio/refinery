@@ -835,12 +835,15 @@ groups:
           Peer management is the mechanism by which Refinery locates its peers.
 
           `file` means that Refinery gets its peer list from the Peers list in
-          this config file.
+          this config file. It also prevents Refinery from using a publish/subscribe
+          mechanism to propagate peer lists, stress levels, and configuration changes.
 
           `redis` means that Refinery uses a Publish/Subscribe mechanism,
-          implemented on Redis, to propagate peer lists much more quickly than
-          the legacy mechanism. This is the recommended setting, especially for
-          new installations.
+          implemented on Redis, to propagate peer lists, stress levels, and
+          notification of configuration changes much more quickly than the
+          legacy mechanism. This is the recommended setting, especially for new
+          installations. If this is specified, fields in `RedisPeerManagement`
+          must also be set.
 
       - name: Identifier
         v1group: PeerManagement
