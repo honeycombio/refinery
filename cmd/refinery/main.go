@@ -116,6 +116,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// set up the peer management and pubsub implementations
 	var peers peer.Peers
 	var pubsubber pubsub.PubSub
 	ptype, err := c.GetPeerManagementType()
@@ -124,24 +125,15 @@ func main() {
 	}
 	switch ptype {
 	case "file":
-		// we want to use the file peers object to ask if we have only one peer, so we need to instantiate it
-		// with a dummy metrics object. we'll replace it with the real one later.
-		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
-		// if we only have one, we can use the local pubsub implementation.
-		peerList, err := peers.GetPeers()
-		if err != nil {
-			panic(err)
-		}
-		if len(peerList) == 1 {
-			pubsubber = &pubsub.LocalPubSub{}
-		} else {
-			pubsubber = &pubsub.GoRedisPubSub{}
-		}
-		// now erase the peers Metrics object so that it will get injected with the right one later
-		peers.(*peer.FilePeers).Metrics = nil
+		// In the case of file peers, we do not use Redis for anything, including pubsub, so
+		// we use the local pubsub implementation. Even if we have multiple peers, these
+		// peers cannot communicate using pubsub.
+		peers = &peer.FilePeers{}
+		pubsubber = &pubsub.LocalPubSub{}
 	case "redis":
-		pubsubber = &pubsub.GoRedisPubSub{}
+		// if we're using redis, we need to set it up for both peers and pubsub
 		peers = &peer.RedisPubsubPeers{}
+		pubsubber = &pubsub.GoRedisPubSub{}
 	default:
 		// this should have been caught by validation
 		panic("invalid config option 'PeerManagement.Type'")

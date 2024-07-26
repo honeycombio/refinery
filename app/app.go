@@ -25,28 +25,31 @@ type App struct {
 // Start exits, Stop will be called on all dependencies then on App then the
 // program will exit.
 func (a *App) Start() error {
+	// little helper function to record the current config and rules hashes; we call it in
+	// the callback but also at startup
+	record_hashes := func(msg string) {
+		cfgHash, rulesHash := a.Config.GetHashes()
+		if a.Logger != nil {
+			a.Logger.Warn().WithFields(map[string]interface{}{
+				"configHash": cfgHash,
+				"rulesHash":  rulesHash,
+			}).Logf(msg)
+		}
+		cfgMetric := config.ConfigHashMetrics(cfgHash)
+		ruleMetric := config.ConfigHashMetrics(rulesHash)
+		a.Metrics.Gauge("config_hash", cfgMetric)
+		a.Metrics.Gauge("rule_config_hash", ruleMetric)
+	}
+
 	a.Logger.Debug().Logf("Starting up App...")
 	a.Metrics.Register("config_hash", "gauge")
 	a.Metrics.Register("rule_config_hash", "gauge")
-
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
 
+	record_hashes("loaded configuration at startup")
 	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
-		if a.Logger != nil {
-			a.Logger.Warn().WithFields(map[string]interface{}{
-				"configHash": configHash,
-				"rulesHash":  rulesHash,
-			}).Logf("configuration change was detected and the configuration was reloaded.")
-
-			cfgMetric := config.ConfigHashMetrics(configHash)
-			ruleMetric := config.ConfigHashMetrics(rulesHash)
-
-			a.Metrics.Gauge("config_hash", cfgMetric)
-			a.Metrics.Gauge("rule_config_hash", ruleMetric)
-
-		}
-
+		record_hashes("configuration change was detected and the configuration was reloaded.")
 	})
 
 	// launch our main routers to listen for incoming event traffic from both peers
