@@ -425,7 +425,13 @@ func (s *StressRelief) Recalc() uint {
 		// If it's off, should we activate it?
 		if !s.stressed && s.overallStressLevel >= s.activateLevel {
 			s.stressed = true
-			s.Logger.Warn().WithField("stress_level", s.overallStressLevel).WithField("stress_formula", s.formula).WithField("reason", s.reason).Logf("StressRelief has been activated")
+			s.Logger.Warn().WithFields(map[string]interface{}{
+				"individual_stress_level": localLevel,
+				"cluster_stress_level":    clusterStressLevel,
+				"stress_level":            s.overallStressLevel,
+				"stress_formula":          s.formula,
+				"reason":                  s.reason,
+			}).Logf("StressRelief has been activated")
 		}
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
@@ -436,7 +442,11 @@ func (s *StressRelief) Recalc() uint {
 		// If it's on, should we deactivate it?
 		if s.stressed && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
-			s.Logger.Warn().WithField("stress_level", s.overallStressLevel).Logf("StressRelief has been deactivated")
+			s.Logger.Warn().WithFields(map[string]interface{}{
+				"individual_stress_level": localLevel,
+				"cluster_stress_level":    clusterStressLevel,
+				"stress_level":            s.overallStressLevel,
+			}).Logf("StressRelief has been deactivated")
 		}
 	}
 

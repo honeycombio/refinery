@@ -117,7 +117,7 @@ func TestStressRelief_Peer(t *testing.T) {
 
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 5)
 	require.Eventually(t, func() bool {
 		msg := stressReliefMessage{
 			level:  10,
