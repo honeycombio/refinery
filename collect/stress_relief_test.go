@@ -15,6 +15,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -126,6 +127,89 @@ func TestStressRelief_Peer(t *testing.T) {
 		clock.Advance(time.Second * 1)
 		return !sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
+}
+
+func TestStressRelief_OverallStressLevel(t *testing.T) {
+	clock := clockwork.NewFakeClock()
+	sr, stop := newStressRelief(t, clock, nil)
+	defer stop()
+
+	sr.Start()
+
+	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
+
+	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
+
+	cfg := config.StressReliefConfig{
+		Mode:                      "monitor",
+		ActivationLevel:           80,
+		DeactivationLevel:         65,
+		MinimumActivationDuration: config.Duration(5 * time.Second),
+	}
+
+	// On startup, the stress relief should not be active
+	sr.UpdateFromConfig(cfg)
+	require.False(t, sr.Stressed())
+
+	// Test 1
+	// when a single peer's individual stress level is above the activation level
+	// the overall stress level should be above the activation level
+	// and the stress relief should be active
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
+	clock.Advance(time.Second * 1)
+	sr.stressLevels = make(map[string]stressReport, 100)
+	for i := 0; i < 100; i++ {
+		key := fmt.Sprintf("peer%d", i)
+		sr.stressLevels[key] = stressReport{
+			key:       key,
+			level:     10,
+			timestamp: sr.Clock.Now(),
+		}
+	}
+
+	localLevel := sr.Recalc()
+	sr.lock.RLock()
+	require.Equal(t, localLevel, sr.overallStressLevel)
+	require.True(t, sr.stressed)
+	sr.lock.Unlock()
+
+	// Test 2
+	// when a single peer's individual stress level is below the activation level
+	// and the rest of the cluster is above the activation level
+	// the single peer should remain in stress relief mode
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
+	for i := 0; i < 100; i++ {
+		key := fmt.Sprintf("peer%d", i)
+		sr.stressLevels[key] = stressReport{
+			key:       key,
+			level:     85,
+			timestamp: sr.Clock.Now(),
+		}
+	}
+	localLevel = sr.Recalc()
+	sr.lock.RLock()
+	require.Greater(t, sr.overallStressLevel, localLevel)
+	require.True(t, sr.stressed)
+	sr.lock.Unlock()
+
+	// Test 3
+	// Only when both the single peer's individual stress level and the cluster stress
+	// level is below the activation level, the stress relief should be deactivated.
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
+	for i := 0; i < 100; i++ {
+		key := fmt.Sprintf("peer%d", i)
+		sr.stressLevels[key] = stressReport{
+			key:       key,
+			level:     1,
+			timestamp: sr.Clock.Now(),
+		}
+	}
+	clock.Advance(sr.minDuration * 2)
+	localLevel = sr.Recalc()
+	sr.lock.RLock()
+	assert.Equal(t, sr.overallStressLevel, localLevel)
+	assert.False(t, sr.stressed)
+	sr.lock.Unlock()
 }
 
 // TestStressRelief_Sample tests that traces are sampled deterministically
