@@ -16,12 +16,27 @@ Things that are shared with this connection are:
 - News of configuration changes
 
 Because of this mechanism, Refinery will now react more quickly to changes in any of these factors.
-In particular, all of the nodes in the cluster will now go into and out of stress relief together.
-Also, when one node detects a configuration change, all of its peers will be told about it immediately.
+When one node detects a configuration change, all of its peers will be told about it immediately.
 
-In particular, Refinery now publishes individual stress levels between peers.
+In addition, Refinery now publishes individual stress levels between peers.
 Nodes calculate a cluster stress level as a weighted average (with nodes that are more stressed getting more weight).
-All of the nodes should now enter or leave stress relief at approximately the same time.
+An individual node can enter stress relief as before.
+This can happen, for example, when a single giant trace is concentrated on one node.
+If the cluster as a whole is being stressed by a general burst in traffic, all of the nodes should now enter or leave stress relief at approximately the same time.
+
+### Health checks now include both liveness and readiness
+
+Refinery has always had only a liveness check on `/alive`, which always simply returned ok.
+
+Starting with this release, Refinery now supports both `/alive` and `/ready`, which are based on internal status reporting.
+
+The liveness check is alive whenever Refinery is awake and internal systems are functional.
+It will return a failure if any of the monitored systems fail to report in time.
+
+The readiness check returns ready whenever the monitored systems indicate readiness.
+It will return a failure if any internal system returns not ready.
+This is usually used to indicate to a load balancer that no new traffic should go to this node.
+In this release, this will only happen when a Refinery node is shutting down.
 
 ### Metrics changes
 There have also been some minor changes to metrics in this release:
@@ -35,6 +50,12 @@ These can be used to track that all refineries are using the same configuration 
 ### Disabling Redis and using a static list of peers
 Specifying `PeerManagement.Type=file` will cause Refinery to use the fixed list of peers found in the configuration.
 This means that Refinery will operate without sharing changes to peers, stress, or configuration, as it has in previous releases.
+
+### Config Change notifications
+When deploying a cluster in Kubernetes, it is often the case that configurations are managed as a ConfigMap.
+In the default setup, ConfigMaps are eventually consistent.
+This may mean that one Refinery node will detect a configuration change and broadcast news of it, but a different node that receives the news will attempt to read the data and get the previous configuration.
+In this situation, the change will still be detected by all Refineries within the `ConfigReloadInterval`.
 
 ## Version 2.6.1
 
