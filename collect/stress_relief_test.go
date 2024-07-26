@@ -102,21 +102,22 @@ func TestStressRelief_Peer(t *testing.T) {
 	require.Eventually(t, func() bool {
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
-	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
+	}, 2*time.Second, 100*time.Millisecond, "stress relief should be active")
 
 	require.Eventually(t, func() bool {
 		// pretend another refinery just started up
 		msg := stressReliefMessage{
-			level:  90,
+			level:  10,
 			peerID: "peer1",
 		}
 		require.NoError(t, channel.Publish(context.Background(), stressReliefTopic, msg.String()))
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
-	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
+	}, 2*time.Second, 100*time.Millisecond, "stress relief should be remain activated")
 
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
+	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
 	require.Eventually(t, func() bool {
 		msg := stressReliefMessage{
 			level:  10,
@@ -134,6 +135,8 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	sr, stop := newStressRelief(t, clock, nil)
 	defer stop()
 
+	// disable the automatic stress level recalculation
+	sr.disableStressLevelReport = true
 	sr.Start()
 
 	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
@@ -168,10 +171,8 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	}
 
 	localLevel := sr.Recalc()
-	sr.lock.RLock()
 	require.Equal(t, localLevel, sr.overallStressLevel)
 	require.True(t, sr.stressed)
-	sr.lock.Unlock()
 
 	// Test 2
 	// when a single peer's individual stress level is below the activation level
@@ -187,10 +188,8 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 		}
 	}
 	localLevel = sr.Recalc()
-	sr.lock.RLock()
 	require.Greater(t, sr.overallStressLevel, localLevel)
 	require.True(t, sr.stressed)
-	sr.lock.Unlock()
 
 	// Test 3
 	// Only when both the single peer's individual stress level and the cluster stress
@@ -206,10 +205,8 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	}
 	clock.Advance(sr.minDuration * 2)
 	localLevel = sr.Recalc()
-	sr.lock.RLock()
 	assert.Equal(t, sr.overallStressLevel, localLevel)
 	assert.False(t, sr.stressed)
-	sr.lock.Unlock()
 }
 
 // TestStressRelief_Sample tests that traces are sampled deterministically

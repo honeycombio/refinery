@@ -35,8 +35,8 @@ var _ StressReliever = &MockStressReliever{}
 type MockStressReliever struct {
 	IsStressed              bool
 	SampleDeterministically bool
-	SampleRate              uint
 	ShouldKeep              bool
+	SampleRate              uint
 }
 
 func (m *MockStressReliever) Start() error                                   { return nil }
@@ -99,6 +99,8 @@ type StressRelief struct {
 
 	lock         sync.RWMutex
 	stressLevels map[string]stressReport
+	// only used in tests
+	disableStressLevelReport bool
 }
 
 const StressReliefHealthKey = "stress_relief"
@@ -152,8 +154,12 @@ func (s *StressRelief) Start() error {
 
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
+
 	go func(s *StressRelief) {
 		// only publish stress level if it has changed or if it's been a while since the last publish
+		if s.disableStressLevelReport {
+			return
+		}
 		const maxTicksBetweenReports = 30
 		var (
 			lastLevel   uint = 0
