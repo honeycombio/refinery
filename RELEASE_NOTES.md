@@ -5,7 +5,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 ## Version 2.7.0
 
 This release is a minor release focused on better cluster stability and data quality with a new system for communicating peer information across nodes.
-As a result, clusters should generally behavior more consistently.
+As a result, clusters should generally behave more consistently.
 
 Refinery 2.7 lays the groundwork for substantial future changes to Refinery.
 
