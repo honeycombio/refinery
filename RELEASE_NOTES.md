@@ -24,6 +24,8 @@ If an individual node is stressed, it can enter stress relief individually.
 This may happen, for example, when a single giant trace is concentrated on one node.
 If the cluster as a whole is being stressed by a general burst in traffic, the entire cluster should now enter or leave stress relief at approximately the same time.
 
+If your existing Redis instance is particularly small, you may find it necessary to increase its CPU or network allocations.
+
 ### Health checks now include both liveness and readiness
 
 Refinery has always had only a liveness check on `/alive`, which always simply returned ok.
