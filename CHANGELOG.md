@@ -1,5 +1,55 @@
 # Refinery Changelog
 
+## 2.7.0 2024-07-29
+
+This release incorporates a new publish/subscribe (pubsub) system for faster and cleaner communication between Refinery nodes.
+In particular, the way Refinery uses Redis has changed.
+See full details in [the Release Notes](./RELEASE_NOTES.md).
+
+### Features
+
+- feat: Add metrics to pubsub and peers (#1226) | [Kent Quirk](https://github.com/kentquirk)
+- feat: add otel tracing support for Refinery internal operations (#1218) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add some useful generics (#1206) | [Kent Quirk](https://github.com/kentquirk)
+- feat: gossip config reload information (#1241) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Health/Ready system imported from R3 (#1231) | [Kent Quirk](https://github.com/kentquirk)
+- feat: peer management on pubsub via callbacks (#1220) | [Kent Quirk](https://github.com/kentquirk)
+- feat: track config hash on config reload (#1212) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: use pub/sub for stress relief (#1221) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Working, tested, but unused pubsub system (#1205) | [Kent Quirk](https://github.com/kentquirk)
+
+### Fixes
+
+- fix: add injection tags for configwatcher (#1246) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: add peer logging, add debug log of peers (#1239) | [Kent Quirk](https://github.com/kentquirk)
+- fix: allow a single node to activate stress relief mode during significant load increase (#1256) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: allow sending otel tracing to non honeycomb backend (#1219) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: Change pubsub interface to use callbacks. (#1217) | [Kent Quirk](https://github.com/kentquirk)
+- fix: clean up a print line (#1250) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: FilePeers implies no Redis (#1251) | [Kent Quirk](https://github.com/kentquirk)
+- fix: make sure stress relief pub/sub topic is consistent (#1245) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: make sure to inject Health object as a pointer (#1237) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: Record hashes at startup in metrics (#1252) | [Kent Quirk](https://github.com/kentquirk)
+- fix: reduce pub/sub messages from stress relief (#1248) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: remove otel-config-go as a dependency (#1240) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: remove personal api keys (#1253) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Root spans must have a non-empty parent ID field (#1236) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- fix: sharder should use peer identity from Peers package (#1249) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Maintenance
+
+- docs: Tweak docs for reload (#1247) | [Kent Quirk](https://github.com/kentquirk)
+- docs: update vulnerability reporting process (#1224) | [Robb Kidd](https://github.com/Robb Kidd)
+- maint: add instrumentation for GoRedisPubSub (#1229) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: Add jitter to peer traffic, fix startup (#1227) | [Kent Quirk](https://github.com/kentquirk)
+- maint: change targeted arch to arm for local development Dockerfile (#1228) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: last changes before the final release prep (#1254) | [Kent Quirk](https://github.com/kentquirk)
+- maint: update doc based on config changes (#1243) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: Update licenses (#1244) | [Tyler Helmuth](https://github.com/Tyler Helmuth)
+- maint(deps): bump google.golang.org/grpc from 1.64.0 to 1.64.1 (#1223) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump the minor-patch group across 1 directory with 9 updates (#1232) | [dependabot[bot]](https://github.com/dependabot[bot])
+
+
 ## 2.6.1 2024-06-17
 
 ### Fixes

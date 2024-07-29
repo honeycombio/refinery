@@ -2,9 +2,70 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.7.0
+
+This release is a minor release focused on better cluster stability and data quality with a new system for communicating peer information across nodes.
+As a result, clusters should generally behave more consistently.
+
+Refinery 2.7 lays the groundwork for substantial future changes to Refinery.
+
+### Publish/Subscribe on Redis
+In this release, Redis is no longer a database for storing a list of peers.
+Instead, it is used as a more general publish/subscribe framework for rapidly sharing information between nodes in the cluster.
+Things that are shared with this connection are:
+
+- Peer membership
+- Stress levels
+- News of configuration changes
+
+Because of this mechanism, Refinery will now react more quickly to changes in any of these factors.
+When one node detects a configuration change, all of its peers will be told about it immediately.
+
+In addition, Refinery now publishes individual stress levels between peers.
+Nodes calculate a cluster stress level as a weighted average (with nodes that are more stressed getting more weight).
+If an individual node is stressed, it can enter stress relief individually.
+This may happen, for example, when a single giant trace is concentrated on one node.
+If the cluster as a whole is being stressed by a general burst in traffic, the entire cluster should now enter or leave stress relief at approximately the same time.
+
+If your existing Redis instance is particularly small, you may find it necessary to increase its CPU or network allocations.
+
+### Health checks now include both liveness and readiness
+
+Refinery has always had only a liveness check on `/alive`, which always simply returned ok.
+
+Starting with this release, Refinery now supports both `/alive` and `/ready`, which are based on internal status reporting.
+
+The liveness check is alive whenever Refinery is awake and internal systems are functional.
+It will return a failure if any of the monitored systems fail to report in time.
+
+The readiness check returns ready whenever the monitored systems indicate readiness.
+It will return a failure if any internal system returns not ready.
+This is usually used to indicate to a load balancer that no new traffic should go to this node.
+In this release, this will only happen when a Refinery node is shutting down.
+
+### Metrics changes
+There have also been some minor changes to metrics in this release:
+
+We have two new metrics called `individual_stress_level` (the stress level as seen by a single node) and `cluster_stress_level` (the aggregated cluster level).
+The `stress_level` metric indicates the maximum of the two values; it is this value which is used to determine whether an individual node activates stress relief.
+
+There is also a new pair of metrics, `config_hash` and `rule_config_hash`.
+These are numeric Gauge metrics that are set to the numeric value of the last 4 hex digits of the hash of the current config files.
+These can be used to track that all refineries are using the same configuration file.
+
+### Disabling Redis and using a static list of peers
+Specifying `PeerManagement.Type=file` will cause Refinery to use the fixed list of peers found in the configuration.
+This means that Refinery will operate without sharing changes to peers, stress, or configuration, as it has in previous releases.
+
+### Config Change notifications
+When deploying a cluster in Kubernetes, it is often the case that configurations are managed as a ConfigMap.
+In the default setup, ConfigMaps are eventually consistent.
+This may mean that one Refinery node will detect a configuration change and broadcast news of it, but a different node that receives the news will attempt to read the data and get the previous configuration.
+In this situation, the change will still be detected by all Refineries within the `ConfigReloadInterval`.
+
 ## Version 2.6.1
 
-This is a bug fix release. 
+This is a bug fix release.
 In the log handling logic newly introduced in v2.6.0, Refinery would incorrectly consider log events to be root spans in a trace.
 After this fix, log events can never be root spans.
 This is recommended for everyone who wants to use the new log handling capabilities.

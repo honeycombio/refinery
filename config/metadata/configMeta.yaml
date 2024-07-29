@@ -753,7 +753,7 @@ groups:
         default: false
         reload: false
         firstversion: v2.6
-        summary: controls whether to send Refinery's own otel traces.
+        summary: controls whether to send Refinery's own OpenTelemetry traces.
         description: >
           The setting specifies if Refinery sends traces.
 
@@ -786,9 +786,9 @@ groups:
           It is recommended that you create a separate team and key for
           Refinery telemetry.
 
-          If this is blank, then Refinery will not set the Honeycomb-specific
-          headers for OpenTelemetry, and your `APIHost` must be set to a
-          valid OpenTelemetry endpoint.
+          If this value is blank, then Refinery will not set the
+          Honeycomb-specific headers for OpenTelemetry, and your `APIHost` must
+          be set to a valid OpenTelemetry endpoint.
 
       - name: Dataset
         type: string
@@ -813,7 +813,7 @@ groups:
         summary: is the rate at which Refinery samples its own traces.
         description: >
           This is the Honeycomb sample rate used to sample traces sent by Refinery. Since each
-          incoming span generates multiple outgoing spans, a sample rate of at least 100 is
+          incoming span generates multiple outgoing spans, a minimum sample rate of `100` is
           strongly advised.
 
   - name: PeerManagement
@@ -841,8 +841,10 @@ groups:
           `redis` means that Refinery uses a Publish/Subscribe mechanism,
           implemented on Redis, to propagate peer lists, stress levels, and
           notification of configuration changes much more quickly than the
-          legacy mechanism. This is the recommended setting, especially for new
-          installations. If this is specified, fields in `RedisPeerManagement`
+          legacy mechanism.
+
+          The recommended setting is `redis`, especially for new
+          installations. If `redis` is specified, fields in `RedisPeerManagement`
           must also be set.
 
       - name: Identifier
