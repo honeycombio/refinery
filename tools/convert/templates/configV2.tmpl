@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2024-07-24 at 20:24:27 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2024-07-29 at 17:37:49 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -641,7 +641,7 @@ OTelMetrics:
 OTelTracing:
   ## OTelTracing contains configuration for Refinery's own tracing.
   ####
-    ## Enabled controls whether to send Refinery's own otel traces.
+    ## Enabled controls whether to send Refinery's own OpenTelemetry traces.
     ##
     ## The setting specifies if Refinery sends traces.
     ##
@@ -662,9 +662,9 @@ OTelTracing:
     ##
     ## It is recommended that you create a separate team and key for Refinery
     ## telemetry.
-    ## If this is blank, then Refinery will not set the Honeycomb-specific
-    ## headers for OpenTelemetry, and your `APIHost` must be set to a valid
-    ## OpenTelemetry endpoint.
+    ## If this value is blank, then Refinery will not set the
+    ## Honeycomb-specific headers for OpenTelemetry, and your `APIHost` must
+    ## be set to a valid OpenTelemetry endpoint.
     ##
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "APIKey" "APIKey" "" }}
@@ -682,7 +682,7 @@ OTelTracing:
     ##
     ## This is the Honeycomb sample rate used to sample traces sent by
     ## Refinery. Since each incoming span generates multiple outgoing spans,
-    ## a sample rate of at least 100 is strongly advised.
+    ## a minimum sample rate of `100` is strongly advised.
     ##
     ## default: 100
     ## Eligible for live reload.
@@ -699,11 +699,16 @@ PeerManagement:
     ##
     ## Peer management is the mechanism by which Refinery locates its peers.
     ## `file` means that Refinery gets its peer list from the Peers list in
-    ## this config file.
+    ## this config file. It also prevents Refinery from using a
+    ## publish/subscribe mechanism to propagate peer lists, stress levels,
+    ## and configuration changes.
     ## `redis` means that Refinery uses a Publish/Subscribe mechanism,
-    ## implemented on Redis, to propagate peer lists much more quickly than
-    ## the legacy mechanism. This is the recommended setting, especially for
-    ## new installations.
+    ## implemented on Redis, to propagate peer lists, stress levels, and
+    ## notification of configuration changes much more quickly than the
+    ## legacy mechanism.
+    ## The recommended setting is `redis`, especially for new installations.
+    ## If `redis` is specified, fields in `RedisPeerManagement` must also be
+    ## set.
     ##
     ## default: file
     ## Not eligible for live reload.
