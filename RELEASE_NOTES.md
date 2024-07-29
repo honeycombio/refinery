@@ -41,7 +41,7 @@ In this release, this will only happen when a Refinery node is shutting down.
 ### Metrics changes
 There have also been some minor changes to metrics in this release:
 
-We hae two new metrics called `individual_stress_level` (the stress level as seen by a single node) and `cluster_stress_level` (the aggregated cluster level).
+We have two new metrics called `individual_stress_level` (the stress level as seen by a single node) and `cluster_stress_level` (the aggregated cluster level).
 The `stress_level` metric indicates the maximum of the two values; it is this value which is used to determine whether an individual node activates stress relief.
 
 There is also a new pair of metrics, `config_hash` and `rule_config_hash`.
