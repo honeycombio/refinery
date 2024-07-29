@@ -4,7 +4,10 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.7.0
 
-This release is a transitional release, laying the groundwork for substantial future changes to Refinery.
+This release is a minor release focused on better cluster stability and data quality with a new system for communicating peer information across nodes.
+As a result, clusters should generally behavior more consistently.
+
+Refinery 2.7 lays the groundwork for substantial future changes to Refinery.
 
 ### Publish/Subscribe on Redis
 In this release, Redis is no longer a database for storing a list of peers.
