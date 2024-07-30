@@ -13,13 +13,7 @@ import (
 func (r *Router) proxy(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_proxied")
 	r.Logger.Debug().Logf("proxying request for %s", req.URL.Path)
-	upstreamTarget, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		w.WriteHeader(http.StatusServiceUnavailable)
-		io.WriteString(w, `{"error":"upstream target unavailable"}`)
-		r.Logger.Error().Logf("error getting honeycomb API config: %s", err)
-		return
-	}
+	upstreamTarget := r.Config.GetHoneycombAPI()
 	forwarded := req.Header.Get("X-Forwarded-For")
 	// let's copy the request over to a new one and
 	// dispatch it upstream

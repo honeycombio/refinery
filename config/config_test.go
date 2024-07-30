@@ -77,7 +77,7 @@ func TestGRPCListenAddrEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if a, _ := c.GetGRPCListenAddr(); a != address {
+	if a := c.GetGRPCListenAddr(); a != address {
 		t.Error("received", a, "expected", address)
 	}
 }
@@ -90,7 +90,7 @@ func TestRedisHostEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetRedisHost(); d != host {
+	if d := c.GetRedisHost(); d != host {
 		t.Error("received", d, "expected", host)
 	}
 }
@@ -103,7 +103,7 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetRedisUsername(); d != username {
+	if d := c.GetRedisUsername(); d != username {
 		t.Error("received", d, "expected", username)
 	}
 }
@@ -116,7 +116,7 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetRedisPassword(); d != password {
+	if d := c.GetRedisPassword(); d != password {
 		t.Error("received", d, "expected", password)
 	}
 }
@@ -129,7 +129,7 @@ func TestRedisAuthCodeEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetRedisAuthCode(); d != authCode {
+	if d := c.GetRedisAuthCode(); d != authCode {
 		t.Error("received", d, "expected", authCode)
 	}
 }
@@ -219,7 +219,7 @@ func TestReload(t *testing.T) {
 	watcher.Start()
 	defer watcher.Stop()
 
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+	if d := c.GetListenAddr(); d != "0.0.0.0:8080" {
 		t.Error("received", d, "expected", "0.0.0.0:8080")
 	}
 
@@ -266,7 +266,7 @@ func TestReload(t *testing.T) {
 
 	wg.Wait()
 
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:9000" {
+	if d := c.GetListenAddr(); d != "0.0.0.0:9000" {
 		t.Error("received", d, "expected", "0.0.0.0:9000")
 	}
 
@@ -281,7 +281,7 @@ func TestReloadDisabled(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+	if d := c.GetListenAddr(); d != "0.0.0.0:8080" {
 		t.Error("received", d, "expected", "0.0.0.0:8080")
 	}
 
@@ -294,7 +294,7 @@ func TestReloadDisabled(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	if d, _ := c.GetListenAddr(); d != "0.0.0.0:8080" {
+	if d := c.GetListenAddr(); d != "0.0.0.0:8080" {
 		t.Error("received", d, "expected", "0.0.0.0:8080")
 	}
 }
@@ -303,11 +303,11 @@ func TestReadDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetSendDelay(); d != 2*time.Second {
+	if d := c.GetSendDelay(); d != 2*time.Second {
 		t.Error("received", d, "expected", 2*time.Second)
 	}
 
-	if d, _ := c.GetTraceTimeout(); d != 60*time.Second {
+	if d := c.GetTraceTimeout(); d != 60*time.Second {
 		t.Error("received", d, "expected", 60*time.Second)
 	}
 
@@ -315,11 +315,11 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", 100*time.Millisecond)
 	}
 
-	if d, _ := c.GetPeerManagementType(); d != "file" {
+	if d := c.GetPeerManagementType(); d != "file" {
 		t.Error("received", d, "expected", "file")
 	}
 
-	if d, _ := c.GetUseIPV6Identifier(); d != false {
+	if d := c.GetUseIPV6Identifier(); d != false {
 		t.Error("received", d, "expected", false)
 	}
 
@@ -335,8 +335,7 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", time.Hour)
 	}
 
-	d, name, err := c.GetSamplerConfigForDestName("dataset-doesnt-exist")
-	assert.NoError(t, err)
+	d, name := c.GetSamplerConfigForDestName("dataset-doesnt-exist")
 	assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)
 }
@@ -345,18 +344,15 @@ func TestReadRulesConfig(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules_complete.yaml"})
 	assert.NoError(t, err)
 
-	d, name, err := c.GetSamplerConfigForDestName("doesnt-exist")
-	assert.NoError(t, err)
+	d, name := c.GetSamplerConfigForDestName("doesnt-exist")
 	assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)
 
-	d, name, err = c.GetSamplerConfigForDestName("env1")
-	assert.NoError(t, err)
+	d, name = c.GetSamplerConfigForDestName("env1")
 	assert.IsType(t, &config.DynamicSamplerConfig{}, d)
 	assert.Equal(t, "DynamicSampler", name)
 
-	d, name, err = c.GetSamplerConfigForDestName("env4")
-	assert.NoError(t, err)
+	d, name = c.GetSamplerConfigForDestName("env4")
 	switch r := d.(type) {
 	case *config.RulesBasedSamplerConfig:
 		assert.Len(t, r.Rules, 6)
@@ -403,7 +399,7 @@ func TestPeerManagementType(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetPeerManagementType(); d != "redis" {
+	if d := c.GetPeerManagementType(); d != "redis" {
 		t.Error("received", d, "expected", "redis")
 	}
 
@@ -425,7 +421,7 @@ func TestDebugServiceAddr(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	if d, _ := c.GetDebugServiceAddr(); d != "localhost:8085" {
+	if d := c.GetDebugServiceAddr(); d != "localhost:8085" {
 		t.Error("received", d, "expected", "localhost:8085")
 	}
 }
@@ -468,8 +464,7 @@ func TestMaxAlloc(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := config.MemorySize(16 * 1024 * 1024 * 1024)
-	inMemConfig, err := c.GetCollectionConfig()
-	assert.NoError(t, err)
+	inMemConfig := c.GetCollectionConfig()
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
 }
 
@@ -514,8 +509,7 @@ func TestPeerAndIncomingQueueSize(t *testing.T) {
 		c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 		assert.NoError(t, err)
 
-		inMemConfig, err := c.GetCollectionConfig()
-		assert.NoError(t, err)
+		inMemConfig := c.GetCollectionConfig()
 		assert.Equal(t, tc.expectedForPeer, inMemConfig.GetPeerQueueSize())
 		assert.Equal(t, tc.expectedForIncoming, inMemConfig.GetIncomingQueueSize())
 	}
@@ -531,7 +525,7 @@ func TestAvailableMemoryCmdLine(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := config.MemorySize(2*1024*1024*1024 + 512*1024*1024)
-	inMemConfig, err := c.GetCollectionConfig()
+	inMemConfig := c.GetCollectionConfig()
 	assert.NoError(t, err)
 	assert.Equal(t, expected, inMemConfig.AvailableMemory)
 }
@@ -563,27 +557,27 @@ func TestGetSamplerTypes(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	if d, name, err := c.GetSamplerConfigForDestName("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
+	if d, name := c.GetSamplerConfigForDestName("dataset-doesnt-exist"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 		assert.Equal(t, "DeterministicSampler", name)
 	}
 
-	if d, name, err := c.GetSamplerConfigForDestName("dataset 1"); assert.Equal(t, nil, err) {
+	if d, name := c.GetSamplerConfigForDestName("dataset 1"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &config.DynamicSamplerConfig{}, d)
 		assert.Equal(t, "DynamicSampler", name)
 	}
 
-	if d, name, err := c.GetSamplerConfigForDestName("dataset2"); assert.Equal(t, nil, err) {
+	if d, name := c.GetSamplerConfigForDestName("dataset2"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 		assert.Equal(t, "DeterministicSampler", name)
 	}
 
-	if d, name, err := c.GetSamplerConfigForDestName("dataset3"); assert.Equal(t, nil, err) {
+	if d, name := c.GetSamplerConfigForDestName("dataset3"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &config.EMADynamicSamplerConfig{}, d)
 		assert.Equal(t, "EMADynamicSampler", name)
 	}
 
-	if d, name, err := c.GetSamplerConfigForDestName("dataset4"); assert.Equal(t, nil, err) {
+	if d, name := c.GetSamplerConfigForDestName("dataset4"); assert.Equal(t, nil, err) {
 		assert.IsType(t, &config.TotalThroughputSamplerConfig{}, d)
 		assert.Equal(t, "TotalThroughputSampler", name)
 	}
@@ -600,11 +594,9 @@ func TestDefaultSampler(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	s, name, err := c.GetSamplerConfigForDestName("nonexistent")
+	s, name := c.GetSamplerConfigForDestName("nonexistent")
 
-	assert.NoError(t, err)
 	assert.Equal(t, "DeterministicSampler", name)
-
 	assert.IsType(t, &config.DeterministicSamplerConfig{}, s)
 }
 
@@ -625,9 +617,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	loggerConfig, err := c.GetHoneycombLoggerConfig()
-
-	assert.NoError(t, err)
+	loggerConfig := c.GetHoneycombLoggerConfig()
 
 	assert.Equal(t, "http://honeycomb.io", loggerConfig.APIHost)
 	assert.Equal(t, "1234", loggerConfig.APIKey)
@@ -651,9 +641,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	loggerConfig, err := c.GetHoneycombLoggerConfig()
-
-	assert.NoError(t, err)
+	loggerConfig := c.GetHoneycombLoggerConfig()
 
 	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
@@ -674,8 +662,7 @@ func TestHoneycombGRPCConfigDefaults(t *testing.T) {
 
 	assert.Equal(t, true, c.GetGRPCEnabled())
 
-	a, err := c.GetGRPCListenAddr()
-	assert.NoError(t, err)
+	a := c.GetGRPCListenAddr()
 	assert.Equal(t, "localhost:4343", a)
 
 	grpcConfig := c.GetGRPCConfig()
@@ -706,9 +693,7 @@ func TestStdoutLoggerConfig(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	loggerConfig, err := c.GetStdoutLoggerConfig()
-
-	assert.NoError(t, err)
+	loggerConfig := c.GetStdoutLoggerConfig()
 
 	assert.True(t, loggerConfig.Structured)
 	assert.True(t, loggerConfig.SamplerEnabled)
@@ -726,9 +711,7 @@ func TestStdoutLoggerConfigDefaults(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	loggerConfig, err := c.GetStdoutLoggerConfig()
-
-	assert.NoError(t, err)
+	loggerConfig := c.GetStdoutLoggerConfig()
 
 	assert.False(t, loggerConfig.Structured)
 	assert.False(t, loggerConfig.SamplerEnabled)
@@ -790,8 +773,7 @@ func TestGRPCServerParameters(t *testing.T) {
 	assert.Equal(t, 4*time.Minute, time.Duration(gc.KeepAlive))
 	assert.Equal(t, 5*time.Minute, time.Duration(gc.KeepAliveTimeout))
 	assert.Equal(t, true, c.GetGRPCEnabled())
-	addr, err := c.GetGRPCListenAddr()
-	assert.NoError(t, err)
+	addr := c.GetGRPCListenAddr()
 	assert.Equal(t, "localhost:4317", addr)
 }
 
@@ -925,8 +907,7 @@ func TestOverrideConfigDefaults(t *testing.T) {
 
 	assert.Equal(t, false, c.GetAddSpanCountToRoot())
 	assert.Equal(t, false, c.GetAddHostMetadataToTrace())
-	loggerConfig, err := c.GetHoneycombLoggerConfig()
-	assert.NoError(t, err)
+	loggerConfig := c.GetHoneycombLoggerConfig()
 	assert.Equal(t, false, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, false, c.GetCompressPeerCommunication())
 	assert.Equal(t, false, c.GetGRPCEnabled())

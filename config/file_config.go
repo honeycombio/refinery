@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -42,6 +41,9 @@ type fileConfig struct {
 	mux           sync.RWMutex
 	lastLoadTime  time.Time
 }
+
+// ensure that fileConfig implements Config
+var _ Config = (*fileConfig)(nil)
 
 type configContents struct {
 	General              GeneralConfig             `yaml:"General"`
@@ -466,26 +468,26 @@ func (f *fileConfig) RegisterReloadCallback(cb ConfigReloadCallback) {
 	f.callbacks = append(f.callbacks, cb)
 }
 
-func (f *fileConfig) GetListenAddr() (string, error) {
+func (f *fileConfig) GetListenAddr() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	_, _, err := net.SplitHostPort(f.mainConfig.Network.ListenAddr)
 	if err != nil {
-		return "", err
+		return ""
 	}
-	return f.mainConfig.Network.ListenAddr, nil
+	return f.mainConfig.Network.ListenAddr
 }
 
-func (f *fileConfig) GetPeerListenAddr() (string, error) {
+func (f *fileConfig) GetPeerListenAddr() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	_, _, err := net.SplitHostPort(f.mainConfig.Network.PeerListenAddr)
 	if err != nil {
-		return "", err
+		return ""
 	}
-	return f.mainConfig.Network.PeerListenAddr, nil
+	return f.mainConfig.Network.PeerListenAddr
 }
 
 func (f *fileConfig) GetHTTPIdleTimeout() time.Duration {
@@ -509,7 +511,7 @@ func (f *fileConfig) GetGRPCEnabled() bool {
 	return f.mainConfig.GRPCServerParameters.Enabled.Get()
 }
 
-func (f *fileConfig) GetGRPCListenAddr() (string, error) {
+func (f *fileConfig) GetGRPCListenAddr() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
@@ -517,10 +519,10 @@ func (f *fileConfig) GetGRPCListenAddr() (string, error) {
 	if f.mainConfig.GRPCServerParameters.ListenAddr != "" {
 		_, _, err := net.SplitHostPort(f.mainConfig.GRPCServerParameters.ListenAddr)
 		if err != nil {
-			return "", err
+			return ""
 		}
 	}
-	return f.mainConfig.GRPCServerParameters.ListenAddr, nil
+	return f.mainConfig.GRPCServerParameters.ListenAddr
 }
 
 func (f *fileConfig) GetGRPCConfig() GRPCServerParameters {
@@ -546,32 +548,32 @@ func (f *fileConfig) IsAPIKeyValid(key string) bool {
 	return f.mainConfig.AccessKeys.keymap.Contains(key)
 }
 
-func (f *fileConfig) GetPeerManagementType() (string, error) {
+func (f *fileConfig) GetPeerManagementType() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.Type, nil
+	return f.mainConfig.PeerManagement.Type
 }
 
-func (f *fileConfig) GetPeers() ([]string, error) {
+func (f *fileConfig) GetPeers() []string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.Peers, nil
+	return f.mainConfig.PeerManagement.Peers
 }
 
-func (f *fileConfig) GetRedisHost() (string, error) {
+func (f *fileConfig) GetRedisHost() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Host, nil
+	return f.mainConfig.RedisPeerManagement.Host
 }
 
-func (f *fileConfig) GetRedisUsername() (string, error) {
+func (f *fileConfig) GetRedisUsername() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Username, nil
+	return f.mainConfig.RedisPeerManagement.Username
 }
 
 func (f *fileConfig) GetRedisPrefix() string {
@@ -581,18 +583,18 @@ func (f *fileConfig) GetRedisPrefix() string {
 	return f.mainConfig.RedisPeerManagement.Prefix
 }
 
-func (f *fileConfig) GetRedisPassword() (string, error) {
+func (f *fileConfig) GetRedisPassword() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.Password, nil
+	return f.mainConfig.RedisPeerManagement.Password
 }
 
-func (f *fileConfig) GetRedisAuthCode() (string, error) {
+func (f *fileConfig) GetRedisAuthCode() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.AuthCode, nil
+	return f.mainConfig.RedisPeerManagement.AuthCode
 }
 
 func (f *fileConfig) GetRedisDatabase() int {
@@ -602,46 +604,46 @@ func (f *fileConfig) GetRedisDatabase() int {
 	return f.mainConfig.RedisPeerManagement.Database
 }
 
-func (f *fileConfig) GetUseTLS() (bool, error) {
+func (f *fileConfig) GetUseTLS() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.UseTLS, nil
+	return f.mainConfig.RedisPeerManagement.UseTLS
 }
 
-func (f *fileConfig) GetUseTLSInsecure() (bool, error) {
+func (f *fileConfig) GetUseTLSInsecure() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.RedisPeerManagement.UseTLSInsecure, nil
+	return f.mainConfig.RedisPeerManagement.UseTLSInsecure
 }
 
-func (f *fileConfig) GetIdentifierInterfaceName() (string, error) {
+func (f *fileConfig) GetIdentifierInterfaceName() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.IdentifierInterfaceName, nil
+	return f.mainConfig.PeerManagement.IdentifierInterfaceName
 }
 
-func (f *fileConfig) GetUseIPV6Identifier() (bool, error) {
+func (f *fileConfig) GetUseIPV6Identifier() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.UseIPV6Identifier, nil
+	return f.mainConfig.PeerManagement.UseIPV6Identifier
 }
 
-func (f *fileConfig) GetRedisIdentifier() (string, error) {
+func (f *fileConfig) GetRedisIdentifier() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.PeerManagement.Identifier, nil
+	return f.mainConfig.PeerManagement.Identifier
 }
 
-func (f *fileConfig) GetHoneycombAPI() (string, error) {
+func (f *fileConfig) GetHoneycombAPI() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Network.HoneycombAPI, nil
+	return f.mainConfig.Network.HoneycombAPI
 }
 
 func (f *fileConfig) GetLoggerLevel() Level {
@@ -651,40 +653,40 @@ func (f *fileConfig) GetLoggerLevel() Level {
 	return f.mainConfig.Logger.Level
 }
 
-func (f *fileConfig) GetLoggerType() (string, error) {
+func (f *fileConfig) GetLoggerType() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Logger.Type, nil
+	return f.mainConfig.Logger.Type
 }
 
-func (f *fileConfig) GetHoneycombLoggerConfig() (HoneycombLoggerConfig, error) {
+func (f *fileConfig) GetHoneycombLoggerConfig() HoneycombLoggerConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.HoneycombLogger, nil
+	return f.mainConfig.HoneycombLogger
 }
 
-func (f *fileConfig) GetStdoutLoggerConfig() (StdoutLoggerConfig, error) {
+func (f *fileConfig) GetStdoutLoggerConfig() StdoutLoggerConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.StdoutLogger, nil
+	return f.mainConfig.StdoutLogger
 }
 
-func (f *fileConfig) GetAllSamplerRules() (*V2SamplerConfig, error) {
+func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	// This is probably good enough for debug; if not we can extend it.
-	return f.rulesConfig, nil
+	return f.rulesConfig
 }
 
 // GetSamplerConfigForDestName returns the sampler config for the given
 // destination (environment, or dataset in classic mode), as well as the name of
 // the sampler type. If the specific destination is not found, it returns the
 // default sampler config.
-func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, error) {
+func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string) {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
@@ -693,23 +695,19 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string, 
 		nameToUse = destname
 	}
 
-	err := errors.New("no sampler found and no default configured")
 	name := "not found"
 	var cfg any
 	if sampler, ok := f.rulesConfig.Samplers[nameToUse]; ok {
 		cfg, name = sampler.Sampler()
-		if cfg != nil {
-			err = nil
-		}
 	}
-	return cfg, name, err
+	return cfg, name
 }
 
-func (f *fileConfig) GetCollectionConfig() (CollectionConfig, error) {
+func (f *fileConfig) GetCollectionConfig() CollectionConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.Collection, nil
+	return f.mainConfig.Collection
 }
 
 func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
@@ -733,11 +731,11 @@ func (f *fileConfig) GetOTelMetricsConfig() OTelMetricsConfig {
 	return f.mainConfig.OTelMetrics
 }
 
-func (f *fileConfig) GetSendDelay() (time.Duration, error) {
+func (f *fileConfig) GetSendDelay() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.Traces.SendDelay), nil
+	return time.Duration(f.mainConfig.Traces.SendDelay)
 }
 
 func (f *fileConfig) GetBatchTimeout() time.Duration {
@@ -747,11 +745,11 @@ func (f *fileConfig) GetBatchTimeout() time.Duration {
 	return time.Duration(f.mainConfig.Traces.BatchTimeout)
 }
 
-func (f *fileConfig) GetTraceTimeout() (time.Duration, error) {
+func (f *fileConfig) GetTraceTimeout() time.Duration {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return time.Duration(f.mainConfig.Traces.TraceTimeout), nil
+	return time.Duration(f.mainConfig.Traces.TraceTimeout)
 }
 
 func (f *fileConfig) GetMaxBatchSize() uint {
@@ -782,15 +780,15 @@ func (f *fileConfig) GetSendTickerValue() time.Duration {
 	return time.Duration(f.mainConfig.Traces.SendTicker)
 }
 
-func (f *fileConfig) GetDebugServiceAddr() (string, error) {
+func (f *fileConfig) GetDebugServiceAddr() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	_, _, err := net.SplitHostPort(f.mainConfig.Debugging.DebugServiceAddr)
 	if err != nil {
-		return "", err
+		return ""
 	}
-	return f.mainConfig.Debugging.DebugServiceAddr, nil
+	return f.mainConfig.Debugging.DebugServiceAddr
 }
 
 func (f *fileConfig) GetIsDryRun() bool {

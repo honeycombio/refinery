@@ -65,10 +65,7 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 		}
 	}
 
-	c, _, err := s.Config.GetSamplerConfigForDestName(samplerKey)
-	if err != nil {
-		return nil
-	}
+	c, _ := s.Config.GetSamplerConfigForDestName(samplerKey)
 
 	var sampler Sampler
 
@@ -92,7 +89,7 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 		os.Exit(1)
 	}
 
-	err = sampler.Start()
+	err := sampler.Start()
 	if err != nil {
 		s.Logger.Debug().WithField("dataset", samplerKey).Logf("failed to start sampler")
 		return nil
