@@ -59,7 +59,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 // the cache and that that trace gets sent
 func TestAddRootSpan(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -135,7 +135,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	const originalSampleRate = uint(50)
 
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
 		SendTickerVal:      2 * time.Millisecond,
@@ -217,7 +217,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 // set instead of inferred
 func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -276,7 +276,7 @@ func getEventsLength(transmission *transmit.MockTransmission) int {
 // cache
 func TestAddSpan(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -335,7 +335,7 @@ func TestAddSpan(t *testing.T) {
 // sampling decision is marked on each span in the trace
 func TestDryRunMode(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
 			SampleRate: 10,
@@ -460,7 +460,7 @@ func TestDryRunMode(t *testing.T) {
 
 func TestCacheSizeReload(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -534,7 +534,7 @@ func TestCacheSizeReload(t *testing.T) {
 
 func TestSampleConfigReload(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:        0,
+		GetSendDelayVal:        1 * time.Millisecond,
 		GetTraceTimeoutVal:     60 * time.Second,
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:          2 * time.Millisecond,
@@ -606,7 +606,7 @@ func TestSampleConfigReload(t *testing.T) {
 
 func TestStableMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -698,7 +698,7 @@ func TestStableMaxAlloc(t *testing.T) {
 
 func TestAddSpanNoBlock(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 10 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
@@ -768,7 +768,7 @@ func TestDependencyInjection(t *testing.T) {
 // This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
 func TestAddCountsToRoot(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -846,7 +846,7 @@ func TestAddCountsToRoot(t *testing.T) {
 // even if the trace had already been sent
 func TestLateRootGetsCounts(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:      0,
+		GetSendDelayVal:      1 * time.Millisecond,
 		GetTraceTimeoutVal:   5 * time.Millisecond,
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:        2 * time.Millisecond,
@@ -929,7 +929,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 // the cache and that that trace gets span count added to it
 func TestAddSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -991,7 +991,7 @@ func TestAddSpanCount(t *testing.T) {
 // even if the trace had already been sent
 func TestLateRootGetsSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:      0,
+		GetSendDelayVal:      1 * time.Millisecond,
 		GetTraceTimeoutVal:   5 * time.Millisecond,
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:        2 * time.Millisecond,
@@ -1057,7 +1057,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 // if the AddRuleReasonToTrace attribute not set in config
 func TestLateSpanNotDecorated(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 5 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -1116,7 +1116,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 
 func TestAddAdditionalAttributes(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -1178,7 +1178,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 // StressReliefMode is active
 func TestStressReliefDecorateHostname(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 5 * time.Minute,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
@@ -1242,7 +1242,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 func TestSpanWithRuleReasons(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 5 * time.Millisecond,
 		GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
 			Rules: []*config.RulesBasedSamplerRule{

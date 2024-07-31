@@ -13,13 +13,11 @@ Logger:
 LegacyMetrics:
   Enabled: true
   Dataset: refinery_metrics
-  APIKey: $REFINERY_HONEYCOMB_API_KEY
   APIHost: https://api-dogfood.honeycomb.io
 
 OTelMetrics:
   Enabled: true
   Dataset: refinery_metrics_otel
-  APIKey: $REFINERY_HONEYCOMB_API_KEY
   APIHost: https://api-dogfood.honeycomb.io
 
 RefineryTelemetry:

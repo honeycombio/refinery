@@ -119,10 +119,7 @@ func main() {
 	// set up the peer management and pubsub implementations
 	var peers peer.Peers
 	var pubsubber pubsub.PubSub
-	ptype, err := c.GetPeerManagementType()
-	if err != nil {
-		panic(err)
-	}
+	ptype := c.GetPeerManagementType()
 	switch ptype {
 	case "file":
 		// In the case of file peers, we do not use Redis for anything, including pubsub, so

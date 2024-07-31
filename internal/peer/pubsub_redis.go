@@ -206,7 +206,7 @@ func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
 
 func (p *RedisPubsubPeers) publicAddr() (string, error) {
 	// compute the public version of my peer listen address
-	listenAddr, _ := p.Config.GetPeerListenAddr()
+	listenAddr := p.Config.GetPeerListenAddr()
 	// first, extract the port
 	_, port, err := net.SplitHostPort(listenAddr)
 
@@ -217,7 +217,7 @@ func (p *RedisPubsubPeers) publicAddr() (string, error) {
 	var myIdentifier string
 
 	// If RedisIdentifier is set, use as identifier.
-	if redisIdentifier, _ := p.Config.GetRedisIdentifier(); redisIdentifier != "" {
+	if redisIdentifier := p.Config.GetRedisIdentifier(); redisIdentifier != "" {
 		myIdentifier = redisIdentifier
 		p.Logger.Info().WithField("identifier", myIdentifier).Logf("using specified RedisIdentifier from config")
 	} else {
@@ -239,7 +239,7 @@ func (p *RedisPubsubPeers) publicAddr() (string, error) {
 // Otherwise, it will use the hostname.
 func (p *RedisPubsubPeers) getIdentifierFromInterface() (string, error) {
 	myIdentifier, _ := os.Hostname()
-	identifierInterfaceName, _ := p.Config.GetIdentifierInterfaceName()
+	identifierInterfaceName := p.Config.GetIdentifierInterfaceName()
 
 	if identifierInterfaceName != "" {
 		ifc, err := net.InterfaceByName(identifierInterfaceName)
@@ -258,7 +258,7 @@ func (p *RedisPubsubPeers) getIdentifierFromInterface() (string, error) {
 		for _, addr := range addrs {
 			// ParseIP doesn't know what to do with the suffix
 			ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
-			ipv6, _ := p.Config.GetUseIPV6Identifier()
+			ipv6 := p.Config.GetUseIPV6Identifier()
 			if ipv6 && ip.To16() != nil {
 				ipStr = fmt.Sprintf("[%s]", ip.String())
 				break

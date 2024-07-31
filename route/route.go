@@ -188,23 +188,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	var listenAddr, grpcAddr string
 	if r.incomingOrPeer == "incoming" {
-		listenAddr, err = r.Config.GetListenAddr()
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to get listen addr config: %s", err)
-			return
-		}
-		// GRPC listen addr is optional, err means addr was not empty and invalid
-		grpcAddr, err = r.Config.GetGRPCListenAddr()
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to get grpc listen addr config: %s", err)
-			return
-		}
+		listenAddr = r.Config.GetListenAddr()
+		// GRPC listen addr is optional
+		grpcAddr = r.Config.GetGRPCListenAddr()
 	} else {
-		listenAddr, err = r.Config.GetPeerListenAddr()
-		if err != nil {
-			r.iopLogger.Error().Logf("failed to get peer listen addr config: %s", err)
-			return
-		}
+		listenAddr = r.Config.GetPeerListenAddr()
 	}
 
 	r.iopLogger.Info().Logf("Listening on %s", listenAddr)
@@ -320,23 +308,13 @@ func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
 	dataset := mux.Vars(req)["dataset"]
-	cfg, name, err := r.Config.GetSamplerConfigForDestName(dataset)
-	if err != nil {
-		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch config for dataset %s\n", err, dataset)))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	cfg, name := r.Config.GetSamplerConfigForDestName(dataset)
 	r.marshalToFormat(w, map[string]interface{}{name: cfg}, format)
 }
 
 func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
-	cfgs, err := r.Config.GetAllSamplerRules()
-	if err != nil {
-		w.Write([]byte(fmt.Sprintf("got error %v trying to fetch configs", err)))
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	cfgs := r.Config.GetAllSamplerRules()
 	r.marshalToFormat(w, cfgs, format)
 }
 
@@ -426,10 +404,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 		return nil, err
 	}
 
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return nil, err
-	}
+	apiHost := r.Config.GetHoneycombAPI()
 
 	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
@@ -486,10 +461,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
-	apiHost, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		r.handlerReturnWithError(w, ErrReqToEvent, err)
-	}
+	apiHost := r.Config.GetHoneycombAPI()
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
@@ -544,11 +516,7 @@ func (router *Router) processOTLPRequest(
 	apiKey string) error {
 
 	var requestID types.RequestIDContextKey
-	apiHost, err := router.Config.GetHoneycombAPI()
-	if err != nil {
-		router.Logger.Error().Logf("Unable to retrieve APIHost from config while processing OTLP batch")
-		return err
-	}
+	apiHost := router.Config.GetHoneycombAPI()
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
@@ -928,10 +896,7 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 }
 
 func (r *Router) lookupEnvironment(apiKey string) (string, error) {
-	apiEndpoint, err := r.Config.GetHoneycombAPI()
-	if err != nil {
-		return "", fmt.Errorf("failed to read Honeycomb API config value. %w", err)
-	}
+	apiEndpoint := r.Config.GetHoneycombAPI()
 	authURL, err := url.Parse(apiEndpoint)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)

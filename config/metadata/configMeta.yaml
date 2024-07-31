@@ -264,14 +264,16 @@ groups:
         type: duration
         valuetype: nondefault
         default: 2s
+        validations:
+          - type: minimum
+            arg: 100ms
         reload: true
         summary: is the duration to wait before sending a trace.
         description: >
           This setting is a short timer that is triggered when a trace is
           complete. Refinery waits for this duration before sending the trace.
-          The reason for this setting is to allow for small network delays or
-          clock jitters to elapse and any final spans to arrive before sending
-          the trace. Set to "0" for immediate sending.
+          The reason for this setting is to allow for asynchronous spans and
+          small network delays to elapse before sending the trace.
 
       - name: BatchTimeout
         type: duration
@@ -286,6 +288,9 @@ groups:
         type: duration
         valuetype: nondefault
         default: 60s
+        validations:
+          - type: minimum
+            arg: 1s
         reload: true
         summary: is the duration to wait before making the trace decision on an incomplete trace.
         description: >

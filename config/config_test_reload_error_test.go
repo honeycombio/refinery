@@ -48,7 +48,7 @@ func TestErrorReloading(t *testing.T) {
 	watcher.Start()
 	defer watcher.Stop()
 
-	d, name, _ := c.GetSamplerConfigForDestName("dataset5")
+	d, name := c.GetSamplerConfigForDestName("dataset5")
 	if _, ok := d.(config.DeterministicSamplerConfig); ok {
 		t.Error("type received", d, "expected", "DeterministicSampler")
 	}
@@ -81,7 +81,7 @@ func TestErrorReloading(t *testing.T) {
 	wg.Wait()
 
 	// config should error and not update sampler to invalid type
-	d, _, _ = c.GetSamplerConfigForDestName("dataset5")
+	d, _ = c.GetSamplerConfigForDestName("dataset5")
 	if _, ok := d.(config.DeterministicSamplerConfig); ok {
 		t.Error("received", d, "expected", "DeterministicSampler")
 	}

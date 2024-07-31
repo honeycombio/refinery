@@ -56,23 +56,10 @@ func (ps *GoRedisPubSub) Start() error {
 	ps.Metrics.Register("redis_pubsub_received", "counter")
 
 	if ps.Config != nil {
-		host, err := ps.Config.GetRedisHost()
-		if err != nil {
-			return err
-		}
-		username, err := ps.Config.GetRedisUsername()
-		if err != nil {
-			return err
-		}
-		pw, err := ps.Config.GetRedisPassword()
-		if err != nil {
-			return err
-		}
-
-		authcode, err = ps.Config.GetRedisAuthCode()
-		if err != nil {
-			return err
-		}
+		host := ps.Config.GetRedisHost()
+		username := ps.Config.GetRedisUsername()
+		pw := ps.Config.GetRedisPassword()
+		authcode = ps.Config.GetRedisAuthCode()
 
 		// we may have multiple hosts, separated by commas, so split them up and
 		// use them as the addrs for the client (if there are multiples, it will

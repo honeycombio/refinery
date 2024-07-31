@@ -56,10 +56,7 @@ func (d *DefaultTransmission) Start() error {
 
 	// upstreamAPI doesn't get set when the client is initialized, because
 	// it can be reloaded from the config file while live
-	upstreamAPI, err := d.Config.GetHoneycombAPI()
-	if err != nil {
-		return err
-	}
+	upstreamAPI := d.Config.GetHoneycombAPI()
 
 	d.builder = d.LibhClient.NewBuilder()
 	d.builder.APIHost = upstreamAPI
@@ -85,11 +82,7 @@ func (d *DefaultTransmission) Start() error {
 
 func (d *DefaultTransmission) reloadTransmissionBuilder(cfgHash, ruleHash string) {
 	d.Logger.Debug().Logf("reloading transmission config")
-	upstreamAPI, err := d.Config.GetHoneycombAPI()
-	if err != nil {
-		// log and skip reload
-		d.Logger.Error().Logf("Failed to reload Honeycomb API when reloading configs:", err)
-	}
+	upstreamAPI := d.Config.GetHoneycombAPI()
 	builder := d.LibhClient.NewBuilder()
 	builder.APIHost = upstreamAPI
 }

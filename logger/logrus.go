@@ -25,18 +25,15 @@ type StdoutLogger struct {
 var _ = Logger((*StdoutLogger)(nil))
 
 type LogrusEntry struct {
-	entry *logrus.Entry
-	level logrus.Level
+	entry   *logrus.Entry
+	level   logrus.Level
 	sampler dynsampler.Sampler
 }
 
 func (l *StdoutLogger) Start() error {
 	l.logger = logrus.New()
 	l.logger.SetLevel(l.level)
-	cfg, err := l.Config.GetStdoutLoggerConfig()
-	if err != nil {
-		return err
-	}
+	cfg := l.Config.GetStdoutLoggerConfig()
 
 	if cfg.Structured {
 		l.logger.SetFormatter(&logrus.JSONFormatter{})
@@ -44,11 +41,11 @@ func (l *StdoutLogger) Start() error {
 
 	if cfg.SamplerEnabled {
 		l.sampler = &dynsampler.PerKeyThroughput{
-			ClearFrequencyDuration: 10*time.Second,
+			ClearFrequencyDuration: 10 * time.Second,
 			PerKeyThroughputPerSec: cfg.SamplerThroughput,
-			MaxKeys: 1000,
+			MaxKeys:                1000,
 		}
-		err = l.sampler.Start()
+		err := l.sampler.Start()
 		if err != nil {
 			return err
 		}
@@ -63,8 +60,8 @@ func (l *StdoutLogger) Debug() Entry {
 	}
 
 	return &LogrusEntry{
-		entry: logrus.NewEntry(l.logger),
-		level: logrus.DebugLevel,
+		entry:   logrus.NewEntry(l.logger),
+		level:   logrus.DebugLevel,
 		sampler: l.sampler,
 	}
 }
@@ -75,8 +72,8 @@ func (l *StdoutLogger) Info() Entry {
 	}
 
 	return &LogrusEntry{
-		entry: logrus.NewEntry(l.logger),
-		level: logrus.InfoLevel,
+		entry:   logrus.NewEntry(l.logger),
+		level:   logrus.InfoLevel,
 		sampler: l.sampler,
 	}
 }
@@ -87,8 +84,8 @@ func (l *StdoutLogger) Warn() Entry {
 	}
 
 	return &LogrusEntry{
-		entry: logrus.NewEntry(l.logger),
-		level: logrus.WarnLevel,
+		entry:   logrus.NewEntry(l.logger),
+		level:   logrus.WarnLevel,
 		sampler: l.sampler,
 	}
 }
@@ -99,8 +96,8 @@ func (l *StdoutLogger) Error() Entry {
 	}
 
 	return &LogrusEntry{
-		entry: logrus.NewEntry(l.logger),
-		level: logrus.ErrorLevel,
+		entry:   logrus.NewEntry(l.logger),
+		level:   logrus.ErrorLevel,
 		sampler: l.sampler,
 	}
 }
@@ -120,24 +117,24 @@ func (l *StdoutLogger) SetLevel(level string) error {
 
 func (l *LogrusEntry) WithField(key string, value interface{}) Entry {
 	return &LogrusEntry{
-		entry: l.entry.WithField(key, value),
-		level: l.level,
+		entry:   l.entry.WithField(key, value),
+		level:   l.level,
 		sampler: l.sampler,
 	}
 }
 
 func (l *LogrusEntry) WithString(key string, value string) Entry {
 	return &LogrusEntry{
-		entry: l.entry.WithField(key, value),
-		level: l.level,
+		entry:   l.entry.WithField(key, value),
+		level:   l.level,
 		sampler: l.sampler,
 	}
 }
 
 func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
 	return &LogrusEntry{
-		entry: l.entry.WithFields(fields),
-		level: l.level,
+		entry:   l.entry.WithFields(fields),
+		level:   l.level,
 		sampler: l.sampler,
 	}
 }
@@ -148,8 +145,8 @@ func (l *LogrusEntry) Logf(f string, args ...interface{}) {
 		// this will give us a different sample rate for each level and format string
 		// and avoid high cardinality args making the throughput sampler less effective
 		rate := l.sampler.GetSampleRate(fmt.Sprintf("%s:%s", l.level, f))
-		if shouldDrop(uint(rate)){
-			return 
+		if shouldDrop(uint(rate)) {
+			return
 		}
 		l.entry.WithField("SampleRate", rate)
 	}
