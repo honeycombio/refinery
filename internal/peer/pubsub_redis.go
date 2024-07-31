@@ -77,6 +77,7 @@ type RedisPubsubPeers struct {
 	Logger  logger.Logger   `inject:""`
 	PubSub  pubsub.PubSub   `inject:""`
 	Clock   clockwork.Clock `inject:""`
+	Done    chan struct{}
 
 	// Done is a channel that will be closed when the service should stop.
 	// After it is closed, peers service should signal the rest of the cluster
