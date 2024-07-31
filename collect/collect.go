@@ -15,10 +15,12 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
@@ -26,6 +28,7 @@ import (
 )
 
 var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
+var CollectorHealthKey = "collector"
 
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged into a trace.
@@ -53,10 +56,13 @@ const (
 
 // InMemCollector is a single threaded collector.
 type InMemCollector struct {
-	Config         config.Config          `inject:""`
-	Logger         logger.Logger          `inject:""`
-	Clock          clockwork.Clock        `inject:""`
-	Tracer         trace.Tracer           `inject:"tracer"`
+	Config  config.Config   `inject:""`
+	Logger  logger.Logger   `inject:""`
+	Clock   clockwork.Clock `inject:""`
+	Tracer  trace.Tracer    `inject:"tracer"`
+	Health  health.Recorder `inject:""`
+	Sharder sharder.Sharder `inject:""`
+
 	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
 	Metrics        metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory *sample.SamplerFactory `inject:""`
@@ -77,6 +83,7 @@ type InMemCollector struct {
 	incoming chan *types.Span
 	fromPeer chan *types.Span
 	reload   chan struct{}
+	done     chan struct{}
 
 	hostname string
 }
@@ -90,6 +97,8 @@ func (i *InMemCollector) Start() error {
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
+
+	i.Health.Register(CollectorHealthKey, 3*time.Second)
 
 	i.Metrics.Register("trace_duration_ms", "histogram")
 	i.Metrics.Register("trace_span_count", "histogram")
@@ -129,6 +138,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
+	i.done = make(chan struct{})
 	i.datasetSamplers = make(map[string]sample.Sampler)
 
 	if i.Config.GetAddHostMetadataToTrace() {
@@ -313,6 +323,7 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
+		i.Health.Ready(CollectorHealthKey, true)
 		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
@@ -324,6 +335,8 @@ func (i *InMemCollector) collect() {
 		// deadlocks because peers are waiting to get their events handed off to each
 		// other.
 		select {
+		case <-i.done:
+			return
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -332,6 +345,8 @@ func (i *InMemCollector) collect() {
 			i.processSpan(sp)
 		default:
 			select {
+			case <-i.done:
+				return
 			case <-ticker.C:
 				i.sendTracesInCache(time.Now())
 				i.checkAlloc()
@@ -375,9 +390,8 @@ func (i *InMemCollector) sendTracesInCache(now time.Time) {
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
 func (i *InMemCollector) processSpan(sp *types.Span) {
-	ctx, span := otelutil.StartSpan(context.Background(), i.Tracer, "processSpan")
+	ctx := context.Background()
 	defer func() {
-		span.End()
 		i.Metrics.Increment("span_processed")
 		i.Metrics.Down("spans_waiting")
 	}()
@@ -495,9 +509,9 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	i.Metrics.Increment("kept_from_stress")
 	// ok, we're sending it, so decorate it first
-	sp.Event.Data["meta.stressed"] = true
+	sp.Data["meta.stressed"] = true
 	if i.Config.GetAddRuleReasonToTrace() {
-		sp.Event.Data["meta.refinery.reason"] = reason
+		sp.Data["meta.refinery.reason"] = reason
 	}
 	if i.hostname != "" {
 		sp.Data["meta.refinery.local_hostname"] = i.hostname
@@ -514,7 +528,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, sentReason string, sp *types.Span) {
-	ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
+	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
 		"trace_id":    sp.TraceID,
 		"sent_reason": sentReason,
 		"hostname":    i.hostname,
@@ -606,7 +620,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 
 func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
 	// log event should never be considered a root span, check for that first
-	if signalType, _ := sp.Data["meta.signal_type"]; signalType == "log" {
+	if signalType := sp.Data["meta.signal_type"]; signalType == "log" {
 		return false
 	}
 	// check if the event has a parent id using the configured parent id field names
@@ -738,21 +752,109 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 }
 
 func (i *InMemCollector) Stop() error {
-	// close the incoming channel and (TODO) wait for all collectors to finish
+	close(i.done)
+	// signal the health system to not be ready
+	// so that no new traces are accepted
+	i.Health.Ready(CollectorHealthKey, false)
+
 	close(i.incoming)
+	close(i.fromPeer)
 
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 
-	// purge the collector of any in-flight traces
+	wg := &sync.WaitGroup{}
 	if i.cache != nil {
+		// TODO: make this a config option
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		type sentTrace struct {
+			record cache.TraceSentRecord
+			reason string
+			trace  *types.Trace
+		}
+		sentTraceChan := make(chan sentTrace, 0)
+		forwardTraceChan := make(chan *types.Trace, 0)
+		expiredTraceChan := make(chan *types.Trace, 0)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					i.Logger.Error().Logf("Timed out waiting for traces to send")
+					return
+				case tr, ok := <-sentTraceChan:
+					if !ok {
+						return
+					}
+					for _, sp := range tr.trace.GetSpans() {
+						ctx, span := otelutil.StartSpanWith(ctx, i.Tracer, "shutdown_sent_trace", "trace_id", sp.TraceID)
+						i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
+						span.End()
+					}
+				case tr, ok := <-expiredTraceChan:
+					if !ok {
+						return
+					}
+					_, span := otelutil.StartSpanWith(ctx, i.Tracer, "shutdown_expired_trace", "trace_id", tr.TraceID)
+					if tr.RootSpan != nil {
+						i.send(tr, TraceSendGotRoot)
+					} else {
+						i.send(tr, TraceSendExpired)
+					}
+					span.End()
+
+				case tr, ok := <-forwardTraceChan:
+					if !ok {
+						return
+					}
+					_, span := otelutil.StartSpanWith(ctx, i.Tracer, "shutdown_forwarded_trace", "trace_id", tr.TraceID)
+					targetShard := i.Sharder.WhichShard(tr.ID())
+					url := targetShard.GetAddress()
+					otelutil.AddSpanField(span, "target_shard", url)
+					for _, sp := range tr.GetSpans() {
+						sp.APIHost = url
+						i.Transmission.EnqueueSpan(sp)
+					}
+					span.End()
+				}
+			}
+		}()
+
+		now := i.Clock.Now()
 		traces := i.cache.GetAll()
 		for _, trace := range traces {
 			if trace != nil {
-				i.send(trace, TraceSendEjectedFull)
+
+				// first check if there's a trace decision
+				record, reason, found := i.sampleTraceCache.Test(trace.ID())
+				if found {
+					sentTraceChan <- sentTrace{record, reason, trace}
+					continue
+				}
+
+				// if trace has hit TraceTimeout, no need to forward it
+				if now.After(trace.SendBy) {
+					expiredTraceChan <- trace
+					continue
+				}
+
+				// if there's no trace decision, then we need forward
+				// the trace to its new home
+				forwardTraceChan <- trace
 			}
 		}
+
+		close(sentTraceChan)
+		close(expiredTraceChan)
+		close(forwardTraceChan)
 	}
+
+	wg.Wait()
+
 	if i.Transmission != nil {
 		i.Transmission.Flush()
 	}
