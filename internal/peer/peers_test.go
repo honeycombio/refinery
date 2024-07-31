@@ -24,10 +24,7 @@ import (
 func newPeers(c config.Config) (Peers, error) {
 	var peers Peers
 	var pubsubber pubsub.PubSub
-	ptype, err := c.GetPeerManagementType()
-	if err != nil {
-		return nil, err
-	}
+	ptype := c.GetPeerManagementType()
 	switch ptype {
 	case "file":
 		peers = &FilePeers{
@@ -67,7 +64,7 @@ func newPeers(c config.Config) (Peers, error) {
 		{Value: &logger.NullLogger{}},
 		{Value: clockwork.NewFakeClock()},
 	}
-	err = g.Provide(objects...)
+	err := g.Provide(objects...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to provide injection graph. error: %+v\n", err)
 	}

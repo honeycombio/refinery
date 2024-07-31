@@ -96,7 +96,7 @@ func newStartedApp(
 	enableHostMetadata bool,
 ) (*App, inject.Graph) {
 	c := &config.MockConfig{
-		GetSendDelayVal:          0,
+		GetSendDelayVal:          1 * time.Millisecond,
 		GetTraceTimeoutVal:       10 * time.Millisecond,
 		GetMaxBatchSizeVal:       500,
 		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},

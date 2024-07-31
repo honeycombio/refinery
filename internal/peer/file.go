@@ -22,7 +22,7 @@ func (p *FilePeers) GetPeers() ([]string, error) {
 	// we never want to return an empty list of peers, so if the config
 	// returns an empty list, return a single peer. This keeps the sharding
 	// logic happy.
-	peers, err := p.Cfg.GetPeers()
+	peers := p.Cfg.GetPeers()
 	if len(peers) == 0 {
 		addr, err := p.publicAddr()
 		if err != nil {
@@ -32,7 +32,7 @@ func (p *FilePeers) GetPeers() ([]string, error) {
 		peers = []string{addr}
 	}
 	p.Metrics.Gauge("num_file_peers", float64(len(peers)))
-	return peers, err
+	return peers, nil
 }
 
 func (p *FilePeers) GetInstanceID() (string, error) {
@@ -57,10 +57,7 @@ func (p *FilePeers) Start() (err error) {
 }
 
 func (p *FilePeers) publicAddr() (string, error) {
-	addr, err := p.Cfg.GetPeerListenAddr()
-	if err != nil {
-		return "", err
-	}
+	addr := p.Cfg.GetPeerListenAddr()
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return "", err

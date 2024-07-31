@@ -59,7 +59,7 @@ func TestOTLPHandler(t *testing.T) {
 	}
 
 	conf := &config.MockConfig{
-		GetSendDelayVal:    0,
+		GetSendDelayVal:    1 * time.Millisecond,
 		GetTraceTimeoutVal: 60 * time.Second,
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,

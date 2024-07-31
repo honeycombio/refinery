@@ -84,10 +84,7 @@ type InMemCollector struct {
 func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
-	imcConfig, err := i.Config.GetCollectionConfig()
-	if err != nil {
-		return err
-	}
+	imcConfig := i.Config.GetCollectionConfig()
 	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
@@ -121,6 +118,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register(cache.CurrentCapacity, "gauge")
 	i.Metrics.Register(cache.FutureLoadFactor, "gauge")
 	i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
+	var err error
 	i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
 	if err != nil {
 		return err
@@ -158,10 +156,7 @@ func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig, err := i.Config.GetCollectionConfig()
-	if err != nil {
-		i.Logger.Error().WithField("error", err).Logf("Failed to reload InMemCollector section when reloading configs")
-	}
+	imcConfig := i.Config.GetCollectionConfig()
 
 	if existingCache, ok := i.cache.(*cache.DefaultInMemCache); ok {
 		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
@@ -194,14 +189,14 @@ func (i *InMemCollector) reloadConfigs() {
 }
 
 func (i *InMemCollector) checkAlloc() {
-	inMemConfig, err := i.Config.GetCollectionConfig()
+	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
-	if err != nil || maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
+	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
 
@@ -223,8 +218,8 @@ func (i *InMemCollector) checkAlloc() {
 		return
 	}
 	allTraces := existingCache.GetAll()
-	timeout, err := i.Config.GetTraceTimeout()
-	if err != nil {
+	timeout := i.Config.GetTraceTimeout()
+	if timeout == 0 {
 		timeout = 60 * time.Second
 	} // Sort traces by CacheImpact, heaviest first
 	sort.Slice(allTraces, func(i, j int) bool {
@@ -402,8 +397,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// create a new trace to hold it
 		i.Metrics.Increment("trace_accepted")
 
-		timeout, err := i.Config.GetTraceTimeout()
-		if err != nil {
+		timeout := i.Config.GetTraceTimeout()
+		if timeout == 0 {
 			timeout = 60 * time.Second
 		}
 
@@ -442,9 +437,9 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 
 	// if this is a root span, send the trace
 	if i.isRootSpan(sp) {
-		timeout, err := i.Config.GetSendDelay()
+		timeout := i.Config.GetSendDelay()
 
-		if err != nil {
+		if timeout == 0 {
 			timeout = 2 * time.Second
 		}
 
