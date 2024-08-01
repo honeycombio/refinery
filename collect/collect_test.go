@@ -41,11 +41,12 @@ func newCache() (cache.TraceSentCache, error) {
 func newTestCollector(conf config.Config, transmission transmit.Transmission) *InMemCollector {
 	s := &metrics.MockMetrics{}
 	s.Start()
+	healthReporter := &health.Health{}
 	return &InMemCollector{
 		Config:       conf,
 		Logger:       &logger.NullLogger{},
 		Tracer:       noop.NewTracerProvider().Tracer("test"),
-		Health:       &health.Health{},
+		Health:       healthReporter,
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
 		StressRelief: &MockStressReliever{},
@@ -327,6 +328,9 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 5)
+	// make sure no other goroutines are trying to access traces in the cache
+	close(coll.done)
+
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
