@@ -240,13 +240,14 @@ func TestAppIntegration(t *testing.T) {
 
 	time.Sleep(5 * app.Config.GetSendTickerValue())
 
-	events := sender.Events()
-	require.Len(t, events, 1)
-
-	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := sender.Events()
+		require.Len(collect, events, 1)
+		assert.Equal(collect, "dataset", events[0].Dataset)
+		assert.Equal(collect, "bar", events[0].Data["foo"])
+		assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
+		assert.Equal(collect, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	}, 2*time.Second, 10*time.Millisecond)
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
