@@ -77,7 +77,13 @@ type RedisPubsubPeers struct {
 	Logger  logger.Logger   `inject:""`
 	PubSub  pubsub.PubSub   `inject:""`
 	Clock   clockwork.Clock `inject:""`
-	Done    chan struct{}
+
+	// Done is a channel that will be closed when the service should stop.
+	// After it is closed, peers service should signal the rest of the cluster
+	// that it is no longer available.
+	// However, any messages send on the peers channel will still be processed
+	// since the pubsub subscription is still active.
+	Done chan struct{}
 
 	peers     *generics.SetWithTTL[string]
 	hash      uint64
@@ -176,6 +182,8 @@ func (p *RedisPubsubPeers) Start() error {
 	return nil
 }
 
+// stop send a message to the pubsub channel to unregister this peer
+// but it does not close the subscription.
 func (p *RedisPubsubPeers) stop() {
 	// unregister ourselves
 	myaddr, err := p.publicAddr()
