@@ -781,12 +781,16 @@ func (i *InMemCollector) Stop() error {
 	return nil
 }
 
+// sentTrace is a struct that holds a trace and the record of the decision made.
 type sentTrace struct {
 	trace  *types.Trace
 	record cache.TraceSentRecord
 	reason string
 }
 
+// sendTracesInCache sends all traces in the cache to their final destination.
+// This is done on shutdown to ensure that all traces are sent before the collector
+// is stopped.
 func (i *InMemCollector) sendTracesInCache() {
 	wg := &sync.WaitGroup{}
 	if i.cache != nil {
@@ -820,6 +824,7 @@ func (i *InMemCollector) sendTracesInCache() {
 	wg.Wait()
 }
 
+// distributeTracesInCache takes a list of traces and sends them to the appropriate channel// based on the state of the trace.
 func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTraceChan chan sentTrace, forwardTraceChan chan *types.Trace, expiredTraceChan chan *types.Trace) {
 	now := i.Clock.Now()
 	for _, trace := range traces {
@@ -845,33 +850,48 @@ func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTrac
 	}
 }
 
+// sendTracesOnShutdown is a helper function that sends traces to their final destination
+// on shutdown.
+// It will return true if it times out waiting for traces to send or one of the traces channel has been closed.
 func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) (done bool) {
 	select {
 	case <-ctx.Done():
 		i.Logger.Error().Logf("Timed out waiting for traces to send")
 		return true
+
 	case tr, ok := <-sentTraceChan:
 		if !ok {
 			return true
 		}
+
 		i.Metrics.Count("trace_send_shutdown_total", 1)
 		i.Metrics.Count("trace_send_shutdown_late", 1)
+
 		for _, sp := range tr.trace.GetSpans() {
 			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
+
 			i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
+
 			span.End()
 		}
+
 	case tr, ok := <-expiredTraceChan:
 		if !ok {
 			return true
 		}
+
 		i.Metrics.Count("trace_send_shutdown_total", 1)
+
 		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+
 		if tr.RootSpan != nil {
 			i.Metrics.Count("trace_send_shutdown_root", 1)
+
 			i.send(tr, TraceSendGotRoot)
+
 		} else {
 			i.Metrics.Count("trace_send_shutdown_expired", 1)
+
 			i.send(tr, TraceSendExpired)
 		}
 		span.End()
@@ -880,12 +900,17 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 		if !ok {
 			return true
 		}
+
 		i.Metrics.Count("trace_send_shutdown_total", 1)
 		i.Metrics.Count("trace_send_shutdown_forwarded", 1)
+
 		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+
 		targetShard := i.Sharder.WhichShard(tr.ID())
 		url := targetShard.GetAddress()
+
 		otelutil.AddSpanField(span, "target_shard", url)
+
 		for _, sp := range tr.GetSpans() {
 			sp.APIHost = url
 			i.Transmission.EnqueueSpan(sp)
