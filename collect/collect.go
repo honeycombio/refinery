@@ -348,7 +348,7 @@ func (i *InMemCollector) collect() {
 			case <-i.done:
 				return
 			case <-ticker.C:
-				i.sendTracesInCache(i.Clock.Now())
+				i.sendExpiredTracesInCache(i.Clock.Now())
 				i.checkAlloc()
 
 				// Briefly unlock the cache, to allow test access.
@@ -376,7 +376,7 @@ func (i *InMemCollector) collect() {
 	}
 }
 
-func (i *InMemCollector) sendTracesInCache(now time.Time) {
+func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 	traces := i.cache.TakeExpiredTraces(now)
 	for _, t := range traces {
 		if t.RootSpan != nil {
@@ -760,102 +760,10 @@ func (i *InMemCollector) Stop() error {
 	close(i.incoming)
 	close(i.fromPeer)
 
-	wg := &sync.WaitGroup{}
-
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 
-	if i.cache != nil {
-
-		// TODO: make this a config option
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
-		type sentTrace struct {
-			trace  *types.Trace
-			record cache.TraceSentRecord
-			reason string
-		}
-		sentTraceChan := make(chan sentTrace)
-		forwardTraceChan := make(chan *types.Trace)
-		expiredTraceChan := make(chan *types.Trace)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					i.Logger.Error().Logf("Timed out waiting for traces to send")
-					return
-				case tr, ok := <-sentTraceChan:
-					if !ok {
-						return
-					}
-					for _, sp := range tr.trace.GetSpans() {
-						ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
-						i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
-						span.End()
-					}
-				case tr, ok := <-expiredTraceChan:
-					if !ok {
-						return
-					}
-					_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
-					if tr.RootSpan != nil {
-						i.send(tr, TraceSendGotRoot)
-					} else {
-						i.send(tr, TraceSendExpired)
-					}
-					span.End()
-
-				case tr, ok := <-forwardTraceChan:
-					if !ok {
-						return
-					}
-					_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
-					targetShard := i.Sharder.WhichShard(tr.ID())
-					url := targetShard.GetAddress()
-					otelutil.AddSpanField(span, "target_shard", url)
-					for _, sp := range tr.GetSpans() {
-						sp.APIHost = url
-						i.Transmission.EnqueueSpan(sp)
-					}
-					span.End()
-				}
-			}
-		}()
-
-		now := i.Clock.Now()
-		traces := i.cache.GetAll()
-		for _, trace := range traces {
-			if trace != nil {
-
-				// first check if there's a trace decision
-				record, reason, found := i.sampleTraceCache.Test(trace.ID())
-				if found {
-					sentTraceChan <- sentTrace{trace, record, reason}
-					continue
-				}
-
-				// if trace has hit TraceTimeout, no need to forward it
-				if now.After(trace.SendBy) {
-					expiredTraceChan <- trace
-					continue
-				}
-
-				// if there's no trace decision, then we need forward
-				// the trace to its new home
-				forwardTraceChan <- trace
-			}
-		}
-
-		close(sentTraceChan)
-		close(expiredTraceChan)
-		close(forwardTraceChan)
-	}
-
-	wg.Wait()
+	i.sendTracesInCache()
 
 	if i.Transmission != nil {
 		i.Transmission.Flush()
@@ -864,6 +772,110 @@ func (i *InMemCollector) Stop() error {
 	i.sampleTraceCache.Stop()
 
 	return nil
+}
+
+type sentTrace struct {
+	trace  *types.Trace
+	record cache.TraceSentRecord
+	reason string
+}
+
+func (i *InMemCollector) sendTracesInCache() {
+	wg := &sync.WaitGroup{}
+	if i.cache != nil {
+
+		// TODO: make this a config option
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		traces := i.cache.GetAll()
+		sentTraceChan := make(chan sentTrace, len(traces)/3)
+		forwardTraceChan := make(chan *types.Trace, len(traces)/3)
+		expiredTraceChan := make(chan *types.Trace, len(traces)/3)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i.sendTracesOnShutdown(ctx, sentTraceChan, forwardTraceChan, expiredTraceChan)
+			}
+		}()
+
+		i.distributeTracesInCache(traces, sentTraceChan, forwardTraceChan, expiredTraceChan)
+
+		close(sentTraceChan)
+		close(expiredTraceChan)
+		close(forwardTraceChan)
+	}
+
+	wg.Wait()
+}
+
+func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTraceChan chan sentTrace, forwardTraceChan chan *types.Trace, expiredTraceChan chan *types.Trace) {
+	now := i.Clock.Now()
+	for _, trace := range traces {
+		if trace != nil {
+
+			// first check if there's a trace decision
+			record, reason, found := i.sampleTraceCache.Test(trace.ID())
+			if found {
+				sentTraceChan <- sentTrace{trace, record, reason}
+				continue
+			}
+
+			// if trace has hit TraceTimeout, no need to forward it
+			if now.After(trace.SendBy) {
+				expiredTraceChan <- trace
+				continue
+			}
+
+			// if there's no trace decision, then we need forward
+			// the trace to its new home
+			forwardTraceChan <- trace
+		}
+	}
+}
+
+func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) {
+	select {
+	case <-ctx.Done():
+		i.Logger.Error().Logf("Timed out waiting for traces to send")
+		return
+	case tr, ok := <-sentTraceChan:
+		if !ok {
+			return
+		}
+		for _, sp := range tr.trace.GetSpans() {
+			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
+			i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
+			span.End()
+		}
+	case tr, ok := <-expiredTraceChan:
+		if !ok {
+			return
+		}
+		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+		if tr.RootSpan != nil {
+			i.send(tr, TraceSendGotRoot)
+		} else {
+			i.send(tr, TraceSendExpired)
+		}
+		span.End()
+
+	case tr, ok := <-forwardTraceChan:
+		if !ok {
+			return
+		}
+		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+		targetShard := i.Sharder.WhichShard(tr.ID())
+		url := targetShard.GetAddress()
+		otelutil.AddSpanField(span, "target_shard", url)
+		for _, sp := range tr.GetSpans() {
+			sp.APIHost = url
+			i.Transmission.EnqueueSpan(sp)
+		}
+		span.End()
+	}
 }
 
 // Convenience method for tests.

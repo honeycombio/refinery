@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"runtime"
@@ -22,6 +23,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sample"
+	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 )
@@ -43,10 +45,14 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 	s.Start()
 	healthReporter := &health.Health{}
 	return &InMemCollector{
-		Config:       conf,
-		Logger:       &logger.NullLogger{},
-		Tracer:       noop.NewTracerProvider().Tracer("test"),
-		Health:       healthReporter,
+		Config: conf,
+		Clock:  clockwork.NewRealClock(),
+		Logger: &logger.NullLogger{},
+		Tracer: noop.NewTracerProvider().Tracer("test"),
+		Health: healthReporter,
+		Sharder: &sharder.SingleServerSharder{
+			Logger: &logger.NullLogger{},
+		},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
 		StressRelief: &MockStressReliever{},
@@ -1438,4 +1444,110 @@ func TestIsRootSpan(t *testing.T) {
 			assert.Equal(t, tc.expected, collector.isRootSpan(tc.span))
 		})
 	}
+}
+
+func TestDrainTracesOnShutdown(t *testing.T) {
+	// set up the trace cache
+	conf := &config.MockConfig{
+		GetSendDelayVal:    1 * time.Millisecond,
+		GetTraceTimeoutVal: 60 * time.Second,
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:      2 * time.Millisecond,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+	coll.hostname = "host123"
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+
+	sentTraceChan := make(chan sentTrace, 1)
+	forwardTraceChan := make(chan *types.Trace, 1)
+	expiredTraceChan := make(chan *types.Trace, 1)
+
+	// test 1
+	// the trace in cache already has decision made
+	trace1 := &types.Trace{
+		TraceID: "traceID1",
+	}
+	span1 := &types.Span{
+		TraceID: "traceID1",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    make(map[string]interface{}),
+		},
+	}
+	trace1.AddSpan(span1)
+
+	stc.Record(trace1, true, "test")
+
+	coll.distributeTracesInCache([]*types.Trace{trace1}, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.Len(t, sentTraceChan, 1)
+	require.Len(t, forwardTraceChan, 0)
+	require.Len(t, expiredTraceChan, 0)
+
+	coll.sendTracesOnShutdown(context.Background(), sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.Len(t, transmission.Events, 1)
+	require.Equal(t, span1.Dataset, transmission.Events[0].Dataset)
+	transmission.Flush()
+
+	// test 2
+	// the trace in cache has already expired
+	trace2 := &types.Trace{
+		TraceID: "traceID2",
+		SendBy:  coll.Clock.Now().Add(-time.Second),
+	}
+	span2 := &types.Span{
+		TraceID: "traceID2",
+		Event: types.Event{
+			Dataset: "test2",
+			Data:    make(map[string]interface{}),
+		},
+	}
+	trace2.AddSpan(span2)
+
+	coll.distributeTracesInCache([]*types.Trace{trace2}, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.Len(t, sentTraceChan, 0)
+	require.Len(t, forwardTraceChan, 0)
+	require.Len(t, expiredTraceChan, 1)
+
+	coll.sendTracesOnShutdown(context.Background(), sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.Len(t, transmission.Events, 1)
+	require.Equal(t, span2.Dataset, transmission.Events[0].Dataset)
+	transmission.Flush()
+
+	// test 3
+	// we can't make a decision for the trace yet, let's
+	// forward it to its new home
+	trace3 := &types.Trace{
+		TraceID: "traceID3",
+		SendBy:  coll.Clock.Now().Add(10 * time.Second),
+	}
+	span3 := &types.Span{
+		TraceID: "traceID3",
+		Event: types.Event{
+			Dataset: "test3",
+			Data:    make(map[string]interface{}),
+		},
+	}
+	trace3.AddSpan(span3)
+
+	coll.distributeTracesInCache([]*types.Trace{trace3}, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.Len(t, sentTraceChan, 0)
+	require.Len(t, forwardTraceChan, 1)
+	require.Len(t, expiredTraceChan, 0)
+
+	coll.sendTracesOnShutdown(context.Background(), sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.Len(t, transmission.Events, 1)
+	require.Equal(t, span3.Dataset, transmission.Events[0].Dataset)
+	require.Equal(t, "http://self", transmission.Events[0].APIHost)
+
 }
