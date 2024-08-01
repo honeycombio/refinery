@@ -117,6 +117,13 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_dropped", "counter")
 	i.Metrics.Register("trace_send_has_root", "counter")
 	i.Metrics.Register("trace_send_no_root", "counter")
+
+	i.Metrics.Register("trace_send_shutdown_total", "counter")
+	i.Metrics.Register("trace_send_shutdown_late", "counter")
+	i.Metrics.Register("trace_send_shutdown_expired", "counter")
+	i.Metrics.Register("trace_send_shutdown_root", "counter")
+	i.Metrics.Register("trace_send_shutdown_forwarded", "counter")
+
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
@@ -826,7 +833,7 @@ func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTrac
 			}
 
 			// if trace has hit TraceTimeout, no need to forward it
-			if now.After(trace.SendBy) {
+			if now.After(trace.SendBy) || trace.RootSpan != nil {
 				expiredTraceChan <- trace
 				continue
 			}
@@ -847,6 +854,8 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 		if !ok {
 			return true
 		}
+		i.Metrics.Count("trace_send_shutdown_total", 1)
+		i.Metrics.Count("trace_send_shutdown_late", 1)
 		for _, sp := range tr.trace.GetSpans() {
 			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
 			i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
@@ -856,10 +865,13 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 		if !ok {
 			return true
 		}
+		i.Metrics.Count("trace_send_shutdown_total", 1)
 		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
 		if tr.RootSpan != nil {
+			i.Metrics.Count("trace_send_shutdown_root", 1)
 			i.send(tr, TraceSendGotRoot)
 		} else {
+			i.Metrics.Count("trace_send_shutdown_expired", 1)
 			i.send(tr, TraceSendExpired)
 		}
 		span.End()
@@ -868,6 +880,8 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 		if !ok {
 			return true
 		}
+		i.Metrics.Count("trace_send_shutdown_total", 1)
+		i.Metrics.Count("trace_send_shutdown_forwarded", 1)
 		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
 		targetShard := i.Sharder.WhichShard(tr.ID())
 		url := targetShard.GetAddress()
