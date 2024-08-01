@@ -116,6 +116,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// when refinery receives a shutdown signal, we need to
+	// immediately let its peers know so they can stop sending
+	// data to it.
+	done := make(chan struct{})
 	// set up the peer management and pubsub implementations
 	var peers peer.Peers
 	var pubsubber pubsub.PubSub
@@ -125,11 +129,11 @@ func main() {
 		// In the case of file peers, we do not use Redis for anything, including pubsub, so
 		// we use the local pubsub implementation. Even if we have multiple peers, these
 		// peers cannot communicate using pubsub.
-		peers = &peer.FilePeers{}
+		peers = &peer.FilePeers{Done: done}
 		pubsubber = &pubsub.LocalPubSub{}
 	case "redis":
 		// if we're using redis, we need to set it up for both peers and pubsub
-		peers = &peer.RedisPubsubPeers{}
+		peers = &peer.RedisPubsubPeers{Done: done}
 		pubsubber = &pubsub.GoRedisPubSub{}
 	default:
 		// this should have been caught by validation
@@ -195,7 +199,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	done := make(chan struct{})
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
 	peerTransmission := transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer")

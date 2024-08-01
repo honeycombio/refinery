@@ -288,7 +288,6 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 
 	return sr, func() {
 		require.NoError(t, healthReporter.Stop())
-		require.NoError(t, peer.Stop())
 		require.NoError(t, channel.Stop())
 	}
 }

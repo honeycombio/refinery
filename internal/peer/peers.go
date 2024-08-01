@@ -11,5 +11,4 @@ type Peers interface {
 	RegisterUpdatedPeersCallback(callback func())
 	// make it injectable
 	startstop.Starter
-	startstop.Stopper
 }

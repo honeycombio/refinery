@@ -69,6 +69,8 @@ func (p *peerCommand) marshal() string {
 	return string(p.action) + p.peer
 }
 
+var _ Peers = (*RedisPubsubPeers)(nil)
+
 type RedisPubsubPeers struct {
 	Config  config.Config   `inject:""`
 	Metrics metrics.Metrics `inject:"metrics"`
@@ -76,11 +78,17 @@ type RedisPubsubPeers struct {
 	PubSub  pubsub.PubSub   `inject:""`
 	Clock   clockwork.Clock `inject:""`
 
+	// Done is a channel that will be closed when the service should stop.
+	// After it is closed, peers service should signal the rest of the cluster
+	// that it is no longer available.
+	// However, any messages send on the peers channel will still be processed
+	// since the pubsub subscription is still active.
+	Done chan struct{}
+
 	peers     *generics.SetWithTTL[string]
 	hash      uint64
 	callbacks []func()
 	sub       pubsub.Subscription
-	done      chan struct{}
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -124,7 +132,6 @@ func (p *RedisPubsubPeers) Start() error {
 		p.Logger = &logger.NullLogger{}
 	}
 
-	p.done = make(chan struct{})
 	p.peers = generics.NewSetWithTTL[string](PeerEntryTimeout)
 	p.callbacks = make([]func(), 0)
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
@@ -153,7 +160,8 @@ func (p *RedisPubsubPeers) Start() error {
 		defer logTicker.Stop()
 		for {
 			select {
-			case <-p.done:
+			case <-p.Done:
+				p.stop()
 				return
 			case <-ticker.Chan():
 				// publish our presence periodically
@@ -174,15 +182,16 @@ func (p *RedisPubsubPeers) Start() error {
 	return nil
 }
 
-func (p *RedisPubsubPeers) Stop() error {
+// stop send a message to the pubsub channel to unregister this peer
+// but it does not close the subscription.
+func (p *RedisPubsubPeers) stop() {
 	// unregister ourselves
 	myaddr, err := p.publicAddr()
 	if err != nil {
-		return err
+		p.Logger.Error().Logf("failed to get public address")
+		return
 	}
 	p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr).marshal())
-	close(p.done)
-	return nil
 }
 
 func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
