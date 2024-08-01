@@ -85,13 +85,6 @@ type RedisPubsubPeers struct {
 	// since the pubsub subscription is still active.
 	Done chan struct{}
 
-	// Done is a channel that will be closed when the service should stop.
-	// After it is closed, peers service should signal the rest of the cluster
-	// that it is no longer available.
-	// However, any messages send on the peers channel will still be processed
-	// since the pubsub subscription is still active.
-	Done chan struct{}
-
 	peers     *generics.SetWithTTL[string]
 	hash      uint64
 	callbacks []func()

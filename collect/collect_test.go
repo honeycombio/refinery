@@ -43,10 +43,14 @@ func newCache() (cache.TraceSentCache, error) {
 func newTestCollector(conf config.Config, transmission transmit.Transmission) *InMemCollector {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	healthReporter := &health.Health{}
+	clock := clockwork.NewRealClock()
+	healthReporter := &health.Health{
+		Clock: clock,
+	}
+	healthReporter.Start()
 	return &InMemCollector{
 		Config: conf,
-		Clock:  clockwork.NewRealClock(),
+		Clock:  clock,
 		Logger: &logger.NullLogger{},
 		Tracer: noop.NewTracerProvider().Tracer("test"),
 		Health: healthReporter,
@@ -61,6 +65,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Metrics: s,
 			Logger:  &logger.NullLogger{},
 		},
+		done: make(chan struct{}),
 	}
 }
 
@@ -334,9 +339,6 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 5)
-	// make sure no other goroutines are trying to access traces in the cache
-	close(coll.done)
-
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -761,6 +763,8 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
 		&inject.Object{Value: clockwork.NewRealClock()},
+		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: &sharder.SingleServerSharder{}},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},

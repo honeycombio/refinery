@@ -797,7 +797,9 @@ func (i *InMemCollector) sendTracesInCache() {
 		go func() {
 			defer wg.Done()
 			for {
-				i.sendTracesOnShutdown(ctx, sentTraceChan, forwardTraceChan, expiredTraceChan)
+				if done := i.sendTracesOnShutdown(ctx, sentTraceChan, forwardTraceChan, expiredTraceChan); done {
+					return
+				}
 			}
 		}()
 
@@ -836,14 +838,14 @@ func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTrac
 	}
 }
 
-func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) {
+func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) (done bool) {
 	select {
 	case <-ctx.Done():
 		i.Logger.Error().Logf("Timed out waiting for traces to send")
-		return
+		return true
 	case tr, ok := <-sentTraceChan:
 		if !ok {
-			return
+			return true
 		}
 		for _, sp := range tr.trace.GetSpans() {
 			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
@@ -852,7 +854,7 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 		}
 	case tr, ok := <-expiredTraceChan:
 		if !ok {
-			return
+			return true
 		}
 		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
 		if tr.RootSpan != nil {
@@ -864,7 +866,7 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 
 	case tr, ok := <-forwardTraceChan:
 		if !ok {
-			return
+			return true
 		}
 		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
 		targetShard := i.Sharder.WhichShard(tr.ID())
@@ -876,6 +878,8 @@ func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan
 		}
 		span.End()
 	}
+
+	return false
 }
 
 // Convenience method for tests.
