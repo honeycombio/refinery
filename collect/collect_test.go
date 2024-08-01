@@ -17,6 +17,7 @@ import (
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -44,6 +45,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 		Config:       conf,
 		Logger:       &logger.NullLogger{},
 		Tracer:       noop.NewTracerProvider().Tracer("test"),
+		Health:       &health.Health{},
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
 		StressRelief: &MockStressReliever{},

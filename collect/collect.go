@@ -348,7 +348,7 @@ func (i *InMemCollector) collect() {
 			case <-i.done:
 				return
 			case <-ticker.C:
-				i.sendTracesInCache(time.Now())
+				i.sendTracesInCache(i.Clock.Now())
 				i.checkAlloc()
 
 				// Briefly unlock the cache, to allow test access.
@@ -760,23 +760,25 @@ func (i *InMemCollector) Stop() error {
 	close(i.incoming)
 	close(i.fromPeer)
 
+	wg := &sync.WaitGroup{}
+
 	i.mutex.Lock()
 	defer i.mutex.Unlock()
 
-	wg := &sync.WaitGroup{}
 	if i.cache != nil {
+
 		// TODO: make this a config option
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
 		type sentTrace struct {
+			trace  *types.Trace
 			record cache.TraceSentRecord
 			reason string
-			trace  *types.Trace
 		}
-		sentTraceChan := make(chan sentTrace, 0)
-		forwardTraceChan := make(chan *types.Trace, 0)
-		expiredTraceChan := make(chan *types.Trace, 0)
+		sentTraceChan := make(chan sentTrace)
+		forwardTraceChan := make(chan *types.Trace)
+		expiredTraceChan := make(chan *types.Trace)
 
 		wg.Add(1)
 		go func() {
@@ -791,7 +793,7 @@ func (i *InMemCollector) Stop() error {
 						return
 					}
 					for _, sp := range tr.trace.GetSpans() {
-						ctx, span := otelutil.StartSpanWith(ctx, i.Tracer, "shutdown_sent_trace", "trace_id", sp.TraceID)
+						ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
 						i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
 						span.End()
 					}
@@ -799,7 +801,7 @@ func (i *InMemCollector) Stop() error {
 					if !ok {
 						return
 					}
-					_, span := otelutil.StartSpanWith(ctx, i.Tracer, "shutdown_expired_trace", "trace_id", tr.TraceID)
+					_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
 					if tr.RootSpan != nil {
 						i.send(tr, TraceSendGotRoot)
 					} else {
@@ -811,7 +813,7 @@ func (i *InMemCollector) Stop() error {
 					if !ok {
 						return
 					}
-					_, span := otelutil.StartSpanWith(ctx, i.Tracer, "shutdown_forwarded_trace", "trace_id", tr.TraceID)
+					_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
 					targetShard := i.Sharder.WhichShard(tr.ID())
 					url := targetShard.GetAddress()
 					otelutil.AddSpanField(span, "target_shard", url)
@@ -832,7 +834,7 @@ func (i *InMemCollector) Stop() error {
 				// first check if there's a trace decision
 				record, reason, found := i.sampleTraceCache.Test(trace.ID())
 				if found {
-					sentTraceChan <- sentTrace{record, reason, trace}
+					sentTraceChan <- sentTrace{trace, record, reason}
 					continue
 				}
 
