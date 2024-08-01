@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -38,23 +39,69 @@ func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
 	})
 }
 
-func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
+// truncate the key to 8 characters for logging
+func (r *Router) sanitize(key string) string {
+	return fmt.Sprintf("%.8s...", key)
+}
+
+func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		apiKey := req.Header.Get(types.APIKeyHeader)
 		if apiKey == "" {
 			apiKey = req.Header.Get(types.APIKeyHeaderShort)
 		}
-		if apiKey == "" {
-			err := errors.New("no " + types.APIKeyHeader + " header found from within authing middleware")
+
+		keycfg := r.Config.GetAccessKeyConfig()
+
+		// Apply AcceptOnlyListedKeys logic BEFORE we consider replacement
+		if keycfg.AcceptOnlyListedKeys && !slices.Contains(keycfg.ReceiveKeys, apiKey) {
+			err := fmt.Errorf("api key %s not found in list of authorized keys", r.sanitize(apiKey))
 			r.handlerReturnWithError(w, ErrAuthNeeded, err)
 			return
 		}
-		if r.Config.IsAPIKeyValid(apiKey) {
-			next.ServeHTTP(w, req)
+
+		if keycfg.SendKey != "" {
+			overwriteWith := ""
+			switch keycfg.SendKeyMode {
+			case "none":
+				// don't replace keys at all
+				// (SendKey is disabled)
+			case "all":
+				// overwrite all keys, even missing ones, with the configured one
+				overwriteWith = keycfg.SendKey
+			case "nonblank":
+				// only replace nonblank keys with the configured one
+				if apiKey != "" {
+					overwriteWith = keycfg.SendKey
+				}
+			case "listedonly":
+				// only replace keys that are listed in the `ReceiveKeys` list
+				// reject everything else
+				if slices.Contains(keycfg.ReceiveKeys, apiKey) {
+					overwriteWith = keycfg.SendKey
+				}
+			case "missingonly":
+				// only inject keys into telemetry that doesn't have a key at all
+				if apiKey == "" {
+					overwriteWith = keycfg.SendKey
+				}
+			case "unlisted":
+				// only replace nonblank keys that are NOT listed in the `ReceiveKeys` list
+				if apiKey != "" && !slices.Contains(keycfg.ReceiveKeys, apiKey) {
+					overwriteWith = keycfg.SendKey
+				}
+			}
+			req.Header.Set(types.APIKeyHeader, overwriteWith)
+		}
+
+		// we might still have a blank key, so check again
+		if apiKey == "" {
+			err := errors.New("no value for " + types.APIKeyHeader + " header found from within authing middleware")
+			r.handlerReturnWithError(w, ErrAuthNeeded, err)
 			return
 		}
-		err := fmt.Errorf("api key %s not found in list of authorized keys", apiKey)
-		r.handlerReturnWithError(w, ErrAuthNeeded, err)
+
+		next.ServeHTTP(w, req)
 	})
 }
 

@@ -54,6 +54,9 @@ type Config interface {
 	// Returns the entire GRPC config block
 	GetGRPCConfig() GRPCServerParameters
 
+	// GetAccessKeyConfig returns the access key configuration
+	GetAccessKeyConfig() AccessKeyConfig
+
 	// IsAPIKeyValid checks if the given API key is valid according to the rules
 	IsAPIKeyValid(key string) bool
 

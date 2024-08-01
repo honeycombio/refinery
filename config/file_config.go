@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/honeycombio/refinery/generics"
+	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
 
@@ -86,8 +86,9 @@ type NetworkConfig struct {
 
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
+	SendKey              string   `yaml:"SendKey"`
+	SendKeyMode          string   `yaml:"SendKeyMode" default:"none"`
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
-	keymap               generics.Set[string]
 }
 
 type DefaultTrue bool
@@ -532,6 +533,13 @@ func (f *fileConfig) GetGRPCConfig() GRPCServerParameters {
 	return f.mainConfig.GRPCServerParameters
 }
 
+func (f *fileConfig) GetAccessKeyConfig() AccessKeyConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.AccessKeys
+}
+
 func (f *fileConfig) IsAPIKeyValid(key string) bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -540,12 +548,7 @@ func (f *fileConfig) IsAPIKeyValid(key string) bool {
 		return true
 	}
 
-	// if we haven't built the keymap yet, do it now
-	if f.mainConfig.AccessKeys.keymap == nil {
-		f.mainConfig.AccessKeys.keymap = generics.NewSet(f.mainConfig.AccessKeys.ReceiveKeys...)
-	}
-
-	return f.mainConfig.AccessKeys.keymap.Contains(key)
+	return slices.Contains(f.mainConfig.AccessKeys.ReceiveKeys, key)
 }
 
 func (f *fileConfig) GetPeerManagementType() string {

@@ -181,6 +181,41 @@ groups:
 
           If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
 
+          This setting is applied *before* the `SendKey` and `SendKeyMode` settings.
+
+      - name: SendKey
+        type: string
+        reload: true
+        validations:
+          - type: format
+            arg: apikey
+          - type: validapikey
+        summary: is a Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration.
+        description: >
+          If `SendKey` is set to a valid Honeycomb key, then Refinery can use
+          the listed key to send data.
+          How this works depends on the value of `SendKeyMode`.
+
+      - name: SendKeyMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "nonblank", "listedonly", "unlisted", "missingonly"]
+        default: "none"
+        reload: true
+        summary: controls how SendKey is used to replace or augment API keys used in incoming telemetry.
+        description: >
+          Controls how SendKey is used to replace or supply API keys used in
+          incoming telemetry. If `AcceptOnlyListedKeys` is `true`, then
+          `SendKeys` will only be used for events with keys listed in
+          `ReceiveKeys`.
+
+          `none` uses the incoming key for all telemetry (default).
+          `all` overwrites all keys, even missing ones, with `SendKey`.
+          `nonblank` overwrites all supplied keys but will not inject `SendKey` if the incoming key is blank.
+          `listedonly` overwrites only the keys listed in `ReceiveKeys`.
+          `unlisted` uses the `SendKey` for all events *except* those with keys listed in `ReceiveKeys`, which use their original keys.
+          `missingonly` uses the SendKey only to inject keys into events with blank keys. All other events use their original keys.
+
   - name: RefineryTelemetry
     title: "Refinery Telemetry"
     description: contains configuration information for the telemetry that Refinery uses to record its own operation.
