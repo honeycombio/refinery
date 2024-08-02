@@ -604,7 +604,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// Figure out if we should handle this span locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
-	if r.incomingOrPeer == "incoming" && !targetShard.Equals(r.Sharder.MyShard()) {
+	if !targetShard.Equals(r.Sharder.MyShard()) {
 		r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
 		debugLog.
 			WithString("peer", targetShard.GetAddress()).
