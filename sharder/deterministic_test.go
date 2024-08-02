@@ -34,7 +34,6 @@ func TestWhichShard(t *testing.T) {
 
 	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 	require.NoError(t, filePeers.Start())
-	defer filePeers.Stop()
 
 	sharder := DeterministicSharder{
 		Config: config,
@@ -81,7 +80,6 @@ func TestWhichShardAtEdge(t *testing.T) {
 
 	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 	require.NoError(t, filePeers.Start())
-	defer filePeers.Stop()
 
 	sharder := DeterministicSharder{
 		Config: config,
@@ -136,7 +134,6 @@ func BenchmarkShardBulk(b *testing.B) {
 
 	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 	require.NoError(b, filePeers.Start())
-	defer filePeers.Stop()
 
 	sharder := DeterministicSharder{
 		Config: config,
@@ -186,7 +183,6 @@ func TestShardBulk(t *testing.T) {
 
 				filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 				require.NoError(t, filePeers.Start())
-				defer filePeers.Stop()
 
 				sharder := DeterministicSharder{
 					Config: config,
@@ -262,7 +258,6 @@ func TestShardDrop(t *testing.T) {
 
 				filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 				require.NoError(t, filePeers.Start())
-				defer filePeers.Stop()
 
 				sharder := DeterministicSharder{
 					Config: config,
@@ -349,7 +344,6 @@ func TestShardAddHash(t *testing.T) {
 
 				filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 				require.NoError(t, filePeers.Start())
-				defer filePeers.Stop()
 
 				sharder := DeterministicSharder{
 					Config: config,
@@ -435,7 +429,6 @@ func BenchmarkDeterministicShard(b *testing.B) {
 
 			filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
 			require.NoError(b, filePeers.Start())
-			defer filePeers.Stop()
 
 			sharder := DeterministicSharder{
 				Config: config,

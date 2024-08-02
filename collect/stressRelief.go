@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dgryski/go-wyhash"
+	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
@@ -22,12 +23,13 @@ import (
 const stressReliefTopic = "refinery-stress-relief"
 
 type StressReliever interface {
-	Start() error
 	UpdateFromConfig(cfg config.StressReliefConfig)
 	Recalc() uint
 	Stressed() bool
 	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
 	ShouldSampleDeterministically(traceID string) bool
+
+	startstop.Starter
 }
 
 var _ StressReliever = &MockStressReliever{}

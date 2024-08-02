@@ -8,11 +8,12 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 )
 
-var _ Peers = &FilePeers{}
+var _ Peers = (*FilePeers)(nil)
 
 type FilePeers struct {
 	Cfg     config.Config   `inject:""`
 	Metrics metrics.Metrics `inject:"metrics"`
+	Done    chan struct{}
 
 	id string
 }
@@ -52,10 +53,6 @@ func (p *FilePeers) Start() (err error) {
 		return err
 	}
 
-	return nil
-}
-
-func (p *FilePeers) Stop() error {
 	return nil
 }
 
