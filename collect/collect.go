@@ -776,15 +776,17 @@ func (i *InMemCollector) Stop() error {
 	close(i.fromPeer)
 
 	i.mutex.Lock()
-	defer i.mutex.Unlock()
 
-	i.sendTracesInCache()
+	if i.Config.GetCollectionConfig().DrainTracesOnShutdown {
+		i.sendTracesInCache()
+	}
 
 	if i.Transmission != nil {
 		i.Transmission.Flush()
 	}
 
 	i.sampleTraceCache.Stop()
+	i.mutex.Unlock()
 
 	return nil
 }
