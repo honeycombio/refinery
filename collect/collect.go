@@ -118,12 +118,6 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_has_root", "counter")
 	i.Metrics.Register("trace_send_no_root", "counter")
 
-	i.Metrics.Register("trace_send_shutdown_total", "counter")
-	i.Metrics.Register("trace_send_shutdown_late", "counter")
-	i.Metrics.Register("trace_send_shutdown_expired", "counter")
-	i.Metrics.Register("trace_send_shutdown_root", "counter")
-	i.Metrics.Register("trace_send_shutdown_forwarded", "counter")
-
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
@@ -182,7 +176,7 @@ func (i *InMemCollector) reloadConfigs() {
 			// pull the old cache contents into the new cache
 			for j, trace := range existingCache.GetAll() {
 				if j >= imcConfig.CacheCapacity {
-					i.send(trace, TraceSendEjectedFull)
+					i.sendTrace(trace, TraceSendEjectedFull)
 					continue
 				}
 				c.Set(trace)
@@ -256,7 +250,7 @@ func (i *InMemCollector) checkAlloc() {
 	for _, trace := range allTraces {
 		tracesSent.Add(trace.TraceID)
 		totalDataSizeSent += trace.DataSize
-		i.send(trace, TraceSendEjectedMemsize)
+		i.sendTrace(trace, TraceSendEjectedMemsize)
 		if totalDataSizeSent > int(totalToRemove) {
 			break
 		}
@@ -387,9 +381,9 @@ func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 	traces := i.cache.TakeExpiredTraces(now)
 	for _, t := range traces {
 		if t.RootSpan != nil {
-			i.send(t, TraceSendGotRoot)
+			i.sendTrace(t, TraceSendGotRoot)
 		} else {
-			i.send(t, TraceSendExpired)
+			i.sendTrace(t, TraceSendExpired)
 		}
 	}
 }
@@ -406,7 +400,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, sentReason, found := i.sampleTraceCache.Check(sp); found {
+		if sr, sentReason, found := i.sampleTraceCache.CheckSpan(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -436,13 +430,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
 		if ejectedTrace != nil {
-			i.send(ejectedTrace, TraceSendEjectedFull)
+			i.sendTrace(ejectedTrace, TraceSendEjectedFull)
 		}
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		if sr, reason, found := i.sampleTraceCache.Check(sp); found {
+		if sr, reason, found := i.sampleTraceCache.CheckSpan(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			i.dealWithSentTrace(ctx, sr, reason, sp)
 			return
@@ -489,7 +483,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 	}
 
 	var rate uint
-	record, reason, found := i.sampleTraceCache.Check(sp)
+	record, reason, found := i.sampleTraceCache.CheckSpan(sp)
 	if !found {
 		rate, keep, reason = i.StressRelief.GetSampleRate(sp.TraceID)
 		now := i.Clock.Now()
@@ -640,7 +634,18 @@ func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
 	return true
 }
 
-func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
+// drainTrace is called when a trace should be sent to honeycomb during shutdown.
+func (i *InMemCollector) drainTrace(trace *types.Trace, sendReason string) {
+	i.send(trace, sendReason, true)
+}
+
+// sendTrace is called when a trace is ready to be sent to honeycomb during normal operation.
+func (i *InMemCollector) sendTrace(trace *types.Trace, sendReason string) {
+	i.send(trace, sendReason, false)
+}
+
+// send is the actual workhorse of sending a trace to honeycomb. It's called by both drainTrace and sendTrace.
+func (i *InMemCollector) send(trace *types.Trace, sendReason string, onShutdown bool) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
@@ -752,6 +757,9 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		if i.hostname != "" {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname
 		}
+		if onShutdown {
+			sp.Data["meta.refinery.shutdown.send"] = true
+		}
 		mergeTraceAndSpanSampleRates(sp, trace.SampleRate(), isDryRun)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
@@ -807,11 +815,7 @@ func (i *InMemCollector) sendTracesInCache() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
-				if done := i.sendTracesOnShutdown(ctx, sentTraceChan, forwardTraceChan, expiredTraceChan); done {
-					return
-				}
-			}
+			i.sendTracesOnShutdown(ctx, sentTraceChan, forwardTraceChan, expiredTraceChan)
 		}()
 
 		i.distributeTracesInCache(traces, sentTraceChan, forwardTraceChan, expiredTraceChan)
@@ -831,7 +835,7 @@ func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTrac
 		if trace != nil {
 
 			// first check if there's a trace decision
-			record, reason, found := i.sampleTraceCache.Test(trace.ID())
+			record, reason, found := i.sampleTraceCache.CheckTrace(trace.ID())
 			if found {
 				sentTraceChan <- sentTrace{trace, record, reason}
 				continue
@@ -843,8 +847,7 @@ func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTrac
 				continue
 			}
 
-			// if there's no trace decision, then we need forward
-			// the trace to its new home
+			// if there's no trace decision, then we need to forward the trace to its new home
 			forwardTraceChan <- trace
 		}
 	}
@@ -853,72 +856,63 @@ func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTrac
 // sendTracesOnShutdown is a helper function that sends traces to their final destination
 // on shutdown.
 // It will return true if it times out waiting for traces to send or one of the traces channel has been closed.
-func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) (done bool) {
-	select {
-	case <-ctx.Done():
-		i.Logger.Error().Logf("Timed out waiting for traces to send")
-		return true
+func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) {
+	for {
+		select {
+		case <-ctx.Done():
+			i.Logger.Info().Logf("Timed out waiting for traces to send")
+			return
 
-	case tr, ok := <-sentTraceChan:
-		if !ok {
-			return true
-		}
+		case tr, ok := <-sentTraceChan:
+			if !ok {
+				return
+			}
 
-		i.Metrics.Count("trace_send_shutdown_total", 1)
-		i.Metrics.Count("trace_send_shutdown_late", 1)
+			for _, sp := range tr.trace.GetSpans() {
+				ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
+				sp.Data["meta.refinery.shutdown.send"] = true
 
-		for _, sp := range tr.trace.GetSpans() {
-			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
+				i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
 
-			i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
+				span.End()
+			}
 
+		case tr, ok := <-expiredTraceChan:
+			if !ok {
+				return
+			}
+
+			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+
+			if tr.RootSpan != nil {
+				i.drainTrace(tr, TraceSendGotRoot)
+
+			} else {
+				i.drainTrace(tr, TraceSendExpired)
+			}
+			span.End()
+
+		case tr, ok := <-forwardTraceChan:
+			if !ok {
+				return
+			}
+
+			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+
+			targetShard := i.Sharder.WhichShard(tr.ID())
+			url := targetShard.GetAddress()
+
+			otelutil.AddSpanField(span, "target_shard", url)
+
+			for _, sp := range tr.GetSpans() {
+				sp.APIHost = url
+				sp.Data["meta.refinery.shutdown.send"] = false
+				i.Transmission.EnqueueSpan(sp)
+			}
 			span.End()
 		}
 
-	case tr, ok := <-expiredTraceChan:
-		if !ok {
-			return true
-		}
-
-		i.Metrics.Count("trace_send_shutdown_total", 1)
-
-		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
-
-		if tr.RootSpan != nil {
-			i.Metrics.Count("trace_send_shutdown_root", 1)
-
-			i.send(tr, TraceSendGotRoot)
-
-		} else {
-			i.Metrics.Count("trace_send_shutdown_expired", 1)
-
-			i.send(tr, TraceSendExpired)
-		}
-		span.End()
-
-	case tr, ok := <-forwardTraceChan:
-		if !ok {
-			return true
-		}
-
-		i.Metrics.Count("trace_send_shutdown_total", 1)
-		i.Metrics.Count("trace_send_shutdown_forwarded", 1)
-
-		_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
-
-		targetShard := i.Sharder.WhichShard(tr.ID())
-		url := targetShard.GetAddress()
-
-		otelutil.AddSpanField(span, "target_shard", url)
-
-		for _, sp := range tr.GetSpans() {
-			sp.APIHost = url
-			i.Transmission.EnqueueSpan(sp)
-		}
-		span.End()
 	}
-
-	return false
 }
 
 // Convenience method for tests.

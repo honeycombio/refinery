@@ -1498,9 +1498,17 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	require.Len(t, forwardTraceChan, 0)
 	require.Len(t, expiredTraceChan, 0)
 
-	coll.sendTracesOnShutdown(context.Background(), sentTraceChan, forwardTraceChan, expiredTraceChan)
-	require.Len(t, transmission.Events, 1)
-	require.Equal(t, span1.Dataset, transmission.Events[0].Dataset)
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	go coll.sendTracesOnShutdown(ctx1, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.Lock()
+		events := transmission.Events
+		require.Len(collect, events, 1)
+		require.Equal(collect, span1.Dataset, events[0].Dataset)
+		transmission.Mux.Unlock()
+	}, 2*time.Second, 100*time.Millisecond)
+
+	cancel1()
 	transmission.Flush()
 
 	// test 2
@@ -1523,9 +1531,15 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	require.Len(t, forwardTraceChan, 0)
 	require.Len(t, expiredTraceChan, 1)
 
-	coll.sendTracesOnShutdown(context.Background(), sentTraceChan, forwardTraceChan, expiredTraceChan)
-	require.Len(t, transmission.Events, 1)
-	require.Equal(t, span2.Dataset, transmission.Events[0].Dataset)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	go coll.sendTracesOnShutdown(ctx2, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.Lock()
+		require.Len(collect, transmission.Events, 1)
+		require.Equal(collect, span2.Dataset, transmission.Events[0].Dataset)
+		transmission.Mux.Unlock()
+	}, 2*time.Second, 100*time.Millisecond)
+	cancel2()
 	transmission.Flush()
 
 	// test 3
@@ -1549,9 +1563,15 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	require.Len(t, forwardTraceChan, 1)
 	require.Len(t, expiredTraceChan, 0)
 
-	coll.sendTracesOnShutdown(context.Background(), sentTraceChan, forwardTraceChan, expiredTraceChan)
-	require.Len(t, transmission.Events, 1)
-	require.Equal(t, span3.Dataset, transmission.Events[0].Dataset)
-	require.Equal(t, "http://self", transmission.Events[0].APIHost)
+	ctx3, cancel3 := context.WithCancel(context.Background())
+	go coll.sendTracesOnShutdown(ctx3, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.Lock()
+		require.Len(collect, transmission.Events, 1)
+		require.Equal(collect, span3.Dataset, transmission.Events[0].Dataset)
+		require.Equal(collect, "http://self", transmission.Events[0].APIHost)
+		transmission.Mux.Unlock()
+	}, 2*time.Second, 100*time.Millisecond)
+	cancel3()
 
 }

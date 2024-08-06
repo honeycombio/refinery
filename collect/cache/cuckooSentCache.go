@@ -210,11 +210,11 @@ func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 	c.dropped.Add(trace.ID())
 }
 
-func (c *cuckooSentCache) Check(span *types.Span) (TraceSentRecord, string, bool) {
+func (c *cuckooSentCache) CheckSpan(span *types.Span) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(span.TraceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
-		return &cuckooDroppedRecord{}, "", false
+		return &cuckooDroppedRecord{}, "", true
 	}
 	// was it kept?
 	c.keptMut.Lock()
@@ -262,9 +262,10 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	return nil
 }
 
-// Test checks if a trace was kept or dropped, and returns the reason if it was kept.
+// CheckTrace checks if a trace was kept or dropped, and returns the reason if it was kept.
 // The bool return value is true if the trace was found in the cache.
-func (c *cuckooSentCache) Test(traceID string) (TraceSentRecord, string, bool) {
+// It does not modify the count information.
+func (c *cuckooSentCache) CheckTrace(traceID string) (TraceSentRecord, string, bool) {
 	// was it dropped?
 	if c.dropped.Check(traceID) {
 		// we recognize it as dropped, so just say so; there's nothing else to do
