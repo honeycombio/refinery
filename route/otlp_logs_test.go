@@ -270,6 +270,12 @@ func TestLogsOTLPHandler(t *testing.T) {
 			ReceiveKeys:          []string{},
 			AcceptOnlyListedKeys: true,
 		}
+		defer func() {
+			router.Config.(*config.MockConfig).GetAccessKeyConfigVal = config.AccessKeyConfig{
+				ReceiveKeys:          []string{},
+				AcceptOnlyListedKeys: false,
+			}
+		}()
 		req := &collectorlogs.ExportLogsServiceRequest{
 			ResourceLogs: []*logs.ResourceLogs{{
 				ScopeLogs: []*logs.ScopeLogs{{
@@ -302,6 +308,12 @@ func TestLogsOTLPHandler(t *testing.T) {
 			ReceiveKeys:          []string{},
 			AcceptOnlyListedKeys: true,
 		}
+		defer func() {
+			router.Config.(*config.MockConfig).GetAccessKeyConfigVal = config.AccessKeyConfig{
+				ReceiveKeys:          []string{},
+				AcceptOnlyListedKeys: false,
+			}
+		}()
 		req := &collectorlogs.ExportLogsServiceRequest{
 			ResourceLogs: []*logs.ResourceLogs{{
 				ScopeLogs: []*logs.ScopeLogs{{
