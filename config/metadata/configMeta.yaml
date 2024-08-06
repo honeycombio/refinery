@@ -185,16 +185,19 @@ groups:
 
       - name: SendKey
         type: string
+        pattern: apikey
+        valuetype: nondefault
+        default: ""
+        example: "SetThisToAHoneycombKey"
         reload: true
         validations:
           - type: format
-            arg: apikey
-          - type: validapikey
-        summary: is a Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration.
+            arg: apikeyOrBlank
+        summary: is an optional Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration.
         description: >
           If `SendKey` is set to a valid Honeycomb key, then Refinery can use
           the listed key to send data.
-          How this works depends on the value of `SendKeyMode`.
+          The exact behavior depends on the value of `SendKeyMode`.
 
       - name: SendKeyMode
         type: string

@@ -269,6 +269,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 			}
 		}
 		for _, validation := range field.Validations {
+		nextValidation:
 			switch validation.Type {
 			case "choice":
 				if !(isString(v) && slices.Contains(field.Choices, v.(string))) {
@@ -279,6 +280,12 @@ func (m *Metadata) Validate(data map[string]any) []string {
 				var format string
 				mask := false
 				switch validation.Arg.(string) {
+				case "apikeyOrBlank":
+					// allow an empty string as well as a valid API key
+					if v.(string) == "" {
+						break nextValidation
+					}
+					fallthrough // fallthrough to the apikey case
 				case "apikey":
 					// valid API key formats are:
 					// 1. 32 hex characters ("classic" Honeycomb API key)
