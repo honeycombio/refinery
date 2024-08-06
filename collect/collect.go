@@ -75,6 +75,7 @@ type InMemCollector struct {
 	incoming chan *types.Span
 	fromPeer chan *types.Span
 	reload   chan struct{}
+	done     chan struct{}
 
 	hostname string
 }
@@ -128,6 +129,7 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.done = make(chan struct{})
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -328,11 +330,16 @@ func (i *InMemCollector) collect() {
 		default:
 			select {
 			case <-ticker.C:
-				i.sendTracesInCache(time.Now())
-				i.checkAlloc()
+				select {
+				case <-i.done:
+				default:
+					i.sendTracesInCache(time.Now())
+					i.checkAlloc()
 
-				// Briefly unlock the cache, to allow test access.
-				runtime.Gosched()
+					// Briefly unlock the cache, to allow test access.
+					runtime.Gosched()
+				}
+
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -734,6 +741,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 func (i *InMemCollector) Stop() error {
 	// close the incoming channel and (TODO) wait for all collectors to finish
+	close(i.done)
 	close(i.incoming)
 
 	// purge the collector of any in-flight traces

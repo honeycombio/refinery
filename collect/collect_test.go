@@ -52,6 +52,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Metrics: s,
 			Logger:  &logger.NullLogger{},
 		},
+		done:  make(chan struct{}),
 	}
 }
 
