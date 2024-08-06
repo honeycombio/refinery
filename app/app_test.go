@@ -106,13 +106,16 @@ func newStartedApp(
 		GetPeerBufferSizeVal:     10000,
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
-		IsAPIKeyValidFunc:        func(k string) bool { return k == legacyAPIKey || k == nonLegacyAPIKey },
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
 		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000},
 		AddHostMetadataToTrace:   enableHostMetadata,
 		TraceIdFieldNames:        []string{"trace.trace_id"},
 		ParentIdFieldNames:       []string{"trace.parent_id"},
 		SampleCache:              config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
+		GetAccessKeyConfigVal: config.AccessKeyConfig{
+			ReceiveKeys:          []string{legacyAPIKey, nonLegacyAPIKey},
+			AcceptOnlyListedKeys: true,
+		},
 	}
 
 	var err error

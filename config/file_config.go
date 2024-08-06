@@ -91,6 +91,60 @@ type AccessKeyConfig struct {
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
 }
 
+// truncate the key to 8 characters for logging
+func (a *AccessKeyConfig) sanitize(key string) string {
+	return fmt.Sprintf("%.8s...", key)
+}
+
+// CheckAndMaybeReplaceKey checks the given API key against the configuration
+// and possibly replaces it with the configured SendKey, if the settings so indicate.
+func (a *AccessKeyConfig) CheckAndMaybeReplaceKey(apiKey string) (string, error) {
+	// Apply AcceptOnlyListedKeys logic BEFORE we consider replacement
+	if a.AcceptOnlyListedKeys && !slices.Contains(a.ReceiveKeys, apiKey) {
+		err := fmt.Errorf("api key %s not found in list of authorized keys", a.sanitize(apiKey))
+		return "", err
+	}
+
+	if a.SendKey != "" {
+		overwriteWith := ""
+		switch a.SendKeyMode {
+		case "none":
+			// don't replace keys at all
+			// (SendKey is disabled)
+		case "all":
+			// overwrite all keys, even missing ones, with the configured one
+			overwriteWith = a.SendKey
+		case "nonblank":
+			// only replace nonblank keys with the configured one
+			if apiKey != "" {
+				overwriteWith = a.SendKey
+			}
+		case "listedonly":
+			// only replace keys that are listed in the `ReceiveKeys` list
+			// reject everything else
+			if slices.Contains(a.ReceiveKeys, apiKey) {
+				overwriteWith = a.SendKey
+			}
+		case "missingonly":
+			// only inject keys into telemetry that doesn't have a key at all
+			if apiKey == "" {
+				overwriteWith = a.SendKey
+			}
+		case "unlisted":
+			// only replace nonblank keys that are NOT listed in the `ReceiveKeys` list
+			if apiKey != "" && !slices.Contains(a.ReceiveKeys, apiKey) {
+				overwriteWith = a.SendKey
+			}
+		}
+		return overwriteWith, nil
+	}
+
+	if apiKey == "" {
+		return "", fmt.Errorf("blank API key not permitted with this configuration")
+	}
+	return apiKey, nil
+}
+
 type DefaultTrue bool
 
 func (dt *DefaultTrue) Get() (enabled bool) {
@@ -538,17 +592,6 @@ func (f *fileConfig) GetAccessKeyConfig() AccessKeyConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.AccessKeys
-}
-
-func (f *fileConfig) IsAPIKeyValid(key string) bool {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	if !f.mainConfig.AccessKeys.AcceptOnlyListedKeys {
-		return true
-	}
-
-	return slices.Contains(f.mainConfig.AccessKeys.ReceiveKeys, key)
 }
 
 func (f *fileConfig) GetPeerManagementType() string {

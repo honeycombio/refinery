@@ -57,9 +57,6 @@ type Config interface {
 	// GetAccessKeyConfig returns the access key configuration
 	GetAccessKeyConfig() AccessKeyConfig
 
-	// IsAPIKeyValid checks if the given API key is valid according to the rules
-	IsAPIKeyValid(key string) bool
-
 	// GetPeers returns a list of other servers participating in this proxy cluster
 	GetPeers() []string
 
