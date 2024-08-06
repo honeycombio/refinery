@@ -65,11 +65,9 @@ type InMemCollector struct {
 	// For test use only
 	BlockOnAddSpan bool
 
-	// mutex must be held whenever non-channel internal fields are accessed.
-	// This exists to avoid data races in tests and startup/shutdown.
-	mutex sync.RWMutex
+	cache cache.Cache
 
-	cache           cache.Cache
+	mut             sync.RWMutex
 	datasetSamplers map[string]sample.Sampler
 
 	sampleTraceCache cache.TraceSentCache
@@ -184,7 +182,9 @@ func (i *InMemCollector) reloadConfigs() {
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
+	i.mut.Lock()
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.mut.Unlock()
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
@@ -307,11 +307,6 @@ func (i *InMemCollector) collect() {
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	// mutex is normally held by this goroutine at all times.
-	// It is unlocked once per ticker cycle for tests.
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
-
 	for {
 		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
@@ -337,9 +332,7 @@ func (i *InMemCollector) collect() {
 				i.checkAlloc()
 
 				// Briefly unlock the cache, to allow test access.
-				i.mutex.Unlock()
 				runtime.Gosched()
-				i.mutex.Lock()
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -669,10 +662,12 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	}
 
 	// use sampler key to find sampler; create and cache if not found
+	i.mut.Lock()
 	if sampler, found = i.datasetSamplers[samplerKey]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
 		i.datasetSamplers[samplerKey] = sampler
 	}
+	i.mut.Unlock()
 
 	// make sampling decision and update the trace
 	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
@@ -741,9 +736,6 @@ func (i *InMemCollector) Stop() error {
 	// close the incoming channel and (TODO) wait for all collectors to finish
 	close(i.incoming)
 
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
-
 	// purge the collector of any in-flight traces
 	if i.cache != nil {
 		traces := i.cache.GetAll()
@@ -752,21 +744,23 @@ func (i *InMemCollector) Stop() error {
 				i.send(trace, TraceSendEjectedFull)
 			}
 		}
-	}
-	if i.Transmission != nil {
-		i.Transmission.Flush()
-	}
+		if i.Transmission != nil {
+			i.Transmission.Flush()
+		}
 
+	}
 	i.sampleTraceCache.Stop()
 
 	return nil
 }
 
+func (i *InMemCollector) redistributeTraces() {
+	// loop through eveything in the cache of live traces
+	// if it doesn't belong to this peer, we should forward it to the correct peer
+}
+
 // Convenience method for tests.
 func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.mutex.RLock()
-	defer i.mutex.RUnlock()
-
 	return i.cache.Get(traceID)
 }
 

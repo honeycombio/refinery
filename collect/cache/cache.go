@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"sync"
 	"time"
 
 	"github.com/honeycombio/refinery/generics"
@@ -23,6 +24,8 @@ type Cache interface {
 	TakeExpiredTraces(now time.Time) []*types.Trace
 }
 
+var _ Cache = (*DefaultInMemCache)(nil)
+
 // DefaultInMemCache keeps a bounded number of entries to avoid growing memory
 // forever. Traces are expunged from the cache in insertion order (not access
 // order) so it is important to have a cache larger than trace throughput *
@@ -31,6 +34,7 @@ type DefaultInMemCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
+	mut   sync.RWMutex
 	cache map[string]*types.Trace
 
 	// traceBuffer is a circular buffer of currently stored traces
@@ -69,6 +73,8 @@ func NewInMemCache(
 }
 
 func (d *DefaultInMemCache) GetCacheSize() int {
+	d.mut.RLock()
+	defer d.mut.RUnlock()
 	return len(d.traceBuffer)
 }
 
@@ -107,6 +113,9 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 		return nil
 	}
 
+	d.mut.Lock()
+	defer d.mut.Unlock()
+
 	// store the trace
 	d.cache[trace.TraceID] = trace
 
@@ -132,12 +141,18 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
+	d.mut.RLock()
+	defer d.mut.RUnlock()
+
 	return d.cache[traceID]
 }
 
 // GetAll is not thread safe and should only be used when that's ok
 // Returns all non-nil trace entries.
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
+	d.mut.RLock()
+	defer d.mut.RUnlock()
+
 	tmp := make([]*types.Trace, 0, len(d.traceBuffer))
 	for _, t := range d.traceBuffer {
 		if t != nil {
@@ -150,6 +165,9 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+	d.mut.Lock()
+	defer d.mut.Unlock()
+
 	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.traceBuffer)))
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
@@ -167,6 +185,9 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
+	d.mut.Lock()
+	defer d.mut.Unlock()
+
 	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.traceBuffer)))
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 

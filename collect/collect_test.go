@@ -512,9 +512,6 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.Reload()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.RLock()
-		defer coll.mutex.RUnlock()
-
 		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
 	}, 60*wait, wait, "cache size to change")
 
@@ -568,20 +565,19 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
-
+		coll.mut.RLock()
 		_, ok := coll.datasetSamplers[dataset]
+		coll.mut.RUnlock()
+
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
 	conf.Reload()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
-
+		coll.mut.RLock()
 		_, ok := coll.datasetSamplers[dataset]
+		coll.mut.RUnlock()
 		return !ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
@@ -596,10 +592,9 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
-
+		coll.mut.RLock()
 		_, ok := coll.datasetSamplers[dataset]
+		coll.mut.RUnlock()
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 }
@@ -656,7 +651,6 @@ func TestStableMaxAlloc(t *testing.T) {
 	}
 
 	// Now there should be 500 traces in the cache.
-	coll.mutex.Lock()
 	assert.Equal(t, 500, len(coll.cache.GetAll()))
 
 	// We want to induce an eviction event, so set MaxAlloc a bit below
@@ -665,19 +659,17 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
-
-	coll.mutex.Unlock()
+	cfg := conf.GetCollectionConfig()
+	cfg.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	conf.SetCollectionConfig(cfg)
 
 	// wait for the cache to take some action
 	var traces []*types.Trace
 	for {
-		coll.mutex.Lock()
 		traces = coll.cache.GetAll()
 		if len(traces) < 500 {
 			break
 		}
-		coll.mutex.Unlock()
 
 		time.Sleep(conf.SendTickerVal)
 	}
@@ -687,7 +679,6 @@ func TestStableMaxAlloc(t *testing.T) {
 	tracesLeft := len(traces)
 	assert.Less(t, tracesLeft, 480, "should have sent some traces")
 	assert.Greater(t, tracesLeft, 100, "should have NOT sent some traces")
-	coll.mutex.Unlock()
 
 	// We discarded the most costly spans, and sent them.
 	transmission.Mux.Lock()
