@@ -183,6 +183,59 @@ func BenchmarkCache_Get(b *testing.B) {
 	}
 }
 
+// BenchmarkCache_GetConcurrent concurrent access to the cache's Get method
+func BenchmarkCache_GetConcurrent(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(1000000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+		c.Set(traces[i])
+	}
+
+	const numGoroutines = 70
+
+	p := pool.New().WithMaxGoroutines(numGoroutines + 1)
+	stop := make(chan struct{})
+	p.Go(func() {
+		select {
+		case <-stop:
+			return
+		default:
+			rand.Intn(100)
+		}
+	})
+
+	ch := make(chan int, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		p.Go(func() {
+			for n := range ch {
+				if i%1000 == 0 {
+					c.TakeExpiredTraces(time.Now())
+				}
+
+				c.Get(traces[n].ID())
+			}
+		})
+	}
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		ch <- j
+		if j%1000 == 0 {
+			// just give things a moment to run
+			time.Sleep(1 * time.Microsecond)
+		}
+	}
+	close(ch)
+	close(stop)
+	p.Wait()
+}
+
 // Benmark concurrent access to the cache's Set method
 func BenchmarkCache_SetConcurrent(b *testing.B) {
 	s := &metrics.MockMetrics{}
@@ -222,6 +275,17 @@ func BenchmarkCache_SetConcurrent(b *testing.B) {
 			}
 		})
 	}
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		ch <- j
+		if j%1000 == 0 {
+			// just give things a moment to run
+			time.Sleep(1 * time.Microsecond)
+		}
+	}
+	close(ch)
+	close(stop)
+	p.Wait()
 }
 
 // Benchmark the cache's TakeExpiredTraces method
