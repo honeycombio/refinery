@@ -1184,17 +1184,16 @@ groups:
           supported. See `MaxMemoryPercentage` for more details. If set,
           `Collections.AvailableMemory` must not be defined.
 
-      - name: DrainTracesOnShutdown
+      - name: DisableRedistribution
         type: bool
         valuetype: nondefault
         firstversion: v2.8
         default: false
         reload: true
-        summary: controls whether to transmit traces in cache to remaining peers during shutdown.
+        summary: controls whether to transmit traces in cache to remaining peers during cluster scaling event.
         description: >
-          If `true`, then Refinery will loop through all remaining traces in its cache and forward them to the rest of the peers in a cluster.
-          This will prevent data loss during a shutdown event.
-          By enabling this behavior, it could result in a large burst of network traffic when large traces with long TraceTimeout are present.
+          If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
+          By diabling this behavior, it can help to prevent distuptive burst of network traffic when large traces with long TraceTimeout are redistributed.
 
   - name: BufferSizes
     title: "Buffer Sizes"

@@ -777,7 +777,7 @@ func (i *InMemCollector) Stop() error {
 
 	i.mutex.Lock()
 
-	if i.Config.GetCollectionConfig().DrainTracesOnShutdown {
+	if !i.Config.GetCollectionConfig().DisableRedistribution {
 		i.sendTracesInCache()
 	}
 
