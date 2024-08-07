@@ -98,6 +98,7 @@ func (a *AccessKeyConfig) sanitize(key string) string {
 
 // CheckAndMaybeReplaceKey checks the given API key against the configuration
 // and possibly replaces it with the configured SendKey, if the settings so indicate.
+// It returns the key to use, or an error if the key is invalid given the settings.
 func (a *AccessKeyConfig) CheckAndMaybeReplaceKey(apiKey string) (string, error) {
 	// Apply AcceptOnlyListedKeys logic BEFORE we consider replacement
 	if a.AcceptOnlyListedKeys && !slices.Contains(a.ReceiveKeys, apiKey) {
@@ -120,27 +121,34 @@ func (a *AccessKeyConfig) CheckAndMaybeReplaceKey(apiKey string) (string, error)
 				overwriteWith = a.SendKey
 			}
 		case "listedonly":
-			// only replace keys that are listed in the `ReceiveKeys` list
-			// reject everything else
+			// only replace keys that are listed in the `ReceiveKeys` list,
+			// otherwise use original key
+			overwriteWith = apiKey
 			if slices.Contains(a.ReceiveKeys, apiKey) {
 				overwriteWith = a.SendKey
 			}
 		case "missingonly":
 			// only inject keys into telemetry that doesn't have a key at all
+			// otherwise use original key
+			overwriteWith = apiKey
 			if apiKey == "" {
 				overwriteWith = a.SendKey
 			}
 		case "unlisted":
 			// only replace nonblank keys that are NOT listed in the `ReceiveKeys` list
-			if apiKey != "" && !slices.Contains(a.ReceiveKeys, apiKey) {
-				overwriteWith = a.SendKey
+			// otherwise use original key
+			if apiKey != "" {
+				overwriteWith = apiKey
+				if !slices.Contains(a.ReceiveKeys, apiKey) {
+					overwriteWith = a.SendKey
+				}
 			}
 		}
-		return overwriteWith, nil
+		apiKey = overwriteWith
 	}
 
 	if apiKey == "" {
-		return "", fmt.Errorf("blank API key not permitted with this configuration")
+		return "", fmt.Errorf("blank API key is not permitted with this configuration")
 	}
 	return apiKey, nil
 }
