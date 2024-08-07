@@ -54,8 +54,8 @@ type Config interface {
 	// Returns the entire GRPC config block
 	GetGRPCConfig() GRPCServerParameters
 
-	// IsAPIKeyValid checks if the given API key is valid according to the rules
-	IsAPIKeyValid(key string) bool
+	// GetAccessKeyConfig returns the access key configuration
+	GetAccessKeyConfig() AccessKeyConfig
 
 	// GetPeers returns a list of other servers participating in this proxy cluster
 	GetPeers() []string
