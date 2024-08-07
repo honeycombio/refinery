@@ -12,7 +12,7 @@ var selfShard SingleShard = "self"
 func (s *SingleShard) Equals(other Shard) bool { return true }
 
 // GetAddress will never be used because every shard is my shard
-func (s *SingleShard) GetAddress() string { return "" }
+func (s *SingleShard) GetAddress() string { return "http://self" }
 
 type SingleServerSharder struct {
 	Logger logger.Logger `inject:""`

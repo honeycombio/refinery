@@ -249,7 +249,7 @@ func main() {
 		{Value: legacyMetrics, Name: "legacyMetrics"},
 		{Value: promMetrics, Name: "promMetrics"},
 		{Value: oTelMetrics, Name: "otelMetrics"},
-		{Value: tracer, Name: "tracer"},
+		{Value: tracer, Name: "tracer"}, // we need to use a named injection here because trace.Tracer's struct fields are all private
 		{Value: clockwork.NewRealClock()},
 		{Value: metricsSingleton, Name: "metrics"},
 		{Value: genericMetricsRecorder, Name: "genericMetrics"},
