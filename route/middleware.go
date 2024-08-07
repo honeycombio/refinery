@@ -2,7 +2,6 @@ package route
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -38,23 +37,24 @@ func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
 	})
 }
 
-func (r *Router) apiKeyChecker(next http.Handler) http.Handler {
+func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		apiKey := req.Header.Get(types.APIKeyHeader)
 		if apiKey == "" {
 			apiKey = req.Header.Get(types.APIKeyHeaderShort)
 		}
-		if apiKey == "" {
-			err := errors.New("no " + types.APIKeyHeader + " header found from within authing middleware")
+
+		keycfg := r.Config.GetAccessKeyConfig()
+
+		overwriteWith, err := keycfg.CheckAndMaybeReplaceKey(apiKey)
+		if err != nil {
 			r.handlerReturnWithError(w, ErrAuthNeeded, err)
 			return
 		}
-		if r.Config.IsAPIKeyValid(apiKey) {
-			next.ServeHTTP(w, req)
-			return
+		if overwriteWith != apiKey {
+			req.Header.Set(types.APIKeyHeader, overwriteWith)
 		}
-		err := fmt.Errorf("api key %s not found in list of authorized keys", apiKey)
-		r.handlerReturnWithError(w, ErrAuthNeeded, err)
+		next.ServeHTTP(w, req)
 	})
 }
 

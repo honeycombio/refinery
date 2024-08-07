@@ -9,7 +9,7 @@ import (
 // initialization
 type MockConfig struct {
 	Callbacks                        []ConfigReloadCallback
-	IsAPIKeyValidFunc                func(string) bool
+	GetAccessKeyConfigVal            AccessKeyConfig
 	GetCollectorTypeVal              string
 	GetCollectionConfigVal           CollectionConfig
 	GetHoneycombAPIVal               string
@@ -102,16 +102,11 @@ func (m *MockConfig) GetHashes() (string, string) {
 	return m.CfgHash, m.RulesHash
 }
 
-func (m *MockConfig) IsAPIKeyValid(key string) bool {
+func (m *MockConfig) GetAccessKeyConfig() AccessKeyConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	// if no function is set, assume the key is valid
-	if m.IsAPIKeyValidFunc == nil {
-		return true
-	}
-
-	return m.IsAPIKeyValidFunc(key)
+	return m.GetAccessKeyConfigVal
 }
 
 func (m *MockConfig) GetCollectorType() string {

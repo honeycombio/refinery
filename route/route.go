@@ -174,7 +174,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	// require an auth header for events and batches
 	authedMuxxer := muxxer.PathPrefix("/1/").Methods("POST").Subrouter()
 	authedMuxxer.UseEncodedPath()
-	authedMuxxer.Use(r.apiKeyChecker)
+	authedMuxxer.Use(r.apiKeyProcessor)
 
 	// handle events and batches
 	authedMuxxer.HandleFunc("/events/{datasetName}", r.event).Name("event")

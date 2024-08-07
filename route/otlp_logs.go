@@ -3,7 +3,6 @@ package route
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -25,8 +24,11 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if !r.Config.IsAPIKeyValid(ri.ApiKey) {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey), HTTPStatusCode: http.StatusUnauthorized})
+	apicfg := r.Config.GetAccessKeyConfig()
+	keyToUse, err := apicfg.CheckAndMaybeReplaceKey(ri.ApiKey)
+
+	if err != nil {
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
 
@@ -36,7 +38,7 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := r.processOTLPRequest(req.Context(), result.Batches, ri.ApiKey); err != nil {
+	if err := r.processOTLPRequest(req.Context(), result.Batches, keyToUse); err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -60,8 +62,11 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if !l.router.Config.IsAPIKeyValid(ri.ApiKey) {
-		return nil, status.Error(codes.Unauthenticated, fmt.Sprintf("api key %s not found in list of authorized keys", ri.ApiKey))
+	apicfg := l.router.Config.GetAccessKeyConfig()
+	keyToUse, err := apicfg.CheckAndMaybeReplaceKey(ri.ApiKey)
+
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 
 	result, err := huskyotlp.TranslateLogsRequest(ctx, req, ri)
@@ -69,7 +74,7 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := l.router.processOTLPRequest(ctx, result.Batches, ri.ApiKey); err != nil {
+	if err := l.router.processOTLPRequest(ctx, result.Batches, keyToUse); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 

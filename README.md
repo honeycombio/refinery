@@ -109,6 +109,48 @@ Refinery supports the following key environment variables; please see the comman
 
 Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
 
+## Managing Keys
+
+Sending data to Honeycomb requires attaching an API key to telemetry. In order to make managing telemetry easier, Refinery support the `ReceiveKeys` and `SendKey` config options, along with `AcceptOnlyListedKeys` and `SendKeyMode`. In various combinations, they have a lot of expressive power. Please see the configuration documentation for details on how to set these parameters.
+
+A quick start for specific scenarios is below:
+
+### A small number of services
+* Set keys in your applications the way you normally would, and leave Refinery set to the defaults.
+
+### Large number of services, central key preferred
+* Do not set keys in your applications
+* Set `SendKey` to a valid Honeycomb Key
+* Set `SendKeyMode` to `all`
+
+### Applications must set a key, but control the actual key at Refinery
+* Set `SendKey` to a valid Honeycomb Key
+* Set `SendKeyMode` to `nonblank`
+
+### Replace most keys but permit exceptions
+* Set `ReceiveKeys` to the list of exceptions
+* Set `SendKey` to a valid Honeycomb Key
+* Set `SendKeyMode` to `unlisted`
+
+### Some applications have custom keys, but others should use central key
+* Set custom keys in your applications as needed, leave others blank
+* Set `SendKey` to a valid Honeycomb Key
+* Set `SendKeyMode` to `missingonly`
+
+### Only applications knowing a specific secret should be able to send telemetry, but a central key is preferred
+* Choose an internal secret key (any arbitrary string)
+* Add that secret to `ReceiveKeys`
+* Set `AcceptOnlyListedKeys` to `true`
+* Set `SendKey` to a valid Honeycomb Key
+* Set `SendKeyMode` to `listedonly`
+
+### Replace specific keys used by certain applications with the central key
+* Set `AcceptOnlyListedKeys` to `false`
+* Set `ReceiveKeys` to the keys that should be replaced
+* Set `SendKey` to a valid Honeycomb Key
+* Set `SendKeyMode` to `listedonly`
+
+
 ## Dry Run Mode
 
 When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery.

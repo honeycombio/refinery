@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/honeycombio/refinery/generics"
+	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
 )
 
@@ -86,8 +86,71 @@ type NetworkConfig struct {
 
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
+	SendKey              string   `yaml:"SendKey"`
+	SendKeyMode          string   `yaml:"SendKeyMode" default:"none"`
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
-	keymap               generics.Set[string]
+}
+
+// truncate the key to 8 characters for logging
+func (a *AccessKeyConfig) sanitize(key string) string {
+	return fmt.Sprintf("%.8s...", key)
+}
+
+// CheckAndMaybeReplaceKey checks the given API key against the configuration
+// and possibly replaces it with the configured SendKey, if the settings so indicate.
+// It returns the key to use, or an error if the key is invalid given the settings.
+func (a *AccessKeyConfig) CheckAndMaybeReplaceKey(apiKey string) (string, error) {
+	// Apply AcceptOnlyListedKeys logic BEFORE we consider replacement
+	if a.AcceptOnlyListedKeys && !slices.Contains(a.ReceiveKeys, apiKey) {
+		err := fmt.Errorf("api key %s not found in list of authorized keys", a.sanitize(apiKey))
+		return "", err
+	}
+
+	if a.SendKey != "" {
+		overwriteWith := ""
+		switch a.SendKeyMode {
+		case "none":
+			// don't replace keys at all
+			// (SendKey is disabled)
+		case "all":
+			// overwrite all keys, even missing ones, with the configured one
+			overwriteWith = a.SendKey
+		case "nonblank":
+			// only replace nonblank keys with the configured one
+			if apiKey != "" {
+				overwriteWith = a.SendKey
+			}
+		case "listedonly":
+			// only replace keys that are listed in the `ReceiveKeys` list,
+			// otherwise use original key
+			overwriteWith = apiKey
+			if slices.Contains(a.ReceiveKeys, apiKey) {
+				overwriteWith = a.SendKey
+			}
+		case "missingonly":
+			// only inject keys into telemetry that doesn't have a key at all
+			// otherwise use original key
+			overwriteWith = apiKey
+			if apiKey == "" {
+				overwriteWith = a.SendKey
+			}
+		case "unlisted":
+			// only replace nonblank keys that are NOT listed in the `ReceiveKeys` list
+			// otherwise use original key
+			if apiKey != "" {
+				overwriteWith = apiKey
+				if !slices.Contains(a.ReceiveKeys, apiKey) {
+					overwriteWith = a.SendKey
+				}
+			}
+		}
+		apiKey = overwriteWith
+	}
+
+	if apiKey == "" {
+		return "", fmt.Errorf("blank API key is not permitted with this configuration")
+	}
+	return apiKey, nil
 }
 
 type DefaultTrue bool
@@ -532,20 +595,11 @@ func (f *fileConfig) GetGRPCConfig() GRPCServerParameters {
 	return f.mainConfig.GRPCServerParameters
 }
 
-func (f *fileConfig) IsAPIKeyValid(key string) bool {
+func (f *fileConfig) GetAccessKeyConfig() AccessKeyConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	if !f.mainConfig.AccessKeys.AcceptOnlyListedKeys {
-		return true
-	}
-
-	// if we haven't built the keymap yet, do it now
-	if f.mainConfig.AccessKeys.keymap == nil {
-		f.mainConfig.AccessKeys.keymap = generics.NewSet(f.mainConfig.AccessKeys.ReceiveKeys...)
-	}
-
-	return f.mainConfig.AccessKeys.keymap.Contains(key)
+	return f.mainConfig.AccessKeys
 }
 
 func (f *fileConfig) GetPeerManagementType() string {
