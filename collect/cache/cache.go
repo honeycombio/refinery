@@ -10,11 +10,13 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// Cache is a non-threadsafe cache. It must not be used for concurrent access.
+// Cache is a multi-threadsafe cache. It is used to store traces that have
+// been received but not yet sent.
 type Cache interface {
 	// Set adds the trace to the cache. If it is kicking out a trace from the cache
 	// that has not yet been sent, it will return that trace. Otherwise returns nil.
 	Set(trace *types.Trace) *types.Trace
+	//Get returns the trace with the given traceID, or nil if it is not in the cache.
 	Get(traceID string) *types.Trace
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
@@ -39,6 +41,7 @@ type DefaultInMemCache struct {
 
 	// traceBuffer is a circular buffer of currently stored traces
 	traceBuffer []*types.Trace
+
 	// currentIndex is the current location in the circle.
 	currentIndex int
 }
