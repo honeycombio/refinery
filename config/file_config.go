@@ -282,7 +282,7 @@ type CollectionConfig struct {
 	AvailableMemory       MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage   int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
-	DisableRedistribution bool       `yaml:"DisableRedisribution"`
+	DisableRedistribution bool       `yaml:"DisableRedistribution"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
