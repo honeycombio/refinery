@@ -165,8 +165,8 @@ func main() {
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          c.GetMaxBatchSize(),
-			BatchTimeout:          c.GetBatchTimeout(),
+			MaxBatchSize:          c.GetTracesConfig().GetMaxBatchSize(),
+			BatchTimeout:          time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:   uint(c.GetUpstreamBufferSize()),
 			UserAgentAddition:     userAgentAddition,
@@ -183,8 +183,8 @@ func main() {
 
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          c.GetMaxBatchSize(),
-			BatchTimeout:          c.GetBatchTimeout(),
+			MaxBatchSize:          c.GetTracesConfig().GetMaxBatchSize(),
+			BatchTimeout:          time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
 			UserAgentAddition:     userAgentAddition,

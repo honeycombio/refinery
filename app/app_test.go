@@ -96,11 +96,13 @@ func newStartedApp(
 	enableHostMetadata bool,
 ) (*App, inject.Graph) {
 	c := &config.MockConfig{
-		GetSendDelayVal:          1 * time.Millisecond,
-		GetTraceTimeoutVal:       10 * time.Millisecond,
-		GetMaxBatchSizeVal:       500,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(10 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:        &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:            2 * time.Millisecond,
 		PeerManagementType:       "file",
 		GetUpstreamBufferSizeVal: 10000,
 		GetPeerBufferSizeVal:     10000,
@@ -159,7 +161,7 @@ func newStartedApp(
 	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:         c.GetMaxBatchSize(),
+			MaxBatchSize:         c.GetTracesConfigVal.MaxBatchSize,
 			BatchTimeout:         libhoney.DefaultBatchTimeout,
 			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
 			PendingWorkCapacity:  uint(c.GetPeerBufferSize()),
@@ -241,7 +243,7 @@ func TestAppIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(5 * app.Config.GetSendTickerValue())
+	time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
 
 	events := sender.Events()
 	require.Len(t, events, 1)
@@ -440,7 +442,7 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	time.Sleep(5 * app.Config.GetSendTickerValue())
+	time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
 
 	events := sender.Events()
 	require.Len(t, events, 1)

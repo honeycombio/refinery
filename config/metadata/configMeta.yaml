@@ -350,6 +350,20 @@ groups:
           should increase this timer. Note that this increase will also
           increase the memory requirements for Refinery.
 
+      - name: SpanLimit
+        type: int
+        valuetype: nondefault
+        default: 0
+        reload: true
+        summary: is the number of spans after which a trace becomes eligible for a trace decision.
+        description: >
+          This setting helps to keep memory usage under control. If a trace has more than this
+          number of spans, then it becomes eligible for a trace decision.
+
+          It's most helpful in a situation where a sudden burst of many spans in a large trace hits
+          refinery all at once, causing memory usage to spike and possibly crashing refinery.
+          TODO: Write more
+
       - name: MaxBatchSize
         type: int
         valuetype: nondefault
