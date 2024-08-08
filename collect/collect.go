@@ -218,7 +218,7 @@ func (i *InMemCollector) checkAlloc() {
 		return
 	}
 	allTraces := existingCache.GetAll()
-	timeout := i.Config.GetTraceTimeout()
+	timeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	} // Sort traces by CacheImpact, heaviest first
@@ -303,7 +303,7 @@ func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 // block is the only place we are allowed to modify any running data
 // structures.
 func (i *InMemCollector) collect() {
-	tickerDuration := i.Config.GetSendTickerValue()
+	tickerDuration := i.Config.GetTracesConfig().GetSendTickerValue()
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
@@ -382,6 +382,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		i.Metrics.Down("spans_waiting")
 	}()
 
+	tcfg := i.Config.GetTracesConfig()
+
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
@@ -397,7 +399,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// create a new trace to hold it
 		i.Metrics.Increment("trace_accepted")
 
-		timeout := i.Config.GetTraceTimeout()
+		timeout := tcfg.GetTraceTimeout()
 		if timeout == 0 {
 			timeout = 60 * time.Second
 		}
@@ -435,16 +437,26 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 
-	// if this is a root span, send the trace
+	markTraceForSending := false
+	// if the span count has exceeded our SpanLimit, mark the trace for sending
+	if tcfg.SpanLimit > 0 && uint(trace.SpanCount()) > tcfg.SpanLimit {
+		markTraceForSending = true
+	}
+
+	// if this is a root span, say so and send the trace
 	if i.isRootSpan(sp) {
-		timeout := i.Config.GetSendDelay()
+		markTraceForSending = true
+		trace.RootSpan = sp
+	}
+
+	if markTraceForSending {
+		timeout := tcfg.GetSendDelay()
 
 		if timeout == 0 {
 			timeout = 2 * time.Second
 		}
 
 		trace.SendBy = time.Now().Add(timeout)
-		trace.RootSpan = sp
 	}
 }
 
