@@ -147,6 +147,10 @@ func main() {
 			Timeout: 10 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 15 * time.Second,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		MaxConnsPerHost:     100,
+		IdleConnTimeout:     30 * time.Second,
 	}
 
 	// peerTransport is the http transport used to send things to a local peer
@@ -156,6 +160,10 @@ func main() {
 			Timeout: 3 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		MaxConnsPerHost:     100,
+		IdleConnTimeout:     30 * time.Second,
 	}
 
 	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
