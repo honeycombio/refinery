@@ -276,12 +276,14 @@ type RedisPeerManagementConfig struct {
 
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
-	PeerQueueSize       int        `yaml:"PeerQueueSize"`
-	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
-	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
-	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
-	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
+	CacheCapacity         int        `yaml:"CacheCapacity" default:"10_000"`
+	PeerQueueSize         int        `yaml:"PeerQueueSize"`
+	IncomingQueueSize     int        `yaml:"IncomingQueueSize"`
+	AvailableMemory       MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
+	MaxMemoryPercentage   int        `yaml:"MaxMemoryPercentage" default:"75"`
+	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
+	DisableRedistribution bool       `yaml:"DisableRedistribution"`
+	ShutdownDelay         Duration   `yaml:"ShutdownDelay" default:"15s"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.

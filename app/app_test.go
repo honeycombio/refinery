@@ -243,13 +243,14 @@ func TestAppIntegration(t *testing.T) {
 
 	time.Sleep(5 * app.Config.GetSendTickerValue())
 
-	events := sender.Events()
-	require.Len(t, events, 1)
-
-	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := sender.Events()
+		require.Len(collect, events, 1)
+		assert.Equal(collect, "dataset", events[0].Dataset)
+		assert.Equal(collect, "bar", events[0].Data["foo"])
+		assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
+		assert.Equal(collect, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	}, 2*time.Second, 10*time.Millisecond)
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -400,8 +401,8 @@ func TestPeerRouting(t *testing.T) {
 	}
 	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 
-	// Repeat, but deliver to host 1 on the peer channel, it should not be
-	// passed to host 0.
+	// Repeat, but deliver to host 1 on the peer channel, it should be
+	// passed to host 0 since that's who the trace belongs to.
 	req, err = http.NewRequest(
 		"POST",
 		"http://localhost:11003/1/batch/dataset",
@@ -414,7 +415,7 @@ func TestPeerRouting(t *testing.T) {
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
+		return len(senders[0].Events()) == 1
 	}, 2*time.Second, 2*time.Millisecond)
 	assert.Equal(t, expectedEvent, senders[0].Events()[0])
 }
@@ -522,8 +523,8 @@ func TestEventsEndpoint(t *testing.T) {
 		senders[0].Events()[0],
 	)
 
-	// Repeat, but deliver to host 1 on the peer channel, it should not be
-	// passed to host 0.
+	// Repeat, but deliver to host 1 on the peer channel, it should be
+	// passed to host 0 since that's the host this trace belongs to.
 
 	blob = blob[:0]
 	buf := bytes.NewBuffer(blob)
@@ -545,7 +546,7 @@ func TestEventsEndpoint(t *testing.T) {
 
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
+		return len(senders[0].Events()) == 1
 	}, 2*time.Second, 2*time.Millisecond)
 
 	assert.Equal(
@@ -565,10 +566,10 @@ func TestEventsEndpoint(t *testing.T) {
 				"api_host":    "http://api.honeycomb.io",
 				"dataset":     "dataset",
 				"environment": "",
-				"enqueued_at": senders[1].Events()[0].Metadata.(map[string]any)["enqueued_at"],
+				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
 			},
 		},
-		senders[1].Events()[0],
+		senders[0].Events()[0],
 	)
 }
 
@@ -644,7 +645,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		senders[0].Events()[0],
 	)
 
-	// Repeat, but deliver to host 1 on the peer channel, it should not be
+	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0.
 
 	blob = blob[:0]
@@ -667,7 +668,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
+		return len(senders[0].Events()) == 1
 	}, 2*time.Second, 2*time.Millisecond)
 
 	assert.Equal(
@@ -687,10 +688,10 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 				"api_host":    "http://api.honeycomb.io",
 				"dataset":     "dataset",
 				"environment": "test",
-				"enqueued_at": senders[1].Events()[0].Metadata.(map[string]any)["enqueued_at"],
+				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
 			},
 		},
-		senders[1].Events()[0],
+		senders[0].Events()[0],
 	)
 }
 
