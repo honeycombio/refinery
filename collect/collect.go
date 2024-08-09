@@ -772,13 +772,10 @@ func (i *InMemCollector) Stop() error {
 	// so that no new traces are accepted
 	i.Health.Ready(CollectorHealthKey, false)
 
-	close(i.incoming)
-	close(i.fromPeer)
-
 	i.mutex.Lock()
 
 	if !i.Config.GetCollectionConfig().DisableRedistribution {
-		i.sendTracesInCache()
+		i.sendTracesOnShutdown()
 	}
 
 	if i.Transmission != nil {
@@ -788,12 +785,15 @@ func (i *InMemCollector) Stop() error {
 	i.sampleTraceCache.Stop()
 	i.mutex.Unlock()
 
+	close(i.incoming)
+	close(i.fromPeer)
+
 	return nil
 }
 
-// sentTrace is a struct that holds a trace and the record of the decision made.
-type sentTrace struct {
-	trace  *types.Trace
+// sentRecord is a struct that holds a span and the record of the trace decision made.
+type sentRecord struct {
+	span   *types.Span
 	record cache.TraceSentRecord
 	reason string
 }
@@ -801,116 +801,135 @@ type sentTrace struct {
 // sendTracesInCache sends all traces in the cache to their final destination.
 // This is done on shutdown to ensure that all traces are sent before the collector
 // is stopped.
-func (i *InMemCollector) sendTracesInCache() {
+// It does this by pulling spans out of both the incoming queue and the peer queue so that
+// any spans that are still in the queues when the collector is stopped are also sent.
+// It also pulls traces out of the cache and sends them to their final destination.
+func (i *InMemCollector) sendTracesOnShutdown() {
 	wg := &sync.WaitGroup{}
+	sentChan := make(chan sentRecord, len(i.incoming))
+	forwardChan := make(chan *types.Span, i.Config.GetCollectionConfig().CacheCapacity)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i.Config.GetCollectionConfig().ShutdownDelay))
+	defer cancel()
+
+	// start a goroutine that will pull spans off of the channels passed in
+	// and send them to their final destination
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		i.sendSpansOnShutdown(ctx, sentChan, forwardChan)
+	}()
+
+	// start a goroutine that will pull spans off of the incoming queue
+	// and place them on the sentChan or forwardChan
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case sp, ok := <-i.incoming:
+				if !ok {
+					return
+				}
+
+				i.distributeSpansOnShutdown(sentChan, forwardChan, sp)
+			}
+		}
+	}()
+
+	// start a goroutine that will pull spans off of the peer queue
+	// and place them on the sentChan or forwardChan
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case sp, ok := <-i.fromPeer:
+				if !ok {
+					return
+				}
+
+				i.distributeSpansOnShutdown(sentChan, forwardChan, sp)
+			}
+		}
+	}()
+
+	// pull traces from the trace cache and place them on the sentChan or forwardChan
 	if i.cache != nil {
-
-		// TODO: make this a config option
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-
 		traces := i.cache.GetAll()
-		sentTraceChan := make(chan sentTrace, len(traces)/3)
-		forwardTraceChan := make(chan *types.Trace, len(traces)/3)
-		expiredTraceChan := make(chan *types.Trace, len(traces)/3)
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			i.sendTracesOnShutdown(ctx, sentTraceChan, forwardTraceChan, expiredTraceChan)
-		}()
-
-		i.distributeTracesInCache(traces, sentTraceChan, forwardTraceChan, expiredTraceChan)
-
-		close(sentTraceChan)
-		close(expiredTraceChan)
-		close(forwardTraceChan)
+		for _, trace := range traces {
+			i.distributeSpansOnShutdown(sentChan, forwardChan, trace.GetSpans()...)
+		}
 	}
 
 	wg.Wait()
+
+	close(sentChan)
+	close(forwardChan)
+
 }
 
-// distributeTracesInCache takes a list of traces and sends them to the appropriate channel// based on the state of the trace.
-func (i *InMemCollector) distributeTracesInCache(traces []*types.Trace, sentTraceChan chan sentTrace, forwardTraceChan chan *types.Trace, expiredTraceChan chan *types.Trace) {
-	now := i.Clock.Now()
-	for _, trace := range traces {
-		if trace != nil {
+// distributeSpansInCache takes a list of spans and sends them to the appropriate channel based on the state of the trace.
+func (i *InMemCollector) distributeSpansOnShutdown(sentTraceChan chan sentRecord, forwardTraceChan chan *types.Span, spans ...*types.Span) {
+	for _, sp := range spans {
+		if sp != nil {
 
 			// first check if there's a trace decision
-			record, reason, found := i.sampleTraceCache.CheckTrace(trace.ID())
+			record, reason, found := i.sampleTraceCache.CheckTrace(sp.TraceID)
 			if found {
-				sentTraceChan <- sentTrace{trace, record, reason}
-				continue
-			}
-
-			// if trace has hit TraceTimeout, no need to forward it
-			if now.After(trace.SendBy) || trace.RootSpan != nil {
-				expiredTraceChan <- trace
+				sentTraceChan <- sentRecord{sp, record, reason}
 				continue
 			}
 
 			// if there's no trace decision, then we need to forward the trace to its new home
-			forwardTraceChan <- trace
+			forwardTraceChan <- sp
 		}
 	}
 }
 
-// sendTracesOnShutdown is a helper function that sends traces to their final destination
+// sendSpansOnShutdown is a helper function that sends span to their final destination
 // on shutdown.
-// It will return true if it times out waiting for traces to send or one of the traces channel has been closed.
-func (i *InMemCollector) sendTracesOnShutdown(ctx context.Context, sentTraceChan <-chan sentTrace, forwardTraceChan <-chan *types.Trace, expiredTraceChan <-chan *types.Trace) {
+func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan <-chan sentRecord, forwardTraceChan <-chan *types.Span) {
 	for {
 		select {
 		case <-ctx.Done():
 			i.Logger.Info().Logf("Timed out waiting for traces to send")
 			return
 
-		case tr, ok := <-sentTraceChan:
+		case r, ok := <-sentTraceChan:
 			if !ok {
 				return
 			}
 
-			for _, sp := range tr.trace.GetSpans() {
-				ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": tr.trace.TraceID, "hostname": i.hostname})
-				sp.Data["meta.refinery.shutdown.send"] = true
+			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
+			r.span.Data["meta.refinery.shutdown.send"] = true
 
-				i.dealWithSentTrace(ctx, tr.record, tr.reason, sp)
+			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
 
-				span.End()
-			}
-
-		case tr, ok := <-expiredTraceChan:
-			if !ok {
-				return
-			}
-
-			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_expired_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
-
-			if tr.RootSpan != nil {
-				i.drainTrace(tr, TraceSendGotRoot)
-
-			} else {
-				i.drainTrace(tr, TraceSendExpired)
-			}
 			span.End()
 
-		case tr, ok := <-forwardTraceChan:
+		case sp, ok := <-forwardTraceChan:
 			if !ok {
 				return
 			}
 
-			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": tr.TraceID, "hostname": i.hostname})
+			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": sp.TraceID, "hostname": i.hostname})
 
-			targetShard := i.Sharder.WhichShard(tr.ID())
+			targetShard := i.Sharder.WhichShard(sp.TraceID)
 			url := targetShard.GetAddress()
 
 			otelutil.AddSpanField(span, "target_shard", url)
 
-			for _, sp := range tr.GetSpans() {
-				sp.APIHost = url
-				sp.Data["meta.refinery.shutdown.send"] = false
-				i.Transmission.EnqueueSpan(sp)
-			}
+			// TODO: we need to decorate the expired traces before forwarding them so that
+			// the downstream consumers can make decisions based on the metadata without having
+			// to restart the TraceTimeout or SendDelay
+			sp.APIHost = url
+			sp.Data["meta.refinery.shutdown.send"] = false
+			i.Transmission.EnqueueSpan(sp)
 			span.End()
 		}
 

@@ -283,6 +283,7 @@ type CollectionConfig struct {
 	MaxMemoryPercentage   int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
 	DisableRedistribution bool       `yaml:"DisableRedistribution"`
+	ShutdownDelay         Duration   `yaml:"ShutdownDelay" default:"15s"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.

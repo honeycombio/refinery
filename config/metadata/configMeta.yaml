@@ -1231,7 +1231,23 @@ groups:
         summary: controls whether to transmit traces in cache to remaining peers during cluster scaling event.
         description: >
           If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
-          By diabling this behavior, it can help to prevent distuptive burst of network traffic when large traces with long TraceTimeout are redistributed.
+          By diabling this behavior, it can help to prevent distuptive burst of network traffic when large traces with long TraceTimeout
+          are redistributed.
+
+      - name: ShutdownDelay
+        type: duration
+        valuetype: nondefault
+        default: 15s
+        reload: true
+        summary: controls the maximum time Refinery can use while draining traces at shutdown.
+        description: >
+          This setting controls the duration that Refinery expects to have to
+          drain in-process traces before shutting down an instance. When asked
+          to shut down gracefully, Refinery stops accepting new spans
+          immediately and drains the remaining traces by sending them to remaining
+          peers.
+          This value should be set to a bit less than the normal timeout period
+          for shutting down without forcibly terminating the process.
 
   - name: BufferSizes
     title: "Buffer Sizes"

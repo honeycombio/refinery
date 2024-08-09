@@ -48,6 +48,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 		Clock: clock,
 	}
 	healthReporter.Start()
+
 	return &InMemCollector{
 		Config: conf,
 		Clock:  clock,
@@ -78,6 +79,9 @@ func TestAddRootSpan(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -154,6 +158,9 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -236,6 +243,9 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -295,6 +305,9 @@ func TestAddSpan(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -357,6 +370,9 @@ func TestDryRunMode(t *testing.T) {
 		SendTickerVal:      20 * time.Millisecond,
 		DryRun:             true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -480,6 +496,7 @@ func TestCacheSizeReload(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity: 1,
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		SampleCache: config.SampleCacheConfig{
@@ -553,7 +570,7 @@ func TestSampleConfigReload(t *testing.T) {
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:          2 * time.Millisecond,
 		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
+		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -625,6 +642,10 @@ func TestStableMaxAlloc(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			CacheCapacity: 1000,
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -717,6 +738,10 @@ func TestAddSpanNoBlock(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			CacheCapacity: 10,
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -791,6 +816,10 @@ func TestAddCountsToRoot(t *testing.T) {
 		AddSpanCountToRoot: true,
 		AddCountsToRoot:    true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			CacheCapacity: 3,
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -870,6 +899,9 @@ func TestLateRootGetsCounts(t *testing.T) {
 		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -951,6 +983,9 @@ func TestAddSpanCount(t *testing.T) {
 		SendTickerVal:      2 * time.Millisecond,
 		AddSpanCountToRoot: true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -1014,6 +1049,9 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		AddSpanCountToRoot:   true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -1078,6 +1116,9 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -1139,6 +1180,9 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		AdditionalAttributes: map[string]string{
 			"name":  "foo",
 			"other": "bar",
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -1204,6 +1248,9 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			ActivationLevel:   75,
 			DeactivationLevel: 25,
 			SamplingRate:      100,
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
 	}
 
@@ -1301,6 +1348,9 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		SendTickerVal:        2 * time.Millisecond,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -1440,6 +1490,9 @@ func TestIsRootSpan(t *testing.T) {
 	collector := &InMemCollector{
 		Config: &config.MockConfig{
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+			GetCollectionConfigVal: config.CollectionConfig{
+				ShutdownDelay: config.Duration(1 * time.Millisecond),
+			},
 		},
 	}
 
@@ -1458,6 +1511,10 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(100 * time.Millisecond),
+			CacheCapacity: 3,
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -1473,9 +1530,9 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	coll.fromPeer = make(chan *types.Span, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 
-	sentTraceChan := make(chan sentTrace, 1)
-	forwardTraceChan := make(chan *types.Trace, 1)
-	expiredTraceChan := make(chan *types.Trace, 1)
+	sentTraceChan := make(chan sentRecord, 1)
+	forwardTraceChan := make(chan *types.Span, 1)
+	expiredTraceChan := make(chan *types.Span, 1)
 
 	// test 1
 	// the trace in cache already has decision made
@@ -1489,17 +1546,16 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			Data:    make(map[string]interface{}),
 		},
 	}
-	trace1.AddSpan(span1)
 
 	stc.Record(trace1, true, "test")
 
-	coll.distributeTracesInCache([]*types.Trace{trace1}, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span1)
 	require.Len(t, sentTraceChan, 1)
 	require.Len(t, forwardTraceChan, 0)
 	require.Len(t, expiredTraceChan, 0)
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	go coll.sendTracesOnShutdown(ctx1, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	go coll.sendSpansOnShutdown(ctx1, sentTraceChan, forwardTraceChan)
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		transmission.Mux.Lock()
 		events := transmission.Events
@@ -1512,11 +1568,8 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	transmission.Flush()
 
 	// test 2
-	// the trace in cache has already expired
-	trace2 := &types.Trace{
-		TraceID: "traceID2",
-		SendBy:  coll.Clock.Now().Add(-time.Second),
-	}
+	// we can't make a decision for the trace yet, let's
+	// forward it to its new home
 	span2 := &types.Span{
 		TraceID: "traceID2",
 		Event: types.Event{
@@ -1524,54 +1577,21 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			Data:    make(map[string]interface{}),
 		},
 	}
-	trace2.AddSpan(span2)
 
-	coll.distributeTracesInCache([]*types.Trace{trace2}, sentTraceChan, forwardTraceChan, expiredTraceChan)
-	require.Len(t, sentTraceChan, 0)
-	require.Len(t, forwardTraceChan, 0)
-	require.Len(t, expiredTraceChan, 1)
-
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	go coll.sendTracesOnShutdown(ctx2, sentTraceChan, forwardTraceChan, expiredTraceChan)
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		transmission.Mux.Lock()
-		require.Len(collect, transmission.Events, 1)
-		require.Equal(collect, span2.Dataset, transmission.Events[0].Dataset)
-		transmission.Mux.Unlock()
-	}, 2*time.Second, 100*time.Millisecond)
-	cancel2()
-	transmission.Flush()
-
-	// test 3
-	// we can't make a decision for the trace yet, let's
-	// forward it to its new home
-	trace3 := &types.Trace{
-		TraceID: "traceID3",
-		SendBy:  coll.Clock.Now().Add(10 * time.Second),
-	}
-	span3 := &types.Span{
-		TraceID: "traceID3",
-		Event: types.Event{
-			Dataset: "test3",
-			Data:    make(map[string]interface{}),
-		},
-	}
-	trace3.AddSpan(span3)
-
-	coll.distributeTracesInCache([]*types.Trace{trace3}, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span2)
 	require.Len(t, sentTraceChan, 0)
 	require.Len(t, forwardTraceChan, 1)
 	require.Len(t, expiredTraceChan, 0)
 
-	ctx3, cancel3 := context.WithCancel(context.Background())
-	go coll.sendTracesOnShutdown(ctx3, sentTraceChan, forwardTraceChan, expiredTraceChan)
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	go coll.sendSpansOnShutdown(ctx2, sentTraceChan, forwardTraceChan)
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		transmission.Mux.Lock()
 		require.Len(collect, transmission.Events, 1)
-		require.Equal(collect, span3.Dataset, transmission.Events[0].Dataset)
+		require.Equal(collect, span2.Dataset, transmission.Events[0].Dataset)
 		require.Equal(collect, "http://self", transmission.Events[0].APIHost)
 		transmission.Mux.Unlock()
 	}, 2*time.Second, 100*time.Millisecond)
-	cancel3()
+	cancel2()
 
 }
