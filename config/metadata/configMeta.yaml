@@ -1146,12 +1146,13 @@ groups:
             arg: 1000
         summary: is the number of traces to keep in the cache's circular buffer.
         description: >
-          The collection cache is used to collect all spans into a trace as
-          well as remember the sampling decision for any spans that might come
-          in after the trace has been marked "complete" (either by timing out
-          or seeing the root span). The number of traces in the cache should be
-          many multiples (100x to 1000x) of the total number of concurrently
-          active traces (trace throughput * trace duration).
+          The collection cache is used to collect all active spans into traces.
+          It is organized as a circular buffer. When the buffer wraps around
+          Refinery will try a few times to find an empty slot; if it fails, it
+          starts ejecting traces from the cache earlier than would otherwise be
+          necessary. Ideally, the size of the cache should be many
+          multiples (100x to 1000x) of the total number of concurrently active
+          traces (average trace throughput * average trace duration).
 
       - name: PeerQueueSize
         type: int
