@@ -12,6 +12,7 @@ type MockConfig struct {
 	GetAccessKeyConfigVal            AccessKeyConfig
 	GetCollectorTypeVal              string
 	GetCollectionConfigVal           CollectionConfig
+	GetTracesConfigVal               TracesConfig
 	GetHoneycombAPIVal               string
 	GetListenAddrVal                 string
 	GetPeerListenAddrVal             string
@@ -41,13 +42,8 @@ type MockConfig struct {
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
-	GetSendDelayVal                  time.Duration
-	GetBatchTimeoutVal               time.Duration
-	GetTraceTimeoutVal               time.Duration
-	GetMaxBatchSizeVal               uint
 	GetUpstreamBufferSizeVal         int
 	GetPeerBufferSizeVal             int
-	SendTickerVal                    time.Duration
 	IdentifierInterfaceName          string
 	UseIPV6Identifier                bool
 	RedisIdentifier                  string
@@ -121,6 +117,13 @@ func (m *MockConfig) GetCollectionConfig() CollectionConfig {
 	defer m.Mux.RUnlock()
 
 	return m.GetCollectionConfigVal
+}
+
+func (m *MockConfig) GetTracesConfig() TracesConfig {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetTracesConfigVal
 }
 
 func (m *MockConfig) GetHoneycombAPI() string {
@@ -297,34 +300,6 @@ func (m *MockConfig) GetOTelTracingConfig() OTelTracingConfig {
 	return m.GetOTelTracingConfigVal
 }
 
-func (m *MockConfig) GetSendDelay() time.Duration {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetSendDelayVal
-}
-
-func (m *MockConfig) GetBatchTimeout() time.Duration {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetBatchTimeoutVal
-}
-
-func (m *MockConfig) GetTraceTimeout() time.Duration {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetTraceTimeoutVal
-}
-
-func (m *MockConfig) GetMaxBatchSize() uint {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetMaxBatchSizeVal
-}
-
 // TODO: allow per-dataset mock values
 func (m *MockConfig) GetSamplerConfigForDestName(dataset string) (interface{}, string) {
 	m.Mux.RLock()
@@ -395,13 +370,6 @@ func (m *MockConfig) GetRedisIdentifier() string {
 	defer m.Mux.RUnlock()
 
 	return m.RedisIdentifier
-}
-
-func (m *MockConfig) GetSendTickerValue() time.Duration {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.SendTickerVal
 }
 
 func (m *MockConfig) GetPeerManagementType() string {

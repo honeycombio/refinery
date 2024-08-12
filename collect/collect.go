@@ -52,6 +52,7 @@ func GetCollectorImplementation(c config.Config) Collector {
 const (
 	TraceSendGotRoot        = "trace_send_got_root"
 	TraceSendExpired        = "trace_send_expired"
+	TraceSendSpanLimit      = "trace_send_span_limit"
 	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 	TraceSendLateSpan       = "trace_send_late_span"
@@ -125,6 +126,7 @@ func (i *InMemCollector) Start() error {
 
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
+	i.Metrics.Register(TraceSendSpanLimit, "counter")
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 	i.Metrics.Register(TraceSendLateSpan, "counter")
@@ -229,7 +231,7 @@ func (i *InMemCollector) checkAlloc() {
 	// To do this, we sort the traces by their CacheImpact value and then remove traces
 	// until the total size is less than the amount to which we want to shrink.
 	allTraces := i.cache.GetAll()
-	timeout := i.Config.GetTraceTimeout()
+	timeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	} // Sort traces by CacheImpact, heaviest first
@@ -314,7 +316,7 @@ func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 // block is the only place we are allowed to modify any running data
 // structures.
 func (i *InMemCollector) collect() {
-	tickerDuration := i.Config.GetSendTickerValue()
+	tickerDuration := i.Config.GetTracesConfig().GetSendTickerValue()
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
@@ -444,11 +446,16 @@ func (i *InMemCollector) redistributeTraces() {
 
 func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 	traces := i.cache.TakeExpiredTraces(now)
+	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	for _, t := range traces {
 		if t.RootSpan != nil {
 			i.send(t, TraceSendGotRoot)
 		} else {
-			i.send(t, TraceSendExpired)
+			if t.SpanCount() > spanLimit {
+				i.send(t, TraceSendSpanLimit)
+			} else {
+				i.send(t, TraceSendExpired)
+			}
 		}
 	}
 }
@@ -461,6 +468,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		i.Metrics.Increment("span_processed")
 		i.Metrics.Down("spans_waiting")
 	}()
+
+	tcfg := i.Config.GetTracesConfig()
 
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
@@ -477,7 +486,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// create a new trace to hold it
 		i.Metrics.Increment("trace_accepted")
 
-		timeout := i.Config.GetTraceTimeout()
+		timeout := tcfg.GetTraceTimeout()
 		if timeout == 0 {
 			timeout = 60 * time.Second
 		}
@@ -515,16 +524,26 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 
-	// if this is a root span, send the trace
+	markTraceForSending := false
+	// if the span count has exceeded our SpanLimit, mark the trace for sending
+	if tcfg.SpanLimit > 0 && uint(trace.SpanCount()) > tcfg.SpanLimit {
+		markTraceForSending = true
+	}
+
+	// if this is a root span, say so and send the trace
 	if i.isRootSpan(sp) {
-		timeout := i.Config.GetSendDelay()
+		markTraceForSending = true
+		trace.RootSpan = sp
+	}
+
+	if markTraceForSending {
+		timeout := tcfg.GetSendDelay()
 
 		if timeout == 0 {
 			timeout = 2 * time.Second
 		}
 
 		trace.SendBy = time.Now().Add(timeout)
-		trace.RootSpan = sp
 	}
 }
 
