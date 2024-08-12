@@ -96,20 +96,7 @@ type Config interface {
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() string
 
-	// GetSendDelay returns the number of seconds to pause after a trace is
-	// complete before sending it, to allow stragglers to arrive
-	GetSendDelay() time.Duration
-
-	// GetBatchTimeout returns how often to send off batches in seconds
-	GetBatchTimeout() time.Duration
-
-	// GetTraceTimeout is how long to wait before sending a trace even if it's
-	// not complete. This should be longer than the longest expected trace
-	// duration.
-	GetTraceTimeout() time.Duration
-
-	// GetMaxBatchSize is the number of events to be included in the batch for sending
-	GetMaxBatchSize() uint
+	GetTracesConfig() TracesConfig
 
 	// GetLoggerType returns the type of the logger to use. Valid types are in
 	// the logger package
@@ -160,9 +147,6 @@ type Config interface {
 	GetUseIPV6Identifier() bool
 
 	GetRedisIdentifier() string
-
-	// GetSendTickerValue returns the duration to use to check for traces to send
-	GetSendTickerValue() time.Duration
 
 	// GetDebugServiceAddr sets the IP and port the debug service will run on (you must provide the
 	// command line flag -d to start the debug service)

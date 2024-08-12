@@ -190,6 +190,27 @@ type TracesConfig struct {
 	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s"`
 	MaxBatchSize uint     `yaml:"MaxBatchSize" default:"500"`
 	SendTicker   Duration `yaml:"SendTicker" default:"100ms"`
+	SpanLimit    uint     `yaml:"SpanLimit"`
+}
+
+func (t TracesConfig) GetSendDelay() time.Duration {
+	return time.Duration(t.SendDelay)
+}
+
+func (t TracesConfig) GetBatchTimeout() time.Duration {
+	return time.Duration(t.BatchTimeout)
+}
+
+func (t TracesConfig) GetTraceTimeout() time.Duration {
+	return time.Duration(t.TraceTimeout)
+}
+
+func (t TracesConfig) GetMaxBatchSize() uint {
+	return t.MaxBatchSize
+}
+
+func (t TracesConfig) GetSendTickerValue() time.Duration {
+	return time.Duration(t.SendTicker)
 }
 
 type DebuggingConfig struct {
@@ -597,6 +618,13 @@ func (f *fileConfig) GetGRPCConfig() GRPCServerParameters {
 	return f.mainConfig.GRPCServerParameters
 }
 
+func (f *fileConfig) GetTracesConfig() TracesConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Traces
+}
+
 func (f *fileConfig) GetAccessKeyConfig() AccessKeyConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -787,34 +815,6 @@ func (f *fileConfig) GetOTelMetricsConfig() OTelMetricsConfig {
 	return f.mainConfig.OTelMetrics
 }
 
-func (f *fileConfig) GetSendDelay() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.Traces.SendDelay)
-}
-
-func (f *fileConfig) GetBatchTimeout() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.Traces.BatchTimeout)
-}
-
-func (f *fileConfig) GetTraceTimeout() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.Traces.TraceTimeout)
-}
-
-func (f *fileConfig) GetMaxBatchSize() uint {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.Traces.MaxBatchSize
-}
-
 func (f *fileConfig) GetUpstreamBufferSize() int {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
@@ -827,13 +827,6 @@ func (f *fileConfig) GetPeerBufferSize() int {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.BufferSizes.PeerBufferSize
-}
-
-func (f *fileConfig) GetSendTickerValue() time.Duration {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return time.Duration(f.mainConfig.Traces.SendTicker)
 }
 
 func (f *fileConfig) GetDebugServiceAddr() string {

@@ -74,10 +74,13 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 // the cache and that that trace gets sent
 func TestAddRootSpan(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -110,7 +113,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpan(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
@@ -131,7 +134,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
@@ -153,10 +156,13 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	const originalSampleRate = uint(50)
 
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -193,7 +199,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		}
 		err := coll.AddSpan(span)
 		require.NoError(t, err, "must be able to add the span")
-		time.Sleep(conf.SendTickerVal * 5)
+		time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
 	}
 
 	transmission.Mux.RLock()
@@ -227,7 +233,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		defer transmission.Mux.RUnlock()
 		noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
 		return noUpstreamSampleRateEvent.Dataset == "no-upstream-sampling"
-	}, 5*time.Second, conf.SendTickerVal*2, "the event with no upstream sampling should have appeared in the transmission queue by now")
+	}, 5*time.Second, conf.GetTracesConfig().GetSendTickerValue()*2, "the event with no upstream sampling should have appeared in the transmission queue by now")
 
 	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
 		"original sample rate should not be set in metadata when original sample rate is zero")
@@ -238,10 +244,13 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 // set instead of inferred
 func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -275,13 +284,13 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	coll.AddSpan(span)
 
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
 	assert.Eventually(t, func() bool {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 		return len(transmission.Events) > 0
-	}, 2*time.Second, conf.SendTickerVal*2)
+	}, 2*time.Second, conf.GetTracesConfig().GetSendTickerValue()*2)
 
 	transmission.Mux.RLock()
 	assert.Equal(t, uint(1), transmission.Events[0].SampleRate,
@@ -300,10 +309,13 @@ func getEventsLength(transmission *transmit.MockTransmission) int {
 // cache
 func TestAddSpan(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -338,7 +350,8 @@ func TestAddSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
@@ -351,7 +364,7 @@ func TestAddSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 5)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -362,12 +375,15 @@ func TestAddSpan(t *testing.T) {
 // sampling decision is marked on each span in the trace
 func TestDryRunMode(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(20 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
 			SampleRate: 10,
 		},
-		SendTickerVal:      20 * time.Millisecond,
 		DryRun:             true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -420,7 +436,8 @@ func TestDryRunMode(t *testing.T) {
 		},
 	}
 	coll.AddSpan(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
@@ -443,7 +460,8 @@ func TestDryRunMode(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Equal(t, traceID2, coll.getFromCache(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
@@ -454,7 +472,8 @@ func TestDryRunMode(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	// adding root span to send the trace
 	transmission.Mux.RLock()
 	assert.Equal(t, 3, len(transmission.Events), "adding another root span should send the span")
@@ -476,7 +495,8 @@ func TestDryRunMode(t *testing.T) {
 		},
 	}
 	coll.AddSpan(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
@@ -490,10 +510,13 @@ func TestDryRunMode(t *testing.T) {
 
 func TestCacheSizeReload(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 10 * time.Minute,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(10 * time.Minute),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
 		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity: 1,
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -551,7 +574,7 @@ func TestCacheSizeReload(t *testing.T) {
 
 	err = coll.AddSpan(&types.Span{TraceID: "3", Event: event})
 	assert.NoError(t, err)
-	time.Sleep(5 * conf.SendTickerVal)
+	time.Sleep(5 * conf.GetTracesConfig().GetSendTickerValue())
 	assert.True(t, check(), "expected no more traces evicted and sent")
 
 	conf.Mux.Lock()
@@ -565,10 +588,13 @@ func TestCacheSizeReload(t *testing.T) {
 
 func TestSampleConfigReload(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:        1 * time.Millisecond,
-		GetTraceTimeoutVal:     60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:          2 * time.Millisecond,
 		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
 		SampleCache: config.SampleCacheConfig{
@@ -604,7 +630,7 @@ func TestSampleConfigReload(t *testing.T) {
 
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
-	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
 	conf.Reload()
 
@@ -614,7 +640,7 @@ func TestSampleConfigReload(t *testing.T) {
 
 		_, ok := coll.datasetSamplers[dataset]
 		return !ok
-	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
 	span = &types.Span{
 		TraceID: "2",
@@ -632,15 +658,18 @@ func TestSampleConfigReload(t *testing.T) {
 
 		_, ok := coll.datasetSamplers[dataset]
 		return ok
-	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 }
 
 func TestStableMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 10 * time.Minute,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(10 * time.Minute),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -687,7 +716,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	}
 
 	for len(coll.incoming) > 0 {
-		time.Sleep(conf.SendTickerVal)
+		time.Sleep(conf.GetTracesConfig().GetSendTickerValue())
 	}
 
 	// Now there should be 500 traces in the cache.
@@ -714,7 +743,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		}
 		coll.mutex.Unlock()
 
-		time.Sleep(conf.SendTickerVal)
+		time.Sleep(conf.GetTracesConfig().GetSendTickerValue())
 	}
 
 	assert.Equal(t, 1000, coll.cache.(*cache.DefaultInMemCache).GetCacheSize(), "cache size shouldn't change")
@@ -733,10 +762,13 @@ func TestStableMaxAlloc(t *testing.T) {
 
 func TestAddSpanNoBlock(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 10 * time.Minute,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(10 * time.Minute),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -809,10 +841,13 @@ func TestDependencyInjection(t *testing.T) {
 // This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
 func TestAddCountsToRoot(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		AddSpanCountToRoot: true,
 		AddCountsToRoot:    true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -858,7 +893,8 @@ func TestAddCountsToRoot(t *testing.T) {
 		}
 		coll.AddSpanFromPeer(span)
 	}
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
@@ -871,7 +907,8 @@ func TestAddCountsToRoot(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -891,10 +928,13 @@ func TestAddCountsToRoot(t *testing.T) {
 // even if the trace had already been sent
 func TestLateRootGetsCounts(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:      1 * time.Millisecond,
-		GetTraceTimeoutVal:   5 * time.Millisecond,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:        2 * time.Millisecond,
 		AddSpanCountToRoot:   true,
 		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
@@ -941,7 +981,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		}
 		coll.AddSpanFromPeer(span)
 	}
-	time.Sleep(conf.SendTickerVal * 10)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 10)
 
 	trace := coll.getFromCache(traceID)
 	assert.Nil(t, trace, "trace should have been sent although the root span hasn't arrived")
@@ -956,7 +996,8 @@ func TestLateRootGetsCounts(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -977,10 +1018,13 @@ func TestLateRootGetsCounts(t *testing.T) {
 // the cache and that that trace gets span count added to it
 func TestAddSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		AddSpanCountToRoot: true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -1016,7 +1060,8 @@ func TestAddSpanCount(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
@@ -1029,7 +1074,8 @@ func TestAddSpanCount(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -1042,10 +1088,13 @@ func TestAddSpanCount(t *testing.T) {
 // even if the trace had already been sent
 func TestLateRootGetsSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:      1 * time.Millisecond,
-		GetTraceTimeoutVal:   5 * time.Millisecond,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:        2 * time.Millisecond,
 		AddSpanCountToRoot:   true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
@@ -1082,7 +1131,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 10)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 10)
 
 	trace := coll.getFromCache(traceID)
 	assert.Nil(t, trace, "trace should have been sent although the root span hasn't arrived")
@@ -1097,7 +1146,8 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -1111,10 +1161,13 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 // if the AddRuleReasonToTrace attribute not set in config
 func TestLateSpanNotDecorated(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 5 * time.Minute,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Minute),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -1168,15 +1221,18 @@ func TestLateSpanNotDecorated(t *testing.T) {
 			assert.Equal(c, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
 		}
 		transmission.Mux.RUnlock()
-	}, 5*time.Second, conf.SendTickerVal)
+	}, 5*time.Second, conf.GetTracesConfig().GetSendTickerValue())
 }
 
 func TestAddAdditionalAttributes(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
 		AdditionalAttributes: map[string]string{
 			"name":  "foo",
 			"other": "bar",
@@ -1214,7 +1270,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -1225,7 +1281,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 5)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "should be some events transmitted")
 	assert.Equal(t, "foo", transmission.Events[0].Data["name"], "new attribute should appear in data")
@@ -1238,10 +1294,13 @@ func TestAddAdditionalAttributes(t *testing.T) {
 // StressReliefMode is active
 func TestStressReliefDecorateHostname(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 5 * time.Minute,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Minute),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		StressRelief: config.StressReliefConfig{
 			Mode:              "monitor",
@@ -1284,7 +1343,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -1295,7 +1354,8 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		},
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, "host123", transmission.Events[1].Data["meta.refinery.local_hostname"])
@@ -1305,8 +1365,12 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 func TestSpanWithRuleReasons(t *testing.T) {
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 5 * time.Millisecond,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
 			Rules: []*config.RulesBasedSamplerRule{
 				{
@@ -1345,7 +1409,6 @@ func TestSpanWithRuleReasons(t *testing.T) {
 					},
 				},
 			}},
-		SendTickerVal:        2 * time.Millisecond,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -1392,7 +1455,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		}
 		coll.AddSpanFromPeer(span)
 	}
-	time.Sleep(conf.SendTickerVal * 10)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 10)
 
 	for i, traceID := range traceIDs {
 		assert.Nil(t, coll.getFromCache(traceID), "trace should have been sent although the root span hasn't arrived")
@@ -1415,7 +1478,8 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		coll.AddSpan(rootSpan)
 	}
 	// now we add the root span and verify that both got sent and that the root span had the span count
-	time.Sleep(conf.SendTickerVal * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	transmission.Mux.RLock()
 	assert.Equal(t, 6, len(transmission.Events), "adding a root span should send all spans in the trace")
 	for _, event := range transmission.Events {
@@ -1506,10 +1570,13 @@ func TestIsRootSpan(t *testing.T) {
 func TestDrainTracesOnShutdown(t *testing.T) {
 	// set up the trace cache
 	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(100 * time.Millisecond),
@@ -1594,4 +1661,88 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond)
 	cancel2()
 
+}
+
+func TestBigTracesGoEarly(t *testing.T) {
+	spanlimit := 200
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(10 * time.Millisecond),
+			TraceTimeout: config.Duration(500 * time.Millisecond),
+			SpanLimit:    uint(spanlimit),
+			MaxBatchSize: 1500,
+		},
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddSpanCountToRoot:   true,
+		AddCountsToRoot:      true,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 500)
+	coll.fromPeer = make(chan *types.Span, 500)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	var traceID = "mytrace"
+
+	for i := 0; i < spanlimit; i++ {
+		span := &types.Span{
+			TraceID: traceID,
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id": "unused",
+					"index":           i,
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		coll.AddSpanFromPeer(span)
+	}
+
+	// wait for all the events to be transmitted
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.RLock()
+		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the trace")
+		transmission.Mux.RUnlock()
+	}, 5*time.Second, 100*time.Millisecond)
+
+	// now we add the root span and verify that it got sent and that the root span had the span count
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+	}
+	coll.AddSpan(rootSpan)
+
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.RLock()
+		assert.Equal(collect, spanlimit+1, len(transmission.Events), "hitting the spanlimit should send the trace")
+		transmission.Mux.RUnlock()
+	}, 5*time.Second, 100*time.Millisecond)
+
+	transmission.Mux.RLock()
+	require.Equal(t, spanlimit+1, len(transmission.Events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.EqualValues(t, spanlimit+1, transmission.Events[spanlimit].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.EqualValues(t, spanlimit+1, transmission.Events[spanlimit].Data["meta.event_count"], "root span metadata should be populated with event count")
+	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[spanlimit].Data["meta.refinery.reason"], "the late root span should have meta.refinery.reason set to rules + late arriving span.")
+	assert.Equal(t, "trace_send_late_span", transmission.Events[spanlimit].Data["meta.refinery.send_reason"], "send reason should indicate span count exceeded")
+	transmission.Mux.RUnlock()
 }

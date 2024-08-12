@@ -45,8 +45,23 @@ func TestOTLPHandler(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
+		GetCollectionConfigVal: config.CollectionConfig{
+			CacheCapacity: 100,
+			MaxAlloc:      100,
+		},
+	}
+
 	router := &Router{
-		Config:               &config.MockConfig{},
+		Config:               conf,
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
 		iopLogger: iopLogger{
@@ -56,17 +71,6 @@ func TestOTLPHandler(t *testing.T) {
 		Logger:           &logger.MockLogger{},
 		zstdDecoders:     decoders,
 		environmentCache: newEnvironmentCache(time.Second, nil),
-	}
-
-	conf := &config.MockConfig{
-		GetSendDelayVal:    1 * time.Millisecond,
-		GetTraceTimeoutVal: 60 * time.Second,
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		SendTickerVal:      2 * time.Millisecond,
-		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 100,
-			MaxAlloc:      100,
-		},
 	}
 
 	t.Run("span with status", func(t *testing.T) {
@@ -134,7 +138,7 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 
-		time.Sleep(conf.SendTickerVal * 2)
+		time.Sleep(conf.GetTracesConfigVal.GetSendTickerValue() * 2)
 
 		mockTransmission.Mux.Lock()
 		assert.Equal(t, 2, len(mockTransmission.Events))
@@ -184,7 +188,7 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 
-		time.Sleep(conf.SendTickerVal * 2)
+		time.Sleep(conf.GetTracesConfigVal.GetSendTickerValue() * 2)
 		assert.Equal(t, 2, len(mockTransmission.Events))
 
 		spanLink := mockTransmission.Events[1]
