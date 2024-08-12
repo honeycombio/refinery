@@ -149,7 +149,7 @@ func main() {
 		TLSHandshakeTimeout: 15 * time.Second,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
-		MaxConnsPerHost:     100,
+		MaxConnsPerHost:     1000,
 		IdleConnTimeout:     30 * time.Second,
 	}
 
@@ -162,7 +162,7 @@ func main() {
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 10,
-		MaxConnsPerHost:     100,
+		MaxConnsPerHost:     1000,
 		IdleConnTimeout:     30 * time.Second,
 	}
 
