@@ -362,7 +362,6 @@ groups:
 
           It's most helpful in a situation where a sudden burst of many spans in a large trace hits
           refinery all at once, causing memory usage to spike and possibly crashing refinery.
-          TODO: Write more
 
       - name: MaxBatchSize
         type: int

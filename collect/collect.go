@@ -49,6 +49,7 @@ func GetCollectorImplementation(c config.Config) Collector {
 const (
 	TraceSendGotRoot        = "trace_send_got_root"
 	TraceSendExpired        = "trace_send_expired"
+	TraceSendSpanLimit      = "trace_send_span_limit"
 	TraceSendEjectedFull    = "trace_send_ejected_full"
 	TraceSendEjectedMemsize = "trace_send_ejected_memsize"
 	TraceSendLateSpan       = "trace_send_late_span"
@@ -120,6 +121,7 @@ func (i *InMemCollector) Start() error {
 
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
+	i.Metrics.Register(TraceSendSpanLimit, "counter")
 	i.Metrics.Register(TraceSendEjectedFull, "counter")
 	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
 	i.Metrics.Register(TraceSendLateSpan, "counter")
@@ -379,11 +381,16 @@ func (i *InMemCollector) collect() {
 
 func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 	traces := i.cache.TakeExpiredTraces(now)
+	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	for _, t := range traces {
 		if t.RootSpan != nil {
 			i.sendTrace(t, TraceSendGotRoot)
 		} else {
-			i.sendTrace(t, TraceSendExpired)
+			if t.SpanCount() > spanLimit {
+				i.sendTrace(t, TraceSendSpanLimit)
+			} else {
+				i.sendTrace(t, TraceSendExpired)
+			}
 		}
 	}
 }

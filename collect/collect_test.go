@@ -1713,13 +1713,14 @@ func TestBigTracesGoEarly(t *testing.T) {
 		coll.AddSpanFromPeer(span)
 	}
 
+	// wait for all the events to be transmitted
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		transmission.Mux.RLock()
 		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the trace")
 		transmission.Mux.RUnlock()
 	}, 2*time.Second, 100*time.Millisecond)
 
-	// now we add the root span and verify that both got sent and that the root span had the span count
+	// now we add the root span and verify that it got sent and that the root span had the span count
 	rootSpan := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
@@ -1731,14 +1732,17 @@ func TestBigTracesGoEarly(t *testing.T) {
 	coll.AddSpan(rootSpan)
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Equal(collect, spanlimit+1, transmission.Len(), "the root span should also be added")
+		transmission.Mux.RLock()
+		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the trace")
+		transmission.Mux.RUnlock()
 	}, 2*time.Second, 100*time.Millisecond)
 
 	transmission.Mux.RLock()
-	assert.Equal(t, spanlimit+1, len(transmission.Events), "adding a root span should send all spans in the trace")
+	require.Equal(t, spanlimit+1, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 	assert.EqualValues(t, spanlimit+1, transmission.Events[spanlimit].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.EqualValues(t, spanlimit+1, transmission.Events[spanlimit].Data["meta.event_count"], "root span metadata should be populated with event count")
-	assert.Equal(t, "deterministic/always", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
+	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[spanlimit].Data["meta.refinery.reason"], "the late root span should have meta.refinery.reason set to rules + late arriving span.")
+	assert.Equal(t, "trace_send_late_span", transmission.Events[spanlimit].Data["meta.refinery.send_reason"], "send reason should indicate span count exceeded")
 	transmission.Mux.RUnlock()
 }
