@@ -443,8 +443,11 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 
 	time.Sleep(5 * app.Config.GetSendTickerValue())
 
-	events := sender.Events()
-	require.Len(t, events, 1)
+	var events []*transmission.Event
+	require.Eventually(t, func() bool {
+		events = sender.Events()
+		return len(events) == 1
+	}, 2*time.Second, 10*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])

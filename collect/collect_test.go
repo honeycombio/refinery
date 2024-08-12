@@ -71,9 +71,6 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Self: &sharder.TestShard{
 				Addr: "api1",
 			},
-			Other: &sharder.TestShard{
-				Addr: "api2",
-			},
 		},
 		redistributeTimer: newRedistributeNotifier(clock),
 	}
@@ -348,7 +345,9 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.SendTickerVal * 2)
-	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	trace := coll.getFromCache(traceID)
+	require.NotNil(t, trace)
+	assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
@@ -1526,6 +1525,11 @@ func TestRedistributeTraces(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	coll := newTestCollector(conf, transmission)
+	s := &sharder.MockSharder{
+		Self: &sharder.TestShard{Addr: "api1"},
+	}
+
+	coll.Sharder = s
 
 	err := coll.Start()
 	assert.NoError(t, err)
@@ -1553,6 +1557,7 @@ func TestRedistributeTraces(t *testing.T) {
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 	transmission.Flush()
 
+	s.Other = &sharder.TestShard{Addr: "api2"}
 	span = &types.Span{
 		TraceID: "11",
 		Event: types.Event{
@@ -1601,6 +1606,11 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	transmission.Start()
 	coll := newTestCollector(conf, transmission)
 	coll.hostname = "host123"
+	coll.Sharder = &sharder.MockSharder{
+		Self:  &sharder.TestShard{Addr: "api1"},
+		Other: &sharder.TestShard{Addr: "api2"},
+	}
+
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()

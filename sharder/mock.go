@@ -8,16 +8,11 @@ type MockSharder struct {
 func (s *MockSharder) MyShard() Shard { return s.Self }
 
 func (s *MockSharder) WhichShard(traceID string) Shard {
-	if len(traceID)%2 != 0 {
-		return s.Self
+	if s.Other != nil {
+		return s.Other
 	}
 
-	if s.Other == nil {
-		return &TestShard{
-			Addr: "http://other",
-		}
-	}
-	return s.Other
+	return s.Self
 }
 
 type TestShard struct {

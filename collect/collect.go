@@ -75,6 +75,8 @@ type InMemCollector struct {
 	// For test use only
 	BlockOnAddSpan bool
 
+	// mutex must be held whenever non-channel internal fields are accessed.
+	// This exists to avoid data races in tests and startup/shutdown.
 	mutex sync.RWMutex
 	cache cache.Cache
 
@@ -153,7 +155,9 @@ func (i *InMemCollector) Start() error {
 		}
 	}
 
-	i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
+	if !i.Config.GetCollectionConfig().DisableRedistribution {
+		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
+	}
 
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
