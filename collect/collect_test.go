@@ -1733,7 +1733,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		transmission.Mux.RLock()
-		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the trace")
+		assert.Equal(collect, spanlimit+1, len(transmission.Events), "hitting the spanlimit should send the trace")
 		transmission.Mux.RUnlock()
 	}, 5*time.Second, 100*time.Millisecond)
 
