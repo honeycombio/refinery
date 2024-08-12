@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"runtime"
@@ -1566,98 +1567,178 @@ func TestIsRootSpan(t *testing.T) {
 	}
 }
 
-// func TestDrainTracesOnShutdown(t *testing.T) {
-// 	// set up the trace cache
-// 	conf := &config.MockConfig{
-// 		GetTracesConfigVal: config.TracesConfig{
-// 			SendTicker:   config.Duration(2 * time.Millisecond),
-// 			SendDelay:    config.Duration(1 * time.Millisecond),
-// 			TraceTimeout: config.Duration(60 * time.Second),
-// 			MaxBatchSize: 500,
-// 		},
-// 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-// 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-// 		GetCollectionConfigVal: config.CollectionConfig{
-// 			ShutdownDelay: config.Duration(100 * time.Millisecond),
-// 			CacheCapacity: 3,
-// 		},
-// 	}
-// 	transmission := &transmit.MockTransmission{}
-// 	transmission.Start()
-// 	coll := newTestCollector(conf, transmission)
-// 	coll.hostname = "host123"
-// 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-// 	coll.cache = c
-// 	stc, err := newCache()
-// 	assert.NoError(t, err, "lru cache should start")
-// 	coll.sampleTraceCache = stc
+func TestDrainTracesOnShutdown(t *testing.T) {
+	// set up the trace cache
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(100 * time.Millisecond),
+			CacheCapacity: 3,
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+	coll.hostname = "host123"
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
 
-// 	coll.incoming = make(chan *types.Span, 5)
-// 	coll.fromPeer = make(chan *types.Span, 5)
-// 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 
-// 	sentTraceChan := make(chan sentRecord, 1)
-// 	forwardTraceChan := make(chan *types.Span, 1)
-// 	expiredTraceChan := make(chan *types.Span, 1)
+	sentTraceChan := make(chan sentRecord, 1)
+	forwardTraceChan := make(chan *types.Span, 1)
+	expiredTraceChan := make(chan *types.Span, 1)
 
-// 	// test 1
-// 	// the trace in cache already has decision made
-// 	trace1 := &types.Trace{
-// 		TraceID: "traceID1",
-// 	}
-// 	span1 := &types.Span{
-// 		TraceID: "traceID1",
-// 		Event: types.Event{
-// 			Dataset: "aoeu",
-// 			Data:    make(map[string]interface{}),
-// 		},
-// 	}
+	// test 1
+	// the trace in cache already has decision made
+	trace1 := &types.Trace{
+		TraceID: "traceID1",
+	}
+	span1 := &types.Span{
+		TraceID: "traceID1",
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    make(map[string]interface{}),
+		},
+	}
 
-// 	stc.Record(trace1, true, "test")
+	stc.Record(trace1, true, "test")
 
-// 	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span1)
-// 	require.Len(t, sentTraceChan, 1)
-// 	require.Len(t, forwardTraceChan, 0)
-// 	require.Len(t, expiredTraceChan, 0)
+	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span1)
+	require.Len(t, sentTraceChan, 1)
+	require.Len(t, forwardTraceChan, 0)
+	require.Len(t, expiredTraceChan, 0)
 
-// 	ctx1, cancel1 := context.WithCancel(context.Background())
-// 	go coll.sendSpansOnShutdown(ctx1, sentTraceChan, forwardTraceChan)
-// 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-// 		transmission.Mux.Lock()
-// 		events := transmission.Events
-// 		require.Len(collect, events, 1)
-// 		require.Equal(collect, span1.Dataset, events[0].Dataset)
-// 		transmission.Mux.Unlock()
-// 	}, 2*time.Second, 100*time.Millisecond)
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	go coll.sendSpansOnShutdown(ctx1, sentTraceChan, forwardTraceChan)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.Lock()
+		events := transmission.Events
+		require.Len(collect, events, 1)
+		require.Equal(collect, span1.Dataset, events[0].Dataset)
+		transmission.Mux.Unlock()
+	}, 2*time.Second, 100*time.Millisecond)
 
-// 	cancel1()
-// 	transmission.Flush()
+	cancel1()
+	transmission.Flush()
 
-// 	// test 2
-// 	// we can't make a decision for the trace yet, let's
-// 	// forward it to its new home
-// 	span2 := &types.Span{
-// 		TraceID: "traceID2",
-// 		Event: types.Event{
-// 			Dataset: "test2",
-// 			Data:    make(map[string]interface{}),
-// 		},
-// 	}
+	// test 2
+	// we can't make a decision for the trace yet, let's
+	// forward it to its new home
+	span2 := &types.Span{
+		TraceID: "traceID2",
+		Event: types.Event{
+			Dataset: "test2",
+			Data:    make(map[string]interface{}),
+		},
+	}
 
-// 	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span2)
-// 	require.Len(t, sentTraceChan, 0)
-// 	require.Len(t, forwardTraceChan, 1)
-// 	require.Len(t, expiredTraceChan, 0)
+	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span2)
+	require.Len(t, sentTraceChan, 0)
+	require.Len(t, forwardTraceChan, 1)
+	require.Len(t, expiredTraceChan, 0)
 
-// 	ctx2, cancel2 := context.WithCancel(context.Background())
-// 	go coll.sendSpansOnShutdown(ctx2, sentTraceChan, forwardTraceChan)
-// 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-// 		transmission.Mux.Lock()
-// 		require.Len(collect, transmission.Events, 1)
-// 		require.Equal(collect, span2.Dataset, transmission.Events[0].Dataset)
-// 		require.Equal(collect, "http://self", transmission.Events[0].APIHost)
-// 		transmission.Mux.Unlock()
-// 	}, 2*time.Second, 100*time.Millisecond)
-// 	cancel2()
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	go coll.sendSpansOnShutdown(ctx2, sentTraceChan, forwardTraceChan)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.Lock()
+		require.Len(collect, transmission.Events, 1)
+		require.Equal(collect, span2.Dataset, transmission.Events[0].Dataset)
+		require.Equal(collect, "http://self", transmission.Events[0].APIHost)
+		transmission.Mux.Unlock()
+	}, 2*time.Second, 100*time.Millisecond)
+	cancel2()
 
-// }
+}
+
+func TestBigTracesGoEarly(t *testing.T) {
+	spanlimit := 200
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(10 * time.Millisecond),
+			TraceTimeout: config.Duration(500 * time.Millisecond),
+			SpanLimit:    uint(spanlimit),
+			MaxBatchSize: 1500,
+		},
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddSpanCountToRoot:   true,
+		AddCountsToRoot:      true,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	defer coll.Stop()
+
+	var traceID = "mytrace"
+
+	for i := 0; i < spanlimit; i++ {
+		span := &types.Span{
+			TraceID: traceID,
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id": "unused",
+					"index":           i,
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		coll.AddSpanFromPeer(span)
+	}
+
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		trace := coll.getFromCache(traceID)
+		assert.Nil(collect, trace, "trace should have been sent because the count was exceeded")
+		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the span")
+		assert.Nil(collect, coll.getFromCache(traceID), "after sending, it should be removed from the cache")
+	}, 2*time.Second, 10*time.Millisecond)
+	// now we add the root span and verify that both got sent and that the root span had the span count
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+	}
+	coll.AddSpan(rootSpan)
+
+	// assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+	// 	assert.Nil(collect, coll.getFromCache(traceID), "after adding root span, it should be removed from the cache")
+	// }, 2*time.Second, 20*time.Millisecond)
+
+	// transmission.Mux.RLock()
+	// assert.Equal(t, spanlimit, len(transmission.Events), "adding a root span should send all spans in the trace")
+	// assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	// assert.Equal(t, spanlimit, transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
+	// assert.Equal(t, spanlimit, transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
+	// assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
+	// transmission.Mux.RUnlock()
+}
