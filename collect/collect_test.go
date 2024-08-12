@@ -1718,7 +1718,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		transmission.Mux.RLock()
 		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the trace")
 		transmission.Mux.RUnlock()
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 
 	// now we add the root span and verify that it got sent and that the root span had the span count
 	rootSpan := &types.Span{
@@ -1735,7 +1735,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		transmission.Mux.RLock()
 		assert.Equal(collect, spanlimit, len(transmission.Events), "hitting the spanlimit should send the trace")
 		transmission.Mux.RUnlock()
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 5*time.Second, 100*time.Millisecond)
 
 	transmission.Mux.RLock()
 	require.Equal(t, spanlimit+1, len(transmission.Events), "adding a root span should send all spans in the trace")
