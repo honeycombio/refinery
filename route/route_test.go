@@ -21,6 +21,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,6 @@ import (
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/gorilla/mux"
-	"github.com/honeycombio/refinery/sharder"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc/health/grpc_health_v1"
@@ -321,7 +321,10 @@ func TestDebugTrace(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	router := &Router{
-		Sharder: &TestSharder{},
+		Sharder: &sharder.MockSharder{
+			Self:  &sharder.TestShard{Addr: "http://localhost:12345"},
+			Other: &sharder.TestShard{Addr: "http://localhost:12345"},
+		},
 	}
 
 	router.debugTrace(rr, req)
@@ -481,7 +484,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
-		&inject.Object{Value: &TestSharder{}},
+		&inject.Object{Value: &sharder.MockSharder{}},
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
@@ -497,23 +500,6 @@ func TestDependencyInjection(t *testing.T) {
 		t.Error(err)
 	}
 }
-
-type TestSharder struct{}
-
-func (s *TestSharder) MyShard() sharder.Shard { return nil }
-
-func (s *TestSharder) WhichShard(string) sharder.Shard {
-	return &TestShard{
-		addr: "http://localhost:12345",
-	}
-}
-
-type TestShard struct {
-	addr string
-}
-
-func (s *TestShard) Equals(other sharder.Shard) bool { return true }
-func (s *TestShard) GetAddress() string              { return s.addr }
 
 func TestEnvironmentCache(t *testing.T) {
 	t.Run("calls getFn on cache miss", func(t *testing.T) {

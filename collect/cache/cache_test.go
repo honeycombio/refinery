@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -139,4 +142,194 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	prev := c.Set(&types.Trace{TraceID: "7", SendBy: now})
 	// make sure we kicked out #4
 	assert.Equal(t, traces[3], prev)
+}
+
+// Benchamark the cache's Set method
+func BenchmarkCache_Set(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(100000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Set(traces[i])
+	}
+}
+
+// Benchmark the cache's Get method
+func BenchmarkCache_Get(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(100000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+		c.Set(traces[i])
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.Get(traces[i].TraceID)
+	}
+}
+
+// BenchmarkCache_GetConcurrent concurrent access to the cache's Get method
+func BenchmarkCache_GetConcurrent(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(1000000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+		c.Set(traces[i])
+	}
+
+	const numGoroutines = 70
+
+	p := pool.New().WithMaxGoroutines(numGoroutines + 1)
+	stop := make(chan struct{})
+	p.Go(func() {
+		select {
+		case <-stop:
+			return
+		default:
+			rand.Intn(100)
+		}
+	})
+
+	ch := make(chan int, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		p.Go(func() {
+			for n := range ch {
+				if i%1000 == 0 {
+					c.TakeExpiredTraces(time.Now())
+				}
+
+				c.Get(traces[n].ID())
+			}
+		})
+	}
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		ch <- j
+		if j%1000 == 0 {
+			// just give things a moment to run
+			time.Sleep(1 * time.Microsecond)
+		}
+	}
+	close(ch)
+	close(stop)
+	p.Wait()
+}
+
+// Benmark concurrent access to the cache's Set method
+func BenchmarkCache_SetConcurrent(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(1000000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+	}
+
+	const numGoroutines = 70
+
+	p := pool.New().WithMaxGoroutines(numGoroutines + 1)
+	stop := make(chan struct{})
+	p.Go(func() {
+		select {
+		case <-stop:
+			return
+		default:
+			rand.Intn(100)
+		}
+	})
+
+	ch := make(chan int, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		p.Go(func() {
+			for n := range ch {
+				if i%1000 == 0 {
+					c.TakeExpiredTraces(time.Now())
+				}
+
+				c.Set(traces[n])
+			}
+		})
+	}
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		ch <- j
+		if j%1000 == 0 {
+			// just give things a moment to run
+			time.Sleep(1 * time.Microsecond)
+		}
+	}
+	close(ch)
+	close(stop)
+	p.Wait()
+}
+
+// Benchmark the cache's TakeExpiredTraces method
+func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(100000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+		c.Set(traces[i])
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
+	}
+}
+
+// Benchmark the cache's RemoveTraces method
+func BenchmarkCache_RemoveTraces(b *testing.B) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(100000, s, &logger.NullLogger{})
+	now := time.Now()
+	traces := make([]*types.Trace, 0, b.N)
+	for i := 0; i < b.N; i++ {
+		traces = append(traces, &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		})
+		c.Set(traces[i])
+	}
+
+	deletes := generics.NewSetWithCapacity[string](b.N / 2)
+	for i := 0; i < b.N/2; i++ {
+		deletes.Add("trace" + fmt.Sprint(i))
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		c.RemoveTraces(deletes)
+	}
 }

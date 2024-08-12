@@ -50,14 +50,11 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 	healthReporter.Start()
 
 	return &InMemCollector{
-		Config: conf,
-		Clock:  clock,
-		Logger: &logger.NullLogger{},
-		Tracer: noop.NewTracerProvider().Tracer("test"),
-		Health: healthReporter,
-		Sharder: &sharder.SingleServerSharder{
-			Logger: &logger.NullLogger{},
-		},
+		Config:       conf,
+		Clock:        clock,
+		Logger:       &logger.NullLogger{},
+		Tracer:       noop.NewTracerProvider().Tracer("test"),
+		Health:       healthReporter,
 		Transmission: transmission,
 		Metrics:      &metrics.NullMetrics{},
 		StressRelief: &MockStressReliever{},
@@ -67,6 +64,18 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 			Logger:  &logger.NullLogger{},
 		},
 		done: make(chan struct{}),
+		Peers: &peer.MockPeers{
+			Peers: []string{"api1", "api2"},
+		},
+		Sharder: &sharder.MockSharder{
+			Self: &sharder.TestShard{
+				Addr: "api1",
+			},
+			Other: &sharder.TestShard{
+				Addr: "api2",
+			},
+		},
+		redistributeTimer: newRedistributeNotifier(clock),
 	}
 }
 
@@ -509,6 +518,7 @@ func TestCacheSizeReload(t *testing.T) {
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
 	coll := newTestCollector(conf, transmission)
+	coll.Peers = &peer.MockPeers{}
 
 	err := coll.Start()
 	assert.NoError(t, err)
@@ -543,9 +553,8 @@ func TestCacheSizeReload(t *testing.T) {
 	conf.Reload()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.RLock()
-		defer coll.mutex.RUnlock()
-
+		coll.mut.RLock()
+		defer coll.mut.RUnlock()
 		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
 	}, 60*wait, wait, "cache size to change")
 
@@ -599,20 +608,19 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
-
+		coll.mut.Lock()
 		_, ok := coll.datasetSamplers[dataset]
+		coll.mut.Unlock()
+
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
 	conf.Reload()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
-
+		coll.mut.Lock()
 		_, ok := coll.datasetSamplers[dataset]
+		coll.mut.Unlock()
 		return !ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 
@@ -627,10 +635,9 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		defer coll.mutex.Unlock()
-
+		coll.mut.Lock()
 		_, ok := coll.datasetSamplers[dataset]
+		coll.mut.Unlock()
 		return ok
 	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
 }
@@ -691,7 +698,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	}
 
 	// Now there should be 500 traces in the cache.
-	coll.mutex.Lock()
+	coll.mut.Lock()
 	assert.Equal(t, 500, len(coll.cache.GetAll()))
 
 	// We want to induce an eviction event, so set MaxAlloc a bit below
@@ -701,18 +708,16 @@ func TestStableMaxAlloc(t *testing.T) {
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
 	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
-
-	coll.mutex.Unlock()
-
+	coll.mut.Unlock()
 	// wait for the cache to take some action
 	var traces []*types.Trace
 	for {
-		coll.mutex.Lock()
+		coll.mut.Lock()
 		traces = coll.cache.GetAll()
 		if len(traces) < 500 {
 			break
 		}
-		coll.mutex.Unlock()
+		coll.mut.Unlock()
 
 		time.Sleep(conf.SendTickerVal)
 	}
@@ -722,7 +727,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	tracesLeft := len(traces)
 	assert.Less(t, tracesLeft, 480, "should have sent some traces")
 	assert.Greater(t, tracesLeft, 100, "should have NOT sent some traces")
-	coll.mutex.Unlock()
+	coll.mut.Unlock()
 
 	// We discarded the most costly spans, and sent them.
 	transmission.Mux.Lock()
@@ -1503,6 +1508,82 @@ func TestIsRootSpan(t *testing.T) {
 	}
 }
 
+func TestRedistributeTraces(t *testing.T) {
+	conf := &config.MockConfig{
+		GetSendDelayVal:        1 * time.Millisecond,
+		GetTraceTimeoutVal:     1 * time.Second,
+		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
+		SendTickerVal:          2 * time.Millisecond,
+		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
+	err := coll.Start()
+	assert.NoError(t, err)
+	defer coll.Stop()
+
+	dataset := "aoeu"
+
+	span := &types.Span{
+		TraceID: "1",
+		Event: types.Event{
+			Dataset: dataset,
+			APIKey:  legacyAPIKey,
+			APIHost: "api1",
+			Data:    make(map[string]interface{}),
+		},
+	}
+
+	coll.AddSpan(span)
+
+	assert.Eventually(t, func() bool {
+		transmission.Mux.Lock()
+		defer transmission.Mux.Unlock()
+
+		return len(transmission.Events) == 1 && transmission.Events[0].APIHost == "api1"
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+	transmission.Flush()
+
+	span = &types.Span{
+		TraceID: "11",
+		Event: types.Event{
+			Dataset: dataset,
+			APIKey:  legacyAPIKey,
+			Data:    make(map[string]interface{}),
+		},
+	}
+	trace := &types.Trace{
+		TraceID: span.TraceID,
+		Dataset: dataset,
+		SendBy:  coll.Clock.Now().Add(5 * time.Second),
+	}
+	trace.AddSpan(span)
+
+	coll.mut.Lock()
+	coll.cache.Set(trace)
+	coll.mut.Unlock()
+	coll.Peers.RegisterUpdatedPeersCallback(coll.redistributeTimer.Reset)
+
+	assert.Eventually(t, func() bool {
+		transmission.Mux.Lock()
+		defer transmission.Mux.Unlock()
+		if len(transmission.Events) == 0 {
+			return false
+		}
+
+		return len(transmission.Events) == 1 && transmission.Events[0].APIHost == "api2"
+	}, conf.GetTraceTimeoutVal*2, conf.SendTickerVal)
+}
+
 func TestDrainTracesOnShutdown(t *testing.T) {
 	// set up the trace cache
 	conf := &config.MockConfig{
@@ -1589,9 +1670,8 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		transmission.Mux.Lock()
 		require.Len(collect, transmission.Events, 1)
 		require.Equal(collect, span2.Dataset, transmission.Events[0].Dataset)
-		require.Equal(collect, "http://self", transmission.Events[0].APIHost)
+		require.Equal(collect, "api2", transmission.Events[0].APIHost)
 		transmission.Mux.Unlock()
 	}, 2*time.Second, 100*time.Millisecond)
 	cancel2()
-
 }
