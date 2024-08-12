@@ -147,7 +147,7 @@ func (i *InMemCollector) Start() error {
 	i.done = make(chan struct{})
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	i.done = make(chan struct{})
-	i.redistributeTimer = newRedistributeNotifier(i.Clock)
+	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Clock)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -1007,13 +1007,14 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	}
 }
 
-func newRedistributeNotifier(clock clockwork.Clock) *redistributeNotifier {
+func newRedistributeNotifier(logger logger.Logger, clock clockwork.Clock) *redistributeNotifier {
 	r := &redistributeNotifier{
 		initialDelay: 3 * time.Second,
 		maxDelay:     30 * time.Second,
 		maxAttempts:  5,
 		done:         make(chan struct{}),
 		clock:        clock,
+		logger:       logger,
 		triggered:    make(chan struct{}),
 		reset:        make(chan struct{}),
 	}
@@ -1023,6 +1024,7 @@ func newRedistributeNotifier(clock clockwork.Clock) *redistributeNotifier {
 
 type redistributeNotifier struct {
 	clock        clockwork.Clock
+	logger       logger.Logger
 	initialDelay time.Duration
 	maxAttempts  int
 	maxDelay     time.Duration
@@ -1048,7 +1050,11 @@ func (r *redistributeNotifier) Reset() {
 		return
 	}
 
-	r.reset <- struct{}{}
+	select {
+	case r.reset <- struct{}{}:
+	default:
+		r.logger.Debug().Logf("A trace redistribution is ongoing. Ignoring reset.")
+	}
 }
 
 func (r *redistributeNotifier) Stop() {
