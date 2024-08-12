@@ -1091,6 +1091,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	trace := coll.getFromCache(traceID)
 	assert.Nil(t, trace, "trace should have been sent although the root span hasn't arrived")
 	assert.Equal(t, 1, len(transmission.Events), "adding a non-root span and waiting should send the span")
+
 	// now we add the root span and verify that both got sent and that the root span had the span count
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -1103,12 +1104,14 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.SendTickerVal * 2)
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
-	transmission.Mux.RLock()
-	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
-	assert.Equal(t, "deterministic/always - late arriving span", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
-	transmission.Mux.RUnlock()
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		transmission.Mux.RLock()
+		assert.Equal(collect, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
+		assert.Equal(collect, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+		assert.Equal(collect, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
+		assert.Equal(collect, "deterministic/always - late arriving span", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
+		transmission.Mux.RUnlock()
+	}, 2*conf.SendTickerVal, 1*time.Millisecond)
 }
 
 // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
