@@ -107,7 +107,7 @@ func newStartedApp(
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
-		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000},
+		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000, ShutdownDelay: config.Duration(1 * time.Second)},
 		AddHostMetadataToTrace:   enableHostMetadata,
 		TraceIdFieldNames:        []string{"trace.trace_id"},
 		ParentIdFieldNames:       []string{"trace.parent_id"},

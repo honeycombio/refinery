@@ -80,13 +80,6 @@ type MockConfig struct {
 // assert that MockConfig implements Config
 var _ Config = (*MockConfig)(nil)
 
-func (m *MockConfig) SetCollectionConfig(c CollectionConfig) {
-	m.Mux.Lock()
-	defer m.Mux.Unlock()
-
-	m.GetCollectionConfigVal = c
-}
-
 func (m *MockConfig) Reload() {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()

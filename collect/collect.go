@@ -75,7 +75,7 @@ type InMemCollector struct {
 	// For test use only
 	BlockOnAddSpan bool
 
-	mut   sync.RWMutex
+	mutex sync.RWMutex
 	cache cache.Cache
 
 	datasetSamplers map[string]sample.Sampler
@@ -176,27 +176,23 @@ func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
 	imcConfig := i.Config.GetCollectionConfig()
 
-	if existingCache, ok := i.cache.(*cache.DefaultInMemCache); ok {
-		if imcConfig.CacheCapacity != existingCache.GetCacheSize() {
-			i.Logger.Debug().WithField("cache_size.previous", existingCache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-			c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
-			// pull the old cache contents into the new cache
-			for j, trace := range existingCache.GetAll() {
-				if j >= imcConfig.CacheCapacity {
-					i.send(trace, TraceSendEjectedFull)
-					continue
-				}
-				c.Set(trace)
+	if imcConfig.CacheCapacity != i.cache.GetCacheSize() {
+		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
+		c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
+		// pull the old cache contents into the new cache
+		for j, trace := range i.cache.GetAll() {
+			if j >= imcConfig.CacheCapacity {
+				i.send(trace, TraceSendEjectedFull)
+				continue
 			}
-			i.cache = c
-		} else {
-			i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
+			c.Set(trace)
 		}
-
-		i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
+		i.cache = c
 	} else {
-		i.Logger.Error().WithField("cache", i.cache.(*cache.DefaultInMemCache)).Logf("skipping reloading the cache on config reload because it's not an in-memory cache")
+		i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
 	}
+
+	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
 	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
 
@@ -228,14 +224,7 @@ func (i *InMemCollector) checkAlloc() {
 	// remove the traces from the cache that have had the most impact on allocation.
 	// To do this, we sort the traces by their CacheImpact value and then remove traces
 	// until the total size is less than the amount to which we want to shrink.
-	existingCache, ok := i.cache.(*cache.DefaultInMemCache)
-	if !ok {
-		i.Logger.Error().WithField("alloc", mem.Alloc).Logf(
-			"total allocation exceeds limit, but unable to control cache",
-		)
-		return
-	}
-	allTraces := existingCache.GetAll()
+	allTraces := i.cache.GetAll()
 	timeout := i.Config.GetTraceTimeout()
 	if timeout == 0 {
 		timeout = 60 * time.Second
@@ -248,7 +237,7 @@ func (i *InMemCollector) checkAlloc() {
 	// successive traces until we've crossed the totalToRemove threshold
 	// or just run out of traces to delete.
 
-	cap := existingCache.GetCacheSize()
+	cap := i.cache.GetCacheSize()
 	i.Metrics.Gauge("collector_cache_size", cap)
 
 	totalDataSizeSent := 0
@@ -262,7 +251,7 @@ func (i *InMemCollector) checkAlloc() {
 			break
 		}
 	}
-	existingCache.RemoveTraces(tracesSent)
+	i.cache.RemoveTraces(tracesSent)
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
 	i.Logger.Error().
@@ -270,7 +259,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
-		WithField("new_trace_count", existingCache.GetCacheSize()).
+		WithField("new_trace_count", i.cache.GetCacheSize()).
 		Logf("evicting large traces early due to memory overage")
 
 	// Manually GC here - without this we can easily end up evicting more than we
@@ -327,8 +316,8 @@ func (i *InMemCollector) collect() {
 
 	// mutex is normally held by this goroutine at all times.
 	// It is unlocked once per ticker cycle for tests.
-	i.mut.Lock()
-	defer i.mut.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 
 	for {
 		i.Health.Ready(CollectorHealthKey, true)
@@ -365,9 +354,9 @@ func (i *InMemCollector) collect() {
 					i.checkAlloc()
 
 					// Briefly unlock the cache, to allow test access.
-					i.mut.Unlock()
+					i.mutex.Unlock()
 					runtime.Gosched()
-					i.mut.Lock()
+					i.mutex.Lock()
 				}
 			case <-i.redistributeTimer.Notify():
 				i.redistributeTraces()
@@ -838,7 +827,7 @@ func (i *InMemCollector) Stop() error {
 	// shuts down. so that the new peer can know it's already expired and do not restart the trace timeout.
 	// wait for the queues to drain
 
-	i.mut.Lock()
+	i.mutex.Lock()
 
 	if !i.Config.GetCollectionConfig().DisableRedistribution {
 		peers, err := i.Peers.GetPeers()
@@ -855,7 +844,7 @@ func (i *InMemCollector) Stop() error {
 	}
 
 	i.sampleTraceCache.Stop()
-	i.mut.Unlock()
+	i.mutex.Unlock()
 
 	close(i.incoming)
 	close(i.fromPeer)
@@ -951,7 +940,7 @@ func (i *InMemCollector) distributeSpansOnShutdown(sentTraceChan chan sentRecord
 		if sp != nil {
 
 			// first check if there's a trace decision
-			record, reason, found := i.sampleTraceCache.CheckTrace(sp.TraceID)
+			record, reason, found := i.sampleTraceCache.CheckSpan(sp)
 			if found {
 				sentTraceChan <- sentRecord{sp, record, reason}
 				continue
@@ -1010,8 +999,8 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan 
 
 // Convenience method for tests.
 func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.mut.Lock()
-	defer i.mut.Unlock()
+	i.mutex.Lock()
+	defer i.mutex.Unlock()
 	return i.cache.Get(traceID)
 }
 
