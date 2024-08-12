@@ -824,13 +824,6 @@ func (i *InMemCollector) Stop() error {
 	// so that no new traces are accepted
 	i.Health.Ready(CollectorHealthKey, false)
 
-	// TODO: start another goroutine to drain the queues directly without adding
-	// to the cache.
-	// TODO: only send traces that already has a decision, if not, forward them.
-	// TODO: we may want to add a metadata for traces that already expired by the time that refinery
-	// shuts down. so that the new peer can know it's already expired and do not restart the trace timeout.
-	// wait for the queues to drain
-
 	i.mutex.Lock()
 
 	if !i.Config.GetCollectionConfig().DisableRedistribution {
