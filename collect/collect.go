@@ -123,6 +123,9 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_dropped", "counter")
 	i.Metrics.Register("trace_send_has_root", "counter")
 	i.Metrics.Register("trace_send_no_root", "counter")
+	i.Metrics.Register("trace_send_on_shutdown", "counter")
+	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
+	i.Metrics.Register("trace_forwarded_on_peer_change", "gauge")
 
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
@@ -439,6 +442,7 @@ func (i *InMemCollector) redistributeTraces() {
 		"hostname":              i.hostname,
 	})
 
+	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces))
 	if len(forwardedTraces) > 0 {
 		i.cache.RemoveTraces(forwardedTraces)
 	}
@@ -986,6 +990,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan 
 			r.span.Data["meta.refinery.shutdown.send"] = true
 
 			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
+			i.Metrics.Count("trace_send_on_shutdown", 1)
 
 			span.End()
 
@@ -1007,6 +1012,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan 
 			sp.APIHost = url
 			sp.Data["meta.refinery.shutdown.send"] = false
 			i.Transmission.EnqueueSpan(sp)
+			i.Metrics.Count("trace_forwarded_on_shutdown", 1)
 			span.End()
 		}
 
