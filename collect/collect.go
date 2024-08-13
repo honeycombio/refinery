@@ -1077,6 +1077,8 @@ func (r *redistributeNotifier) Reset() {
 
 	select {
 	case r.reset <- struct{}{}:
+	case <-r.done:
+		return
 	default:
 		r.logger.Debug().Logf("A trace redistribution is ongoing. Ignoring reset.")
 	}
@@ -1090,6 +1092,8 @@ func (r *redistributeNotifier) run() {
 	var attempts int
 	lastBackoff := r.initialDelay
 	for {
+		// if we've reached the max attempts, reset the backoff and attempts
+		// only when the reset signal is received.
 		if attempts >= r.maxAttempts {
 			<-r.reset
 			lastBackoff = r.initialDelay
