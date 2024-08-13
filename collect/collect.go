@@ -123,9 +123,9 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_dropped", "counter")
 	i.Metrics.Register("trace_send_has_root", "counter")
 	i.Metrics.Register("trace_send_no_root", "counter")
-	i.Metrics.Register("trace_send_on_shutdown", "counter")
-	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
 	i.Metrics.Register("trace_forwarded_on_peer_change", "gauge")
+	i.Metrics.Register("trace_send_on_shutdown", "gauge")
+	i.Metrics.Register("trace_forwarded_on_shutdown", "gauge")
 
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
@@ -438,6 +438,7 @@ func (i *InMemCollector) redistributeTraces() {
 
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"forwarded_trace_count": len(forwardedTraces.Members()),
+		"total_trace_count":     len(traces),
 		"hostname":              i.hostname,
 	})
 
@@ -954,51 +955,58 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 }
 
 // distributeSpansInCache takes a list of spans and sends them to the appropriate channel based on the state of the trace.
-func (i *InMemCollector) distributeSpansOnShutdown(sentTraceChan chan sentRecord, forwardTraceChan chan *types.Span, spans ...*types.Span) {
+func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord, forwardSpanChan chan *types.Span, spans ...*types.Span) {
 	for _, sp := range spans {
 		if sp != nil {
 
 			// first check if there's a trace decision
 			record, reason, found := i.sampleTraceCache.CheckSpan(sp)
 			if found {
-				sentTraceChan <- sentRecord{sp, record, reason}
+				sentSpanChan <- sentRecord{sp, record, reason}
 				continue
 			}
 
 			// if there's no trace decision, then we need to forward the trace to its new home
-			forwardTraceChan <- sp
+			forwardSpanChan <- sp
 		}
 	}
 }
 
 // sendSpansOnShutdown is a helper function that sends span to their final destination
 // on shutdown.
-func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan <-chan sentRecord, forwardTraceChan <-chan *types.Span) {
+func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <-chan sentRecord, forwardSpanChan <-chan *types.Span) {
+	sentTraces := make(map[string]struct{})
+	forwardedTraces := make(map[string]struct{})
+	defer func() {
+		i.Metrics.Gauge("trace_send_on_shutdown", len(sentTraces))
+		i.Metrics.Gauge("trace_forwarded_on_shutdown", len(forwardedTraces))
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
 			i.Logger.Info().Logf("Timed out waiting for traces to send")
 			return
 
-		case r, ok := <-sentTraceChan:
+		case r, ok := <-sentSpanChan:
 			if !ok {
 				return
 			}
 
-			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_trace", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
+			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_span", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
 			r.span.Data["meta.refinery.shutdown.send"] = true
 
 			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
-			i.Metrics.Count("trace_send_on_shutdown", 1)
+			sentTraces[r.span.TraceID] = struct{}{}
 
 			span.End()
 
-		case sp, ok := <-forwardTraceChan:
+		case sp, ok := <-forwardSpanChan:
 			if !ok {
 				return
 			}
 
-			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_trace", map[string]interface{}{"trace_id": sp.TraceID, "hostname": i.hostname})
+			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_span", map[string]interface{}{"trace_id": sp.TraceID, "hostname": i.hostname})
 
 			targetShard := i.Sharder.WhichShard(sp.TraceID)
 			url := targetShard.GetAddress()
@@ -1020,7 +1028,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan 
 			}
 
 			i.Transmission.EnqueueSpan(sp)
-			i.Metrics.Count("trace_forwarded_on_shutdown", 1)
+			forwardedTraces[sp.TraceID] = struct{}{}
 			span.End()
 		}
 
