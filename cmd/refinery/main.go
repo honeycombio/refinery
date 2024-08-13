@@ -151,6 +151,7 @@ func main() {
 		MaxIdleConnsPerHost: 10,
 		MaxConnsPerHost:     1000,
 		IdleConnTimeout:     30 * time.Second,
+		ForceAttemptHTTP2:   true,
 	}
 
 	// peerTransport is the http transport used to send things to a local peer
@@ -164,6 +165,7 @@ func main() {
 		MaxIdleConnsPerHost: 10,
 		MaxConnsPerHost:     1000,
 		IdleConnTimeout:     30 * time.Second,
+		ForceAttemptHTTP2:   true,
 	}
 
 	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
