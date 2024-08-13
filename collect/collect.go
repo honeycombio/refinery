@@ -425,10 +425,9 @@ func (i *InMemCollector) redistributeTraces() {
 				sp.Data = make(map[string]interface{})
 			}
 			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				v := append(v.([]interface{}), i.hostname)
-				sp.Data["meta.refinery.forwarded"] = v
+				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
 			} else {
-				sp.Data["meta.refinery.forwarded"] = []string{i.hostname}
+				sp.Data["meta.refinery.forwarded"] = i.hostname
 			}
 
 			i.Transmission.EnqueueSpan(sp)
@@ -1010,7 +1009,16 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentTraceChan 
 			// the downstream consumers can make decisions based on the metadata without having
 			// to restart the TraceTimeout or SendDelay
 			sp.APIHost = url
-			sp.Data["meta.refinery.shutdown.send"] = false
+
+			if sp.Data == nil {
+				sp.Data = make(map[string]interface{})
+			}
+			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
+				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
+			} else {
+				sp.Data["meta.refinery.forwarded"] = i.hostname
+			}
+
 			i.Transmission.EnqueueSpan(sp)
 			i.Metrics.Count("trace_forwarded_on_shutdown", 1)
 			span.End()
