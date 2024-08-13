@@ -425,10 +425,10 @@ func (i *InMemCollector) redistributeTraces() {
 				sp.Data = make(map[string]interface{})
 			}
 			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				v := append(v.([]string), i.Sharder.MyShard().GetAddress())
+				v := append(v.([]interface{}), i.hostname)
 				sp.Data["meta.refinery.forwarded"] = v
 			} else {
-				sp.Data["meta.refinery.forwarded"] = []string{i.Sharder.MyShard().GetAddress()}
+				sp.Data["meta.refinery.forwarded"] = []string{i.hostname}
 			}
 
 			i.Transmission.EnqueueSpan(sp)
@@ -841,8 +841,8 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 }
 
 func (i *InMemCollector) Stop() error {
-	close(i.done)
 	i.redistributeTimer.Stop()
+	close(i.done)
 	// signal the health system to not be ready
 	// so that no new traces are accepted
 	i.Health.Ready(CollectorHealthKey, false)
