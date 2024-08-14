@@ -18,10 +18,18 @@ type Cache interface {
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
 
+	// GetCacheCapacity returns the number of traces that can be stored in the cache
+	GetCacheCapacity() int
+
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
 	TakeExpiredTraces(now time.Time) []*types.Trace
+
+	// RemoveTraces accepts a set of trace IDs and removes any matching ones from
+	RemoveTraces(toDelete generics.Set[string])
 }
+
+var _ Cache = (*DefaultInMemCache)(nil)
 
 // DefaultInMemCache keeps a bounded number of entries to avoid growing memory
 // forever. Traces are expunged from the cache in insertion order (not access
@@ -68,7 +76,7 @@ func NewInMemCache(
 
 }
 
-func (d *DefaultInMemCache) GetCacheSize() int {
+func (d *DefaultInMemCache) GetCacheCapacity() int {
 	return len(d.traceBuffer)
 }
 
