@@ -18,6 +18,7 @@ type Cache interface {
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
 
+	// GetCacheCapacity returns the number of traces that can be stored in the cache
 	GetCacheCapacity() int
 
 	// Retrieve and remove all traces which are past their SendBy date.
