@@ -459,10 +459,11 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 
+	// we may override these values in conditions below
 	markTraceForSending := false
-	// if the span count has exceeded our SpanLimit, mark the trace for sending
-	if tcfg.SpanLimit > 0 && uint(trace.SpanCount()) > tcfg.SpanLimit {
-		markTraceForSending = true
+	timeout := tcfg.GetSendDelay()
+	if timeout == 0 {
+		timeout = 2 * time.Second // a sensible default
 	}
 
 	// if this is a root span, say so and send the trace
@@ -471,13 +472,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		trace.RootSpan = sp
 	}
 
+	// if the span count has exceeded our SpanLimit, send the trace immediately
+	if tcfg.SpanLimit > 0 && uint(trace.SpanCount()) > tcfg.SpanLimit {
+		markTraceForSending = true
+		timeout = 0 // don't use a timeout in this case; this is an "act fast" situation
+	}
+
 	if markTraceForSending {
-		timeout := tcfg.GetSendDelay()
-
-		if timeout == 0 {
-			timeout = 2 * time.Second
-		}
-
 		trace.SendBy = time.Now().Add(timeout)
 	}
 }
