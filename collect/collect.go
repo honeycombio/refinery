@@ -185,8 +185,8 @@ func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
 	imcConfig := i.Config.GetCollectionConfig()
 
-	if imcConfig.CacheCapacity != i.cache.GetCacheSize() {
-		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheSize()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
+	if imcConfig.CacheCapacity != i.cache.GetCacheCapacity() {
+		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheCapacity()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
 		c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
 		// pull the old cache contents into the new cache
 		for j, trace := range i.cache.GetAll() {
@@ -246,7 +246,7 @@ func (i *InMemCollector) checkAlloc() {
 	// successive traces until we've crossed the totalToRemove threshold
 	// or just run out of traces to delete.
 
-	cap := i.cache.GetCacheSize()
+	cap := i.cache.GetCacheCapacity()
 	i.Metrics.Gauge("collector_cache_size", cap)
 
 	totalDataSizeSent := 0
@@ -268,7 +268,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
-		WithField("new_trace_count", i.cache.GetCacheSize()).
+		WithField("new_trace_count", i.cache.GetCacheCapacity()).
 		Logf("evicting large traces early due to memory overage")
 
 	// Manually GC here - without this we can easily end up evicting more than we

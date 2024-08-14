@@ -18,7 +18,7 @@ type Cache interface {
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
 
-	GetCacheSize() int
+	GetCacheCapacity() int
 
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
@@ -75,7 +75,7 @@ func NewInMemCache(
 
 }
 
-func (d *DefaultInMemCache) GetCacheSize() int {
+func (d *DefaultInMemCache) GetCacheCapacity() int {
 	return len(d.traceBuffer)
 }
 

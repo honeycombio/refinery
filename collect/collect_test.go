@@ -576,7 +576,7 @@ func TestCacheSizeReload(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		coll.mutex.RLock()
 		defer coll.mutex.RUnlock()
-		return coll.cache.(*cache.DefaultInMemCache).GetCacheSize() == 2
+		return coll.cache.GetCacheCapacity() == 2
 	}, 60*wait, wait, "cache size to change")
 
 	err = coll.AddSpan(&types.Span{TraceID: "3", Event: event})
@@ -749,7 +749,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		time.Sleep(conf.GetTracesConfig().GetSendTickerValue())
 	}
 
-	assert.Equal(t, 1000, coll.cache.(*cache.DefaultInMemCache).GetCacheSize(), "cache size shouldn't change")
+	assert.Equal(t, 1000, coll.cache.GetCacheCapacity(), "cache size shouldn't change")
 
 	tracesLeft := len(traces)
 	assert.Less(t, tracesLeft, 480, "should have sent some traces")
