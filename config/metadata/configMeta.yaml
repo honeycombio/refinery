@@ -306,12 +306,14 @@ groups:
           - type: minimum
             arg: 100ms
         reload: true
-        summary: is the duration to wait before sending a trace.
+        summary: is the duration to wait after the root span arrives before sending a trace.
         description: >
-          This setting is a short timer that is triggered when a trace is
-          complete. Refinery waits for this duration before sending the trace.
-          The reason for this setting is to allow for asynchronous spans and
-          small network delays to elapse before sending the trace.
+          This setting is a short timer that is triggered when a trace is marked
+          complete by the arrival of the root span. Refinery waits for this
+          duration before sending the trace. This setting exists to allow for
+          asynchronous spans and small network delays to elapse before sending
+          the trace. `SendDelay` is not applied if the TraceTimeout expires or
+          the `SpanLimit` is reached.
 
       - name: BatchTimeout
         type: duration
