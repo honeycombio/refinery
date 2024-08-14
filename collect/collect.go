@@ -495,7 +495,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			timeout = 60 * time.Second
 		}
 
-		now := time.Now()
+		now := i.Clock.Now()
 		trace = &types.Trace{
 			APIHost:     sp.APIHost,
 			APIKey:      sp.APIKey,
@@ -528,7 +528,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 
-	markTraceForSending := false
+	var markTraceForSending bool
 	// if the span count has exceeded our SpanLimit, mark the trace for sending
 	if tcfg.SpanLimit > 0 && uint(trace.SpanCount()) > tcfg.SpanLimit {
 		markTraceForSending = true
@@ -547,7 +547,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 			timeout = 2 * time.Second
 		}
 
-		trace.SendBy = time.Now().Add(timeout)
+		trace.SendBy = i.Clock.Now().Add(timeout)
 	}
 }
 
@@ -583,6 +583,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 			ArrivalTime: now,
 			SendBy:      now,
 		}
+		trace.SetSampleRate(rate)
 		// we do want a record of how we disposed of traces in case more come in after we've
 		// turned off stress relief (if stress relief is on we'll keep making the same decisions)
 		i.sampleTraceCache.Record(trace, keep, reason)
@@ -733,7 +734,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	}
 	trace.Sent = true
 
-	traceDur := time.Since(trace.ArrivalTime)
+	traceDur := i.Clock.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
 	if trace.RootSpan != nil {
