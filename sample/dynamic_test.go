@@ -19,7 +19,8 @@ func TestDynamicAddSampleRateKeyToTrace(t *testing.T) {
 
 	sampler := &DynamicSampler{
 		Config: &config.DynamicSamplerConfig{
-			FieldList: []string{"http.status_code"},
+			FieldList:  []string{"http.status_code", "root.service_name", "root.url"},
+			SampleRate: 1,
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
@@ -27,17 +28,32 @@ func TestDynamicAddSampleRateKeyToTrace(t *testing.T) {
 
 	trace := &types.Trace{}
 	for i := 0; i < spanCount; i++ {
+		if i == spanCount-1 {
+			trace.RootSpan = &types.Span{
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"http.status_code": "200",
+						"service_name":     "test",
+					},
+				},
+			}
+		}
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
 				Data: map[string]interface{}{
 					"http.status_code": "200",
+					"url":              "/test",
 				},
 			},
 		})
 	}
 	sampler.Start()
-	sampler.GetSampleRate(trace)
+	rate, keep, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")
+	assert.Equal(t, uint(1), rate)
+	assert.True(t, keep)
+	assert.Equal(t, "dynamic", reason)
+	assert.Equal(t, "200•,test,", key)
 }

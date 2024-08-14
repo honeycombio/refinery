@@ -117,8 +117,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	assert.Equal(t, expected, generator.build(trace))
 
-	// now test that multiple values across spans in a different order are condensed the same
-	fields = []string{"http.status_code"}
+	// test field list with root prefix, only include the field from on the root span
+	// if it exists
+	fields = []string{"http.status_code", "root.service_name", "root.another_field"}
 	useTraceLength = true
 
 	generator = newTraceKey(fields, useTraceLength)
@@ -136,28 +137,21 @@ func TestKeyGeneration(t *testing.T) {
 	trace.AddSpan(&types.Span{
 		Event: types.Event{
 			Data: map[string]interface{}{
-				"http.status_code": 404,
+				"http.status_code": 200,
+				"service_name":     "another",
 			},
 		},
 	})
 
-	trace.AddSpan(&types.Span{
+	trace.RootSpan = &types.Span{
 		Event: types.Event{
 			Data: map[string]interface{}{
-				"http.status_code": 200,
+				"service_name": "test",
 			},
 		},
-	})
+	}
 
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 200,
-			},
-		},
-	})
-
-	expected = "200•404•,4"
+	expected = "200•404•,test,2"
 
 	assert.Equal(t, expected, generator.build(trace))
 }
