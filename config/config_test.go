@@ -615,7 +615,9 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	defer os.Remove(rules)
 	defer os.Remove(config)
 	// Set the environment variable to test that it overrides the config
+	oldenv := os.Getenv("REFINERY_HONEYCOMB_API_KEY")
 	os.Setenv("REFINERY_HONEYCOMB_API_KEY", "321cba")
+	defer os.Setenv("REFINERY_HONEYCOMB_API_KEY", oldenv)
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
