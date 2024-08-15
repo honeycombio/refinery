@@ -1296,6 +1296,85 @@ func TestAddAdditionalAttributes(t *testing.T) {
 
 }
 
+func TestStressReliefSampleRate(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Minute),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	coll := newTestCollector(conf, transmission)
+
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	var traceID = "traceABC"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.StressRelief = &MockStressReliever{
+		IsStressed:              true,
+		SampleDeterministically: true,
+		ShouldKeep:              true,
+		SampleRate:              100,
+	}
+	processed, kept := coll.ProcessSpanImmediately(span)
+	require.True(t, processed)
+	require.True(t, kept)
+
+	tr, _, found := coll.sampleTraceCache.CheckTrace(traceID)
+	require.True(t, found)
+	require.NotNil(t, tr)
+	assert.Equal(t, uint(100), tr.Rate())
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 1, len(transmission.Events), "span should immediately be sent during stress relief")
+	assert.Equal(t, uint(100), transmission.Events[0].SampleRate)
+	transmission.Mux.RUnlock()
+
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset:    "aoeu",
+			Data:       map[string]interface{}{},
+			APIKey:     legacyAPIKey,
+			SampleRate: 10,
+		},
+	}
+
+	processed2, kept2 := coll.ProcessSpanImmediately(rootSpan)
+	require.True(t, processed2)
+	require.True(t, kept2)
+
+	tr2, _, found2 := coll.sampleTraceCache.CheckTrace(traceID)
+	require.True(t, found2)
+	require.NotNil(t, tr2)
+	assert.Equal(t, uint(100), tr2.Rate())
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "span should immediately be sent during stress relief")
+	assert.Equal(t, uint(1000), transmission.Events[1].SampleRate)
+	transmission.Mux.RUnlock()
+}
+
 // TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
 // StressReliefMode is active
 func TestStressReliefDecorateHostname(t *testing.T) {
