@@ -72,7 +72,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 				Addr: "api1",
 			},
 		},
-		redistributeTimer: newRedistributeNotifier(&logger.NullLogger{}, clock),
+		redistributeTimer: newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock),
 	}
 }
 
