@@ -41,17 +41,6 @@ func (d *traceKey) build(trace *types.Trace) string {
 	// fieldCollector gets all values from the fields listed in the config, even
 	// if they happen multiple times.
 	fieldCollector := make(map[string][]string)
-	rootFieldCollector := make(map[string]string)
-
-	for _, field := range d.rootOnlyFields {
-		if trace.RootSpan == nil {
-			break
-		}
-
-		if val, ok := trace.RootSpan.Data[field]; ok {
-			rootFieldCollector[field] = fmt.Sprintf("%v", val)
-		}
-	}
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
@@ -79,12 +68,13 @@ func (d *traceKey) build(trace *types.Trace) string {
 		key += ","
 	}
 
-	for _, field := range d.rootOnlyFields {
-		if rootFieldCollector[field] == "" {
-			continue
-		}
+	if trace.RootSpan != nil {
+		for _, field := range d.rootOnlyFields {
 
-		key += rootFieldCollector[field] + ","
+			if val, ok := trace.RootSpan.Data[field]; ok {
+				key += fmt.Sprintf("%v,", val)
+			}
+		}
 	}
 
 	if d.useTraceLength {
