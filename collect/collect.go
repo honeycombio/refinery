@@ -124,9 +124,9 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_has_root", "counter")
 	i.Metrics.Register("trace_send_no_root", "counter")
 	i.Metrics.Register("trace_forwarded_on_peer_change", "gauge")
+	i.Metrics.Register("trace_redistribution_count", "gauge")
 	i.Metrics.Register("trace_send_on_shutdown", "counter")
 	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
-	i.Metrics.Register("trace_redistribution_count", "counter")
 
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
