@@ -54,7 +54,8 @@ const (
 	numZstdDecoders        = 4
 	traceIDShortLength     = 8
 	traceIDLongLength      = 16
-	GRPCMessageSizeMax int = 5000000 // 5MB
+	GRPCMessageSizeMax int = 5_000_000 // 5MB
+	HTTPMessageSizeMax     = 5_000_000 // 5MB
 	defaultSampleRate      = 1
 )
 
@@ -655,7 +656,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 		defer gzipReader.Close()
 
 		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, gzipReader); err != nil {
+		if _, err := io.Copy(buf, io.LimitReader(gzipReader, HTTPMessageSizeMax)); err != nil {
 			return nil, err
 		}
 		reader = buf
@@ -671,7 +672,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 			return nil, err
 		}
 		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, zReader); err != nil {
+		if _, err := io.Copy(buf, io.LimitReader(zReader, HTTPMessageSizeMax)); err != nil {
 			return nil, err
 		}
 
