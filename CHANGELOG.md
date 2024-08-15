@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## 2.7.1 2024-08-15
+
+### Fixes
+
+- fix: don't read more than max bytes from a request (#1276) | [Kent Quirk](https://github.com/kentquirk)
+
 ## 2.7.0 2024-07-29
 
 This release incorporates a new publish/subscribe (pubsub) system for faster and cleaner communication between Refinery nodes.

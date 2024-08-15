@@ -2,6 +2,11 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.7.1
+
+This is a bug fix release.
+Sending compressed event or batch payloads that are larger than 5MB will now result in a HTTP 400 "failed to parse event" error response to clients.
+
 ## Version 2.7.0
 
 This release is a minor release focused on better cluster stability and data quality with a new system for communicating peer information across nodes.
