@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"crypto/tls"
 	"strings"
 	"sync"
 
@@ -82,6 +83,21 @@ func (ps *GoRedisPubSub) Start() error {
 		options.Username = username
 		options.Password = pw
 		options.DB = ps.Config.GetRedisDatabase()
+
+		useTLS, err := ps.Config.GetUseTLS()
+		if err != nil {
+			return err
+		}
+		if useTLS {
+			tlsInsecure, err := ps.Config.GetUseTLSInsecure()
+			if err != nil {
+				return err
+			}
+			options.TLSConfig = &tls.Config{
+				MinVersion:         tls.VersionTLS12,
+				InsecureSkipVerify: tlsInsecure,
+			}
+		}
 	}
 	client := redis.NewUniversalClient(options)
 
