@@ -197,6 +197,7 @@ func (p *RedisPubsubPeers) stop() {
 		p.Logger.Error().Logf("failed to get public address")
 		return
 	}
+
 	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr).marshal())
 	if err != nil {
 		p.Logger.Error().WithFields(map[string]interface{}{
@@ -204,7 +205,6 @@ func (p *RedisPubsubPeers) stop() {
 			"hostaddress": myaddr,
 		}).Logf("failed to publish peer address")
 	}
-
 }
 
 func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
