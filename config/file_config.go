@@ -363,8 +363,8 @@ type GRPCServerParameters struct {
 	MaxConnectionAgeGrace Duration     `yaml:"MaxConnectionAgeGrace" default:"1m"`
 	KeepAlive             Duration     `yaml:"KeepAlive" default:"1m"`
 	KeepAliveTimeout      Duration     `yaml:"KeepAliveTimeout" default:"20s"`
-	MaxSendMsgSize        MemorySize   `yaml:"MaxSendMsgSize" default:"5MB"`
-	MaxRecvMsgSize        MemorySize   `yaml:"MaxRecvMsgSize" default:"5MB"`
+	MaxSendMsgSize        MemorySize   `yaml:"MaxSendMsgSize" default:"15MB"`
+	MaxRecvMsgSize        MemorySize   `yaml:"MaxRecvMsgSize" default:"15MB"`
 }
 
 type SampleCacheConfig struct {
