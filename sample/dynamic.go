@@ -89,6 +89,7 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		case "counter":
 			delta := val - d.lastMetrics[name]
 			d.Metrics.Count(name, delta)
+			d.lastMetrics[name] = val
 		case "gauge":
 			d.Metrics.Gauge(name, val)
 		}
