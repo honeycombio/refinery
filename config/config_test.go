@@ -614,13 +614,17 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)
 	defer os.Remove(config)
+	// Set the environment variable to test that it overrides the config
+	oldenv := os.Getenv("REFINERY_HONEYCOMB_API_KEY")
+	os.Setenv("REFINERY_HONEYCOMB_API_KEY", "321cba")
+	defer os.Setenv("REFINERY_HONEYCOMB_API_KEY", oldenv)
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
 	loggerConfig := c.GetHoneycombLoggerConfig()
 
 	assert.Equal(t, "http://honeycomb.io", loggerConfig.APIHost)
-	assert.Equal(t, "1234", loggerConfig.APIKey)
+	assert.Equal(t, "321cba", loggerConfig.APIKey)
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
 	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
