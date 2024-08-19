@@ -456,7 +456,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 		if t.RootSpan != nil {
 			i.send(t, TraceSendGotRoot)
 		} else {
-			if t.SpanCount() > spanLimit {
+			if spanLimit > 0 && t.SpanCount() > spanLimit {
 				i.send(t, TraceSendSpanLimit)
 			} else {
 				i.send(t, TraceSendExpired)
