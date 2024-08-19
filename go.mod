@@ -22,7 +22,7 @@ require (
 	github.com/jonboulle/clockwork v0.4.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.17.9
-	github.com/panmari/cuckoofilter v1.0.3
+	github.com/panmari/cuckoofilter v1.0.6
 	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.19.1
@@ -82,5 +82,3 @@ require (
 )
 
 replace go.opentelemetry.io/proto/otlp => github.com/honeycombio/opentelemetry-proto-go/otlp v1.3.1-compat
-
-replace github.com/panmari/cuckoofilter => github.com/honeycombio/cuckoofilter v0.0.0-20230630225016-cf48793fb7c1
