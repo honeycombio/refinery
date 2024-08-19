@@ -1552,7 +1552,7 @@ groups:
       - name: MaxRecvMsgSize
         type: memorysize
         valuetype: memorysize
-        default: 5MB
+        default: 15MB
         reload: false
         firstversion: v2.2
         validations:
