@@ -1,0 +1,13 @@
+
+RulesVersion: 2
+Samplers:
+    __default__:
+        DeterministicSampler:
+            SampleRate: 1
+    TheNewWorld:
+        TotalThroughputSampler:
+            GoalThroughputPerSec: 50
+            ClearFrequency: 5s
+            FieldList:
+                - title
+
