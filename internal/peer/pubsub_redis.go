@@ -166,7 +166,13 @@ func (p *RedisPubsubPeers) Start() error {
 			case <-ticker.Chan():
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
-				p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr).marshal())
+				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr).marshal())
+				if err != nil {
+					p.Logger.Error().WithFields(map[string]interface{}{
+						"error":       err,
+						"hostaddress": myaddr,
+					}).Logf("failed to publish peer address")
+				}
 				cancel()
 			case <-logTicker.Chan():
 				p.Logger.Debug().WithFields(map[string]any{
@@ -191,7 +197,14 @@ func (p *RedisPubsubPeers) stop() {
 		p.Logger.Error().Logf("failed to get public address")
 		return
 	}
-	p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr).marshal())
+
+	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr).marshal())
+	if err != nil {
+		p.Logger.Error().WithFields(map[string]interface{}{
+			"error":       err,
+			"hostaddress": myaddr,
+		}).Logf("failed to publish peer address")
+	}
 }
 
 func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
