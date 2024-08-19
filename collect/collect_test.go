@@ -1773,7 +1773,6 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 
 	sentTraceChan := make(chan sentRecord, 1)
 	forwardTraceChan := make(chan *types.Span, 1)
-	expiredTraceChan := make(chan *types.Span, 1)
 
 	// test 1
 	// the trace in cache already has decision made
@@ -1793,7 +1792,6 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span1)
 	require.Len(t, sentTraceChan, 1)
 	require.Len(t, forwardTraceChan, 0)
-	require.Len(t, expiredTraceChan, 0)
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	go coll.sendSpansOnShutdown(ctx1, sentTraceChan, forwardTraceChan)
@@ -1822,7 +1820,6 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, span2)
 	require.Len(t, sentTraceChan, 0)
 	require.Len(t, forwardTraceChan, 1)
-	require.Len(t, expiredTraceChan, 0)
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	go coll.sendSpansOnShutdown(ctx2, sentTraceChan, forwardTraceChan)
