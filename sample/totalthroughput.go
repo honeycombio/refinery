@@ -106,6 +106,7 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 		case "counter":
 			delta := val - d.lastMetrics[name]
 			d.Metrics.Count(name, delta)
+			d.lastMetrics[name] = val
 		case "gauge":
 			d.Metrics.Gauge(name, val)
 		}
