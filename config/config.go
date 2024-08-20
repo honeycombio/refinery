@@ -66,6 +66,10 @@ type Config interface {
 	// management.
 	GetRedisHost() string
 
+	// GetRedisClusterHosts returns the list of addresses of a Redis cluster, used for
+	// managing peer cluster membership.
+	GetRedisClusterHosts() []string
+
 	// GetRedisUsername returns the username of a Redis instance to use for peer
 	// management.
 	GetRedisUsername() string

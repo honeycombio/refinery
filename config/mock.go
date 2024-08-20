@@ -27,6 +27,7 @@ type MockConfig struct {
 	GetLoggerLevelVal                Level
 	GetPeersVal                      []string
 	GetRedisHostVal                  string
+	GetRedisClusterHostsVal          []string
 	GetRedisUsernameVal              string
 	GetRedisPasswordVal              string
 	GetRedisAuthCodeVal              string
@@ -216,6 +217,12 @@ func (m *MockConfig) GetRedisHost() string {
 	return m.GetRedisHostVal
 }
 
+func (m *MockConfig) GetRedisClusterHosts() []string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetRedisClusterHostsVal
+}
 func (m *MockConfig) GetRedisUsername() string {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()

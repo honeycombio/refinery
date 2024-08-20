@@ -3,7 +3,6 @@ package pubsub
 import (
 	"context"
 	"crypto/tls"
-	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
@@ -58,14 +57,17 @@ func (ps *GoRedisPubSub) Start() error {
 
 	if ps.Config != nil {
 		host := ps.Config.GetRedisHost()
+		hosts := []string{host}
+		clusterHosts := ps.Config.GetRedisClusterHosts()
+		// if we have a cluster host, use that instead of the regular host
+		if len(clusterHosts) > 0 {
+			hosts = clusterHosts
+		}
+
 		username := ps.Config.GetRedisUsername()
 		pw := ps.Config.GetRedisPassword()
 		authcode = ps.Config.GetRedisAuthCode()
 
-		// we may have multiple hosts, separated by commas, so split them up and
-		// use them as the addrs for the client (if there are multiples, it will
-		// create a cluster client)
-		hosts := strings.Split(host, ",")
 		options.Addrs = hosts
 		options.Username = username
 		options.Password = pw

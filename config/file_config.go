@@ -285,6 +285,7 @@ type PeerManagementConfig struct {
 
 type RedisPeerManagementConfig struct {
 	Host           string   `yaml:"Host" cmdenv:"RedisHost"`
+	ClusterHosts   []string `yaml:ClusterHosts`
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
@@ -651,6 +652,13 @@ func (f *fileConfig) GetRedisHost() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.Host
+}
+
+func (f *fileConfig) GetRedisClusterHosts() []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement.ClusterHosts
 }
 
 func (f *fileConfig) GetRedisUsername() string {

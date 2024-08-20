@@ -12,6 +12,7 @@ import (
 	"github.com/honeycombio/refinery/internal/configwatcher"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -452,6 +453,21 @@ func TestDryRun(t *testing.T) {
 	if d := c.GetIsDryRun(); d != true {
 		t.Error("received", d, "expected", true)
 	}
+}
+
+func TestRedisClusterHosts(t *testing.T) {
+	clusterHosts := []string{"localhost:7001", "localhost:7002"}
+	cm := makeYAML("General.ConfigurationVersion", 2, "RedisPeerManagement.ClusterHosts", clusterHosts)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	defer os.Remove(rules)
+	defer os.Remove(config)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	d := c.GetRedisClusterHosts()
+	require.NotNil(t, d)
+	require.EqualValues(t, clusterHosts, d)
 }
 
 func TestMaxAlloc(t *testing.T) {
