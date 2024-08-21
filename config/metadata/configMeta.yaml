@@ -998,7 +998,8 @@ groups:
         reload: false
         summary: is a list of host and port pairs for the instances in a Redis Cluster, used for managing peer cluster membership.
         description: >
-          This configuration enables Refinery to connect to a Redis cluster. Each entry in the list should follow the format `host:port`.
+          This configuration enables Refinery to connect to a Redis deployment setup in Cluster Mode.
+          Each entry in the list should follow the format `host:port`.
           If `ClusterHosts` is specified, the `Host` setting will be ignored.
 
       - name: Username

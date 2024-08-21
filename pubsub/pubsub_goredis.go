@@ -55,6 +55,7 @@ func (ps *GoRedisPubSub) Start() error {
 	ps.Metrics.Register("redis_pubsub_published", "counter")
 	ps.Metrics.Register("redis_pubsub_received", "counter")
 
+	var clusterModeEnabled bool
 	if ps.Config != nil {
 		host := ps.Config.GetRedisHost()
 		hosts := []string{host}
@@ -62,6 +63,7 @@ func (ps *GoRedisPubSub) Start() error {
 		// if we have a cluster host, use that instead of the regular host
 		if len(clusterHosts) > 0 {
 			hosts = clusterHosts
+			clusterModeEnabled = true
 		}
 
 		username := ps.Config.GetRedisUsername()
@@ -81,7 +83,17 @@ func (ps *GoRedisPubSub) Start() error {
 		}
 	}
 
-	client := redis.NewUniversalClient(options)
+	var client redis.UniversalClient
+	if clusterModeEnabled {
+		client = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:     options.Addrs,
+			Username:  options.Username,
+			Password:  options.Password,
+			TLSConfig: options.TLSConfig,
+		})
+	} else {
+		client = redis.NewUniversalClient(options)
+	}
 
 	// if an authcode was provided, use it to authenticate the connection
 	if authcode != "" {
