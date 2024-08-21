@@ -1,24 +1,18 @@
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: v2.0
-  ConfigReloadInterval: 50s
-
-Network:
-  HoneycombAPI: https://api-dogfood.honeycomb.io
 
 Logger:
   Type: stdout
   Level: info
 
-LegacyMetrics:
-  Enabled: true
-  Dataset: refinery_metrics
-  APIHost: https://api-dogfood.honeycomb.io
+# LegacyMetrics:
+#   Enabled: true
+#   Dataset: refinery_metrics
 
-OTelMetrics:
-  Enabled: true
-  Dataset: refinery_metrics_otel
-  APIHost: https://api-dogfood.honeycomb.io
+# OTelMetrics:
+#   Enabled: true
+#   Dataset: refinery_metrics_otel
 
 PeerManagement:
     Type: redis
