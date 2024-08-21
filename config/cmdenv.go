@@ -32,6 +32,7 @@ type CmdEnv struct {
 	PeerListenAddr        string     `long:"peer-listen-address" env:"REFINERY_PEER_LISTEN_ADDRESS" description:"Peer listen address for communication between Refinery instances"`
 	GRPCListenAddr        string     `long:"grpc-listen-address" env:"REFINERY_GRPC_LISTEN_ADDRESS" description:"gRPC listen address for OTLP traffic"`
 	RedisHost             string     `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
+	RedisClusterHosts     []string   `long:"redis-cluster-hosts" env:"REFINERY_REDIS_CLUSTER_HOSTS" env-delim:"," description:"Redis cluster host addresses"`
 	RedisUsername         string     `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username"`
 	RedisPassword         string     `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password"`
 	RedisAuthCode         string     `long:"redis-auth-code" env:"REFINERY_REDIS_AUTH_CODE" description:"Redis AUTH code"`
@@ -50,6 +51,8 @@ type CmdEnv struct {
 	NoValidate            bool       `long:"no-validate" description:"Do not attempt to validate the configuration files. Makes --validate meaningless."`
 	WriteConfig           string     `long:"write-config" description:"After applying defaults, environment variables, and command line values, write the loaded configuration to the specified file as YAML and exit."`
 	WriteRules            string     `long:"write-rules" description:"After applying defaults, write the loaded rules to the specified file as YAML and exit."`
+
+	structType reflect.Type
 }
 
 func NewCmdEnvOptions(args []string) (*CmdEnv, error) {
@@ -70,12 +73,29 @@ func NewCmdEnvOptions(args []string) (*CmdEnv, error) {
 		}
 	}
 
+	v := reflect.ValueOf(*opts)
+	switch v.Kind() {
+	case reflect.Struct:
+		opts.structType = v.Type()
+	}
+
 	return opts, nil
 }
 
+type EnvField struct {
+	value     reflect.Value
+	delimiter string
+}
+
 // GetField returns the reflect.Value for the field with the given name in the CmdEnvOptions struct.
-func (c *CmdEnv) GetField(name string) reflect.Value {
-	return reflect.ValueOf(c).Elem().FieldByName(name)
+func (c *CmdEnv) GetField(name string) EnvField {
+	field, _ := c.structType.FieldByName(name)
+	delim := field.Tag.Get("env-delim")
+
+	return EnvField{
+		value:     reflect.ValueOf(c).Elem().FieldByName(name),
+		delimiter: delim,
+	}
 }
 
 // ApplyTags uses reflection to apply the values from the CmdEnv struct to the
@@ -89,7 +109,7 @@ func (c *CmdEnv) ApplyTags(s reflect.Value) error {
 }
 
 type getFielder interface {
-	GetField(name string) reflect.Value
+	GetField(name string) EnvField
 }
 
 // applyCmdEnvTags is a helper function that applies the values from the given
@@ -106,8 +126,8 @@ func applyCmdEnvTags(s reflect.Value, fielder getFielder) error {
 			if tags := fieldType.Tag.Get("cmdenv"); tags != "" {
 				// this field has a cmdenv tag, so try all its values
 				for _, tag := range strings.Split(tags, ",") {
-					value := fielder.GetField(tag)
-					if !value.IsValid() {
+					f := fielder.GetField(tag)
+					if !f.value.IsValid() {
 						// if you get this error, you didn't specify cmdenv tags
 						// correctly -- its value must be the name of a field in the struct
 						return fmt.Errorf("programming error -- invalid field name: %s", tag)
@@ -117,14 +137,37 @@ func applyCmdEnvTags(s reflect.Value, fielder getFielder) error {
 					}
 
 					// don't overwrite values that are already set
-					if !value.IsZero() {
+					if !f.value.IsZero() {
 						// ensure that the types match
-						if fieldType.Type != value.Type() {
+						if fieldType.Type != f.value.Type() {
 							return fmt.Errorf("programming error -- types don't match for field: %s (%v and %v)",
-								fieldType.Name, fieldType.Type, value.Type())
+								fieldType.Name, fieldType.Type, f.value.Type())
+						}
+
+						if f.value.Kind() == reflect.Slice {
+							if f.delimiter == "" {
+								return fmt.Errorf("programming error -- missing delimiter for slice field: %s", fieldType.Name)
+							}
+
+							rawValue, ok := f.value.Index(0).Interface().(string)
+							if !ok {
+								return fmt.Errorf("programming error -- slice field must be a string: %s", fieldType.Name)
+							}
+
+							// split the value on the delimiter
+							values := strings.Split(rawValue, f.delimiter)
+							// create a new slice of the same type as the field
+							slice := reflect.MakeSlice(field.Type(), len(values), len(values))
+							// iterate over the values and set them
+							for i, v := range values {
+								slice.Index(i).SetString(v)
+							}
+							// set the field
+							field.Set(slice)
+							break
 						}
 						// now we can set it
-						field.Set(value)
+						field.Set(f.value)
 						// and we're done with this field
 						break
 					}

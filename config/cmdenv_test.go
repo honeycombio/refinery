@@ -6,22 +6,37 @@ import (
 )
 
 type TestFielder struct {
-	S  string
-	S2 string
-	I  int
-	F  float64
+	S    string
+	S2   string
+	I    int
+	F    float64
+	STRS []string `env-delim:","`
 }
 
 // implement getFielder
-func (t *TestFielder) GetField(name string) reflect.Value {
-	return reflect.ValueOf(t).Elem().FieldByName(name)
+func (t *TestFielder) GetField(name string) EnvField {
+	v := reflect.ValueOf(*t)
+	var structType reflect.Type
+	switch v.Kind() {
+	case reflect.Struct:
+		structType = v.Type()
+	}
+
+	field, _ := structType.FieldByName(name)
+	delim := field.Tag.Get("env-delim")
+
+	return EnvField{
+		value:     reflect.ValueOf(t).Elem().FieldByName(name),
+		delimiter: delim,
+	}
 }
 
 type TestConfig struct {
-	St string  `cmdenv:"S"`
-	It int     `cmdenv:"I"`
-	Fl float64 `cmdenv:"F"`
-	No string
+	St   string  `cmdenv:"S"`
+	It   int     `cmdenv:"I"`
+	Fl   float64 `cmdenv:"F"`
+	No   string
+	Strs []string `cmdenv:"STRS"`
 }
 
 type FallbackConfig struct {
@@ -43,11 +58,11 @@ func TestApplyCmdEnvTags(t *testing.T) {
 		want    any
 		wantErr bool
 	}{
-		{"normal", &TestFielder{"foo", "bar", 1, 2.3}, &TestConfig{}, &TestConfig{"foo", 1, 2.3, ""}, false},
-		{"bad", &TestFielder{"foo", "bar", 1, 2.3}, &BadTestConfig1{}, &BadTestConfig1{}, true},
-		{"type mismatch", &TestFielder{"foo", "bar", 1, 2.3}, &BadTestConfig2{17}, &BadTestConfig2{17}, true},
-		{"fallback1", &TestFielder{"foo", "bar", 1, 2.3}, &FallbackConfig{}, &FallbackConfig{"foo"}, false},
-		{"fallback2", &TestFielder{"", "bar", 1, 2.3}, &FallbackConfig{}, &FallbackConfig{"bar"}, false},
+		{"normal", &TestFielder{"foo", "bar", 1, 2.3, []string{"test,test1"}}, &TestConfig{}, &TestConfig{"foo", 1, 2.3, "", []string{"test", "test1"}}, false},
+		{"bad", &TestFielder{"foo", "bar", 1, 2.3, []string{}}, &BadTestConfig1{}, &BadTestConfig1{}, true},
+		{"type mismatch", &TestFielder{"foo", "bar", 1, 2.3, []string{}}, &BadTestConfig2{17}, &BadTestConfig2{17}, true},
+		{"fallback1", &TestFielder{"foo", "bar", 1, 2.3, []string{}}, &FallbackConfig{}, &FallbackConfig{"foo"}, false},
+		{"fallback2", &TestFielder{"", "bar", 1, 2.3, []string{}}, &FallbackConfig{}, &FallbackConfig{"bar"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
