@@ -647,6 +647,13 @@ func (f *fileConfig) GetPeers() []string {
 	return f.mainConfig.PeerManagement.Peers
 }
 
+func (f *fileConfig) GetRedisPeerManagement() RedisPeerManagementConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.RedisPeerManagement
+}
+
 func (f *fileConfig) GetRedisHost() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

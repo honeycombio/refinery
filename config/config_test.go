@@ -91,7 +91,7 @@ func TestRedisHostEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetRedisHost(); d != host {
+	if d := c.GetRedisPeerManagement().Host; d != host {
 		t.Error("received", d, "expected", host)
 	}
 }
@@ -104,7 +104,7 @@ func TestRedisUsernameEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetRedisUsername(); d != username {
+	if d := c.GetRedisPeerManagement().Username; d != username {
 		t.Error("received", d, "expected", username)
 	}
 }
@@ -117,7 +117,7 @@ func TestRedisPasswordEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetRedisPassword(); d != password {
+	if d := c.GetRedisPeerManagement().Password; d != password {
 		t.Error("received", d, "expected", password)
 	}
 }
@@ -130,7 +130,7 @@ func TestRedisAuthCodeEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetRedisAuthCode(); d != authCode {
+	if d := c.GetRedisPeerManagement().AuthCode; d != authCode {
 		t.Error("received", d, "expected", authCode)
 	}
 }
@@ -404,11 +404,11 @@ func TestPeerManagementType(t *testing.T) {
 		t.Error("received", d, "expected", "redis")
 	}
 
-	if s := c.GetRedisPrefix(); s != "testPrefix" {
+	if s := c.GetRedisPeerManagement().Prefix; s != "testPrefix" {
 		t.Error("received", s, "expected", "testPrefix")
 	}
 
-	if db := c.GetRedisDatabase(); db != 9 {
+	if db := c.GetRedisPeerManagement().Database; db != 9 {
 		t.Error("received", db, "expected", 9)
 	}
 }
@@ -471,7 +471,7 @@ func TestRedisClusterHosts(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	d := c.GetRedisClusterHosts()
+	d := c.GetRedisPeerManagement().ClusterHosts
 	require.NotNil(t, d)
 	require.EqualValues(t, clusterHosts, d)
 }

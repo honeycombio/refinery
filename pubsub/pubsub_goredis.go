@@ -49,48 +49,39 @@ type GoRedisSubscription struct {
 var _ Subscription = (*GoRedisSubscription)(nil)
 
 func (ps *GoRedisPubSub) Start() error {
-	options := &redis.UniversalOptions{}
-	authcode := ""
+	options := new(redis.UniversalOptions)
+	var (
+		authcode           string
+		clusterModeEnabled bool
+	)
 
-	ps.Metrics.Register("redis_pubsub_published", "counter")
-	ps.Metrics.Register("redis_pubsub_received", "counter")
-
-	var clusterModeEnabled bool
 	if ps.Config != nil {
-		host := ps.Config.GetRedisHost()
-		hosts := []string{host}
-		clusterHosts := ps.Config.GetRedisClusterHosts()
+		redisCfg := ps.Config.GetRedisPeerManagement()
+		hosts := []string{redisCfg.Host}
 		// if we have a cluster host, use that instead of the regular host
-		if len(clusterHosts) > 0 {
-			hosts = clusterHosts
+		if len(redisCfg.ClusterHosts) > 0 {
+			hosts = redisCfg.ClusterHosts
 			clusterModeEnabled = true
 		}
 
-		username := ps.Config.GetRedisUsername()
-		pw := ps.Config.GetRedisPassword()
-		authcode = ps.Config.GetRedisAuthCode()
+		authcode = redisCfg.AuthCode
 
 		options.Addrs = hosts
-		options.Username = username
-		options.Password = pw
-		options.DB = ps.Config.GetRedisDatabase()
+		options.Username = redisCfg.Username
+		options.Password = redisCfg.Password
+		options.DB = redisCfg.Database
 
-		if ps.Config.GetUseTLS() {
+		if redisCfg.UseTLS {
 			options.TLSConfig = &tls.Config{
 				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: ps.Config.GetUseTLSInsecure(),
+				InsecureSkipVerify: redisCfg.UseTLSInsecure,
 			}
 		}
 	}
 
 	var client redis.UniversalClient
 	if clusterModeEnabled {
-		client = redis.NewClusterClient(&redis.ClusterOptions{
-			Addrs:     options.Addrs,
-			Username:  options.Username,
-			Password:  options.Password,
-			TLSConfig: options.TLSConfig,
-		})
+		client = redis.NewClusterClient(options.Cluster())
 	} else {
 		client = redis.NewUniversalClient(options)
 	}
@@ -103,6 +94,9 @@ func (ps *GoRedisPubSub) Start() error {
 			return err
 		}
 	}
+
+	ps.Metrics.Register("redis_pubsub_published", "counter")
+	ps.Metrics.Register("redis_pubsub_received", "counter")
 
 	ps.client = client
 	ps.subs = make([]*GoRedisSubscription, 0)
