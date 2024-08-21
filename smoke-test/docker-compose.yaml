@@ -2,8 +2,10 @@ services:
   refinery:
     image: ko.local/refinery:latest # build this with 'make local_image' at the root of the repo
     pull_policy: never # 'Error response from daemon: No such image' means you need to build it. 👆
-    environment:
+    environment: # these take precedence over the settings in env_file
       REFINERY_REDIS_HOST: redis:6379
+    env_file:
+      - refinery.env # put secrets & other custom env vars in here, git ignores it
     volumes:
       - ./config.yaml:/etc/refinery/refinery.yaml
       - ./rules.yaml:/etc/refinery/rules.yaml
