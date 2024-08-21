@@ -419,7 +419,7 @@ groups:
         reload: false
         envvar: REFINERY_QUERY_AUTH_TOKEN
         commandline: query-auth-token
-        summary: is the token that must be specified to access the `/query` endpoint. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the token that must be specified to access the `/query` endpoint. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           This token must be specified with the header
           "X-Honeycomb-Refinery-Query" in order for a `/query` request to
@@ -530,7 +530,7 @@ groups:
         validations:
           - type: format
             arg: apikey
-        summary: is the API key used to send Refinery's logs to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the API key used to send Refinery's logs to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           It is recommended that you create a separate team and key for
           Refinery logs.
@@ -686,7 +686,7 @@ groups:
             arg: apikey
         envvar: REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY
         commandline: legacy-metrics-api-key
-        summary: is the API key used by Refinery to send its metrics to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the API key used by Refinery to send its metrics to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           It is recommended that you create a separate team and key for
           Refinery metrics.
@@ -757,7 +757,7 @@ groups:
         envvar: REFINERY_OTEL_METRICS_API_KEY, HONEYCOMB_API_KEY
         commandline: otel-metrics-api-key
         firstversion: v2.0
-        summary: is the API key used to send Honeycomb metrics via OpenTelemetry. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the API key used to send Honeycomb metrics via OpenTelemetry. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           It is recommended that you create a separate team and key for
           Refinery metrics.
@@ -839,7 +839,7 @@ groups:
         validations:
           - type: format
             arg: apikey
-        summary: is the API key used to send Refinery's traces to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the API key used to send Refinery's traces to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           It is recommended that you create a separate team and key for
           Refinery telemetry.
@@ -996,7 +996,7 @@ groups:
         reload: false
         envvar: REFINERY_REDIS_USERNAME
         commandline: redis-username
-        summary: is the username used to connect to Redis for peer cluster membership management. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the username used to connect to Redis for peer cluster membership management. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           Many Redis installations do not use this field.
 
@@ -1009,7 +1009,7 @@ groups:
         reload: false
         envvar: REFINERY_REDIS_PASSWORD
         commandline: redis-password
-        summary: is the password used to connect to Redis for peer cluster membership management. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the password used to connect to Redis for peer cluster membership management. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           Many Redis installations do not use this field.
 
@@ -1023,7 +1023,7 @@ groups:
         firstversion: v2.2
         envvar: REFINERY_REDIS_AUTH_CODE
         commandline: redis-auth-code
-        summary: is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or configuration.
+        summary: is the string used to connect to Redis for peer cluster membership management using an explicit AUTH command. Setting this value via a command line flag may expose credentials - it is recommended to use the env var or a configuration file.
         description: >
           Many Redis installations do not use this field.
 
