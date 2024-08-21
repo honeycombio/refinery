@@ -457,7 +457,13 @@ func TestDryRun(t *testing.T) {
 
 func TestRedisClusterHosts(t *testing.T) {
 	clusterHosts := []string{"localhost:7001", "localhost:7002"}
-	cm := makeYAML("General.ConfigurationVersion", 2, "RedisPeerManagement.ClusterHosts", clusterHosts)
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"PeerManagement.Type", "redis",
+		"RedisPeerManagement.ClusterHosts", clusterHosts,
+		"RedisPeerManagement.Prefix", "test",
+		"RedisPeerManagement.Database", 9,
+	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
 	defer os.Remove(rules)

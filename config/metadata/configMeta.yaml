@@ -991,6 +991,7 @@ groups:
         type: stringarray
         valuetype: stringarray
         example: "- localhost:6379"
+        firstversion: v2.8
         validations:
           - type: elementType
             arg: hostport
@@ -1266,6 +1267,7 @@ groups:
       - name: ShutdownDelay
         type: duration
         valuetype: nondefault
+        firstversion: v2.8
         default: 15s
         reload: true
         summary: controls the maximum time Refinery can use while draining traces at shutdown.
