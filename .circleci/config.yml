@@ -65,8 +65,10 @@ commands:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.21
-      - image: redis:6.2
+      # cimg/go:1.21.13
+      - image: cimg/go@sha256:3de9c389d14e6d681099e759e3459bc3cb47472f40a2593506a0946695c565be
+      # redis:6.2.14
+      - image: redis@sha256:da122fff8a838685f3b4e25b3f797ad0c71a6425648e8f944cad8ee56a4e3b16
     steps:
       - checkout
       - restore_cache:
@@ -92,7 +94,8 @@ jobs:
 
   build_binaries:
     docker:
-      - image: cimg/go:1.21
+      # cimg/go:1.21.13
+      - image: cimg/go@sha256:3de9c389d14e6d681099e759e3459bc3cb47472f40a2593506a0946695c565be
     steps:
       - checkout
       - go-build:
@@ -154,7 +157,8 @@ jobs:
 
   publish_github:
     docker:
-      - image: cibuilds/github:0.13.0
+      # cibuilds/github:0.13.0
+      - image: cibuilds/github@sha256:2cee61741812b8ecaa53a92b0cdb3d8fea24bc7c50c9d394c055df97497857be
     steps:
       - attach_workspace:
           at: ~/
@@ -183,7 +187,8 @@ jobs:
 
   build_docker:
     docker:
-      - image: cimg/go:1.21
+      # cimg/go:1.21.13
+      - image: cimg/go@sha256:3de9c389d14e6d681099e759e3459bc3cb47472f40a2593506a0946695c565be
     steps:
       - setup_googleko
       - checkout
@@ -194,7 +199,8 @@ jobs:
 
   publish_docker_to_ecr:
     docker:
-      - image: cimg/go:1.21
+      # cimg/go:1.21.13
+      - image: cimg/go@sha256:3de9c389d14e6d681099e759e3459bc3cb47472f40a2593506a0946695c565be
     steps:
       - setup_googleko
       - checkout
@@ -217,7 +223,8 @@ jobs:
 
   publish_docker_to_dockerhub:
     docker:
-      - image: cimg/go:1.21
+      # cimg/go:1.21.13
+      - image: cimg/go@sha256:3de9c389d14e6d681099e759e3459bc3cb47472f40a2593506a0946695c565be
     steps:
       - setup_googleko
       - checkout
