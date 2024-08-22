@@ -3,7 +3,6 @@ package pubsub
 import (
 	"context"
 	"crypto/tls"
-	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel/trace"
@@ -50,36 +49,42 @@ type GoRedisSubscription struct {
 var _ Subscription = (*GoRedisSubscription)(nil)
 
 func (ps *GoRedisPubSub) Start() error {
-	options := &redis.UniversalOptions{}
-	authcode := ""
-
-	ps.Metrics.Register("redis_pubsub_published", "counter")
-	ps.Metrics.Register("redis_pubsub_received", "counter")
+	options := new(redis.UniversalOptions)
+	var (
+		authcode           string
+		clusterModeEnabled bool
+	)
 
 	if ps.Config != nil {
-		host := ps.Config.GetRedisHost()
-		username := ps.Config.GetRedisUsername()
-		pw := ps.Config.GetRedisPassword()
-		authcode = ps.Config.GetRedisAuthCode()
+		redisCfg := ps.Config.GetRedisPeerManagement()
+		hosts := []string{redisCfg.Host}
+		// if we have a cluster host, use that instead of the regular host
+		if len(redisCfg.ClusterHosts) > 0 {
+			hosts = redisCfg.ClusterHosts
+			clusterModeEnabled = true
+		}
 
-		// we may have multiple hosts, separated by commas, so split them up and
-		// use them as the addrs for the client (if there are multiples, it will
-		// create a cluster client)
-		hosts := strings.Split(host, ",")
+		authcode = redisCfg.AuthCode
+
 		options.Addrs = hosts
-		options.Username = username
-		options.Password = pw
-		options.DB = ps.Config.GetRedisDatabase()
+		options.Username = redisCfg.Username
+		options.Password = redisCfg.Password
+		options.DB = redisCfg.Database
 
-		if ps.Config.GetUseTLS() {
+		if redisCfg.UseTLS {
 			options.TLSConfig = &tls.Config{
 				MinVersion:         tls.VersionTLS12,
-				InsecureSkipVerify: ps.Config.GetUseTLSInsecure(),
+				InsecureSkipVerify: redisCfg.UseTLSInsecure,
 			}
 		}
 	}
 
-	client := redis.NewUniversalClient(options)
+	var client redis.UniversalClient
+	if clusterModeEnabled {
+		client = redis.NewClusterClient(options.Cluster())
+	} else {
+		client = redis.NewUniversalClient(options)
+	}
 
 	// if an authcode was provided, use it to authenticate the connection
 	if authcode != "" {
@@ -89,6 +94,9 @@ func (ps *GoRedisPubSub) Start() error {
 			return err
 		}
 	}
+
+	ps.Metrics.Register("redis_pubsub_published", "counter")
+	ps.Metrics.Register("redis_pubsub_received", "counter")
 
 	ps.client = client
 	ps.subs = make([]*GoRedisSubscription, 0)
