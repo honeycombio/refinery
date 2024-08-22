@@ -37,6 +37,11 @@ Release 2.8 introduces a new feature, `SpanLimit`, which provides a third way to
 
 Suppose, for example, that a service generates a single trace with 10,000 spans. If SpanLimit is set to 1000, once the first 1000 spans have arrived, Refinery will immediately make a decision to keep or drop the trace. Every additional span is dispatched (using the same decision) without storing it. This means that Refinery never had to keep all 10,000 spans in its memory at one time.
 
+### Other Improvements
+
+* The performance of the drop cache has been improved, which should help with stability for systems with a very high drop rate.
+* The default maximum message sizes for OTLP have been increased from 5MB to 15MB
+
 
 ## Version 2.7.0
 
