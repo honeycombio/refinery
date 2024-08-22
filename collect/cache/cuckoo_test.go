@@ -11,14 +11,15 @@ import (
 )
 
 // genID returns a random hex string of length numChars
+var seed = 3565269841805
+var rng = wyhash.Rng(seed)
+
+const charset = "abcdef0123456789"
+
 func genID(numChars int) string {
-	seed := 3565269841805
-
-	const charset = "abcdef0123456789"
-
 	id := make([]byte, numChars)
 	for i := 0; i < numChars; i++ {
-		id[i] = charset[int(wyhash.Rng(seed))%len(charset)]
+		id[i] = charset[int(rng.Next()%uint64(len(charset)))]
 	}
 	return string(id)
 }
