@@ -39,6 +39,7 @@ Suppose, for example, that a service generates a single trace with 10,000 spans.
 
 ### Other Improvements
 
+* Refinery rules now allow specifying `root.` prefixes for fields in dynamic samplers.
 * The performance of the drop cache has been improved, which should help with stability for systems with a very high drop rate.
 * The default maximum message sizes for OTLP have been increased from 5MB to 15MB
 
