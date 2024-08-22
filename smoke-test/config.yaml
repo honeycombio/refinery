@@ -1,0 +1,27 @@
+General:
+  ConfigurationVersion: 2
+  MinRefineryVersion: v2.0
+
+Logger:
+  Type: stdout
+  Level: info
+
+# LegacyMetrics:
+#   Enabled: true
+#   Dataset: refinery_metrics
+
+# OTelMetrics:
+#   Enabled: true
+#   Dataset: refinery_metrics_otel
+
+PeerManagement:
+    Type: redis
+
+RedisPeerManagement:
+    UseTLS: true
+    UseTLSInsecure: true
+
+RefineryTelemetry:
+  AddRuleReasonToTrace: true
+  AddSpanCountToRoot: true
+  AddHostMetadataToTrace: true

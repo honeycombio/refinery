@@ -1,0 +1,51 @@
+services:
+  refinery:
+    image: ko.local/refinery:latest # build this with 'make local_image' at the root of the repo
+    pull_policy: never # 'Error response from daemon: No such image' means you need to build it. 👆
+    environment: # these take precedence over the settings in env_file
+      REFINERY_REDIS_HOST: redis:6379
+    env_file:
+      - refinery.env # put secrets & other custom env vars in here, git ignores it
+    volumes:
+      - ./config.yaml:/etc/refinery/refinery.yaml
+      - ./rules.yaml:/etc/refinery/rules.yaml
+    ports:
+      - 127.0.0.1:8080:8080
+      - 127.0.0.1:9090:9090
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7
+    command: [ "redis-server",
+      "--port", "0",
+      "--tls-port", "6379",
+      "--tls-cert-file", "/data/certs/cert.pem",
+      "--tls-key-file", "/data/certs/key.pem",
+      "--tls-ca-cert-file", "/data/certs/ca.pem",
+      "--tls-auth-clients", "no"
+      ]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --tls --insecure ping | grep PONG"]
+      interval: 2s
+      timeout: 3s
+      retries: 5
+    ports:
+      - 127.0.0.1:6379:6379
+    volumes:
+      - redis-data:/data
+      - certs:/data/certs
+    depends_on:
+      gen-certs:
+        condition: service_completed_successfully
+
+  gen-certs:
+    image: paulczar/omgwtfssl
+    command: ["sh", "-c", "[ -f /certs/cert.pem ] && echo 'Cert exists!' || /usr/local/bin/generate-certs"]
+    volumes:
+      - certs:/certs
+
+volumes:
+  certs:
+  redis-data:
