@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"math"
 	"net"
@@ -301,7 +302,7 @@ func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
-	traceID := mux.Vars(req)["traceID"]
+	traceID := html.EscapeString(mux.Vars(req)["traceID"])
 	shard := r.Sharder.WhichShard(traceID)
 	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
 }
