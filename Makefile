@@ -27,6 +27,15 @@ test_all: test_results wait_for_redis
 test_results:
 	@mkdir -p test_results
 
+local_image: export KO_DOCKER_REPO=ko.local
+local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" --tags)
+local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
+local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
+local_image: export CIRCLE_BUILD_NUM=''
+#: build the release image locally, available as "ko.local/refinery:<commit>"
+local_image:
+	./build-docker.sh
+
 .PHONY: wait_for_redis
 # wait for Redis to become available for test suite
 wait_for_redis: dockerize
