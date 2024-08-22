@@ -58,7 +58,7 @@ func (s *SetWithTTL[T]) Contains(e T) bool {
 	if !ok {
 		return false
 	}
-	return item.After(time.Now())
+	return item.After(s.Clock.Now())
 }
 
 func (s *SetWithTTL[T]) cleanup() int {
