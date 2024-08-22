@@ -14,21 +14,16 @@ type TestFielder struct {
 }
 
 // implement getFielder
-func (t *TestFielder) GetField(name string) EnvField {
-	v := reflect.ValueOf(*t)
-	var structType reflect.Type
-	switch v.Kind() {
-	case reflect.Struct:
-		structType = v.Type()
-	}
+func (t *TestFielder) GetField(name string) reflect.Value {
+	return reflect.ValueOf(t).Elem().FieldByName(name)
+}
 
-	field, _ := structType.FieldByName(name)
-	delim := field.Tag.Get("env-delim")
-
-	return EnvField{
-		value:     reflect.ValueOf(t).Elem().FieldByName(name),
-		delimiter: delim,
+func (t *TestFielder) GetDelimiter(name string) string {
+	field, ok := reflect.TypeOf(t).Elem().FieldByName(name)
+	if !ok {
+		return ""
 	}
+	return field.Tag.Get("env-delim")
 }
 
 type TestConfig struct {
