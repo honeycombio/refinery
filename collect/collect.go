@@ -456,7 +456,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 		if t.RootSpan != nil {
 			i.send(t, TraceSendGotRoot)
 		} else {
-			if spanLimit > 0 && t.SpanCount() > spanLimit {
+			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				i.send(t, TraceSendSpanLimit)
 			} else {
 				i.send(t, TraceSendExpired)
@@ -543,7 +543,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	}
 
 	// if the span count has exceeded our SpanLimit, send the trace immediately
-	if tcfg.SpanLimit > 0 && uint(trace.SpanCount()) > tcfg.SpanLimit {
+	if tcfg.SpanLimit > 0 && uint(trace.DescendantCount()) > tcfg.SpanLimit {
 		markTraceForSending = true
 		timeout = 0 // don't use a timeout in this case; this is an "act fast" situation
 	}
