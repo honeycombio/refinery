@@ -32,6 +32,7 @@ type CmdEnv struct {
 	PeerListenAddr        string     `long:"peer-listen-address" env:"REFINERY_PEER_LISTEN_ADDRESS" description:"Peer listen address for communication between Refinery instances"`
 	GRPCListenAddr        string     `long:"grpc-listen-address" env:"REFINERY_GRPC_LISTEN_ADDRESS" description:"gRPC listen address for OTLP traffic"`
 	RedisHost             string     `long:"redis-host" env:"REFINERY_REDIS_HOST" description:"Redis host address"`
+	RedisClusterHosts     []string   `long:"redis-cluster-hosts" env:"REFINERY_REDIS_CLUSTER_HOSTS" env-delim:"," description:"Redis cluster host addresses"`
 	RedisUsername         string     `long:"redis-username" env:"REFINERY_REDIS_USERNAME" description:"Redis username. Setting this value via a flag may expose credentials - it is recommended to use the env var or a configuration file."`
 	RedisPassword         string     `long:"redis-password" env:"REFINERY_REDIS_PASSWORD" description:"Redis password. Setting this value via a flag may expose credentials - it is recommended to use the env var or a configuration file."`
 	RedisAuthCode         string     `long:"redis-auth-code" env:"REFINERY_REDIS_AUTH_CODE" description:"Redis AUTH code. Setting this value via a flag may expose credentials - it is recommended to use the env var or a configuration file."`
@@ -78,6 +79,14 @@ func (c *CmdEnv) GetField(name string) reflect.Value {
 	return reflect.ValueOf(c).Elem().FieldByName(name)
 }
 
+func (c *CmdEnv) GetDelimiter(name string) string {
+	field, ok := reflect.TypeOf(c).Elem().FieldByName(name)
+	if !ok {
+		return ""
+	}
+	return field.Tag.Get("env-delim")
+}
+
 // ApplyTags uses reflection to apply the values from the CmdEnv struct to the
 // given struct. Any field in the struct that wants to be set from the command
 // line must have a `cmdenv` tag on it that names one or more fields in the
@@ -90,6 +99,7 @@ func (c *CmdEnv) ApplyTags(s reflect.Value) error {
 
 type getFielder interface {
 	GetField(name string) reflect.Value
+	GetDelimiter(name string) string
 }
 
 // applyCmdEnvTags is a helper function that applies the values from the given
@@ -122,6 +132,30 @@ func applyCmdEnvTags(s reflect.Value, fielder getFielder) error {
 						if fieldType.Type != value.Type() {
 							return fmt.Errorf("programming error -- types don't match for field: %s (%v and %v)",
 								fieldType.Name, fieldType.Type, value.Type())
+						}
+
+						if value.Kind() == reflect.Slice {
+							delimiter := fielder.GetDelimiter(tag)
+							if delimiter == "" {
+								return fmt.Errorf("programming error -- missing delimiter for slice field: %s", fieldType.Name)
+							}
+
+							rawValue, ok := value.Index(0).Interface().(string)
+							if !ok {
+								return fmt.Errorf("programming error -- slice field must be a string: %s", fieldType.Name)
+							}
+
+							// split the value on the delimiter
+							values := strings.Split(rawValue, delimiter)
+							// create a new slice of the same type as the field
+							slice := reflect.MakeSlice(field.Type(), len(values), len(values))
+							// iterate over the values and set them
+							for i, v := range values {
+								slice.Index(i).SetString(v)
+							}
+							// set the field
+							field.Set(slice)
+							break
 						}
 						// now we can set it
 						field.Set(value)

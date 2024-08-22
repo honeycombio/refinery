@@ -26,14 +26,7 @@ type MockConfig struct {
 	GetStdoutLoggerConfigVal         StdoutLoggerConfig
 	GetLoggerLevelVal                Level
 	GetPeersVal                      []string
-	GetRedisHostVal                  string
-	GetRedisUsernameVal              string
-	GetRedisPasswordVal              string
-	GetRedisAuthCodeVal              string
-	GetRedisDatabaseVal              int
-	GetRedisPrefixVal                string
-	GetUseTLSVal                     bool
-	GetUseTLSInsecureVal             bool
+	GetRedisPeerManagementVal        RedisPeerManagementConfig
 	GetSamplerTypeName               string
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeVal                string
@@ -209,60 +202,11 @@ func (m *MockConfig) GetPeers() []string {
 	return m.GetPeersVal
 }
 
-func (m *MockConfig) GetRedisHost() string {
+func (m *MockConfig) GetRedisPeerManagement() RedisPeerManagementConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetRedisHostVal
-}
-
-func (m *MockConfig) GetRedisUsername() string {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetRedisUsernameVal
-}
-
-func (m *MockConfig) GetRedisPassword() string {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetRedisPasswordVal
-}
-
-func (m *MockConfig) GetRedisAuthCode() string {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetRedisAuthCodeVal
-}
-
-func (m *MockConfig) GetRedisPrefix() string {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetRedisPrefixVal
-}
-
-func (m *MockConfig) GetRedisDatabase() int {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetRedisDatabaseVal
-}
-
-func (m *MockConfig) GetUseTLS() bool {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetUseTLSVal
-}
-
-func (m *MockConfig) GetUseTLSInsecure() bool {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetUseTLSInsecureVal
+	return m.GetRedisPeerManagementVal
 }
 
 func (m *MockConfig) GetGeneralConfig() GeneralConfig {
