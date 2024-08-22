@@ -6,6 +6,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 )
@@ -139,9 +140,10 @@ func (t *cuckooDroppedRecord) Reason() uint {
 var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 
 type cuckooSentCache struct {
-	kept    *lru.Cache[string, *keptTraceCacheEntry]
-	dropped *CuckooTraceChecker
-	cfg     config.SampleCacheConfig
+	kept             *lru.Cache[string, *keptTraceCacheEntry]
+	dropped          *CuckooTraceChecker
+	recentDroppedIDs *generics.SetWithTTL[string]
+	cfg              config.SampleCacheConfig
 
 	// The done channel is used to decide when to terminate the monitor
 	// goroutine. When resizing the cache, we write to the channel, but
@@ -164,13 +166,26 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 		return nil, err
 	}
 	dropped := NewCuckooTraceChecker(cfg.DroppedSize, met)
+	// we want to keep track of the most recent dropped traces so we can avoid
+	// checking them in the dropped filter, which can have contention issues
+	// under high load. So we use a cache with TTL to keep track of the most
+	// recent dropped trace IDs, which lets us avoid checking the dropped filter
+	// for them for a short period of time. This means that when a whole batch
+	// of spans from the same trace arrives late, we don't have to check the
+	// dropped filter for each one. Benchmarks indicate that the Set cache is
+	// maybe 2-4x faster than the cuckoo filter and it also avoids lock
+	// contention issues in the cuckoo filter, so in practical use saves more
+	// than that. The TTL in this cache is short, because it's refreshed on each
+	// request.
+	recentDroppedIDs := generics.NewSetWithTTL[string](3 * time.Second)
 
 	cache := &cuckooSentCache{
-		kept:        stc,
-		dropped:     dropped,
-		cfg:         cfg,
-		sentReasons: NewSentReasonsCache(met),
-		done:        make(chan struct{}),
+		kept:             stc,
+		dropped:          dropped,
+		recentDroppedIDs: recentDroppedIDs,
+		cfg:              cfg,
+		sentReasons:      NewSentReasonsCache(met),
+		done:             make(chan struct{}),
 	}
 	go cache.monitor()
 	return cache, nil
@@ -206,13 +221,21 @@ func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 
 		return
 	}
-	// if we're not keeping it, save it in the dropped trace filter
+	// if we're not keeping it, save it in the recentDroppedIDs cache
+	c.recentDroppedIDs.Add(trace.ID())
+	// and also save it in the dropped trace filter
 	c.dropped.Add(trace.ID())
 }
 
 func (c *cuckooSentCache) CheckSpan(span *types.Span) (TraceSentRecord, string, bool) {
-	// was it dropped?
+	// was it recently dropped?
+	if c.recentDroppedIDs.Contains(span.TraceID) {
+		c.recentDroppedIDs.Add(span.TraceID) // refresh the TTL on this key
+		return &cuckooDroppedRecord{}, "", true
+	}
+	// was it in the drop cache?
 	if c.dropped.Check(span.TraceID) {
+		c.recentDroppedIDs.Add(span.TraceID)
 		// we recognize it as dropped, so just say so; there's nothing else to do
 		return &cuckooDroppedRecord{}, "", true
 	}

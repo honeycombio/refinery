@@ -56,47 +56,52 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 	// To try to avoid blocking on Add, we have a goroutine that pulls from a
 	// channel and adds to the filter.
 	go func() {
-		for {
-			n := len(c.addch)
-			if n == 0 {
-				// if the channel is empty, wait for a bit
-				time.Sleep(AddQueueSleepTime)
-				continue
+		ticker := time.NewTicker(AddQueueSleepTime)
+		for range ticker.C {
+			// as long as there's anything still in the channel, keep trying to drain it
+			for len(c.addch) > 0 {
+				c.drain()
 			}
-			c.drain()
 		}
 	}()
 
 	return c
 }
 
-// This function records all the traces that were in the channel at the
-// start of the call. The idea is to add them all under a single lock. We
-// tested limiting it so as to not hold the lock for too long, but it didn't
-// seem to matter and it made the code more complicated.
-// We track a histogram metric about lock time, though, so we can watch it.
+// This function records all the traces that were in the channel at the start of
+// the call. The idea is to add as many as possible under a single lock. We do
+// limit our lock hold time to 1ms, so if we can't add them all in that time, we
+// stop and let the next call pick up the rest. We track a histogram metric
+// about lock time.
 func (c *CuckooTraceChecker) drain() {
 	n := len(c.addch)
 	if n == 0 {
 		return
 	}
-	lockStart := time.Now()
 	c.mut.Lock()
+	// we don't start the timer until we have the lock, because we don't want to be counting
+	// the time we're waiting for the lock.
+	lockStart := time.Now()
+	timeout := time.NewTimer(1 * time.Millisecond)
 outer:
 	for i := 0; i < n; i++ {
 		select {
 		case t := <-c.addch:
-			c.current.Insert([]byte(t))
+			s := []byte(t)
+			c.current.Insert(s)
 			// don't add anything to future if it doesn't exist yet
 			if c.future != nil {
-				c.future.Insert([]byte(t))
+				c.future.Insert(s)
 			}
+		case <-timeout.C:
+			break outer
 		default:
 			// if the channel is empty, stop
 			break outer
 		}
 	}
 	c.mut.Unlock()
+	timeout.Stop()
 	qlt := time.Since(lockStart)
 	c.met.Histogram(AddQueueLockTime, qlt.Microseconds())
 }
