@@ -81,7 +81,8 @@ type InMemCollector struct {
 	mutex sync.RWMutex
 	cache cache.Cache
 
-	datasetSamplers map[string]sample.Sampler
+	datasetSamplers      map[string]sample.Sampler
+	throughputCalculator *sample.EMAThroughputCalculator
 
 	sampleTraceCache cache.TraceSentCache
 
@@ -154,6 +155,8 @@ func (i *InMemCollector) Start() error {
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	i.done = make(chan struct{})
 	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock)
+	// TODO: make the interval and weight configurable
+	i.throughputCalculator = sample.NewEMAThroughputCalculator(i.Clock, 0.2, 10*time.Second)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -736,6 +739,8 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	}
 	trace.Sent = true
 
+	i.throughputCalculator.IncrementEventCount(int(trace.DescendantCount()))
+
 	traceDur := i.Clock.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
@@ -781,7 +786,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	}
 
 	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	rate, shouldSend, reason, key := sampler.GetSampleRate(trace, i.throughputCalculator.GetSamplingRateMultiplier())
 	trace.SetSampleRate(rate)
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
@@ -869,6 +874,7 @@ func (i *InMemCollector) Stop() error {
 	i.sampleTraceCache.Stop()
 	i.mutex.Unlock()
 
+	i.throughputCalculator.Stop()
 	close(i.incoming)
 	close(i.fromPeer)
 

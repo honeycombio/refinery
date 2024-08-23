@@ -15,6 +15,8 @@ import (
 // other sharding that uses the trace ID (eg deterministic sharding)
 const shardingSalt = "5VQ8l2jE5aJLPVqk"
 
+var _ Sampler = (*DeterministicSampler)(nil)
+
 type DeterministicSampler struct {
 	Config  *config.DeterministicSamplerConfig
 	Logger  logger.Logger
@@ -42,7 +44,7 @@ func (d *DeterministicSampler) Start() error {
 	return nil
 }
 
-func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *DeterministicSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
 	if d.sampleRate <= 1 {
 		return 1, true, "deterministic/always", ""
 	}

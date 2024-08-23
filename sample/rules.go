@@ -12,6 +12,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var _ Sampler = (*RulesBasedSampler)(nil)
+
 type RulesBasedSampler struct {
 	Config   *config.RulesBasedSamplerConfig
 	Logger   logger.Logger
@@ -79,7 +81,7 @@ func (s *RulesBasedSampler) Start() error {
 	return nil
 }
 
-func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
 		"trace_id": trace.TraceID,
 	})
@@ -119,7 +121,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
 					return 1, true, reason + "bad_rule:" + rule.Name, ""
 				}
-				rate, keep, samplerReason, key = sampler.GetSampleRate(trace)
+				rate, keep, samplerReason, key = sampler.GetSampleRate(trace, sampleRateMultiplier)
 				reason += rule.Name + ":" + samplerReason
 			} else {
 				rate = uint(rule.SampleRate)

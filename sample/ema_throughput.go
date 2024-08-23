@@ -12,6 +12,8 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+var _ Sampler = (*EMAThroughputSampler)(nil)
+
 type EMAThroughputSampler struct {
 	Config  *config.EMAThroughputSamplerConfig
 	Logger  logger.Logger
@@ -88,7 +90,7 @@ func (d *EMAThroughputSampler) SetClusterSize(size int) {
 	}
 }
 
-func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))

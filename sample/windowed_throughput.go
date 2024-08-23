@@ -12,6 +12,8 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+var _ Sampler = (*WindowedThroughputSampler)(nil)
+
 type WindowedThroughputSampler struct {
 	Config  *config.WindowedThroughputSamplerConfig
 	Logger  logger.Logger
@@ -76,7 +78,7 @@ func (d *WindowedThroughputSampler) SetClusterSize(size int) {
 	}
 }
 
-func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))

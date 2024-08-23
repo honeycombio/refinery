@@ -13,7 +13,7 @@ import (
 )
 
 type Sampler interface {
-	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string)
+	GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string)
 	Start() error
 }
 

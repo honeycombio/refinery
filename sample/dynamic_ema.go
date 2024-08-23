@@ -12,6 +12,8 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+var _ Sampler = (*EMADynamicSampler)(nil)
+
 type EMADynamicSampler struct {
 	Config  *config.EMADynamicSamplerConfig
 	Logger  logger.Logger
@@ -71,7 +73,7 @@ func (d *EMADynamicSampler) Start() error {
 	return nil
 }
 
-func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
