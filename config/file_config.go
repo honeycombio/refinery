@@ -383,18 +383,19 @@ type StressReliefConfig struct {
 }
 
 type FileConfigError struct {
-	ConfigLocation string
-	ConfigFailures []string
-	RulesLocation  string
-	RulesFailures  []string
+	ConfigLocations []string
+	ConfigFailures  []string
+	RulesLocation   string
+	RulesFailures   []string
 }
 
 func (e *FileConfigError) Error() string {
 	var msg strings.Builder
 	if len(e.ConfigFailures) > 0 {
-		msg.WriteString("Validation failed for config file ")
-		msg.WriteString(e.ConfigLocation)
-		msg.WriteString(":\n")
+		loc := strings.Join(e.ConfigLocations, ", ")
+		msg.WriteString("Validation failed for config [")
+		msg.WriteString(loc)
+		msg.WriteString("]:\n")
 		for _, fail := range e.ConfigFailures {
 			msg.WriteString("  ")
 			msg.WriteString(fail)
@@ -422,7 +423,7 @@ func (e *FileConfigError) Error() string {
 func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfig(opts)
+		cfgFails, err := validateConfigs(opts)
 		if err != nil {
 			return nil, err
 		}
@@ -434,23 +435,23 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 
 		if len(cfgFails) > 0 || len(ruleFails) > 0 {
 			return nil, &FileConfigError{
-				ConfigLocation: opts.ConfigLocation,
-				ConfigFailures: cfgFails,
-				RulesLocation:  opts.RulesLocation,
-				RulesFailures:  ruleFails,
+				ConfigLocations: opts.ConfigLocations,
+				ConfigFailures:  cfgFails,
+				RulesLocation:   opts.RulesLocation,
+				RulesFailures:   ruleFails,
 			}
 		}
 	}
 
 	// Now load the files
 	mainconf := &configContents{}
-	mainhash, err := readConfigInto(mainconf, opts.ConfigLocation, opts)
+	mainhash, err := readConfigInto(mainconf, opts.ConfigLocations, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	var rulesconf *V2SamplerConfig
-	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocation, nil)
+	ruleshash, err := readConfigInto(&rulesconf, []string{opts.RulesLocation}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -971,7 +972,7 @@ func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
 	ret := make([]ConfigMetadata, 2)
 	ret[0] = ConfigMetadata{
 		Type:     "config",
-		ID:       f.opts.ConfigLocation,
+		ID:       f.opts.ConfigLocations[0],
 		Hash:     f.mainHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}

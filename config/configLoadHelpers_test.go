@@ -1,13 +1,17 @@
 package config
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func Test_formatFromFilename(t *testing.T) {
@@ -144,6 +148,136 @@ func Test_ConfigHashMetrics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := ConfigHashMetrics(tc.hash)
 			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+// creates temporary yaml files from the strings passed in and returns a slice of their filenames
+func createTempConfigs(t *testing.T, cfgs ...string) []string {
+	tmpDir, err := os.MkdirTemp("", "")
+	assert.NoError(t, err)
+
+	var cfgFiles []string
+	for _, cfg := range cfgs {
+
+		configFile, err := os.CreateTemp(tmpDir, "cfg_*.yaml")
+		assert.NoError(t, err)
+
+		_, err = configFile.WriteString(cfg)
+		assert.NoError(t, err)
+		configFile.Close()
+		cfgFiles = append(cfgFiles, configFile.Name())
+	}
+	return cfgFiles
+}
+
+func setMap(m map[string]any, key string, value any) {
+	if strings.Contains(key, ".") {
+		parts := strings.Split(key, ".")
+		if _, ok := m[parts[0]]; !ok {
+			m[parts[0]] = make(map[string]any)
+		}
+		setMap(m[parts[0]].(map[string]any), strings.Join(parts[1:], "."), value)
+		return
+	}
+	m[key] = value
+}
+
+func makeYAML(args ...interface{}) string {
+	m := make(map[string]any)
+	for i := 0; i < len(args); i += 2 {
+		setMap(m, args[i].(string), args[i+1])
+	}
+	b, err := yaml.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
+func Test_loadConfigsInto(t *testing.T) {
+	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
+	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
+	cfgfiles := createTempConfigs(t, cm1, cm2)
+	for _, cfg := range cfgfiles {
+		defer os.Remove(cfg)
+	}
+
+	cfg := configContents{}
+	hash, err := loadConfigsInto(&cfg, cfgfiles)
+	require.NoError(t, err)
+	require.Equal(t, "2381a6563085f50ac56663b67ca85299", hash)
+	require.Equal(t, 2, cfg.General.ConfigurationVersion)
+	require.Equal(t, Duration(2*time.Second), cfg.General.ConfigReloadInterval)
+	require.Equal(t, "0.0.0.0:8080", cfg.Network.ListenAddr)
+	require.Equal(t, "hello", cfg.General.DatasetPrefix)
+}
+
+func Test_loadConfigsIntoMap(t *testing.T) {
+	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
+	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
+	cfgfiles := createTempConfigs(t, cm1, cm2)
+	for _, cfg := range cfgfiles {
+		defer os.Remove(cfg)
+	}
+
+	cfg := map[string]any{}
+	err := loadConfigsIntoMap(cfg, cfgfiles)
+	require.NoError(t, err)
+	fmt.Println(cfg)
+	gen := cfg["General"].(map[string]any)
+	require.Equal(t, 2, gen["ConfigurationVersion"])
+	require.Equal(t, "2s", gen["ConfigReloadInterval"])
+	require.Equal(t, "hello", gen["DatasetPrefix"])
+	net := cfg["Network"].(map[string]any)
+	require.Equal(t, "0.0.0.0:8080", net["ListenAddr"])
+}
+
+func Test_validateConfigs(t *testing.T) {
+	emptySlice := []string{}
+	tests := []struct {
+		name    string
+		cfgs    []string
+		want    []string
+		wantErr bool
+	}{
+		{
+			"test1", []string{
+				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
+			},
+			emptySlice,
+			false,
+		},
+		{
+			"test2", []string{
+				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
+				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second)),
+			},
+			emptySlice,
+			false,
+		},
+		{
+			"test3", []string{
+				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
+				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", 7),
+			},
+			[]string{"field General.DatasetPrefix must be a string but 7 is int"},
+			false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfgfiles := createTempConfigs(t, tt.cfgs...)
+			opts := &CmdEnv{ConfigLocations: cfgfiles}
+			got, err := validateConfigs(opts)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateConfigs() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("validateConfigs() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
