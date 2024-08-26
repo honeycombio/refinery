@@ -302,9 +302,9 @@ func (r *Router) version(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
-	traceID := html.EscapeString(mux.Vars(req)["traceID"])
+	traceID := mux.Vars(req)["traceID"]
 	shard := r.Sharder.WhichShard(traceID)
-	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, traceID, shard.GetAddress())))
+	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, html.EscapeString(traceID), shard.GetAddress())))
 }
 
 func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
