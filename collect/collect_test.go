@@ -1840,7 +1840,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 			SendTicker:   config.Duration(2 * time.Millisecond),
 			SendDelay:    config.Duration(10 * time.Millisecond),
 			TraceTimeout: config.Duration(500 * time.Millisecond),
-			SpanLimit:    uint(spanlimit),
+			SpanLimit:    uint(spanlimit - 1),
 			MaxBatchSize: 1500,
 		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 2},
@@ -1911,6 +1911,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 	transmission.Mux.RLock()
 	require.Equal(t, spanlimit+1, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, "trace_send_span_limit", transmission.Events[0].Data["meta.refinery.send_reason"], "child span metadata should set to trace_send_span_limit")
 	assert.EqualValues(t, spanlimit+1, transmission.Events[spanlimit].Data["meta.span_count"], "root span metadata should be populated with span count")
 	assert.EqualValues(t, spanlimit+1, transmission.Events[spanlimit].Data["meta.event_count"], "root span metadata should be populated with event count")
 	assert.Equal(t, "deterministic/chance - late arriving span", transmission.Events[spanlimit].Data["meta.refinery.reason"], "the late root span should have meta.refinery.reason set to rules + late arriving span.")
