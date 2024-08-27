@@ -86,9 +86,10 @@ Learn more about `config.yaml` and all the parameters that control Refinery's op
 
 Learn more about `rules.yaml` and sampler configuration in our [Refinery sampling methods documentation](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/).
 
-Please note that it is valid to specify more than one source for a configuration.
-For example, it would be possible to have a common configuration available at a URL, and a second file-based configuration containing only secrets.
-The environment variable can contain multiple config locations separated by commas.
+It is valid to specify more than one configuration source.
+For example, it would be possible to have a common configuration file, plus a separate file containing only keys.
+On the command line, specify multiple files by repeating the command line switch.
+In environment variables, separate multiple config locations with commas.
 
 ## Running Refinery
 

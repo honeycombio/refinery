@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/creasty/defaults"
 	"github.com/pelletier/go-toml/v2"
@@ -116,6 +117,8 @@ func loadConfigsInto(dest any, locations []string) (string, error) {
 	// start a hash of the configs we read
 	h := md5.New()
 	for _, location := range locations {
+		// trim leading and trailing whitespace just in case
+		location := strings.TrimSpace(location)
 		r, format, err := getReaderFor(location)
 		if err != nil {
 			return "", err
@@ -137,6 +140,8 @@ func loadConfigsInto(dest any, locations []string) (string, error) {
 
 func loadConfigsIntoMap(dest map[string]any, locations []string) error {
 	for _, location := range locations {
+		// trim leading and trailing whitespace just in case
+		location := strings.TrimSpace(location)
 		r, format, err := getReaderFor(location)
 		if err != nil {
 			return err
