@@ -385,7 +385,7 @@ type StressReliefConfig struct {
 type FileConfigError struct {
 	ConfigLocations []string
 	ConfigFailures  []string
-	RulesLocation   string
+	RulesLocations  []string
 	RulesFailures   []string
 }
 
@@ -403,9 +403,10 @@ func (e *FileConfigError) Error() string {
 		}
 	}
 	if len(e.RulesFailures) > 0 {
-		msg.WriteString("Validation failed for rules file ")
-		msg.WriteString(e.RulesLocation)
-		msg.WriteString(":\n")
+		loc := strings.Join(e.RulesLocations, ", ")
+		msg.WriteString("Validation failed for config [")
+		msg.WriteString(loc)
+		msg.WriteString("]:\n")
 		for _, fail := range e.RulesFailures {
 			msg.WriteString("  ")
 			msg.WriteString(fail)
@@ -428,7 +429,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 			return nil, err
 		}
 
-		ruleFails, err := validateRules(opts.RulesLocation)
+		ruleFails, err := validateRules(opts.RulesLocations)
 		if err != nil {
 			return nil, err
 		}
@@ -437,7 +438,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 			return nil, &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
 				ConfigFailures:  cfgFails,
-				RulesLocation:   opts.RulesLocation,
+				RulesLocations:  opts.RulesLocations,
 				RulesFailures:   ruleFails,
 			}
 		}
@@ -451,7 +452,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 	}
 
 	var rulesconf *V2SamplerConfig
-	ruleshash, err := readConfigInto(&rulesconf, []string{opts.RulesLocation}, nil)
+	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocations, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -972,13 +973,13 @@ func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
 	ret := make([]ConfigMetadata, 2)
 	ret[0] = ConfigMetadata{
 		Type:     "config",
-		ID:       f.opts.ConfigLocations[0],
+		ID:       strings.Join(f.opts.ConfigLocations, ", "),
 		Hash:     f.mainHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}
 	ret[1] = ConfigMetadata{
 		Type:     "rules",
-		ID:       f.opts.RulesLocation,
+		ID:       strings.Join(f.opts.RulesLocations, ", "),
 		Hash:     f.rulesHash,
 		LoadedAt: f.lastLoadTime.Format(time.RFC3339),
 	}

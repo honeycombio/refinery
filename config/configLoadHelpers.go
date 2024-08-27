@@ -244,16 +244,12 @@ func validateConfigs(opts *CmdEnv) ([]string, error) {
 	return failures, nil
 }
 
-func validateRules(location string) ([]string, error) {
-	r, format, err := getReaderFor(location)
+func validateRules(locations []string) ([]string, error) {
+	// first read the configs into a map so we can validate them
+	userData := make(map[string]any)
+	err := loadConfigsIntoMap(userData, locations)
 	if err != nil {
 		return nil, err
-	}
-	defer r.Close()
-
-	var userData map[string]any
-	if err := load(r, format, &userData); err != nil {
-		return nil, fmt.Errorf("validateRules unable to load config %s: %w", location, err)
 	}
 
 	metadata, err := LoadRulesMetadata()
