@@ -37,6 +37,11 @@ Release 2.8 introduces a new feature, `SpanLimit`, which provides a third way to
 
 Suppose, for example, that a service generates a single trace with 10,000 spans. If SpanLimit is set to 1000, once the first 1000 spans have arrived, Refinery will immediately make a decision to keep or drop the trace. Every additional span is dispatched (using the same decision) without storing it. This means that Refinery never had to keep all 10,000 spans in its memory at one time.
 
+### `In` and `NotIn` Operators in Rules
+
+This release introduces `In` and `NotIn` operators for rules. These operators allow the Value field to contain a list of values, and efficiently test for the presence or absence of a particular span field within that list.
+A potential use for these operators would be to keep or drop traces originating from within a specific list of services.
+
 ### Other Improvements
 
 * Refinery rules now allow specifying `root.` prefixes for fields in dynamic samplers.
