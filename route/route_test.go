@@ -21,6 +21,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/jonboulle/clockwork"
@@ -491,6 +492,8 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
 		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
+		&inject.Object{Value: &collect.EMAThroughputCalculator{}, Name: "throughputCalculator"},
 		&inject.Object{Value: clockwork.NewFakeClock()},
 	)
 	if err != nil {

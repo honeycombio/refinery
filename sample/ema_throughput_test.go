@@ -39,7 +39,7 @@ func TestEMAThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, _, reason, key := sampler.GetSampleRate(trace, 1)
+	rate, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 
@@ -47,5 +47,4 @@ func TestEMAThroughputAddSampleRateKeyToTrace(t *testing.T) {
 	assert.Equal(t, uint(10), rate, "sample rate should be 10")
 	assert.Equal(t, "emathroughput", reason)
 	assert.Equal(t, "4•,200•,true•,/{slug}/fun•,", key)
-
 }

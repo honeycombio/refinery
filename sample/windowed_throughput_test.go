@@ -39,7 +39,7 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, _, reason, key := sampler.GetSampleRate(trace, 1)
+	rate, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 

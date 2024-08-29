@@ -304,6 +304,7 @@ type CollectionConfig struct {
 	AvailableMemory       MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	MaxMemoryPercentage   int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
+	ThroughputLimit       int        `yaml:"ThroughputLimit"`
 	DisableRedistribution bool       `yaml:"DisableRedistribution"`
 	ShutdownDelay         Duration   `yaml:"ShutdownDelay" default:"15s"`
 }

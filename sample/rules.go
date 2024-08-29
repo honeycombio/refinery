@@ -2,7 +2,6 @@ package sample
 
 import (
 	"encoding/json"
-	"math/rand"
 	"strings"
 
 	"github.com/honeycombio/refinery/config"
@@ -81,7 +80,7 @@ func (s *RulesBasedSampler) Start() error {
 	return nil
 }
 
-func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
+func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, reason string, key string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
 		"trace_id": trace.TraceID,
 	})
@@ -108,7 +107,6 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace, sampleRateMultipli
 
 		if matched {
 			var rate uint
-			var keep bool
 			var samplerReason string
 			var key string
 
@@ -119,36 +117,47 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace, sampleRateMultipli
 					logger.WithFields(map[string]interface{}{
 						"rule_name": rule.Name,
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
-					return 1, true, reason + "bad_rule:" + rule.Name, ""
+					return 1, reason + "bad_rule:" + rule.Name, ""
 				}
-				rate, keep, samplerReason, key = sampler.GetSampleRate(trace, sampleRateMultiplier)
+				rate, samplerReason, key = sampler.GetSampleRate(trace)
 				reason += rule.Name + ":" + samplerReason
 			} else {
 				rate = uint(rule.SampleRate)
-				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 				reason += rule.Name
 				s.Metrics.Histogram(s.prefix+"sample_rate", float64(rate))
-			}
-
-			if keep {
-				s.Metrics.Increment(s.prefix + "num_kept")
-			} else {
-				s.Metrics.Increment(s.prefix + "num_dropped")
 				if rule.Drop {
-					// If we dropped because of an explicit drop rule, then increment that too.
-					s.Metrics.Increment(s.prefix + "num_dropped_by_drop_rule")
+					rate = 0
 				}
 			}
+
 			logger.WithFields(map[string]interface{}{
 				"rate":      rate,
-				"keep":      keep,
 				"drop_rule": rule.Drop,
 			}).Logf("got sample rate and decision")
-			return rate, keep, reason, key
+			return rate, reason, key
 		}
 	}
 
-	return 1, true, "no rule matched", ""
+	return 1, "no rule matched", ""
+}
+
+func (s *RulesBasedSampler) MakeSamplingDecision(rate uint, trace *types.Trace) bool {
+	if rate == 0 {
+		// If we dropped because of an explicit drop rule, then increment that too.
+		s.Metrics.Increment(s.prefix + "num_dropped_by_drop_rule")
+		return false
+	}
+	if rate == 1 {
+		return true
+	}
+	keep := makeSamplingDecision(rate)
+	if keep {
+		s.Metrics.Increment(s.prefix + "num_kept")
+	} else {
+		s.Metrics.Increment(s.prefix + "num_dropped")
+	}
+
+	return keep
 }
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {

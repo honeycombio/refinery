@@ -2,6 +2,7 @@ package sample
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 
@@ -13,7 +14,8 @@ import (
 )
 
 type Sampler interface {
-	GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string)
+	GetSampleRate(trace *types.Trace) (rate uint, reason string, key string)
+	MakeSamplingDecision(rate uint, trace *types.Trace) bool
 	Start() error
 }
 
@@ -108,4 +110,8 @@ func getMetricType(name string) string {
 		return "counter"
 	}
 	return "gauge"
+}
+
+func makeSamplingDecision(rate uint) bool {
+	return rand.Intn(int(rate)) == 0
 }

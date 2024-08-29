@@ -36,7 +36,7 @@ func TestTotalThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	sampler.GetSampleRate(trace, 1)
+	sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")

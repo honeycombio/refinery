@@ -22,6 +22,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -50,14 +51,15 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission) *I
 	healthReporter.Start()
 
 	return &InMemCollector{
-		Config:       conf,
-		Clock:        clock,
-		Logger:       &logger.NullLogger{},
-		Tracer:       noop.NewTracerProvider().Tracer("test"),
-		Health:       healthReporter,
-		Transmission: transmission,
-		Metrics:      &metrics.NullMetrics{},
-		StressRelief: &MockStressReliever{},
+		Config:               conf,
+		Clock:                clock,
+		Logger:               &logger.NullLogger{},
+		Tracer:               noop.NewTracerProvider().Tracer("test"),
+		Health:               healthReporter,
+		Transmission:         transmission,
+		Metrics:              &metrics.NullMetrics{},
+		StressRelief:         &MockStressReliever{},
+		ThroughputCalculator: &EMAThroughputCalculator{},
 		SamplerFactory: &sample.SamplerFactory{
 			Config:  conf,
 			Metrics: s,
@@ -423,14 +425,20 @@ func TestDryRunMode(t *testing.T) {
 	var traceID2 = "def456"
 	var traceID3 = "ghi789"
 	// sampling decisions based on trace ID
-	sampleRate1, keepTraceID1, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1}, 1)
+	trace1 := &types.Trace{TraceID: traceID1}
+	sampleRate1, _, _ := sampler.GetSampleRate(trace1)
+	keepTraceID1 := sampler.MakeSamplingDecision(sampleRate1, trace1)
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID1)
 	assert.Equal(t, uint(10), sampleRate1)
-	sampleRate2, keepTraceID2, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2}, 1)
+	trace2 := &types.Trace{TraceID: traceID2}
+	sampleRate2, _, _ := sampler.GetSampleRate(trace2)
+	keepTraceID2 := sampler.MakeSamplingDecision(sampleRate2, trace2)
 	assert.True(t, keepTraceID2)
 	assert.Equal(t, uint(10), sampleRate2)
-	sampleRate3, keepTraceID3, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3}, 1)
+	trace3 := &types.Trace{TraceID: traceID3}
+	sampleRate3, _, _ := sampler.GetSampleRate(trace3)
+	keepTraceID3 := sampler.MakeSamplingDecision(sampleRate3, trace3)
 	// would be dropped if dry run mode was not enabled
 	assert.False(t, keepTraceID3)
 	assert.Equal(t, uint(10), sampleRate3)
@@ -827,8 +835,11 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &sharder.SingleServerSharder{}},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
 		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
+		&inject.Object{Value: &EMAThroughputCalculator{}, Name: "throughputCalculator"},
 		&inject.Object{Value: &peer.MockPeers{}},
 	)
 	if err != nil {

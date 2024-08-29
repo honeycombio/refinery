@@ -44,10 +44,19 @@ func (d *DeterministicSampler) Start() error {
 	return nil
 }
 
-func (d *DeterministicSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
+func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, reason string, key string) {
 	if d.sampleRate <= 1 {
-		return 1, true, "deterministic/always", ""
+		return 1, "deterministic/always", ""
 	}
+
+	return uint(d.sampleRate), "deterministic/chance", ""
+}
+
+func (d *DeterministicSampler) MakeSamplingDecision(rate uint, trace *types.Trace) bool {
+	if rate == 1 {
+		return true
+	}
+
 	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
 	v := binary.BigEndian.Uint32(sum[:4])
 	shouldKeep := v <= d.upperBound
@@ -57,5 +66,5 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace, sampleRateMulti
 		d.Metrics.Increment(d.prefix + "num_dropped")
 	}
 
-	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""
+	return shouldKeep
 }

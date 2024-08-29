@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"math/rand"
 	"time"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
@@ -82,26 +81,22 @@ func (d *TotalThroughputSampler) SetClusterSize(size int) {
 	}
 }
 
-func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace, sampleRateMultiplier float64) (rate uint, keep bool, reason string, key string) {
+func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, reason string, key string) {
 	key = d.key.build(trace)
 	count := int(trace.DescendantCount())
+
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
-	shouldKeep := rand.Intn(int(rate)) == 0
+
 	d.Logger.Debug().WithFields(map[string]interface{}{
 		"sample_key":  key,
 		"sample_rate": rate,
-		"sample_keep": shouldKeep,
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
-	}).Logf("got sample rate and decision")
-	if shouldKeep {
-		d.Metrics.Increment(d.prefix + "num_kept")
-	} else {
-		d.Metrics.Increment(d.prefix + "num_dropped")
-	}
+	}).Logf("got sample rate")
+
 	d.Metrics.Histogram(d.prefix+"sample_rate", float64(rate))
 	for name, val := range d.dynsampler.GetMetrics(d.prefix) {
 		switch getMetricType(name) {
@@ -113,5 +108,20 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace, sampleRateMul
 			d.Metrics.Gauge(name, val)
 		}
 	}
-	return rate, shouldKeep, "totalthroughput", key
+	return rate, "totalthroughput", key
+}
+
+func (d *TotalThroughputSampler) MakeSamplingDecision(rate uint, trace *types.Trace) bool {
+	shouldKeep := makeSamplingDecision(rate)
+	if shouldKeep {
+		d.Metrics.Increment(d.prefix + "num_kept")
+	} else {
+		d.Metrics.Increment(d.prefix + "num_dropped")
+	}
+	d.Logger.Debug().WithFields(map[string]interface{}{
+		"sample_rate": rate,
+		"sample_keep": shouldKeep,
+		"trace_id":    trace.TraceID,
+	}).Logf("got sample decision")
+	return shouldKeep
 }

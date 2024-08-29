@@ -834,7 +834,7 @@ func TestRules(t *testing.T) {
 			},
 			ExpectedName: "Check that the number of descendants is greater than 3",
 			ExpectedKeep: false,
-			ExpectedRate: 1,
+			ExpectedRate: 0,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -919,7 +919,8 @@ func TestRules(t *testing.T) {
 			}
 		}
 
-		rate, keep, reason, key := sampler.GetSampleRate(trace, 1)
+		rate, reason, key := sampler.GetSampleRate(trace)
+		keep := sampler.MakeSamplingDecision(rate, trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -1112,7 +1113,8 @@ func TestRulesWithNestedFields(t *testing.T) {
 				trace.AddSpan(span)
 			}
 
-			rate, keep, reason, key := sampler.GetSampleRate(trace, 1)
+			rate, reason, key := sampler.GetSampleRate(trace)
+			keep := sampler.MakeSamplingDecision(rate, trace)
 
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 			name := d.ExpectedName
@@ -1196,7 +1198,8 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace, 1)
+		rate, reason, key := sampler.GetSampleRate(trace)
+		keep := sampler.MakeSamplingDecision(rate, trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -1282,7 +1285,8 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace, 1)
+		rate, reason, key := sampler.GetSampleRate(trace)
+		keep := sampler.MakeSamplingDecision(rate, trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -1406,9 +1410,15 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 				}
 
 				sampler.Start()
-				rate, keep, _, _ := sampler.GetSampleRate(trace, 1)
+				rate, _, _ := sampler.GetSampleRate(trace)
+				keep := sampler.MakeSamplingDecision(rate, trace)
 
-				assert.Equal(t, uint(1), rate, rate)
+				if !keep {
+					assert.Equal(t, uint(0), rate, rate)
+				} else {
+					assert.Equal(t, uint(1), rate, rate)
+				}
+
 				if scope == "span" {
 					assert.Equal(t, tc.keepSpanScope, keep, keep)
 				} else {
@@ -1988,7 +1998,9 @@ func TestRulesDatatypes(t *testing.T) {
 				trace.AddSpan(span)
 			}
 
-			rate, keep, _, _ := sampler.GetSampleRate(trace, 1)
+			rate, _, _ := sampler.GetSampleRate(trace)
+			keep := sampler.MakeSamplingDecision(rate, trace)
+
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 			// because keep depends on sampling rate, we can only test expectedKeep when it should be false
 			if !d.ExpectedKeep {
@@ -2065,7 +2077,7 @@ func TestRegexpRules(t *testing.T) {
 				trace.AddSpan(span)
 			}
 
-			rate, _, _, _ := sampler.GetSampleRate(trace, 1)
+			rate, _, _ := sampler.GetSampleRate(trace)
 			assert.Equal(t, d.rate, rate, d)
 		})
 	}
@@ -2136,7 +2148,9 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace, 1)
+		rate, reason, key := sampler.GetSampleRate(trace)
+		keep := sampler.MakeSamplingDecision(rate, trace)
+
 		assert.Equal(t, "", key)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
@@ -2850,7 +2864,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			spans := trace.GetSpans()
 			assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 
-			rate, _, reason, key := sampler.GetSampleRate(trace, 1)
+			rate, reason, key := sampler.GetSampleRate(trace)
 			assert.Equal(t, "", key)
 
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
