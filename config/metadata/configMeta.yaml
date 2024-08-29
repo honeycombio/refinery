@@ -1787,3 +1787,47 @@ groups:
           If this duration is `0`, then Refinery will not start in stressed
           mode, which will provide faster startup at the possible cost of
           startup instability.
+
+  - name: ThroughputCalculator
+    sortorder: 1
+    title: Throughput Calculator
+    description: >
+      The Throughput Calculator is designed to dynamically adjust the sampling
+      rates of all configured samplers to maintain an overall throughput that
+      does not exceed a specified limit. This configuration uses an Exponential
+      Moving Average (EMA) to track the current throughput and applies a sample
+      rate multiplier that scales the sample rates accordingly.
+    fields:
+      - name: Limit
+        type: int
+        validations:
+          - type: requiredInGroup
+        summary: is the maximum allowable throughput per second for the entire Refinery cluster.
+        description: >
+          The maximum number of events per second you want to send to Honeycomb, aggregated across
+          all instances in the cluster.
+
+          Refinery will adjust sample rate calculated from all configured samplers dynamically to
+          try to ensure that the overall traffic from all instances combined does not exceed this limit.
+      - name: Weight
+        type: float
+        validations:
+          - type: minimum
+            arg: 0
+          - type: maximum
+            arg: 1
+        summary: is the weight to use when calculating the EMA.
+        description: >
+          The weight to use when calculating the EMA. It should be a number
+          between `0` and `1`. Larger values weight the average more toward
+          recent observations. In other words, a larger weight will cause
+          sample rates more quickly adapt to traffic patterns, while a smaller
+          weight will result in sample rates that are less sensitive to bursts
+          or drops in traffic and thus more consistent over time.
+      - name: AdjustmentInterval
+        type: duration
+        summary: is how often the sampler will recalculate the sample rate.
+        description: >
+          The duration after which the EMA Dynamic Sampler should recalculate
+          its internal counters. It should be specified as a duration string.
+          For example, "30s" or "1m". Defaults to "15s".

@@ -737,8 +737,6 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	}
 	trace.Sent = true
 
-	i.ThroughputCalculator.IncrementEventCount(int(trace.DescendantCount()))
-
 	traceDur := i.Clock.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
 	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
@@ -806,6 +804,9 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 		return
 	}
+
+	i.ThroughputCalculator.IncrementEventCount(int(trace.DescendantCount()))
+
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
 	i.Metrics.Histogram("trace_kept_sample_rate", float64(rate))

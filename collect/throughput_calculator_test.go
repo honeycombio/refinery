@@ -74,7 +74,7 @@ func TestEMAThroughputCalculator_Concurrent(t *testing.T) {
 	calculator := &EMAThroughputCalculator{
 		Clock: fakeClock,
 		Config: &config.MockConfig{
-			GetThroughputLimitVal: config.EMAThroughputLimitConfig{
+			GetThroughputCalculatorVal: config.ThroughputCalculatorConfig{
 				Limit:              throughputLimit,
 				Weight:             weight,
 				AdjustmentInterval: config.Duration(intervalLength),
@@ -127,7 +127,7 @@ func TestEMAThroughputCalculator_MultiplePeers(t *testing.T) {
 
 	calculator := &EMAThroughputCalculator{
 		Config: &config.MockConfig{
-			GetThroughputLimitVal: config.EMAThroughputLimitConfig{
+			GetThroughputCalculatorVal: config.ThroughputCalculatorConfig{
 				Limit:              1000,
 				Weight:             0.5,
 				AdjustmentInterval: config.Duration(time.Second),

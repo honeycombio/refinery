@@ -46,28 +46,35 @@ type fileConfig struct {
 var _ Config = (*fileConfig)(nil)
 
 type configContents struct {
-	General              GeneralConfig             `yaml:"General"`
-	Network              NetworkConfig             `yaml:"Network"`
-	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
-	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
-	Traces               TracesConfig              `yaml:"Traces"`
-	Debugging            DebuggingConfig           `yaml:"Debugging"`
-	Logger               LoggerConfig              `yaml:"Logger"`
-	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
-	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
-	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
-	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
-	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
-	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
-	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
-	Collection           CollectionConfig          `yaml:"Collection"`
-	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
-	Specialized          SpecializedConfig         `yaml:"Specialized"`
-	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
-	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
-	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
-	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
+	General              GeneralConfig              `yaml:"General"`
+	Network              NetworkConfig              `yaml:"Network"`
+	AccessKeys           AccessKeyConfig            `yaml:"AccessKeys"`
+	Telemetry            RefineryTelemetryConfig    `yaml:"RefineryTelemetry"`
+	Traces               TracesConfig               `yaml:"Traces"`
+	Debugging            DebuggingConfig            `yaml:"Debugging"`
+	Logger               LoggerConfig               `yaml:"Logger"`
+	HoneycombLogger      HoneycombLoggerConfig      `yaml:"HoneycombLogger"`
+	StdoutLogger         StdoutLoggerConfig         `yaml:"StdoutLogger"`
+	PrometheusMetrics    PrometheusMetricsConfig    `yaml:"PrometheusMetrics"`
+	LegacyMetrics        LegacyMetricsConfig        `yaml:"LegacyMetrics"`
+	OTelMetrics          OTelMetricsConfig          `yaml:"OTelMetrics"`
+	OTelTracing          OTelTracingConfig          `yaml:"OTelTracing"`
+	PeerManagement       PeerManagementConfig       `yaml:"PeerManagement"`
+	RedisPeerManagement  RedisPeerManagementConfig  `yaml:"RedisPeerManagement"`
+	Collection           CollectionConfig           `yaml:"Collection"`
+	BufferSizes          BufferSizeConfig           `yaml:"BufferSizes"`
+	Specialized          SpecializedConfig          `yaml:"Specialized"`
+	IDFieldNames         IDFieldsConfig             `yaml:"IDFields"`
+	GRPCServerParameters GRPCServerParameters       `yaml:"GRPCServerParameters"`
+	SampleCache          SampleCacheConfig          `yaml:"SampleCache"`
+	StressRelief         StressReliefConfig         `yaml:"StressRelief"`
+	ThroughputCalculator ThroughputCalculatorConfig `yaml:"ThroughputCalculator"`
+}
+
+type ThroughputCalculatorConfig struct {
+	Limit              int      `json:"limit" yaml:"Limit,omitempty" validate:"required,gte=1"`
+	Weight             float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
+	AdjustmentInterval Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
 }
 
 type GeneralConfig struct {
@@ -951,6 +958,13 @@ func (f *fileConfig) GetStressReliefConfig() StressReliefConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.StressRelief
+}
+
+func (f *fileConfig) GetThroughputCalculatorConfig() ThroughputCalculatorConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.ThroughputCalculator
 }
 
 func (f *fileConfig) GetTraceIdFieldNames() []string {

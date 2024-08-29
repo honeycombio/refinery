@@ -39,7 +39,7 @@ type EMAThroughputCalculator struct {
 
 // NewEMAThroughputCalculator creates a new instance of EMAThroughputCalculator.
 func (c *EMAThroughputCalculator) Start() error {
-	cfg := c.Config.GetAllSamplerRules().ThroughPutLimit
+	cfg := c.Config.GetThroughputCalculatorConfig()
 	c.throughputLimit = uint(cfg.Limit)
 	c.done = make(chan struct{})
 
@@ -48,7 +48,14 @@ func (c *EMAThroughputCalculator) Start() error {
 		return nil
 	}
 	c.intervalLength = time.Duration(cfg.AdjustmentInterval)
+	if c.intervalLength == 0 {
+		c.intervalLength = 15 * time.Second
+	}
+
 	c.weight = cfg.Weight
+	if c.weight == 0 {
+		c.weight = 0.5
+	}
 	c.lastEMA = 0
 
 	peerID, err := c.Peer.GetInstanceID()
