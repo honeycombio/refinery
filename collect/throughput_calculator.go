@@ -24,7 +24,7 @@ type EMAThroughputCalculator struct {
 	Pubsub pubsub.PubSub   `inject:""`
 	Peer   peer.Peers      `inject:""`
 
-	throughputLimit float64
+	throughputLimit uint
 	weight          float64       // Smoothing factor for EMA
 	intervalLength  time.Duration // Length of the interval
 	hostID          string
@@ -39,11 +39,17 @@ type EMAThroughputCalculator struct {
 
 // NewEMAThroughputCalculator creates a new instance of EMAThroughputCalculator.
 func (c *EMAThroughputCalculator) Start() error {
-	c.weight = 0.5
-	c.intervalLength = time.Second * 15
-	c.throughputLimit = 1000
-	c.lastEMA = 0
+	cfg := c.Config.GetAllSamplerRules().ThroughPutLimit
+	c.throughputLimit = uint(cfg.Limit)
 	c.done = make(chan struct{})
+
+	// if throughput limit is not set, disable the calculator
+	if c.throughputLimit == 0 {
+		return nil
+	}
+	c.intervalLength = time.Duration(cfg.AdjustmentInterval)
+	c.weight = cfg.Weight
+	c.lastEMA = 0
 
 	peerID, err := c.Peer.GetInstanceID()
 	if err != nil {
@@ -138,14 +144,14 @@ func (c *EMAThroughputCalculator) GetSamplingRateMultiplier() float64 {
 	}
 
 	c.mut.RLock()
-	currentEMA := float64(c.clusterEMA)
+	currentEMA := c.clusterEMA
 	c.mut.RUnlock()
 
 	if currentEMA <= c.throughputLimit {
 		return 1.0 // Throughput is within the limit, no adjustment needed
 	}
 
-	return currentEMA / c.throughputLimit
+	return float64(currentEMA) / float64(c.throughputLimit)
 }
 
 type throughputReport struct {

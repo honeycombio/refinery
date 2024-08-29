@@ -27,6 +27,7 @@ type MockConfig struct {
 	GetLoggerLevelVal                Level
 	GetPeersVal                      []string
 	GetRedisPeerManagementVal        RedisPeerManagementConfig
+	GetThroughputLimitVal            EMAThroughputLimitConfig
 	GetSamplerTypeName               string
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeVal                string
@@ -258,6 +259,11 @@ func (m *MockConfig) GetAllSamplerRules() *V2SamplerConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
+	v := &V2SamplerConfig{}
+
+	if m.GetThroughputLimitVal.Limit != 0 {
+		v.ThroughPutLimit = m.GetThroughputLimitVal
+	}
 	choice := &V2SamplerChoice{}
 	switch sampler := m.GetSamplerTypeVal.(type) {
 	case *DeterministicSamplerConfig:
@@ -271,12 +277,10 @@ func (m *MockConfig) GetAllSamplerRules() *V2SamplerConfig {
 	case *TotalThroughputSamplerConfig:
 		choice.TotalThroughputSampler = sampler
 	default:
-		return nil
+		return v
 	}
 
-	v := &V2SamplerConfig{
-		Samplers: map[string]*V2SamplerChoice{"dataset1": choice},
-	}
+	v.Samplers = map[string]*V2SamplerChoice{"dataset1": choice}
 
 	return v
 }

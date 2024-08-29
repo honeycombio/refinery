@@ -143,8 +143,15 @@ func (v *RulesBasedDownstreamSampler) NameMeaningfulRate() string {
 }
 
 type V2SamplerConfig struct {
-	RulesVersion int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
-	Samplers     map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
+	RulesVersion    int                         `json:"rulesversion" yaml:"RulesVersion" validate:"required,ge=2"`
+	ThroughPutLimit EMAThroughputLimitConfig    `json:"throughputlimit" yaml:"ThroughPutLimit,omitempty"`
+	Samplers        map[string]*V2SamplerChoice `json:"samplers" yaml:"Samplers,omitempty" validate:"required"`
+}
+
+type EMAThroughputLimitConfig struct {
+	Limit              int      `json:"limit" yaml:"Limit,omitempty" validate:"required,gte=1"`
+	Weight             float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
+	AdjustmentInterval Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
 }
 
 type DeterministicSamplerConfig struct {

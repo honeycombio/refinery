@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"context"
 	"math"
 	"sync"
 	"testing"
@@ -22,15 +23,14 @@ func TestEMAThroughputCalculator(t *testing.T) {
 	throughputLimit := 100
 	calculator := &EMAThroughputCalculator{
 		Clock:           fakeClock,
-		Config:          &config.MockConfig{},
 		Pubsub:          &pubsub.LocalPubSub{},
 		Peer:            &peer.MockPeers{},
-		throughputLimit: float64(throughputLimit),
-		weight:          weight,
-		intervalLength:  intervalLength,
 		done:            make(chan struct{}),
 		hostID:          "test-host",
 		throughputs:     make(map[string]throughputReport),
+		intervalLength:  intervalLength,
+		weight:          weight,
+		throughputLimit: uint(throughputLimit),
 	}
 	calculator.Pubsub.Start()
 	defer calculator.Pubsub.Stop()
@@ -43,7 +43,7 @@ func TestEMAThroughputCalculator(t *testing.T) {
 	// starting lastEMA is 0
 	expectedEMA := weight*expectedThroughput + (1-weight)*0
 	calculator.mut.RLock()
-	require.Equal(t, uint(expectedEMA), calculator.lastEMA, "EMA calculation is incorrect")
+	require.Equal(t, uint(expectedEMA), calculator.lastEMA, "EMA calculation is incorrect", calculator.lastEMA)
 	require.Equal(t, 0, calculator.eventCount, "event count is not reset after EMA calculation")
 	calculator.mut.RUnlock()
 
@@ -72,13 +72,16 @@ func TestEMAThroughputCalculator_Concurrent(t *testing.T) {
 	throughputLimit := 100
 
 	calculator := &EMAThroughputCalculator{
-		Clock:           fakeClock,
-		Config:          &config.MockConfig{},
-		Pubsub:          &pubsub.LocalPubSub{},
-		Peer:            &peer.MockPeers{},
-		throughputLimit: float64(throughputLimit),
-		weight:          weight,
-		intervalLength:  intervalLength,
+		Clock: fakeClock,
+		Config: &config.MockConfig{
+			GetThroughputLimitVal: config.EMAThroughputLimitConfig{
+				Limit:              throughputLimit,
+				Weight:             weight,
+				AdjustmentInterval: config.Duration(intervalLength),
+			},
+		},
+		Pubsub: &pubsub.LocalPubSub{},
+		Peer:   &peer.MockPeers{},
 	}
 	calculator.Pubsub.Start()
 	defer calculator.Pubsub.Stop()
@@ -111,4 +114,41 @@ func TestEMAThroughputCalculator_Concurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestEMAThroughputCalculator_MultiplePeers(t *testing.T) {
+	mockPubSub := &pubsub.LocalPubSub{}
+	mockPeers := &peer.MockPeers{
+		Peers: []string{"instance-1", "instance-2", "instance-3"},
+		ID:    "instance-1",
+	}
+
+	fakeClock := clockwork.NewFakeClock()
+
+	calculator := &EMAThroughputCalculator{
+		Config: &config.MockConfig{
+			GetThroughputLimitVal: config.EMAThroughputLimitConfig{
+				Limit:              1000,
+				Weight:             0.5,
+				AdjustmentInterval: config.Duration(time.Second),
+			},
+		},
+		Clock:          fakeClock,
+		Pubsub:         mockPubSub,
+		Peer:           mockPeers,
+		intervalLength: time.Second,
+		weight:         0.5,
+		throughputs:    make(map[string]throughputReport),
+	}
+
+	// Simulate multiple peers reporting their throughputs
+	calculator.eventCount = 100
+	calculator.lastEMA = 150
+	calculator.onThroughputUpdate(context.Background(), "instance-2|200")
+	calculator.onThroughputUpdate(context.Background(), "instance-3|300")
+
+	// Update EMA and check the combined cluster EMA
+	calculator.updateEMA()
+
+	assert.Equal(t, uint(625), calculator.clusterEMA, "The cluster EMA should be the sum of all peer throughputs.", int(calculator.clusterEMA))
 }

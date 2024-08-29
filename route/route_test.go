@@ -388,11 +388,11 @@ func TestDebugAllRules(t *testing.T) {
 	}{
 		{
 			format: "json",
-			expect: `{"rulesversion":0,"samplers":{"dataset1":{"deterministicsampler":{"samplerate":0},"rulesbasedsampler":null,"dynamicsampler":null,"emadynamicsampler":null,"emathroughputsampler":null,"windowedthroughputsampler":null,"totalthroughputsampler":null}}}`,
+			expect: `{"rulesversion":0,"throughputlimit":{"limit":0,"weight":0,"adjustmentinterval":"0s"},"samplers":{"dataset1":{"deterministicsampler":{"samplerate":0},"rulesbasedsampler":null,"dynamicsampler":null,"emadynamicsampler":null,"emathroughputsampler":null,"windowedthroughputsampler":null,"totalthroughputsampler":null}}}`,
 		},
 		{
 			format: "toml",
-			expect: "RulesVersion = 0\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\n",
+			expect: "RulesVersion = 0\n\n[ThroughPutLimit]\nLimit = 0\nWeight = 0.0\nAdjustmentInterval = '0s'\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\n",
 		},
 		{
 			format: "yaml",
