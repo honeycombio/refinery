@@ -181,9 +181,27 @@ Comparisons are case-sensitive and exact.
 
 Values are always coerced to strings -- the `Datatype` parameter is ignored.
 
-For most cases, use `does-not-contain` in a rule with a scope of "span".
-WARNING: Rules can have `Scope: trace` or `Scope: span`; `does-not-contain` used with `Scope: trace` will be true if **any** single span in the entire trace matches the negative condition.
-This is almost never desired behavior.
+### `in`
+
+The `Value` parameter should be a list of items.
+
+Tests if the span value named by the `Field` occurs exactly within the list specified in the `Value` parameter.
+Comparisons are exact. For strings, comparisons are also case-sensitive.
+
+### `not-in`
+
+The `Value` parameter should be a list of items.
+
+Tests if the span value named by the `Field` does not occur exactly within the list specified in the `Value` parameter.
+Comparisons are exact. For strings, comparisons are also case-sensitive.
+
+
+
+For most cases, use negative operators (`!=`, `does-not-contain`, `not-exists`,
+and `not-in`) in a rule with a scope of "span".
+WARNING: Rules can have `Scope: trace` or `Scope: span`.
+Using a negative operator with `Scope: trace` will cause the condition be true if **any** single span in the entire trace matches.
+Use `Scope: span` with negative operators.
 
 ### `exists`
 

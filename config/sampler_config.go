@@ -569,11 +569,25 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 
 func setInBasedOperators(r *RulesBasedSamplerCondition, condition string) error {
 	var matches func(spanValue any, exists bool) bool
+
+	// we'll support having r.Value be either a single scalar or a list of scalars
+	// so to avoid having to check the type of r.Value every time, we'll just convert
+	// it to a list of scalars and then check the type of each scalar as we iterate
+	var value []any
+	switch v := r.Value.(type) {
+	case []any:
+		value = v
+	case string, int, float64:
+		value = []any{v}
+	default:
+		return fmt.Errorf("value must be a list of scalars")
+	}
+
 	switch r.Datatype {
 	// if datatype is not specified, we'll always convert the values to strings
 	case "string", "":
 		values := generics.NewSet[string]()
-		for _, v := range r.Value.([]any) {
+		for _, v := range value {
 			value := convertToString(v)
 			values.Add(value)
 		}
@@ -583,7 +597,7 @@ func setInBasedOperators(r *RulesBasedSamplerCondition, condition string) error 
 		}
 	case "int":
 		values := generics.NewSet[int]()
-		for _, v := range r.Value.([]any) {
+		for _, v := range value {
 			value, ok := tryConvertToInt(v)
 			if !ok {
 				// validation should have caught this, so we'll just skip it
@@ -597,7 +611,7 @@ func setInBasedOperators(r *RulesBasedSamplerCondition, condition string) error 
 		}
 	case "float":
 		values := generics.NewSet[float64]()
-		for _, v := range r.Value.([]any) {
+		for _, v := range value {
 			value, ok := tryConvertToFloat(v)
 			if !ok {
 				// validation should have caught this, so we'll just skip it

@@ -669,11 +669,13 @@ groups:
               - not-exists
               - has-root-span
               - matches
+              - in
+              - not-in
         summary: is the comparison operator to use.
         description: >
           The comparison operator to use. String comparisons are case-sensitive.
-          For most cases, use negative operators (`!=`, `does-not-contain`, and
-          `not-exists`) in a rule with a scope of "span".
+          For most cases, use negative operators (`!=`, `does-not-contain`,
+          `not-exists`, and `not-in`) in a rule with a scope of "span".
           WARNING: Rules can have `Scope: trace` or `Scope: span`. Using a negative
           operator with `Scope: trace` will cause the condition be true if **any**
           single span in the entire trace matches. Use `Scope: span` with negative
@@ -684,7 +686,8 @@ groups:
         description: >
           The value to compare against. If `Datatype` is not specified, then
           the value and the field will be compared based on the type of the
-          field.
+          field. The `in` and `not-in` operators can accept a list of values,
+          which should all be of the same datatype.
       - name: Datatype
         type: string
         validations:
@@ -703,3 +706,7 @@ groups:
           especially useful when a field like `http status code` may be
           rendered as strings by some environments and as numbers or booleans
           by others.
+
+          The best practice is to always specify `Datatype`; this avoids
+          ambiguity, allows for more accurate comparisons, and offers a
+          minor performance improvement.
