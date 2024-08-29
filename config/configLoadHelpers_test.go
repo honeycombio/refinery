@@ -152,10 +152,10 @@ func Test_ConfigHashMetrics(t *testing.T) {
 	}
 }
 
-// creates temporary yaml files from the strings passed in and returns a slice of their filenames
+// Creates temporary yaml files from the strings passed in and returns a slice of their filenames
+// Because we use t.TempDir() the files will be cleaned up automatically.
 func createTempConfigs(t *testing.T, cfgs ...string) []string {
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.NoError(t, err)
+	tmpDir := t.TempDir()
 
 	var cfgFiles []string
 	for _, cfg := range cfgs {
@@ -199,9 +199,6 @@ func Test_loadConfigsInto(t *testing.T) {
 	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
 	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
 	cfgfiles := createTempConfigs(t, cm1, cm2)
-	for _, cfg := range cfgfiles {
-		defer os.Remove(cfg)
-	}
 
 	cfg := configContents{}
 	hash, err := loadConfigsInto(&cfg, cfgfiles)
@@ -217,9 +214,6 @@ func Test_loadConfigsIntoMap(t *testing.T) {
 	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
 	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
 	cfgfiles := createTempConfigs(t, cm1, cm2)
-	for _, cfg := range cfgfiles {
-		defer os.Remove(cfg)
-	}
 
 	cfg := map[string]any{}
 	err := loadConfigsIntoMap(cfg, cfgfiles)
