@@ -127,9 +127,9 @@ func loadConfigsInto(dest any, locations []string) (string, error) {
 		// write the data to the hash as we read it
 		rdr := io.TeeReader(r, h)
 
-		// when working on a struct, load doesn't overwrite destination values
-		// that are not mentioned in a file, so we can just keep loading into
-		// the same object.
+		// when working on a struct, load only overwrites destination values that are
+		// explicitly named. So we can just keep loading successive files into
+		// the same object without losing data we've already specified.
 		if err := load(rdr, format, dest); err != nil {
 			return "", fmt.Errorf("loadConfigsInto unable to load config %s: %w", location, err)
 		}
@@ -148,7 +148,8 @@ func loadConfigsIntoMap(dest map[string]any, locations []string) error {
 		}
 		defer r.Close()
 
-		// when working on a map, load *DOES* overwrite destination values that are not mentioned in a file, so we
+		// when working on a map, when loading a nested object, load will overwrite the entire destination
+		// value, so we can't just keep loading successive files into the same object. Instead, we
 		// need to load into a new object and then merge it into the map.
 		temp := make(map[string]any)
 		if err := load(r, format, &temp); err != nil {

@@ -27,7 +27,7 @@ import (
 // config struct and the command line options.
 type CmdEnv struct {
 	ConfigLocations       []string   `short:"c" long:"config" env:"REFINERY_CONFIG" env-delim:"," default:"/etc/refinery/refinery.yaml" description:"config file or URL to load; can be specified more than once"`
-	RulesLocations        []string   `short:"r" long:"rules_config" env:"REFINERY_RULES_CONFIG" default:"/etc/refinery/rules.yaml" description:"config file or URL to load; can be specified more than once"`
+	RulesLocations        []string   `short:"r" long:"rules_config" env:"REFINERY_RULES_CONFIG" env-delim:"," default:"/etc/refinery/rules.yaml" description:"config file or URL to load; can be specified more than once"`
 	HTTPListenAddr        string     `long:"http-listen-address" env:"REFINERY_HTTP_LISTEN_ADDRESS" description:"HTTP listen address for incoming event traffic"`
 	PeerListenAddr        string     `long:"peer-listen-address" env:"REFINERY_PEER_LISTEN_ADDRESS" description:"Peer listen address for communication between Refinery instances"`
 	GRPCListenAddr        string     `long:"grpc-listen-address" env:"REFINERY_GRPC_LISTEN_ADDRESS" description:"gRPC listen address for OTLP traffic"`
