@@ -679,7 +679,7 @@ groups:
           single span in the entire trace matches. Use `Scope: span` with negative
           operators.
       - name: Value
-        type: anyscalar
+        type: sliceorscalar
         summary: is the value to compare against.
         description: >
           The value to compare against. If `Datatype` is not specified, then

@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/honeycombio/refinery/generics"
 )
 
 // Define some constants for rule comparison operators
@@ -287,6 +289,11 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 		if err != nil {
 			return err
 		}
+	case In, NotIn:
+		err := setInBasedOperators(r, r.Operator)
+		if err != nil {
+			return err
+		}
 	case MatchesRegexp:
 		err := setRegexStringMatchOperator(r)
 		if err != nil {
@@ -344,16 +351,13 @@ func tryConvertToFloat(v any) (float64, bool) {
 // "standard" format, which we are defining as whatever Go does with the %v
 // operator to sprintf. This will make sure that no matter how people encode
 // their values, they compare on an equal footing.
-func tryConvertToString(v any) (string, bool) {
-	return fmt.Sprintf("%v", v), true
+// This function can never fail, so it's not named "tryConvert" like the others.
+func convertToString(v any) string {
+	return fmt.Sprintf("%v", v)
 }
 
 func TryConvertToBool(v any) bool {
-	value, ok := tryConvertToString(v)
-	if !ok {
-		return false
-	}
-	str, err := strconv.ParseBool(value)
+	str, err := strconv.ParseBool(convertToString(v))
 	if err != nil {
 		return false
 	}
@@ -367,58 +371,37 @@ func TryConvertToBool(v any) bool {
 func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error {
 	switch r.Datatype {
 	case "string":
-		conditionValue, ok := tryConvertToString(r.Value)
-		if !ok {
-			return fmt.Errorf("could not convert %v to string", r.Value)
-		}
+		conditionValue := convertToString(r.Value)
 
 		switch condition {
 		case NEQ:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToString(spanValue); exists && ok {
-					return n != conditionValue
-				}
-				return false
+				return convertToString(spanValue) != conditionValue
 			}
 			return nil
 		case EQ:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToString(spanValue); exists && ok {
-					return n == conditionValue
-				}
-				return false
+				return convertToString(spanValue) == conditionValue
 			}
 			return nil
 		case GT:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToString(spanValue); exists && ok {
-					return n > conditionValue
-				}
-				return false
+				return convertToString(spanValue) > conditionValue
 			}
 			return nil
 		case GTE:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToString(spanValue); exists && ok {
-					return n >= conditionValue
-				}
-				return false
+				return convertToString(spanValue) >= conditionValue
 			}
 			return nil
 		case LT:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToString(spanValue); exists && ok {
-					return n < conditionValue
-				}
-				return false
+				return convertToString(spanValue) < conditionValue
 			}
 			return nil
 		case LTE:
 			r.Matches = func(spanValue any, exists bool) bool {
-				if n, ok := tryConvertToString(spanValue); exists && ok {
-					return n <= conditionValue
-				}
-				return false
+				return convertToString(spanValue) <= conditionValue
 			}
 			return nil
 		}
@@ -564,35 +547,78 @@ func setCompareOperators(r *RulesBasedSamplerCondition, condition string) error 
 }
 
 func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition string) error {
-	conditionValue, ok := tryConvertToString(r.Value)
-	if !ok {
-		return fmt.Errorf("%s value must be a string, but was '%s'", condition, r.Value)
-	}
+	conditionValue := convertToString(r.Value)
 
 	switch condition {
 	case StartsWith:
 		r.Matches = func(spanValue any, exists bool) bool {
-			s, ok := tryConvertToString(spanValue)
-			if ok {
-				return strings.HasPrefix(s, conditionValue)
-			}
-			return false
+			return strings.HasPrefix(convertToString(spanValue), conditionValue)
 		}
 	case Contains:
 		r.Matches = func(spanValue any, exists bool) bool {
-			s, ok := tryConvertToString(spanValue)
-			if ok {
-				return strings.Contains(s, conditionValue)
-			}
-			return false
+			return strings.Contains(convertToString(spanValue), conditionValue)
 		}
 	case DoesNotContain:
 		r.Matches = func(spanValue any, exists bool) bool {
-			s, ok := tryConvertToString(spanValue)
-			if ok {
-				return !strings.Contains(s, conditionValue)
+			return !strings.Contains(convertToString(spanValue), conditionValue)
+		}
+	}
+
+	return nil
+}
+
+func setInBasedOperators(r *RulesBasedSamplerCondition, condition string) error {
+	var matches func(spanValue any, exists bool) bool
+	switch r.Datatype {
+	// if datatype is not specified, we'll always convert the values to strings
+	case "string", "":
+		values := generics.NewSet[string]()
+		for _, v := range r.Value.([]any) {
+			value := convertToString(v)
+			values.Add(value)
+		}
+		matches = func(spanValue any, exists bool) bool {
+			s := convertToString(spanValue)
+			return values.Contains(s)
+		}
+	case "int":
+		values := generics.NewSet[int]()
+		for _, v := range r.Value.([]any) {
+			value, ok := tryConvertToInt(v)
+			if !ok {
+				// validation should have caught this, so we'll just skip it
+				continue
 			}
-			return false
+			values.Add(value)
+		}
+		matches = func(spanValue any, exists bool) bool {
+			i, ok := tryConvertToInt(spanValue)
+			return ok && values.Contains(i)
+		}
+	case "float":
+		values := generics.NewSet[float64]()
+		for _, v := range r.Value.([]any) {
+			value, ok := tryConvertToFloat(v)
+			if !ok {
+				// validation should have caught this, so we'll just skip it
+				continue
+			}
+			values.Add(value)
+		}
+		matches = func(spanValue any, exists bool) bool {
+			f, ok := tryConvertToFloat(spanValue)
+			return ok && values.Contains(f)
+		}
+	case "bool":
+		return fmt.Errorf("cannot use %s operator with boolean datatype", condition)
+	}
+
+	switch condition {
+	case In:
+		r.Matches = matches
+	case NotIn:
+		r.Matches = func(spanValue any, exists bool) bool {
+			return !matches(spanValue, exists)
 		}
 	}
 
@@ -600,10 +626,7 @@ func setMatchStringBasedOperators(r *RulesBasedSamplerCondition, condition strin
 }
 
 func setRegexStringMatchOperator(r *RulesBasedSamplerCondition) error {
-	conditionValue, ok := tryConvertToString(r.Value)
-	if !ok {
-		return fmt.Errorf("regex value must be a string, but was '%s'", r.Value)
-	}
+	conditionValue := convertToString(r.Value)
 
 	regex, err := regexp.Compile(conditionValue)
 	if err != nil {
@@ -611,11 +634,8 @@ func setRegexStringMatchOperator(r *RulesBasedSamplerCondition) error {
 	}
 
 	r.Matches = func(spanValue any, exists bool) bool {
-		s, ok := tryConvertToString(spanValue)
-		if ok {
-			return regex.MatchString(s)
-		}
-		return false
+		s := convertToString(spanValue)
+		return regex.MatchString(s)
 	}
 
 	return nil
