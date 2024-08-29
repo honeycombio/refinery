@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"reflect"
@@ -218,7 +217,6 @@ func Test_loadConfigsIntoMap(t *testing.T) {
 	cfg := map[string]any{}
 	err := loadConfigsIntoMap(cfg, cfgfiles)
 	require.NoError(t, err)
-	fmt.Println(cfg)
 	gen := cfg["General"].(map[string]any)
 	require.Equal(t, 2, gen["ConfigurationVersion"])
 	require.Equal(t, "2s", gen["ConfigReloadInterval"])
