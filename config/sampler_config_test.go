@@ -106,12 +106,12 @@ func anys(a ...any) []any {
 
 func Test_setInBasedOperators(t *testing.T) {
 	tests := []struct {
-		name       string
-		datatype   string
-		testvalue  any
-		value      any
-		wantResult bool
-		wantErr    bool
+		name          string
+		datatype      string
+		testvalue     any
+		value         any
+		shouldContain bool
+		wantErr       bool
 	}{
 		// we want to test many different combinations of datatypes and conditions
 		// datatypes: string, int, float, bool, for all 3 of datatype, value, testvalue
@@ -157,8 +157,8 @@ func Test_setInBasedOperators(t *testing.T) {
 			}
 			if err == nil {
 				result := rbsc.Matches(tt.testvalue, true)
-				if result != tt.wantResult {
-					t.Errorf("setCompareOperators() result = %v, wantResult %v", result, tt.wantResult)
+				if result != tt.shouldContain {
+					t.Errorf("setCompareOperators() result = %v, shouldContain %v", result, tt.shouldContain)
 				}
 			}
 			// test NotIn
@@ -169,8 +169,8 @@ func Test_setInBasedOperators(t *testing.T) {
 			if err == nil {
 				result := rbsc.Matches(tt.testvalue, true)
 				// opposite result
-				if result != !tt.wantResult {
-					t.Errorf("setCompareOperators() result = %v, wantResult %v", result, !tt.wantResult)
+				if result != !tt.shouldContain {
+					t.Errorf("setCompareOperators() result = %v, should not Contain %v", result, !tt.shouldContain)
 				}
 			}
 		})
