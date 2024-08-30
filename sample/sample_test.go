@@ -25,8 +25,7 @@ func getConfig(args []string) (config.Config, error) {
 
 // creates two temporary yaml files from the strings passed in and returns their filenames
 func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, string) {
-	tmpDir, err := os.MkdirTemp("", "")
-	assert.NoError(t, err)
+	tmpDir := t.TempDir()
 
 	configFile, err := os.CreateTemp(tmpDir, "cfg_*.yaml")
 	assert.NoError(t, err)
@@ -100,8 +99,6 @@ func TestDatasetPrefix(t *testing.T) {
 		"Samplers/dataset.production/DeterministicSampler/SampleRate", 20,
 	)
 	cfg, rules := createTempConfigs(t, cm, rm)
-	defer os.Remove(rules)
-	defer os.Remove(cfg)
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
@@ -145,8 +142,6 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		"Samplers/production/TotalThroughputSampler/UseClusterSize", true,
 	)
 	cfg, rules := createTempConfigs(t, cm, rm)
-	defer os.Remove(rules)
-	defer os.Remove(cfg)
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
@@ -176,8 +171,6 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		"Samplers/production/EMAThroughputSampler/UseClusterSize", true,
 	)
 	cfg, rules := createTempConfigs(t, cm, rm)
-	defer os.Remove(rules)
-	defer os.Remove(cfg)
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
@@ -207,8 +200,6 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		"Samplers/production/WindowedThroughputSampler/UseClusterSize", true,
 	)
 	cfg, rules := createTempConfigs(t, cm, rm)
-	defer os.Remove(rules)
-	defer os.Remove(cfg)
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 

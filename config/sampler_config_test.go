@@ -1,6 +1,8 @@
 package config
 
-import "testing"
+import (
+	"testing"
+)
 
 func Test_setCompareOperators(t *testing.T) {
 	tests := []struct {
@@ -92,6 +94,83 @@ func Test_setCompareOperators(t *testing.T) {
 				result := rbsc.Matches(tt.testvalue, true)
 				if result != tt.wantResult {
 					t.Errorf("setCompareOperators() result = %v, wantResult %v", result, tt.wantResult)
+				}
+			}
+		})
+	}
+}
+
+func anys(a ...any) []any {
+	return a
+}
+
+func Test_setInBasedOperators(t *testing.T) {
+	tests := []struct {
+		name          string
+		datatype      string
+		testvalue     any
+		value         any
+		shouldContain bool
+		wantErr       bool
+	}{
+		// we want to test many different combinations of datatypes and conditions
+		// datatypes: string, int, float, bool, for all 3 of datatype, value, testvalue
+		// conditions, plus 4 different boolean states. That's a lot of cases, so
+		// we'll try some representative ones to limit the scope.
+		// In and NotIn are true opposites, so we can test both with the same test cases.
+		{"s1", "string", "foo", "bar", false, false},
+		{"s2", "string", "bar", "foo", false, false},
+		{"s3", "string", "bar", "bar", true, false},
+		{"s4", "string", "bar", anys("foo", "bar"), true, false},
+		{"s5", "string", "10", 10, true, false},
+		{"s6", "string", "1", 10, false, false},
+		{"i1", "int", "1", 1, true, false},
+		{"i2", "int", "10", 1, false, false},
+		{"f1", "float", "1", 1, true, false},
+		{"f2", "float", "10", 1, false, false},
+		{"b", "bool", "true", true, false, true},
+		{"s7", "string", "a", anys("a", "b", "c", "d"), true, false},
+		{"s8", "string", "d", anys("a", "b", "c", "d"), true, false},
+		{"s9", "string", "h", anys("a", "b", "c", "d"), false, false},
+		{"i3", "int", "1", anys(1, 2, 3, 4), true, false},
+		{"i4", "int", "5", anys(1, 2, 3, 4), false, false},
+		{"i5", "int", 5, anys(1, 2, 3, 4, "5"), true, false},
+		{"f3", "float", "1.5", anys(1.5, 2.5, 1.6, 4), true, false},
+		{"f4", "float", 5.0, anys(1, 2, 3, 4), false, false},
+		{"f5", "float", 5.0, anys(1, 2, 3, 4, "5.0"), true, false},
+		{"s10", "string", "1.5", anys(1.5, 2.5, 1.6, 4), true, false},
+		{"s11", "string", 5.0, anys(1, 2, 3, 4), false, false},
+		{"s12", "string", 5.0, anys(1, 2, 3, 4, "5"), true, false},
+		{"n1", "", "1", anys(1, 2, 3, 4), true, false},
+		{"n2", "", "5", anys(1, 2, 3, 4), false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rbsc := &RulesBasedSamplerCondition{
+				Datatype: tt.datatype,
+				Value:    tt.value,
+			}
+			// test In
+			err := setInBasedOperators(rbsc, In)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("setCompareOperators() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err == nil {
+				result := rbsc.Matches(tt.testvalue, true)
+				if result != tt.shouldContain {
+					t.Errorf("setCompareOperators() result = %v, shouldContain %v", result, tt.shouldContain)
+				}
+			}
+			// test NotIn
+			err = setInBasedOperators(rbsc, NotIn)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("setCompareOperators() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err == nil {
+				result := rbsc.Matches(tt.testvalue, true)
+				// opposite result
+				if result != !tt.shouldContain {
+					t.Errorf("setCompareOperators() result = %v, should not Contain %v", result, !tt.shouldContain)
 				}
 			}
 		})

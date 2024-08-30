@@ -99,6 +99,24 @@ func validateDatatype(k string, v any, typ string) string {
 		default:
 			return fmt.Sprintf("field %s must be a string, int, float, or bool", k)
 		}
+	case "sliceorscalar":
+		switch vt := v.(type) {
+		case string, int, int64, float64, bool:
+			// we're good
+		case []any:
+			// we need to check that the slice is all the same type
+			// if it's empty or 1 element, it's fine
+			if len(v.([]any)) > 1 {
+				firstType := fmt.Sprintf("%T", vt[0])
+				for i, a := range vt {
+					if fmt.Sprintf("%T", a) != firstType {
+						return fmt.Sprintf("field %s must be a slice of all the same type, but element %d is %T", k, i, a)
+					}
+				}
+			}
+		default:
+			return fmt.Sprintf("field %s must be a list of string, int, float, or bool", k)
+		}
 	case "string":
 		if !isString(v) {
 			return fmt.Sprintf("field %s must be a string but %v is %T", k, v, v)

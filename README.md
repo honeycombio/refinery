@@ -80,11 +80,16 @@ This communication can be managed in two ways: via an explicit list of peers in 
 
 ## Configuration
 
-Configuration is controlled by Refinery's two configuration files, which is generally referred to as `config.yaml` for general configuration and `rules.yaml` for sampling configuration.
+Configuration is controlled by Refinery's two configuration files, which is generally referred to as `config.yaml` for general configuration and `rules.yaml` for sampling configuration. These files can be loaded from an accessible filesystem, or loaded with an unauthenticated GET request from a URL.
 
 Learn more about `config.yaml` and all the parameters that control Refinery's operation in our [Refinery configuration documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/).
 
 Learn more about `rules.yaml` and sampler configuration in our [Refinery sampling methods documentation](https://docs.honeycomb.io/manage-data-volume/refinery/sampling-methods/).
+
+It is valid to specify more than one configuration source.
+For example, it would be possible to have a common configuration file, plus a separate file containing only keys.
+On the command line, specify multiple files by repeating the command line switch.
+In environment variables, separate multiple config locations with commas.
 
 ## Running Refinery
 
