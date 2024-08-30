@@ -66,6 +66,14 @@ Samplers:
                     - Field: http.route
                       Operator: =
                       Value: /health-check
+                - Name: drop everything from specific services
+                  Drop: true
+                  Conditions:
+                    - Field: service.name
+                      Operator: In
+                      Value:
+                        - noisy-service
+                        - overly-chatty-service17
                 - Name: keep slow 500 errors across semantic conventions
                   SampleRate: 1
                   Conditions:

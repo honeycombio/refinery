@@ -351,7 +351,7 @@ func TestReadRulesConfig(t *testing.T) {
 	d, name = c.GetSamplerConfigForDestName("env4")
 	switch r := d.(type) {
 	case *config.RulesBasedSamplerConfig:
-		assert.Len(t, r.Rules, 6)
+		assert.Len(t, r.Rules, 7)
 
 		var rule *config.RulesBasedSamplerRule
 
@@ -360,16 +360,16 @@ func TestReadRulesConfig(t *testing.T) {
 		assert.Equal(t, 0, rule.SampleRate)
 		assert.Len(t, rule.Conditions, 1)
 
-		rule = r.Rules[1]
+		rule = r.Rules[2]
 		assert.Equal(t, 1, rule.SampleRate)
 		assert.Equal(t, "keep slow 500 errors across semantic conventions", rule.Name)
 		assert.Len(t, rule.Conditions, 2)
 
-		rule = r.Rules[3]
+		rule = r.Rules[4]
 		assert.Equal(t, 5, rule.SampleRate)
 		assert.Equal(t, "span", rule.Scope)
 
-		rule = r.Rules[5]
+		rule = r.Rules[6]
 		assert.Equal(t, 10, rule.SampleRate)
 		assert.Equal(t, "", rule.Scope)
 
