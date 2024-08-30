@@ -129,6 +129,10 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_send_on_shutdown", "counter")
 	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
 
+	i.Metrics.Register("original_sample_rate_before_multi", "histogram")
+	i.Metrics.Register("sample_rate_multi", "histogram")
+	i.Metrics.Register("trace_aggregate_sample_rate", "histogram")
+
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
 	i.Metrics.Register(TraceSendSpanLimit, "counter")
@@ -661,6 +665,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		}
 	}
 	if keep {
+		i.ThroughputCalculator.IncrementEventCount(1)
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		mergeTraceAndSpanSampleRates(sp, tr.Rate(), isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
@@ -785,6 +790,8 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	originalRate, reason, key := sampler.GetSampleRate(trace)
 	sampleRateMultiplier := i.ThroughputCalculator.GetSamplingRateMultiplier()
 	rate := uint(float64(originalRate) * sampleRateMultiplier)
+	i.Metrics.Histogram("original_sample_rate_before_multi", originalRate)
+	i.Metrics.Histogram("sample_rate_multi", sampleRateMultiplier)
 	shouldSend := sampler.MakeSamplingDecision(rate, trace)
 
 	trace.SetSampleRate(rate)

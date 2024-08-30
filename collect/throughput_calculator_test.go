@@ -9,6 +9,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,7 @@ func TestEMAThroughputCalculator(t *testing.T) {
 	throughputLimit := 100
 	calculator := &EMAThroughputCalculator{
 		Clock:           fakeClock,
+		Metrics:         &metrics.NullMetrics{},
 		Pubsub:          &pubsub.LocalPubSub{},
 		Peer:            &peer.MockPeers{},
 		done:            make(chan struct{}),
@@ -80,8 +82,9 @@ func TestEMAThroughputCalculator_Concurrent(t *testing.T) {
 				AdjustmentInterval: config.Duration(intervalLength),
 			},
 		},
-		Pubsub: &pubsub.LocalPubSub{},
-		Peer:   &peer.MockPeers{},
+		Pubsub:  &pubsub.LocalPubSub{},
+		Peer:    &peer.MockPeers{},
+		Metrics: &metrics.NullMetrics{},
 	}
 	calculator.Pubsub.Start()
 	defer calculator.Pubsub.Stop()
@@ -134,6 +137,7 @@ func TestEMAThroughputCalculator_MultiplePeers(t *testing.T) {
 			},
 		},
 		Clock:          fakeClock,
+		Metrics:        &metrics.NullMetrics{},
 		Pubsub:         mockPubSub,
 		Peer:           mockPeers,
 		intervalLength: time.Second,

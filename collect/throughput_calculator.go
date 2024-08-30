@@ -11,6 +11,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 )
@@ -19,10 +20,11 @@ const emaThroughputTopic = "ema_throughput"
 
 // EMAThroughputCalculator encapsulates the logic to calculate a throughput value using an Exponential Moving Average (EMA).
 type EMAThroughputCalculator struct {
-	Config config.Config   `inject:""`
-	Clock  clockwork.Clock `inject:""`
-	Pubsub pubsub.PubSub   `inject:""`
-	Peer   peer.Peers      `inject:""`
+	Config  config.Config   `inject:""`
+	Metrics metrics.Metrics `inject:"metrics"`
+	Clock   clockwork.Clock `inject:""`
+	Pubsub  pubsub.PubSub   `inject:""`
+	Peer    peer.Peers      `inject:""`
 
 	throughputLimit uint
 	weight          float64       // Smoothing factor for EMA
@@ -32,8 +34,7 @@ type EMAThroughputCalculator struct {
 	mut         sync.RWMutex
 	throughputs map[string]throughputReport
 	clusterEMA  uint
-	lastEMA     uint // Previous EMA value
-	eventCount  int  // Internal count of events in the current interval
+	eventCount  int // Internal count of events in the current interval
 	done        chan struct{}
 }
 
@@ -47,6 +48,7 @@ func (c *EMAThroughputCalculator) Start() error {
 	if c.throughputLimit == 0 {
 		return nil
 	}
+
 	c.intervalLength = time.Duration(cfg.AdjustmentInterval)
 	if c.intervalLength == 0 {
 		c.intervalLength = 15 * time.Second
@@ -56,7 +58,6 @@ func (c *EMAThroughputCalculator) Start() error {
 	if c.weight == 0 {
 		c.weight = 0.5
 	}
-	c.lastEMA = 0
 
 	peerID, err := c.Peer.GetInstanceID()
 	if err != nil {
@@ -64,6 +65,10 @@ func (c *EMAThroughputCalculator) Start() error {
 	}
 	c.hostID = peerID
 	c.throughputs = make(map[string]throughputReport)
+
+	c.Metrics.Register("cluster_throughput", "gauge")
+	c.Metrics.Register("individual_throughput", "gauge")
+	c.Metrics.Register("event_count_per_sec", "gauge")
 	// Subscribe to the throughput topic so we can react to throughput
 	// changes in the cluster.
 	c.Pubsub.Subscribe(context.Background(), stressReliefTopic, c.onThroughputUpdate)
@@ -116,31 +121,35 @@ func (c *EMAThroughputCalculator) updateEMA() uint {
 	defer c.mut.Unlock()
 
 	currentThroughput := float64(c.eventCount) / c.intervalLength.Seconds()
+	c.Metrics.Gauge("event_count_per_sec", currentThroughput)
 
-	c.lastEMA = uint(math.Ceil(c.weight*currentThroughput + (1-c.weight)*float64(c.lastEMA)))
 	report := throughputReport{
 		key:        c.hostID,
-		throughput: c.lastEMA,
+		throughput: uint(currentThroughput),
 		timestamp:  c.Clock.Now(),
 	}
 	c.throughputs[report.key] = report
-	var clusterEMA uint
+	var totalThroughput float64
 
 	for _, report := range c.throughputs {
-		if c.Clock.Since(report.timestamp) > peer.PeerEntryTimeout {
+		if report.key == c.hostID {
+			totalThroughput += float64(report.throughput)
+			continue
+		}
+
+		if c.Clock.Since(report.timestamp) > c.intervalLength*2 {
 			delete(c.throughputs, report.key)
 			continue
 		}
-		// we don't want to include peers that are just starting up
-		if report.throughput == 0 {
-			continue
-		}
-		clusterEMA += report.throughput
+
+		totalThroughput += float64(report.throughput)
 	}
-	c.clusterEMA = clusterEMA
+	c.clusterEMA = uint(math.Ceil(c.weight*totalThroughput + (1-c.weight)*float64(c.clusterEMA)))
+	c.Metrics.Gauge("cluster_throughput", c.clusterEMA)
+
 	c.eventCount = 0 // Reset the event count for the new interval
 
-	return c.lastEMA
+	return uint(currentThroughput)
 }
 
 // GetSamplingRateMultiplier calculates and returns a sampling rate multiplier
