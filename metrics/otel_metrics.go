@@ -34,7 +34,7 @@ type OTelMetrics struct {
 
 	counters   map[string]metric.Int64Counter
 	gauges     map[string]metric.Float64ObservableGauge
-	histograms map[string]metric.Int64Histogram
+	histograms map[string]metric.Float64Histogram
 	updowns    map[string]metric.Int64UpDownCounter
 
 	// values keeps a map of all the non-histogram metrics and their current value
@@ -52,7 +52,7 @@ func (o *OTelMetrics) Start() error {
 
 	o.counters = make(map[string]metric.Int64Counter)
 	o.gauges = make(map[string]metric.Float64ObservableGauge)
-	o.histograms = make(map[string]metric.Int64Histogram)
+	o.histograms = make(map[string]metric.Float64Histogram)
 	o.updowns = make(map[string]metric.Int64UpDownCounter)
 
 	o.values = make(map[string]float64)
@@ -215,7 +215,7 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 		}
 		o.gauges[name] = g
 	case "histogram":
-		h, err := o.meter.Int64Histogram(name)
+		h, err := o.meter.Float64Histogram(name)
 		if err != nil {
 			o.Logger.Error().WithString("msg", "failed to create histogram").WithString("name", name)
 			return
@@ -268,7 +268,7 @@ func (o *OTelMetrics) Histogram(name string, val interface{}) {
 
 	if h, ok := o.histograms[name]; ok {
 		f := ConvertNumeric(val)
-		h.Record(context.Background(), int64(f))
+		h.Record(context.Background(), f)
 		o.values[name] += f
 	}
 }
