@@ -13,6 +13,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -74,6 +75,7 @@ var _ Peers = (*RedisPubsubPeers)(nil)
 type RedisPubsubPeers struct {
 	Config  config.Config   `inject:""`
 	Metrics metrics.Metrics `inject:"metrics"`
+	Health  health.Reporter `inject:""`
 	Logger  logger.Logger   `inject:""`
 	PubSub  pubsub.PubSub   `inject:""`
 	Clock   clockwork.Clock `inject:""`
@@ -164,6 +166,10 @@ func (p *RedisPubsubPeers) Start() error {
 				p.stop()
 				return
 			case <-ticker.Chan():
+				// only publish our presence if we're ready to accept traffic
+				if !p.Health.IsReady() {
+					continue
+				}
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
 				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr).marshal())
