@@ -31,11 +31,11 @@ type EMAThroughputCalculator struct {
 	intervalLength  time.Duration // Length of the interval
 	hostID          string
 
-	mut         sync.RWMutex
-	throughputs map[string]throughputReport
-	clusterEMA  uint
-	eventCount  int // Internal count of events in the current interval
-	done        chan struct{}
+	mut                sync.RWMutex
+	throughputs        map[string]throughputReport
+	clusterEMA         uint
+	weightedEventTotal float64 // Internal count of events in the current interval
+	done               chan struct{}
 }
 
 // NewEMAThroughputCalculator creates a new instance of EMAThroughputCalculator.
@@ -67,21 +67,32 @@ func (c *EMAThroughputCalculator) Start() error {
 	c.throughputs = make(map[string]throughputReport)
 
 	c.Metrics.Register("cluster_throughput", "gauge")
+	c.Metrics.Register("cluster_ema_throughput", "gauge")
 	c.Metrics.Register("individual_throughput", "gauge")
-	c.Metrics.Register("event_count_per_sec", "gauge")
+	c.Metrics.Register("ema_throughput_publish_error", "counter")
 	// Subscribe to the throughput topic so we can react to throughput
 	// changes in the cluster.
-	c.Pubsub.Subscribe(context.Background(), stressReliefTopic, c.onThroughputUpdate)
+	c.Pubsub.Subscribe(context.Background(), emaThroughputTopic, c.onThroughputUpdate)
 
+	// have a centralized peer metric service that's responsible for publishing and
+	// receiving peer metrics
+	// it could have a channel that's receiving metrics from different source
+	// it then only send a message if the value has changed and it has passed the configured interval for the metric
+	// there could be a third case that basically says you have to send it now because we have passed the configured interval and we haven't send a message about this metric since the last interval
 	go func() {
 		ticker := c.Clock.NewTicker(c.intervalLength)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-c.done:
 				return
 			case <-ticker.Chan():
-				currentEMA := c.updateEMA()
-				c.Pubsub.Publish(context.Background(), emaThroughputTopic, newThroughputMessage(currentEMA, peerID).String())
+				currentThroughput := c.updateEMA()
+				err := c.Pubsub.Publish(context.Background(), emaThroughputTopic, newThroughputMessage(currentThroughput, peerID).String())
+				if err != nil {
+					c.Metrics.Count("ema_throughput_publish_error", 1)
+				}
 			}
 		}
 
@@ -109,9 +120,9 @@ func (c *EMAThroughputCalculator) Stop() {
 }
 
 // IncrementEventCount increments the internal event count by a specified amount.
-func (c *EMAThroughputCalculator) IncrementEventCount(count int) {
+func (c *EMAThroughputCalculator) IncrementEventCount(count float64) {
 	c.mut.Lock()
-	c.eventCount += count
+	c.weightedEventTotal += count
 	c.mut.Unlock()
 }
 
@@ -120,23 +131,9 @@ func (c *EMAThroughputCalculator) updateEMA() uint {
 	c.mut.Lock()
 	defer c.mut.Unlock()
 
-	currentThroughput := float64(c.eventCount) / c.intervalLength.Seconds()
-	c.Metrics.Gauge("event_count_per_sec", currentThroughput)
-
-	report := throughputReport{
-		key:        c.hostID,
-		throughput: uint(currentThroughput),
-		timestamp:  c.Clock.Now(),
-	}
-	c.throughputs[report.key] = report
 	var totalThroughput float64
 
 	for _, report := range c.throughputs {
-		if report.key == c.hostID {
-			totalThroughput += float64(report.throughput)
-			continue
-		}
-
 		if c.Clock.Since(report.timestamp) > c.intervalLength*2 {
 			delete(c.throughputs, report.key)
 			continue
@@ -144,10 +141,14 @@ func (c *EMAThroughputCalculator) updateEMA() uint {
 
 		totalThroughput += float64(report.throughput)
 	}
+	c.Metrics.Gauge("cluster_throughput", totalThroughput)
 	c.clusterEMA = uint(math.Ceil(c.weight*totalThroughput + (1-c.weight)*float64(c.clusterEMA)))
-	c.Metrics.Gauge("cluster_throughput", c.clusterEMA)
+	c.Metrics.Gauge("cluster_ema_throughput", c.clusterEMA)
 
-	c.eventCount = 0 // Reset the event count for the new interval
+	// calculating throughput for the next interval
+	currentThroughput := float64(c.weightedEventTotal) / c.intervalLength.Seconds()
+	c.Metrics.Gauge("individual_throughput", currentThroughput)
+	c.weightedEventTotal = 0 // Reset the event count for the new interval
 
 	return uint(currentThroughput)
 }

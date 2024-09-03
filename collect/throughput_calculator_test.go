@@ -45,8 +45,8 @@ func TestEMAThroughputCalculator(t *testing.T) {
 	// starting lastEMA is 0
 	expectedEMA := weight*expectedThroughput + (1-weight)*0
 	calculator.mut.RLock()
-	require.Equal(t, uint(expectedEMA), calculator.lastEMA, "EMA calculation is incorrect", calculator.lastEMA)
-	require.Equal(t, 0, calculator.eventCount, "event count is not reset after EMA calculation")
+	require.Equal(t, uint(expectedEMA), calculator.clusterEMA, "EMA calculation is incorrect", calculator.clusterEMA)
+	require.Equal(t, 0, calculator.weightedEventTotal, "event count is not reset after EMA calculation")
 	calculator.mut.RUnlock()
 
 	multiplier := calculator.GetSamplingRateMultiplier()
@@ -58,8 +58,8 @@ func TestEMAThroughputCalculator(t *testing.T) {
 	newThroughput := float64(300) / intervalLength.Seconds()
 	expectedEMA = math.Ceil(weight*newThroughput + (1-weight)*expectedEMA)
 	calculator.mut.RLock()
-	assert.Equal(t, uint(expectedEMA), calculator.lastEMA, "EMA calculation after second interval is incorrect")
-	require.Equal(t, 0, calculator.eventCount, "event count is not reset after EMA calculation")
+	assert.Equal(t, uint(expectedEMA), calculator.clusterEMA, "EMA calculation after second interval is incorrect")
+	require.Equal(t, 0, calculator.weightedEventTotal, "event count is not reset after EMA calculation")
 	calculator.mut.RUnlock()
 
 	multiplier = calculator.GetSamplingRateMultiplier()
@@ -146,8 +146,7 @@ func TestEMAThroughputCalculator_MultiplePeers(t *testing.T) {
 	}
 
 	// Simulate multiple peers reporting their throughputs
-	calculator.eventCount = 100
-	calculator.lastEMA = 150
+	calculator.weightedEventTotal = 100
 	calculator.onThroughputUpdate(context.Background(), "instance-2|200")
 	calculator.onThroughputUpdate(context.Background(), "instance-3|300")
 

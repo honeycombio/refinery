@@ -789,9 +789,21 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// make sampling decision and update the trace
 	originalRate, reason, key := sampler.GetSampleRate(trace)
 	sampleRateMultiplier := i.ThroughputCalculator.GetSamplingRateMultiplier()
-	rate := uint(float64(originalRate) * sampleRateMultiplier)
 	i.Metrics.Histogram("original_sample_rate_before_multi", originalRate)
 	i.Metrics.Histogram("sample_rate_multi", sampleRateMultiplier)
+
+	// counting the expected number of spans based on the original sample rate
+	// this will tell us the throughput we would have sent without the adjustment from the multiplier
+	i.ThroughputCalculator.IncrementEventCount(float64(trace.DescendantCount()) / float64(originalRate))
+
+	// TODO: if the sample rate returned by the sampler is set to 1, we should not
+	// modify the sample rate with the multiplier
+	var rate uint
+	if originalRate == 1 {
+		rate = originalRate
+	} else {
+		rate = uint(float64(originalRate) * sampleRateMultiplier)
+	}
 	shouldSend := sampler.MakeSamplingDecision(rate, trace)
 
 	trace.SetSampleRate(rate)
@@ -811,8 +823,6 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 		return
 	}
-
-	i.ThroughputCalculator.IncrementEventCount(int(trace.DescendantCount()))
 
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
