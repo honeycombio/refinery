@@ -134,6 +134,7 @@ func (p *RedisPubsubPeers) Start() error {
 
 	p.peers = generics.NewSetWithTTL[string](PeerEntryTimeout)
 	p.callbacks = make([]func(), 0)
+	p.Logger.Info().Logf("subscribing to pubsub peers channel")
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
 
 	p.Metrics.Register("num_peers", "gauge")
