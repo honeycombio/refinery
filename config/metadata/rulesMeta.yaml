@@ -40,6 +40,9 @@ groups:
           The sample rate is calculated from the trace ID, so all spans with the
           same trace ID will be sampled or not sampled together.
 
+          A `SampleRate` of `1` or less will keep all traces.
+
+          Specifying this value is required.
   - name: DynamicSampler
     title: Dynamic Sampler
     sortorder: 20
@@ -127,9 +130,9 @@ groups:
           Indicates whether to include the trace length (number of spans in the
           trace) as part of the key. The number of spans is exact, so if there
           are normally small variations in trace length, we recommend setting
-          this field to `false`. If your traces are consistent lengths and
-          changes in trace length is a useful indicator to view in Honeycomb,
-          then set this field to `true`.
+          this field to `false` (the default). If your traces are consistent
+          lengths and changes in trace length is a useful indicator to view in
+          Honeycomb, then set this field to `true`.
 
   - name: EMADynamicSampler
     title: EMA Dynamic Sampler
@@ -170,7 +173,7 @@ groups:
         description: >
           The duration after which the EMA Dynamic Sampler should recalculate
           its internal counters. It should be specified as a duration string.
-          For example, "30s" or "1m". Defaults to "15s".
+          For example, `30s` or `1m`. Defaults to `15s`.
       - name: Weight
         type: float
         validations:
@@ -182,10 +185,11 @@ groups:
         description: >
           The weight to use when calculating the EMA. It should be a number
           between `0` and `1`. Larger values weight the average more toward
-          recent observations. In other words, a larger weight will cause
-          sample rates more quickly adapt to traffic patterns, while a smaller
-          weight will result in sample rates that are less sensitive to bursts
-          or drops in traffic and thus more consistent over time.
+          recent observations. In other words, a larger weight will cause sample
+          rates more quickly adapt to traffic patterns, while a smaller weight
+          will result in sample rates that are less sensitive to bursts or drops
+          in traffic and thus more consistent over time. The default value is
+          `0.5`.
       - name: AgeOutValue
         type: float
         validations:
@@ -199,7 +203,7 @@ groups:
           The EMA of any key will approach `0` if it is not repeatedly observed,
           but will never truly reach it, so this field determines what
           constitutes "zero". Keys with averages below this threshold will be
-          removed from the EMA. Default is the same as `Weight`, as this
+          removed from the EMA. Default is the value of `Weight`, as this
           prevents a key with the smallest integer value (1) from being aged
           out immediately. This value should generally be less than (<=)
           `Weight`, unless you have very specific reasons to set it higher.
@@ -283,7 +287,7 @@ groups:
         description: >
           Indicates whether to use the cluster size to calculate the goal
           throughput. If `true`, then the goal throughput will be divided by the
-          number of instances in the cluster. If `false`, then the goal
+          number of instances in the cluster. If `false` (the default), then the goal
           throughput will be the value specified in `GoalThroughputPerSec`.
       - name: InitialSampleRate
         type: int
@@ -292,7 +296,7 @@ groups:
           `InitialSampleRate` is the sample rate to use during startup, before
           the sampler has accumulated enough data to calculate a reasonable
           throughput. This is mainly useful in situations where unsampled
-          throughput is high enough to cause problems.
+          throughput is high enough to cause problems. Default value is `10`.
       - name: AdjustmentInterval
         type: duration
         summary: is how often the sampler will recalculate the sample rate.
@@ -365,9 +369,9 @@ groups:
       A standard configuration would be to set `UpdateFrequency` to `1s` and
       `LookbackFrequency` to `30s`. In this configuration, for every second, we
       lookback at the last 30 seconds of data in order to compute the new
-      sampling rate. The actual sampling rate computation is nearly identical
-      to the original Throughput Sampler, but this variant has better support
-      for floating point numbers.
+      sampling rate. The actual sampling rate computation is nearly identical to
+      the original Throughput Sampler, but this variant has better support for
+      floating point numbers and does a better job with less-common keys.
 
     fields:
       - name: GoalThroughputPerSec
@@ -391,14 +395,14 @@ groups:
         description: >
           Indicates whether to use the cluster size to calculate the goal
           throughput. If `true`, then the goal throughput will be divided by the
-          number of instances in the cluster. If `false`, then the goal
-          throughput will be the value specified in `GoalThroughputPerSec`.
+          number of instances in the cluster. If `false` (the default), then the
+          goal throughput will be the value specified in `GoalThroughputPerSec`.
       - name: UpdateFrequency
         type: duration
         summary: is how often the sampling rate is recomputed.
         description: >
           The duration between sampling rate computations. It should be
-          specified as a duration string. For example, "30s" or "1m". Defaults to "1s".
+          specified as a duration string. For example, `30s` or `1m`. Defaults to `1s`.
       - name: LookbackFrequency
         type: duration
         summary: how far back in time to look when computing the sampling rate.
@@ -463,12 +467,12 @@ groups:
         description: >
           Indicates whether to use the cluster size to calculate the goal
           throughput. If `true`, then the goal throughput will be divided by the
-          number of instances in the cluster. If `false`, then the goal
+          number of instances in the cluster. If `false` (the default), then the goal
           throughput will be the value specified in `GoalThroughputPerSec`.
       - name: ClearFrequency
         type: duration
         summary: is the duration over which the sampler will calculate the throughput. It should be
-          specified as a duration string. For example, "30s" or "1m". Defaults to "30s".
+          specified as a duration string. For example, `30s` or `1m`. Defaults to `30s`.
         description: $DynamicSampler.ClearFrequency
       - name: FieldList
         type: stringarray
@@ -510,14 +514,15 @@ groups:
         summary: indicates whether to expand nested JSON when evaluating rules.
         description: >
           Indicates whether to expand nested JSON when evaluating rules. If
-          false, nested JSON will be treated as a string. If `true`, nested JSON
-          will be expanded into a `map[string]interface{}` and the value of the
-          field will be the value of the nested field. For example, if you have
-          a field called `http.request.headers` and you want to check the value
-          of the `User-Agent` header, then you would set this to `true` and use
-          `http.request.headers.User-Agent` as the field name in your rule. This
-          is a computationally expensive option and may cause performance
-          problems if you have a large number of spans with nested JSON.
+          false (the default), nested JSON will be treated as a string. If
+          `true`, nested JSON will be expanded into a `map[string]interface{}`
+          and the value of the field will be the value of the nested field. For
+          example, if you have a field called `http.request.headers` and you
+          want to check the value of the `User-Agent` header, then you would set
+          this to `true` and use `http.request.headers.User-Agent` as the field
+          name in your rule. This is a computationally expensive option and may
+          cause performance problems if you have a large number of spans with
+          nested JSON.
 
   - name: Rules
     title: Rules for Rules-based Samplers
@@ -586,9 +591,9 @@ groups:
               - span
         summary: controls the scope of the rule.
         description: >
-          Controls the scope of the rule evaluation. If set to "trace" (the
+          Controls the scope of the rule evaluation. If set to `trace` (the
           default), then each condition can apply to any span in the trace
-          independently. If set to "span", then all of the conditions in the
+          independently. If set to `span`, then all of the conditions in the
           rule will be evaluated against each span in the trace and the rule
           only succeeds if all of the conditions match on a single span
           together.

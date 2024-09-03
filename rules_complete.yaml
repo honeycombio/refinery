@@ -70,7 +70,7 @@ Samplers:
                   Drop: true
                   Conditions:
                     - Field: service.name
-                      Operator: In
+                      Operator: in
                       Value:
                         - noisy-service
                         - overly-chatty-service17

@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2024-07-29 at 17:37:54 UTC.
+It was automatically generated on 2024-09-03 at 19:48:56 UTC.
 
 ## The Rules file
 
@@ -70,6 +70,8 @@ It indicates a ratio, where one sample trace is kept for every N traces seen.
 For example, a `SampleRate` of `30` will keep 1 out of every 30 traces.
 The choice on whether to keep any specific trace is random, so the rate is approximate.
 The sample rate is calculated from the trace ID, so all spans with the same trace ID will be sampled or not sampled together.
+A `SampleRate` of `1` or less will keep all traces.
+Specifying this value is required.
 
 Type: `int`
 
@@ -92,6 +94,8 @@ It indicates a ratio, where one sample trace is kept for every N traces seen.
 For example, a `SampleRate` of `30` will keep 1 out of every 30 traces.
 The choice on whether to keep any specific trace is random, so the rate is approximate.
 The sample rate is calculated from the trace ID, so all spans with the same trace ID will be sampled or not sampled together.
+A `SampleRate` of `1` or less will keep all traces.
+Specifying this value is required.
 
 Type: `int`
 
@@ -132,7 +136,7 @@ Type: `int`
 ### `UseTraceLength`
 
 Indicates whether to include the trace length (number of spans in the trace) as part of the key.
-The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false`.
+The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false` (the default).
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 Type: `bool`
@@ -159,6 +163,8 @@ It indicates a ratio, where one sample trace is kept for every N traces seen.
 For example, a `SampleRate` of `30` will keep 1 out of every 30 traces.
 The choice on whether to keep any specific trace is random, so the rate is approximate.
 The sample rate is calculated from the trace ID, so all spans with the same trace ID will be sampled or not sampled together.
+A `SampleRate` of `1` or less will keep all traces.
+Specifying this value is required.
 
 Type: `int`
 
@@ -166,8 +172,8 @@ Type: `int`
 
 The duration after which the EMA Dynamic Sampler should recalculate its internal counters.
 It should be specified as a duration string.
-For example, "30s" or "1m".
-Defaults to "15s".
+For example, `30s` or `1m`.
+Defaults to `15s`.
 
 Type: `duration`
 
@@ -177,6 +183,7 @@ The weight to use when calculating the EMA.
 It should be a number between `0` and `1`.
 Larger values weight the average more toward recent observations.
 In other words, a larger weight will cause sample rates more quickly adapt to traffic patterns, while a smaller weight will result in sample rates that are less sensitive to bursts or drops in traffic and thus more consistent over time.
+The default value is `0.5`.
 
 Type: `float`
 
@@ -185,7 +192,7 @@ Type: `float`
 Indicates the threshold for removing keys from the EMA.
 The EMA of any key will approach `0` if it is not repeatedly observed, but will never truly reach it, so this field determines what constitutes "zero".
 Keys with averages below this threshold will be removed from the EMA.
-Default is the same as `Weight`, as this prevents a key with the smallest integer value (1) from being aged out immediately.
+Default is the value of `Weight`, as this prevents a key with the smallest integer value (1) from being aged out immediately.
 This value should generally be less than (<=) `Weight`, unless you have very specific reasons to set it higher.
 
 Type: `float`
@@ -234,7 +241,7 @@ Type: `int`
 ### `UseTraceLength`
 
 Indicates whether to include the trace length (number of spans in the trace) as part of the key.
-The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false`.
+The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false` (the default).
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 Type: `bool`
@@ -266,7 +273,7 @@ Type: `int`
 
 Indicates whether to use the cluster size to calculate the goal throughput.
 If `true`, then the goal throughput will be divided by the number of instances in the cluster.
-If `false`, then the goal throughput will be the value specified in `GoalThroughputPerSec`.
+If `false` (the default), then the goal throughput will be the value specified in `GoalThroughputPerSec`.
 
 Type: `bool`
 
@@ -274,6 +281,7 @@ Type: `bool`
 
 `InitialSampleRate` is the sample rate to use during startup, before the sampler has accumulated enough data to calculate a reasonable throughput.
 This is mainly useful in situations where unsampled throughput is high enough to cause problems.
+Default value is `10`.
 
 Type: `int`
 
@@ -281,8 +289,8 @@ Type: `int`
 
 The duration after which the EMA Dynamic Sampler should recalculate its internal counters.
 It should be specified as a duration string.
-For example, "30s" or "1m".
-Defaults to "15s".
+For example, `30s` or `1m`.
+Defaults to `15s`.
 
 Type: `duration`
 
@@ -292,6 +300,7 @@ The weight to use when calculating the EMA.
 It should be a number between `0` and `1`.
 Larger values weight the average more toward recent observations.
 In other words, a larger weight will cause sample rates more quickly adapt to traffic patterns, while a smaller weight will result in sample rates that are less sensitive to bursts or drops in traffic and thus more consistent over time.
+The default value is `0.5`.
 
 Type: `float`
 
@@ -300,7 +309,7 @@ Type: `float`
 Indicates the threshold for removing keys from the EMA.
 The EMA of any key will approach `0` if it is not repeatedly observed, but will never truly reach it, so this field determines what constitutes "zero".
 Keys with averages below this threshold will be removed from the EMA.
-Default is the same as `Weight`, as this prevents a key with the smallest integer value (1) from being aged out immediately.
+Default is the value of `Weight`, as this prevents a key with the smallest integer value (1) from being aged out immediately.
 This value should generally be less than (<=) `Weight`, unless you have very specific reasons to set it higher.
 
 Type: `float`
@@ -349,7 +358,7 @@ Type: `int`
 ### `UseTraceLength`
 
 Indicates whether to include the trace length (number of spans in the trace) as part of the key.
-The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false`.
+The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false` (the default).
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 Type: `bool`
@@ -373,7 +382,7 @@ The Windowed Throughput Sampler resolves this by introducing two different, tuna
   recomputing sampling rate.
 A standard configuration would be to set `UpdateFrequency` to `1s` and `LookbackFrequency` to `30s`.
 In this configuration, for every second, we lookback at the last 30 seconds of data in order to compute the new sampling rate.
-The actual sampling rate computation is nearly identical to the original Throughput Sampler, but this variant has better support for floating point numbers.
+The actual sampling rate computation is nearly identical to the original Throughput Sampler, but this variant has better support for floating point numbers and does a better job with less-common keys.
 
 ### `GoalThroughputPerSec`
 
@@ -388,7 +397,7 @@ Type: `int`
 
 Indicates whether to use the cluster size to calculate the goal throughput.
 If `true`, then the goal throughput will be divided by the number of instances in the cluster.
-If `false`, then the goal throughput will be the value specified in `GoalThroughputPerSec`.
+If `false` (the default), then the goal throughput will be the value specified in `GoalThroughputPerSec`.
 
 Type: `bool`
 
@@ -396,8 +405,8 @@ Type: `bool`
 
 The duration between sampling rate computations.
 It should be specified as a duration string.
-For example, "30s" or "1m".
-Defaults to "1s".
+For example, `30s` or `1m`.
+Defaults to `1s`.
 
 Type: `duration`
 
@@ -437,7 +446,7 @@ Type: `int`
 ### `UseTraceLength`
 
 Indicates whether to include the trace length (number of spans in the trace) as part of the key.
-The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false`.
+The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false` (the default).
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 Type: `bool`
@@ -461,7 +470,7 @@ Type: `objectarray`
 ### `CheckNestedFields`
 
 Indicates whether to expand nested JSON when evaluating rules.
-If false, nested JSON will be treated as a string.
+If false (the default), nested JSON will be treated as a string.
 If `true`, nested JSON will be expanded into a `map[string]interface{}` and the value of the field will be the value of the nested field.
 For example, if you have a field called `http.request.headers` and you want to check the value of the `User-Agent` header, then you would set this to `true` and use `http.request.headers.User-Agent` as the field name in your rule.
 This is a computationally expensive option and may cause performance problems if you have a large number of spans with nested JSON.
@@ -518,8 +527,8 @@ Type: `objectarray`
 ### `Scope`
 
 Controls the scope of the rule evaluation.
-If set to "trace" (the default), then each condition can apply to any span in the trace independently.
-If set to "span", then all of the conditions in the rule will be evaluated against each span in the trace and the rule only succeeds if all of the conditions match on a single span together.
+If set to `trace` (the default), then each condition can apply to any span in the trace independently.
+If set to `span`, then all of the conditions in the rule will be evaluated against each span in the trace and the rule only succeeds if all of the conditions match on a single span together.
 
 Type: `string`
 
@@ -566,21 +575,22 @@ Type: `stringarray`
 
 The comparison operator to use.
 String comparisons are case-sensitive.
-For most cases, use negative operators (`!=`, `does-not-contain`, and `not-exists`) in a rule with a scope of "span".
+For most cases, use negative operators (`!=`, `does-not-contain`, `not-exists`, and `not-in`) in a rule with a scope of "span".
 WARNING: Rules can have `Scope: trace` or `Scope: span`.
 Using a negative operator with `Scope: trace` will cause the condition be true if **any** single span in the entire trace matches.
 Use `Scope: span` with negative operators.
 
 Type: `string`
 
-- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`, `matches`
+- Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`, `matches`, `in`, `not-in`
 
 ### `Value`
 
 The value to compare against.
 If `Datatype` is not specified, then the value and the field will be compared based on the type of the field.
+The `in` and `not-in` operators can accept a list of values, which should all be of the same datatype.
 
-Type: `anyscalar`
+Type: `sliceorscalar`
 
 ### `Datatype`
 
@@ -588,6 +598,7 @@ The datatype to use when comparing the value and the field.
 If `Datatype` is specified, then both values will be converted (best-effort) to that type and then compared.
 Errors in conversion will result in the comparison evaluating to `false`.
 This is especially useful when a field like `http status code` may be rendered as strings by some environments and as numbers or booleans by others.
+The best practice is to always specify `Datatype`; this avoids ambiguity, allows for more accurate comparisons, and offers a minor performance improvement.
 
 Type: `string`
 
@@ -617,7 +628,7 @@ Type: `int`
 
 Indicates whether to use the cluster size to calculate the goal throughput.
 If `true`, then the goal throughput will be divided by the number of instances in the cluster.
-If `false`, then the goal throughput will be the value specified in `GoalThroughputPerSec`.
+If `false` (the default), then the goal throughput will be the value specified in `GoalThroughputPerSec`.
 
 Type: `bool`
 
@@ -658,7 +669,7 @@ Type: `int`
 ### `UseTraceLength`
 
 Indicates whether to include the trace length (number of spans in the trace) as part of the key.
-The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false`.
+The number of spans is exact, so if there are normally small variations in trace length, we recommend setting this field to `false` (the default).
 If your traces are consistent lengths and changes in trace length is a useful indicator to view in Honeycomb, then set this field to `true`.
 
 Type: `bool`
