@@ -42,11 +42,16 @@ Suppose, for example, that a service generates a single trace with 10,000 spans.
 This release introduces `in` and `not-in` operators for rules. These operators allow the Value field to contain a list of values, and efficiently test for the presence or absence of a particular span field within that list.
 A potential use for these operators would be to keep or drop traces originating from within a specific list of services.
 
+### More flexible API key management with `SendKey` and `SendKeyMode`
+
+This release allows an API key to be deployed alongside Refinery rather than with the sources of telemetry using the `SendKey` configuration.
+The `SendKeyMode` value allows `SendKey` to be used (along with the existing `ReceiveKeys` value) in a variety of modes depending on the security requirements.
+
 ### Other Improvements
 
 * Refinery rules now allow specifying `root.` prefixes for fields in dynamic samplers.
 * The performance of the drop cache has been improved, which should help with stability for systems with a very high drop rate.
-* The default maximum message sizes for OTLP have been increased from 5MB to 15MB
+* The default maximum message sizes for OTLP have been increased from 5MB to 15MB.
 
 
 ## Version 2.7.0
