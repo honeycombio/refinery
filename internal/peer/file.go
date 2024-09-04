@@ -56,6 +56,10 @@ func (p *FilePeers) Start() (err error) {
 	return nil
 }
 
+func (p *FilePeers) Ready() error {
+	return nil
+}
+
 func (p *FilePeers) publicAddr() (string, error) {
 	addr := p.Cfg.GetPeerListenAddr()
 	host, port, err := net.SplitHostPort(addr)
