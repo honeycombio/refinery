@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.8.0
 
-This release has a couple of significant changes to the way that Refinery deals with scaling events.
+This release has a several significant changes that should make Refinery easier to operate at scale.
 
 ### Draining during Shutdown
 
@@ -37,6 +37,8 @@ Release 2.8 introduces a new feature, `SpanLimit`, which provides a third way to
 
 Suppose, for example, that a service generates a single trace with 10,000 spans. If SpanLimit is set to 1000, once the first 1000 spans have arrived, Refinery will immediately make a decision to keep or drop the trace. Every additional span is dispatched (using the same decision) without storing it. This means that Refinery never had to keep all 10,000 spans in its memory at one time.
 
+For installations that sometimes see very large traces, this feature can have a significant impact on memory usage within a cluster, and can effectively prevent one Refinery in a cluster from running out of memory due to a big trace.
+
 ### `in` and `not-in` Operators in Rules
 
 This release introduces `in` and `not-in` operators for rules. These operators allow the Value field to contain a list of values, and efficiently test for the presence or absence of a particular span field within that list.
@@ -52,6 +54,7 @@ The `SendKeyMode` value allows `SendKey` to be used (along with the existing `Re
 * Refinery rules now allow specifying `root.` prefixes for fields in dynamic samplers.
 * The performance of the drop cache has been improved, which should help with stability for systems with a very high drop rate.
 * The default maximum message sizes for OTLP have been increased from 5MB to 15MB.
+* It is now possible to specify multiple config files, which can allow a layered approach to configuration (separating keys from other configuration, for example).
 
 
 ## Version 2.7.0
