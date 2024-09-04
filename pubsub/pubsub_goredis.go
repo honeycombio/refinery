@@ -60,6 +60,7 @@ func (ps *GoRedisPubSub) Start() error {
 		hosts := []string{redisCfg.Host}
 		// if we have a cluster host, use that instead of the regular host
 		if len(redisCfg.ClusterHosts) > 0 {
+			ps.Logger.Info().Logf("ClusterHosts was specified, setting up Redis Cluster")
 			hosts = redisCfg.ClusterHosts
 			clusterModeEnabled = true
 		}
@@ -72,6 +73,7 @@ func (ps *GoRedisPubSub) Start() error {
 		options.DB = redisCfg.Database
 
 		if redisCfg.UseTLS {
+			ps.Logger.Info().WithField("TLSInsecure", redisCfg.UseTLSInsecure).Logf("Using TLS with Redis")
 			options.TLSConfig = &tls.Config{
 				MinVersion:         tls.VersionTLS12,
 				InsecureSkipVerify: redisCfg.UseTLSInsecure,
@@ -81,13 +83,16 @@ func (ps *GoRedisPubSub) Start() error {
 
 	var client redis.UniversalClient
 	if clusterModeEnabled {
+		ps.Logger.Info().WithField("hosts", options.Addrs).Logf("Using Redis Cluster Client")
 		client = redis.NewClusterClient(options.Cluster())
 	} else {
+		ps.Logger.Info().WithField("hosts", options.Addrs).Logf("Using Redis Universal client")
 		client = redis.NewUniversalClient(options)
 	}
 
 	// if an authcode was provided, use it to authenticate the connection
 	if authcode != "" {
+		ps.Logger.Info().Logf("Using Redis AuthCode to authenticate connection")
 		pipe := client.Pipeline()
 		pipe.Auth(context.Background(), authcode)
 		if _, err := pipe.Exec(context.Background()); err != nil {
