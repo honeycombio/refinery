@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,7 @@ func newPubSub(typ string) pubsub.PubSub {
 		ps = &pubsub.GoRedisPubSub{
 			Metrics: m,
 			Tracer:  tracer,
+			Logger:  &logger.NullLogger{},
 		}
 	case "local":
 		ps = &pubsub.LocalPubSub{
