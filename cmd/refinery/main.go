@@ -298,6 +298,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Now that all components are started, we can notify our peers that we are ready
+	// to receive data.
+	err = peers.Ready()
+	if err != nil {
+		fmt.Printf("failed to start peer management: %v\n", err)
+		os.Exit(1)
+	}
+
 	// these have to be done after the injection (of metrics)
 	// these are the metrics that libhoney will emit; we preregister them so that they always appear
 	libhoneyMetricsName := map[string]string{
