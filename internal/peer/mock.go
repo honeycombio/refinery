@@ -26,4 +26,8 @@ func (p *MockPeers) Start() error {
 	return nil
 }
 
+func (p *MockPeers) Ready() error {
+	return nil
+}
+
 func (p *MockPeers) stop() {}
