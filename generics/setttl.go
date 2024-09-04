@@ -11,7 +11,7 @@ import (
 )
 
 // SetWithTTL is a unique set of items with a TTL (time to live) for each item.
-// After the TTL expires, the item is automatically removed from the set.
+// After the TTL expires, the item is automatically removed from the set when either Members or Length is called.
 // It is safe for concurrent use.
 type SetWithTTL[T cmp.Ordered] struct {
 	Items map[T]time.Time
