@@ -140,6 +140,7 @@ func (t *cuckooDroppedRecord) Reason() uint {
 var _ TraceSentRecord = (*cuckooDroppedRecord)(nil)
 
 type cuckooSentCache struct {
+	met              metrics.Metrics
 	kept             *lru.Cache[string, *keptTraceCacheEntry]
 	dropped          *CuckooTraceChecker
 	recentDroppedIDs *generics.SetWithTTL[string]
@@ -179,7 +180,10 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 	// request.
 	recentDroppedIDs := generics.NewSetWithTTL[string](3 * time.Second)
 
+	met.Register("cache_recent_dropped_traces", "gauge")
+
 	cache := &cuckooSentCache{
+		met:              met,
 		kept:             stc,
 		dropped:          dropped,
 		recentDroppedIDs: recentDroppedIDs,
@@ -198,6 +202,10 @@ func (c *cuckooSentCache) monitor() {
 		select {
 		case <-ticker.C:
 			c.dropped.Maintain()
+			// Length() returns the number of items in the cache and it will
+			// clean up any expired items.
+			numOfDroppedIDs := c.recentDroppedIDs.Length()
+			c.met.Gauge("cache_recent_dropped_traces", numOfDroppedIDs)
 		case <-c.done:
 			return
 		}
