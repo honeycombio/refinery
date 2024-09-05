@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.8.0
 
-This release has a several significant changes that should make Refinery easier to operate at scale.
+This release has a several significant changes that makes Refinery easier to operate at scale.
 
 ### Draining during Shutdown
 
