@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-07-24 at 20:24:28 UTC.
+# Automatically generated on 2024-09-03 at 19:48:53 UTC.
 
 General:
   - ConfigurationVersion
@@ -26,6 +26,10 @@ AccessKeys:
 
   - AcceptOnlyListedKeys
 
+  - SendKey
+
+  - SendKeyMode
+
 
 RefineryTelemetry:
   - AddRuleReasonToTrace
@@ -43,6 +47,8 @@ Traces:
   - BatchTimeout
 
   - TraceTimeout
+
+  - SpanLimit
 
   - MaxBatchSize
 
@@ -144,6 +150,8 @@ PeerManagement:
 RedisPeerManagement:
   - Host (originally PeerManagement.RedisHost)
 
+  - ClusterHosts
+
   - Username (originally PeerManagement.RedisUsername)
 
   - Password (originally PeerManagement.Password)
@@ -175,6 +183,10 @@ Collection:
   - MaxMemoryPercentage
 
   - MaxAlloc (originally InMemCollector.MaxAlloc)
+
+  - DisableRedistribution
+
+  - ShutdownDelay
 
 
 BufferSizes:

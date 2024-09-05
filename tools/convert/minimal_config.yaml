@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-07-24 at 20:24:29 UTC
+# automatically generated on 2024-09-03 at 19:48:53 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -15,6 +15,8 @@ AccessKeys:
     - "your-key-goes-here"
 
   AcceptOnlyListedKeys: false
+  SendKey: SetThisToAHoneycombKey
+  SendKeyMode: none
 RefineryTelemetry:
   AddRuleReasonToTrace: true
   AddSpanCountToRoot: true
@@ -24,6 +26,7 @@ Traces:
   SendDelay: 2s
   BatchTimeout: 500ms
   TraceTimeout: 60s
+  SpanLimit: 0
   MaxBatchSize: 500
   SendTicker: 100ms
 Debugging:
@@ -79,6 +82,9 @@ PeerManagement:
 
 RedisPeerManagement:
   Host: "localhost:6379"
+  ClusterHosts: 
+    - "- localhost:6379"
+
   Username: ""
   Password: ""
   AuthCode: ""
@@ -95,6 +101,8 @@ Collection:
   AvailableMemory: "4.5Gb"
   MaxMemoryPercentage: 75
   MaxAlloc: 0
+  DisableRedistribution: false
+  ShutdownDelay: 15s
 BufferSizes:
   UpstreamBufferSize: 10_000
   PeerBufferSize: 100_000
@@ -124,8 +132,8 @@ GRPCServerParameters:
   MaxConnectionAgeGrace: 1m
   KeepAlive: 1m
   KeepAliveTimeout: 20s
-  MaxSendMsgSize: 5MB
-  MaxRecvMsgSize: 5MB
+  MaxSendMsgSize: 15MB
+  MaxRecvMsgSize: 15MB
 SampleCache:
   Type: cuckoo
   KeptSize: 10_000
