@@ -359,9 +359,13 @@ groups:
         reload: true
         summary: is the number of spans after which a trace becomes eligible for a trace decision.
         description: >
-          This setting helps to keep memory usage under control. If a trace has more than this set number of spans, then it becomes eligible for a trace decision.
+          This setting helps to keep memory usage under control. If a trace has
+          more than this set number of spans, then it becomes eligible for a
+          trace decision.
 
-          It's most helpful in a situation where a sudden burst of many spans in a large trace hits Refinery all at once, causing memory usage to spike and possibly crashing Refinery.
+          It's most helpful in a situation where a sudden burst of many spans in
+          a large trace hits Refinery all at once, causing memory usage to spike
+          and possibly crashing Refinery.
 
       - name: MaxBatchSize
         type: int
