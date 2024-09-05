@@ -27,12 +27,10 @@ See full details in [the Release Notes](./RELEASE_NOTES.md).
 - fix: escape use input in debug route (#1299) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - fix: use trace.DescendantCount for span limit (#1297) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: support TLS connections to Redis (#1285) | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: set up tls for redis when it's enabled | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: support TLS connections to Redis (#1285) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: only set send reason to span limit if it's configured (#1290) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: record previous value of sampler counter metrics so they report correctly (#1281) | [Kent Quirk](https://github.com/kentquirk)
 - fix: set up tls for redis when it's enabled | [Yingrong Zhao](https://github.com/vinozzZ)
-- fix: don't read more than max bytes from a request (#1276) (#1282) | [Kent Quirk](https://github.com/kentquirk)
+- fix: don't read more than max bytes from a request (#1282) | [Kent Quirk](https://github.com/kentquirk)
 - fix: allow draining traces even if only 1 peer left (#1278) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: record sample rate in decision cache during stress relief (#1273) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: SpanLimit shouldn't add SendDelay (#1272) | [Kent Quirk](https://github.com/kentquirk)
@@ -45,15 +43,10 @@ See full details in [the Release Notes](./RELEASE_NOTES.md).
 - maint: add a docker'd Redis TLS local setup (#1291) | [Robb Kidd](https://github.com/robbkidd)
 - maint: change default for MaxSendMsgSize and MaxRcvMsgSize. (#1289) | [Kent Quirk](https://github.com/kentquirk)
 - maint: use non-forked cuckoofilter again (#1287) | [Kent Quirk](https://github.com/kentquirk)
-- maint: log error when pubsub fail to publish peer information | [Yingrong Zhao](https://github.com/vinozzZ)
 - maint(deps): bump the minor-patch group with 13 updates (#1304) | [dependabot[bot]](https://github.com/dependabot)
 - maint(deps): bump the minor-patch group with 4 updates (#1262) | [dependabot[bot]](https://github.com/dependabot)
 - refactor: Remove error returns from config functions, fix tests. (#1259) | [Kent Quirk](https://github.com/kentquirk)
 - docs: fix CacheCapacity documentation (#1267) | [Kent Quirk](https://github.com/kentquirk)
-- Merge pull request #1284 from honeycombio/yingrong.setup_tls | [Yingrong Zhao](https://github.com/vinozzZ)
-- Merge branch 'yingrong.setup_tls' of github.com:honeycombio/refinery into yingrong.setup_tls | [Yingrong Zhao](https://github.com/vinozzZ)
-- Merge branch 'main' into yingrong.setup_tls | [Yingrong Zhao](https://github.com/vinozzZ)
-
 
 ## 2.7.0 2024-07-29
 
