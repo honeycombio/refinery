@@ -101,3 +101,30 @@ verify-licenses: install-tools
       rm -rf temp; \
       exit 1; \
     fi; \
+
+
+.PHONY: smoke-test
+smoke-test: local_image
+	cd smoke-test; \
+	docker compose -f refinery-redis.yaml up -d --wait-timeout 10; \
+	container_id=$$(docker ps -f name=refinery -q); \
+  if [ -z "$$container_id" ]; then \
+      echo "No container with the name 'refinery' is running."; \
+			docker compose down; \
+      exit 1; \
+  fi; \
+	echo "Container ID: $$container_id"; \
+	sleep 5; \
+	found=$$(docker logs $$container_id 2>&1 | grep "loaded configuration at startup" >/dev/null 2>&1; echo $$?); \
+	docker compose -f refinery-redis.yaml down; \
+	if [ $$found -eq 0 ]; then \
+		echo "Refinery is running"; \
+	else \
+		echo "Refinery is not running"; \
+		exit 1; \
+	fi; \
+
+
+
+
+
