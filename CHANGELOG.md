@@ -1,5 +1,13 @@
 # Refinery Changelog
 
+## 2.8.1 2024-09-05
+
+This release includes a fix to a bug that prevented Refinery from starting up a new cluster from scratch.
+
+### Fixes
+- fix: load peer list in sharder once manually on startup (#1314) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+
 ## 2.8.0 2024-09-05
 
 This release has many features designed to help manage and operate Refinery at scale.
