@@ -5,8 +5,6 @@ services:
       service: refinery
 
   redis:
-    volumes:
-      - redis-data:/data
     extends:
       file: common-services.yaml
       service: redis

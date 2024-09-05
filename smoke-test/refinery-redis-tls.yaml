@@ -18,16 +18,12 @@ services:
       "--tls-auth-clients", "no"
       ]
     volumes:
-      - redis-data:/data
       - certs:/data/certs
     extends:
       file: common-services.yaml
       service: redis
     healthcheck:
       test: ["CMD-SHELL", "redis-cli --tls --insecure ping | grep PONG"]
-      interval: 2s
-      timeout: 3s
-      retries: 5
     depends_on:
       gen-certs:
         condition: service_completed_successfully

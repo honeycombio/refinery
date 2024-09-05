@@ -105,12 +105,13 @@ verify-licenses: install-tools
 
 .PHONY: smoke-test
 smoke-test: local_image
-	cd smoke-test; \
+	pushd smoke-test; \
 	docker compose -f refinery-redis.yaml up -d --wait-timeout 10; \
 	container_id=$$(docker ps -f name=refinery -q); \
   if [ -z "$$container_id" ]; then \
       echo "No container with the name 'refinery' is running."; \
-			docker compose down; \
+			docker compose -f refinery-redis.yaml down; \
+			popd; \
       exit 1; \
   fi; \
 	echo "Container ID: $$container_id"; \
@@ -121,9 +122,10 @@ smoke-test: local_image
 		echo "Refinery is running"; \
 	else \
 		echo "Refinery is not running"; \
+		popd; \
 		exit 1; \
 	fi; \
-
+	popd; \
 
 
 
