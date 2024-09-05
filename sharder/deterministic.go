@@ -108,6 +108,10 @@ func (d *DeterministicSharder) Start() error {
 		}
 	})
 
+	if err := d.loadPeerList(); err != nil {
+		d.Logger.Error().Logf("failed to reload peer list: %+v", err)
+	}
+
 	// Try up to 5 times to find myself in the peer list before giving up
 	var self string
 	var err error
