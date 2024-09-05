@@ -134,6 +134,7 @@ func (p *RedisPubsubPeers) Start() error {
 
 	p.peers = generics.NewSetWithTTL[string](PeerEntryTimeout)
 	p.callbacks = make([]func(), 0)
+	p.Logger.Info().Logf("subscribing to pubsub peers channel")
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
 
 	p.Metrics.Register("num_peers", "gauge")
@@ -144,7 +145,15 @@ func (p *RedisPubsubPeers) Start() error {
 	if err != nil {
 		return err
 	}
+	p.peers.Add(myaddr)
+	return nil
+}
 
+func (p *RedisPubsubPeers) Ready() error {
+	myaddr, err := p.publicAddr()
+	if err != nil {
+		return err
+	}
 	// periodically refresh our presence in the list of peers, and update peers as they come in
 	go func() {
 		// we want our refresh cache interval to vary from peer to peer so they
@@ -164,6 +173,7 @@ func (p *RedisPubsubPeers) Start() error {
 				p.stop()
 				return
 			case <-ticker.Chan():
+
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
 				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr).marshal())

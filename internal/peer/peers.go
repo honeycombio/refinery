@@ -9,6 +9,7 @@ type Peers interface {
 	GetPeers() ([]string, error)
 	GetInstanceID() (string, error)
 	RegisterUpdatedPeersCallback(callback func())
+	Ready() error
 	// make it injectable
 	startstop.Starter
 }
