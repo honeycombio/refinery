@@ -2,6 +2,61 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.8.0
+
+This release has a several significant changes that makes Refinery easier to operate at scale.
+
+### Draining during Shutdown
+
+When one Refinery in a cluster shuts down, it now:
+
+* Immediately marks itself as "not ready" so that load balancers will stop sending it data
+* Immediately removes itself from the peer list so that other Refineries will stop sending data
+* Recalculates the appropriate destination for all the traces it has been tracking, and forwards those spans to the correct instance.
+
+When other Refineries in a cluster see that the number of peers has changed, they:
+
+* Check all the traces they have been tracking; for any that belong to a different Refinery, all the spans are forwarded to the new destination. (On average in an N-node cluster, 1/N of the existing traces will need to move.)
+
+### Redis Cluster Support
+
+Refinery now supports Redis instances deployed in Cluster Mode. There is a new configuration parameter, `ClusterHosts`, which can be used to enable this support.
+
+This should make it easier to configure AWS ElastiCache for use with Refinery, since ElastiCache now uses Redis Cluster Mode by default.
+
+In addition, Refinery now supports the use of TLS for communications with Redis.
+
+### SpanLimit
+
+Until this release, Refinery has marked a trace for trace decision when either:
+
+* The root span arrives
+* The TraceTimeout expires
+
+Release 2.8 introduces a new feature, `SpanLimit`, which provides a third way to cause Refinery to make a trace decision. It sets the maximum number of descendants that a trace can have before it gets marked for a trace decision. This is to help with the memory consumption due to very large traces.
+
+Suppose, for example, that a service generates a single trace with 10,000 spans. If SpanLimit is set to 1000, once the first 1000 spans have arrived, Refinery will immediately make a decision to keep or drop the trace. Every additional span is dispatched (using the same decision) without storing it. This means that Refinery never had to keep all 10,000 spans in its memory at one time.
+
+For installations that sometimes see very large traces, this feature can have a significant impact on memory usage within a cluster, and can effectively prevent one Refinery in a cluster from running out of memory due to a big trace.
+
+### `in` and `not-in` Operators in Rules
+
+This release introduces `in` and `not-in` operators for rules. These operators allow the Value field to contain a list of values, and efficiently test for the presence or absence of a particular span field within that list.
+A potential use for these operators would be to keep or drop traces originating from within a specific list of services.
+
+### More flexible API key management with `SendKey` and `SendKeyMode`
+
+This release allows an API key to be deployed alongside Refinery rather than with the sources of telemetry using the `SendKey` configuration.
+The `SendKeyMode` value allows `SendKey` to be used (along with the existing `ReceiveKeys` value) in a variety of modes depending on the security requirements.
+
+### Other Improvements
+
+* Refinery rules now allow specifying `root.` prefixes for fields in dynamic samplers.
+* The performance of the drop cache has been improved, which should help with stability for systems with a very high drop rate.
+* The default maximum message sizes for OTLP have been increased from 5MB to 15MB.
+* It is now possible to specify multiple config files, which can allow a layered approach to configuration (separating keys from other configuration, for example).
+
+
 ## Version 2.7.0
 
 This release is a minor release focused on better cluster stability and data quality with a new system for communicating peer information across nodes.

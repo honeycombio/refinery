@@ -1,5 +1,53 @@
 # Refinery Changelog
 
+## 2.8.0 2024-09-05
+
+This release has many features designed to help manage and operate Refinery at scale.
+It also includes some features to help in writing sampling rules (`in` and `not-in` operators, `root.`)
+See full details in [the Release Notes](./RELEASE_NOTES.md).
+
+### Features
+- feat: add IN operator (#1302) | [Kent Quirk](https://github.com/kentquirk)
+- feat: support layered (multiple) configuration files (#1301) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Add a cache to the cache (#1296) | [Kent Quirk](https://github.com/kentquirk)
+- feat: support configure refinery to use redis in cluster mode (#1294) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: allow `root.` in field list for dynamic sampler (#1275) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: redistribute traces on peer membership changes (#1268) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add SpanLimit (includes some config changes) (#1266) | [Kent Quirk](https://github.com/kentquirk)
+- feat: redistribute remaining traces during shutdown (#1261) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Allow more complex key behavior (#1263) | [Kent Quirk](https://github.com/kentquirk)
+- feat: unregister peer asap on shutdown (#1260) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Fixes
+- fix: periodically clean up recent_dropped_traces cache (#1312) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: revert the revert -- that wasn't the problem (#1311) | [Kent Quirk](https://github.com/kentquirk)
+- fix: revert "Use HTTP/2 for all upstream and peer-to-peer connections… (#1310) | [Kent Quirk](https://github.com/kentquirk)
+- fix: join peer list only after refinery is ready to accept traffic (#1309) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: use float histogram for otel metrics (#1303) | [Kent Quirk](https://github.com/kentquirk)
+- fix: escape use input in debug route (#1299) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- fix: use trace.DescendantCount for span limit (#1297) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: support TLS connections to Redis (#1285) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: only set send reason to span limit if it's configured (#1290) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: record previous value of sampler counter metrics so they report correctly (#1281) | [Kent Quirk](https://github.com/kentquirk)
+- fix: set up tls for redis when it's enabled | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: don't read more than max bytes from a request (#1282) | [Kent Quirk](https://github.com/kentquirk)
+- fix: allow draining traces even if only 1 peer left (#1278) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: record sample rate in decision cache during stress relief (#1273) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: SpanLimit shouldn't add SendDelay (#1272) | [Kent Quirk](https://github.com/kentquirk)
+- fix: Use HTTP/2 for all upstream and peer-to-peer connections (#1269) | [Irving Popovetsky](https://github.com/irvingpop)
+
+### Maintenance
+- maint: Add some extra logging to pubsub systems (#1308) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Add warning about cli flags (#1293) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: Delete unused Dockerfile (#1292) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: add a docker'd Redis TLS local setup (#1291) | [Robb Kidd](https://github.com/robbkidd)
+- maint: change default for MaxSendMsgSize and MaxRcvMsgSize. (#1289) | [Kent Quirk](https://github.com/kentquirk)
+- maint: use non-forked cuckoofilter again (#1287) | [Kent Quirk](https://github.com/kentquirk)
+- maint(deps): bump the minor-patch group with 13 updates (#1304) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump the minor-patch group with 4 updates (#1262) | [dependabot[bot]](https://github.com/dependabot)
+- refactor: Remove error returns from config functions, fix tests. (#1259) | [Kent Quirk](https://github.com/kentquirk)
+- docs: fix CacheCapacity documentation (#1267) | [Kent Quirk](https://github.com/kentquirk)
+
 ## 2.7.0 2024-07-29
 
 This release incorporates a new publish/subscribe (pubsub) system for faster and cleaner communication between Refinery nodes.
@@ -39,15 +87,15 @@ See full details in [the Release Notes](./RELEASE_NOTES.md).
 ### Maintenance
 
 - docs: Tweak docs for reload (#1247) | [Kent Quirk](https://github.com/kentquirk)
-- docs: update vulnerability reporting process (#1224) | [Robb Kidd](https://github.com/Robb Kidd)
+- docs: update vulnerability reporting process (#1224) | [Robb Kidd](https://github.com/robbkidd)
 - maint: add instrumentation for GoRedisPubSub (#1229) | [Yingrong Zhao](https://github.com/vinozzZ)
 - maint: Add jitter to peer traffic, fix startup (#1227) | [Kent Quirk](https://github.com/kentquirk)
 - maint: change targeted arch to arm for local development Dockerfile (#1228) | [Yingrong Zhao](https://github.com/vinozzZ)
 - maint: last changes before the final release prep (#1254) | [Kent Quirk](https://github.com/kentquirk)
 - maint: update doc based on config changes (#1243) | [Yingrong Zhao](https://github.com/vinozzZ)
-- maint: Update licenses (#1244) | [Tyler Helmuth](https://github.com/Tyler Helmuth)
-- maint(deps): bump google.golang.org/grpc from 1.64.0 to 1.64.1 (#1223) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump the minor-patch group across 1 directory with 9 updates (#1232) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint: Update licenses (#1244) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint(deps): bump google.golang.org/grpc from 1.64.0 to 1.64.1 (#1223) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump the minor-patch group across 1 directory with 9 updates (#1232) | [dependabot[bot]](https://github.com/dependabot)
 
 
 ## 2.6.1 2024-06-17
@@ -96,7 +144,7 @@ Thanks to [Joshua Jones](https://github.com/senojj) for the [bug report](https:/
 ### Maintenance
 
 - maint: Bump protobuf (#1058) | [Kent Quirk](https://github.com/kentquirk)
-- maint(deps): bump the minor-patch group with 4 updates (#1073) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump the minor-patch group with 4 updates (#1073) | [dependabot[bot]](https://github.com/dependabot)
 
 ## 2.5.0 2024-03-12
 
@@ -118,7 +166,7 @@ The main feature is support of Honeycomb Classic ingest keys; there is also a pe
 ### Maintenance
 
 - maint: add labels to release.yml for auto-generated grouping (#1042) | [Jamie Danielson](https://github.com/JamieDanielson)
-- maint(deps): bump the minor-patch group with 12 updates (#1030) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump the minor-patch group with 12 updates (#1030) | [dependabot[bot]](https://github.com/dependabot)
 - maint: group minor/patch dep updates (#1028) | [Alex Boten](https://github.com/Alex Boten)
 
 
@@ -393,8 +441,8 @@ For more information, see [the release notes](https://github.com/honeycombio/ref
 - docs: Fix up docs, especially envvar and cmdline (#737) | [Kent Quirk](https://github.com/kentquirk)
 - docs: Fix convert help and docs (#744) | [Kent Quirk](https://github.com/kentquirk)
 - maint: README updates -- round 1 (#742) | [Phillip Carter](https://github.com/cartermp)
-- maint(deps): Bump github.com/klauspost/compress from 1.16.4 to 1.16.5 (#675) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): Bump github.com/prometheus/client_golang from 1.14.0 to 1.15.1 (#676) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): Bump github.com/klauspost/compress from 1.16.4 to 1.16.5 (#675) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): Bump github.com/prometheus/client_golang from 1.14.0 to 1.15.1 (#676) | [dependabot[bot]](https://github.com/dependabot)
 - refactor: Rename fields for clarity in an E&S world (#680) | [Kent Quirk](https://github.com/kentquirk)
 - maint: Update dependencies (#699) | [Kent Quirk](https://github.com/kentquirk)
 - docs: Improve generated documentation (#711) | [Kent Quirk](https://github.com/kentquirk)
@@ -436,14 +484,14 @@ were already set upstream before refinery sampling for debugging purposes.
 ### Maintenance
 - chore: Update MetricsReportingInterval in config_complete.toml (#653) | [Davin](https://github.com/Davin)
 - maint: switch dependabot to collection (#660) | [Vera Reynolds](https://github.com/Vera Reynolds)
-- maint(deps): bump google.golang.org/protobuf from 1.28.1 to 1.30.0 (#663) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#662) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump github.com/klauspost/compress from 1.16.3 to 1.16.4 (#661) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump go.uber.org/automaxprocs from 1.5.1 to 1.5.2 (#650) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump github.com/honeycombio/dynsampler-go from 0.3.0 to 0.4.0 (#649) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump google.golang.org/grpc from 1.52.3 to 1.54.0 (#652) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#651) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint(deps): bump github.com/klauspost/compress from 1.16.0 to 1.16.3 (#648) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump google.golang.org/protobuf from 1.28.1 to 1.30.0 (#663) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#662) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump github.com/klauspost/compress from 1.16.3 to 1.16.4 (#661) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump go.uber.org/automaxprocs from 1.5.1 to 1.5.2 (#650) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump github.com/honeycombio/dynsampler-go from 0.3.0 to 0.4.0 (#649) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump google.golang.org/grpc from 1.52.3 to 1.54.0 (#652) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump github.com/honeycombio/husky from 0.21.0 to 0.22.2 (#651) | [dependabot[bot]](https://github.com/dependabot)
+- maint(deps): bump github.com/klauspost/compress from 1.16.0 to 1.16.3 (#648) | [dependabot[bot]](https://github.com/dependabot)
 - maint: Add labels to docker image (#640) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 - maint: Add LICENSES dir (#638) | [Tyler Helmuth](https://github.com/TylerHelmuth)
 
