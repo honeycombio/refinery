@@ -96,7 +96,6 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - setup_remote_docker
       - run: make smoke
       - run: make unsmoke
 
