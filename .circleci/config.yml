@@ -95,7 +95,8 @@ jobs:
       image: ubuntu-2204:2024.01.1
     steps:
       - checkout
-      - make smoke-test
+      - run: make smoke
+      - run: make unsmoke
 
   build_binaries:
     docker:
@@ -253,6 +254,12 @@ workflows:
       - build_docker:
           requires:
             - test
+          filters:
+            tags:
+              only: /.*/
+      - smoke-test:
+          requires:
+            - build_docker
           filters:
             tags:
               only: /.*/
