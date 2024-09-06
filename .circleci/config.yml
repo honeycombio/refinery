@@ -94,7 +94,9 @@ jobs:
     machine:
       image: ubuntu-2204:2024.01.1
     steps:
+      - setup_googleko
       - checkout
+      - setup_remote_docker
       - run: make smoke
       - run: make unsmoke
 
