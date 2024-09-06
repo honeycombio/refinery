@@ -102,30 +102,26 @@ verify-licenses: install-tools
       exit 1; \
     fi; \
 
+.PHONY: smoke
+smoke: dockerize local_image
+	@echo ""
+	@echo "+++ Smoking all the tests."
+	@echo ""
+	@echo ""
+	@echo "+++ Spin up Refinery and Redis."
+	@echo ""
+	cd smoke-test && docker compose up --detach --wait-timeout 10
+	@echo ""
+	@echo "+++ Verify Refinery is ready within the timeout."
+	@echo ""
+	./dockerize -wait http://localhost:8080/ready -timeout 5s
 
-.PHONY: smoke-test
-smoke-test: local_image
-	pushd smoke-test; \
-	docker compose -f refinery-redis.yaml up -d --wait-timeout 10; \
-	container_id=$$(docker ps -f name=refinery -q); \
-  if [ -z "$$container_id" ]; then \
-      echo "No container with the name 'refinery' is running."; \
-			docker compose -f refinery-redis.yaml down; \
-			popd; \
-      exit 1; \
-  fi; \
-	echo "Container ID: $$container_id"; \
-	sleep 5; \
-	found=$$(docker logs $$container_id 2>&1 | grep "loaded configuration at startup" >/dev/null 2>&1; echo $$?); \
-	docker compose -f refinery-redis.yaml down; \
-	if [ $$found -eq 0 ]; then \
-		echo "Refinery is running"; \
-	else \
-		echo "Refinery is not running"; \
-		popd; \
-		exit 1; \
-	fi; \
-	popd; \
+.PHONY: unsmoke
+unsmoke:
+	@echo ""
+	@echo "+++ Spinning down the smokers."
+	@echo ""
+	cd smoke-tests && docker-compose down --volumes
 
 
 

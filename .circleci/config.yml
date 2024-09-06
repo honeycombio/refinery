@@ -90,6 +90,13 @@ jobs:
           paths:
             - /home/circleci/go/pkg/mod
 
+  smoke-test:
+    machine:
+      image: ubuntu-2204:2024.01.1
+    steps:
+      - checkout
+      - make smoke-test
+
   build_binaries:
     docker:
       - image: cimg/go:1.21
