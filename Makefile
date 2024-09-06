@@ -121,7 +121,7 @@ unsmoke:
 	@echo ""
 	@echo "+++ Spinning down the smokers."
 	@echo ""
-	cd smoke-tests && docker-compose down --volumes
+	cd smoke-test && docker-compose down --volumes
 
 
 
