@@ -269,6 +269,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             branches:
               ignore: /pull\/.*/
@@ -277,6 +278,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             tags:
               only: /^v.*/
@@ -287,6 +289,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             tags:
               only: /^v.*/
@@ -297,6 +300,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             tags:
               only: /^v.*/
