@@ -122,11 +122,11 @@ jobs:
     machine:
       image: ubuntu-2204:2024.01.1
     steps:
-      - setup_googleko
       - checkout
       - load_current_timestamp
       - restore_cache:
           keys:
+            - v1-googleko_bin
             - go_build_cache
             - ko_cache
       - run: make smoke
@@ -247,12 +247,12 @@ jobs:
     docker:
       - image: cimg/go:1.21
     steps:
-      - setup_googleko
       - checkout
       - load_current_timestamp
       - setup_remote_docker
       - restore_cache:
           keys:
+            - v1-googleko_bin
             - go_build_cache
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
@@ -274,12 +274,12 @@ jobs:
     docker:
       - image: cimg/go:1.21
     steps:
-      - setup_googleko
       - checkout
       - load_current_timestamp
       - setup_remote_docker
       - restore_cache:
           keys:
+            - v1-googleko_bin
             - go_build_cache
       - run:
           name: build docker images and publish to Docker Hub
