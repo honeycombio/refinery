@@ -90,6 +90,35 @@ jobs:
           paths:
             - /home/circleci/go/pkg/mod
 
+  create-current-timestamp:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run: |
+          echo "export CURRENT_TIMESTAMP=$(date +%s)" >> $BASH_ENV
+      - run: |
+          # verify;
+          printenv CURRENT_TIMESTAMP
+      - run: |
+          cp $BASH_ENV bash.env
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - bash.env
+  load-current-timestamp:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run: |
+          # verify;
+          printenv CURRENT_TIMESTAMP
+
   smoke-test:
     machine:
       image: ubuntu-2204:2024.01.1
@@ -97,6 +126,7 @@ jobs:
     steps:
       - setup_googleko
       - checkout
+      - load-current-timestamp
       - run: make smoke
       - run: make unsmoke
 
@@ -197,6 +227,7 @@ jobs:
     steps:
       - setup_googleko
       - checkout
+      - create-current-timestamp
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
@@ -209,6 +240,7 @@ jobs:
     steps:
       - setup_googleko
       - checkout
+      - load-current-timestamp
       - setup_remote_docker:
           docker_layer_caching: true
       - aws-cli/setup:
@@ -233,6 +265,7 @@ jobs:
     steps:
       - setup_googleko
       - checkout
+      - load-current-timestamp
       - setup_remote_docker:
           docker_layer_caching: true
       - run:

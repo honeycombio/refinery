@@ -32,6 +32,7 @@ local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" -
 local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
 local_image: export CIRCLE_BUILD_NUM=''
+local_image: export CURRENT_TIMESTAMP=$(shell date +%s)
 #: build the release image locally, available as "ko.local/refinery:<commit>"
 local_image:
 	./build-docker.sh
