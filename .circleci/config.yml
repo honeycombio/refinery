@@ -61,6 +61,15 @@ commands:
           key: v1-googleko
           paths:
             - /home/circleci/go/pkg/mod/
+  load_current_timestamp:
+    steps:
+      - attach_workspace:
+          at: .
+      - run: |
+          cat bash.env >> $BASH_ENV
+      - run: |
+          # verify;
+          printenv CURRENT_TIMESTAMP
 
 jobs:
   test:
@@ -95,6 +104,7 @@ jobs:
       - image: cimg/base:current
     resource_class: small
     steps:
+      - checkout
       - run: |
           echo "export CURRENT_TIMESTAMP=$(date +%s)" >> $BASH_ENV
       - run: |
@@ -103,30 +113,17 @@ jobs:
       - run: |
           cp $BASH_ENV bash.env
       - persist_to_workspace:
-          root: ~/
+          root: .
           paths:
             - bash.env
-  load-current-timestamp:
-    docker:
-      - image: cimg/base:current
-    resource_class: small
-    steps:
-      - attach_workspace:
-          at: ~/
-      - run: |
-          cat bash.env >> $BASH_ENV
-      - run: |
-          # verify;
-          printenv CURRENT_TIMESTAMP
 
   smoke-test:
     machine:
       image: ubuntu-2204:2024.01.1
-      docker_layer_caching: true
     steps:
       - setup_googleko
       - checkout
-      - load-current-timestamp
+      - load_current_timestamp
       - run: make smoke
       - run: make unsmoke
 
@@ -227,12 +224,15 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - create-current-timestamp
-      - setup_remote_docker:
-          docker_layer_caching: true
+      - load_current_timestamp
+      - setup_remote_docker
       - run:
           name: build docker images and publish locally
           command: ./build-docker.sh
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ./.cache/go-build
 
   publish_docker_to_ecr:
     docker:
@@ -240,9 +240,8 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - load-current-timestamp
-      - setup_remote_docker:
-          docker_layer_caching: true
+      - load_current_timestamp
+      - setup_remote_docker
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
@@ -265,9 +264,8 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - load-current-timestamp
-      - setup_remote_docker:
-          docker_layer_caching: true
+      - load_current_timestamp
+      - setup_remote_docker
       - run:
           name: build docker images and publish to Docker Hub
           environment:
@@ -289,14 +287,20 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - create-current-timestamp:
+          filters:
+            tags:
+              only: /.*/
       - build_docker:
           requires:
+            - create-current-timestamp
             - test
           filters:
             tags:
               only: /.*/
       - smoke-test:
           requires:
+            - create-current-timestamp
             - build_docker
           filters:
             tags:
@@ -304,6 +308,7 @@ workflows:
       - publish_docker_to_ecr:
           context: Honeycomb Secrets for Public Repos
           requires:
+            - create-current-timestamp
             - build_binaries
             - build_docker
             - smoke-test
@@ -335,6 +340,7 @@ workflows:
       - publish_docker_to_dockerhub:
           context: Honeycomb Secrets for Public Repos
           requires:
+            - create-current-timestamp
             - build_binaries
             - build_docker
             - smoke-test
