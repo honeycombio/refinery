@@ -83,6 +83,7 @@ jobs:
             - v1-dockerize-{{ checksum "Makefile" }}
             - v1-dockerize-
       - run: make dockerize
+      - run: go env GOCACHE
       - save_cache:
           key: v1-dockerize-{{ checksum "Makefile" }}
           paths:
