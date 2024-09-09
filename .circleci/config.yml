@@ -93,6 +93,7 @@ jobs:
   smoke-test:
     machine:
       image: ubuntu-2204:2024.01.1
+      docker_layer_caching: true
     steps:
       - setup_googleko
       - checkout
@@ -196,7 +197,8 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: build docker images and publish locally
           command: ./build-docker.sh
@@ -207,7 +209,8 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
@@ -230,7 +233,8 @@ jobs:
     steps:
       - setup_googleko
       - checkout
-      - setup_remote_docker
+      - setup_remote_docker:
+          docker_layer_caching: true
       - run:
           name: build docker images and publish to Docker Hub
           environment:
