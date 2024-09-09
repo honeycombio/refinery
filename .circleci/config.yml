@@ -125,6 +125,9 @@ jobs:
       - setup_googleko
       - checkout
       - load_current_timestamp
+      - restore_cache:
+          keys:
+            - go_build_cache
       - run: make smoke
       - run: make unsmoke
 
@@ -230,10 +233,10 @@ jobs:
       - run:
           name: build docker images and publish locally
           command: ./build-docker.sh
-      - persist_to_workspace:
-          root: .
+      - save_cache:
+          key: go_build_cache
           paths:
-            - ./.cache/go-build
+            - /home/circleci/.cache/go-build
 
   publish_docker_to_ecr:
     docker:
