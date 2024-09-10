@@ -75,7 +75,6 @@ __latest_modification_time := $(strip $(if $(shell git diff --quiet && echo $$?)
 $(shell git log --max-count=1 --pretty=format:"%ct"), \
 $(shell git status --short --untracked-files=no --no-column | cut -w -f 3 | xargs ls -ltr -D "%s" | tail -n 1 | cut -w -f 6)))
 
-
 .PHONY: latest_modification_time
 latest_modification_time:
 	@echo $(call __latest_modification_time)
