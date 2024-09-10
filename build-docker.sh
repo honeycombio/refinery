@@ -45,7 +45,6 @@ unset GOARCH
 export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
-export KOCACHE=${KOCACHE:-./ko-cache}
 # shellcheck disable=SC2086
 ./ko publish \
   --tags "${TAGS}" \

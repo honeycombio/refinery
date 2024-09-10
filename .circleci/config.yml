@@ -100,9 +100,6 @@ jobs:
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - restore_cache:
-          keys:
-            - ko_cache-{{ .Environment.CIRCLE_SHA1 }}
       - run: make smoke
       - run: make unsmoke
 
@@ -211,10 +208,6 @@ jobs:
           key: go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
           paths:
             - /home/circleci/.cache/go-build
-      - save_cache:
-          key: ko_cache-{{ .Environment.CIRCLE_SHA1 }}
-          paths:
-            - ./ko-cache
 
   publish_docker_to_ecr:
     docker:
