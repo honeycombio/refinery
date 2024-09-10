@@ -71,11 +71,13 @@ endif
 	&& file ko_tmp.tar.gz | grep --silent gzip \
 	&& mv ko_tmp.tar.gz $@ || (echo "Failed to download ko. Got:"; cat ko_tmp.tar.gz ; echo "" ; exit 1)
 
-__latest_modification_time := $(shell git log --max-count=1 --pretty=format:"%ct")
+__latest_modification_time := $(strip $(if $(shell git diff --quiet && echo $$?), \
+$(shell git log --max-count=1 --pretty=format:"%ct"), \
+$(shell git status --short --untracked-files=no --no-column | cut -w -f 3 | xargs ls -ltr -D "%s" | tail -n 1 | cut -w -f 6)))
+
 
 .PHONY: latest_modification_time
 latest_modification_time:
-	@echo $(shell git diff)
 	@echo $(call __latest_modification_time)
 
 # ensure the dockerize command is available
