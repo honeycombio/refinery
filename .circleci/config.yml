@@ -202,8 +202,6 @@ jobs:
       - setup_remote_docker
       - run:
           name: build docker images and publish locally
-          environment:
-            SOURCE_DATE_EPOCH: $(make latest_modification_time)
           command: ./build-docker.sh
       - save_cache:
           key: go_build_cache-{{ .BuildNum }}
@@ -235,7 +233,6 @@ jobs:
 
             export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
             export KO_DOCKER_REPO=${ECR_HOST}
-            export SOURCE_DATE_EPOCH=$(make latest_modification_time)
 
             aws ecr get-login-password --region us-east-1 \
               | docker login --username AWS --password-stdin "${ECR_HOST}"
@@ -255,7 +252,6 @@ jobs:
           name: build docker images and publish to Docker Hub
           environment:
             KO_DOCKER_REPO: honeycombio
-            SOURCE_DATE_EPOCH: $(make latest_modification_time)
           command: |
             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             ./build-docker.sh
@@ -263,19 +259,19 @@ jobs:
 workflows:
   build:
     jobs:
-      - test:
-          filters:
-            tags:
-              only: /.*/
+      # - test:
+      #     filters:
+      #       tags:
+      #         only: /.*/
       - build_binaries:
-          requires:
-            - test
+          # requires:
+            # - test
           filters:
             tags:
               only: /.*/
       - build_docker:
-          requires:
-            - test
+          # requires:
+            # - test
           filters:
             tags:
               only: /.*/

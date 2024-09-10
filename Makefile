@@ -78,7 +78,7 @@ $(shell git log --max-count=1 --pretty=format:"%%ct")))
 
 .PHONY: latest_modification_time
 latest_modification_time:
-	$(call get_latest_modification_time)
+	@echo $(call get_latest_modification_time)
 
 # ensure the dockerize command is available
 dockerize: dockerize.tar.gz
