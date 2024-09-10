@@ -54,10 +54,10 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v2-googleko-{{ .BuildNum }}
+            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
       - run: make ko
       - save_cache:
-          key: v2-googleko-{{ .BuildNum }}
+          key: v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
           paths:
             - ./ko
 
@@ -96,9 +96,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - v2-googleko-{{ .BuildNum }}
-            - go_build_cache-{{ .BuildNum }}
-            - ko_cache-{{ .BuildNum }}
+            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+            - ko_cache-{{ .Environment.CIRCLE_SHA1 }}
       - run: make smoke
       - run: make unsmoke
 
@@ -204,11 +204,11 @@ jobs:
           name: build docker images and publish locally
           command: ./build-docker.sh
       - save_cache:
-          key: go_build_cache-{{ .BuildNum }}
+          key: go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
           paths:
             - /home/circleci/.cache/go-build
       - save_cache:
-          key: ko_cache-{{ .BuildNum }}
+          key: ko_cache-{{ .Environment.CIRCLE_SHA1 }}
           paths:
             - ./ko-cache
 
@@ -220,8 +220,8 @@ jobs:
       - setup_remote_docker
       - restore_cache:
           keys:
-            - v2-googleko-{{ .BuildNum }}
-            - go_build_cache-{{ .BuildNum }}
+            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
@@ -246,8 +246,8 @@ jobs:
       - setup_remote_docker
       - restore_cache:
           keys:
-            - v2-googleko-{{ .BuildNum }}
-            - go_build_cache-{{ .BuildNum }}
+            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
       - run:
           name: build docker images and publish to Docker Hub
           environment:
