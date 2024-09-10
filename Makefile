@@ -32,6 +32,7 @@ local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" -
 local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
 local_image: export CIRCLE_BUILD_NUM=''
+local_image: export SOURCE_DATE_EPOCH=$(call __latest_modification_time)
 #: build the release image locally, available as "ko.local/refinery:<commit>"
 local_image:
 	./build-docker.sh
@@ -70,13 +71,11 @@ endif
 	&& file ko_tmp.tar.gz | grep --silent gzip \
 	&& mv ko_tmp.tar.gz $@ || (echo "Failed to download ko. Got:"; cat ko_tmp.tar.gz ; echo "" ; exit 1)
 
+__latest_modification_time := $(shell git log --max-count=1 --pretty=format:"%ct")
+
 .PHONY: latest_modification_time
 latest_modification_time:
-ifeq ("0", $(shell git diff --quiet; echo $$?)) # 0 if no tracked files are modified, non-zero otherwise
-	@git log --max-count=1 --pretty=format:"%%ct"
-else
-	@git status --short --untracked-files=no --no-column | cut -w -f 2 | xargs ls -ltr -D "%s" | tail -n 1 | cut -w -f 6
-endif
+	@echo $(call __latest_modification_time)
 
 # ensure the dockerize command is available
 dockerize: dockerize.tar.gz

@@ -96,8 +96,15 @@ jobs:
       - checkout
       - restore_cache:
           keys:
+            - ko_cache-{{ .Environment.CIRCLE_SHA1 }}
+      - restore_cache:
+          keys:
             - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+      - restore_cache:
+          keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+      - restore_cache:
+          keys:
             - ko_cache-{{ .Environment.CIRCLE_SHA1 }}
       - run: make smoke
       - run: make unsmoke
@@ -221,6 +228,8 @@ jobs:
       - restore_cache:
           keys:
             - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+      - restore_cache:
+          keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
@@ -247,6 +256,8 @@ jobs:
       - restore_cache:
           keys:
             - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+      - restore_cache:
+          keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
       - run:
           name: build docker images and publish to Docker Hub
