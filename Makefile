@@ -32,7 +32,7 @@ local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" -
 local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
 local_image: export CIRCLE_BUILD_NUM=''
-local_image: export CURRENT_TIMESTAMP=$(shell date +%s)
+local_image: export SOURCE_DATE_EPOCH=$(call get_latest_modification_time)
 #: build the release image locally, available as "ko.local/refinery:<commit>"
 local_image:
 	./build-docker.sh
@@ -46,11 +46,44 @@ wait_for_redis: dockerize
 	@echo "Checking with dockerize $(shell ./dockerize --version)"
 	@./dockerize -wait tcp://localhost:6379 -timeout 30s
 
+# You can override this version from an environment variable.
+HOST_OS := $(shell uname -s | tr A-Z a-z)
+# You can override this version from an environment variable.
+KO_VERSION ?= 0.11.2
+KO_RELEASE_ASSET := ko_${KO_VERSION}_${HOST_OS}_x86_64.tar.gz
+# ensure the dockerize command is available
+ko: ko_${KO_VERSION}.tar.gz
+	tar xzvmf $< ko
+	chmod u+x ./ko
+
+ko_${KO_VERSION}.tar.gz:
+	@echo
+	@echo "+++ Retrieving dockerize tool for Redis readiness check."
+	@echo
+# make sure that file is available
+ifeq (, $(shell command -v file))
+	sudo apt-get update
+	sudo apt-get -y install file
+endif
+	curl --location --silent --show-error \
+	    --output ko_tmp.tar.gz \
+	    https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/${KO_RELEASE_ASSET} \
+	&& file ko_tmp.tar.gz | grep --silent gzip \
+	&& mv ko_tmp.tar.gz $@ || (echo "Failed to download ko. Got:"; cat ko_tmp.tar.gz ; echo "" ; exit 1)
+
+# Function to get the latest modification time
+get_latest_modification_time = $(strip $(if $(shell git diff --quiet; echo $$?), \
+$(shell git status --short --untracked-files=no --no-column | cut -w -f 3 | xargs ls -ltr -D "%s" | tail -n 1 | cut -w -f 6), \
+$(shell git log --max-count=1 --pretty=format:"%%ct")))
+
+.PHONY: latest_modification_time
+latest_modification_time:
+	@echo "Latest modification time:'$(call get_latest_modification_time)'"
+
 # ensure the dockerize command is available
 dockerize: dockerize.tar.gz
 	tar xzvmf dockerize.tar.gz
 
-HOST_OS := $(shell uname -s | tr A-Z a-z)
 # You can override this version from an environment variable.
 DOCKERIZE_VERSION ?= v0.6.1
 DOCKERIZE_RELEASE_ASSET := dockerize-${HOST_OS}-amd64-${DOCKERIZE_VERSION}.tar.gz

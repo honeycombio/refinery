@@ -54,22 +54,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v1-googleko_bin
-      # we're pinning to ko 11.2 because it v0.12 can't push to ecr
-      - run: go install github.com/google/ko@v0.11.2
+            - v2-googleko-{{ .BuildNum }}
+      - run: make ko
       - save_cache:
-          key: v1-googleko_bin
+          key: v2-googleko-{{ .BuildNum }}
           paths:
-            - /home/circleci/go/bin/ko
-  load_current_timestamp:
-    steps:
-      - attach_workspace:
-          at: .
-      - run: |
-          cat bash.env >> $BASH_ENV
-      - run: |
-          # verify;
-          printenv CURRENT_TIMESTAMP
+            - ./ko
 
 jobs:
   test:
@@ -83,7 +73,7 @@ jobs:
             - v1-dockerize-{{ checksum "Makefile" }}
             - v1-dockerize-
       - run: make dockerize
-      - run: go env GOCACHE
+      - run: go env GOBIN
       - save_cache:
           key: v1-dockerize-{{ checksum "Makefile" }}
           paths:
@@ -100,35 +90,16 @@ jobs:
           paths:
             - /home/circleci/go/pkg/mod
 
-  create-current-timestamp:
-    docker:
-      - image: cimg/base:current
-    resource_class: small
-    steps:
-      - checkout
-      - run: |
-          echo "export CURRENT_TIMESTAMP=$(date +%s)" >> $BASH_ENV
-      - run: |
-          # verify;
-          printenv CURRENT_TIMESTAMP
-      - run: |
-          cp $BASH_ENV bash.env
-      - persist_to_workspace:
-          root: .
-          paths:
-            - bash.env
-
   smoke-test:
     machine:
       image: ubuntu-2204:2024.01.1
     steps:
       - checkout
-      - load_current_timestamp
       - restore_cache:
           keys:
-            - v1-googleko_bin
-            - go_build_cache
-            - ko_cache
+            - v2-googleko-{{ .BuildNum }}
+            - go_build_cache-{{ .BuildNum }}
+            - ko_cache-{{ .BuildNum }}
       - run: make smoke
       - run: make unsmoke
 
@@ -227,19 +198,18 @@ jobs:
     docker:
       - image: cimg/go:1.21
     steps:
-      - setup_googleko
       - checkout
-      - load_current_timestamp
+      - setup_googleko
       - setup_remote_docker
       - run:
           name: build docker images and publish locally
           command: ./build-docker.sh
       - save_cache:
-          key: go_build_cache
+          key: go_build_cache-{{ .BuildNum }}
           paths:
             - /home/circleci/.cache/go-build
       - save_cache:
-          key: ko_cache
+          key: ko_cache-{{ .BuildNum }}
           paths:
             - ./ko-cache
 
@@ -248,12 +218,11 @@ jobs:
       - image: cimg/go:1.21
     steps:
       - checkout
-      - load_current_timestamp
       - setup_remote_docker
       - restore_cache:
           keys:
-            - v1-googleko_bin
-            - go_build_cache
+            - v2-googleko-{{ .BuildNum }}
+            - go_build_cache-{{ .BuildNum }}
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
@@ -275,12 +244,11 @@ jobs:
       - image: cimg/go:1.21
     steps:
       - checkout
-      - load_current_timestamp
       - setup_remote_docker
       - restore_cache:
           keys:
-            - v1-googleko_bin
-            - go_build_cache
+            - v2-googleko-{{ .BuildNum }}
+            - go_build_cache-{{ .BuildNum }}
       - run:
           name: build docker images and publish to Docker Hub
           environment:
@@ -302,20 +270,14 @@ workflows:
           filters:
             tags:
               only: /.*/
-      - create-current-timestamp:
-          filters:
-            tags:
-              only: /.*/
       - build_docker:
           requires:
-            - create-current-timestamp
             - test
           filters:
             tags:
               only: /.*/
       - smoke-test:
           requires:
-            - create-current-timestamp
             - build_docker
           filters:
             tags:
@@ -323,7 +285,6 @@ workflows:
       - publish_docker_to_ecr:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - create-current-timestamp
             - build_binaries
             - build_docker
             - smoke-test
@@ -355,7 +316,6 @@ workflows:
       - publish_docker_to_dockerhub:
           context: Honeycomb Secrets for Public Repos
           requires:
-            - create-current-timestamp
             - build_binaries
             - build_docker
             - smoke-test
