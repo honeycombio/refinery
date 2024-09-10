@@ -47,7 +47,7 @@ export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 export KOCACHE=${KOCACHE:-./ko-cache}
 # shellcheck disable=SC2086
-ko publish \
+./ko publish \
   --tags "${TAGS}" \
   --base-import-paths \
   --platform "linux/amd64,linux/arm64" \
