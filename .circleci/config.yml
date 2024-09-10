@@ -54,10 +54,10 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - v2-googleko-{{ checksum "Makefile" }}
       - run: make ko
       - save_cache:
-          key: v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+          key: v2-googleko-{{ checksum "Makefile" }}
           paths:
             - ./ko
 
@@ -96,10 +96,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - ko_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - restore_cache:
-          keys:
-            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - v2-googleko-{{ checksum "Makefile" }}
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
@@ -227,7 +224,7 @@ jobs:
       - setup_remote_docker
       - restore_cache:
           keys:
-            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - v2-googleko-{{ checksum "Makefile" }}
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
@@ -255,7 +252,7 @@ jobs:
       - setup_remote_docker
       - restore_cache:
           keys:
-            - v2-googleko-{{ .Environment.CIRCLE_SHA1 }}
+            - v2-googleko-{{ checksum "Makefile" }}
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
@@ -270,19 +267,19 @@ jobs:
 workflows:
   build:
     jobs:
-      # - test:
-      #     filters:
-      #       tags:
-      #         only: /.*/
+      - test:
+          filters:
+            tags:
+              only: /.*/
       - build_binaries:
-          # requires:
-            # - test
+          requires:
+            - test
           filters:
             tags:
               only: /.*/
       - build_docker:
-          # requires:
-            # - test
+          requires:
+            - test
           filters:
             tags:
               only: /.*/
