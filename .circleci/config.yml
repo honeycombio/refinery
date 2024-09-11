@@ -54,13 +54,12 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - v1-googleko
-      # we're pinning to ko 11.2 because it v0.12 can't push to ecr
-      - run: go install github.com/google/ko@v0.11.2
+            - v2-googleko-{{ checksum "Makefile" }}
+      - run: make ko
       - save_cache:
-          key: v1-googleko
+          key: v2-googleko-{{ checksum "Makefile" }}
           paths:
-            - /home/circleci/go/pkg/mod/
+            - ./ko
 
 jobs:
   test:
@@ -185,20 +184,43 @@ jobs:
     docker:
       - image: cimg/go:1.21
     steps:
-      - setup_googleko
       - checkout
+      - setup_googleko
       - setup_remote_docker
       - run:
           name: build docker images and publish locally
           command: ./build-docker.sh
+      - save_cache:
+          key: go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+          paths:
+            - /home/circleci/.cache/go-build
+
+  smoke-test:
+    machine:
+      image: ubuntu-2204:2024.01.1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v2-googleko-{{ checksum "Makefile" }}
+      - restore_cache:
+          keys:
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+      - run: make smoke
+      - run: make unsmoke
 
   publish_docker_to_ecr:
     docker:
       - image: cimg/go:1.21
     steps:
-      - setup_googleko
       - checkout
       - setup_remote_docker
+      - restore_cache:
+          keys:
+            - v2-googleko-{{ checksum "Makefile" }}
+      - restore_cache:
+          keys:
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
       - aws-cli/setup:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
@@ -219,9 +241,14 @@ jobs:
     docker:
       - image: cimg/go:1.21
     steps:
-      - setup_googleko
       - checkout
       - setup_remote_docker
+      - restore_cache:
+          keys:
+            - v2-googleko-{{ checksum "Makefile" }}
+      - restore_cache:
+          keys:
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
       - run:
           name: build docker images and publish to Docker Hub
           environment:
@@ -249,11 +276,18 @@ workflows:
           filters:
             tags:
               only: /.*/
+      - smoke-test:
+          requires:
+            - build_docker
+          filters:
+            tags:
+              only: /.*/
       - publish_docker_to_ecr:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             branches:
               ignore: /pull\/.*/
@@ -262,6 +296,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             tags:
               only: /^v.*/
@@ -272,6 +307,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             tags:
               only: /^v.*/
@@ -282,6 +318,7 @@ workflows:
           requires:
             - build_binaries
             - build_docker
+            - smoke-test
           filters:
             tags:
               only: /^v.*/

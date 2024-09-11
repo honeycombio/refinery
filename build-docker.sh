@@ -28,25 +28,25 @@ fi
 # it is probably best if people just use the major or minor version tags
 
 if [[ -n ${CIRCLE_TAG:-} ]]; then
-    # trim 'v' prefix if present
-    VERSION=${CIRCLE_TAG#"v"}
+  # trim 'v' prefix if present
+  VERSION=${CIRCLE_TAG#"v"}
 
-    # Extract major, major.minor, and major.minor.patch versions
-    MAJOR_VERSION=${VERSION%%.*}
-    MINOR_VERSION=${VERSION%.*}
+  # Extract major, major.minor, and major.minor.patch versions
+  MAJOR_VERSION=${VERSION%%.*}
+  MINOR_VERSION=${VERSION%.*}
 
-    # Append versions to image tags
-    # So 2.1.1 would be tagged with "2","2.1","2.1.1"
-    TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
+  # Append versions to image tags
+  # So 2.1.1 would be tagged with "2","2.1","2.1.1"
+  TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
 fi
 
 unset GOOS
 unset GOARCH
 export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
-export SOURCE_DATE_EPOCH=$(date +%s)
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
 # shellcheck disable=SC2086
-ko publish \
+./ko publish \
   --tags "${TAGS}" \
   --base-import-paths \
   --platform "linux/amd64,linux/arm64" \

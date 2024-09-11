@@ -26,3 +26,8 @@ dockerize*
 
 # redis dump file
 *.rdb
+
+# cache for ko-build/
+ko-cache/
+ko
+ko*.tar.gz

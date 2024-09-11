@@ -17,10 +17,6 @@ Logger:
 PeerManagement:
     Type: redis
 
-RedisPeerManagement:
-    UseTLS: true
-    UseTLSInsecure: true
-
 RefineryTelemetry:
   AddRuleReasonToTrace: true
   AddSpanCountToRoot: true
