@@ -1,0 +1,40 @@
+services:
+  refinery:
+    volumes:
+      - ./config-tls.yaml:/etc/refinery/refinery-tls.yaml
+    environment:
+      REFINERY_REDIS_AUTH_CODE: "12345"
+      REFINERY_CONFIG: /etc/refinery/refinery.yaml,/etc/refinery/refinery-tls.yaml
+    extends:
+      file: docker-compose.yaml
+      service: refinery
+
+  redis:
+    command: [ "redis-server",
+      "--port", "0",
+      "--requirepass", "12345",
+      "--tls-port", "6379",
+      "--tls-cert-file", "/data/certs/cert.pem",
+      "--tls-key-file", "/data/certs/key.pem",
+      "--tls-ca-cert-file", "/data/certs/ca.pem",
+      "--tls-auth-clients", "no"
+      ]
+    volumes:
+      - certs:/data/certs
+    extends:
+      file: docker-compose.yaml
+      service: redis
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --tls --insecure ping | grep PONG"]
+    depends_on:
+      gen-certs:
+        condition: service_completed_successfully
+
+  gen-certs:
+    image: paulczar/omgwtfssl
+    command: ["sh", "-c", "[ -f /certs/cert.pem ] && echo 'Cert exists!' || /usr/local/bin/generate-certs"]
+    volumes:
+      - certs:/certs
+
+volumes:
+  certs:
