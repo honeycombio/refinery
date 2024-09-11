@@ -89,20 +89,6 @@ jobs:
           paths:
             - /home/circleci/go/pkg/mod
 
-  smoke-test:
-    machine:
-      image: ubuntu-2204:2024.01.1
-    steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - v2-googleko-{{ checksum "Makefile" }}
-      - restore_cache:
-          keys:
-            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - run: make smoke
-      - run: make unsmoke
-
   build_binaries:
     docker:
       - image: cimg/go:1.21
@@ -208,6 +194,20 @@ jobs:
           key: go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
           paths:
             - /home/circleci/.cache/go-build
+
+  smoke-test:
+    machine:
+      image: ubuntu-2204:2024.01.1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v2-googleko-{{ checksum "Makefile" }}
+      - restore_cache:
+          keys:
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+      - run: make smoke
+      - run: make unsmoke
 
   publish_docker_to_ecr:
     docker:
