@@ -33,6 +33,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -198,6 +199,8 @@ func newStartedApp(
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &health.Health{}},
 		&inject.Object{Value: clockwork.NewRealClock()},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
+		&inject.Object{Value: &collect.EMAThroughputCalculator{}, Name: "throughputCalculator"},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &a},
 	)

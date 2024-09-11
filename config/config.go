@@ -150,6 +150,7 @@ type Config interface {
 	GetSampleCacheConfig() SampleCacheConfig
 
 	GetStressReliefConfig() StressReliefConfig
+	GetThroughputCalculatorConfig() ThroughputCalculatorConfig
 
 	GetAdditionalAttributes() map[string]string
 

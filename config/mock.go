@@ -27,6 +27,7 @@ type MockConfig struct {
 	GetLoggerLevelVal                Level
 	GetPeersVal                      []string
 	GetRedisPeerManagementVal        RedisPeerManagementConfig
+	GetThroughputCalculatorVal       ThroughputCalculatorConfig
 	GetSamplerTypeName               string
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeVal                string
@@ -274,11 +275,16 @@ func (m *MockConfig) GetAllSamplerRules() *V2SamplerConfig {
 		return nil
 	}
 
-	v := &V2SamplerConfig{
-		Samplers: map[string]*V2SamplerChoice{"dataset1": choice},
-	}
+	v := &V2SamplerConfig{Samplers: map[string]*V2SamplerChoice{"dataset1": choice}}
 
 	return v
+}
+
+func (m *MockConfig) GetThroughputCalculatorConfig() ThroughputCalculatorConfig {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetThroughputCalculatorVal
 }
 
 func (m *MockConfig) GetUpstreamBufferSize() int {

@@ -260,6 +260,7 @@ func main() {
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
+		{Value: &collect.EMAThroughputCalculator{}, Name: "throughputCalculator"},
 		{Value: &health.Health{}},
 		{Value: &configwatcher.ConfigWatcher{}},
 		{Value: &a},

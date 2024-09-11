@@ -67,11 +67,12 @@ type InMemCollector struct {
 	Health  health.Recorder `inject:""`
 	Sharder sharder.Sharder `inject:""`
 
-	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
-	Metrics        metrics.Metrics        `inject:"genericMetrics"`
-	SamplerFactory *sample.SamplerFactory `inject:""`
-	StressRelief   StressReliever         `inject:"stressRelief"`
-	Peers          peer.Peers             `inject:""`
+	Transmission         transmit.Transmission    `inject:"upstreamTransmission"`
+	Metrics              metrics.Metrics          `inject:"genericMetrics"`
+	SamplerFactory       *sample.SamplerFactory   `inject:""`
+	StressRelief         StressReliever           `inject:"stressRelief"`
+	ThroughputCalculator *EMAThroughputCalculator `inject:"throughputCalculator"`
+	Peers                peer.Peers               `inject:""`
 
 	// For test use only
 	BlockOnAddSpan bool
@@ -127,6 +128,10 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Register("trace_redistribution_count", "gauge")
 	i.Metrics.Register("trace_send_on_shutdown", "counter")
 	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
+
+	i.Metrics.Register("original_sample_rate_before_multi", "histogram")
+	i.Metrics.Register("sample_rate_multi", "histogram")
+	i.Metrics.Register("trace_aggregate_sample_rate", "histogram")
 
 	i.Metrics.Register(TraceSendGotRoot, "counter")
 	i.Metrics.Register(TraceSendExpired, "counter")
@@ -660,6 +665,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		}
 	}
 	if keep {
+		i.ThroughputCalculator.IncrementEventCount(1)
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		mergeTraceAndSpanSampleRates(sp, tr.Rate(), isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
@@ -781,7 +787,25 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	}
 
 	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	originalRate, reason, key := sampler.GetSampleRate(trace)
+	sampleRateMultiplier := i.ThroughputCalculator.GetSamplingRateMultiplier()
+	i.Metrics.Histogram("original_sample_rate_before_multi", originalRate)
+	i.Metrics.Histogram("sample_rate_multi", sampleRateMultiplier)
+
+	// counting the expected number of spans based on the original sample rate
+	// this will tell us the throughput we would have sent without the adjustment from the multiplier
+	i.ThroughputCalculator.IncrementEventCount(float64(trace.DescendantCount()) / float64(originalRate))
+
+	// TODO: if the sample rate returned by the sampler is set to 1, we should not
+	// modify the sample rate with the multiplier
+	var rate uint
+	if originalRate == 1 {
+		rate = originalRate
+	} else {
+		rate = uint(float64(originalRate) * sampleRateMultiplier)
+	}
+	shouldSend := sampler.MakeSamplingDecision(rate, trace)
+
 	trace.SetSampleRate(rate)
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
@@ -799,6 +823,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
 		return
 	}
+
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
 	i.Metrics.Histogram("trace_kept_sample_rate", float64(rate))

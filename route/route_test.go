@@ -21,6 +21,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/jonboulle/clockwork"
@@ -387,11 +388,11 @@ func TestDebugAllRules(t *testing.T) {
 	}{
 		{
 			format: "json",
-			expect: `{"rulesversion":0,"samplers":{"dataset1":{"deterministicsampler":{"samplerate":0},"rulesbasedsampler":null,"dynamicsampler":null,"emadynamicsampler":null,"emathroughputsampler":null,"windowedthroughputsampler":null,"totalthroughputsampler":null}}}`,
+			expect: `{"rulesversion":0,"throughputlimit":{"limit":0,"weight":0,"adjustmentinterval":"0s"},"samplers":{"dataset1":{"deterministicsampler":{"samplerate":0},"rulesbasedsampler":null,"dynamicsampler":null,"emadynamicsampler":null,"emathroughputsampler":null,"windowedthroughputsampler":null,"totalthroughputsampler":null}}}`,
 		},
 		{
 			format: "toml",
-			expect: "RulesVersion = 0\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\n",
+			expect: "RulesVersion = 0\n\n[ThroughPutLimit]\nLimit = 0\nWeight = 0.0\nAdjustmentInterval = '0s'\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\n",
 		},
 		{
 			format: "yaml",
@@ -491,6 +492,8 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
 		&inject.Object{Value: &health.Health{}},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
+		&inject.Object{Value: &collect.EMAThroughputCalculator{}, Name: "throughputCalculator"},
 		&inject.Object{Value: clockwork.NewFakeClock()},
 	)
 	if err != nil {
