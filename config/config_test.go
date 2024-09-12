@@ -531,6 +531,33 @@ func TestAvailableMemoryCmdLine(t *testing.T) {
 	assert.Equal(t, expected, inMemConfig.AvailableMemory)
 }
 
+func TestSendKeyCmdLine(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "AccessKeys.SendKey", "my-send-key")
+	rm := makeYAML("ConfigVersion", 2)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules, "--send-key", "another-send-key"})
+	assert.NoError(t, err)
+
+	accessKeysConfig := c.GetAccessKeyConfig()
+	assert.Equal(t, "another-send-key", accessKeysConfig.SendKey)
+}
+
+func TestSendKeyEnvvart(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "AccessKeys.SendKey", "my-send-key")
+	rm := makeYAML("ConfigVersion", 2)
+	cfg, rules := createTempConfigs(t, cm, rm)
+
+	oldenv := os.Getenv("REFINERY_SEND_KEY")
+	os.Setenv("REFINERY_SEND_KEY", "another-send-key")
+	defer os.Setenv("REFINERY_SEND_KEY", oldenv)
+
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	accessKeysConfig := c.GetAccessKeyConfig()
+	assert.Equal(t, "another-send-key", accessKeysConfig.SendKey)
+}
+
 func TestGetSamplerTypes(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2)
 	rm := makeYAML(
