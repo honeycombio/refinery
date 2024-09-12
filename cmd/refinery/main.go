@@ -334,5 +334,5 @@ func main() {
 	// unregister ourselves before we go
 	close(done)
 	time.Sleep(100 * time.Millisecond)
-	a.Logger.Error().Logf("Caught signal \"%s\"", sig)
+	a.Logger.Error().WithField("signal", sig).Logf("Caught OS signal")
 }
