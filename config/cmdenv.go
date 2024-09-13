@@ -44,6 +44,7 @@ type CmdEnv struct {
 	OTelTracesAPIKey      string     `long:"otel-traces-api-key" env:"REFINERY_OTEL_TRACES_API_KEY" description:"API key for OTel traces if being sent to Honeycomb. Setting this value via a flag may expose credentials - it is recommended to use the env var or a configuration file."`
 	QueryAuthToken        string     `long:"query-auth-token" env:"REFINERY_QUERY_AUTH_TOKEN" description:"Token for debug/management queries. Setting this value via a flag may expose credentials - it is recommended to use the env var or a configuration file."`
 	AvailableMemory       MemorySize `long:"available-memory" env:"REFINERY_AVAILABLE_MEMORY" description:"The maximum memory available for Refinery to use (ex: 4GiB)."`
+	SendKey               string     `long:"send-key" env:"REFINERY_SEND_KEY" description:"The Honeycomb API key that Refinery can use to send data to Honeycomb."`
 	Debug                 bool       `short:"d" long:"debug" description:"Runs debug service (on the first open port between localhost:6060 and :6069 by default)"`
 	Version               bool       `short:"v" long:"version" description:"Print version number and exit"`
 	InterfaceNames        bool       `long:"interface-names" description:"Print system's network interface names and exit."`
