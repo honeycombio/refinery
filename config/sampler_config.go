@@ -263,7 +263,11 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 		}
 
 		for _, condition := range rule.Conditions {
-			fields.Add(condition.Fields...)
+			// Field and Fields are mutually exclusive, so we only need to check one.
+			if condition.Fields != nil {
+				fields.Add(condition.Fields...)
+				continue
+			}
 
 			if condition.Field != "" {
 				fields.Add(condition.Field)
@@ -280,6 +284,8 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 
 var _ GetSamplingFielder = (*RulesBasedDownstreamSampler)(nil)
 
+// RulesBasedDownstreamSampler is a sampler that can be used as a downstream sampler in a rules-based sampler.
+// Only one of the fields should be set.
 type RulesBasedDownstreamSampler struct {
 	DynamicSampler            *DynamicSamplerConfig            `json:"dynamicsampler" yaml:"DynamicSampler,omitempty"`
 	EMADynamicSampler         *EMADynamicSamplerConfig         `json:"emadynamicsampler" yaml:"EMADynamicSampler,omitempty"`
@@ -290,33 +296,32 @@ type RulesBasedDownstreamSampler struct {
 }
 
 func (r *RulesBasedDownstreamSampler) GetSamplingFields() []string {
-	fields := make(generics.Set[string], 0)
 
 	if r.DeterministicSampler != nil {
-		fields.Add(r.DeterministicSampler.GetSamplingFields()...)
+		return r.DeterministicSampler.GetSamplingFields()
 	}
 
 	if r.DynamicSampler != nil {
-		fields.Add(r.DynamicSampler.GetSamplingFields()...)
+		return r.DynamicSampler.GetSamplingFields()
 	}
 
 	if r.EMADynamicSampler != nil {
-		fields.Add(r.EMADynamicSampler.GetSamplingFields()...)
+		return r.EMADynamicSampler.GetSamplingFields()
 	}
 
 	if r.EMAThroughputSampler != nil {
-		fields.Add(r.EMAThroughputSampler.GetSamplingFields()...)
+		return r.EMAThroughputSampler.GetSamplingFields()
 	}
 
 	if r.WindowedThroughputSampler != nil {
-		fields.Add(r.WindowedThroughputSampler.GetSamplingFields()...)
+		return r.WindowedThroughputSampler.GetSamplingFields()
 	}
 
 	if r.TotalThroughputSampler != nil {
-		fields.Add(r.TotalThroughputSampler.GetSamplingFields()...)
+		return r.TotalThroughputSampler.GetSamplingFields()
 	}
 
-	return fields.Members()
+	return []string{}
 }
 
 type RulesBasedSamplerRule struct {
