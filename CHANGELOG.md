@@ -7,6 +7,7 @@
 
 - fix: assertion for ClusterSizer (#1329) | [Yingrong Zhao](https://github.com/vinozzZ)
 - feat: Allow SendKey to be set via command line and env var (#1323) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: add SendKey envvar config metadata (#1331) | [Yingrong Zhao](https://github.com/vinozzZ)
 - maint: run smoke test in CI (#1316) | [Yingrong Zhao](https://github.com/vinozzZ)
 
 ## 2.8.1 2024-09-05
