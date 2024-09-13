@@ -1,5 +1,14 @@
 # Refinery Changelog
 
+
+## 2.8.2 2024-09-13
+
+### Changes
+
+- fix: assertion for ClusterSizer (#1329) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Allow SendKey to be set via command line and env var (#1323) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- maint: run smoke test in CI (#1316) | [Yingrong Zhao](https://github.com/vinozzZ)
+
 ## 2.8.1 2024-09-05
 
 This release includes a fix to a bug that prevented Refinery from starting up a new cluster from scratch.
