@@ -547,9 +547,7 @@ func TestSendKeyEnvVar(t *testing.T) {
 	rm := makeYAML("ConfigVersion", 2)
 	cfg, rules := createTempConfigs(t, cm, rm)
 
-	oldenv := os.Getenv("REFINERY_SEND_KEY")
-	os.Setenv("REFINERY_SEND_KEY", "another-send-key")
-	defer os.Setenv("REFINERY_SEND_KEY", oldenv)
+	t.Setenv("REFINERY_SEND_KEY", "another-send-key")
 
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
