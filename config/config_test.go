@@ -542,7 +542,7 @@ func TestSendKeyCmdLine(t *testing.T) {
 	assert.Equal(t, "another-send-key", accessKeysConfig.SendKey)
 }
 
-func TestSendKeyEnvvart(t *testing.T) {
+func TestSendKeyEnvVar(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "AccessKeys.SendKey", "my-send-key")
 	rm := makeYAML("ConfigVersion", 2)
 	cfg, rules := createTempConfigs(t, cm, rm)
