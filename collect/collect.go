@@ -30,7 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ErrWouldBlock = errors.New("not adding span, channel buffer is full. Span will not be processed and will be lost.")
+var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
 var CollectorHealthKey = "collector"
 
 type Collector interface {
@@ -270,7 +270,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
 		WithField("new_trace_count", i.cache.GetCacheCapacity()).
-		Logf("evicting large traces early due to memory overage. Evicted traces will be processed and if selected by sampling, sent to Honeycomb.")
+		Logf("Making some trace decisions early due to memory overrun.")
 
 	// Manually GC here - without this we can easily end up evicting more than we
 	// need to, since total alloc won't be updated until after a GC pass.
