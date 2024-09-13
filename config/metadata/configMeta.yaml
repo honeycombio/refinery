@@ -189,11 +189,13 @@ groups:
         valuetype: nondefault
         default: ""
         example: "SetThisToAHoneycombKey"
+        envvar: REFINERY_SEND_KEY
+        commandline: send-key
         reload: true
         validations:
           - type: format
             arg: apikeyOrBlank
-        summary: is an optional Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration.
+        summary: is an optional Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration. Setting this value via a command line flag may expose credentials - it is recommended to use the environment variable or a configuration file.
         description: >
           If `SendKey` is set to a valid Honeycomb key, then Refinery can use
           the listed key to send data.
