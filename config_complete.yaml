@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-09-05 at 17:40:32 UTC from ../../config.yaml using a template generated on 2024-09-05 at 17:40:29 UTC
+# created on 2024-09-13 at 18:50:42 UTC from ../../config.yaml using a template generated on 2024-09-13 at 18:50:40 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -162,7 +162,9 @@ AccessKeys:
     # AcceptOnlyListedKeys: false
 
     ## SendKey is an optional Honeycomb API key that Refinery can use to send
-    ## data to Honeycomb, depending on configuration.
+    ## data to Honeycomb, depending on configuration. Setting this value via
+    ## a command line flag may expose credentials - it is recommended to use
+    ## the environment variable or a configuration file.
     ##
     ## If `SendKey` is set to a valid Honeycomb key, then Refinery can use
     ## the listed key to send data. The exact behavior depends on the value

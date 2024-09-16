@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-09-05 at 17:40:33 UTC.
+It was automatically generated on 2024-09-13 at 18:50:43 UTC.
 
 ## The Config file
 
@@ -178,7 +178,7 @@ This setting is applied **before** the `SendKey` and `SendKeyMode` settings.
 
 ### `SendKey`
 
-SendKey is an optional Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration.
+SendKey is an optional Honeycomb API key that Refinery can use to send data to Honeycomb, depending on configuration. Setting this value via a command line flag may expose credentials - it is recommended to use the environment variable or a configuration file.
 
 If `SendKey` is set to a valid Honeycomb key, then Refinery can use the listed key to send data.
 The exact behavior depends on the value of `SendKeyMode`.
@@ -186,6 +186,7 @@ The exact behavior depends on the value of `SendKeyMode`.
 - Eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
+- Environment variable: `REFINERY_SEND_KEY`
 
 ### `SendKeyMode`
 

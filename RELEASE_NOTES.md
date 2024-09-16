@@ -2,6 +2,12 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.8.2
+
+This is a bug fix release.
+It fixes a bug in the `UseClusterMode` feature of throughput samplers that prevented it from working properly.
+It also enables the new `SendKey` feature to be configured from the environment or the command line.
+
 ## Version 2.8.0
 
 This release has a several significant changes that makes Refinery easier to operate at scale.
