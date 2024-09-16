@@ -43,11 +43,11 @@ func (s *SamplerFactory) updatePeerCounts() {
 
 	// all the samplers who want it should use the stored count
 	for _, sampler := range s.samplers {
-		// Sampler does not implement ClusterSizer.
-		// By asserting Sampler to an empty interface, we will have access to the underlying pointer.
-		// We can then assert that pointer to the ClusterSizer.
-		if clusterSizer, ok := sampler.(any).(ClusterSizer); ok {
+		if clusterSizer, ok := sampler.(ClusterSizer); ok {
+			s.Logger.Warn().Logf("set cluster size to %d", s.peerCount)
 			clusterSizer.SetClusterSize(s.peerCount)
+		} else {
+			s.Logger.Warn().Logf("sampler does not implement ClusterSizer")
 		}
 	}
 }
