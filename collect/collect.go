@@ -30,7 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var ErrWouldBlock = errors.New("not adding span, channel buffer is full")
+var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
 var CollectorHealthKey = "collector"
 
 type Collector interface {
@@ -265,13 +265,13 @@ func (i *InMemCollector) checkAlloc() {
 	i.cache.RemoveTraces(tracesSent)
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
-	i.Logger.Error().
+	i.Logger.Warn().
 		WithField("cache_size", cap).
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
 		WithField("new_trace_count", i.cache.GetCacheCapacity()).
-		Logf("evicting large traces early due to memory overage")
+		Logf("Making some trace decisions early due to memory overrun.")
 
 	// Manually GC here - without this we can easily end up evicting more than we
 	// need to, since total alloc won't be updated until after a GC pass.
@@ -797,7 +797,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
-		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
+		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
 		return
 	}
 	i.Metrics.Increment("trace_send_kept")
@@ -806,9 +806,10 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !shouldSend {
-		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but dry run mode is enabled")
+		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but sending because dry run mode is enabled")
+	} else {
+		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
-	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	for _, sp := range trace.GetSpans() {
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
