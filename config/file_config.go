@@ -86,7 +86,7 @@ type NetworkConfig struct {
 
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
-	SendKey              string   `yaml:"SendKey"`
+	SendKey              string   `yaml:"SendKey" cmdenv:"SendKey"`
 	SendKeyMode          string   `yaml:"SendKeyMode" default:"none"`
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
 }

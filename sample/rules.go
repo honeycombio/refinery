@@ -12,12 +12,15 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var _ ClusterSizer = (*RulesBasedSampler)(nil)
+
 type RulesBasedSampler struct {
-	Config   *config.RulesBasedSamplerConfig
-	Logger   logger.Logger
-	Metrics  metrics.Metrics
-	samplers map[string]Sampler
-	prefix   string
+	Config    *config.RulesBasedSamplerConfig
+	Logger    logger.Logger
+	Metrics   metrics.Metrics
+	samplers  map[string]Sampler
+	prefix    string
+	keyFields []string
 }
 
 const RootPrefix = "root."
@@ -33,6 +36,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.Metrics.Register(s.prefix+"sample_rate", "histogram")
 
 	s.samplers = make(map[string]Sampler)
+	s.keyFields = s.Config.GetSamplingFields()
 
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
@@ -77,6 +81,17 @@ func (s *RulesBasedSampler) Start() error {
 		}
 	}
 	return nil
+}
+
+func (s *RulesBasedSampler) SetClusterSize(size int) {
+	for _, sampler := range s.samplers {
+		// Sampler does not implement ClusterSizer.
+		// By asserting Sampler to an empty interface, we will have access to the underlying pointer.
+		// We can then assert that pointer to the ClusterSizer.
+		if sampler, ok := sampler.(any).(ClusterSizer); ok {
+			sampler.SetClusterSize(size)
+		}
+	}
 }
 
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
@@ -147,6 +162,10 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	}
 
 	return 1, true, "no rule matched", ""
+}
+
+func (s *RulesBasedSampler) GetKeyFields() []string {
+	return s.keyFields
 }
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
