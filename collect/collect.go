@@ -265,7 +265,7 @@ func (i *InMemCollector) checkAlloc() {
 	i.cache.RemoveTraces(tracesSent)
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
-	i.Logger.Error().
+	i.Logger.Warn().
 		WithField("cache_size", cap).
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
