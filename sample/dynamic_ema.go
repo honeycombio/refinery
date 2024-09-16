@@ -27,7 +27,8 @@ type EMADynamicSampler struct {
 	prefix              string
 	lastMetrics         map[string]int64
 
-	key *traceKey
+	key       *traceKey
+	keyFields []string
 
 	dynsampler dynsampler.Sampler
 }
@@ -47,6 +48,7 @@ func (d *EMADynamicSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "emadynamic_"
+	d.keyFields = d.Config.GetSamplingFields()
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{
@@ -106,4 +108,8 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		}
 	}
 	return rate, shouldKeep, "emadynamic", key
+}
+
+func (d *EMADynamicSampler) GetKeyFields() []string {
+	return d.keyFields
 }

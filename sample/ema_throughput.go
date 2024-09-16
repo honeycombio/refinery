@@ -30,7 +30,8 @@ type EMAThroughputSampler struct {
 	prefix               string
 	lastMetrics          map[string]int64
 
-	key *traceKey
+	key       *traceKey
+	keyFields []string
 
 	dynsampler *dynsampler.EMAThroughput
 }
@@ -56,6 +57,7 @@ func (d *EMAThroughputSampler) Start() error {
 	}
 	d.prefix = "emathroughput_"
 
+	d.keyFields = d.Config.GetSamplingFields()
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMAThroughput{
 		GoalThroughputPerSec: d.goalThroughputPerSec / d.clusterSize,
@@ -123,4 +125,8 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		}
 	}
 	return rate, shouldKeep, "emathroughput", key
+}
+
+func (d *EMAThroughputSampler) GetKeyFields() []string {
+	return d.keyFields
 }
