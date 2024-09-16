@@ -255,7 +255,7 @@ func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) {
 		s.mode = Always
 	default: // validation shouldn't let this happen but we'll be safe...
 		s.mode = Never
-		s.Logger.Error().Logf("StressRelief mode is '%s' which shouldn't happen", cfg.Mode)
+		s.Logger.Error().WithString("mode", cfg.Mode).Logf("Invalid StressRelief mode")
 	}
 	s.Logger.Debug().WithField("mode", s.mode).Logf("setting StressRelief mode")
 

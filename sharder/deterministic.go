@@ -133,7 +133,7 @@ func (d *DeterministicSharder) Start() error {
 		time.Sleep(5 * time.Second)
 	}
 
-	d.Logger.Error().WithFields(map[string]interface{}{"peers": d.peers, "self": self}).Logf("list of current peers")
+	d.Logger.Error().WithFields(map[string]interface{}{"peers": d.peers, "self": self}).Logf("failed to find self in the peer list")
 	return errors.New("failed to find self in the peer list")
 }
 
