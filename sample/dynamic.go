@@ -23,7 +23,8 @@ type DynamicSampler struct {
 	prefix         string
 	lastMetrics    map[string]int64
 
-	key *traceKey
+	key       *traceKey
+	keyFields []string
 
 	dynsampler dynsampler.Sampler
 }
@@ -42,6 +43,7 @@ func (d *DynamicSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "dynamic_"
+	d.keyFields = d.Config.GetSamplingFields()
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
@@ -95,4 +97,8 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		}
 	}
 	return rate, shouldKeep, "dynamic", key
+}
+
+func (d *DynamicSampler) GetKeyFields() []string {
+	return d.keyFields
 }
