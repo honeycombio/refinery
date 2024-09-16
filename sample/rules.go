@@ -85,10 +85,7 @@ func (s *RulesBasedSampler) Start() error {
 
 func (s *RulesBasedSampler) SetClusterSize(size int) {
 	for _, sampler := range s.samplers {
-		// Sampler does not implement ClusterSizer.
-		// By asserting Sampler to an empty interface, we will have access to the underlying pointer.
-		// We can then assert that pointer to the ClusterSizer.
-		if sampler, ok := sampler.(any).(ClusterSizer); ok {
+		if sampler, ok := sampler.(ClusterSizer); ok {
 			sampler.SetClusterSize(size)
 		}
 	}
