@@ -12,6 +12,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var _ ClusterSizer = (*RulesBasedSampler)(nil)
+
 type RulesBasedSampler struct {
 	Config    *config.RulesBasedSamplerConfig
 	Logger    logger.Logger
@@ -79,6 +81,17 @@ func (s *RulesBasedSampler) Start() error {
 		}
 	}
 	return nil
+}
+
+func (s *RulesBasedSampler) SetClusterSize(size int) {
+	for _, sampler := range s.samplers {
+		// Sampler does not implement ClusterSizer.
+		// By asserting Sampler to an empty interface, we will have access to the underlying pointer.
+		// We can then assert that pointer to the ClusterSizer.
+		if sampler, ok := sampler.(any).(ClusterSizer); ok {
+			sampler.SetClusterSize(size)
+		}
+	}
 }
 
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
