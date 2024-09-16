@@ -67,11 +67,12 @@ type InMemCollector struct {
 	Health  health.Recorder `inject:""`
 	Sharder sharder.Sharder `inject:""`
 
-	Transmission   transmit.Transmission  `inject:"upstreamTransmission"`
-	Metrics        metrics.Metrics        `inject:"genericMetrics"`
-	SamplerFactory *sample.SamplerFactory `inject:""`
-	StressRelief   StressReliever         `inject:"stressRelief"`
-	Peers          peer.Peers             `inject:""`
+	Transmission     transmit.Transmission  `inject:"upstreamTransmission"`
+	PeerTransmission transmit.Transmission  `inject:"peerTransmission"`
+	Metrics          metrics.Metrics        `inject:"genericMetrics"`
+	SamplerFactory   *sample.SamplerFactory `inject:""`
+	StressRelief     StressReliever         `inject:"stressRelief"`
+	Peers            peer.Peers             `inject:""`
 
 	// For test use only
 	BlockOnAddSpan bool
@@ -433,7 +434,7 @@ func (i *InMemCollector) redistributeTraces() {
 				sp.Data["meta.refinery.forwarded"] = i.hostname
 			}
 
-			i.Transmission.EnqueueSpan(sp)
+			i.PeerTransmission.EnqueueSpan(sp)
 		}
 
 		forwardedTraces.Add(trace.TraceID)
@@ -1033,7 +1034,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 				sp.Data["meta.refinery.forwarded"] = i.hostname
 			}
 
-			i.Transmission.EnqueueSpan(sp)
+			i.PeerTransmission.EnqueueSpan(sp)
 			_, exist := forwardedTraces[sp.TraceID]
 			if !exist {
 				forwardedTraces[sp.TraceID] = struct{}{}
