@@ -58,7 +58,7 @@ func (h *HoneycombLogger) Start() error {
 
 	if loggerConfig.GetSamplerEnabled() {
 		h.sampler = &dynsampler.EMAThroughput{
-			AdjustmentInterval:   10 * time.Second,
+			AdjustmentInterval:   30 * time.Second,
 			GoalThroughputPerSec: loggerConfig.SamplerThroughput,
 			MaxKeys:              1000,
 		}
