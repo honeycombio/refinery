@@ -198,6 +198,8 @@ type Span struct {
 	IsRoot      bool
 }
 
+// IsDecicionSpan returns true if the span is a decision span based on
+// a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
 	if sp.Data == nil {
 		return false
@@ -219,9 +221,15 @@ func (sp *Span) IsDecisionSpan() bool {
 	return d
 }
 
+// ExtractDecisionContext returns a new Event that contains only the data that is
+// relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx := sp.Event
-	decisionCtx.Data = make(map[string]interface{})
+	decisionCtx.Data = map[string]interface{}{
+		"meta.refinery.root":     sp.IsRoot,
+		"meta.refinery.min_span": true,
+		"meta.annotation_type":   sp.Type(),
+	}
 	return &decisionCtx
 }
 

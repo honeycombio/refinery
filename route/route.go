@@ -1023,6 +1023,17 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 	if signalType := ev.Data["meta.signal_type"]; signalType == "log" {
 		return false
 	}
+
+	// check if the event has a root flag
+	if isRoot, ok := ev.Data["meta.refinery.root"]; ok {
+		v, ok := isRoot.(bool)
+		if !ok {
+			return false
+		}
+
+		return v
+	}
+
 	// check if the event has a parent id using the configured parent id field names
 	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
 		parentId := ev.Data[parentIdFieldName]
