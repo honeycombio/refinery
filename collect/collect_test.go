@@ -120,6 +120,7 @@ func TestAddRootSpan(t *testing.T) {
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(span)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -141,6 +142,7 @@ func TestAddRootSpan(t *testing.T) {
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -233,6 +235,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			SampleRate: 0, // no upstream sampling
 			Data:       make(map[string]interface{}),
 		},
+		IsRoot: true,
 	})
 	require.NoError(t, err, "must be able to add the span")
 
@@ -293,6 +296,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 			SampleRate: 0, // This should get lifted to 1
 			Data:       make(map[string]interface{}),
 		},
+		IsRoot: true,
 	}
 
 	coll.AddSpan(span)
@@ -378,6 +382,7 @@ func TestAddSpan(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
@@ -452,6 +457,7 @@ func TestDryRunMode(t *testing.T) {
 			Data:   map[string]interface{}{},
 			APIKey: legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(span)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -488,6 +494,7 @@ func TestDryRunMode(t *testing.T) {
 			Data:   map[string]interface{}{},
 			APIKey: legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -511,6 +518,7 @@ func TestDryRunMode(t *testing.T) {
 			Data:   map[string]interface{}{},
 			APIKey: legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(span)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -642,6 +650,7 @@ func TestSampleConfigReload(t *testing.T) {
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 
 	coll.AddSpan(span)
@@ -669,6 +678,7 @@ func TestSampleConfigReload(t *testing.T) {
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 
 	coll.AddSpan(span)
@@ -930,6 +940,7 @@ func TestAddCountsToRoot(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -1021,6 +1032,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -1101,6 +1113,7 @@ func TestAddSpanCount(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -1176,6 +1189,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -1247,6 +1261,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 
@@ -1317,6 +1332,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
@@ -1393,6 +1409,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 			APIKey:     legacyAPIKey,
 			SampleRate: 10,
 		},
+		IsRoot: true,
 	}
 
 	processed2, kept2 := coll.ProcessSpanImmediately(rootSpan)
@@ -1473,6 +1490,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -1591,6 +1609,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 				},
 				APIKey: legacyAPIKey,
 			},
+			IsRoot: true,
 		}
 		if i == 0 {
 			rootSpan.Data["test"] = int64(1)
@@ -1876,6 +1895,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 			Data:    map[string]interface{}{},
 			APIKey:  legacyAPIKey,
 		},
+		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
 
