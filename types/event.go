@@ -139,8 +139,8 @@ func (t *Trace) DescendantCount() uint32 {
 func (t *Trace) SpanCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		switch s.AnnotationType() {
-		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
+		switch s.Type() {
+		case SpanTypeSpanEvent, SpanTypeLink:
 			continue
 		default:
 			count++
@@ -154,7 +154,7 @@ func (t *Trace) SpanCount() uint32 {
 func (t *Trace) SpanLinkCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeLink {
+		if s.Type() == SpanTypeLink {
 			count++
 		}
 	}
@@ -165,7 +165,7 @@ func (t *Trace) SpanLinkCount() uint32 {
 func (t *Trace) SpanEventCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
+		if s.Type() == SpanTypeSpanEvent {
 			count++
 		}
 	}
@@ -227,7 +227,7 @@ func (sp *Span) ExtractDecisionContext() *Event {
 		"trace_id":                     sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
 		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         sp.AnnotationType(),
+		"meta.annotation_type":         sp.Type(),
 		"meta.refinery.span_data_size": dataSize,
 	}
 	return &decisionCtx
@@ -269,28 +269,28 @@ func (sp *Span) GetDataSize() int {
 	return total
 }
 
-// SpanAnnotationType is an enum for the type of annotation this span is.
-type SpanAnnotationType int
+// SpanType is an enum for the type of annotation this span is.
+type SpanType int
 
 const (
-	// SpanAnnotationTypeUnknown is the default value for an unknown annotation type.
-	SpanAnnotationTypeUnknown SpanAnnotationType = iota
-	// SpanAnnotationTypeSpanEvent is the type for a span event.
-	SpanAnnotationTypeSpanEvent
-	// SpanAnnotationTypeLink is the type for a span link.
-	SpanAnnotationTypeLink
+	// SpanTypeUnknown is the default value for an unknown annotation type.
+	SpanTypeUnknown SpanType = iota
+	// SpanTypeSpanEvent is the type for a span event.
+	SpanTypeSpanEvent
+	// SpanTypeLink is the type for a span link.
+	SpanTypeLink
 )
 
-// AnnotationType returns the type of annotation this span is.
-func (sp *Span) AnnotationType() SpanAnnotationType {
+// Type returns the type of annotation this span is.
+func (sp *Span) Type() SpanType {
 	t := sp.Data["meta.annotation_type"]
 	switch t {
 	case "span_event":
-		return SpanAnnotationTypeSpanEvent
+		return SpanTypeSpanEvent
 	case "link":
-		return SpanAnnotationTypeLink
+		return SpanTypeLink
 	default:
-		return SpanAnnotationTypeUnknown
+		return SpanTypeUnknown
 	}
 }
 

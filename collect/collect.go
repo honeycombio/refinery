@@ -22,6 +22,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -29,6 +30,8 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 )
+
+const traceDecisionTopic = "trace_decision"
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
 var CollectorHealthKey = "collector"
@@ -69,6 +72,7 @@ type InMemCollector struct {
 
 	Transmission     transmit.Transmission  `inject:"upstreamTransmission"`
 	PeerTransmission transmit.Transmission  `inject:"peerTransmission"`
+	PubSub           pubsub.PubSub          `inject:""`
 	Metrics          metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory   *sample.SamplerFactory `inject:""`
 	StressRelief     StressReliever         `inject:"stressRelief"`
@@ -88,6 +92,7 @@ type InMemCollector struct {
 
 	incoming          chan *types.Span
 	fromPeer          chan *types.Span
+	traceDecisions    chan string
 	reload            chan struct{}
 	done              chan struct{}
 	redistributeTimer *redistributeNotifier
@@ -171,6 +176,12 @@ func (i *InMemCollector) Start() error {
 
 	if !i.Config.GetCollectionConfig().DisableRedistribution {
 		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
+	}
+
+	if !i.Config.GetCollectionConfig().ForceTraceLocality {
+		i.PubSub.Subscribe(context.Background(), traceDecisionTopic, i.signalRemoteTraceDecisions)
+		// TODO: make this configurable?
+		i.traceDecisions = make(chan string, 100)
 	}
 
 	// spin up one collector because this is a single threaded collector
@@ -354,6 +365,12 @@ func (i *InMemCollector) collect() {
 			return
 		case <-i.redistributeTimer.Notify():
 			i.redistributeTraces()
+		case msg, ok := <-i.traceDecisions:
+			if !ok {
+				return
+			}
+
+			i.processTraceDecision(msg)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -376,6 +393,12 @@ func (i *InMemCollector) collect() {
 					runtime.Gosched()
 					i.mutex.Lock()
 				}
+			case msg, ok := <-i.traceDecisions:
+				if !ok {
+					return
+				}
+
+				i.processTraceDecision(msg)
 			case <-i.redistributeTimer.Notify():
 				i.redistributeTraces()
 			case sp, ok := <-i.incoming:
@@ -671,7 +694,28 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 	// if we receive a proxy span after a trace decision has been made,
 	// we should just broadcast the decision again
 	if sp.IsDecisionSpan() {
-		// TODO: broadcast the decision again
+		td, err := newTraceDecisionMessage(TraceDecision{
+			ID:     sp.TraceID,
+			Kept:   tr.Kept(),
+			Reason: keptReason,
+		})
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id":  sp.TraceID,
+				"kept":      tr.Kept(),
+				"late_span": true,
+			}).Logf("Failed to marshal trace decision")
+			return
+		}
+
+		err = i.PubSub.Publish(ctx, traceDecisionTopic, td)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id":  sp.TraceID,
+				"kept":      tr.Kept(),
+				"late_span": true,
+			}).Logf("Failed to publish trace decision")
+		}
 		return
 	}
 
@@ -779,20 +823,6 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	i.Metrics.Increment(sendReason)
 
-	var sampler sample.Sampler
-	var found bool
-
-	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
-	logFields := logrus.Fields{
-		"trace_id": trace.TraceID,
-	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
-
 	// If we have a root span, update it with the count before determining the SampleRate.
 	if trace.RootSpan != nil {
 		rs := trace.RootSpan
@@ -804,6 +834,19 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		} else if i.Config.GetAddSpanCountToRoot() {
 			rs.Data["meta.span_count"] = int64(trace.DescendantCount())
 		}
+	}
+
+	var sampler sample.Sampler
+	var found bool
+	// get sampler key (dataset for legacy keys, environment for new keys)
+	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	logFields := logrus.Fields{
+		"trace_id": trace.TraceID,
+	}
+	if isLegacyKey {
+		logFields["dataset"] = samplerKey
+	} else {
+		logFields["environment"] = samplerKey
 	}
 
 	// use sampler key to find sampler; create and cache if not found
@@ -824,6 +867,8 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
 	i.sampleTraceCache.Record(trace, shouldSend, reason)
+
+	// TODO: publish the decision to peers in the cluster
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
@@ -1221,4 +1266,38 @@ func (r *redistributeNotifier) run() {
 			return
 		}
 	}
+}
+
+func (i *InMemCollector) signalRemoteTraceDecisions(ctx context.Context, msg string) {
+	select {
+	case <-ctx.Done():
+	case i.traceDecisions <- msg:
+	default:
+		i.Logger.Warn().Logf("trace decision channel is full. Dropping message")
+	}
+}
+
+func (i *InMemCollector) processTraceDecision(msg string) {
+	td, err := unmarshalTraceDecisionMessage(msg)
+	if err != nil {
+		i.Logger.Error().Logf("unable to unmarshal trace decision message: %s", err.Error())
+		return
+	}
+	trace := i.cache.Get(td.ID)
+	// if we don't have the trace in the cache, we don't need to do anything
+	if trace == nil {
+		i.Logger.Debug().Logf("trace not found in cache for trace decision")
+		return
+	}
+
+	i.sampleTraceCache.Record(trace, td.Kept, td.Reason)
+	// if we have the trace in our cache, we need to either drop or send the trace
+	if !td.Kept {
+		// trace is dropped, record it and move on
+		// TODO: add metrics for dropped traces
+		return
+	}
+
+	// TODO: split this so that makeDecision is separate from `send`
+	i.send(trace, td.SendReason)
 }
