@@ -79,10 +79,8 @@ func ConvertNumeric(val interface{}) float64 {
 		if n {
 			return 1
 		}
-		return 0
-	default:
-		return 0
 	}
+	return 0
 }
 
 func PrefixMetricName(prefix string, name string) string {
