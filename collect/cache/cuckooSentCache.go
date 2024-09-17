@@ -88,10 +88,10 @@ func (t *keptTraceCacheEntry) SpanCount() uint {
 // Count records additional spans in the cache record.
 func (t *keptTraceCacheEntry) Count(s *types.Span) {
 	t.eventCount++
-	switch s.AnnotationType() {
-	case types.SpanAnnotationTypeSpanEvent:
+	switch s.Type() {
+	case types.SpanTypeSpanEvent:
 		t.spanEventCount++
-	case types.SpanAnnotationTypeLink:
+	case types.SpanTypeLink:
 		t.spanLinkCount++
 	default:
 		t.spanCount++

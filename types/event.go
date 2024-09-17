@@ -2,6 +2,8 @@ package types
 
 import (
 	"context"
+	"slices"
+	"strconv"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -102,6 +104,12 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
+func (t *Trace) RemoveDecisionSpans() {
+	t.spans = slices.DeleteFunc(t.spans, func(sp *Span) bool {
+		return sp.IsDecisionSpan()
+	})
+}
+
 func (t *Trace) ID() string {
 	return t.TraceID
 }
@@ -132,8 +140,8 @@ func (t *Trace) DescendantCount() uint32 {
 func (t *Trace) SpanCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		switch s.AnnotationType() {
-		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
+		switch s.Type() {
+		case SpanTypeSpanEvent, SpanTypeLink:
 			continue
 		default:
 			count++
@@ -147,7 +155,7 @@ func (t *Trace) SpanCount() uint32 {
 func (t *Trace) SpanLinkCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeLink {
+		if s.Type() == SpanTypeLink {
 			count++
 		}
 	}
@@ -158,7 +166,7 @@ func (t *Trace) SpanLinkCount() uint32 {
 func (t *Trace) SpanEventCount() uint32 {
 	var count uint32
 	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
+		if s.Type() == SpanTypeSpanEvent {
 			count++
 		}
 	}
@@ -172,8 +180,8 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 
 	env := ""
 	for _, sp := range t.GetSpans() {
-		if sp.Event.Environment != "" {
-			env = sp.Event.Environment
+		if sp.Environment != "" {
+			env = sp.Environment
 			break
 		}
 	}
@@ -187,6 +195,34 @@ type Span struct {
 	TraceID     string
 	DataSize    int
 	ArrivalTime time.Time
+	IsRoot      bool
+}
+
+func (sp *Span) IsDecisionSpan() bool {
+	if sp.Data == nil {
+		return false
+	}
+	v, ok := sp.Data["meta.refinery.min_span"]
+	if !ok {
+		return false
+	}
+	strv, ok := v.(string)
+	if !ok {
+		return false
+	}
+
+	d, err := strconv.ParseBool(strv)
+	if err != nil {
+		return false
+	}
+
+	return d
+}
+
+func (sp *Span) ExtractDecisionContext() *Event {
+	decisionCtx := sp.Event
+	decisionCtx.Data = make(map[string]interface{})
+	return &decisionCtx
 }
 
 // GetDataSize computes the size of the Data element of the Span.
@@ -213,28 +249,28 @@ func (sp *Span) GetDataSize() int {
 	return total
 }
 
-// SpanAnnotationType is an enum for the type of annotation this span is.
-type SpanAnnotationType int
+// SpanType is an enum for the type of annotation this span is.
+type SpanType int
 
 const (
-	// SpanAnnotationTypeUnknown is the default value for an unknown annotation type.
-	SpanAnnotationTypeUnknown SpanAnnotationType = iota
-	// SpanAnnotationTypeSpanEvent is the type for a span event.
-	SpanAnnotationTypeSpanEvent
-	// SpanAnnotationTypeLink is the type for a span link.
-	SpanAnnotationTypeLink
+	// SpanTypeUnknown is the default value for an unknown annotation type.
+	SpanTypeUnknown SpanType = iota
+	// SpanTypeSpanEvent is the type for a span event.
+	SpanTypeSpanEvent
+	// SpanTypeLink is the type for a span link.
+	SpanTypeLink
 )
 
-// AnnotationType returns the type of annotation this span is.
-func (sp *Span) AnnotationType() SpanAnnotationType {
+// Type returns the type of annotation this span is.
+func (sp *Span) Type() SpanType {
 	t := sp.Data["meta.annotation_type"]
 	switch t {
 	case "span_event":
-		return SpanAnnotationTypeSpanEvent
+		return SpanTypeSpanEvent
 	case "link":
-		return SpanAnnotationTypeLink
+		return SpanTypeLink
 	default:
-		return SpanAnnotationTypeUnknown
+		return SpanTypeUnknown
 	}
 }
 

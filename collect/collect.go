@@ -538,7 +538,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	}
 
 	// if this is a root span, say so and send the trace
-	if i.isRootSpan(sp) {
+	if sp.IsRoot {
 		markTraceForSending = true
 		trace.RootSpan = sp
 	}
@@ -664,8 +664,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span because of previous decision to send trace")
 		mergeTraceAndSpanSampleRates(sp, tr.Rate(), isDryRun)
 		// if this span is a late root span, possibly update it with our current span count
-		isRootSpan := i.isRootSpan(sp)
-		if isRootSpan {
+		if sp.IsRoot {
 			if i.Config.GetAddCountsToRoot() {
 				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
@@ -675,7 +674,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 				sp.Data["meta.span_count"] = int64(tr.DescendantCount())
 			}
 		}
-		otelutil.AddSpanField(span, "is_root_span", isRootSpan)
+		otelutil.AddSpanField(span, "is_root_span", sp.IsRoot)
 		i.Metrics.Increment(TraceSendLateSpan)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
@@ -709,21 +708,6 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	} else {
 		sp.SampleRate = tempSampleRate * traceSampleRate
 	}
-}
-
-func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
-	// log event should never be considered a root span, check for that first
-	if signalType := sp.Data["meta.signal_type"]; signalType == "log" {
-		return false
-	}
-	// check if the event has a parent id using the configured parent id field names
-	for _, parentIdFieldName := range i.Config.GetParentIdFieldNames() {
-		parentId := sp.Data[parentIdFieldName]
-		if _, ok := parentId.(string); ok && parentId != "" {
-			return false
-		}
-	}
-	return true
 }
 
 func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
@@ -821,7 +805,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 		// update the root span (if we have one, which we might not if the trace timed out)
 		// with the final total as of our send time
-		if i.isRootSpan(sp) {
+		if sp.IsRoot {
 			if i.Config.GetAddCountsToRoot() {
 				sp.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
 				sp.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
