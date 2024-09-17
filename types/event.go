@@ -225,10 +225,15 @@ func (sp *Span) IsDecisionSpan() bool {
 // relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx := sp.Event
+	dataSize := sp.DataSize
+	if dataSize == 0 {
+		dataSize = sp.GetDataSize()
+	}
 	decisionCtx.Data = map[string]interface{}{
-		"meta.refinery.root":     sp.IsRoot,
-		"meta.refinery.min_span": true,
-		"meta.annotation_type":   sp.Type(),
+		"meta.refinery.root":           sp.IsRoot,
+		"meta.refinery.min_span":       true,
+		"meta.annotation_type":         sp.Type(),
+		"meta.refinery.span_data_size": dataSize,
 	}
 	return &decisionCtx
 }
@@ -238,6 +243,12 @@ func (sp *Span) ExtractDecisionContext() *Event {
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
 	total := 0
+
+	if sp.IsDecisionSpan() {
+		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
+			return v.(int)
+		}
+	}
 	// the data types we should be getting from JSON are:
 	// float64, int64, bool, string, []byte
 	for _, v := range sp.Data {
