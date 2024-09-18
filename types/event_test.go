@@ -48,11 +48,11 @@ func TestSpan_Type(t *testing.T) {
 	tests := []struct {
 		name string
 		data map[string]any
-		want SpanType
+		want SpanAnnotationType
 	}{
-		{"unknown", map[string]any{}, SpanTypeUnknown},
-		{"span_event", map[string]any{"meta.annotation_type": "span_event"}, SpanTypeSpanEvent},
-		{"link", map[string]any{"meta.annotation_type": "link"}, SpanTypeLink},
+		{"unknown", map[string]any{}, SpanAnnotationTypeUnknown},
+		{"span_event", map[string]any{"meta.annotation_type": "span_event"}, SpanAnnotationTypeSpanEvent},
+		{"link", map[string]any{"meta.annotation_type": "link"}, SpanAnnotationTypeLink},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestSpan_Type(t *testing.T) {
 					Data: tt.data,
 				},
 			}
-			if got := sp.Type(); got != tt.want {
+			if got := sp.AnnotationType(); got != tt.want {
 				t.Errorf("Span.AnnotationType() = %v, want %v", got, tt.want)
 			}
 		})
@@ -98,7 +98,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	assert.Equal(t, map[string]interface{}{
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         SpanTypeSpanEvent,
+		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
 		"meta.refinery.span_data_size": 14,
 	}, got.Data)
 }
