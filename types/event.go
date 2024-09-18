@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"slices"
-	"strconv"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -208,17 +207,12 @@ func (sp *Span) IsDecisionSpan() bool {
 	if !ok {
 		return false
 	}
-	strv, ok := v.(string)
+	isDecisionSpan, ok := v.(bool)
 	if !ok {
 		return false
 	}
 
-	d, err := strconv.ParseBool(strv)
-	if err != nil {
-		return false
-	}
-
-	return d
+	return isDecisionSpan
 }
 
 // ExtractDecisionContext returns a new Event that contains only the data that is
