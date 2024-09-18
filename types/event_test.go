@@ -44,7 +44,7 @@ func TestSpan_GetDataSize(t *testing.T) {
 	}
 }
 
-func TestSpan_Type(t *testing.T) {
+func TestSpan_AnnotationType(t *testing.T) {
 	tests := []struct {
 		name string
 		data map[string]any
