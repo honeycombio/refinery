@@ -560,14 +560,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		return nil
 	}
 
-	// extract trace ID
-	var traceID string
-	for _, traceIdFieldName := range r.Config.GetTraceIdFieldNames() {
-		if trID, ok := ev.Data[traceIdFieldName]; ok {
-			traceID = trID.(string)
-			break
-		}
-	}
+	traceID := extractTraceID(r.Config.GetTraceIdFieldNames(), ev)
 	if traceID == "" {
 		// not part of a trace. send along upstream
 		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
@@ -1042,4 +1035,18 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 		}
 	}
 	return true
+}
+
+func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
+	if trID, ok := ev.Data["trace_id"]; ok {
+		return trID.(string)
+	}
+
+	for _, traceIdFieldName := range traceIdFieldNames {
+		if trID, ok := ev.Data[traceIdFieldName]; ok {
+			return trID.(string)
+		}
+	}
+
+	return ""
 }

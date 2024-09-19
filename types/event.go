@@ -224,6 +224,7 @@ func (sp *Span) ExtractDecisionContext() *Event {
 		dataSize = sp.GetDataSize()
 	}
 	decisionCtx.Data = map[string]interface{}{
+		"trace_id":                     sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
 		"meta.refinery.min_span":       true,
 		"meta.annotation_type":         sp.AnnotationType(),
