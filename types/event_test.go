@@ -96,6 +96,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	assert.Equal(t, ev.SampleRate, got.SampleRate)
 	assert.Equal(t, ev.Timestamp, got.Timestamp)
 	assert.Equal(t, map[string]interface{}{
+		"trace_id":                     sp.TraceID,
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
 		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
