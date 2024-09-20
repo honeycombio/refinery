@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -211,7 +212,8 @@ func (i *InMemCollector) reloadConfigs() {
 		// pull the old cache contents into the new cache
 		for j, trace := range i.cache.GetAll() {
 			if j >= imcConfig.CacheCapacity {
-				i.send(trace, TraceSendEjectedFull)
+				i.makeDecision(trace, TraceSendEjectedFull)
+				// i.send(trace)
 				continue
 			}
 			c.Set(trace)
@@ -275,7 +277,8 @@ func (i *InMemCollector) checkAlloc() {
 	for _, trace := range allTraces {
 		tracesSent.Add(trace.TraceID)
 		totalDataSizeSent += trace.DataSize
-		i.send(trace, TraceSendEjectedMemsize)
+		i.makeDecision(trace, TraceSendEjectedMemsize)
+		// i.send(trace)
 		if totalDataSizeSent > int(totalToRemove) {
 			break
 		}
@@ -499,12 +502,15 @@ func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	for _, t := range traces {
 		if t.RootSpan != nil {
-			i.send(t, TraceSendGotRoot)
+			i.makeDecision(t, TraceSendGotRoot)
+			//i.send(t, TraceSendGotRoot)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				i.send(t, TraceSendSpanLimit)
+				i.makeDecision(t, TraceSendSpanLimit)
+				// i.send(t, TraceSendSpanLimit)
 			} else {
-				i.send(t, TraceSendExpired)
+				i.makeDecision(t, TraceSendExpired)
+				//i.send(t, TraceSendExpired)
 			}
 		}
 	}
@@ -554,7 +560,8 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
 		if ejectedTrace != nil {
-			i.send(ejectedTrace, TraceSendEjectedFull)
+			i.makeDecision(ejectedTrace, TraceSendEjectedFull)
+			//i.send(ejectedTrace, TraceSendEjectedFull)
 		}
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
@@ -801,7 +808,8 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	}
 }
 
-func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
+// this is only called when a trace decision is received
+func (i *InMemCollector) send(trace *types.Trace, td *TraceDecision) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
@@ -814,74 +822,50 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	traceDur := i.Clock.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
-	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
-	if trace.RootSpan != nil {
+	i.Metrics.Histogram("trace_span_count", float64(td.DescendantCount()))
+	if td.HasRoot {
 		i.Metrics.Increment("trace_send_has_root")
+		rs := trace.RootSpan
+		if rs != nil {
+			if i.Config.GetAddCountsToRoot() {
+				rs.Data["meta.span_event_count"] = int64(td.EventCount)
+				rs.Data["meta.span_link_count"] = int64(td.LinkCount)
+				rs.Data["meta.span_count"] = int64(td.Count)
+				rs.Data["meta.event_count"] = int64(td.DescendantCount())
+			} else if i.Config.GetAddSpanCountToRoot() {
+				rs.Data["meta.span_count"] = int64(td.DescendantCount())
+			}
+		}
 	} else {
 		i.Metrics.Increment("trace_send_no_root")
 	}
 
-	i.Metrics.Increment(sendReason)
-
-	// If we have a root span, update it with the count before determining the SampleRate.
-	if trace.RootSpan != nil {
-		rs := trace.RootSpan
-		if i.Config.GetAddCountsToRoot() {
-			rs.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
-			rs.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
-			rs.Data["meta.span_count"] = int64(trace.SpanCount())
-			rs.Data["meta.event_count"] = int64(trace.DescendantCount())
-		} else if i.Config.GetAddSpanCountToRoot() {
-			rs.Data["meta.span_count"] = int64(trace.DescendantCount())
-		}
-	}
-
-	var sampler sample.Sampler
-	var found bool
-	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
+	i.Metrics.Increment(td.SendReason)
 	logFields := logrus.Fields{
-		"trace_id": trace.TraceID,
+		"trace_id": td.ID,
 	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
+	if types.IsLegacyAPIKey(trace.APIKey) {
+		logFields["dataset"] = td.Selector
 	} else {
-		logFields["environment"] = samplerKey
+		logFields["environment"] = td.Selector
 	}
-
-	// use sampler key to find sampler; create and cache if not found
-	if sampler, found = i.datasetSamplers[samplerKey]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
-		i.datasetSamplers[samplerKey] = sampler
+	logFields["reason"] = td.Reason
+	if td.SamplerKey != "" {
+		logFields["sample_key"] = td.SamplerKey
 	}
-
-	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
-	trace.SetSampleRate(rate)
-	trace.KeepSample = shouldSend
-	logFields["reason"] = reason
-	if key != "" {
-		logFields["sample_key"] = key
-	}
-	// This will observe sample rate attempts even if the trace is dropped
-	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
-
-	i.sampleTraceCache.Record(trace, shouldSend, reason)
-
-	// TODO: publish the decision to peers in the cluster
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
-	if !shouldSend && !i.Config.GetIsDryRun() {
+	if !td.Kept && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
 		return
 	}
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
-	i.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
+	i.Metrics.Histogram("trace_kept_sample_rate", float64(td.Rate))
 
 	// ok, we're not dropping this trace; send all the spans
-	if i.Config.GetIsDryRun() && !shouldSend {
+	if i.Config.GetIsDryRun() && !td.Kept {
 		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but sending because dry run mode is enabled")
 	} else {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
@@ -892,10 +876,10 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 			continue
 		}
 		if i.Config.GetAddRuleReasonToTrace() {
-			sp.Data["meta.refinery.reason"] = reason
-			sp.Data["meta.refinery.send_reason"] = sendReason
-			if key != "" {
-				sp.Data["meta.refinery.sample_key"] = key
+			sp.Data["meta.refinery.reason"] = td.Reason
+			sp.Data["meta.refinery.send_reason"] = td.SendReason
+			if td.SamplerKey != "" {
+				sp.Data["meta.refinery.sample_key"] = td.SamplerKey
 			}
 		}
 
@@ -903,23 +887,23 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 		// with the final total as of our send time
 		if sp.IsRoot {
 			if i.Config.GetAddCountsToRoot() {
-				sp.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
-				sp.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
-				sp.Data["meta.span_count"] = int64(trace.SpanCount())
-				sp.Data["meta.event_count"] = int64(trace.DescendantCount())
+				sp.Data["meta.span_event_count"] = int64(td.EventCount)
+				sp.Data["meta.span_link_count"] = int64(td.LinkCount)
+				sp.Data["meta.span_count"] = int64(td.Count)
+				sp.Data["meta.event_count"] = int64(td.DescendantCount())
 			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data["meta.span_count"] = int64(trace.DescendantCount())
+				sp.Data["meta.span_count"] = int64(td.DescendantCount())
 			}
 		}
 
 		isDryRun := i.Config.GetIsDryRun()
 		if isDryRun {
-			sp.Data[config.DryRunFieldName] = shouldSend
+			sp.Data[config.DryRunFieldName] = td.Kept
 		}
 		if i.hostname != "" {
 			sp.Data["meta.refinery.local_hostname"] = i.hostname
 		}
-		mergeTraceAndSpanSampleRates(sp, trace.SampleRate(), isDryRun)
+		mergeTraceAndSpanSampleRates(sp, td.Rate, isDryRun)
 		i.addAdditionalAttributes(sp)
 		i.Transmission.EnqueueSpan(sp)
 	}
@@ -1292,12 +1276,71 @@ func (i *InMemCollector) processTraceDecision(msg string) {
 
 	i.sampleTraceCache.Record(trace, td.Kept, td.Reason)
 	// if we have the trace in our cache, we need to either drop or send the trace
-	if !td.Kept {
-		// trace is dropped, record it and move on
-		// TODO: add metrics for dropped traces
-		return
+
+	i.send(trace, &td)
+}
+
+func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) {
+	var sampler sample.Sampler
+	var found bool
+	// get sampler key (dataset for legacy keys, environment for new keys)
+	samplerSelector, isLegacyKey := trace.GetSamplerKey()
+
+	// use sampler key to find sampler; create and cache if not found
+	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, isLegacyKey)
+		i.datasetSamplers[samplerSelector] = sampler
 	}
 
-	// TODO: split this so that makeDecision is separate from `send`
-	i.send(trace, td.SendReason)
+	// make sampling decision and update the trace
+	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	trace.SetSampleRate(rate)
+	trace.KeepSample = shouldSend
+	// This will observe sample rate attempts even if the trace is dropped
+	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
+
+	i.sampleTraceCache.Record(trace, shouldSend, reason)
+
+	var hasRoot bool
+	if trace.RootSpan != nil {
+		hasRoot = true
+	}
+	td := TraceDecision{
+		ID:         trace.TraceID,
+		Kept:       shouldSend,
+		Reason:     reason,
+		SamplerKey: key,
+		Selector:   samplerSelector,
+		Rate:       rate,
+		SendReason: sendReason,
+		Count:      trace.SpanCount(),
+		EventCount: trace.SpanEventCount(),
+		LinkCount:  trace.SpanLinkCount(),
+		HasRoot:    hasRoot,
+	}
+
+	v, err := json.Marshal(td)
+	if err != nil {
+		i.Logger.Error().WithFields(map[string]interface{}{
+			"trace_id": trace.TraceID,
+			"kept":     shouldSend,
+			"reason":   reason,
+			"sampler":  key,
+			"selector": samplerSelector,
+			"error":    err.Error(),
+		}).Logf("Failed to marshal trace decision")
+		return
+	}
+	err = i.PubSub.Publish(context.Background(), traceDecisionTopic, string(v))
+	if err != nil {
+		i.Logger.Error().WithFields(map[string]interface{}{
+			"trace_id": trace.TraceID,
+			"kept":     shouldSend,
+			"reason":   reason,
+			"sampler":  key,
+			"selector": samplerSelector,
+			"error":    err.Error(),
+		}).Logf("Failed to publish trace decision")
+
+	}
 }
