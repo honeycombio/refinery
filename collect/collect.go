@@ -482,12 +482,12 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	trace := i.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, sentReason, found := i.sampleTraceCache.CheckSpan(sp); found {
+		if sr, keptReason, found := i.sampleTraceCache.CheckSpan(sp); found {
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
 			// having none at all
-			i.dealWithSentTrace(ctx, sr, sentReason, sp)
+			i.dealWithSentTrace(ctx, sr, keptReason, sp)
 			return
 		}
 		// trace hasn't already been sent (or this span is really old); let's
@@ -622,18 +622,18 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, sentReason string, sp *types.Span) {
+func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, keptReason string, sp *types.Span) {
 	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
 		"trace_id":    sp.TraceID,
-		"sent_reason": sentReason,
+		"kept_reason": keptReason,
 		"hostname":    i.hostname,
 	})
 	defer span.End()
 
 	if i.Config.GetAddRuleReasonToTrace() {
 		var metaReason string
-		if len(sentReason) > 0 {
-			metaReason = fmt.Sprintf("%s - late arriving span", sentReason)
+		if len(keptReason) > 0 {
+			metaReason = fmt.Sprintf("%s - late arriving span", keptReason)
 		} else {
 			metaReason = "late arriving span"
 		}

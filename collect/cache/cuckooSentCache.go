@@ -38,8 +38,8 @@ type KeptTrace interface {
 	SpanEventCount() uint32
 	SpanLinkCount() uint32
 	SpanCount() uint32
-	SetSentReason(uint)
-	SentReason() uint
+	SetKeptReason(uint)
+	KeptReason() uint
 }
 
 func NewKeptTraceCacheEntry(t KeptTrace) *keptTraceCacheEntry {
@@ -53,7 +53,7 @@ func NewKeptTraceCacheEntry(t KeptTrace) *keptTraceCacheEntry {
 		spanEventCount: t.SpanEventCount(),
 		spanLinkCount:  t.SpanLinkCount(),
 		spanCount:      t.SpanCount(),
-		reason:         uint32(t.SentReason()),
+		reason:         uint32(t.KeptReason()),
 	}
 }
 
@@ -155,7 +155,7 @@ type cuckooSentCache struct {
 
 	// This mutex is for managing kept traces
 	keptMut     sync.Mutex
-	sentReasons *SentReasonsCache
+	keptReasons *KeptReasonsCache
 }
 
 // Make sure it implements TraceSentCache
@@ -188,7 +188,7 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 		dropped:          dropped,
 		recentDroppedIDs: recentDroppedIDs,
 		cfg:              cfg,
-		sentReasons:      NewSentReasonsCache(met),
+		keptReasons:      NewKeptReasonsCache(met),
 		done:             make(chan struct{}),
 	}
 	go cache.monitor()
@@ -220,7 +220,7 @@ func (c *cuckooSentCache) Stop() {
 func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 	if keep {
 		// record this decision in the sent record LRU for future spans
-		trace.SetSentReason(c.sentReasons.Set(reason))
+		trace.SetKeptReason(c.keptReasons.Set(reason))
 		sentRecord := NewKeptTraceCacheEntry(trace)
 
 		c.keptMut.Lock()
@@ -253,7 +253,7 @@ func (c *cuckooSentCache) CheckSpan(span *types.Span) (TraceSentRecord, string, 
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
 		// if we kept it, then this span being checked needs counting too
 		sentRecord.Count(span)
-		reason, _ := c.sentReasons.Get(uint(sentRecord.reason))
+		reason, _ := c.keptReasons.Get(uint(sentRecord.reason))
 		return sentRecord, reason, true
 	}
 	// we have no memory of this place
@@ -306,7 +306,7 @@ func (c *cuckooSentCache) CheckTrace(traceID string) (TraceSentRecord, string, b
 	c.keptMut.Lock()
 	defer c.keptMut.Unlock()
 	if sentRecord, found := c.kept.Get(traceID); found {
-		reason, _ := c.sentReasons.Get(uint(sentRecord.reason))
+		reason, _ := c.keptReasons.Get(uint(sentRecord.reason))
 		return sentRecord, reason, true
 	}
 	// we have no memory of this place
