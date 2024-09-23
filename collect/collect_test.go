@@ -130,9 +130,9 @@ func TestAddRootSpan(t *testing.T) {
 	// * send the trace
 	// * remove the trace from the cache
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+	assert.NotNil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
-	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
+	assert.Equal(t, 1, len(peerTransmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
 

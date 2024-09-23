@@ -212,8 +212,11 @@ func (i *InMemCollector) reloadConfigs() {
 		// pull the old cache contents into the new cache
 		for j, trace := range i.cache.GetAll() {
 			if j >= imcConfig.CacheCapacity {
-				i.makeDecision(trace, TraceSendEjectedFull)
-				// i.send(trace)
+				td, err := i.makeDecision(trace, TraceSendEjectedFull)
+				if err != nil {
+					continue
+				}
+				i.send(trace, td)
 				continue
 			}
 			c.Set(trace)
@@ -277,8 +280,11 @@ func (i *InMemCollector) checkAlloc() {
 	for _, trace := range allTraces {
 		tracesSent.Add(trace.TraceID)
 		totalDataSizeSent += trace.DataSize
-		i.makeDecision(trace, TraceSendEjectedMemsize)
-		// i.send(trace)
+		td, err := i.makeDecision(trace, TraceSendEjectedMemsize)
+		if err != nil {
+			continue
+		}
+		i.send(trace, td)
 		if totalDataSizeSent > int(totalToRemove) {
 			break
 		}
@@ -502,15 +508,27 @@ func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	for _, t := range traces {
 		if t.RootSpan != nil {
-			i.makeDecision(t, TraceSendGotRoot)
-			//i.send(t, TraceSendGotRoot)
+			td, err := i.makeDecision(t, TraceSendGotRoot)
+			if err != nil {
+				continue
+			}
+			i.Logger.Warn().WithFields(map[string]interface{}{
+				"trace_id": t.TraceID,
+			}).Logf("Sending trace with root")
+			i.send(t, td)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				i.makeDecision(t, TraceSendSpanLimit)
-				// i.send(t, TraceSendSpanLimit)
+				td, err := i.makeDecision(t, TraceSendSpanLimit)
+				if err != nil {
+					continue
+				}
+				i.send(t, td)
 			} else {
-				i.makeDecision(t, TraceSendExpired)
-				//i.send(t, TraceSendExpired)
+				td, err := i.makeDecision(t, TraceSendExpired)
+				if err != nil {
+					continue
+				}
+				i.send(t, td)
 			}
 		}
 	}
@@ -560,8 +578,10 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		// push this into the cache and if we eject an unsent trace, send it ASAP
 		ejectedTrace := i.cache.Set(trace)
 		if ejectedTrace != nil {
-			i.makeDecision(ejectedTrace, TraceSendEjectedFull)
-			//i.send(ejectedTrace, TraceSendEjectedFull)
+			td, err := i.makeDecision(ejectedTrace, TraceSendEjectedFull)
+			if err == nil {
+				i.send(ejectedTrace, td)
+			}
 		}
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
@@ -610,6 +630,9 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	if sp.IsRoot && !spanForwarded {
 		markTraceForSending = true
 		trace.RootSpan = sp
+		if sp.IsDecisionSpan() {
+			i.Logger.Warn().Logf("we set root decision span on trace")
+		}
 	}
 
 	// if the span count has exceeded our SpanLimit, send the trace immediately
@@ -1148,6 +1171,10 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 	}
 
 	dc.APIHost = targetShard.GetAddress()
+	i.Logger.Warn().WithFields(map[string]interface{}{
+		"dc": dc,
+		"sp": sp.Data,
+	}).Logf("creating decision span")
 	return dc
 }
 
@@ -1275,12 +1302,14 @@ func (i *InMemCollector) processTraceDecision(msg string) {
 	}
 
 	i.sampleTraceCache.Record(trace, td.Kept, td.Reason)
-	// if we have the trace in our cache, we need to either drop or send the trace
 
 	i.send(trace, &td)
 }
 
-func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) {
+func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
+	if i.IsMyTrace(trace.ID()) {
+		return nil, errors.New("cannot make a decision for partial traces")
+	}
 	var sampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
@@ -1305,6 +1334,7 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) {
 	if trace.RootSpan != nil {
 		hasRoot = true
 	}
+	i.Logger.Warn().WithField("key", key).Logf("making decision for trace")
 	td := TraceDecision{
 		ID:         trace.TraceID,
 		Kept:       shouldSend,
@@ -1329,7 +1359,7 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) {
 			"selector": samplerSelector,
 			"error":    err.Error(),
 		}).Logf("Failed to marshal trace decision")
-		return
+		return nil, err
 	}
 	err = i.PubSub.Publish(context.Background(), traceDecisionTopic, string(v))
 	if err != nil {
@@ -1341,6 +1371,12 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) {
 			"selector": samplerSelector,
 			"error":    err.Error(),
 		}).Logf("Failed to publish trace decision")
-
+		return nil, err
 	}
+
+	return &td, nil
+}
+
+func (i *InMemCollector) IsMyTrace(traceID string) bool {
+	return i.Sharder.WhichShard(traceID).Equals(i.Sharder.MyShard())
 }
