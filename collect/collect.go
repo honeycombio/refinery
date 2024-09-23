@@ -848,9 +848,10 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 func (i *InMemCollector) Stop() error {
 	i.redistributeTimer.Stop()
 	close(i.done)
-	// signal the health system to not be ready
+	// signal the health system to not be ready and
+	// stop liveness check
 	// so that no new traces are accepted
-	i.Health.Ready(CollectorHealthKey, false)
+	i.Health.Unregister(CollectorHealthKey)
 
 	i.mutex.Lock()
 
