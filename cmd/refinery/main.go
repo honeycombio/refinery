@@ -220,6 +220,8 @@ func main() {
 		oTelMetrics = &metrics.OTelMetrics{}
 	}
 
+	refineryHealth := &health.Health{}
+
 	resourceLib := "refinery"
 	resourceVer := version
 	tracer := trace.Tracer(noop.Tracer{})
@@ -260,7 +262,7 @@ func main() {
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
-		{Value: &health.Health{}},
+		{Value: refineryHealth},
 		{Value: &configwatcher.ConfigWatcher{}},
 		{Value: &a},
 	}
@@ -285,14 +287,11 @@ func main() {
 
 	// the logger provided to startstop must be valid before any service is
 	// started, meaning it can't rely on injected configs. make a custom logger
-	// just for this step
+	// just for this step (and for shutdown)
 	ststLogger := logrus.New()
 	// level, _ := logrus.ParseLevel(logLevel)
 	ststLogger.SetLevel(logrus.DebugLevel)
 
-	// we can stop all the objects in one call, but we need to start the
-	// transmissions manually.
-	defer startstop.Stop(g.Objects(), ststLogger)
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
@@ -325,14 +324,55 @@ func main() {
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
 	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
-	// set up signal channel to exit
+	// set up signal channel to exit, and allow a second try to kill everything
+	// immediately.
 	sigsToExit := make(chan os.Signal, 1)
+	// this is the signal that the goroutine sends
+	exitWait := make(chan struct{})
+	// this is the channel the goroutine uses to stop; it has to be unique since it's
+	// the last thing we do
+	monitorDone := make(chan struct{})
+	// the signal gets sent to sigsToExit, which is monitored by the goroutine below
 	signal.Notify(sigsToExit, syscall.SIGINT, syscall.SIGTERM)
 
+	go func() {
+		// first attempt does a normal close
+		forceExit := false
+		for {
+			select {
+			case <-sigsToExit:
+				// if some part of refinery is already dead, don't
+				// attempt an orderly shutdown, just die
+				if !refineryHealth.IsAlive() {
+					ststLogger.Logf(logrus.ErrorLevel, "at least one subsystem is not alive, exiting immediately")
+					os.Exit(1)
+				}
+
+				// if this is true they've tried more than once, so get out
+				// without trying to be clean about it
+				if forceExit {
+					ststLogger.Logf(logrus.ErrorLevel, "immediate exit forced by second signal")
+					os.Exit(2)
+				}
+				forceExit = true
+				close(exitWait)
+			case <-monitorDone:
+				return
+			}
+		}
+	}()
+
 	// block on our signal handler to exit
-	sig := <-sigsToExit
+	sig := <-exitWait
 	// unregister ourselves before we go
 	close(done)
 	time.Sleep(100 * time.Millisecond)
 	a.Logger.Error().WithField("signal", sig).Logf("Caught OS signal")
+
+	// these are the subsystems that might not shut down properly, so we're
+	// going to call this manually so that if something blocks on shutdown, you
+	// can still send a signal that will get heard.
+	startstop.Stop(g.Objects(), ststLogger)
+	close(monitorDone)
+	close(sigsToExit)
 }
