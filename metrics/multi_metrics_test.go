@@ -71,9 +71,18 @@ func TestMultiMetrics_Register(t *testing.T) {
 	// that are important to StressRelief.
 	mm, err := getAndStartMultiMetrics()
 	assert.NoError(t, err)
-	mm.Register("updown", "updowncounter")
-	mm.Register("counter", "counter")
-	mm.Register("gauge", "gauge")
+	mm.Register(Metadata{
+		Name:       "updown",
+		MetricType: "updowncounter",
+	})
+	mm.Register(Metadata{
+		Name:       "counter",
+		MetricType: "counter",
+	})
+	mm.Register(Metadata{
+		Name:       "gauge",
+		MetricType: "gauge",
+	})
 
 	mm.Count("counter", 1)
 	mm.Up("updown")

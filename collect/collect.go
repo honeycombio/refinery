@@ -95,6 +95,39 @@ type InMemCollector struct {
 	hostname string
 }
 
+var inMemCollectorMetrics = []metrics.Metadata{
+	{Name: "trace_duration_ms", Type: metrics.Histogram},
+	{Name: "trace_span_count", Type: metrics.Histogram},
+	{Name: "collector_incoming_queue", Type: metrics.Histogram},
+	{Name: "collector_peer_queue_length", Type: metrics.Gauge},
+	{Name: "collector_incoming_queue_length", Type: metrics.Gauge},
+	{Name: "collector_peer_queue", Type: metrics.Histogram},
+	{Name: "collector_cache_size", Type: metrics.Gauge},
+	{Name: "memory_heap_allocation", Type: metrics.Gauge},
+	{Name: "span_received", Type: metrics.Counter},
+	{Name: "span_processed", Type: metrics.Counter},
+	{Name: "spans_waiting", Type: metrics.UpDown},
+	{Name: "trace_sent_cache_hit", Type: metrics.Counter},
+	{Name: "trace_accepted", Type: metrics.Counter},
+	{Name: "trace_send_kept", Type: metrics.Counter},
+	{Name: "trace_send_dropped", Type: metrics.Counter},
+	{Name: "trace_send_has_root", Type: metrics.Counter},
+	{Name: "trace_send_no_root", Type: metrics.Counter},
+	{Name: "trace_forwarded_on_peer_change", Type: metrics.Gauge},
+	{Name: "trace_redistribution_count", Type: metrics.Gauge},
+	{Name: "trace_send_on_shutdown", Type: metrics.Counter},
+	{Name: "trace_forwarded_on_shutdown", Type: metrics.Counter},
+
+	{Name: TraceSendGotRoot, Type: metrics.Counter},
+	{Name: TraceSendExpired, Type: metrics.Counter},
+	{Name: TraceSendSpanLimit, Type: metrics.Counter},
+	{Name: TraceSendEjectedFull, Type: metrics.Counter},
+	{Name: TraceSendEjectedMemsize, Type: metrics.Counter},
+	{Name: TraceSendLateSpan, Type: metrics.Counter},
+
+	{Name: "dropped_from_stress", Type: metrics.Counter},
+}
+
 func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
@@ -107,39 +140,11 @@ func (i *InMemCollector) Start() error {
 
 	i.Health.Register(CollectorHealthKey, 3*time.Second)
 
-	i.Metrics.Register("trace_duration_ms", "histogram")
-	i.Metrics.Register("trace_span_count", "histogram")
-	i.Metrics.Register("collector_incoming_queue", "histogram")
-	i.Metrics.Register("collector_peer_queue_length", "gauge")
-	i.Metrics.Register("collector_incoming_queue_length", "gauge")
-	i.Metrics.Register("collector_peer_queue", "histogram")
-	i.Metrics.Register("collector_cache_size", "gauge")
-	i.Metrics.Register("memory_heap_allocation", "gauge")
-	i.Metrics.Register("span_received", "counter")
-	i.Metrics.Register("span_processed", "counter")
-	i.Metrics.Register("spans_waiting", "updown")
-	i.Metrics.Register("trace_sent_cache_hit", "counter")
-	i.Metrics.Register("trace_accepted", "counter")
-	i.Metrics.Register("trace_send_kept", "counter")
-	i.Metrics.Register("trace_send_dropped", "counter")
-	i.Metrics.Register("trace_send_has_root", "counter")
-	i.Metrics.Register("trace_send_no_root", "counter")
-	i.Metrics.Register("trace_forwarded_on_peer_change", "gauge")
-	i.Metrics.Register("trace_redistribution_count", "gauge")
-	i.Metrics.Register("trace_send_on_shutdown", "counter")
-	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
-
-	i.Metrics.Register(TraceSendGotRoot, "counter")
-	i.Metrics.Register(TraceSendExpired, "counter")
-	i.Metrics.Register(TraceSendSpanLimit, "counter")
-	i.Metrics.Register(TraceSendEjectedFull, "counter")
-	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
-	i.Metrics.Register(TraceSendLateSpan, "counter")
+	for _, metric := range inMemCollectorMetrics {
+		i.Metrics.Register(metric)
+	}
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
-	i.Metrics.Register(cache.CurrentCapacity, "gauge")
-	i.Metrics.Register(cache.FutureLoadFactor, "gauge")
-	i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
 	var err error
 	i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
 	if err != nil {
@@ -1061,7 +1066,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	}
 }
 
-func newRedistributeNotifier(logger logger.Logger, metrics metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
+func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
 	r := &redistributeNotifier{
 		initialDelay: 3 * time.Second,
 		maxDelay:     30 * time.Second,
@@ -1069,11 +1074,10 @@ func newRedistributeNotifier(logger logger.Logger, metrics metrics.Metrics, cloc
 		done:         make(chan struct{}),
 		clock:        clock,
 		logger:       logger,
-		metrics:      metrics,
+		metrics:      met,
 		triggered:    make(chan struct{}),
 		reset:        make(chan struct{}),
 	}
-	r.metrics.Register("trace_redistribution_count", "gauge")
 
 	return r
 }

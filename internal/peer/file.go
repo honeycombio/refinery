@@ -45,8 +45,14 @@ func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
 	callback()
 }
 
+var filePeersMetrics = []metrics.Metadata{
+	{Name: "num_file_peers", Type: metrics.Gauge, Unit: "peers", Description: "Number of peers in the file peer list"},
+}
+
 func (p *FilePeers) Start() (err error) {
-	p.Metrics.Register("num_file_peers", "gauge")
+	for _, metric := range filePeersMetrics {
+		p.Metrics.Register(metric)
+	}
 
 	p.id, err = p.publicAddr()
 	if err != nil {

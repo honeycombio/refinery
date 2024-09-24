@@ -34,7 +34,7 @@ import (
 // StressRelief.
 type Metrics interface {
 	// Register declares a metric; metricType should be one of counter, gauge, histogram, updown
-	Register(name string, metricType string)
+	Register(metadata Metadata)
 	Increment(name string)                  // for counters
 	Gauge(name string, val interface{})     // for gauges
 	Count(name string, n interface{})       // for counters
@@ -89,3 +89,21 @@ func PrefixMetricName(prefix string, name string) string {
 	}
 	return name
 }
+
+type Metadata struct {
+	Name string
+	Type MetricType
+	// Unit is the unit of the metric, e.g. "bytes", "seconds", "count"
+	Unit string
+	// Description is a human-readable description of the metric
+	Description string
+}
+
+type MetricType int
+
+const (
+	Counter MetricType = iota
+	Gauge
+	Histogram
+	UpDown
+)

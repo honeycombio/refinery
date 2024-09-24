@@ -44,6 +44,12 @@ const (
 	AddQueueSleepTime = 100 * time.Microsecond
 )
 
+var cuckooTraceCheckerMetrics = []metrics.Metadata{
+	{Name: CurrentCapacity, Type: metrics.Gauge, Unit: "trace", Description: "current capacity of the cuckoo filter"},
+	{Name: FutureLoadFactor, Type: metrics.Gauge, Unit: "percentage", Description: "the fraction of slots occupied in the future cuckoo filter"},
+	{Name: CurrentLoadFactor, Type: metrics.Gauge, Unit: "percentage", Description: "the fraction of slots occupied in the current cuckoo filter"},
+}
+
 func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker {
 	c := &CuckooTraceChecker{
 		capacity: capacity,
@@ -51,6 +57,9 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 		future:   nil,
 		met:      m,
 		addch:    make(chan string, AddQueueDepth),
+	}
+	for _, metric := range cuckooTraceCheckerMetrics {
+		m.Register(metric)
 	}
 
 	// To try to avoid blocking on Add, we have a goroutine that pulls from a

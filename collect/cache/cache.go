@@ -49,26 +49,30 @@ type DefaultInMemCache struct {
 
 const DefaultInMemCacheCapacity = 10000
 
+var collectCacheMetrics = []metrics.Metadata{
+	{Name: "collect_cache_buffer_overrun", Type: metrics.Counter, Unit: "count", Description: "The number of times the trace overwritten in the circular buffer has not yet been sent"},
+	{Name: "collect_cache_capacity", Type: metrics.Gauge, Unit: "count", Description: "The number of traces that can be stored in the cache"},
+	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: "count", Description: "The number of traces currently stored in the cache"},
+}
+
 func NewInMemCache(
 	capacity int,
-	metrics metrics.Metrics,
+	met metrics.Metrics,
 	logger logger.Logger,
 ) *DefaultInMemCache {
 	logger.Debug().Logf("Starting DefaultInMemCache")
 	defer func() { logger.Debug().Logf("Finished starting DefaultInMemCache") }()
 
-	// buffer_overrun increments when the trace overwritten in the circular
-	// buffer has not yet been sent
-	metrics.Register("collect_cache_buffer_overrun", "counter")
-	metrics.Register("collect_cache_capacity", "gauge")
-	metrics.Register("collect_cache_entries", "histogram")
+	for _, metadata := range collectCacheMetrics {
+		met.Register(metadata)
+	}
 
 	if capacity == 0 {
 		capacity = DefaultInMemCacheCapacity
 	}
 
 	return &DefaultInMemCache{
-		Metrics:     metrics,
+		Metrics:     met,
 		Logger:      logger,
 		cache:       make(map[string]*types.Trace, capacity),
 		traceBuffer: make([]*types.Trace, capacity),

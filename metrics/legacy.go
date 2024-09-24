@@ -17,6 +17,8 @@ import (
 	"github.com/honeycombio/refinery/logger"
 )
 
+var _ Metrics = (*LegacyMetrics)(nil)
+
 type LegacyMetrics struct {
 	Config            config.Config   `inject:""`
 	Logger            logger.Logger   `inject:""`
@@ -304,19 +306,19 @@ func average(vals []float64) float64 {
 	return total / float64(len(vals))
 }
 
-func (h *LegacyMetrics) Register(name string, metricType string) {
-	h.Logger.Debug().Logf("metrics registering %s with name %s", metricType, name)
-	switch metricType {
+func (h *LegacyMetrics) Register(metadata Metadata) {
+	h.Logger.Debug().Logf("metrics registering %s with name %s", metadata.MetricType, metadata.Name)
+	switch metadata.MetricType {
 	case "counter":
-		getOrAdd(&h.lock, name, h.counters, createCounter)
+		getOrAdd(&h.lock, metadata.Name, h.counters, createCounter)
 	case "gauge":
-		getOrAdd(&h.lock, name, h.gauges, createGauge)
+		getOrAdd(&h.lock, metadata.Name, h.gauges, createGauge)
 	case "histogram":
-		getOrAdd(&h.lock, name, h.histograms, createHistogram)
+		getOrAdd(&h.lock, metadata.Name, h.histograms, createHistogram)
 	case "updown":
-		getOrAdd(&h.lock, name, h.updowns, createUpdown)
+		getOrAdd(&h.lock, metadata.Name, h.updowns, createUpdown)
 	default:
-		h.Logger.Debug().Logf("unsupported metric type %s", metricType)
+		h.Logger.Debug().Logf("unsupported metric type %s", metadata.MetricType)
 	}
 }
 

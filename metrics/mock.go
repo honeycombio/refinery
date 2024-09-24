@@ -2,6 +2,8 @@ package metrics
 
 import "sync"
 
+var _ Metrics = (*MockMetrics)(nil)
+
 // MockMetrics collects metrics that were registered and changed to allow tests to
 // verify expected behavior
 type MockMetrics struct {
@@ -25,11 +27,11 @@ func (m *MockMetrics) Start() {
 	m.Constants = make(map[string]float64)
 }
 
-func (m *MockMetrics) Register(name string, metricType string) {
+func (m *MockMetrics) Register(metadata Metadata) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	m.Registrations[name] = metricType
+	m.Registrations[metadata.Name] = metadata.MetricType
 }
 func (m *MockMetrics) Increment(name string) {
 	m.lock.Lock()

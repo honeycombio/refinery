@@ -27,7 +27,7 @@ func TestStressRelief_Monitor(t *testing.T) {
 	defer stop()
 	require.NoError(t, sr.Start())
 
-	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
+	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge", metrics.Metadata{})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
 
@@ -81,7 +81,7 @@ func TestStressRelief_Peer(t *testing.T) {
 	defer stop()
 	require.NoError(t, sr.Start())
 
-	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
+	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge", metrics.Metadata{})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
 
@@ -139,7 +139,7 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	sr.disableStressLevelReport = true
 	sr.Start()
 
-	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge")
+	sr.RefineryMetrics.Register("collector_incoming_queue_length", "gauge", metrics.Metadata{})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
 

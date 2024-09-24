@@ -107,6 +107,13 @@ type StressRelief struct {
 
 const StressReliefHealthKey = "stress_relief"
 
+var stressReliefMetrics = []metrics.Metadata{
+	{Name: "cluster_stress_level", Type: metrics.Gauge},
+	{Name: "individual_stress_level", Type: metrics.Gauge},
+	{Name: "stress_level", Type: metrics.Gauge},
+	{Name: "stress_relief_activated", Type: metrics.Gauge},
+}
+
 func (s *StressRelief) Start() error {
 	s.Logger.Debug().Logf("Starting StressRelief system")
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
@@ -115,10 +122,9 @@ func (s *StressRelief) Start() error {
 	s.Health.Register(StressReliefHealthKey, 3*time.Second)
 
 	// register stress level metrics
-	s.RefineryMetrics.Register("cluster_stress_level", "gauge")
-	s.RefineryMetrics.Register("individual_stress_level", "gauge")
-	s.RefineryMetrics.Register("stress_level", "gauge")
-	s.RefineryMetrics.Register("stress_relief_activated", "gauge")
+	for _, m := range stressReliefMetrics {
+		s.RefineryMetrics.Register(m)
+	}
 
 	// We use an algorithms map so that we can name these algorithms, which makes it easier for several things:
 	// - change our mind about which algorithm to use

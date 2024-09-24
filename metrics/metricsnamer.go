@@ -1,5 +1,7 @@
 package metrics
 
+var _ Metrics = (*MetricsPrefixer)(nil)
+
 // This wraps a Metrics object and is a Metrics object itself, but adds a prefix
 // to all uses of its name. The point is that we can have a singleton Metrics
 // object that collects and reports all metrics rather than 3-5 different
@@ -24,8 +26,9 @@ func (p *MetricsPrefixer) Start() error {
 	return nil
 }
 
-func (p *MetricsPrefixer) Register(name string, metricType string) {
-	p.Metrics.Register(p.prefix+name, metricType)
+func (p *MetricsPrefixer) Register(metadata Metadata) {
+	metadata.Name = p.prefix + metadata.Name
+	p.Metrics.Register(metadata)
 }
 
 func (p *MetricsPrefixer) Increment(name string) {

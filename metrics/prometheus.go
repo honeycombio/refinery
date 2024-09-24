@@ -13,6 +13,8 @@ import (
 	"github.com/honeycombio/refinery/logger"
 )
 
+var _ Metrics = (*PromMetrics)(nil)
+
 type PromMetrics struct {
 	Config config.Config `inject:""`
 	Logger logger.Logger `inject:""`
@@ -45,40 +47,44 @@ func (p *PromMetrics) Start() error {
 
 // Register takes a name and a metric type. The type should be one of "counter",
 // "gauge", or "histogram"
-func (p *PromMetrics) Register(name string, metricType string) {
+func (p *PromMetrics) Register(metadata Metadata) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	newmet, exists := p.metrics[name]
+	newmet, exists := p.metrics[metadata.Name]
 
 	// don't attempt to add the metric again as this will cause a panic
 	if exists {
 		return
 	}
 
-	switch metricType {
+	help := metadata.Description
+	if help == "" {
+		help = metadata.Name
+	}
+	switch metadata.MetricType {
 	case "counter":
 		newmet = promauto.NewCounter(prometheus.CounterOpts{
-			Name: name,
-			Help: name,
+			Name: metadata.Name,
+			Help: help,
 		})
 	case "gauge", "updown": // updown is a special gauge
 		newmet = promauto.NewGauge(prometheus.GaugeOpts{
-			Name: name,
-			Help: name,
+			Name: metadata.Name,
+			Help: help,
 		})
 	case "histogram":
 		newmet = promauto.NewHistogram(prometheus.HistogramOpts{
-			Name: name,
-			Help: name,
+			Name: metadata.Name,
+			Help: help,
 			// This is an attempt at a usable set of buckets for a wide range of metrics
 			// 16 buckets, first upper bound of 1, each following upper bound is 4x the previous
 			Buckets: prometheus.ExponentialBuckets(1, 4, 16),
 		})
 	}
 
-	p.metrics[name] = newmet
-	p.values[name] = 0
+	p.metrics[metadata.Name] = newmet
+	p.values[metadata.Name] = 0
 }
 
 func (p *PromMetrics) Get(name string) (float64, bool) {
