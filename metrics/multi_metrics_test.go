@@ -72,16 +72,16 @@ func TestMultiMetrics_Register(t *testing.T) {
 	mm, err := getAndStartMultiMetrics()
 	assert.NoError(t, err)
 	mm.Register(Metadata{
-		Name:       "updown",
-		MetricType: "updowncounter",
+		Name: "updown",
+		Type: UpDown,
 	})
 	mm.Register(Metadata{
-		Name:       "counter",
-		MetricType: "counter",
+		Name: "counter",
+		Type: Counter,
 	})
 	mm.Register(Metadata{
-		Name:       "gauge",
-		MetricType: "gauge",
+		Name: "gauge",
+		Type: Gauge,
 	})
 
 	mm.Count("counter", 1)

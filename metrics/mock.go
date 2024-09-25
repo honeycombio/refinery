@@ -31,7 +31,7 @@ func (m *MockMetrics) Register(metadata Metadata) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	m.Registrations[metadata.Name] = metadata.MetricType
+	m.Registrations[metadata.Name] = metadata.Type.String()
 }
 func (m *MockMetrics) Increment(name string) {
 	m.lock.Lock()

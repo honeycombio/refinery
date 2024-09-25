@@ -62,18 +62,18 @@ func (p *PromMetrics) Register(metadata Metadata) {
 	if help == "" {
 		help = metadata.Name
 	}
-	switch metadata.MetricType {
-	case "counter":
+	switch metadata.Type {
+	case Counter:
 		newmet = promauto.NewCounter(prometheus.CounterOpts{
 			Name: metadata.Name,
 			Help: help,
 		})
-	case "gauge", "updown": // updown is a special gauge
+	case Gauge, UpDown: // updown is a special gauge
 		newmet = promauto.NewGauge(prometheus.GaugeOpts{
 			Name: metadata.Name,
 			Help: help,
 		})
-	case "histogram":
+	case Histogram:
 		newmet = promauto.NewHistogram(prometheus.HistogramOpts{
 			Name: metadata.Name,
 			Help: help,

@@ -101,6 +101,20 @@ type Metadata struct {
 
 type MetricType int
 
+func (m MetricType) String() string {
+	switch m {
+	case Counter:
+		return "counter"
+	case Gauge:
+		return "gauge"
+	case Histogram:
+		return "histogram"
+	case UpDown:
+		return "updown"
+	}
+	return "unknown"
+}
+
 const (
 	Counter MetricType = iota
 	Gauge

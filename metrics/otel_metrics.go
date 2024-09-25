@@ -191,8 +191,8 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 
 	ctx := context.Background()
 
-	switch metadata.MetricType {
-	case "counter":
+	switch metadata.Type {
+	case Counter:
 		ctr, err := o.meter.Int64Counter(metadata.Name,
 			metric.WithUnit(metadata.Unit),
 			metric.WithDescription(metadata.Description),
@@ -204,7 +204,7 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 		// Give the counter an initial value of 0 so that OTel will send it
 		ctr.Add(ctx, 0)
 		o.counters[metadata.Name] = ctr
-	case "gauge":
+	case Gauge:
 		var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
 			// this callback is invoked from outside this function call, so we
 			// need to Rlock when we read the values map. We don't know how long
@@ -229,7 +229,7 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 
 		o.values[metadata.Name] = 0
 		o.gauges[metadata.Name] = g
-	case "histogram":
+	case Histogram:
 		h, err := o.meter.Float64Histogram(metadata.Name,
 			metric.WithUnit(metadata.Unit),
 			metric.WithDescription(metadata.Description),
@@ -240,7 +240,7 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 		}
 		h.Record(ctx, 0)
 		o.histograms[metadata.Name] = h
-	case "updown":
+	case UpDown:
 		ud, err := o.meter.Int64UpDownCounter(metadata.Name,
 			metric.WithUnit(metadata.Unit),
 			metric.WithDescription(metadata.Description),
@@ -252,7 +252,7 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 		ud.Add(ctx, 0)
 		o.updowns[metadata.Name] = ud
 	default:
-		o.Logger.Error().WithString("type", metadata.MetricType).Logf("unknown metric type")
+		o.Logger.Error().WithString("type", metadata.Type.String()).Logf("unknown metric type")
 		return
 	}
 }

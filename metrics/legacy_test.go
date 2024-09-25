@@ -134,8 +134,8 @@ func TestMetricsUpdown(t *testing.T) {
 	}
 	m.Start()
 	m.Register(Metadata{
-		Name:       "foo",
-		MetricType: "updown",
+		Name: "foo",
+		Type: UpDown,
 	})
 	m.Up("foo")
 	m.Up("foo")

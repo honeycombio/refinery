@@ -20,13 +20,13 @@ func TestMultipleRegistrations(t *testing.T) {
 	assert.NoError(t, err)
 
 	p.Register(Metadata{
-		Name:       "test",
-		MetricType: "counter",
+		Name: "test",
+		Type: Counter,
 	})
 
 	p.Register(Metadata{
-		Name:       "test",
-		MetricType: "counter",
+		Name: "test",
+		Type: Counter,
 	})
 }
 
@@ -41,8 +41,8 @@ func TestRaciness(t *testing.T) {
 	assert.NoError(t, err)
 
 	p.Register(Metadata{
-		Name:       "race",
-		MetricType: "counter",
+		Name: "race",
+		Type: Counter,
 	})
 
 	// this loop modifying the metric registry and reading it to increment
@@ -51,8 +51,8 @@ func TestRaciness(t *testing.T) {
 		go func(j int) {
 			metricName := fmt.Sprintf("metric%d", j)
 			p.Register(Metadata{
-				Name:       metricName,
-				MetricType: "counter",
+				Name: metricName,
+				Type: Counter,
 			})
 		}(i)
 

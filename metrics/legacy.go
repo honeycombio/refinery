@@ -307,18 +307,18 @@ func average(vals []float64) float64 {
 }
 
 func (h *LegacyMetrics) Register(metadata Metadata) {
-	h.Logger.Debug().Logf("metrics registering %s with name %s", metadata.MetricType, metadata.Name)
-	switch metadata.MetricType {
-	case "counter":
+	h.Logger.Debug().Logf("metrics registering %s with name %s", metadata.Type, metadata.Name)
+	switch metadata.Type {
+	case Counter:
 		getOrAdd(&h.lock, metadata.Name, h.counters, createCounter)
-	case "gauge":
+	case Gauge:
 		getOrAdd(&h.lock, metadata.Name, h.gauges, createGauge)
-	case "histogram":
+	case Histogram:
 		getOrAdd(&h.lock, metadata.Name, h.histograms, createHistogram)
-	case "updown":
+	case UpDown:
 		getOrAdd(&h.lock, metadata.Name, h.updowns, createUpdown)
 	default:
-		h.Logger.Debug().Logf("unsupported metric type %s", metadata.MetricType)
+		h.Logger.Debug().Logf("unsupported metric type %s", metadata.Type)
 	}
 }
 

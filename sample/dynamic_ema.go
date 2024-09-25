@@ -52,18 +52,14 @@ func (d *EMADynamicSampler) Start() error {
 	d.keyFields = d.Config.GetSamplingFields()
 
 	// spin up the actual dynamic sampler
-	d.dynsampler = &baseSampler{
-		Sampler: &dynsampler.EMASampleRate{
-			GoalSampleRate:             d.goalSampleRate,
-			AdjustmentIntervalDuration: time.Duration(d.adjustmentInterval),
-			Weight:                     d.weight,
-			AgeOutValue:                d.ageOutValue,
-			BurstDetectionDelay:        d.burstDetectionDelay,
-			BurstMultiple:              d.burstMultiple,
-			MaxKeys:                    d.maxKeys,
-		},
-		prefix: d.prefix,
-		met:    d.Metrics,
+	d.dynsampler = &dynsampler.EMASampleRate{
+		GoalSampleRate:             d.goalSampleRate,
+		AdjustmentIntervalDuration: time.Duration(d.adjustmentInterval),
+		Weight:                     d.weight,
+		AgeOutValue:                d.ageOutValue,
+		BurstDetectionDelay:        d.burstDetectionDelay,
+		BurstMultiple:              d.burstMultiple,
+		MaxKeys:                    d.maxKeys,
 	}
 	d.dynsampler.Start()
 
