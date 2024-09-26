@@ -316,10 +316,15 @@ func main() {
 		"messages_sent":          "counter",
 		"response_decode_errors": "counter",
 	}
+
 	for name, typ := range libhoneyMetricsName {
 		upstreamMetricsRecorder.Register(name, typ)
 		peerMetricsRecorder.Register(name, typ)
 	}
+
+	// Register metrics after the metrics object has been created
+	peerTransmission.RegisterMetrics()
+	upstreamTransmission.RegisterMetrics()
 
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
 	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))

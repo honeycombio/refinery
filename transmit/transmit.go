@@ -20,6 +20,8 @@ type Transmission interface {
 	EnqueueSpan(ev *types.Span)
 	// Flush flushes the in-flight queue of all events and spans
 	Flush()
+
+	RegisterMetrics()
 }
 
 const (
@@ -64,12 +66,6 @@ func (d *DefaultTransmission) Start() error {
 	once.Do(func() {
 		libhoney.UserAgentAddition = "refinery/" + d.Version
 	})
-
-	d.Metrics.Register(counterEnqueueErrors, "counter")
-	d.Metrics.Register(counterResponse20x, "counter")
-	d.Metrics.Register(counterResponseErrors, "counter")
-	d.Metrics.Register(updownQueuedItems, "updown")
-	d.Metrics.Register(histogramQueueTime, "histogram")
 
 	processCtx, canceler := context.WithCancel(context.Background())
 	d.responseCanceler = canceler
@@ -139,6 +135,16 @@ func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
 
 func (d *DefaultTransmission) Flush() {
 	d.LibhClient.Flush()
+}
+
+// RegisterMetrics registers the metrics used by the DefaultTransmission.
+// it should be called after the metrics object has been created.
+func (d *DefaultTransmission) RegisterMetrics() {
+	d.Metrics.Register(counterEnqueueErrors, "counter")
+	d.Metrics.Register(counterResponse20x, "counter")
+	d.Metrics.Register(counterResponseErrors, "counter")
+	d.Metrics.Register(updownQueuedItems, "updown")
+	d.Metrics.Register(histogramQueueTime, "histogram")
 }
 
 func (d *DefaultTransmission) Stop() error {
