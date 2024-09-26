@@ -28,7 +28,7 @@
   description: the current size of the most recent dropped trace cache
 - name: collect_sent_reasons_cache_entries
   type: Histogram
-  unit: count
+  unit: Dimensionless
   description: Number of entries in the sent reasons cache
 - name: is_ready
   type: Gauge
@@ -48,11 +48,11 @@
   description: Number of messages received from Redis PubSub
 - name: local_pubsub_published
   type: Counter
-  unit: messages
+  unit: Dimensionless
   description: The total number of messages sent via the local pubsub implementation
 - name: local_pubsub_received
   type: Counter
-  unit: messages
+  unit: Dimensionless
   description: The total number of messages received via the local pubsub implementation
 - name: num_file_peers
   type: Gauge

@@ -401,7 +401,9 @@ func GenerateMetricsDoc(w io.Writer) error {
 		return err
 	}
 
-	tmpl, err := template.ParseFiles("./templates/metrics.tmpl")
+	tmpl := template.New("metrics.tmpl")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/metrics.tmpl")
 	if err != nil {
 		return err
 	}

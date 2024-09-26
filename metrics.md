@@ -1,4 +1,5 @@
 # Metrics Documentation
+# Automatically generated on 2024-09-26 at 18:58:58 UTC
 
 This document contains the description of various metrics used in the system.
 
@@ -11,13 +12,13 @@ This document contains the description of various metrics used in the system.
 | cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
 | cuckoo_current_load_factor | Gauge | Percent | the fraction of slots occupied in the current cuckoo filter |
 | cache_recent_dropped_traces | Gauge | Dimensionless | the current size of the most recent dropped trace cache |
-| collect_sent_reasons_cache_entries | Histogram | count | Number of entries in the sent reasons cache |
+| collect_sent_reasons_cache_entries | Histogram | Dimensionless | Number of entries in the sent reasons cache |
 | is_ready | Gauge | Dimensionless | Whether the system is ready to receive traffic |
 | is_alive | Gauge | Dimensionless | Whether the system is alive and reporting in |
 | redis_pubsub_published | Counter | Dimensionless | Number of messages published to Redis PubSub |
 | redis_pubsub_received | Counter | Dimensionless | Number of messages received from Redis PubSub |
-| local_pubsub_published | Counter | messages | The total number of messages sent via the local pubsub implementation |
-| local_pubsub_received | Counter | messages | The total number of messages received via the local pubsub implementation |
+| local_pubsub_published | Counter | Dimensionless | The total number of messages sent via the local pubsub implementation |
+| local_pubsub_received | Counter | Dimensionless | The total number of messages received via the local pubsub implementation |
 | num_file_peers | Gauge | Dimensionless | Number of peers in the file peer list |
 | num_peers | Gauge | Dimensionless | the active number of peers in the cluster |
 | peer_hash | Gauge | Dimensionless | the hash of the current list of peers |
