@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	dynsampler "github.com/honeycombio/dynsampler-go"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -107,9 +108,58 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 	return sampler
 }
 
-func getMetricType(name string) string {
+var samplerMetrics = []metrics.Metadata{
+	{Name: "_num_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by configured sampler"},
+	{Name: "_num_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces kept by configured sampler"},
+	{Name: "_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Sample rate for traces"},
+}
+
+func getMetricType(name string) metrics.MetricType {
 	if strings.HasSuffix(name, "_count") {
-		return "counter"
+		return metrics.Counter
 	}
-	return "gauge"
+	return metrics.Gauge
+}
+
+type dynsamplerMetricsRecorder struct {
+	prefix      string
+	lastMetrics map[string]int64
+	met         metrics.Metrics
+}
+
+func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) {
+	// Register statistics this package will produce
+	d.lastMetrics = sampler.GetMetrics(d.prefix + "_")
+	for name := range d.lastMetrics {
+		d.met.Register(metrics.Metadata{
+			Name: name,
+			Type: getMetricType(name),
+		})
+	}
+
+	for _, metric := range samplerMetrics {
+		metric.Name = d.prefix + metric.Name
+		d.met.Register(metric)
+	}
+
+}
+
+func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint) {
+	for name, val := range sampler.GetMetrics(d.prefix + "_") {
+		switch getMetricType(name) {
+		case metrics.Counter:
+			delta := val - d.lastMetrics[name]
+			d.met.Count(name, delta)
+			d.lastMetrics[name] = val
+		case metrics.Gauge:
+			d.met.Gauge(name, val)
+		}
+	}
+
+	if kept {
+		d.met.Increment(d.prefix + "_num_kept")
+	} else {
+		d.met.Increment(d.prefix + "_num_dropped")
+	}
+	d.met.Histogram(d.prefix+"_sample_rate", float64(rate))
 }

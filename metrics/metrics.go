@@ -34,7 +34,7 @@ import (
 // StressRelief.
 type Metrics interface {
 	// Register declares a metric; metricType should be one of counter, gauge, histogram, updown
-	Register(name string, metricType string)
+	Register(metadata Metadata)
 	Increment(name string)                  // for counters
 	Gauge(name string, val interface{})     // for gauges
 	Count(name string, n interface{})       // for counters
@@ -89,3 +89,47 @@ func PrefixMetricName(prefix string, name string) string {
 	}
 	return name
 }
+
+type Metadata struct {
+	Name string
+	Type MetricType
+	// Unit is the unit of the metric. It should follow the UCUM case-sensitive
+	// unit format.
+	Unit Unit
+	// Description is a human-readable description of the metric
+	Description string
+}
+
+type MetricType int
+
+func (m MetricType) String() string {
+	switch m {
+	case Counter:
+		return "counter"
+	case Gauge:
+		return "gauge"
+	case Histogram:
+		return "histogram"
+	case UpDown:
+		return "updown"
+	}
+	return "unknown"
+}
+
+const (
+	Counter MetricType = iota
+	Gauge
+	Histogram
+	UpDown
+)
+
+type Unit string
+
+// Units defined by OpenTelemetry.
+const (
+	Dimensionless Unit = "1"
+	Bytes         Unit = "By"
+	Milliseconds  Unit = "ms"
+	Microseconds  Unit = "us"
+	Percent       Unit = "%"
+)

@@ -22,12 +22,18 @@ type KeptReasonsCache struct {
 	hashSeed uint64
 }
 
+var keptReasonCacheMetrics = []metrics.Metadata{
+	{Name: "collect_sent_reasons_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Number of entries in the sent reasons cache"},
+}
+
 // NewKeptReasonsCache returns a new SentReasonsCache.
-func NewKeptReasonsCache(metrics metrics.Metrics) *KeptReasonsCache {
-	metrics.Register("collect_sent_reasons_cache_entries", "histogram")
+func NewKeptReasonsCache(met metrics.Metrics) *KeptReasonsCache {
+	for _, metric := range keptReasonCacheMetrics {
+		met.Register(metric)
+	}
 
 	return &KeptReasonsCache{
-		Metrics:  metrics,
+		Metrics:  met,
 		keys:     make(map[uint64]uint32),
 		hashSeed: rand.Uint64(),
 	}

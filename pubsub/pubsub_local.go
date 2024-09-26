@@ -31,14 +31,21 @@ type LocalSubscription struct {
 // Ensure that LocalSubscription implements Subscription
 var _ Subscription = (*LocalSubscription)(nil)
 
+var localPubSubMetrics = []metrics.Metadata{
+	{Name: "local_pubsub_published", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The total number of messages sent via the local pubsub implementation"},
+	{Name: "local_pubsub_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The total number of messages received via the local pubsub implementation"},
+}
+
 // Start initializes the LocalPubSub
 func (ps *LocalPubSub) Start() error {
 	ps.topics = make(map[string][]*LocalSubscription)
 	if ps.Metrics == nil {
 		ps.Metrics = &metrics.NullMetrics{}
 	}
-	ps.Metrics.Register("local_pubsub_published", "counter")
-	ps.Metrics.Register("local_pubsub_received", "counter")
+
+	for _, metric := range localPubSubMetrics {
+		ps.Metrics.Register(metric)
+	}
 	return nil
 }
 

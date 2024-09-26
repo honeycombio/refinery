@@ -307,19 +307,9 @@ func main() {
 
 	// these have to be done after the injection (of metrics)
 	// these are the metrics that libhoney will emit; we preregister them so that they always appear
-	libhoneyMetricsName := map[string]string{
-		"queue_length":           "gauge",
-		"queue_overflow":         "counter",
-		"send_errors":            "counter",
-		"send_retries":           "counter",
-		"batches_sent":           "counter",
-		"messages_sent":          "counter",
-		"response_decode_errors": "counter",
-	}
-
-	for name, typ := range libhoneyMetricsName {
-		upstreamMetricsRecorder.Register(name, typ)
-		peerMetricsRecorder.Register(name, typ)
+	for _, metric := range libhoneyMetrics {
+		upstreamMetricsRecorder.Register(metric)
+		peerMetricsRecorder.Register(metric)
 	}
 
 	// Register metrics after the metrics object has been created
@@ -380,4 +370,49 @@ func main() {
 	startstop.Stop(g.Objects(), ststLogger)
 	close(monitorDone)
 	close(sigsToExit)
+}
+
+var libhoneyMetrics = []metrics.Metadata{
+	metrics.Metadata{
+		Name:        "queue_length",
+		Type:        metrics.Gauge,
+		Unit:        metrics.Dimensionless,
+		Description: "number of events waiting to be sent to destination",
+	},
+	metrics.Metadata{
+		Name:        "queue_overflow",
+		Type:        metrics.Counter,
+		Unit:        metrics.Dimensionless,
+		Description: "number of events dropped due to queue overflow",
+	},
+	metrics.Metadata{
+		Name:        "send_errors",
+		Type:        metrics.Counter,
+		Unit:        metrics.Dimensionless,
+		Description: "number of errors encountered while sending events to destination",
+	},
+	metrics.Metadata{
+		Name:        "send_retries",
+		Type:        metrics.Counter,
+		Unit:        metrics.Dimensionless,
+		Description: "number of times a batch of events was retried",
+	},
+	metrics.Metadata{
+		Name:        "batches_sent",
+		Type:        metrics.Counter,
+		Unit:        metrics.Dimensionless,
+		Description: "number of batches of events sent to destination",
+	},
+	metrics.Metadata{
+		Name:        "messages_sent",
+		Type:        metrics.Counter,
+		Unit:        metrics.Dimensionless,
+		Description: "number of messages sent to destination",
+	},
+	metrics.Metadata{
+		Name:        "response_decode_errors",
+		Type:        metrics.Counter,
+		Unit:        metrics.Dimensionless,
+		Description: "number of errors encountered while decoding responses from destination",
+	},
 }

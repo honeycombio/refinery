@@ -133,7 +133,10 @@ func TestMetricsUpdown(t *testing.T) {
 		Logger: &logger.NullLogger{},
 	}
 	m.Start()
-	m.Register("foo", "updown")
+	m.Register(Metadata{
+		Name: "foo",
+		Type: UpDown,
+	})
 	m.Up("foo")
 	m.Up("foo")
 	m.Down("foo")

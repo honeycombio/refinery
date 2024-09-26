@@ -6,6 +6,8 @@ import (
 	"github.com/honeycombio/refinery/config"
 )
 
+var _ Metrics = (*MultiMetrics)(nil)
+
 // MultiMetrics is a metrics provider that sends metrics to at least one
 // underlying metrics provider (StoreMetrics). It can be configured to send
 // metrics to multiple providers at once.
@@ -61,13 +63,13 @@ func (m *MultiMetrics) Children() []Metrics {
 	return m.children
 }
 
-func (m *MultiMetrics) Register(name string, metricType string) {
+func (m *MultiMetrics) Register(metadata Metadata) {
 	for _, ch := range m.children {
-		ch.Register(name, metricType)
+		ch.Register(metadata)
 	}
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.values[name] = 0
+	m.values[metadata.Name] = 0
 }
 
 func (m *MultiMetrics) Increment(name string) { // for counters

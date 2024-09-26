@@ -121,6 +121,11 @@ func (r *Router) SetVersion(ver string) {
 	r.versionStr = ver
 }
 
+var routerMetrics = []metrics.Metadata{
+	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
+	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
+}
+
 // LnS spins up the Listen and Serve portion of the router. A router is
 // initialized as being for either incoming traffic from clients or traffic from
 // a peer. They listen on different addresses so peer traffic can be
@@ -145,13 +150,10 @@ func (r *Router) LnS(incomingOrPeer string) {
 		return
 	}
 
-	r.Metrics.Register(r.incomingOrPeer+"_router_proxied", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_event", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_batch", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_nonspan", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_span", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_peer", "counter")
-	r.Metrics.Register(r.incomingOrPeer+"_router_dropped", "counter")
+	for _, metric := range routerMetrics {
+		metric.Name = r.incomingOrPeer + metric.Name
+		r.Metrics.Register(metric)
+	}
 
 	muxxer := mux.NewRouter()
 
