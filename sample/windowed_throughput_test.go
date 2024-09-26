@@ -45,7 +45,7 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")
 	assert.Equal(t, uint(1), rate, "sample rate should be 1")
-	assert.Equal(t, "Windowedthroughput", reason)
+	assert.Equal(t, "windowedthroughput", reason)
 	assert.Equal(t, "4•,200•,true•,/{slug}/fun•,", key)
 
 }

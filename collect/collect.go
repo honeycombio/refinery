@@ -95,6 +95,39 @@ type InMemCollector struct {
 	hostname string
 }
 
+var inMemCollectorMetrics = []metrics.Metadata{
+	{Name: "trace_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "time taken to process a trace from arrival to send"},
+	{Name: "trace_span_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans in a trace"},
+	{Name: "collector_incoming_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the incoming queue"},
+	{Name: "collector_peer_queue_length", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans in the peer queue"},
+	{Name: "collector_incoming_queue_length", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans in the incoming queue"},
+	{Name: "collector_peer_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the peer queue"},
+	{Name: "collector_cache_size", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces currently stored in the trace cache"},
+	{Name: "memory_heap_allocation", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "current heap allocation"},
+	{Name: "span_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans received by the collector"},
+	{Name: "span_processed", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans processed by the collector"},
+	{Name: "spans_waiting", Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "number of spans waiting to be processed by the collector"},
+	{Name: "trace_sent_cache_hit", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of late spans received for traces that have already been sent"},
+	{Name: "trace_accepted", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of new traces received by the collector"},
+	{Name: "trace_send_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that has been kept"},
+	{Name: "trace_send_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that has been dropped"},
+	{Name: "trace_send_has_root", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept traces that have a root span"},
+	{Name: "trace_send_no_root", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept traces that do not have a root span"},
+	{Name: "trace_forwarded_on_peer_change", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces forwarded due to peer membership change"},
+	{Name: "trace_redistribution_count", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces redistributed due to peer membership change"},
+	{Name: "trace_send_on_shutdown", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces sent during shutdown"},
+	{Name: "trace_forwarded_on_shutdown", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces forwarded during shutdown"},
+
+	{Name: TraceSendGotRoot, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that are ready for decision due to root span arrival"},
+	{Name: TraceSendExpired, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that are ready for decision due to TraceTimeout or SendDelay"},
+	{Name: TraceSendSpanLimit, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that are ready for decision due to span limit"},
+	{Name: TraceSendEjectedFull, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that are ready for decision due to cache capacity overrun"},
+	{Name: TraceSendEjectedMemsize, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces that are ready for decision due to memory overrun"},
+	{Name: TraceSendLateSpan, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans that are sent due to late span arrival"},
+
+	{Name: "dropped_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces dropped due to stress relief"},
+}
+
 func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
@@ -107,39 +140,11 @@ func (i *InMemCollector) Start() error {
 
 	i.Health.Register(CollectorHealthKey, time.Duration(imcConfig.HealthCheckTimeout))
 
-	i.Metrics.Register("trace_duration_ms", "histogram")
-	i.Metrics.Register("trace_span_count", "histogram")
-	i.Metrics.Register("collector_incoming_queue", "histogram")
-	i.Metrics.Register("collector_peer_queue_length", "gauge")
-	i.Metrics.Register("collector_incoming_queue_length", "gauge")
-	i.Metrics.Register("collector_peer_queue", "histogram")
-	i.Metrics.Register("collector_cache_size", "gauge")
-	i.Metrics.Register("memory_heap_allocation", "gauge")
-	i.Metrics.Register("span_received", "counter")
-	i.Metrics.Register("span_processed", "counter")
-	i.Metrics.Register("spans_waiting", "updown")
-	i.Metrics.Register("trace_sent_cache_hit", "counter")
-	i.Metrics.Register("trace_accepted", "counter")
-	i.Metrics.Register("trace_send_kept", "counter")
-	i.Metrics.Register("trace_send_dropped", "counter")
-	i.Metrics.Register("trace_send_has_root", "counter")
-	i.Metrics.Register("trace_send_no_root", "counter")
-	i.Metrics.Register("trace_forwarded_on_peer_change", "gauge")
-	i.Metrics.Register("trace_redistribution_count", "gauge")
-	i.Metrics.Register("trace_send_on_shutdown", "counter")
-	i.Metrics.Register("trace_forwarded_on_shutdown", "counter")
-
-	i.Metrics.Register(TraceSendGotRoot, "counter")
-	i.Metrics.Register(TraceSendExpired, "counter")
-	i.Metrics.Register(TraceSendSpanLimit, "counter")
-	i.Metrics.Register(TraceSendEjectedFull, "counter")
-	i.Metrics.Register(TraceSendEjectedMemsize, "counter")
-	i.Metrics.Register(TraceSendLateSpan, "counter")
+	for _, metric := range inMemCollectorMetrics {
+		i.Metrics.Register(metric)
+	}
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
-	i.Metrics.Register(cache.CurrentCapacity, "gauge")
-	i.Metrics.Register(cache.FutureLoadFactor, "gauge")
-	i.Metrics.Register(cache.CurrentLoadFactor, "gauge")
 	var err error
 	i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
 	if err != nil {
@@ -1063,7 +1068,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	}
 }
 
-func newRedistributeNotifier(logger logger.Logger, metrics metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
+func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
 	r := &redistributeNotifier{
 		initialDelay: 3 * time.Second,
 		maxDelay:     30 * time.Second,
@@ -1071,11 +1076,10 @@ func newRedistributeNotifier(logger logger.Logger, metrics metrics.Metrics, cloc
 		done:         make(chan struct{}),
 		clock:        clock,
 		logger:       logger,
-		metrics:      metrics,
+		metrics:      met,
 		triggered:    make(chan struct{}),
 		reset:        make(chan struct{}),
 	}
-	r.metrics.Register("trace_redistribution_count", "gauge")
 
 	return r
 }

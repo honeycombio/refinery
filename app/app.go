@@ -42,8 +42,9 @@ func (a *App) Start() error {
 	}
 
 	a.Logger.Debug().Logf("Starting up App...")
-	a.Metrics.Register("config_hash", "gauge")
-	a.Metrics.Register("rule_config_hash", "gauge")
+	for _, metric := range configHashMetrics {
+		a.Metrics.Register(metric)
+	}
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
 
@@ -63,4 +64,19 @@ func (a *App) Start() error {
 func (a *App) Stop() error {
 	a.Logger.Debug().Logf("Shutting down App...")
 	return nil
+}
+
+var configHashMetrics = []metrics.Metadata{
+	metrics.Metadata{
+		Name:        "config_hash",
+		Type:        metrics.Gauge,
+		Unit:        metrics.Dimensionless,
+		Description: "The hash of the current configuration",
+	},
+	metrics.Metadata{
+		Name:        "rule_config_hash",
+		Type:        metrics.Gauge,
+		Unit:        metrics.Dimensionless,
+		Description: "The hash of the current rules configuration",
+	},
 }

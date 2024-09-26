@@ -30,7 +30,8 @@ type EMADynamicSampler struct {
 	key       *traceKey
 	keyFields []string
 
-	dynsampler dynsampler.Sampler
+	dynsampler      *dynsampler.EMASampleRate
+	metricsRecorder *dynsamplerMetricsRecorder
 }
 
 func (d *EMADynamicSampler) Start() error {
@@ -47,7 +48,7 @@ func (d *EMADynamicSampler) Start() error {
 	if d.maxKeys == 0 {
 		d.maxKeys = 500
 	}
-	d.prefix = "emadynamic_"
+	d.prefix = "emadynamic"
 	d.keyFields = d.Config.GetSamplingFields()
 
 	// spin up the actual dynamic sampler
@@ -63,13 +64,12 @@ func (d *EMADynamicSampler) Start() error {
 	d.dynsampler.Start()
 
 	// Register statistics this package will produce
-	d.lastMetrics = d.dynsampler.GetMetrics(d.prefix)
-	for name := range d.lastMetrics {
-		d.Metrics.Register(name, getMetricType(name))
+	d.metricsRecorder = &dynsamplerMetricsRecorder{
+		prefix: d.prefix,
+		met:    d.Metrics,
 	}
-	d.Metrics.Register(d.prefix+"num_dropped", "counter")
-	d.Metrics.Register(d.prefix+"num_kept", "counter")
-	d.Metrics.Register(d.prefix+"sample_rate", "histogram")
+
+	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	return nil
 }
 
@@ -91,23 +91,9 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
-	if shouldKeep {
-		d.Metrics.Increment(d.prefix + "num_kept")
-	} else {
-		d.Metrics.Increment(d.prefix + "num_dropped")
-	}
-	d.Metrics.Histogram(d.prefix+"sample_rate", float64(rate))
-	for name, val := range d.dynsampler.GetMetrics(d.prefix) {
-		switch getMetricType(name) {
-		case "counter":
-			delta := val - d.lastMetrics[name]
-			d.Metrics.Count(name, delta)
-			d.lastMetrics[name] = val
-		case "gauge":
-			d.Metrics.Gauge(name, val)
-		}
-	}
-	return rate, shouldKeep, "emadynamic", key
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
+
+	return rate, shouldKeep, d.prefix, key
 }
 
 func (d *EMADynamicSampler) GetKeyFields() []string {

@@ -52,6 +52,14 @@ func NewDefaultTransmission(client *libhoney.Client, m metrics.Metrics, name str
 	return &DefaultTransmission{LibhClient: client, Metrics: m, Name: name}
 }
 
+var transmissionMetrics = []metrics.Metadata{
+	{Name: counterEnqueueErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when enqueueing events"},
+	{Name: counterResponse20x, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of successful responses from Honeycomb"},
+	{Name: counterResponseErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when sending events to Honeycomb"},
+	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
+	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
+}
+
 func (d *DefaultTransmission) Start() error {
 	d.Logger.Debug().Logf("Starting DefaultTransmission: %s type", d.Name)
 	defer func() { d.Logger.Debug().Logf("Finished starting DefaultTransmission: %s type", d.Name) }()
@@ -140,11 +148,9 @@ func (d *DefaultTransmission) Flush() {
 // RegisterMetrics registers the metrics used by the DefaultTransmission.
 // it should be called after the metrics object has been created.
 func (d *DefaultTransmission) RegisterMetrics() {
-	d.Metrics.Register(counterEnqueueErrors, "counter")
-	d.Metrics.Register(counterResponse20x, "counter")
-	d.Metrics.Register(counterResponseErrors, "counter")
-	d.Metrics.Register(updownQueuedItems, "updown")
-	d.Metrics.Register(histogramQueueTime, "histogram")
+	for _, m := range transmissionMetrics {
+		d.Metrics.Register(m)
+	}
 }
 
 func (d *DefaultTransmission) Stop() error {

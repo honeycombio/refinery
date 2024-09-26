@@ -68,6 +68,11 @@ type Health struct {
 	Reporter
 }
 
+var healthMetrics = []metrics.Metadata{
+	{Name: "is_ready", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is ready to receive traffic"},
+	{Name: "is_alive", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is alive and reporting in"},
+}
+
 func (h *Health) Start() error {
 	// if we don't have a logger or metrics object, we'll use the null ones (makes testing easier)
 	if h.Logger == nil {
@@ -75,6 +80,9 @@ func (h *Health) Start() error {
 	}
 	if h.Metrics == nil {
 		h.Metrics = &metrics.NullMetrics{}
+	}
+	for _, metric := range healthMetrics {
+		h.Metrics.Register(metric)
 	}
 	h.timeouts = make(map[string]time.Duration)
 	h.timeLeft = make(map[string]time.Duration)

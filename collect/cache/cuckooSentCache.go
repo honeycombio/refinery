@@ -161,6 +161,10 @@ type cuckooSentCache struct {
 // Make sure it implements TraceSentCache
 var _ TraceSentCache = (*cuckooSentCache)(nil)
 
+var cuckooSentCacheMetrics = []metrics.Metadata{
+	{Name: "cache_recent_dropped_traces", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the current size of the most recent dropped trace cache"},
+}
+
 func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
 	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
 	if err != nil {
@@ -180,7 +184,9 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 	// request.
 	recentDroppedIDs := generics.NewSetWithTTL[string](3 * time.Second)
 
-	met.Register("cache_recent_dropped_traces", "gauge")
+	for _, metric := range cuckooSentCacheMetrics {
+		met.Register(metric)
+	}
 
 	cache := &cuckooSentCache{
 		met:              met,

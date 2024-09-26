@@ -29,9 +29,14 @@ func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
 	d.sampleRate = d.Config.SampleRate
-	d.prefix = "deterministic_"
+	d.prefix = "deterministic"
 	if d.Metrics == nil {
 		d.Metrics = &metrics.NullMetrics{}
+	}
+
+	for _, metric := range samplerMetrics {
+		metric.Name = d.prefix + metric.Name
+		d.Metrics.Register(metric)
 	}
 
 	// Get the actual upper bound - the largest possible value divided by
@@ -50,9 +55,9 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	v := binary.BigEndian.Uint32(sum[:4])
 	shouldKeep := v <= d.upperBound
 	if shouldKeep {
-		d.Metrics.Increment(d.prefix + "num_kept")
+		d.Metrics.Increment(d.prefix + "_num_kept")
 	} else {
-		d.Metrics.Increment(d.prefix + "num_dropped")
+		d.Metrics.Increment(d.prefix + "_num_dropped")
 	}
 
 	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""
