@@ -1,6 +1,6 @@
 .PHONY: all
 #: build all the things
-all: template names sample complete docs validate build
+all: template names sample metrics complete docs validate build
 
 .PHONY: build
 #: build the binary
@@ -33,6 +33,24 @@ sample:
 	@echo "+++ generating sample config"
 	@echo
 	go run . sample --output=minimal_config.yaml
+
+.PHONY: metricsmeta
+metricsmeta:
+	@echo
+	@echo "+++ generating metrics metadata file"
+	@echo
+	go run . metricsmeta
+
+.PHONY: metricsdoc
+metrics:
+	@echo
+	@echo "+++ generating metrics markdown documentation file"
+	@echo
+	go run . metrics --output=../../metrics.md
+
+
+.PHONY: metrics
+metrics: metricsmeta metricsdoc
 
 .PHONY: complete
 #: generate the complete config

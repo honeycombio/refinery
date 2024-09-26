@@ -1,0 +1,10 @@
+# Metrics Documentation
+# Automatically generated {{ now }}
+
+This document contains the description of various metrics used in the system.
+
+| Name | Type | Unit | Description |
+|------|------|------|-------------|
+{{- range . }}
+| {{ .Name }} | {{ .Type }} | {{ .Unit }} | {{ .Description }} |
+{{- end }}
