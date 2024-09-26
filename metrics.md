@@ -1,36 +1,36 @@
 Name: "collect_cache_buffer_overrun"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of times the trace overwritten in the circular buffer has not yet been sent"
 
 Name: "collect_cache_capacity"
 Type: metrics.Gauge
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of traces that can be stored in the cache"
 
 Name: "collect_cache_entries"
 Type: metrics.Histogram
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of traces currently stored in the cache"
 
 Name: cuckoo_current_capacity
 Type: metrics.Gauge
-Unit: "trace"
+Unit: metrics.Dimensionless
 Description: "current capacity of the cuckoo filter"
 
 Name: cuckoo_future_load_factor
 Type: metrics.Gauge
-Unit: "percentage"
+Unit: metrics.Percent
 Description: "the fraction of slots occupied in the future cuckoo filter"
 
 Name: cuckoo_current_load_factor
 Type: metrics.Gauge
-Unit: "percentage"
+Unit: metrics.Percent
 Description: "the fraction of slots occupied in the current cuckoo filter"
 
 Name: "cache_recent_dropped_traces"
 Type: metrics.Gauge
-Unit: "traces"
+Unit: metrics.Dimensionless
 Description: "the current size of the most recent dropped trace cache"
 
 Name: "collect_sent_reasons_cache_entries"
@@ -40,22 +40,22 @@ Description: "Number of entries in the sent reasons cache"
 
 Name: "is_ready"
 Type: metrics.Gauge
-Unit: "bool"
+Unit: metrics.Dimensionless
 Description: "Whether the system is ready to receive traffic"
 
 Name: "is_alive"
 Type: metrics.Gauge
-Unit: "bool"
+Unit: metrics.Dimensionless
 Description: "Whether the system is alive and reporting in"
 
 Name: "redis_pubsub_published"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "Number of messages published to Redis PubSub"
 
 Name: "redis_pubsub_received"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "Number of messages received from Redis PubSub"
 
 Name: "local_pubsub_published"
@@ -70,217 +70,281 @@ Description: "The total number of messages received via the local pubsub impleme
 
 Name: "num_file_peers"
 Type: metrics.Gauge
-Unit: "peers"
+Unit: metrics.Dimensionless
 Description: "Number of peers in the file peer list"
 
 Name: "num_peers"
 Type: metrics.Gauge
-Unit: "peers"
+Unit: metrics.Dimensionless
 Description: "the active number of peers in the cluster"
 
 Name: "peer_hash"
 Type: metrics.Gauge
-Unit: "hash"
+Unit: metrics.Dimensionless
 Description: "the hash of the current list of peers"
 
 Name: "peer_messages"
 Type: metrics.Counter
-Unit: "messages"
+Unit: metrics.Dimensionless
 Description: "the number of messages received by the peers service"
 
 Name: "_num_dropped_by_drop_rule"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "Number of traces dropped by the drop rule"
 
 Name: "_num_dropped"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "Number of traces dropped by configured sampler"
 
 Name: "_num_kept"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "Number of traces kept by configured sampler"
 
 Name: "_sample_rate"
 Type: metrics.Histogram
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "Sample rate for traces"
 
 Name: enqueue_errors
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of errors encountered when enqueueing events"
 
 Name: response_20x
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of successful responses from Honeycomb"
 
 Name: response_errors
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of errors encountered when sending events to Honeycomb"
 
 Name: queued_items
 Type: metrics.UpDown
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "The number of events queued for transmission to Honeycomb"
 
 Name: queue_time
 Type: metrics.Histogram
-Unit: "microsecond"
+Unit: metrics.Microseconds
 Description: "The time spent in the queue before being sent to Honeycomb"
 
 Name: "trace_duration_ms"
 Type: metrics.Histogram
+Unit: metrics.Milliseconds
+Description: "time taken to process a trace from arrival to send"
 
 Name: "trace_span_count"
 Type: metrics.Histogram
+Unit: metrics.Dimensionless
+Description: "number of spans in a trace"
 
 Name: "collector_incoming_queue"
 Type: metrics.Histogram
+Unit: metrics.Dimensionless
+Description: "number of spans currently in the incoming queue"
 
 Name: "collector_peer_queue_length"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "number of spans in the peer queue"
 
 Name: "collector_incoming_queue_length"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "number of spans in the incoming queue"
 
 Name: "collector_peer_queue"
 Type: metrics.Histogram
+Unit: metrics.Dimensionless
+Description: "number of spans currently in the peer queue"
 
 Name: "collector_cache_size"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "number of traces currently stored in the trace cache"
 
 Name: "memory_heap_allocation"
 Type: metrics.Gauge
+Unit: metrics.Bytes
+Description: "current heap allocation"
 
 Name: "span_received"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of spans received by the collector"
 
 Name: "span_processed"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of spans processed by the collector"
 
 Name: "spans_waiting"
 Type: metrics.UpDown
+Unit: metrics.Dimensionless
+Description: "number of spans waiting to be processed by the collector"
 
 Name: "trace_sent_cache_hit"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of late spans received for traces that have already been sent"
 
 Name: "trace_accepted"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of new traces received by the collector"
 
 Name: "trace_send_kept"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that has been kept"
 
 Name: "trace_send_dropped"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that has been dropped"
 
 Name: "trace_send_has_root"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of kept traces that have a root span"
 
 Name: "trace_send_no_root"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of kept traces that do not have a root span"
 
 Name: "trace_forwarded_on_peer_change"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "number of traces forwarded due to peer membership change"
 
 Name: "trace_redistribution_count"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "number of traces redistributed due to peer membership change"
 
 Name: "trace_send_on_shutdown"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces sent during shutdown"
 
 Name: "trace_forwarded_on_shutdown"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces forwarded during shutdown"
 
 Name: trace_send_got_root
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that are ready for decision due to root span arrival"
 
 Name: trace_send_expired
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that are ready for decision due to TraceTimeout or SendDelay"
 
 Name: trace_send_span_limit
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that are ready for decision due to span limit"
 
 Name: trace_send_ejected_full
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that are ready for decision due to cache capacity overrun"
 
 Name: trace_send_ejected_memsize
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces that are ready for decision due to memory overrun"
 
 Name: trace_send_late_span
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of spans that are sent due to late span arrival"
 
 Name: "dropped_from_stress"
 Type: metrics.Counter
+Unit: metrics.Dimensionless
+Description: "number of traces dropped due to stress relief"
 
 Name: "cluster_stress_level"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "The overall stress level of the cluster"
 
 Name: "individual_stress_level"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "The stress level of the individual node"
 
 Name: "stress_level"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "The stress level that's being used to determine whether to activate stress relief"
 
 Name: "stress_relief_activated"
 Type: metrics.Gauge
+Unit: metrics.Dimensionless
+Description: "Whether stress relief is currently activated"
 
 Name: "_router_proxied"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "the number of events proxied to another refinery"
 
 Name: "_router_event"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "the number of events received"
 
 Name: "config_hash"
 Type: metrics.Gauge
-Unit: "hash"
+Unit: metrics.Dimensionless
 Description: "The hash of the current configuration"
 
 Name: "rule_config_hash"
 Type: metrics.Gauge
-Unit: "hash"
+Unit: metrics.Dimensionless
 Description: "The hash of the current rules configuration"
 
 Name: "queue_length"
 Type: metrics.Gauge
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of events waiting to be sent to destination"
 
 Name: "queue_overflow"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of events dropped due to queue overflow"
 
 Name: "send_errors"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of errors encountered while sending events to destination"
 
 Name: "send_retries"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of times a batch of events was retried"
 
 Name: "batches_sent"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of batches of events sent to destination"
 
 Name: "messages_sent"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of messages sent to destination"
 
 Name: "response_decode_errors"
 Type: metrics.Counter
-Unit: "count"
+Unit: metrics.Dimensionless
 Description: "number of errors encountered while decoding responses from destination"
 
