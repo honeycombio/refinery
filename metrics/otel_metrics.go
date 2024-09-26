@@ -150,6 +150,7 @@ func (o *OTelMetrics) Start() error {
 	if err != nil {
 		return err
 	}
+
 	o.gauges[name] = g
 
 	name = "memory_inuse"
@@ -185,6 +186,7 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
+	ctx := context.Background()
 	switch metricType {
 	case "counter":
 		ctr, err := o.meter.Int64Counter(name)
@@ -192,6 +194,9 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 			o.Logger.Error().WithString("name", name).Logf("failed to create counter")
 			return
 		}
+		// Initialize the counter to 0 so that it will be reported
+		ctr.Add(ctx, 0)
+
 		o.counters[name] = ctr
 	case "gauge":
 		var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
@@ -213,6 +218,7 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 			o.Logger.Error().WithString("name", name).Logf("failed to create gauge")
 			return
 		}
+
 		o.gauges[name] = g
 	case "histogram":
 		h, err := o.meter.Float64Histogram(name)
@@ -220,6 +226,8 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 			o.Logger.Error().WithString("name", name).Logf("failed to create histogram")
 			return
 		}
+
+		h.Record(ctx, 0)
 		o.histograms[name] = h
 	case "updown":
 		ud, err := o.meter.Int64UpDownCounter(name)
@@ -227,6 +235,8 @@ func (o *OTelMetrics) Register(name string, metricType string) {
 			o.Logger.Error().WithString("name", name).Logf("failed to create updown counter")
 			return
 		}
+
+		ud.Add(ctx, 0)
 		o.updowns[name] = ud
 	default:
 		o.Logger.Error().WithString("type", metricType).Logf("unknown metric type")
