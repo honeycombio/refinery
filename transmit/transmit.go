@@ -20,6 +20,8 @@ type Transmission interface {
 	EnqueueSpan(ev *types.Span)
 	// Flush flushes the in-flight queue of all events and spans
 	Flush()
+
+	RegisterMetrics()
 }
 
 const (
@@ -51,11 +53,11 @@ func NewDefaultTransmission(client *libhoney.Client, m metrics.Metrics, name str
 }
 
 var transmissionMetrics = []metrics.Metadata{
-	{Name: counterEnqueueErrors, Type: metrics.Counter, Unit: "count", Description: "The number of errors encountered when enqueueing events"},
-	{Name: counterResponse20x, Type: metrics.Counter, Unit: "count", Description: "The number of successful responses from Honeycomb"},
-	{Name: counterResponseErrors, Type: metrics.Counter, Unit: "count", Description: "The number of errors encountered when sending events to Honeycomb"},
-	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: "count", Description: "The number of events queued for transmission to Honeycomb"},
-	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: "microsecond", Description: "The time spent in the queue before being sent to Honeycomb"},
+	{Name: counterEnqueueErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when enqueueing events"},
+	{Name: counterResponse20x, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of successful responses from Honeycomb"},
+	{Name: counterResponseErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when sending events to Honeycomb"},
+	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
+	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
 }
 
 func (d *DefaultTransmission) Start() error {
@@ -72,10 +74,6 @@ func (d *DefaultTransmission) Start() error {
 	once.Do(func() {
 		libhoney.UserAgentAddition = "refinery/" + d.Version
 	})
-
-	for _, m := range transmissionMetrics {
-		d.Metrics.Register(m)
-	}
 
 	processCtx, canceler := context.WithCancel(context.Background())
 	d.responseCanceler = canceler
@@ -145,6 +143,14 @@ func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
 
 func (d *DefaultTransmission) Flush() {
 	d.LibhClient.Flush()
+}
+
+// RegisterMetrics registers the metrics used by the DefaultTransmission.
+// it should be called after the metrics object has been created.
+func (d *DefaultTransmission) RegisterMetrics() {
+	for _, m := range transmissionMetrics {
+		d.Metrics.Register(m)
+	}
 }
 
 func (d *DefaultTransmission) Stop() error {

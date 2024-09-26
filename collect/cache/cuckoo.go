@@ -45,9 +45,9 @@ const (
 )
 
 var cuckooTraceCheckerMetrics = []metrics.Metadata{
-	{Name: CurrentCapacity, Type: metrics.Gauge, Unit: "trace", Description: "current capacity of the cuckoo filter"},
-	{Name: FutureLoadFactor, Type: metrics.Gauge, Unit: "percentage", Description: "the fraction of slots occupied in the future cuckoo filter"},
-	{Name: CurrentLoadFactor, Type: metrics.Gauge, Unit: "percentage", Description: "the fraction of slots occupied in the current cuckoo filter"},
+	{Name: CurrentCapacity, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "current capacity of the cuckoo filter"},
+	{Name: FutureLoadFactor, Type: metrics.Gauge, Unit: metrics.Percent, Description: "the fraction of slots occupied in the future cuckoo filter"},
+	{Name: CurrentLoadFactor, Type: metrics.Gauge, Unit: metrics.Percent, Description: "the fraction of slots occupied in the current cuckoo filter"},
 }
 
 func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker {

@@ -162,7 +162,7 @@ type cuckooSentCache struct {
 var _ TraceSentCache = (*cuckooSentCache)(nil)
 
 var cuckooSentCacheMetrics = []metrics.Metadata{
-	{Name: "cache_recent_dropped_traces", Type: metrics.Gauge, Unit: "traces", Description: "the current size of the most recent dropped trace cache"},
+	{Name: "cache_recent_dropped_traces", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the current size of the most recent dropped trace cache"},
 }
 
 func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {

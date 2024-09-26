@@ -49,8 +49,8 @@ type GoRedisSubscription struct {
 var _ Subscription = (*GoRedisSubscription)(nil)
 
 var goredisPubSubMetrics = []metrics.Metadata{
-	{Name: "redis_pubsub_published", Type: metrics.Counter, Unit: "count", Description: "Number of messages published to Redis PubSub"},
-	{Name: "redis_pubsub_received", Type: metrics.Counter, Unit: "count", Description: "Number of messages received from Redis PubSub"},
+	{Name: "redis_pubsub_published", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of messages published to Redis PubSub"},
+	{Name: "redis_pubsub_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of messages received from Redis PubSub"},
 }
 
 func (ps *GoRedisPubSub) Start() error {

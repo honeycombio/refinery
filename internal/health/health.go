@@ -69,8 +69,8 @@ type Health struct {
 }
 
 var healthMetrics = []metrics.Metadata{
-	{Name: "is_ready", Type: metrics.Gauge, Unit: "bool", Description: "Whether the system is ready to receive traffic"},
-	{Name: "is_alive", Type: metrics.Gauge, Unit: "bool", Description: "Whether the system is alive and reporting in"},
+	{Name: "is_ready", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is ready to receive traffic"},
+	{Name: "is_alive", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is alive and reporting in"},
 }
 
 func (h *Health) Start() error {

@@ -70,13 +70,13 @@ var configHashMetrics = []metrics.Metadata{
 	metrics.Metadata{
 		Name:        "config_hash",
 		Type:        metrics.Gauge,
-		Unit:        "hash",
+		Unit:        metrics.Dimensionless,
 		Description: "The hash of the current configuration",
 	},
 	metrics.Metadata{
 		Name:        "rule_config_hash",
 		Type:        metrics.Gauge,
-		Unit:        "hash",
+		Unit:        metrics.Dimensionless,
 		Description: "The hash of the current rules configuration",
 	},
 }

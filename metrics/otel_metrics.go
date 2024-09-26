@@ -152,6 +152,7 @@ func (o *OTelMetrics) Start() error {
 	if err != nil {
 		return err
 	}
+
 	o.gauges[name] = g
 
 	name = "memory_inuse"
@@ -191,16 +192,18 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 
 	ctx := context.Background()
 
+	unit := string(metadata.Unit)
 	switch metadata.Type {
 	case Counter:
 		ctr, err := o.meter.Int64Counter(metadata.Name,
-			metric.WithUnit(metadata.Unit),
+			metric.WithUnit(unit),
 			metric.WithDescription(metadata.Description),
 		)
 		if err != nil {
 			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create counter")
 			return
 		}
+
 		// Give the counter an initial value of 0 so that OTel will send it
 		ctr.Add(ctx, 0)
 		o.counters[metadata.Name] = ctr
@@ -218,7 +221,7 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 			return nil
 		}
 		g, err := o.meter.Float64ObservableGauge(metadata.Name,
-			metric.WithUnit(metadata.Unit),
+			metric.WithUnit(unit),
 			metric.WithDescription(metadata.Description),
 			metric.WithFloat64Callback(f),
 		)
@@ -227,11 +230,10 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 			return
 		}
 
-		o.values[metadata.Name] = 0
 		o.gauges[metadata.Name] = g
 	case Histogram:
 		h, err := o.meter.Float64Histogram(metadata.Name,
-			metric.WithUnit(metadata.Unit),
+			metric.WithUnit(unit),
 			metric.WithDescription(metadata.Description),
 		)
 		if err != nil {
@@ -242,7 +244,7 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 		o.histograms[metadata.Name] = h
 	case UpDown:
 		ud, err := o.meter.Int64UpDownCounter(metadata.Name,
-			metric.WithUnit(metadata.Unit),
+			metric.WithUnit(unit),
 			metric.WithDescription(metadata.Description),
 		)
 		if err != nil {

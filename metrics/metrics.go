@@ -93,8 +93,9 @@ func PrefixMetricName(prefix string, name string) string {
 type Metadata struct {
 	Name string
 	Type MetricType
-	// Unit is the unit of the metric, e.g. "bytes", "seconds", "count"
-	Unit string
+	// Unit is the unit of the metric. It should follow the UCUM case-sensitive
+	// unit format.
+	Unit Unit
 	// Description is a human-readable description of the metric
 	Description string
 }
@@ -120,4 +121,15 @@ const (
 	Gauge
 	Histogram
 	UpDown
+)
+
+type Unit string
+
+// Units defined by OpenTelemetry.
+const (
+	Dimensionless Unit = "1"
+	Bytes         Unit = "By"
+	Milliseconds  Unit = "ms"
+	Microseconds  Unit = "us"
+	Percent       Unit = "%"
 )

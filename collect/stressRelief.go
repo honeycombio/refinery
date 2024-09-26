@@ -108,10 +108,10 @@ type StressRelief struct {
 const StressReliefHealthKey = "stress_relief"
 
 var stressReliefMetrics = []metrics.Metadata{
-	{Name: "cluster_stress_level", Type: metrics.Gauge},
-	{Name: "individual_stress_level", Type: metrics.Gauge},
-	{Name: "stress_level", Type: metrics.Gauge},
-	{Name: "stress_relief_activated", Type: metrics.Gauge},
+	{Name: "cluster_stress_level", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "The overall stress level of the cluster"},
+	{Name: "individual_stress_level", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "The stress level of the individual node"},
+	{Name: "stress_level", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "The stress level that's being used to determine whether to activate stress relief"},
+	{Name: "stress_relief_activated", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether stress relief is currently activated"},
 }
 
 func (s *StressRelief) Start() error {
