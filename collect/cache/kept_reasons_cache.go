@@ -23,7 +23,7 @@ type KeptReasonsCache struct {
 }
 
 var keptReasonCacheMetrics = []metrics.Metadata{
-	{Name: "collect_sent_reasons_cache_entries", Type: metrics.Histogram, Unit: "count", Description: "Number of entries in the sent reasons cache"},
+	{Name: "collect_sent_reasons_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Number of entries in the sent reasons cache"},
 }
 
 // NewKeptReasonsCache returns a new SentReasonsCache.

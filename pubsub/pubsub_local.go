@@ -32,8 +32,8 @@ type LocalSubscription struct {
 var _ Subscription = (*LocalSubscription)(nil)
 
 var localPubSubMetrics = []metrics.Metadata{
-	{Name: "local_pubsub_published", Type: metrics.Counter, Unit: "messages", Description: "The total number of messages sent via the local pubsub implementation"},
-	{Name: "local_pubsub_received", Type: metrics.Counter, Unit: "messages", Description: "The total number of messages received via the local pubsub implementation"},
+	{Name: "local_pubsub_published", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The total number of messages sent via the local pubsub implementation"},
+	{Name: "local_pubsub_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The total number of messages received via the local pubsub implementation"},
 }
 
 // Start initializes the LocalPubSub
