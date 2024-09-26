@@ -26,7 +26,7 @@ type RulesBasedSampler struct {
 const RootPrefix = "root."
 
 var ruleBasedSamplerMetrics = []metrics.Metadata{
-	{Name: "_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: "count", Description: "Number of traces dropped by the drop rule"},
+	{Name: "_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by the drop rule"},
 }
 
 func (s *RulesBasedSampler) Start() error {

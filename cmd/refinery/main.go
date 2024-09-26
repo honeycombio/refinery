@@ -312,6 +312,10 @@ func main() {
 		peerMetricsRecorder.Register(metric)
 	}
 
+	// Register metrics after the metrics object has been created
+	peerTransmission.RegisterMetrics()
+	upstreamTransmission.RegisterMetrics()
+
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
 	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
@@ -372,43 +376,43 @@ var libhoneyMetrics = []metrics.Metadata{
 	metrics.Metadata{
 		Name:        "queue_length",
 		Type:        metrics.Gauge,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of events waiting to be sent to destination",
 	},
 	metrics.Metadata{
 		Name:        "queue_overflow",
 		Type:        metrics.Counter,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of events dropped due to queue overflow",
 	},
 	metrics.Metadata{
 		Name:        "send_errors",
 		Type:        metrics.Counter,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of errors encountered while sending events to destination",
 	},
 	metrics.Metadata{
 		Name:        "send_retries",
 		Type:        metrics.Counter,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of times a batch of events was retried",
 	},
 	metrics.Metadata{
 		Name:        "batches_sent",
 		Type:        metrics.Counter,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of batches of events sent to destination",
 	},
 	metrics.Metadata{
 		Name:        "messages_sent",
 		Type:        metrics.Counter,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of messages sent to destination",
 	},
 	metrics.Metadata{
 		Name:        "response_decode_errors",
 		Type:        metrics.Counter,
-		Unit:        "count",
+		Unit:        metrics.Dimensionless,
 		Description: "number of errors encountered while decoding responses from destination",
 	},
 }

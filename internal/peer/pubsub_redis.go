@@ -121,9 +121,9 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 }
 
 var redisPubSubPeersMetrics = []metrics.Metadata{
-	{Name: "num_peers", Type: metrics.Gauge, Unit: "peers", Description: "the active number of peers in the cluster"},
-	{Name: "peer_hash", Type: metrics.Gauge, Unit: "hash", Description: "the hash of the current list of peers"},
-	{Name: "peer_messages", Type: metrics.Counter, Unit: "messages", Description: "the number of messages received by the peers service"},
+	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
+	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
+	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
 }
 
 func (p *RedisPubsubPeers) Start() error {

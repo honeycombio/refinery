@@ -122,8 +122,8 @@ func (r *Router) SetVersion(ver string) {
 }
 
 var routerMetrics = []metrics.Metadata{
-	{Name: "_router_proxied", Type: metrics.Counter, Unit: "count", Description: "the number of events proxied to another refinery"},
-	{Name: "_router_event", Type: metrics.Counter, Unit: "count", Description: "the number of events received"},
+	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
+	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is

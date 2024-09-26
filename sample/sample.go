@@ -109,9 +109,9 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLeg
 }
 
 var samplerMetrics = []metrics.Metadata{
-	{Name: "_num_dropped", Type: metrics.Counter, Unit: "count", Description: "Number of traces dropped by configured sampler"},
-	{Name: "_num_kept", Type: metrics.Counter, Unit: "count", Description: "Number of traces kept by configured sampler"},
-	{Name: "_sample_rate", Type: metrics.Histogram, Unit: "count", Description: "Sample rate for traces"},
+	{Name: "_num_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by configured sampler"},
+	{Name: "_num_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces kept by configured sampler"},
+	{Name: "_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Sample rate for traces"},
 }
 
 func getMetricType(name string) metrics.MetricType {

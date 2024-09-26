@@ -46,7 +46,7 @@ func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
 }
 
 var filePeersMetrics = []metrics.Metadata{
-	{Name: "num_file_peers", Type: metrics.Gauge, Unit: "peers", Description: "Number of peers in the file peer list"},
+	{Name: "num_file_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Number of peers in the file peer list"},
 }
 
 func (p *FilePeers) Start() (err error) {
