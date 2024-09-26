@@ -105,6 +105,8 @@ func main() {
 		convert validate rules:  validate a rules file against the 2.0 format
 		convert doc config:      generate markdown documentation for the config file
 		convert doc rules:       generate markdown documentation for the rules file
+        convert metricsMeta:     generates the metrics metadata file
+        convert metrics:         generates markdown documentation for all refinery metrics
 
 	Examples:
 		convert config --input config.toml --output config.yaml
@@ -170,6 +172,20 @@ func main() {
 			GenerateConfigMarkdown(output, "cfg_docsite.tmpl")
 		} else {
 			fmt.Fprintf(os.Stderr, `doc subcommand requires "rules" or "config" as an argument\n`)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	case "metricsmeta":
+		err := GenerateMetricsMetadata()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, `error generating metrics metadata: %v\n`, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	case "metrics":
+		err := GenerateMetricsDoc(output)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, `error generating metrics documentation: %v\n`, err)
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -371,6 +387,34 @@ func GenerateTemplate(w io.Writer) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func GenerateMetricsDoc(w io.Writer) error {
+	data, err := os.ReadFile("metricsMeta.yaml")
+	if err != nil {
+		return err
+	}
+
+	var metricsUsages []MetricsUsage
+	err = yaml.Unmarshal(data, &metricsUsages)
+	if err != nil {
+		return err
+	}
+
+	tmpl := template.New("metrics.tmpl")
+	tmpl.Funcs(helpers())
+	tmpl, err = tmpl.ParseFS(filesystem, "templates/metrics.tmpl")
+	if err != nil {
+		return err
+	}
+
+	err = tmpl.Execute(w, metricsUsages)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Metrics usages have been written to the output file")
+	return nil
 }
 
 // This generates a nested list of the groups and names.
