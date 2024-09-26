@@ -1,0 +1,280 @@
+- name: collect_cache_buffer_overrun
+  type: Counter
+  unit: Dimensionless
+  description: The number of times the trace overwritten in the circular buffer has not yet been sent
+- name: collect_cache_capacity
+  type: Gauge
+  unit: Dimensionless
+  description: The number of traces that can be stored in the cache
+- name: collect_cache_entries
+  type: Histogram
+  unit: Dimensionless
+  description: The number of traces currently stored in the cache
+- name: cuckoo_current_capacity
+  type: Gauge
+  unit: Dimensionless
+  description: current capacity of the cuckoo filter
+- name: cuckoo_future_load_factor
+  type: Gauge
+  unit: Percent
+  description: the fraction of slots occupied in the future cuckoo filter
+- name: cuckoo_current_load_factor
+  type: Gauge
+  unit: Percent
+  description: the fraction of slots occupied in the current cuckoo filter
+- name: cache_recent_dropped_traces
+  type: Gauge
+  unit: Dimensionless
+  description: the current size of the most recent dropped trace cache
+- name: collect_sent_reasons_cache_entries
+  type: Histogram
+  unit: count
+  description: Number of entries in the sent reasons cache
+- name: is_ready
+  type: Gauge
+  unit: Dimensionless
+  description: Whether the system is ready to receive traffic
+- name: is_alive
+  type: Gauge
+  unit: Dimensionless
+  description: Whether the system is alive and reporting in
+- name: redis_pubsub_published
+  type: Counter
+  unit: Dimensionless
+  description: Number of messages published to Redis PubSub
+- name: redis_pubsub_received
+  type: Counter
+  unit: Dimensionless
+  description: Number of messages received from Redis PubSub
+- name: local_pubsub_published
+  type: Counter
+  unit: messages
+  description: The total number of messages sent via the local pubsub implementation
+- name: local_pubsub_received
+  type: Counter
+  unit: messages
+  description: The total number of messages received via the local pubsub implementation
+- name: num_file_peers
+  type: Gauge
+  unit: Dimensionless
+  description: Number of peers in the file peer list
+- name: num_peers
+  type: Gauge
+  unit: Dimensionless
+  description: the active number of peers in the cluster
+- name: peer_hash
+  type: Gauge
+  unit: Dimensionless
+  description: the hash of the current list of peers
+- name: peer_messages
+  type: Counter
+  unit: Dimensionless
+  description: the number of messages received by the peers service
+- name: _num_dropped_by_drop_rule
+  type: Counter
+  unit: Dimensionless
+  description: Number of traces dropped by the drop rule
+- name: _num_dropped
+  type: Counter
+  unit: Dimensionless
+  description: Number of traces dropped by configured sampler
+- name: _num_kept
+  type: Counter
+  unit: Dimensionless
+  description: Number of traces kept by configured sampler
+- name: _sample_rate
+  type: Histogram
+  unit: Dimensionless
+  description: Sample rate for traces
+- name: enqueue_errors
+  type: Counter
+  unit: Dimensionless
+  description: The number of errors encountered when enqueueing events
+- name: response_20x
+  type: Counter
+  unit: Dimensionless
+  description: The number of successful responses from Honeycomb
+- name: response_errors
+  type: Counter
+  unit: Dimensionless
+  description: The number of errors encountered when sending events to Honeycomb
+- name: queued_items
+  type: UpDown
+  unit: Dimensionless
+  description: The number of events queued for transmission to Honeycomb
+- name: queue_time
+  type: Histogram
+  unit: Microseconds
+  description: The time spent in the queue before being sent to Honeycomb
+- name: trace_duration_ms
+  type: Histogram
+  unit: Milliseconds
+  description: time taken to process a trace from arrival to send
+- name: trace_span_count
+  type: Histogram
+  unit: Dimensionless
+  description: number of spans in a trace
+- name: collector_incoming_queue
+  type: Histogram
+  unit: Dimensionless
+  description: number of spans currently in the incoming queue
+- name: collector_peer_queue_length
+  type: Gauge
+  unit: Dimensionless
+  description: number of spans in the peer queue
+- name: collector_incoming_queue_length
+  type: Gauge
+  unit: Dimensionless
+  description: number of spans in the incoming queue
+- name: collector_peer_queue
+  type: Histogram
+  unit: Dimensionless
+  description: number of spans currently in the peer queue
+- name: collector_cache_size
+  type: Gauge
+  unit: Dimensionless
+  description: number of traces currently stored in the trace cache
+- name: memory_heap_allocation
+  type: Gauge
+  unit: Bytes
+  description: current heap allocation
+- name: span_received
+  type: Counter
+  unit: Dimensionless
+  description: number of spans received by the collector
+- name: span_processed
+  type: Counter
+  unit: Dimensionless
+  description: number of spans processed by the collector
+- name: spans_waiting
+  type: UpDown
+  unit: Dimensionless
+  description: number of spans waiting to be processed by the collector
+- name: trace_sent_cache_hit
+  type: Counter
+  unit: Dimensionless
+  description: number of late spans received for traces that have already been sent
+- name: trace_accepted
+  type: Counter
+  unit: Dimensionless
+  description: number of new traces received by the collector
+- name: trace_send_kept
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that has been kept
+- name: trace_send_dropped
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that has been dropped
+- name: trace_send_has_root
+  type: Counter
+  unit: Dimensionless
+  description: number of kept traces that have a root span
+- name: trace_send_no_root
+  type: Counter
+  unit: Dimensionless
+  description: number of kept traces that do not have a root span
+- name: trace_forwarded_on_peer_change
+  type: Gauge
+  unit: Dimensionless
+  description: number of traces forwarded due to peer membership change
+- name: trace_redistribution_count
+  type: Gauge
+  unit: Dimensionless
+  description: number of traces redistributed due to peer membership change
+- name: trace_send_on_shutdown
+  type: Counter
+  unit: Dimensionless
+  description: number of traces sent during shutdown
+- name: trace_forwarded_on_shutdown
+  type: Counter
+  unit: Dimensionless
+  description: number of traces forwarded during shutdown
+- name: trace_send_got_root
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that are ready for decision due to root span arrival
+- name: trace_send_expired
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that are ready for decision due to TraceTimeout or SendDelay
+- name: trace_send_span_limit
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that are ready for decision due to span limit
+- name: trace_send_ejected_full
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that are ready for decision due to cache capacity overrun
+- name: trace_send_ejected_memsize
+  type: Counter
+  unit: Dimensionless
+  description: number of traces that are ready for decision due to memory overrun
+- name: trace_send_late_span
+  type: Counter
+  unit: Dimensionless
+  description: number of spans that are sent due to late span arrival
+- name: dropped_from_stress
+  type: Counter
+  unit: Dimensionless
+  description: number of traces dropped due to stress relief
+- name: cluster_stress_level
+  type: Gauge
+  unit: Dimensionless
+  description: The overall stress level of the cluster
+- name: individual_stress_level
+  type: Gauge
+  unit: Dimensionless
+  description: The stress level of the individual node
+- name: stress_level
+  type: Gauge
+  unit: Dimensionless
+  description: The stress level that's being used to determine whether to activate stress relief
+- name: stress_relief_activated
+  type: Gauge
+  unit: Dimensionless
+  description: Whether stress relief is currently activated
+- name: _router_proxied
+  type: Counter
+  unit: Dimensionless
+  description: the number of events proxied to another refinery
+- name: _router_event
+  type: Counter
+  unit: Dimensionless
+  description: the number of events received
+- name: config_hash
+  type: Gauge
+  unit: Dimensionless
+  description: The hash of the current configuration
+- name: rule_config_hash
+  type: Gauge
+  unit: Dimensionless
+  description: The hash of the current rules configuration
+- name: queue_length
+  type: Gauge
+  unit: Dimensionless
+  description: number of events waiting to be sent to destination
+- name: queue_overflow
+  type: Counter
+  unit: Dimensionless
+  description: number of events dropped due to queue overflow
+- name: send_errors
+  type: Counter
+  unit: Dimensionless
+  description: number of errors encountered while sending events to destination
+- name: send_retries
+  type: Counter
+  unit: Dimensionless
+  description: number of times a batch of events was retried
+- name: batches_sent
+  type: Counter
+  unit: Dimensionless
+  description: number of batches of events sent to destination
+- name: messages_sent
+  type: Counter
+  unit: Dimensionless
+  description: number of messages sent to destination
+- name: response_decode_errors
+  type: Counter
+  unit: Dimensionless
+  description: number of errors encountered while decoding responses from destination

@@ -1,350 +1,76 @@
-Name: "collect_cache_buffer_overrun"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "The number of times the trace overwritten in the circular buffer has not yet been sent"
-
-Name: "collect_cache_capacity"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "The number of traces that can be stored in the cache"
-
-Name: "collect_cache_entries"
-Type: metrics.Histogram
-Unit: metrics.Dimensionless
-Description: "The number of traces currently stored in the cache"
-
-Name: cuckoo_current_capacity
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "current capacity of the cuckoo filter"
-
-Name: cuckoo_future_load_factor
-Type: metrics.Gauge
-Unit: metrics.Percent
-Description: "the fraction of slots occupied in the future cuckoo filter"
-
-Name: cuckoo_current_load_factor
-Type: metrics.Gauge
-Unit: metrics.Percent
-Description: "the fraction of slots occupied in the current cuckoo filter"
-
-Name: "cache_recent_dropped_traces"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "the current size of the most recent dropped trace cache"
-
-Name: "collect_sent_reasons_cache_entries"
-Type: metrics.Histogram
-Unit: "count"
-Description: "Number of entries in the sent reasons cache"
-
-Name: "is_ready"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "Whether the system is ready to receive traffic"
-
-Name: "is_alive"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "Whether the system is alive and reporting in"
-
-Name: "redis_pubsub_published"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "Number of messages published to Redis PubSub"
-
-Name: "redis_pubsub_received"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "Number of messages received from Redis PubSub"
-
-Name: "local_pubsub_published"
-Type: metrics.Counter
-Unit: "messages"
-Description: "The total number of messages sent via the local pubsub implementation"
-
-Name: "local_pubsub_received"
-Type: metrics.Counter
-Unit: "messages"
-Description: "The total number of messages received via the local pubsub implementation"
-
-Name: "num_file_peers"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "Number of peers in the file peer list"
-
-Name: "num_peers"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "the active number of peers in the cluster"
-
-Name: "peer_hash"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "the hash of the current list of peers"
-
-Name: "peer_messages"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "the number of messages received by the peers service"
-
-Name: "_num_dropped_by_drop_rule"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "Number of traces dropped by the drop rule"
-
-Name: "_num_dropped"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "Number of traces dropped by configured sampler"
-
-Name: "_num_kept"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "Number of traces kept by configured sampler"
-
-Name: "_sample_rate"
-Type: metrics.Histogram
-Unit: metrics.Dimensionless
-Description: "Sample rate for traces"
-
-Name: enqueue_errors
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "The number of errors encountered when enqueueing events"
-
-Name: response_20x
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "The number of successful responses from Honeycomb"
-
-Name: response_errors
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "The number of errors encountered when sending events to Honeycomb"
-
-Name: queued_items
-Type: metrics.UpDown
-Unit: metrics.Dimensionless
-Description: "The number of events queued for transmission to Honeycomb"
-
-Name: queue_time
-Type: metrics.Histogram
-Unit: metrics.Microseconds
-Description: "The time spent in the queue before being sent to Honeycomb"
-
-Name: "trace_duration_ms"
-Type: metrics.Histogram
-Unit: metrics.Milliseconds
-Description: "time taken to process a trace from arrival to send"
-
-Name: "trace_span_count"
-Type: metrics.Histogram
-Unit: metrics.Dimensionless
-Description: "number of spans in a trace"
-
-Name: "collector_incoming_queue"
-Type: metrics.Histogram
-Unit: metrics.Dimensionless
-Description: "number of spans currently in the incoming queue"
-
-Name: "collector_peer_queue_length"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "number of spans in the peer queue"
-
-Name: "collector_incoming_queue_length"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "number of spans in the incoming queue"
-
-Name: "collector_peer_queue"
-Type: metrics.Histogram
-Unit: metrics.Dimensionless
-Description: "number of spans currently in the peer queue"
-
-Name: "collector_cache_size"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "number of traces currently stored in the trace cache"
-
-Name: "memory_heap_allocation"
-Type: metrics.Gauge
-Unit: metrics.Bytes
-Description: "current heap allocation"
-
-Name: "span_received"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of spans received by the collector"
-
-Name: "span_processed"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of spans processed by the collector"
-
-Name: "spans_waiting"
-Type: metrics.UpDown
-Unit: metrics.Dimensionless
-Description: "number of spans waiting to be processed by the collector"
-
-Name: "trace_sent_cache_hit"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of late spans received for traces that have already been sent"
-
-Name: "trace_accepted"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of new traces received by the collector"
-
-Name: "trace_send_kept"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that has been kept"
-
-Name: "trace_send_dropped"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that has been dropped"
-
-Name: "trace_send_has_root"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of kept traces that have a root span"
-
-Name: "trace_send_no_root"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of kept traces that do not have a root span"
-
-Name: "trace_forwarded_on_peer_change"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "number of traces forwarded due to peer membership change"
-
-Name: "trace_redistribution_count"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "number of traces redistributed due to peer membership change"
-
-Name: "trace_send_on_shutdown"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces sent during shutdown"
-
-Name: "trace_forwarded_on_shutdown"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces forwarded during shutdown"
-
-Name: trace_send_got_root
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that are ready for decision due to root span arrival"
-
-Name: trace_send_expired
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that are ready for decision due to TraceTimeout or SendDelay"
-
-Name: trace_send_span_limit
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that are ready for decision due to span limit"
-
-Name: trace_send_ejected_full
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that are ready for decision due to cache capacity overrun"
-
-Name: trace_send_ejected_memsize
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces that are ready for decision due to memory overrun"
-
-Name: trace_send_late_span
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of spans that are sent due to late span arrival"
-
-Name: "dropped_from_stress"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of traces dropped due to stress relief"
-
-Name: "cluster_stress_level"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "The overall stress level of the cluster"
-
-Name: "individual_stress_level"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "The stress level of the individual node"
-
-Name: "stress_level"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "The stress level that's being used to determine whether to activate stress relief"
-
-Name: "stress_relief_activated"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "Whether stress relief is currently activated"
-
-Name: "_router_proxied"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "the number of events proxied to another refinery"
-
-Name: "_router_event"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "the number of events received"
-
-Name: "config_hash"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "The hash of the current configuration"
-
-Name: "rule_config_hash"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "The hash of the current rules configuration"
-
-Name: "queue_length"
-Type: metrics.Gauge
-Unit: metrics.Dimensionless
-Description: "number of events waiting to be sent to destination"
-
-Name: "queue_overflow"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of events dropped due to queue overflow"
-
-Name: "send_errors"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of errors encountered while sending events to destination"
-
-Name: "send_retries"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of times a batch of events was retried"
-
-Name: "batches_sent"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of batches of events sent to destination"
-
-Name: "messages_sent"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of messages sent to destination"
-
-Name: "response_decode_errors"
-Type: metrics.Counter
-Unit: metrics.Dimensionless
-Description: "number of errors encountered while decoding responses from destination"
-
+# Metrics Documentation
+
+This document contains the description of various metrics used in the system.
+
+| Name | Type | Unit | Description |
+|------|------|------|-------------|
+| collect_cache_buffer_overrun | Counter | Dimensionless | The number of times the trace overwritten in the circular buffer has not yet been sent |
+| collect_cache_capacity | Gauge | Dimensionless | The number of traces that can be stored in the cache |
+| collect_cache_entries | Histogram | Dimensionless | The number of traces currently stored in the cache |
+| cuckoo_current_capacity | Gauge | Dimensionless | current capacity of the cuckoo filter |
+| cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
+| cuckoo_current_load_factor | Gauge | Percent | the fraction of slots occupied in the current cuckoo filter |
+| cache_recent_dropped_traces | Gauge | Dimensionless | the current size of the most recent dropped trace cache |
+| collect_sent_reasons_cache_entries | Histogram | count | Number of entries in the sent reasons cache |
+| is_ready | Gauge | Dimensionless | Whether the system is ready to receive traffic |
+| is_alive | Gauge | Dimensionless | Whether the system is alive and reporting in |
+| redis_pubsub_published | Counter | Dimensionless | Number of messages published to Redis PubSub |
+| redis_pubsub_received | Counter | Dimensionless | Number of messages received from Redis PubSub |
+| local_pubsub_published | Counter | messages | The total number of messages sent via the local pubsub implementation |
+| local_pubsub_received | Counter | messages | The total number of messages received via the local pubsub implementation |
+| num_file_peers | Gauge | Dimensionless | Number of peers in the file peer list |
+| num_peers | Gauge | Dimensionless | the active number of peers in the cluster |
+| peer_hash | Gauge | Dimensionless | the hash of the current list of peers |
+| peer_messages | Counter | Dimensionless | the number of messages received by the peers service |
+| _num_dropped_by_drop_rule | Counter | Dimensionless | Number of traces dropped by the drop rule |
+| _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
+| _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
+| _sample_rate | Histogram | Dimensionless | Sample rate for traces |
+| enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
+| response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
+| response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
+| queued_items | UpDown | Dimensionless | The number of events queued for transmission to Honeycomb |
+| queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
+| trace_duration_ms | Histogram | Milliseconds | time taken to process a trace from arrival to send |
+| trace_span_count | Histogram | Dimensionless | number of spans in a trace |
+| collector_incoming_queue | Histogram | Dimensionless | number of spans currently in the incoming queue |
+| collector_peer_queue_length | Gauge | Dimensionless | number of spans in the peer queue |
+| collector_incoming_queue_length | Gauge | Dimensionless | number of spans in the incoming queue |
+| collector_peer_queue | Histogram | Dimensionless | number of spans currently in the peer queue |
+| collector_cache_size | Gauge | Dimensionless | number of traces currently stored in the trace cache |
+| memory_heap_allocation | Gauge | Bytes | current heap allocation |
+| span_received | Counter | Dimensionless | number of spans received by the collector |
+| span_processed | Counter | Dimensionless | number of spans processed by the collector |
+| spans_waiting | UpDown | Dimensionless | number of spans waiting to be processed by the collector |
+| trace_sent_cache_hit | Counter | Dimensionless | number of late spans received for traces that have already been sent |
+| trace_accepted | Counter | Dimensionless | number of new traces received by the collector |
+| trace_send_kept | Counter | Dimensionless | number of traces that has been kept |
+| trace_send_dropped | Counter | Dimensionless | number of traces that has been dropped |
+| trace_send_has_root | Counter | Dimensionless | number of kept traces that have a root span |
+| trace_send_no_root | Counter | Dimensionless | number of kept traces that do not have a root span |
+| trace_forwarded_on_peer_change | Gauge | Dimensionless | number of traces forwarded due to peer membership change |
+| trace_redistribution_count | Gauge | Dimensionless | number of traces redistributed due to peer membership change |
+| trace_send_on_shutdown | Counter | Dimensionless | number of traces sent during shutdown |
+| trace_forwarded_on_shutdown | Counter | Dimensionless | number of traces forwarded during shutdown |
+| trace_send_got_root | Counter | Dimensionless | number of traces that are ready for decision due to root span arrival |
+| trace_send_expired | Counter | Dimensionless | number of traces that are ready for decision due to TraceTimeout or SendDelay |
+| trace_send_span_limit | Counter | Dimensionless | number of traces that are ready for decision due to span limit |
+| trace_send_ejected_full | Counter | Dimensionless | number of traces that are ready for decision due to cache capacity overrun |
+| trace_send_ejected_memsize | Counter | Dimensionless | number of traces that are ready for decision due to memory overrun |
+| trace_send_late_span | Counter | Dimensionless | number of spans that are sent due to late span arrival |
+| dropped_from_stress | Counter | Dimensionless | number of traces dropped due to stress relief |
+| cluster_stress_level | Gauge | Dimensionless | The overall stress level of the cluster |
+| individual_stress_level | Gauge | Dimensionless | The stress level of the individual node |
+| stress_level | Gauge | Dimensionless | The stress level that's being used to determine whether to activate stress relief |
+| stress_relief_activated | Gauge | Dimensionless | Whether stress relief is currently activated |
+| _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
+| _router_event | Counter | Dimensionless | the number of events received |
+| config_hash | Gauge | Dimensionless | The hash of the current configuration |
+| rule_config_hash | Gauge | Dimensionless | The hash of the current rules configuration |
+| queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
+| queue_overflow | Counter | Dimensionless | number of events dropped due to queue overflow |
+| send_errors | Counter | Dimensionless | number of errors encountered while sending events to destination |
+| send_retries | Counter | Dimensionless | number of times a batch of events was retried |
+| batches_sent | Counter | Dimensionless | number of batches of events sent to destination |
+| messages_sent | Counter | Dimensionless | number of messages sent to destination |
+| response_decode_errors | Counter | Dimensionless | number of errors encountered while decoding responses from destination |
