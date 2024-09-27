@@ -20,7 +20,14 @@ type MetricsUsage struct {
 	Description string
 }
 
+type MetricsOutput struct {
+	Complete  []MetricsUsage
+	HasPrefix []MetricsUsage
+}
+
 const metricsImportPath = "github.com/honeycombio/refinery/metrics"
+
+var packagesContainsPrefix = []string{"route", "main", "sample", "transmit"}
 
 func GenerateMetricsMetadata() error {
 	output, err := os.Create("metricsMeta.yaml")
@@ -40,7 +47,7 @@ func GenerateMetricsMetadata() error {
 		return fmt.Errorf("error loading packages: %v", err)
 	}
 
-	usages := make([]MetricsUsage, 0)
+	var usages MetricsOutput
 	// Traverse each package and file.
 	for _, pkg := range pkgs {
 		if !slices.Contains(maps.Keys(pkg.Imports), metricsImportPath) {
@@ -87,7 +94,12 @@ func GenerateMetricsMetadata() error {
 										if usage.Name == "" {
 											continue
 										}
-										usages = append(usages, usage)
+										if slices.Contains(packagesContainsPrefix, pkg.Name) {
+											fmt.Println("name", pkg.Name)
+											usages.HasPrefix = append(usages.HasPrefix, usage)
+										} else {
+											usages.Complete = append(usages.Complete, usage)
+										}
 										found = true
 									}
 								}
@@ -104,7 +116,7 @@ func GenerateMetricsMetadata() error {
 		}
 	}
 
-	if len(usages) == 0 {
+	if len(usages.Complete) == 0 && len(usages.HasPrefix) == 0 {
 		return fmt.Errorf("No metrics.Metadata declarations found in all packages")
 	}
 
@@ -129,7 +141,6 @@ func exprToString(expr ast.Expr, pkg *packages.Package) string {
 				strVal = constVal.Val().String()
 				break
 			}
-
 		}
 		strVal = v.Name
 	case *ast.BasicLit:
@@ -143,7 +154,7 @@ func exprToString(expr ast.Expr, pkg *packages.Package) string {
 	return strings.Trim(strVal, "\"")
 }
 
-func writeMetricsToYAML(metricsUsages []MetricsUsage, output *os.File) error {
+func writeMetricsToYAML(metricsUsages MetricsOutput, output *os.File) error {
 	// Create a new YAML encoder and write the metrics
 	encoder := yaml.NewEncoder(output)
 	defer encoder.Close()

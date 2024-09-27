@@ -1,7 +1,12 @@
-# Metrics Documentation
-# Automatically generated on 2024-09-26 at 18:58:58 UTC
+# Honeycomb Refinery Metrics Documentation
 
-This document contains the description of various metrics used in the system.
+This document contains the description of various metrics used in Refinery.
+It was automatically generated on 2024-09-27 at 16:19:55 UTC.
+
+Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
+
+## Complete Metrics
+This table includes metrics with fully defined names.
 
 | Name | Type | Unit | Description |
 |------|------|------|-------------|
@@ -23,15 +28,6 @@ This document contains the description of various metrics used in the system.
 | num_peers | Gauge | Dimensionless | the active number of peers in the cluster |
 | peer_hash | Gauge | Dimensionless | the hash of the current list of peers |
 | peer_messages | Counter | Dimensionless | the number of messages received by the peers service |
-| _num_dropped_by_drop_rule | Counter | Dimensionless | Number of traces dropped by the drop rule |
-| _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
-| _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
-| _sample_rate | Histogram | Dimensionless | Sample rate for traces |
-| enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
-| response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
-| response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
-| queued_items | UpDown | Dimensionless | The number of events queued for transmission to Honeycomb |
-| queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
 | trace_duration_ms | Histogram | Milliseconds | time taken to process a trace from arrival to send |
 | trace_span_count | Histogram | Dimensionless | number of spans in a trace |
 | collector_incoming_queue | Histogram | Dimensionless | number of spans currently in the incoming queue |
@@ -60,14 +56,33 @@ This document contains the description of various metrics used in the system.
 | trace_send_ejected_memsize | Counter | Dimensionless | number of traces that are ready for decision due to memory overrun |
 | trace_send_late_span | Counter | Dimensionless | number of spans that are sent due to late span arrival |
 | dropped_from_stress | Counter | Dimensionless | number of traces dropped due to stress relief |
+| trace_kept_sample_rate | Histogram | Dimensionless | sample rate of kept traces |
+| trace_aggregate_sample_rate | Histogram | Dimensionless | aggregate sample rate of both kept and dropped traces |
 | cluster_stress_level | Gauge | Dimensionless | The overall stress level of the cluster |
 | individual_stress_level | Gauge | Dimensionless | The stress level of the individual node |
 | stress_level | Gauge | Dimensionless | The stress level that's being used to determine whether to activate stress relief |
 | stress_relief_activated | Gauge | Dimensionless | Whether stress relief is currently activated |
-| _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
-| _router_event | Counter | Dimensionless | the number of events received |
 | config_hash | Gauge | Dimensionless | The hash of the current configuration |
 | rule_config_hash | Gauge | Dimensionless | The hash of the current rules configuration |
+
+
+## Metrics with Prefix
+This table includes metrics with partially defined names.
+Metrics in this table don't contain their expected prefixes. This is because the auto-generator is unable to resolve dynamically created metric names during the generation process.
+
+| Name | Type | Unit | Description |
+|------|------|------|-------------|
+| _num_dropped_by_drop_rule | Counter | Dimensionless | Number of traces dropped by the drop rule |
+| _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
+| _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
+| _sample_rate | Histogram | Dimensionless | Sample rate for traces |
+| enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
+| response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
+| response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
+| queued_items | UpDown | Dimensionless | The number of events queued for transmission to Honeycomb |
+| queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
+| _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
+| _router_event | Counter | Dimensionless | the number of events received |
 | queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
 | queue_overflow | Counter | Dimensionless | number of events dropped due to queue overflow |
 | send_errors | Counter | Dimensionless | number of errors encountered while sending events to destination |
