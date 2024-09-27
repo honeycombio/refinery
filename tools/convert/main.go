@@ -395,7 +395,7 @@ func GenerateMetricsDoc(w io.Writer) error {
 		return err
 	}
 
-	var metricsUsages []MetricsUsage
+	var metricsUsages MetricsOutput
 	err = yaml.Unmarshal(data, &metricsUsages)
 	if err != nil {
 		return err
