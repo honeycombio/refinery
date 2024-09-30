@@ -424,10 +424,27 @@ func (i *InMemCollector) redistributeTraces() {
 		newTarget := i.Sharder.WhichShard(trace.TraceID)
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
+			// Drop all proxy spans since peers will resend them
+			trace.RemoveDecisionSpans()
 			continue
 		}
 
 		for _, sp := range trace.GetSpans() {
+			if sp.IsDecisionSpan() {
+				continue
+			}
+
+			if i.Config.GetCollectionConfig().ForceTraceLocality {
+				// TODO: how do we track how many times the same span has been
+				// forwarded?
+				// what we could do is to increase a fowarded counter on the span
+				// when a proxy span is received on a host
+
+				dc := i.createProxySpan(sp, trace, newTarget)
+				i.PeerTransmission.EnqueueEvent(dc)
+				continue
+			}
+
 			sp.APIHost = newTarget.GetAddress()
 
 			if sp.Data == nil {
@@ -537,6 +554,24 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 
+	// Figure out if we should handle this span locally or pass on to a peer
+	var spanForwarded bool
+	if !i.Config.GetCollectionConfig().ForceTraceLocality {
+		// if this trace doesn't belong to us, we should forward a decision span to its decider
+		targetShard := i.Sharder.WhichShard(trace.ID())
+		if !targetShard.Equals(i.Sharder.MyShard()) && !sp.IsDecisionSpan() {
+			i.Metrics.Increment("incoming_router_peer")
+			i.Logger.Debug().
+				WithString("peer", targetShard.GetAddress()).
+				Logf("Sending span to peer")
+
+			dc := i.createProxySpan(sp, trace, targetShard)
+
+			i.PeerTransmission.EnqueueEvent(dc)
+			spanForwarded = true
+		}
+	}
+
 	// we may override these values in conditions below
 	var markTraceForSending bool
 	timeout := tcfg.GetSendDelay()
@@ -545,7 +580,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	}
 
 	// if this is a root span, say so and send the trace
-	if sp.IsRoot {
+	if sp.IsRoot && !spanForwarded {
 		markTraceForSending = true
 		trace.RootSpan = sp
 	}
@@ -556,7 +591,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		timeout = 0 // don't use a timeout in this case; this is an "act fast" situation
 	}
 
-	if markTraceForSending {
+	if markTraceForSending && !spanForwarded {
 		trace.SendBy = i.Clock.Now().Add(timeout)
 	}
 }
@@ -634,6 +669,13 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		"hostname":    i.hostname,
 	})
 	defer span.End()
+
+	// if we receive a proxy span after a trace decision has been made,
+	// we should just broadcast the decision again
+	if sp.IsDecisionSpan() {
+		// TODO: broadcast the decision again
+		return
+	}
 
 	if i.Config.GetAddRuleReasonToTrace() {
 		var metaReason string
@@ -801,7 +843,11 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	} else {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
+
 	for _, sp := range trace.GetSpans() {
+		if sp.IsDecisionSpan() {
+			continue
+		}
 		if i.Config.GetAddRuleReasonToTrace() {
 			sp.Data["meta.refinery.reason"] = reason
 			sp.Data["meta.refinery.send_reason"] = sendReason
@@ -954,7 +1000,8 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 // distributeSpansInCache takes a list of spans and sends them to the appropriate channel based on the state of the trace.
 func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord, forwardSpanChan chan *types.Span, spans ...*types.Span) {
 	for _, sp := range spans {
-		if sp != nil {
+		// if the span is a decision span, we don't need to do anything with it
+		if sp != nil && !sp.IsDecisionSpan() {
 
 			// first check if there's a trace decision
 			record, reason, found := i.sampleTraceCache.CheckSpan(sp)
@@ -1050,6 +1097,32 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	for k, v := range i.Config.GetAdditionalAttributes() {
 		sp.Data[k] = v
 	}
+}
+
+func (i *InMemCollector) createProxySpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
+	// create a span that only contains key fields
+	dc := sp.ExtractDecisionContext()
+	selector, isLegacyKey := trace.GetSamplerKey()
+	if selector == "" {
+		i.Logger.Error().WithField("trace_id", trace.ID()).Logf("error getting sampler selection key for trace")
+	}
+
+	sampler, found := i.datasetSamplers[selector]
+	if !found {
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(selector, isLegacyKey)
+		i.datasetSamplers[selector] = sampler
+	}
+
+	// extract all key fields from the span
+	keyFields := sampler.GetKeyFields()
+	for _, keyField := range keyFields {
+		if val, ok := sp.Data[keyField]; ok {
+			dc.Data[keyField] = val
+		}
+	}
+
+	dc.APIHost = targetShard.GetAddress()
+	return dc
 }
 
 func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {

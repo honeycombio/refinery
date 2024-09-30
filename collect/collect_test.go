@@ -155,6 +155,29 @@ func TestAddRootSpan(t *testing.T) {
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
+
+	span = &types.Span{
+		TraceID: "decision_root_span",
+		Event: types.Event{
+			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
+			Data: map[string]interface{}{
+				"meta.refinery.min_span": true,
+			},
+		},
+		IsRoot: true,
+	}
+
+	coll.AddSpanFromPeer(span)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	// adding one span with no parent ID should:
+	// * create the trace in the cache
+	// * send the trace
+	// * remove the trace from the cache
+	assert.Nil(t, coll.getFromCache(traceID2), "after sending the span, it should be removed from the cache")
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "adding a decision span should not send the span")
+	transmission.Mux.RUnlock()
 }
 
 // #490, SampleRate getting stomped could cause confusion if sampling was
