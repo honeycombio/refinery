@@ -104,7 +104,7 @@ func defaultConfig(basePort int) *config.MockConfig {
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
-		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000, ShutdownDelay: config.Duration(1 * time.Second)},
+		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000, ShutdownDelay: config.Duration(1 * time.Second), ForceTraceLocality: true},
 		TraceIdFieldNames:        []string{"trace.trace_id"},
 		ParentIdFieldNames:       []string{"trace.parent_id"},
 		SampleCache:              config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
@@ -355,9 +355,6 @@ func TestPeerRouting(t *testing.T) {
 			ID:    peerList[i],
 		}
 		cfg := defaultConfig(basePort)
-		collectionCfg := cfg.GetCollectionConfigVal
-		collectionCfg.ForceTraceLocality = true
-		cfg.GetCollectionConfigVal = collectionCfg
 
 		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
@@ -503,9 +500,6 @@ func TestEventsEndpoint(t *testing.T) {
 		}
 
 		cfg := defaultConfig(basePort)
-		collectionCfg := cfg.GetCollectionConfigVal
-		collectionCfg.ForceTraceLocality = true
-		cfg.GetCollectionConfigVal = collectionCfg
 		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
 	}
@@ -621,9 +615,6 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		}
 
 		cfg := defaultConfig(basePort)
-		collectionCfg := cfg.GetCollectionConfigVal
-		collectionCfg.ForceTraceLocality = true
-		cfg.GetCollectionConfigVal = collectionCfg
 
 		app, graph := newStartedApp(t, senders[i], nil, peers, cfg)
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
@@ -744,6 +735,9 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 			ID:    peerList[i],
 		}
 		cfg := defaultConfig(basePort)
+		collectionCfg := cfg.GetCollectionConfigVal
+		collectionCfg.ForceTraceLocality = false
+		cfg.GetCollectionConfigVal = collectionCfg
 
 		apps[i], graph = newStartedApp(t, senders[i], peerSenders[i], peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
