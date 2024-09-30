@@ -562,14 +562,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		return nil
 	}
 
-	// extract trace ID
-	var traceID string
-	for _, traceIdFieldName := range r.Config.GetTraceIdFieldNames() {
-		if trID, ok := ev.Data[traceIdFieldName]; ok {
-			traceID = trID.(string)
-			break
-		}
-	}
+	traceID := extractTraceID(r.Config.GetTraceIdFieldNames(), ev)
 	if traceID == "" {
 		// not part of a trace. send along upstream
 		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
@@ -584,6 +577,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: traceID,
+		IsRoot:  isRootSpan(ev, r.Config),
 	}
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
@@ -606,6 +600,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		}
 	}
 
+	// TODO: only do this if the span proxy feature is disabled
 	// Figure out if we should handle this span locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(traceID)
 	if !targetShard.Equals(r.Sharder.MyShard()) {
@@ -614,6 +609,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 			WithString("peer", targetShard.GetAddress()).
 			WithField("isprobe", isProbe).
 			Logf("Sending span from batch to peer")
+
 		ev.APIHost = targetShard.GetAddress()
 
 		// Unfortunately this doesn't tell us if the event was actually
@@ -634,6 +630,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)
 	} else {
+		// TODO: again, only do this if span proxy is disabled
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
@@ -1014,4 +1011,44 @@ func getDatasetFromRequest(req *http.Request) (string, error) {
 		return "", err
 	}
 	return dataset, nil
+}
+
+func isRootSpan(ev *types.Event, cfg config.Config) bool {
+	// log event should never be considered a root span, check for that first
+	if signalType := ev.Data["meta.signal_type"]; signalType == "log" {
+		return false
+	}
+
+	// check if the event has a root flag
+	if isRoot, ok := ev.Data["meta.refinery.root"]; ok {
+		v, ok := isRoot.(bool)
+		if !ok {
+			return false
+		}
+
+		return v
+	}
+
+	// check if the event has a parent id using the configured parent id field names
+	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
+		parentId := ev.Data[parentIdFieldName]
+		if _, ok := parentId.(string); ok && parentId != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
+	if trID, ok := ev.Data["trace_id"]; ok {
+		return trID.(string)
+	}
+
+	for _, traceIdFieldName := range traceIdFieldNames {
+		if trID, ok := ev.Data[traceIdFieldName]; ok {
+			return trID.(string)
+		}
+	}
+
+	return ""
 }

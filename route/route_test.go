@@ -23,6 +23,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -718,6 +719,58 @@ func TestGetDatasetFromRequest(t *testing.T) {
 			dataset, err := getDatasetFromRequest(req)
 			assert.Equal(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedDatasetName, dataset)
+		})
+	}
+}
+func TestIsRootSpan(t *testing.T) {
+	tesCases := []struct {
+		name     string
+		event    types.Event
+		expected bool
+	}{
+		{
+			name: "root span - no parent id",
+			event: types.Event{
+				Data: map[string]interface{}{},
+			},
+			expected: true,
+		},
+		{
+			name: "root span - empty parent id",
+			event: types.Event{
+				Data: map[string]interface{}{
+					"trace.parent_id": "",
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "non-root span - parent id",
+			event: types.Event{
+				Data: map[string]interface{}{
+					"trace.parent_id": "some-id",
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "non-root span - no parent id but has signal_type of log",
+			event: types.Event{
+				Data: map[string]interface{}{
+					"meta.signal_type": "log",
+				},
+			},
+			expected: false,
+		},
+	}
+
+	cfg := &config.MockConfig{
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+	}
+
+	for _, tc := range tesCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, isRootSpan(&tc.event, cfg))
 		})
 	}
 }

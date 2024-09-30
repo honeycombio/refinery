@@ -4,6 +4,9 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSpan_GetDataSize(t *testing.T) {
@@ -61,6 +64,69 @@ func TestSpan_AnnotationType(t *testing.T) {
 			if got := sp.AnnotationType(); got != tt.want {
 				t.Errorf("Span.AnnotationType() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestSpan_ExtractDecisionContext(t *testing.T) {
+	ev := Event{
+		APIHost:     "test.api.com",
+		APIKey:      "test-api-key",
+		Dataset:     "test-dataset",
+		Environment: "test-environment",
+		SampleRate:  5,
+		Timestamp:   time.Now(),
+		Data: map[string]interface{}{
+			"test":                 "test",
+			"meta.annotation_type": "span_event",
+		},
+	}
+	sp := &Span{
+		Event:       ev,
+		TraceID:     "test-trace-id",
+		ArrivalTime: time.Now(),
+		IsRoot:      true,
+	}
+
+	got := sp.ExtractDecisionContext()
+	assert.Equal(t, ev.APIHost, got.APIHost)
+	assert.Equal(t, ev.APIKey, got.APIKey)
+	assert.Equal(t, ev.Dataset, got.Dataset)
+	assert.Equal(t, ev.Environment, got.Environment)
+	assert.Equal(t, ev.SampleRate, got.SampleRate)
+	assert.Equal(t, ev.Timestamp, got.Timestamp)
+	assert.Equal(t, map[string]interface{}{
+		"trace_id":                     sp.TraceID,
+		"meta.refinery.root":           true,
+		"meta.refinery.min_span":       true,
+		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
+		"meta.refinery.span_data_size": 14,
+	}, got.Data)
+}
+
+func TestSpan_IsDecisionSpan(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+		want bool
+	}{
+		{"nil meta", nil, false},
+		{"no meta", map[string]any{}, false},
+		{"no meta.refinery.min_span", map[string]any{"meta.annotation_type": "span_event"}, false},
+		{"invalid min_span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.mi_span": true}, false},
+		{"is decision span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.min_span": true}, true},
+		{"is not decision span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.min_span": false}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: tt.data,
+				},
+			}
+			got := sp.IsDecisionSpan()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
