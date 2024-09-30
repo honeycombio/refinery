@@ -424,8 +424,10 @@ func (i *InMemCollector) redistributeTraces() {
 		newTarget := i.Sharder.WhichShard(trace.TraceID)
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
-			// Drop all proxy spans since peers will resend them
-			trace.RemoveDecisionSpans()
+			if !i.Config.GetCollectionConfig().ForceTraceLocality {
+				// Drop all proxy spans since peers will resend them
+				trace.RemoveDecisionSpans()
+			}
 			continue
 		}
 
@@ -434,13 +436,8 @@ func (i *InMemCollector) redistributeTraces() {
 				continue
 			}
 
-			if i.Config.GetCollectionConfig().ForceTraceLocality {
-				// TODO: how do we track how many times the same span has been
-				// forwarded?
-				// what we could do is to increase a fowarded counter on the span
-				// when a proxy span is received on a host
-
-				dc := i.createProxySpan(sp, trace, newTarget)
+			if !i.Config.GetCollectionConfig().ForceTraceLocality {
+				dc := i.createDecisionSpan(sp, trace, newTarget)
 				i.PeerTransmission.EnqueueEvent(dc)
 				continue
 			}
@@ -565,7 +562,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 				WithString("peer", targetShard.GetAddress()).
 				Logf("Sending span to peer")
 
-			dc := i.createProxySpan(sp, trace, targetShard)
+			dc := i.createDecisionSpan(sp, trace, targetShard)
 
 			i.PeerTransmission.EnqueueEvent(dc)
 			spanForwarded = true
@@ -579,7 +576,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		timeout = 2 * time.Second // a sensible default
 	}
 
-	// if this is a root span, say so and send the trace
+	// if this is a root span and its destination shard is the current refinery, say so and send the trace
 	if sp.IsRoot && !spanForwarded {
 		markTraceForSending = true
 		trace.RootSpan = sp
@@ -591,6 +588,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		timeout = 0 // don't use a timeout in this case; this is an "act fast" situation
 	}
 
+	// we should only mark a trace for sending if we are the destination shard
 	if markTraceForSending && !spanForwarded {
 		trace.SendBy = i.Clock.Now().Add(timeout)
 	}
@@ -1099,9 +1097,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	}
 }
 
-func (i *InMemCollector) createProxySpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
-	// create a span that only contains key fields
-	dc := sp.ExtractDecisionContext()
+func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
 	selector, isLegacyKey := trace.GetSamplerKey()
 	if selector == "" {
 		i.Logger.Error().WithField("trace_id", trace.ID()).Logf("error getting sampler selection key for trace")
@@ -1113,6 +1109,7 @@ func (i *InMemCollector) createProxySpan(sp *types.Span, trace *types.Trace, tar
 		i.datasetSamplers[selector] = sampler
 	}
 
+	dc := sp.ExtractDecisionContext()
 	// extract all key fields from the span
 	keyFields := sampler.GetKeyFields()
 	for _, keyField := range keyFields {
