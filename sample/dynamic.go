@@ -21,12 +21,12 @@ type DynamicSampler struct {
 	clearFrequency config.Duration
 	maxKeys        int
 	prefix         string
-	lastMetrics    map[string]int64
 
 	key       *traceKey
 	keyFields []string
 
-	dynsampler dynsampler.Sampler
+	dynsampler      dynsampler.Sampler
+	metricsRecorder dynsamplerMetricsRecorder
 }
 
 func (d *DynamicSampler) Start() error {
@@ -42,9 +42,9 @@ func (d *DynamicSampler) Start() error {
 	if d.maxKeys == 0 {
 		d.maxKeys = 500
 	}
-	d.prefix = "dynamic_"
 	d.keyFields = d.Config.GetSamplingFields()
 
+	d.prefix = "dynamic"
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.AvgSampleRate{
 		GoalSampleRate:         int(d.sampleRate),
@@ -53,14 +53,12 @@ func (d *DynamicSampler) Start() error {
 	}
 	d.dynsampler.Start()
 
-	// Register statistics this package will produce
-	d.lastMetrics = d.dynsampler.GetMetrics(d.prefix)
-	for name := range d.lastMetrics {
-		d.Metrics.Register(name, getMetricType(name))
+	// Register statistics from the dynsampler-go package
+	d.metricsRecorder = dynsamplerMetricsRecorder{
+		met:    d.Metrics,
+		prefix: d.prefix,
 	}
-	d.Metrics.Register(d.prefix+"num_dropped", "counter")
-	d.Metrics.Register(d.prefix+"num_kept", "counter")
-	d.Metrics.Register(d.prefix+"sample_rate", "histogram")
+	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 
 	return nil
 }
@@ -80,23 +78,8 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
-	if shouldKeep {
-		d.Metrics.Increment(d.prefix + "num_kept")
-	} else {
-		d.Metrics.Increment(d.prefix + "num_dropped")
-	}
-	d.Metrics.Histogram(d.prefix+"sample_rate", float64(rate))
-	for name, val := range d.dynsampler.GetMetrics(d.prefix) {
-		switch getMetricType(name) {
-		case "counter":
-			delta := val - d.lastMetrics[name]
-			d.Metrics.Count(name, delta)
-			d.lastMetrics[name] = val
-		case "gauge":
-			d.Metrics.Gauge(name, val)
-		}
-	}
-	return rate, shouldKeep, "dynamic", key
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
+	return rate, shouldKeep, d.prefix, key
 }
 
 func (d *DynamicSampler) GetKeyFields() []string {

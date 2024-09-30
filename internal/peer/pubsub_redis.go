@@ -120,6 +120,12 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	p.checkHash()
 }
 
+var redisPubSubPeersMetrics = []metrics.Metadata{
+	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
+	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
+	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
+}
+
 func (p *RedisPubsubPeers) Start() error {
 	if p.PubSub == nil {
 		return errors.New("injected pubsub is nil")
@@ -137,9 +143,9 @@ func (p *RedisPubsubPeers) Start() error {
 	p.Logger.Info().Logf("subscribing to pubsub peers channel")
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
 
-	p.Metrics.Register("num_peers", "gauge")
-	p.Metrics.Register("peer_hash", "gauge")
-	p.Metrics.Register("peer_messages", "counter")
+	for _, metric := range redisPubSubPeersMetrics {
+		p.Metrics.Register(metric)
+	}
 
 	myaddr, err := p.publicAddr()
 	if err != nil {

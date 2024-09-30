@@ -48,6 +48,11 @@ type GoRedisSubscription struct {
 // Ensure that GoRedisSubscription implements Subscription
 var _ Subscription = (*GoRedisSubscription)(nil)
 
+var goredisPubSubMetrics = []metrics.Metadata{
+	{Name: "redis_pubsub_published", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of messages published to Redis PubSub"},
+	{Name: "redis_pubsub_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of messages received from Redis PubSub"},
+}
+
 func (ps *GoRedisPubSub) Start() error {
 	options := new(redis.UniversalOptions)
 	var (
@@ -100,8 +105,9 @@ func (ps *GoRedisPubSub) Start() error {
 		}
 	}
 
-	ps.Metrics.Register("redis_pubsub_published", "counter")
-	ps.Metrics.Register("redis_pubsub_received", "counter")
+	for _, metric := range goredisPubSubMetrics {
+		ps.Metrics.Register(metric)
+	}
 
 	ps.client = client
 	ps.subs = make([]*GoRedisSubscription, 0)

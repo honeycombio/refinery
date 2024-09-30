@@ -31,3 +31,5 @@ func (m *MockTransmission) Flush() {
 	defer m.Mux.Unlock()
 	m.Events = m.Events[:0]
 }
+
+func (m *MockTransmission) RegisterMetrics() {}

@@ -13,10 +13,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSentReasonCache(t *testing.T) {
+func TestKeptReasonCache(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := cache.NewSentReasonsCache(s)
+	c := cache.NewKeptReasonsCache(s)
 	keys := make([]uint, 0)
 	entries := []string{"foo", "bar", "baz"}
 	for _, item := range entries {
@@ -29,7 +29,7 @@ func TestSentReasonCache(t *testing.T) {
 	}
 }
 
-func BenchmarkSentReasonCache_Set(b *testing.B) {
+func BenchmarkKeptReasonCache_Set(b *testing.B) {
 	s := &metrics.MockMetrics{}
 	s.Start()
 	for _, numItems := range []int{10, 100, 1000, 10000, 100000} {
@@ -38,18 +38,18 @@ func BenchmarkSentReasonCache_Set(b *testing.B) {
 			entries[i] = randomString(50)
 		}
 		b.Run(strconv.Itoa(numItems), func(b *testing.B) {
-			cache := cache.NewSentReasonsCache(s)
+			cache := cache.NewKeptReasonsCache(s)
 			for i := 0; i < b.N; i++ {
 				cache.Set(entries[seededRand.Intn(numItems)])
 			}
 		})
 	}
 }
-func BenchmarkSentReasonCache_Get(b *testing.B) {
+func BenchmarkKeptReasonCache_Get(b *testing.B) {
 	s := &metrics.MockMetrics{}
 	s.Start()
 	for _, numItems := range []int{10, 100, 1000, 10000, 100000} {
-		cache := cache.NewSentReasonsCache(s)
+		cache := cache.NewKeptReasonsCache(s)
 		for i := 0; i < numItems; i++ {
 			cache.Set(randomString(50))
 		}
@@ -61,13 +61,13 @@ func BenchmarkSentReasonCache_Get(b *testing.B) {
 	}
 }
 
-func BenchmarkSentReasonsCache_Get_Parallel(b *testing.B) {
+func BenchmarkKeptReasonsCache_Get_Parallel(b *testing.B) {
 	for _, numGoroutines := range []int{1, 50, 300} {
 		for _, numUniqueEntries := range []int{50, 500, 2000} {
 			b.Run(fmt.Sprintf("entries%d-g%d", numUniqueEntries, numGoroutines), func(b *testing.B) {
 				s := &metrics.MockMetrics{}
 				s.Start()
-				cache := cache.NewSentReasonsCache(s)
+				cache := cache.NewKeptReasonsCache(s)
 
 				entries := make([]string, numUniqueEntries)
 				for i := 0; i < numUniqueEntries; i++ {
@@ -96,7 +96,7 @@ func BenchmarkSentReasonsCache_Get_Parallel(b *testing.B) {
 	}
 }
 
-func BenchmarkSentReasonsCache_Set_Parallel(b *testing.B) {
+func BenchmarkKeptReasonsCache_Set_Parallel(b *testing.B) {
 	for _, numGoroutines := range []int{1, 50, 300} {
 		for _, numUniqueEntries := range []int{50, 500, 2000} {
 			b.Run(fmt.Sprintf("entries%d-g%d", numUniqueEntries, numGoroutines), func(b *testing.B) {
@@ -106,7 +106,7 @@ func BenchmarkSentReasonsCache_Set_Parallel(b *testing.B) {
 				for i := 0; i < numUniqueEntries; i++ {
 					entries[i] = randomString(50)
 				}
-				cache := cache.NewSentReasonsCache(s)
+				cache := cache.NewKeptReasonsCache(s)
 				wg := sync.WaitGroup{}
 				count := b.N / numGoroutines
 				if count == 0 {

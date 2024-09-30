@@ -48,7 +48,7 @@ type Trace struct {
 	KeepSample bool
 	// Sent should only be changed if the changer holds the SendSampleLock
 	Sent       bool
-	sentReason uint
+	keptReason uint
 
 	SendBy time.Time
 
@@ -121,12 +121,12 @@ func (t *Trace) SetSampleRate(rate uint) {
 	t.sampleRate = rate
 }
 
-func (t *Trace) SentReason() uint {
-	return t.sentReason
+func (t *Trace) KeptReason() uint {
+	return t.keptReason
 }
 
-func (t *Trace) SetSentReason(reason uint) {
-	t.sentReason = reason
+func (t *Trace) SetKeptReason(reason uint) {
+	t.keptReason = reason
 }
 
 // DescendantCount gets the number of descendants of all kinds currently in this trace

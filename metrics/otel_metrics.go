@@ -18,6 +18,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
+var _ Metrics = (*OTelMetrics)(nil)
+
 // OTelMetrics sends metrics to Honeycomb using the OpenTelemetry protocol. One
 // particular thing to note is that OTel metrics treats histograms very
 // differently than Honeycomb's Legacy metrics. In particular, Legacy metrics
@@ -150,6 +152,7 @@ func (o *OTelMetrics) Start() error {
 	if err != nil {
 		return err
 	}
+
 	o.gauges[name] = g
 
 	name = "memory_inuse"
@@ -181,55 +184,77 @@ func (o *OTelMetrics) Start() error {
 	return nil
 }
 
-func (o *OTelMetrics) Register(name string, metricType string) {
+// Register creates a new metric with the given metadata
+// and initialize it with zero value.
+func (o *OTelMetrics) Register(metadata Metadata) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	switch metricType {
-	case "counter":
-		ctr, err := o.meter.Int64Counter(name)
+	ctx := context.Background()
+
+	unit := string(metadata.Unit)
+	switch metadata.Type {
+	case Counter:
+		ctr, err := o.meter.Int64Counter(metadata.Name,
+			metric.WithUnit(unit),
+			metric.WithDescription(metadata.Description),
+		)
 		if err != nil {
-			o.Logger.Error().WithString("name", name).Logf("failed to create counter")
+			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create counter")
 			return
 		}
-		o.counters[name] = ctr
-	case "gauge":
+
+		// Give the counter an initial value of 0 so that OTel will send it
+		ctr.Add(ctx, 0)
+		o.counters[metadata.Name] = ctr
+	case Gauge:
 		var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
 			// this callback is invoked from outside this function call, so we
 			// need to Rlock when we read the values map. We don't know how long
 			// Observe() takes, so we make a copy of the value and unlock before
 			// calling Observe.
 			o.lock.RLock()
-			v := o.values[name]
+			v := o.values[metadata.Name]
 			o.lock.RUnlock()
 
 			result.Observe(v)
 			return nil
 		}
-		g, err := o.meter.Float64ObservableGauge(name,
+		g, err := o.meter.Float64ObservableGauge(metadata.Name,
+			metric.WithUnit(unit),
+			metric.WithDescription(metadata.Description),
 			metric.WithFloat64Callback(f),
 		)
 		if err != nil {
-			o.Logger.Error().WithString("name", name).Logf("failed to create gauge")
+			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create gauge")
 			return
 		}
-		o.gauges[name] = g
-	case "histogram":
-		h, err := o.meter.Float64Histogram(name)
+
+		o.gauges[metadata.Name] = g
+	case Histogram:
+		h, err := o.meter.Float64Histogram(metadata.Name,
+			metric.WithUnit(unit),
+			metric.WithDescription(metadata.Description),
+		)
 		if err != nil {
-			o.Logger.Error().WithString("name", name).Logf("failed to create histogram")
+			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create histogram")
 			return
 		}
-		o.histograms[name] = h
-	case "updown":
-		ud, err := o.meter.Int64UpDownCounter(name)
+		h.Record(ctx, 0)
+		o.histograms[metadata.Name] = h
+	case UpDown:
+		ud, err := o.meter.Int64UpDownCounter(metadata.Name,
+			metric.WithUnit(unit),
+			metric.WithDescription(metadata.Description),
+		)
 		if err != nil {
-			o.Logger.Error().WithString("name", name).Logf("failed to create updown counter")
+			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create updown counter")
 			return
 		}
-		o.updowns[name] = ud
+		ud.Add(ctx, 0)
+		o.updowns[metadata.Name] = ud
 	default:
-		o.Logger.Error().WithString("type", metricType).Logf("unknown metric type")
+		o.Logger.Error().WithString("type", metadata.Type.String()).Logf("unknown metric type")
 		return
 	}
 }

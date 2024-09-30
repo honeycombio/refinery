@@ -1,0 +1,26 @@
+# Honeycomb Refinery Metrics Documentation
+
+This document contains the description of various metrics used in Refinery.
+It was automatically generated {{ now }}.
+
+Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
+
+## Complete Metrics
+This table includes metrics with fully defined names.
+
+| Name | Type | Unit | Description |
+|------|------|------|-------------|
+{{- range .Complete }}
+| {{ .Name }} | {{ .Type }} | {{ .Unit }} | {{ .Description }} |
+{{- end }}
+
+
+## Metrics with Prefix
+This table includes metrics with partially defined names.
+Metrics in this table don't contain their expected prefixes. This is because the auto-generator is unable to resolve dynamically created metric names during the generation process.
+
+| Name | Type | Unit | Description |
+|------|------|------|-------------|
+{{- range .HasPrefix }}
+| {{ .Name }} | {{ .Type }} | {{ .Unit }} | {{ .Description }} |
+{{- end }}
