@@ -630,9 +630,6 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	if sp.IsRoot && !spanForwarded {
 		markTraceForSending = true
 		trace.RootSpan = sp
-		if sp.IsDecisionSpan() {
-			i.Logger.Warn().Logf("we set root decision span on trace")
-		}
 	}
 
 	// if the span count has exceeded our SpanLimit, send the trace immediately
@@ -1307,9 +1304,20 @@ func (i *InMemCollector) processTraceDecision(msg string) {
 }
 
 func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
-	if i.IsMyTrace(trace.ID()) {
+	if !i.IsMyTrace(trace) {
 		return nil, errors.New("cannot make a decision for partial traces")
 	}
+
+	_, span := otelutil.StartSpan(context.Background(), i.Tracer, "makeDecision")
+	defer span.End()
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"trace_id": trace.ID(),
+		"root":     trace.RootSpan,
+		"send_by":  trace.SendBy,
+		"arrival":  trace.ArrivalTime,
+	})
+
 	var sampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
@@ -1334,6 +1342,15 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*T
 	if trace.RootSpan != nil {
 		hasRoot = true
 	}
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"kept":        shouldSend,
+		"reason":      reason,
+		"sampler":     key,
+		"selector":    samplerSelector,
+		"rate":        rate,
+		"send_reason": sendReason,
+		"hasRoot":     hasRoot,
+	})
 	i.Logger.Warn().WithField("key", key).Logf("making decision for trace")
 	td := TraceDecision{
 		ID:         trace.TraceID,
