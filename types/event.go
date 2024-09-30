@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -102,6 +103,12 @@ func (t *Trace) GetSpans() []*Span {
 	return t.spans
 }
 
+func (t *Trace) RemoveDecisionSpans() {
+	t.spans = slices.DeleteFunc(t.spans, func(sp *Span) bool {
+		return sp.IsDecisionSpan()
+	})
+}
+
 func (t *Trace) ID() string {
 	return t.TraceID
 }
@@ -172,8 +179,8 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 
 	env := ""
 	for _, sp := range t.GetSpans() {
-		if sp.Event.Environment != "" {
-			env = sp.Event.Environment
+		if sp.Environment != "" {
+			env = sp.Environment
 			break
 		}
 	}
@@ -187,6 +194,43 @@ type Span struct {
 	TraceID     string
 	DataSize    int
 	ArrivalTime time.Time
+	IsRoot      bool
+}
+
+// IsDecicionSpan returns true if the span is a decision span based on
+// a flag set in the span's metadata.
+func (sp *Span) IsDecisionSpan() bool {
+	if sp.Data == nil {
+		return false
+	}
+	v, ok := sp.Data["meta.refinery.min_span"]
+	if !ok {
+		return false
+	}
+	isDecisionSpan, ok := v.(bool)
+	if !ok {
+		return false
+	}
+
+	return isDecisionSpan
+}
+
+// ExtractDecisionContext returns a new Event that contains only the data that is
+// relevant to the decision-making process.
+func (sp *Span) ExtractDecisionContext() *Event {
+	decisionCtx := sp.Event
+	dataSize := sp.DataSize
+	if dataSize == 0 {
+		dataSize = sp.GetDataSize()
+	}
+	decisionCtx.Data = map[string]interface{}{
+		"trace_id":                     sp.TraceID,
+		"meta.refinery.root":           sp.IsRoot,
+		"meta.refinery.min_span":       true,
+		"meta.annotation_type":         sp.AnnotationType(),
+		"meta.refinery.span_data_size": dataSize,
+	}
+	return &decisionCtx
 }
 
 // GetDataSize computes the size of the Data element of the Span.
@@ -194,6 +238,12 @@ type Span struct {
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
 	total := 0
+
+	if sp.IsDecisionSpan() {
+		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
+			return v.(int)
+		}
+	}
 	// the data types we should be getting from JSON are:
 	// float64, int64, bool, string, []byte
 	for _, v := range sp.Data {
