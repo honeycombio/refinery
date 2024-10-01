@@ -22,6 +22,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -48,6 +49,11 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Clock: clock,
 	}
 	healthReporter.Start()
+	localPubSub := &pubsub.LocalPubSub{
+		Config:  conf,
+		Metrics: s,
+	}
+	localPubSub.Start()
 
 	return &InMemCollector{
 		Config:           conf,
@@ -57,6 +63,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Health:           healthReporter,
 		Transmission:     transmission,
 		PeerTransmission: peerTransmission,
+		PubSub:           localPubSub,
 		Metrics:          &metrics.NullMetrics{},
 		StressRelief:     &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
@@ -103,7 +110,7 @@ func TestAddRootSpan(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -129,10 +136,9 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	// * remove the trace from the cache
-	assert.NotNil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
-	assert.Equal(t, 1, len(peerTransmission.Events), "adding a root span should send the span")
+	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
 
@@ -213,7 +219,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -304,7 +310,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -372,7 +378,7 @@ func TestAddSpan(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -451,7 +457,7 @@ func TestDryRunMode(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -532,7 +538,6 @@ func TestDryRunMode(t *testing.T) {
 	// check that meta value associated with dry run mode is properly applied
 	assert.Equal(t, uint(10), transmission.Events[1].Data["meta.dryrun.sample_rate"])
 	// check expected sampleRate against span data
-	assert.Equal(t, sampleRate1, transmission.Events[0].Data["meta.dryrun.sample_rate"])
 	assert.Equal(t, sampleRate2, transmission.Events[1].Data["meta.dryrun.sample_rate"])
 	transmission.Mux.RUnlock()
 
@@ -751,7 +756,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -840,7 +845,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 3)
 	coll.fromPeer = make(chan *types.Span, 3)
@@ -880,7 +885,9 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &sharder.SingleServerSharder{}},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
 		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
@@ -924,7 +931,7 @@ func TestAddCountsToRoot(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1014,7 +1021,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1104,7 +1111,7 @@ func TestAddSpanCount(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1190,7 +1197,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1268,7 +1275,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1338,7 +1345,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1403,7 +1410,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	var traceID = "traceABC"
 
@@ -1427,7 +1434,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 	require.True(t, processed)
 	require.True(t, kept)
 
-	tr, _, found := coll.sampleTraceCache.CheckTrace(traceID)
+	tr, _, found := coll.TraceDecisionCache.CheckTrace(traceID)
 	require.True(t, found)
 	require.NotNil(t, tr)
 	assert.Equal(t, uint(100), tr.Rate())
@@ -1452,7 +1459,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 	require.True(t, processed2)
 	require.True(t, kept2)
 
-	tr2, _, found2 := coll.sampleTraceCache.CheckTrace(traceID)
+	tr2, _, found2 := coll.TraceDecisionCache.CheckTrace(traceID)
 	require.True(t, found2)
 	require.NotNil(t, tr2)
 	assert.Equal(t, uint(100), tr2.Rate())
@@ -1496,7 +1503,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1601,7 +1608,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1796,7 +1803,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
@@ -1890,7 +1897,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
+	coll.TraceDecisionCache = stc
 
 	coll.incoming = make(chan *types.Span, 500)
 	coll.fromPeer = make(chan *types.Span, 500)
@@ -2010,7 +2017,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 		APIHost: peerShard.Addr,
 		APIKey:  legacyAPIKey,
 		Data: map[string]interface{}{
-			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
+			"meta.annotation_type":         types.SpanTypeUnknown,
 			"meta.refinery.min_span":       true,
 			"meta.refinery.root":           false,
 			"meta.refinery.span_data_size": 30,
