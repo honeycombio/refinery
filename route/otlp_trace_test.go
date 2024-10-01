@@ -498,6 +498,57 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 0, len(mockTransmission.Events))
 		mockTransmission.Flush()
 	})
+
+	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
+		md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "ds", "user-agent": "my-user-agent"})
+		ctx := metadata.NewIncomingContext(context.Background(), md)
+
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		traceServer := NewTraceServer(router)
+		_, err := traceServer.Export(ctx, req)
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		event := mockTransmission.Events[0]
+		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		mockTransmission.Flush()
+	})
+
+	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		if err != nil {
+			t.Error(err)
+		}
+
+		request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+		request.Header = http.Header{}
+		request.Header.Set("content-type", "application/json")
+		request.Header.Set("x-honeycomb-team", legacyAPIKey)
+		request.Header.Set("x-honeycomb-dataset", "dataset")
+		request.Header.Set("user-agent", "my-user-agent")
+
+		w := httptest.NewRecorder()
+		router.postOTLPTrace(w, request)
+
+		assert.Equal(t, 2, len(mockTransmission.Events))
+		event := mockTransmission.Events[0]
+		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		mockTransmission.Flush()
+	})
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
