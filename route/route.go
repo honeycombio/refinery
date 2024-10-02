@@ -383,7 +383,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
-	addIncomingUserAgentFromRequest(ev, req)
+	addIncomingUserAgent(ev, getUserAgentFromRequest(req))
 
 	reqID := req.Context().Value(types.RequestIDContextKey{})
 	err = r.processEvent(ev, reqID)
@@ -479,6 +479,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
 
+	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
 		ev := &types.Event{
@@ -492,7 +493,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			Data:        bev.Data,
 		}
 
-		addIncomingUserAgentFromRequest(ev, req)
+		addIncomingUserAgent(ev, userAgent)
 		err = r.processEvent(ev, reqID)
 
 		var resp BatchResponse
@@ -1057,10 +1058,8 @@ func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
 	return ""
 }
 
-func addIncomingUserAgentFromRequest(ev *types.Event, req *http.Request) {
-	if userAgent := req.Header.Get("User-Agent"); userAgent != "" {
-		addIncomingUserAgent(ev, userAgent)
-	}
+func getUserAgentFromRequest(req *http.Request) string {
+	return req.Header.Get("User-Agent")
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
