@@ -484,6 +484,13 @@ func TestOTLPHandler(t *testing.T) {
 			ReceiveKeys:          []string{},
 			AcceptOnlyListedKeys: true,
 		}
+		defer func() {
+			router.Config.(*config.MockConfig).GetAccessKeyConfigVal = config.AccessKeyConfig{
+				ReceiveKeys:          []string{legacyAPIKey},
+				AcceptOnlyListedKeys: false,
+			}
+		}()
+
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				ScopeSpans: []*trace.ScopeSpans{{
