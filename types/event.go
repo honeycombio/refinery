@@ -241,8 +241,14 @@ func (sp *Span) GetDataSize() int {
 
 	if sp.IsDecisionSpan() {
 		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
-			return v.(int)
+			switch value := v.(type) {
+			case int64:
+				return int(value)
+			case uint64:
+				return int(value)
+			}
 		}
+		return 0
 	}
 	// the data types we should be getting from JSON are:
 	// float64, int64, bool, string, []byte

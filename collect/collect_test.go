@@ -155,6 +155,30 @@ func TestAddRootSpan(t *testing.T) {
 	assert.Equal(t, 2, len(transmission.Events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	transmission.Mux.RUnlock()
+
+	decisionSpanTraceID := "decision_root_span"
+	span = &types.Span{
+		TraceID: decisionSpanTraceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
+			Data: map[string]interface{}{
+				"meta.refinery.min_span": true,
+			},
+		},
+		IsRoot: true,
+	}
+
+	coll.AddSpanFromPeer(span)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	// adding one root decision span with no parent ID should:
+	// * create the trace in the cache
+	// * send the trace
+	// * remove the trace from the cache
+	assert.Nil(t, coll.getFromCache(decisionSpanTraceID), "after sending the span, it should be removed from the cache")
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "adding a root decision span should send the trace but not the decision span itself")
+	transmission.Mux.RUnlock()
 }
 
 // #490, SampleRate getting stomped could cause confusion if sampling was
@@ -1100,7 +1124,19 @@ func TestAddSpanCount(t *testing.T) {
 			APIKey: legacyAPIKey,
 		},
 	}
+	decisionSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id":        "unused",
+				"meta.refinery.min_span": true,
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
 	coll.AddSpanFromPeer(span)
+	coll.AddSpanFromPeer(decisionSpan)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
 	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
@@ -1122,7 +1158,7 @@ func TestAddSpanCount(t *testing.T) {
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, int64(3), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
 	transmission.Mux.RUnlock()
 }
 
@@ -1915,4 +1951,82 @@ func TestBigTracesGoEarly(t *testing.T) {
 	assert.EqualValues(t, 2, transmission.Events[spanlimit].SampleRate, "the late root span should sample rate set")
 	assert.Equal(t, "trace_send_late_span", transmission.Events[spanlimit].Data["meta.refinery.send_reason"], "send reason should indicate span count exceeded")
 	transmission.Mux.RUnlock()
+}
+
+func TestCreateDecisionSpan(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	mockSampler := &sample.DynamicSampler{
+		Config: &config.DynamicSamplerConfig{
+			SampleRate: 1,
+			FieldList:  []string{"http.status_code", "test"},
+		}, Logger: coll.Logger, Metrics: coll.Metrics,
+	}
+	mockSampler.Start()
+
+	coll.datasetSamplers = map[string]sample.Sampler{
+		"aoeu": mockSampler,
+	}
+
+	traceID1 := "trace1"
+	peerShard := &sharder.TestShard{Addr: "peer-address"}
+
+	nonrootSpan := &types.Span{
+		TraceID: traceID1,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id":        "unused",
+				"http.status_code":       200,
+				"test":                   1,
+				"should-not-be-included": 123,
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+
+	trace := &types.Trace{
+		TraceID: traceID1,
+		Dataset: "aoeu",
+		APIKey:  legacyAPIKey,
+	}
+	ds := coll.createDecisionSpan(nonrootSpan, trace, peerShard)
+
+	expected := &types.Event{
+		Dataset: "aoeu",
+		APIHost: peerShard.Addr,
+		APIKey:  legacyAPIKey,
+		Data: map[string]interface{}{
+			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
+			"meta.refinery.min_span":       true,
+			"meta.refinery.root":           false,
+			"meta.refinery.span_data_size": 30,
+			"trace_id":                     traceID1,
+
+			"http.status_code": 200,
+			"test":             1,
+		},
+	}
+
+	assert.EqualValues(t, expected, ds)
+
+	rootSpan := nonrootSpan
+	rootSpan.IsRoot = true
+
+	ds = coll.createDecisionSpan(rootSpan, trace, peerShard)
+	expected.Data["meta.refinery.root"] = true
+	assert.EqualValues(t, expected, ds)
 }
