@@ -383,7 +383,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
-	addIncomingUserAgent(ev, req)
+	addIncomingUserAgentFromRequest(ev, req)
 
 	reqID := req.Context().Value(types.RequestIDContextKey{})
 	err = r.processEvent(ev, reqID)
@@ -492,7 +492,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			Data:        bev.Data,
 		}
 
-		addIncomingUserAgent(ev, req)
+		addIncomingUserAgentFromRequest(ev, req)
 		err = r.processEvent(ev, reqID)
 
 		var resp BatchResponse
@@ -543,7 +543,7 @@ func (router *Router) processOTLPRequest(
 				Timestamp:   ev.Timestamp,
 				Data:        ev.Attributes,
 			}
-			event.Data["meta.refinery.incoming_user_agent"] = incomingUserAgent
+			addIncomingUserAgent(event, incomingUserAgent)
 			if err = router.processEvent(event, requestID); err != nil {
 				router.Logger.Error().Logf("Error processing event: " + err.Error())
 			}
@@ -1057,8 +1057,14 @@ func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
 	return ""
 }
 
-func addIncomingUserAgent(ev *types.Event, req *http.Request) {
+func addIncomingUserAgentFromRequest(ev *types.Event, req *http.Request) {
 	if userAgent := req.Header.Get("User-Agent"); userAgent != "" {
+		addIncomingUserAgent(ev, userAgent)
+	}
+}
+
+func addIncomingUserAgent(ev *types.Event, userAgent string) {
+	if userAgent != "" {
 		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
 	}
 }
