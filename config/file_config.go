@@ -306,7 +306,7 @@ type CollectionConfig struct {
 	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
 	DisableRedistribution bool       `yaml:"DisableRedistribution"`
 	ShutdownDelay         Duration   `yaml:"ShutdownDelay" default:"15s"`
-	ForceTraceLocality    bool       `yaml:"ForceTraceLocality"`
+	EnableTraceLocality   bool       `yaml:"EnableTraceLocality"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.

@@ -33,6 +33,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -104,7 +105,7 @@ func defaultConfig(basePort int) *config.MockConfig {
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
-		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000, ShutdownDelay: config.Duration(1 * time.Second), ForceTraceLocality: true},
+		GetCollectionConfigVal:   config.CollectionConfig{CacheCapacity: 10000, ShutdownDelay: config.Duration(1 * time.Second), EnableTraceLocality: true},
 		TraceIdFieldNames:        []string{"trace.trace_id"},
 		ParentIdFieldNames:       []string{"trace.parent_id"},
 		SampleCache:              config.SampleCacheConfig{KeptSize: 10000, DroppedSize: 100000, SizeCheckInterval: config.Duration(10 * time.Second)},
@@ -736,7 +737,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 		}
 		cfg := defaultConfig(basePort)
 		collectionCfg := cfg.GetCollectionConfigVal
-		collectionCfg.ForceTraceLocality = false
+		collectionCfg.EnableTraceLocality = false
 		cfg.GetCollectionConfigVal = collectionCfg
 
 		apps[i], graph = newStartedApp(t, senders[i], peerSenders[i], peers, cfg)

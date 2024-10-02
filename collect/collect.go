@@ -424,7 +424,7 @@ func (i *InMemCollector) redistributeTraces() {
 		newTarget := i.Sharder.WhichShard(trace.TraceID)
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
-			if !i.Config.GetCollectionConfig().ForceTraceLocality {
+			if !i.Config.GetCollectionConfig().EnableTraceLocality {
 				// Drop all proxy spans since peers will resend them
 				trace.RemoveDecisionSpans()
 			}
@@ -436,7 +436,7 @@ func (i *InMemCollector) redistributeTraces() {
 				continue
 			}
 
-			if !i.Config.GetCollectionConfig().ForceTraceLocality {
+			if !i.Config.GetCollectionConfig().EnableTraceLocality {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
 				i.PeerTransmission.EnqueueEvent(dc)
 				continue
@@ -553,7 +553,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 
 	// Figure out if we should handle this span locally or pass on to a peer
 	var spanForwarded bool
-	if !i.Config.GetCollectionConfig().ForceTraceLocality {
+	if !i.Config.GetCollectionConfig().EnableTraceLocality {
 		// if this trace doesn't belong to us, we should forward a decision span to its decider
 		targetShard := i.Sharder.WhichShard(trace.ID())
 		if !targetShard.Equals(i.Sharder.MyShard()) && !sp.IsDecisionSpan() {
