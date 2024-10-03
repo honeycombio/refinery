@@ -204,12 +204,12 @@ type LRUCache struct {
 
 var _ Cache = (*LRUCache)(nil)
 
-func NewLRUCache(capacity int, met metrics.Metrics, logger logger.Logger) (*LRUCache, error) {
+func NewLRUCache(capacity int, metrics metrics.Metrics, logger logger.Logger) (*LRUCache, error) {
 	logger.Debug().Logf("Starting LRUCache")
 	defer func() { logger.Debug().Logf("Finished starting LRUCache") }()
 
 	for _, metadata := range collectCacheMetrics {
-		met.Register(metadata)
+		metrics.Register(metadata)
 	}
 
 	if capacity == 0 {
@@ -222,6 +222,8 @@ func NewLRUCache(capacity int, met metrics.Metrics, logger logger.Logger) (*LRUC
 	}
 
 	return &LRUCache{
+		Metrics:  metrics,
+		Logger:   logger,
 		capacity: capacity,
 		cache:    cache,
 	}, nil
