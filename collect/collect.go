@@ -520,7 +520,6 @@ func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
 				}).Logf("error making decision for trace: %s", err.Error())
 				continue
 			}
-			fmt.Printf("failed? %+v\n", td)
 			i.send(t, td)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
@@ -1218,6 +1217,7 @@ func (i *InMemCollector) processTraceDecision(msg string) {
 	if err != nil {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
 	}
+	toDelete := generics.NewSet[string]()
 	for _, td := range tds {
 		trace := i.cache.Get(td.TraceID)
 		// if we don't have the trace in the cache, we don't need to do anything
@@ -1225,11 +1225,14 @@ func (i *InMemCollector) processTraceDecision(msg string) {
 			i.Logger.Debug().Logf("trace not found in cache for trace decision")
 			return
 		}
+		toDelete.Add(td.TraceID)
 
 		i.TraceDecisionCache.Record(trace, td.Kept, td.KeptReason)
 
 		i.send(trace, &td)
 	}
+
+	i.cache.RemoveTraces(toDelete)
 }
 
 func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
