@@ -9,8 +9,6 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
-
-	bigcache "github.com/allegro/bigcache"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
@@ -24,6 +22,9 @@ type Cache interface {
 
 	// GetCacheCapacity returns the number of traces that can be stored in the cache
 	GetCacheCapacity() int
+
+	// GetUsedBytes returns the number of bytes currently used by the cache
+	GetUsedBytes() int
 
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
@@ -86,6 +87,17 @@ func NewInMemCache(
 
 func (d *DefaultInMemCache) GetCacheCapacity() int {
 	return len(d.traceBuffer)
+}
+
+func (d *DefaultInMemCache) GetUsedBytes() int {
+	count := 0
+	buffer := &bytes.Buffer{}
+	for _, trace := range d.traceBuffer {
+		binary.Write(buffer, binary.BigEndian, trace)
+		count += len(buffer.Bytes())
+	}
+
+	return count
 }
 
 // looks for an insertion point by trying the next N slots in the circular buffer
@@ -200,7 +212,13 @@ type TraceCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
-	cache *bigcache.BigCache
+	maxSizeBytes int
+	cache        map[string]CacheItem
+}
+
+type CacheItem struct {
+	Trace    *types.Trace
+	NumBytes int
 }
 
 var _ Cache = (*TraceCache)(nil)
@@ -209,14 +227,11 @@ func NewTraceCache(maxSizeBytes int, metrics metrics.Metrics, logger logger.Logg
 	logger.Debug().Logf("Starting TraceCache")
 	defer func() { logger.Debug().Logf("Finished starting TraceCache") }()
 
-	config := bigcache.DefaultConfig(0)
-	config.HardMaxCacheSize = maxSizeBytes
-	cache, _ := bigcache.NewBigCache(config)
-
 	return &TraceCache{
-		Metrics: metrics,
-		Logger:  logger,
-		cache:   cache,
+		Metrics:      metrics,
+		Logger:       logger,
+		maxSizeBytes: maxSizeBytes,
+		cache:        make(map[string]CacheItem),
 	}
 }
 
@@ -236,43 +251,37 @@ func (u *TraceCache) deserializeTrace(data []byte) *types.Trace {
 }
 
 func (u *TraceCache) GetCacheCapacity() int {
-	return u.cache.Len()
+	return len(u.cache)
+}
+
+func (u *TraceCache) GetUsedBytes() int {
+	return u.maxSizeBytes
 }
 
 func (u *TraceCache) Get(traceID string) *types.Trace {
-	if data, err := u.cache.Get(traceID); err == nil {
-		return u.deserializeTrace(data)
-	}
-	return nil
+	return u.cache[traceID].Trace
 }
 
 func (u *TraceCache) GetAll() []*types.Trace {
-	traces := make([]*types.Trace, 0)
-	iterator := u.cache.Iterator()
-	for iterator.SetNext() {
-		current, _ := iterator.Value()
-		traces = append(traces, u.deserializeTrace(current.Value()))
+	traces := make([]*types.Trace, 0, len(u.cache))
+	for _, trace := range u.cache {
+		traces = append(traces, trace.Trace)
 	}
 	return traces
 }
 
 func (u *TraceCache) Set(trace *types.Trace) *types.Trace {
-	data := u.serializeTrace(trace)
-	if err := u.cache.Set(trace.TraceID, data); err != nil {
-		u.Logger.Error().Logf("Error setting trace in cache: %v", err)
-	}
+	sizeBytes := len(u.serializeTrace(trace))
+	u.cache[trace.TraceID] = CacheItem{Trace: trace, NumBytes: sizeBytes}
 	return nil
 }
 
 func (u *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
-	expired := make([]*types.Trace, 0)
-	iterator := u.cache.Iterator()
-	for iterator.SetNext() {
-		current, _ := iterator.Value()
-		trace := u.deserializeTrace(current.Value())
-		if now.After(trace.SendBy) {
-			u.cache.Delete(trace.TraceID)
-			expired = append(expired, trace)
+	expired := make([]*types.Trace, 0, 0)
+	for traceID, item := range u.cache {
+		if now.After(item.Trace.SendBy) {
+			delete(u.cache, traceID)
+			expired = append(expired, item.Trace)
 		}
 	}
 	return expired
@@ -280,6 +289,6 @@ func (u *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 
 func (u *TraceCache) RemoveTraces(toDelete generics.Set[string]) {
 	for _, traceID := range toDelete.Members() {
-		u.cache.Delete(traceID)
+		delete(u.cache, traceID)
 	}
 }
