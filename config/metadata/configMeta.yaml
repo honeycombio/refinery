@@ -1286,6 +1286,16 @@ groups:
           This value should be set to a bit less than the normal timeout period
           for shutting down without forcibly terminating the process.
 
+      - name: EnableTraceLocality
+        type: bool
+        valuetype: nondefault
+        firstversion: v2.9
+        default: false
+        reload: true
+        summary: controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
+        description: >
+          If `true`, Refinery's will route all spans that belongs to the same trace to a single peer.
+
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >
