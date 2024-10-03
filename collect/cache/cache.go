@@ -196,55 +196,57 @@ func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	}
 }
 
-type UsageCache struct {
+type TraceCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
 	cache *bigcache.BigCache
 }
 
-var _ Cache = (*UsageCache)(nil)
+var _ Cache = (*TraceCache)(nil)
 
-func NewUsageCache(maxSizeBytes int, metrics metrics.Metrics, logger logger.Logger) *UsageCache {
-	logger.Debug().Logf("Starting UsageCache")
-	defer func() { logger.Debug().Logf("Finished starting UsageCache") }()
+func NewTraceCache(maxSizeBytes int, metrics metrics.Metrics, logger logger.Logger) *TraceCache {
+	logger.Debug().Logf("Starting TraceCache")
+	defer func() { logger.Debug().Logf("Finished starting TraceCache") }()
 
 	config := bigcache.DefaultConfig(0)
 	config.HardMaxCacheSize = maxSizeBytes
 	cache, _ := bigcache.NewBigCache(config)
 
-	return &UsageCache{
+	return &TraceCache{
 		Metrics: metrics,
 		Logger:  logger,
 		cache:   cache,
 	}
 }
 
-func (u *UsageCache) serializeTrace(trace *types.Trace) []byte {
+func (u *TraceCache) serializeTrace(trace *types.Trace) []byte {
+	// TODO: use a sync.pool?
 	buffer := &bytes.Buffer{}
 	binary.Write(buffer, binary.BigEndian, trace)
 	return buffer.Bytes()
 }
 
-func (u *UsageCache) deserializeTrace(data []byte) *types.Trace {
+func (u *TraceCache) deserializeTrace(data []byte) *types.Trace {
+	// TODO: use a sync.pool?
 	reader := bytes.NewReader(data)
 	var trace types.Trace
 	binary.Read(reader, binary.BigEndian, &trace)
 	return &trace
 }
 
-func (u *UsageCache) GetCacheCapacity() int {
+func (u *TraceCache) GetCacheCapacity() int {
 	return u.cache.Len()
 }
 
-func (u *UsageCache) Get(traceID string) *types.Trace {
+func (u *TraceCache) Get(traceID string) *types.Trace {
 	if data, err := u.cache.Get(traceID); err == nil {
 		return u.deserializeTrace(data)
 	}
 	return nil
 }
 
-func (u *UsageCache) GetAll() []*types.Trace {
+func (u *TraceCache) GetAll() []*types.Trace {
 	traces := make([]*types.Trace, 0)
 	iterator := u.cache.Iterator()
 	for iterator.SetNext() {
@@ -254,7 +256,7 @@ func (u *UsageCache) GetAll() []*types.Trace {
 	return traces
 }
 
-func (u *UsageCache) Set(trace *types.Trace) *types.Trace {
+func (u *TraceCache) Set(trace *types.Trace) *types.Trace {
 	data := u.serializeTrace(trace)
 	if err := u.cache.Set(trace.TraceID, data); err != nil {
 		u.Logger.Error().Logf("Error setting trace in cache: %v", err)
@@ -262,7 +264,7 @@ func (u *UsageCache) Set(trace *types.Trace) *types.Trace {
 	return nil
 }
 
-func (u *UsageCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+func (u *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	expired := make([]*types.Trace, 0)
 	iterator := u.cache.Iterator()
 	for iterator.SetNext() {
@@ -276,7 +278,7 @@ func (u *UsageCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	return expired
 }
 
-func (u *UsageCache) RemoveTraces(toDelete generics.Set[string]) {
+func (u *TraceCache) RemoveTraces(toDelete generics.Set[string]) {
 	for _, traceID := range toDelete.Members() {
 		u.cache.Delete(traceID)
 	}
