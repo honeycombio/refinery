@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"bytes"
+	"encoding/binary"
 	"time"
 
 	"github.com/honeycombio/refinery/generics"
@@ -8,7 +10,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
 
-	lru "github.com/hashicorp/golang-lru/v2"
+	bigcache "github.com/allegro/bigcache"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
@@ -194,82 +196,88 @@ func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	}
 }
 
-type LRUCache struct {
+type UsageCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
-	capacity int
-	cache    *lru.Cache[string, *types.Trace]
+	cache *bigcache.BigCache
 }
 
-var _ Cache = (*LRUCache)(nil)
+var _ Cache = (*UsageCache)(nil)
 
-func NewLRUCache(capacity int, metrics metrics.Metrics, logger logger.Logger) (*LRUCache, error) {
-	logger.Debug().Logf("Starting LRUCache")
-	defer func() { logger.Debug().Logf("Finished starting LRUCache") }()
+func NewUsageCache(maxSizeBytes int, metrics metrics.Metrics, logger logger.Logger) *UsageCache {
+	logger.Debug().Logf("Starting UsageCache")
+	defer func() { logger.Debug().Logf("Finished starting UsageCache") }()
 
-	for _, metadata := range collectCacheMetrics {
-		metrics.Register(metadata)
-	}
+	config := bigcache.DefaultConfig(0)
+	config.HardMaxCacheSize = maxSizeBytes
+	cache, _ := bigcache.NewBigCache(config)
 
-	if capacity == 0 {
-		capacity = DefaultInMemCacheCapacity
-	}
-
-	cache, err := lru.New[string, *types.Trace](capacity)
-	if err != nil {
-		return nil, err
-	}
-
-	return &LRUCache{
-		Metrics:  metrics,
-		Logger:   logger,
-		capacity: capacity,
-		cache:    cache,
-	}, nil
-}
-
-// Get attempts to retrieve a trace from the cache.
-func (l *LRUCache) Get(traceID string) *types.Trace {
-	trace, _ := l.cache.Get(traceID)
-	return trace
-}
-
-// GetAll returns all the traces in the cache.
-func (l *LRUCache) GetAll() []*types.Trace {
-	return l.cache.Values()
-}
-
-// GetCacheCapacity returns the maximum number of traces that can be stored in the cache.
-func (l *LRUCache) GetCacheCapacity() int {
-	return l.capacity
-}
-
-// RemoveTraces attempts to remove a set of traces from the cache.
-func (l *LRUCache) RemoveTraces(toDelete generics.Set[string]) {
-	for _, traceID := range toDelete.Members() {
-		l.cache.Remove(traceID)
+	return &UsageCache{
+		Metrics: metrics,
+		Logger:  logger,
+		cache:   cache,
 	}
 }
 
-// Set adds a trace to the cache. If the cache is full, it will remove the oldest trace and return it.
-func (l *LRUCache) Set(trace *types.Trace) *types.Trace {
-	var old *types.Trace = nil
-	if l.cache.Len() == l.capacity {
-		_, old, _ = l.cache.RemoveOldest()
-	}
-	l.cache.Add(trace.TraceID, trace)
-	return old
+func (u *UsageCache) serializeTrace(trace *types.Trace) []byte {
+	buffer := &bytes.Buffer{}
+	binary.Write(buffer, binary.BigEndian, trace)
+	return buffer.Bytes()
 }
 
-// TakeExpiredTraces removes and returns all traces that have expired.
-func (l *LRUCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+func (u *UsageCache) deserializeTrace(data []byte) *types.Trace {
+	reader := bytes.NewReader(data)
+	var trace types.Trace
+	binary.Read(reader, binary.BigEndian, &trace)
+	return &trace
+}
+
+func (u *UsageCache) GetCacheCapacity() int {
+	return u.cache.Len()
+}
+
+func (u *UsageCache) Get(traceID string) *types.Trace {
+	if data, err := u.cache.Get(traceID); err == nil {
+		return u.deserializeTrace(data)
+	}
+	return nil
+}
+
+func (u *UsageCache) GetAll() []*types.Trace {
+	traces := make([]*types.Trace, 0)
+	iterator := u.cache.Iterator()
+	for iterator.SetNext() {
+		current, _ := iterator.Value()
+		traces = append(traces, u.deserializeTrace(current.Value()))
+	}
+	return traces
+}
+
+func (u *UsageCache) Set(trace *types.Trace) *types.Trace {
+	data := u.serializeTrace(trace)
+	if err := u.cache.Set(trace.TraceID, data); err != nil {
+		u.Logger.Error().Logf("Error setting trace in cache: %v", err)
+	}
+	return nil
+}
+
+func (u *UsageCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	expired := make([]*types.Trace, 0)
-	for _, trace := range l.cache.Values() {
+	iterator := u.cache.Iterator()
+	for iterator.SetNext() {
+		current, _ := iterator.Value()
+		trace := u.deserializeTrace(current.Value())
 		if now.After(trace.SendBy) {
-			l.cache.Remove(trace.TraceID)
+			u.cache.Delete(trace.TraceID)
 			expired = append(expired, trace)
 		}
 	}
 	return expired
+}
+
+func (u *UsageCache) RemoveTraces(toDelete generics.Set[string]) {
+	for _, traceID := range toDelete.Members() {
+		u.cache.Delete(traceID)
+	}
 }

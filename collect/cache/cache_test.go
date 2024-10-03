@@ -158,8 +158,11 @@ func BenchmarkCache_Set(b *testing.B) {
 		}
 	})
 
-	c, _ = NewLRUCache(100000, metrics, logger)
-	b.Run("LRUCache", func(b *testing.B) {
+	c = NewUsageCache(1024*1024, metrics, logger)
+	for _, trace := range traces {
+		c.Set(trace)
+	}
+	b.Run("UsageCache", func(b *testing.B) {
 		for _, trace := range traces {
 			c.Set(trace)
 		}
@@ -185,11 +188,11 @@ func BenchmarkCache_Get(b *testing.B) {
 		}
 	})
 
-	c, _ = NewLRUCache(100000, metrics, logger)
+	c = NewUsageCache(1024*1024, metrics, logger)
 	for _, trace := range traces {
 		c.Set(trace)
 	}
-	b.Run("LRUCache", func(b *testing.B) {
+	b.Run("UsageCache", func(b *testing.B) {
 		for traceID, _ := range traces {
 			c.Get(traceID)
 		}
@@ -215,11 +218,11 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 		}
 	})
 
-	c, _ = NewLRUCache(100000, metrics, logger)
+	c = NewUsageCache(1024*1024, metrics, logger)
 	for _, trace := range traces {
 		c.Set(trace)
 	}
-	b.Run("LRUCache", func(b *testing.B) {
+	b.Run("UsageCache", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
 		}
@@ -247,11 +250,11 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 		c.RemoveTraces(deletes)
 	})
 
-	c, _ = NewLRUCache(100000, metrics, logger)
+	c = NewUsageCache(1024*1024, metrics, logger)
 	for _, trace := range traces {
 		c.Set(trace)
 	}
-	b.Run("LRUCache", func(b *testing.B) {
+	b.Run("UsageCache", func(b *testing.B) {
 		c.RemoveTraces(deletes)
 	})
 }
