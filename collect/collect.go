@@ -1272,7 +1272,7 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*T
 
 	// TODO: if we only send trace ids for dropped traces
 	// then dryrun mode won't work
-	if !shouldSend {
+	if !shouldSend && !i.Config.GetCollectionConfig().EnableTraceLocality {
 		select {
 		case i.droppedDecisions <- trace.ID():
 		default:
@@ -1314,29 +1314,31 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*T
 		HasRoot:         hasRoot,
 	}
 
-	decisionMsg, err := newKeptDecisionMessage(td)
-	if err != nil {
-		i.Logger.Error().WithFields(map[string]interface{}{
-			"trace_id": trace.TraceID,
-			"kept":     shouldSend,
-			"reason":   reason,
-			"sampler":  key,
-			"selector": samplerSelector,
-			"error":    err.Error(),
-		}).Logf("Failed to marshal trace decision")
-		return nil, err
-	}
-	err = i.PubSub.Publish(context.Background(), traceDecisionKeptTopic, decisionMsg)
-	if err != nil {
-		i.Logger.Error().WithFields(map[string]interface{}{
-			"trace_id": trace.TraceID,
-			"kept":     shouldSend,
-			"reason":   reason,
-			"sampler":  key,
-			"selector": samplerSelector,
-			"error":    err.Error(),
-		}).Logf("Failed to publish trace decision")
-		return nil, err
+	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+		decisionMsg, err := newKeptDecisionMessage(td)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id": trace.TraceID,
+				"kept":     shouldSend,
+				"reason":   reason,
+				"sampler":  key,
+				"selector": samplerSelector,
+				"error":    err.Error(),
+			}).Logf("Failed to marshal trace decision")
+			return nil, err
+		}
+		err = i.PubSub.Publish(context.Background(), traceDecisionKeptTopic, decisionMsg)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id": trace.TraceID,
+				"kept":     shouldSend,
+				"reason":   reason,
+				"sampler":  key,
+				"selector": samplerSelector,
+				"error":    err.Error(),
+			}).Logf("Failed to publish trace decision")
+			return nil, err
+		}
 	}
 
 	return &td, nil
