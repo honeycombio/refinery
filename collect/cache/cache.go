@@ -7,6 +7,8 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
@@ -190,4 +192,82 @@ func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 			}
 		}
 	}
+}
+
+type LRUCache struct {
+	Metrics metrics.Metrics
+	Logger  logger.Logger
+
+	capacity int
+	cache    *lru.Cache[string, *types.Trace]
+}
+
+var _ Cache = (*LRUCache)(nil)
+
+func NewLRUCache(capacity int, met metrics.Metrics, logger logger.Logger) (*LRUCache, error) {
+	logger.Debug().Logf("Starting LRUCache")
+	defer func() { logger.Debug().Logf("Finished starting LRUCache") }()
+
+	for _, metadata := range collectCacheMetrics {
+		met.Register(metadata)
+	}
+
+	if capacity == 0 {
+		capacity = DefaultInMemCacheCapacity
+	}
+
+	cache, err := lru.New[string, *types.Trace](capacity)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LRUCache{
+		capacity: capacity,
+		cache:    cache,
+	}, nil
+}
+
+// Get implements Cache.
+func (l *LRUCache) Get(traceID string) *types.Trace {
+	trace, _ := l.cache.Get(traceID)
+	return trace
+}
+
+// GetAll implements Cache.
+func (l *LRUCache) GetAll() []*types.Trace {
+	return l.cache.Values()
+}
+
+// GetCacheCapacity implements Cache.
+func (l *LRUCache) GetCacheCapacity() int {
+	return l.capacity
+}
+
+// RemoveTraces implements Cache.
+func (l *LRUCache) RemoveTraces(toDelete generics.Set[string]) {
+	for _, traceID := range toDelete.Members() {
+		l.cache.Remove(traceID)
+	}
+}
+
+// Set implements Cache.
+func (l *LRUCache) Set(trace *types.Trace) *types.Trace {
+	var old *types.Trace = nil
+	if l.cache.Len() == l.capacity {
+		_, old, _ = l.cache.RemoveOldest()
+	}
+	l.cache.Add(trace.TraceID, trace)
+	return old
+}
+
+// TakeExpiredTraces implements Cache.
+func (l *LRUCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+	expired := make([]*types.Trace, 0)
+	for _, trace := range l.cache.Values() {
+		if now.After(trace.SendBy) {
+			l.cache.Remove(trace.TraceID)
+			expired = append(expired, trace)
+		}
+	}
+	return expired
 }
