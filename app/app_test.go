@@ -780,7 +780,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 			"meta.refinery.min_span":       true,
 			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
 			"meta.refinery.root":           false,
-			"meta.refinery.span_data_size": 157,
+			"meta.refinery.span_data_size": 175,
 		},
 		Metadata: map[string]any{
 			"api_host":    "http://localhost:17001",
