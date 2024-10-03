@@ -600,23 +600,24 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		}
 	}
 
-	// TODO: only do this if the span proxy feature is disabled
-	// Figure out if we should handle this span locally or pass on to a peer
-	targetShard := r.Sharder.WhichShard(traceID)
-	if !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
-		debugLog.
-			WithString("peer", targetShard.GetAddress()).
-			WithField("isprobe", isProbe).
-			Logf("Sending span from batch to peer")
+	if r.Config.GetCollectionConfig().EnableTraceLocality {
+		// Figure out if we should handle this span locally or pass on to a peer
+		targetShard := r.Sharder.WhichShard(traceID)
+		if !targetShard.Equals(r.Sharder.MyShard()) {
+			r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
+			debugLog.
+				WithString("peer", targetShard.GetAddress()).
+				WithField("isprobe", isProbe).
+				Logf("Sending span from batch to peer")
 
-		ev.APIHost = targetShard.GetAddress()
+			ev.APIHost = targetShard.GetAddress()
 
-		// Unfortunately this doesn't tell us if the event was actually
-		// enqueued; we need to watch the response channel to find out, at
-		// which point it's too late to tell the client.
-		r.PeerTransmission.EnqueueEvent(ev)
-		return nil
+			// Unfortunately this doesn't tell us if the event was actually
+			// enqueued; we need to watch the response channel to find out, at
+			// which point it's too late to tell the client.
+			r.PeerTransmission.EnqueueEvent(ev)
+			return nil
+		}
 	}
 
 	if isProbe {
@@ -630,7 +631,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)
 	} else {
-		// TODO: again, only do this if span proxy is disabled
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
