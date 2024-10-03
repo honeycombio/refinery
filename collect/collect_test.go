@@ -22,6 +22,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -29,6 +30,8 @@ import (
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+
+var peerTraceIDs = []string{"trace-1", "trace-2", "trace-3"}
 
 func newCache() (cache.TraceSentCache, error) {
 	cfg := config.SampleCacheConfig{
@@ -48,6 +51,11 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Clock: clock,
 	}
 	healthReporter.Start()
+	localPubSub := &pubsub.LocalPubSub{
+		Config:  conf,
+		Metrics: s,
+	}
+	localPubSub.Start()
 
 	return &InMemCollector{
 		Config:           conf,
@@ -57,6 +65,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Health:           healthReporter,
 		Transmission:     transmission,
 		PeerTransmission: peerTransmission,
+		PubSub:           localPubSub,
 		Metrics:          &metrics.NullMetrics{},
 		StressRelief:     &MockStressReliever{},
 		SamplerFactory: &sample.SamplerFactory{
@@ -71,6 +80,10 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Sharder: &sharder.MockSharder{
 			Self: &sharder.TestShard{
 				Addr: "api1",
+			},
+			Other: &sharder.TestShard{
+				Addr:     "api2",
+				TraceIDs: peerTraceIDs,
 			},
 		},
 		redistributeTimer: newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock),
@@ -131,7 +144,6 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	// * remove the trace from the cache
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
@@ -140,6 +152,7 @@ func TestAddRootSpan(t *testing.T) {
 		assert.Equal(collect, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
 	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
+
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 
 	span = &types.Span{
@@ -189,6 +202,30 @@ func TestAddRootSpan(t *testing.T) {
 	}, conf.GetTracesConfig().GetSendTickerValue()*5, conf.GetTracesConfig().GetSendTickerValue())
 
 	assert.Nil(t, coll.getFromCache(decisionSpanTraceID), "after sending the span, it should be removed from the cache")
+
+	transmission.Mux.RLock()
+	assert.Equal(t, 2, len(transmission.Events), "adding a root decision span should send the trace but not the decision span itself")
+	transmission.Mux.RUnlock()
+
+	peerSpan := &types.Span{
+		TraceID: peerTraceIDs[0],
+		Event: types.Event{
+			Dataset: "aoeu",
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(peerSpan)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
+	// adding one span that belongs to peer with no parent ID should:
+	// * create the trace in the cache
+	// * a decision span is forwarded to peer
+	assert.NotNil(t, coll.getFromCache(peerTraceIDs[0]), "after sending the span, it should be removed from the cache")
+	transmission.Mux.RLock()
+	assert.Equal(t, 1, len(peerTransmission.Events), "adding a root span should send the span")
+	assert.Equal(t, "aoeu", peerTransmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	transmission.Mux.RUnlock()
 }
 
 // #490, SampleRate getting stomped could cause confusion if sampling was
@@ -916,7 +953,9 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &sharder.SingleServerSharder{}},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &sample.SamplerFactory{}},
 		&inject.Object{Value: &MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
@@ -1816,7 +1855,7 @@ func TestRedistributeTraces(t *testing.T) {
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 	peerTransmission.Flush()
 
-	s.Other = &sharder.TestShard{Addr: "api2"}
+	s.Other = &sharder.TestShard{Addr: "api2", TraceIDs: []string{"11"}}
 	span = &types.Span{
 		TraceID: "11",
 		Event: types.Event{
@@ -1873,7 +1912,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	coll.hostname = "host123"
 	coll.Sharder = &sharder.MockSharder{
 		Self:  &sharder.TestShard{Addr: "api1"},
-		Other: &sharder.TestShard{Addr: "api2"},
+		Other: &sharder.TestShard{Addr: "api2", TraceIDs: []string{"traceID1", "traceID2"}},
 	}
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})

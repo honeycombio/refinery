@@ -21,6 +21,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
@@ -324,7 +325,7 @@ func TestDebugTrace(t *testing.T) {
 	router := &Router{
 		Sharder: &sharder.MockSharder{
 			Self:  &sharder.TestShard{Addr: "http://localhost:12345"},
-			Other: &sharder.TestShard{Addr: "http://localhost:12345"},
+			Other: &sharder.TestShard{Addr: "http://localhost:12345", TraceIDs: []string{"123abcdef"}},
 		},
 	}
 
@@ -485,6 +486,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
 		&inject.Object{Value: &sharder.MockSharder{}},
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
