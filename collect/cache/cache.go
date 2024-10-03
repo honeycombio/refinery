@@ -229,30 +229,30 @@ func NewLRUCache(capacity int, metrics metrics.Metrics, logger logger.Logger) (*
 	}, nil
 }
 
-// Get implements Cache.
+// Get attempts to retrieve a trace from the cache.
 func (l *LRUCache) Get(traceID string) *types.Trace {
 	trace, _ := l.cache.Get(traceID)
 	return trace
 }
 
-// GetAll implements Cache.
+// GetAll returns all the traces in the cache.
 func (l *LRUCache) GetAll() []*types.Trace {
 	return l.cache.Values()
 }
 
-// GetCacheCapacity implements Cache.
+// GetCacheCapacity returns the maximum number of traces that can be stored in the cache.
 func (l *LRUCache) GetCacheCapacity() int {
 	return l.capacity
 }
 
-// RemoveTraces implements Cache.
+// RemoveTraces attempts to remove a set of traces from the cache.
 func (l *LRUCache) RemoveTraces(toDelete generics.Set[string]) {
 	for _, traceID := range toDelete.Members() {
 		l.cache.Remove(traceID)
 	}
 }
 
-// Set implements Cache.
+// Set adds a trace to the cache. If the cache is full, it will remove the oldest trace and return it.
 func (l *LRUCache) Set(trace *types.Trace) *types.Trace {
 	var old *types.Trace = nil
 	if l.cache.Len() == l.capacity {
@@ -262,7 +262,7 @@ func (l *LRUCache) Set(trace *types.Trace) *types.Trace {
 	return old
 }
 
-// TakeExpiredTraces implements Cache.
+// TakeExpiredTraces removes and returns all traces that have expired.
 func (l *LRUCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	expired := make([]*types.Trace, 0)
 	for _, trace := range l.cache.Values() {
