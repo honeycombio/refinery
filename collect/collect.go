@@ -179,7 +179,7 @@ func (i *InMemCollector) Start() error {
 		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
 	}
 
-	if !i.Config.GetCollectionConfig().ForceTraceLocality {
+	if !i.Config.GetCollectionConfig().EnableTraceLocality {
 		i.PubSub.Subscribe(context.Background(), traceDecisionKeptTopic, i.signalTraceDecisions)
 		i.PubSub.Subscribe(context.Background(), traceDecisionDroppedTopic, i.signalTraceDecisions)
 		// TODO: make this configurable?
