@@ -1,6 +1,8 @@
 package sample
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/honeycombio/refinery/types"
@@ -154,4 +156,39 @@ func TestKeyGeneration(t *testing.T) {
 	expected = "200•404•,test,2"
 
 	assert.Equal(t, expected, generator.build(trace))
+}
+
+func TestKeyLimits(t *testing.T) {
+	fields := []string{"fieldA", "fieldB"}
+	useTraceLength := true
+
+	generator := newTraceKey(fields, useTraceLength)
+
+	trace := &types.Trace{}
+
+	// generate too many spans with different unique values
+	for i := 0; i < 160; i++ {
+		trace.AddSpan(&types.Span{
+			Event: types.Event{
+				Data: map[string]interface{}{
+					"fieldA": fmt.Sprintf("value%d", i),
+					"fieldB": i,
+				},
+			},
+		})
+	}
+
+	trace.RootSpan = &types.Span{
+		Event: types.Event{
+			Data: map[string]interface{}{
+				"service_name": "test",
+			},
+		},
+	}
+
+	key := generator.build(trace)
+	// now split the key into its parts and count them
+	parts := strings.Split(key, "•")
+	// we should have 100 (maxKeyLength) unique values
+	assert.Equal(t, 100, len(parts))
 }
