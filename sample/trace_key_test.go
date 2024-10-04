@@ -2,7 +2,6 @@ package sample
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/honeycombio/refinery/types"
@@ -30,7 +29,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	expected := "2•,200•,true•,/{slug}/home•,1"
 
-	assert.Equal(t, expected, generator.build(trace))
+	key, n := generator.build(trace)
+	assert.Equal(t, expected, key)
+	assert.Equal(t, 5, n)
 
 	fields = []string{"http.status_code", "request.path", "app.team.id", "important_field"}
 	useTraceLength = true
@@ -73,7 +74,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	expected = "2•,200•,true•,/{slug}/home•,4"
 
-	assert.Equal(t, expected, generator.build(trace))
+	key, n = generator.build(trace)
+	assert.Equal(t, expected, key)
+	assert.Equal(t, 5, n)
 
 	// now test that multiple values across spans are condensed correctly
 	fields = []string{"http.status_code"}
@@ -117,7 +120,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	expected = "200•404•,4"
 
-	assert.Equal(t, expected, generator.build(trace))
+	key, n = generator.build(trace)
+	assert.Equal(t, expected, key)
+	assert.Equal(t, 3, n)
 
 	// test field list with root prefix, only include the field from on the root span
 	// if it exists
@@ -155,7 +160,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	expected = "200•404•,test,2"
 
-	assert.Equal(t, expected, generator.build(trace))
+	key, n = generator.build(trace)
+	assert.Equal(t, expected, key)
+	assert.Equal(t, 4, n)
 }
 
 func TestKeyLimits(t *testing.T) {
@@ -186,9 +193,7 @@ func TestKeyLimits(t *testing.T) {
 		},
 	}
 
-	key := generator.build(trace)
-	// now split the key into its parts and count them
-	parts := strings.Split(key, "•")
-	// we should have 100 (maxKeyLength) unique values
-	assert.Equal(t, 100, len(parts))
+	_, n := generator.build(trace)
+	// we should have maxKeyLength unique values
+	assert.Equal(t, maxKeyLength, n)
 }
