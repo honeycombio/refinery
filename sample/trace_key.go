@@ -55,16 +55,20 @@ outer:
 	for _, field := range d.fields {
 		for _, span := range spans {
 			if val, ok := span.Data[field]; ok {
-				v := fmt.Sprintf("%v", val)
-				uniques.Add(v)
+				u := fmt.Sprintf("%s/%v", field, val)
+				// don't bother to add it if we've already seen it
+				if uniques.Contains(u) {
+					continue
+				}
+				uniques.Add(u)
 				if len(uniques) >= maxKeyLength {
 					break outer
 				}
-				fieldCollector[field] = append(fieldCollector[field], v)
+				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
 			}
 		}
 	}
-	// ok, now we have a map of fields to a list of all values for that field.
+	// ok, now we have a map of fields to a list of all unique values for that field.
 	// (unless it was huge, in which case we have a bunch of them)
 
 	var key string
