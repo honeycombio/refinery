@@ -76,7 +76,10 @@ func (d *WindowedThroughputSampler) SetClusterSize(size int) {
 }
 
 func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
-	key = d.key.build(trace)
+	key, n := d.key.build(trace)
+	if n == maxKeyLength {
+		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
+	}
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
