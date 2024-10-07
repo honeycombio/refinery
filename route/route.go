@@ -1063,7 +1063,7 @@ func getUserAgentFromRequest(req *http.Request) string {
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
-	if userAgent != "" {
+	if userAgent != "" && ev.Data["meta.refinery.incoming_user_agent"] == nil {
 		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
 	}
 }
