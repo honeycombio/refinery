@@ -25,7 +25,6 @@ type EMADynamicSampler struct {
 	burstDetectionDelay uint
 	maxKeys             int
 	prefix              string
-	lastMetrics         map[string]int64
 
 	key       *traceKey
 	keyFields []string
