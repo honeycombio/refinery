@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,7 +27,6 @@ import (
 
 	"github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-	"github.com/honeycombio/libhoney-go/version"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
@@ -223,6 +221,7 @@ func newStartedApp(
 }
 
 func post(t testing.TB, req *http.Request) {
+	req.Header.Set("User-Agent", "Test-Client")
 	resp, err := httpClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -405,7 +404,7 @@ func TestPeerRouting(t *testing.T) {
 			"field10":                            float64(10),
 			"long":                               "this is a test of the emergency broadcast system",
 			"meta.refinery.original_sample_rate": uint(2),
-			"meta.refinery.incoming_user_agent":  getLibhoneyUserAgent(),
+			"meta.refinery.incoming_user_agent":  "Test-Client",
 			"foo":                                "bar",
 		},
 		Metadata: map[string]any{
@@ -538,7 +537,7 @@ func TestEventsEndpoint(t *testing.T) {
 				"trace.trace_id":                     "1",
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  getLibhoneyUserAgent(),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -586,7 +585,7 @@ func TestEventsEndpoint(t *testing.T) {
 				"trace.trace_id":                     "1",
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  getLibhoneyUserAgent(),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -661,7 +660,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 				"trace.trace_id":                     traceID,
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  getLibhoneyUserAgent(),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -710,7 +709,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 				"trace.trace_id":                     traceID,
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  getLibhoneyUserAgent(),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -780,7 +779,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 			"meta.refinery.min_span":       true,
 			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
 			"meta.refinery.root":           false,
-			"meta.refinery.span_data_size": 175,
+			"meta.refinery.span_data_size": 168,
 		},
 		Metadata: map[string]any{
 			"api_host":    "http://localhost:17001",
@@ -1001,12 +1000,4 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		}
 		sender.waitForCount(b, b.N)
 	})
-}
-
-// ideally we should get this from libhoney, but we don't have a way to get it yet
-// this can be removed if libhoney does provide it
-func getLibhoneyUserAgent() string {
-	baseUserAgent := fmt.Sprintf("libhoney-go/%s", version.Version)
-	runtimeInfo := fmt.Sprintf("%s (%s/%s)", strings.Replace(runtime.Version(), "go", "go/", 1), runtime.GOOS, runtime.GOARCH)
-	return fmt.Sprintf("%s %s", baseUserAgent, runtimeInfo)
 }
