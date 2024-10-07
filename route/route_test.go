@@ -23,6 +23,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -720,4 +721,26 @@ func TestGetDatasetFromRequest(t *testing.T) {
 			assert.Equal(t, tc.expectedDatasetName, dataset)
 		})
 	}
+}
+
+func TestAddIncomingUserAgent(t *testing.T) {
+	t.Run("no incoming user agent", func(t *testing.T) {
+		event := &types.Event{
+			Data: map[string]interface{}{},
+		}
+
+		addIncomingUserAgent(event, "test-agent")
+		require.Equal(t, "test-agent", event.Data["meta.refinery.incoming_user_agent"])
+	})
+
+	t.Run("existing incoming user agent", func(t *testing.T) {
+		event := &types.Event{
+			Data: map[string]interface{}{
+				"meta.refinery.incoming_user_agent": "test-agent",
+			},
+		}
+
+		addIncomingUserAgent(event, "another-test-agent")
+		require.Equal(t, "test-agent", event.Data["meta.refinery.incoming_user_agent"])
+	})
 }
