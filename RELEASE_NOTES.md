@@ -2,6 +2,12 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.8.3
+
+This is a bug fix release.
+It fixes a bug when building sampler key using a very high cardinality field. The fix is to only take the first 100 unique field values.
+It also adds support for Refinery to record the original sender user agent in event data under the key `meta.refinery.incoming_user_agent`.
+
 ## Version 2.8.2
 
 This is a bug fix release.
