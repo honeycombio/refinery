@@ -93,9 +93,6 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
 	}
-	if n == maxKeyLength {
-		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
-	}
 	count := int(trace.DescendantCount())
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
