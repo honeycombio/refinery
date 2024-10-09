@@ -378,6 +378,7 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
+				i.Metrics.Gauge("collector_collect_loop_duration_ns", time.Now().Sub(startTime))
 				continue
 			case sp, ok := <-i.fromPeer:
 				if !ok {
@@ -385,6 +386,7 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
+				i.Metrics.Gauge("collector_collect_loop_duration_ns", time.Now().Sub(startTime))
 				continue
 			case <-i.reload:
 				i.reloadConfigs()
