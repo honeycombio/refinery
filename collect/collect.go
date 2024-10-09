@@ -391,7 +391,7 @@ func (i *InMemCollector) collect() {
 			}
 		}
 
-		i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
+		i.Metrics.Gauge("collector_collect_loop_duration_ns", time.Now().Sub(startTime))
 	}
 }
 
