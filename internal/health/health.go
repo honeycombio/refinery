@@ -100,7 +100,9 @@ func (h *Health) ticker() {
 				// only decrement positive counters since 0 means we're dead
 				if timeLeft > 0 {
 					h.timeLeft[subsystem] -= TickerTime
-					h.Logger.Warn().WithField("timeLeft", h.timeLeft[subsystem]).WithField("subsystem", subsystem).Logf("decreased timeLeft for subsystem")
+					if h.timeLeft[subsystem] < time.Millisecond*2500 {
+						h.Logger.Warn().WithField("timeLeft", h.timeLeft[subsystem]).WithField("subsystem", subsystem).Logf("decreased timeLeft for subsystem")
+					}
 					if h.timeLeft[subsystem] < 0 {
 						h.timeLeft[subsystem] = 0
 					}
@@ -173,7 +175,9 @@ func (h *Health) Ready(subsystem string, ready bool) {
 		}).Logf("Health.Ready reporting subsystem changing state")
 	}
 	h.readies[subsystem] = ready
-	h.Logger.Warn().WithField("timeLeft", h.timeLeft[subsystem]).WithField("subsystem", subsystem).Logf("timeLeft before reset in Ready")
+	if h.timeLeft[subsystem] < time.Millisecond*2500 {
+		h.Logger.Warn().WithField("timeLeft", h.timeLeft[subsystem]).WithField("subsystem", subsystem).Logf("timeLeft before reset in Ready")
+	}
 	h.timeLeft[subsystem] = h.timeouts[subsystem]
 	if !h.alives[subsystem] {
 		h.alives[subsystem] = true
