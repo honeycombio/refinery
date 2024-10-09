@@ -128,6 +128,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "dropped_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces dropped due to stress relief"},
 	{Name: "trace_kept_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "sample rate of kept traces"},
 	{Name: "trace_aggregate_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "aggregate sample rate of both kept and dropped traces"},
+	{Name: "collector_redistribute_traces_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of redistributing traces to peers"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -403,7 +404,13 @@ func (i *InMemCollector) collect() {
 
 func (i *InMemCollector) redistributeTraces() {
 	_, span := otelutil.StartSpan(context.Background(), i.Tracer, "redistributeTraces")
-	defer span.End()
+	redistrubutionStartTime := i.Clock.Now()
+
+	defer func() {
+		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", i.Clock.Now().Sub(redistrubutionStartTime).Milliseconds())
+		span.End()
+	}()
+
 	// loop through eveything in the cache of live traces
 	// if it doesn't belong to this peer, we should forward it to the correct peer
 	peers, err := i.Peers.GetPeers()
