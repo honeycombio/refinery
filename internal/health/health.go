@@ -38,7 +38,7 @@ type Recorder interface {
 
 // Reporter is the interface that is used to read back the health status of the system.
 type Reporter interface {
-	IsAlive() bool
+	IsAlive(caller string) bool
 	IsReady() bool
 }
 
@@ -178,24 +178,24 @@ func (h *Health) Ready(subsystem string, ready bool) {
 		h.Logger.Info().WithField("subsystem", subsystem).Logf("Health.Ready reporting subsystem alive")
 	}
 	h.Metrics.Gauge("is_ready", h.checkReady())
-	h.Metrics.Gauge("is_alive", h.checkAlive())
+	h.Metrics.Gauge("is_alive", h.checkAlive("Ready"))
 }
 
 // IsAlive returns true if all registered subsystems are alive
-func (h *Health) IsAlive() bool {
+func (h *Health) IsAlive(caller string) bool {
 	h.mut.Lock()
 	defer h.mut.Unlock()
-	return h.checkAlive()
+	return h.checkAlive(caller)
 }
 
 // checkAlive returns true if all registered subsystems are alive
 // only call with a write lock held
-func (h *Health) checkAlive() bool {
+func (h *Health) checkAlive(caller string) bool {
 	// if any counter is 0, we're dead
 	for subsystem, a := range h.timeLeft {
 		if a == 0 {
 			if h.alives[subsystem] {
-				h.Logger.Error().WithField("subsystem", subsystem).Logf("IsAlive: subsystem dead due to timeout")
+				h.Logger.Error().WithField("subsystem", subsystem).WithField("caller", caller).Logf("IsAlive: subsystem dead due to timeout")
 				h.alives[subsystem] = false
 			}
 			return false

@@ -270,7 +270,7 @@ func (r *Router) Stop() error {
 func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /alive check")
 
-	alive := r.Health.IsAlive()
+	alive := r.Health.IsAlive("http /alive check")
 	r.Metrics.Gauge("is_alive", alive)
 	if !alive {
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -974,7 +974,7 @@ func (r *Router) startGRPCHealthMonitor() {
 		for {
 			select {
 			case <-watchticker.C:
-				alive := r.Health.IsAlive()
+				alive := r.Health.IsAlive("grpc health monitor")
 				ready := r.Health.IsReady()
 
 				// we can just update everything because the grpc health server will only send updates if the status changes
