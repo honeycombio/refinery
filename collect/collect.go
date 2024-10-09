@@ -141,7 +141,7 @@ func (i *InMemCollector) Start() error {
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
-	i.Health.Register(CollectorHealthKey, 3*time.Second)
+	i.Health.Register(CollectorHealthKey, time.Duration(imcConfig.HealthCheckTimeout))
 
 	for _, metric := range inMemCollectorMetrics {
 		i.Metrics.Register(metric)
