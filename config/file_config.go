@@ -302,6 +302,7 @@ type CollectionConfig struct {
 	PeerQueueSize         int        `yaml:"PeerQueueSize"`
 	IncomingQueueSize     int        `yaml:"IncomingQueueSize"`
 	AvailableMemory       MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
+	HealthCheckTimeout    Duration   `yaml:"HealthCheckTimeout" default:"3s"`
 	MaxMemoryPercentage   int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
 	DisableRedistribution bool       `yaml:"DisableRedistribution"`

@@ -104,7 +104,7 @@ func (i *InMemCollector) Start() error {
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
-	i.Health.Register(CollectorHealthKey, 3*time.Second)
+	i.Health.Register(CollectorHealthKey, time.Duration(imcConfig.HealthCheckTimeout))
 
 	i.Metrics.Register("trace_duration_ms", "histogram")
 	i.Metrics.Register("trace_span_count", "histogram")
@@ -330,6 +330,8 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
+		startTime := time.Now()
+
 		i.Health.Ready(CollectorHealthKey, true)
 		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
@@ -376,18 +378,18 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
-				continue
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					return
 				}
 				i.processSpan(sp)
-				continue
 			case <-i.reload:
 				i.reloadConfigs()
 			}
 		}
+
+		i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 	}
 }
 
