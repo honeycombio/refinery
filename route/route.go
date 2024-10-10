@@ -636,6 +636,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)
 	} else {
+		// TODO: again, only do this if span proxy is disabled
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
