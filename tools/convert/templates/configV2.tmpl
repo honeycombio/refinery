@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2024-10-10 at 16:58:34 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2024-10-10 at 17:01:33 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -175,7 +175,7 @@ AccessKeys:
     ## SendKeyMode controls how SendKey is used to replace or augment API
     ## keys used in incoming telemetry.
     ##
-    ## Controls how SendKey is used to replace or supply API keys used in
+    ## controls how SendKey is used to replace or supply API keys used in
     ## incoming telemetry. If `AcceptOnlyListedKeys` is `true`, then
     ## `SendKeys` will only be used for events with keys listed in
     ## `ReceiveKeys`.
@@ -1040,7 +1040,7 @@ Collection:
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "EnableTraceLocality" "EnableTraceLocality" false }}
 
-    ## HealthCheckTimeout Controls the maximum duration allowed for
+    ## HealthCheckTimeout controls the maximum duration allowed for
     ## collection health checks to complete.
     ##
     ## The `HealthCheckTimeout` setting specifies the maximum duration
