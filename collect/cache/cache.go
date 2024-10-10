@@ -1,8 +1,6 @@
 package cache
 
 import (
-	"bytes"
-	"encoding/binary"
 	"sync"
 	"time"
 
@@ -86,17 +84,6 @@ func NewInMemCache(
 
 func (d *DefaultInMemCache) GetCacheCapacity() int {
 	return len(d.traceBuffer)
-}
-
-func (d *DefaultInMemCache) GetUsedBytes() int {
-	count := 0
-	buffer := &bytes.Buffer{}
-	for _, trace := range d.traceBuffer {
-		binary.Write(buffer, binary.BigEndian, trace)
-		count += len(buffer.Bytes())
-	}
-
-	return count
 }
 
 // looks for an insertion point by trying the next N slots in the circular buffer
