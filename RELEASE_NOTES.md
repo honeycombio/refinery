@@ -4,9 +4,11 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.8.3
 
-This is a bug fix release.
-It fixes a bug when building sampler key using a very high cardinality field. The fix is to only take the first 100 unique field values.
-It also adds support for Refinery to record the original sender user agent in event data under the key `meta.refinery.incoming_user_agent` and adds a configurtion option for the health check timeout.
+This is a bug fix release and includes the follow changes+~+:
+* Fixes a bug when building sampler key using a very high cardinality field. The fix is to only take the first 100 unique field values.
+* Fixes a bug so the `is_alive` and `is_ready` metrics now report either 0 or 1 correctly.
+
+It also adds support for Refinery to record the original sender user agent in event data under the key `meta.refinery.incoming_user_agent` adds a configurtion option for the health check timeout.
 
 ## Version 2.8.2
 
