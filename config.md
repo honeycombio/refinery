@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-09-13 at 18:50:43 UTC.
+It was automatically generated on 2024-10-10 at 17:01:39 UTC.
 
 ## The Config file
 
@@ -192,7 +192,7 @@ The exact behavior depends on the value of `SendKeyMode`.
 
 SendKeyMode controls how SendKey is used to replace or augment API keys used in incoming telemetry.
 
-Controls how SendKey is used to replace or supply API keys used in incoming telemetry.
+controls how SendKey is used to replace or supply API keys used in incoming telemetry.
 If `AcceptOnlyListedKeys` is `true`, then `SendKeys` will only be used for events with keys listed in `ReceiveKeys`.
 `none` uses the incoming key for all telemetry (default).
 `all` overwrites all keys, even missing ones, with `SendKey`.
@@ -981,6 +981,27 @@ This value should be set to a bit less than the normal timeout period for shutti
 - Eligible for live reload.
 - Type: `duration`
 - Default: `15s`
+
+### `EnableTraceLocality`
+
+EnableTraceLocality controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
+
+If `true`, Refinery's will route all spans that belongs to the same trace to a single peer.
+
+- Eligible for live reload.
+- Type: `bool`
+
+### `HealthCheckTimeout`
+
+HealthCheckTimeout controls the maximum duration allowed for collection health checks to complete.
+
+The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete.
+If a subsystem does not respond within this timeout period, it will be marked as unhealthy.
+This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+
+- Not eligible for live reload.
+- Type: `duration`
+- Default: `3s`
 
 ## Buffer Sizes
 

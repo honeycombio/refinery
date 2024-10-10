@@ -1,5 +1,14 @@
 # Refinery Changelog
 
+## 2.8.3 2024-10-08
+
+### Changes 
+
+- fix: Only set incoming user agent if not already present (#1366) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- fix: Put a limit on the size of sampler keys (#1364) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Record original user agent for spans and logs (#1358) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: Make collector health check timeout configurable (#1371) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: ConvertNumeric now handles bools (#1336) | [Kent Quirk](https://github.com/kentquirk)
 
 ## 2.8.2 2024-09-13
 

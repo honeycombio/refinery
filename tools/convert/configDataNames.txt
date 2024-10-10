@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-09-03 at 19:48:53 UTC.
+# Automatically generated on 2024-10-10 at 17:01:34 UTC.
 
 General:
   - ConfigurationVersion
@@ -187,6 +187,10 @@ Collection:
   - DisableRedistribution
 
   - ShutdownDelay
+
+  - EnableTraceLocality
+
+  - HealthCheckTimeout
 
 
 BufferSizes:
