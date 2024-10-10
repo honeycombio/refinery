@@ -3,8 +3,10 @@ package cache
 import (
 	"bytes"
 	"encoding/binary"
+	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -22,9 +24,6 @@ type Cache interface {
 
 	// GetCacheCapacity returns the number of traces that can be stored in the cache
 	GetCacheCapacity() int
-
-	// GetUsedBytes returns the number of bytes currently used by the cache
-	GetUsedBytes() int
 
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
@@ -212,83 +211,111 @@ type TraceCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
-	maxSizeBytes int
-	cache        map[string]CacheItem
+	maxCapacity int
+	cache       *lru.Cache[string, cacheEntry]
+	available   *sync.Pool
 }
 
-type CacheItem struct {
+type cacheEntry struct {
 	Trace    *types.Trace
 	NumBytes int
 }
 
 var _ Cache = (*TraceCache)(nil)
 
-func NewTraceCache(maxSizeBytes int, metrics metrics.Metrics, logger logger.Logger) *TraceCache {
+func NewTraceCache(maxCapacity int, metrics metrics.Metrics, logger logger.Logger) *TraceCache {
 	logger.Debug().Logf("Starting TraceCache")
 	defer func() { logger.Debug().Logf("Finished starting TraceCache") }()
 
+	cache, err := lru.New[string, cacheEntry](maxCapacity)
+	if err != nil {
+		logger.Error().Logf("Failed to create LRU cache: %s", err)
+		return nil
+	}
+
+	// create a pool of cache entries to reduce GC pressure
+	// and prepolulate it with the max capacity
+	available := &sync.Pool{
+		New: func() any {
+			return cacheEntry{}
+		},
+	}
+	// for i := 0; i < maxCapacity; i++ {
+	// 	available.Put(cacheEntry{})
+	// }
+
 	return &TraceCache{
-		Metrics:      metrics,
-		Logger:       logger,
-		maxSizeBytes: maxSizeBytes,
-		cache:        make(map[string]CacheItem),
+		Metrics: metrics,
+		Logger:  logger,
+
+		maxCapacity: maxCapacity,
+		cache:       cache,
+		available:   available,
 	}
 }
 
-func (u *TraceCache) serializeTrace(trace *types.Trace) []byte {
-	// TODO: use a sync.pool?
-	buffer := &bytes.Buffer{}
-	binary.Write(buffer, binary.BigEndian, trace)
-	return buffer.Bytes()
-}
-
-func (u *TraceCache) deserializeTrace(data []byte) *types.Trace {
-	// TODO: use a sync.pool?
-	reader := bytes.NewReader(data)
-	var trace types.Trace
-	binary.Read(reader, binary.BigEndian, &trace)
-	return &trace
-}
-
 func (u *TraceCache) GetCacheCapacity() int {
-	return len(u.cache)
-}
-
-func (u *TraceCache) GetUsedBytes() int {
-	return u.maxSizeBytes
+	return u.cache.Len()
 }
 
 func (u *TraceCache) Get(traceID string) *types.Trace {
-	return u.cache[traceID].Trace
+	entry, ok := u.cache.Get(traceID)
+	if ok {
+		return entry.Trace
+	}
+	return nil
 }
 
 func (u *TraceCache) GetAll() []*types.Trace {
-	traces := make([]*types.Trace, 0, len(u.cache))
-	for _, trace := range u.cache {
+	traces := make([]*types.Trace, 0, u.cache.Len())
+	for _, trace := range u.cache.Values() {
 		traces = append(traces, trace.Trace)
 	}
 	return traces
 }
 
 func (u *TraceCache) Set(trace *types.Trace) *types.Trace {
-	sizeBytes := len(u.serializeTrace(trace))
-	u.cache[trace.TraceID] = CacheItem{Trace: trace, NumBytes: sizeBytes}
-	return nil
+	var entry cacheEntry
+	var oldTrace *types.Trace
+
+	// if at capacity, evict the oldest trace
+	if u.cache.Len() >= u.maxCapacity {
+		// evict the oldest trace
+		_, entry, _ = u.cache.RemoveOldest()
+		oldTrace = entry.Trace
+	} else {
+		// try to get a cache item from the pool, will create a new one if none available
+		entry = u.available.Get().(cacheEntry)
+	}
+
+	// update the cache entry and add it back to the cache
+	entry.Trace = trace
+	u.cache.Add(trace.TraceID, entry)
+	return oldTrace
 }
 
 func (u *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	expired := make([]*types.Trace, 0, 0)
-	for traceID, item := range u.cache {
-		if now.After(item.Trace.SendBy) {
-			delete(u.cache, traceID)
-			expired = append(expired, item.Trace)
+	for {
+		_, value, ok := u.cache.GetOldest()
+		if !ok || now.Before(value.Trace.SendBy) {
+			break
 		}
+		u.removeEntry(value)
+		expired = append(expired, value.Trace)
 	}
 	return expired
 }
 
 func (u *TraceCache) RemoveTraces(toDelete generics.Set[string]) {
 	for _, traceID := range toDelete.Members() {
-		delete(u.cache, traceID)
+		if entry, ok := u.cache.Get(traceID); ok {
+			u.removeEntry(entry)
+		}
 	}
+}
+
+func (u *TraceCache) removeEntry(entry cacheEntry) {
+	u.cache.Remove(entry.Trace.TraceID)
+	u.available.Put(entry)
 }

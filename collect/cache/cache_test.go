@@ -153,19 +153,12 @@ func BenchmarkCache_Set(b *testing.B) {
 	var c Cache
 	c = NewInMemCache(100000, metrics, logger)
 	b.Run("InMemCache", func(b *testing.B) {
-		for _, trace := range traces {
-			c.Set(trace)
-		}
+		populateCache(c, traces)
 	})
 
-	c = NewTraceCache(1024*1024, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	c = NewTraceCache(1000, metrics, logger)
 	b.Run("UsageCache", func(b *testing.B) {
-		for _, trace := range traces {
-			c.Set(trace)
-		}
+		populateCache(c, traces)
 	})
 }
 
@@ -179,19 +172,15 @@ func BenchmarkCache_Get(b *testing.B) {
 
 	var c Cache
 	c = NewInMemCache(100000, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
 		for traceID, _ := range traces {
 			c.Get(traceID)
 		}
 	})
 
-	c = NewTraceCache(1024*1024, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	c = NewTraceCache(1000, metrics, logger)
+	populateCache(c, traces)
 	b.Run("UsageCache", func(b *testing.B) {
 		for traceID, _ := range traces {
 			c.Get(traceID)
@@ -209,19 +198,15 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 
 	var c Cache
 	c = NewInMemCache(100000, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
 		}
 	})
 
-	c = NewTraceCache(1024*1024, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	c = NewTraceCache(1000, metrics, logger)
+	populateCache(c, traces)
 	b.Run("UsageCache", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
@@ -243,17 +228,13 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 
 	var c Cache
 	c = NewInMemCache(100000, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
 		c.RemoveTraces(deletes)
 	})
 
-	c = NewTraceCache(1024*1024, metrics, logger)
-	for _, trace := range traces {
-		c.Set(trace)
-	}
+	c = NewTraceCache(1000, metrics, logger)
+	populateCache(c, traces)
 	b.Run("UsageCache", func(b *testing.B) {
 		c.RemoveTraces(deletes)
 	})
@@ -270,4 +251,10 @@ func generateTraces(n int) (time.Time, map[string]*types.Trace) {
 		}
 	}
 	return now, traces
+}
+
+func populateCache(c Cache, traces map[string]*types.Trace) {
+	for _, trace := range traces {
+		c.Set(trace)
+	}
 }
