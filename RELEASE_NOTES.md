@@ -10,6 +10,8 @@ This is a bug fix release and includes the follow changes+~+:
 
 It also adds support for Refinery to record the original sender user agent in event data under the key `meta.refinery.incoming_user_agent` adds a configurtion option for the health check timeout.
 
+It also adds support for configuring the timeout of the Collection health check subsystem. If your readiness or liveness probes are failing often due to the `collector` subsystem, you can increase `Collection.HealthCheckTimeout` to give the `collector` subsystem more time before it is considered unhealthy.
+
 ## Version 2.8.2
 
 This is a bug fix release.

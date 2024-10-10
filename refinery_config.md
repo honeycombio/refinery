@@ -967,6 +967,18 @@ This value should be set to a bit less than the normal timeout period for shutti
 - Type: `duration`
 - Default: `15s`
 
+### `HealthCheckTimeout`
+
+`HealthCheckTimeout` Controls the maximum duration allowed for collection health checks to complete.
+
+The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete.
+If a subsystem does not respond within this timeout period, it will be marked as unhealthy.
+This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+
+- Not eligible for live reload.
+- Type: `duration`
+- Default: `3s`
+
 ## Buffer Sizes
 
 `BufferSizes` contains the settings that are relevant to the sizes of communications buffers.
