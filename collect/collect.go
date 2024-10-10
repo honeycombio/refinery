@@ -339,6 +339,8 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
+		startTime := time.Now()
+
 		i.Health.Ready(CollectorHealthKey, true)
 		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
@@ -385,6 +387,7 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
+				i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 				continue
 			case sp, ok := <-i.fromPeer:
 				if !ok {
@@ -392,11 +395,14 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
+				i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 				continue
 			case <-i.reload:
 				i.reloadConfigs()
 			}
 		}
+
+		i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 	}
 }
 
