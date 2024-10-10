@@ -1,8 +1,10 @@
 package cache
 
 import (
+	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -190,4 +192,117 @@ func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 			}
 		}
 	}
+}
+
+type TraceCache struct {
+	Metrics metrics.Metrics
+	Logger  logger.Logger
+
+	maxCapacity int
+	cache       *lru.Cache[string, cacheEntry]
+	available   *sync.Pool
+}
+
+type cacheEntry struct {
+	Trace    *types.Trace
+	NumBytes int
+}
+
+var _ Cache = (*TraceCache)(nil)
+
+func NewTraceCache(maxCapacity int, metrics metrics.Metrics, logger logger.Logger) *TraceCache {
+	logger.Debug().Logf("Starting TraceCache")
+	defer func() { logger.Debug().Logf("Finished starting TraceCache") }()
+
+	cache, err := lru.New[string, cacheEntry](maxCapacity)
+	if err != nil {
+		logger.Error().Logf("Failed to create LRU cache: %s", err)
+		return nil
+	}
+
+	// create a pool of cache entries to reduce GC pressure
+	// and prepolulate it with the max capacity
+	available := &sync.Pool{
+		New: func() any {
+			return cacheEntry{}
+		},
+	}
+	// for i := 0; i < maxCapacity; i++ {
+	// 	available.Put(cacheEntry{})
+	// }
+
+	return &TraceCache{
+		Metrics: metrics,
+		Logger:  logger,
+
+		maxCapacity: maxCapacity,
+		cache:       cache,
+		available:   available,
+	}
+}
+
+func (u *TraceCache) GetCacheCapacity() int {
+	return u.cache.Len()
+}
+
+func (u *TraceCache) Get(traceID string) *types.Trace {
+	entry, ok := u.cache.Get(traceID)
+	if ok {
+		return entry.Trace
+	}
+	return nil
+}
+
+func (u *TraceCache) GetAll() []*types.Trace {
+	traces := make([]*types.Trace, 0, u.cache.Len())
+	for _, trace := range u.cache.Values() {
+		traces = append(traces, trace.Trace)
+	}
+	return traces
+}
+
+func (u *TraceCache) Set(trace *types.Trace) *types.Trace {
+	var entry cacheEntry
+	var oldTrace *types.Trace
+
+	// if at capacity, evict the oldest trace
+	if u.cache.Len() >= u.maxCapacity {
+		// evict the oldest trace
+		_, entry, _ = u.cache.RemoveOldest()
+		oldTrace = entry.Trace
+	} else {
+		// try to get a cache item from the pool, will create a new one if none available
+		entry = u.available.Get().(cacheEntry)
+	}
+
+	// update the cache entry and add it back to the cache
+	entry.Trace = trace
+	u.cache.Add(trace.TraceID, entry)
+	return oldTrace
+}
+
+func (u *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+	expired := make([]*types.Trace, 0, 0)
+	for {
+		_, value, ok := u.cache.GetOldest()
+		if !ok || now.Before(value.Trace.SendBy) {
+			break
+		}
+		u.removeEntry(value)
+		expired = append(expired, value.Trace)
+	}
+	return expired
+}
+
+func (u *TraceCache) RemoveTraces(toDelete generics.Set[string]) {
+	for _, traceID := range toDelete.Members() {
+		if entry, ok := u.cache.Get(traceID); ok {
+			u.removeEntry(entry)
+		}
+	}
+}
+
+func (u *TraceCache) removeEntry(entry cacheEntry) {
+	u.cache.Remove(entry.Trace.TraceID)
+	u.available.Put(entry)
 }

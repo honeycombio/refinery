@@ -144,85 +144,117 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 
 // Benchamark the cache's Set method
 func BenchmarkCache_Set(b *testing.B) {
-	s := &metrics.MockMetrics{}
-	s.Start()
-	c := NewInMemCache(100000, s, &logger.NullLogger{})
-	now := time.Now()
-	traces := make([]*types.Trace, 0, b.N)
-	for i := 0; i < b.N; i++ {
-		traces = append(traces, &types.Trace{
-			TraceID: "trace" + fmt.Sprint(i),
-			SendBy:  now.Add(time.Duration(i) * time.Second),
-		})
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.Set(traces[i])
-	}
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+	logger := &logger.NullLogger{}
+
+	_, traces := generateTraces(b.N)
+
+	var c Cache
+	c = NewInMemCache(100000, metrics, logger)
+	b.Run("InMemCache", func(b *testing.B) {
+		populateCache(c, traces)
+	})
+
+	c = NewTraceCache(1000, metrics, logger)
+	b.Run("UsageCache", func(b *testing.B) {
+		populateCache(c, traces)
+	})
 }
 
 // Benchmark the cache's Get method
 func BenchmarkCache_Get(b *testing.B) {
-	s := &metrics.MockMetrics{}
-	s.Start()
-	c := NewInMemCache(100000, s, &logger.NullLogger{})
-	now := time.Now()
-	traces := make([]*types.Trace, 0, b.N)
-	for i := 0; i < b.N; i++ {
-		traces = append(traces, &types.Trace{
-			TraceID: "trace" + fmt.Sprint(i),
-			SendBy:  now.Add(time.Duration(i) * time.Second),
-		})
-		c.Set(traces[i])
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.Get(traces[i].TraceID)
-	}
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+	logger := &logger.NullLogger{}
+
+	_, traces := generateTraces(b.N)
+
+	var c Cache
+	c = NewInMemCache(100000, metrics, logger)
+	populateCache(c, traces)
+	b.Run("InMemCache", func(b *testing.B) {
+		for traceID, _ := range traces {
+			c.Get(traceID)
+		}
+	})
+
+	c = NewTraceCache(1000, metrics, logger)
+	populateCache(c, traces)
+	b.Run("UsageCache", func(b *testing.B) {
+		for traceID, _ := range traces {
+			c.Get(traceID)
+		}
+	})
 }
 
 // Benchmark the cache's TakeExpiredTraces method
 func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
-	s := &metrics.MockMetrics{}
-	s.Start()
-	c := NewInMemCache(100000, s, &logger.NullLogger{})
-	now := time.Now()
-	traces := make([]*types.Trace, 0, b.N)
-	for i := 0; i < b.N; i++ {
-		traces = append(traces, &types.Trace{
-			TraceID: "trace" + fmt.Sprint(i),
-			SendBy:  now.Add(time.Duration(i) * time.Second),
-		})
-		c.Set(traces[i])
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
-	}
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+	logger := &logger.NullLogger{}
+
+	now, traces := generateTraces(b.N)
+
+	var c Cache
+	c = NewInMemCache(100000, metrics, logger)
+	populateCache(c, traces)
+	b.Run("InMemCache", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
+		}
+	})
+
+	c = NewTraceCache(1000, metrics, logger)
+	populateCache(c, traces)
+	b.Run("UsageCache", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
+		}
+	})
 }
 
 // Benchmark the cache's RemoveTraces method
 func BenchmarkCache_RemoveTraces(b *testing.B) {
-	s := &metrics.MockMetrics{}
-	s.Start()
-	c := NewInMemCache(100000, s, &logger.NullLogger{})
-	now := time.Now()
-	traces := make([]*types.Trace, 0, b.N)
-	for i := 0; i < b.N; i++ {
-		traces = append(traces, &types.Trace{
-			TraceID: "trace" + fmt.Sprint(i),
-			SendBy:  now.Add(time.Duration(i) * time.Second),
-		})
-		c.Set(traces[i])
-	}
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+	logger := &logger.NullLogger{}
 
+	_, traces := generateTraces(b.N)
 	deletes := generics.NewSetWithCapacity[string](b.N / 2)
 	for i := 0; i < b.N/2; i++ {
 		deletes.Add("trace" + fmt.Sprint(i))
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	var c Cache
+	c = NewInMemCache(100000, metrics, logger)
+	populateCache(c, traces)
+	b.Run("InMemCache", func(b *testing.B) {
 		c.RemoveTraces(deletes)
+	})
+
+	c = NewTraceCache(1000, metrics, logger)
+	populateCache(c, traces)
+	b.Run("UsageCache", func(b *testing.B) {
+		c.RemoveTraces(deletes)
+	})
+}
+
+func generateTraces(n int) (time.Time, map[string]*types.Trace) {
+	now := time.Now()
+	traces := make(map[string]*types.Trace, n)
+	for i := 0; i < n; i++ {
+		traceID := "trace" + fmt.Sprint(i)
+		traces[traceID] = &types.Trace{
+			TraceID: "trace" + fmt.Sprint(i),
+			SendBy:  now.Add(time.Duration(i) * time.Second),
+		}
+	}
+	return now, traces
+}
+
+func populateCache(c Cache, traces map[string]*types.Trace) {
+	for _, trace := range traces {
+		c.Set(trace)
 	}
 }
