@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-10-10 at 16:39:08 UTC from ../../config.yaml using a template generated on 2024-10-10 at 16:39:05 UTC
+# created on 2024-10-10 at 16:58:39 UTC from ../../config.yaml using a template generated on 2024-10-10 at 16:58:34 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1035,6 +1035,15 @@ Collection:
     ## default: 15s
     ## Eligible for live reload.
     # ShutdownDelay: 15s
+
+    ## EnableTraceLocality controls whether all spans that belongs to the
+    ## same trace are sent to a single Refinery for processing.
+    ##
+    ## If `true`, Refinery's will route all spans that belongs to the same
+    ## trace to a single peer.
+    ##
+    ## Eligible for live reload.
+    # EnableTraceLocality: false
 
     ## HealthCheckTimeout Controls the maximum duration allowed for
     ## collection health checks to complete.

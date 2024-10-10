@@ -967,6 +967,15 @@ This value should be set to a bit less than the normal timeout period for shutti
 - Type: `duration`
 - Default: `15s`
 
+### `EnableTraceLocality`
+
+`EnableTraceLocality` controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
+
+If `true`, Refinery's will route all spans that belongs to the same trace to a single peer.
+
+- Eligible for live reload.
+- Type: `bool`
+
 ### `HealthCheckTimeout`
 
 `HealthCheckTimeout` Controls the maximum duration allowed for collection health checks to complete.

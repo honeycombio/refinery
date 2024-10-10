@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-10-10 at 16:39:07 UTC
+# automatically generated on 2024-10-10 at 16:58:36 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -103,6 +103,7 @@ Collection:
   MaxAlloc: 0
   DisableRedistribution: false
   ShutdownDelay: 15s
+  EnableTraceLocality: false
   HealthCheckTimeout: 3s
 BufferSizes:
   UpstreamBufferSize: 10_000

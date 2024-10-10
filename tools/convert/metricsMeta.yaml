@@ -191,6 +191,14 @@ complete:
       type: Histogram
       unit: Dimensionless
       description: aggregate sample rate of both kept and dropped traces
+    - name: collector_redistribute_traces_duration_ms
+      type: Histogram
+      unit: Milliseconds
+      description: duration of redistributing traces to peers
+    - name: collector_collect_loop_duration_ms
+      type: Gauge
+      unit: Milliseconds
+      description: duration of the collect loop, the primary event processing goroutine
     - name: cluster_stress_level
       type: Gauge
       unit: Dimensionless
