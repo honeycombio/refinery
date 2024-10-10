@@ -209,7 +209,7 @@ groups:
         reload: true
         summary: controls how SendKey is used to replace or augment API keys used in incoming telemetry.
         description: >
-          Controls how SendKey is used to replace or supply API keys used in
+          controls how SendKey is used to replace or supply API keys used in
           incoming telemetry. If `AcceptOnlyListedKeys` is `true`, then
           `SendKeys` will only be used for events with keys listed in
           `ReceiveKeys`.
@@ -1302,7 +1302,7 @@ groups:
         firstversion: v2.8
         default: 3s
         reload: false
-        summary: Controls the maximum duration allowed for collection health checks to complete.
+        summary: controls the maximum duration allowed for collection health checks to complete.
         description: >
           The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete. If a subsystem does not respond within this timeout period, it will be marked as unhealthy. This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
 
