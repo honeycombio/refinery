@@ -387,16 +387,12 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
-				i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
-				continue
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					return
 				}
 				i.processSpan(sp)
-				i.Metrics.Gauge("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
-				continue
 			case <-i.reload:
 				i.reloadConfigs()
 			}
