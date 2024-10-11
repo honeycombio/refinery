@@ -30,7 +30,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const traceDecisionTopic = "trace_decision"
+const (
+	traceDecisionTopic       = "trace_decision"
+	traceDecisionsBufferSize = 100
+)
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
 var CollectorHealthKey = "collector"
@@ -192,8 +195,7 @@ func (i *InMemCollector) Start() error {
 
 	if !i.Config.GetCollectionConfig().EnableTraceLocality {
 		i.PubSub.Subscribe(context.Background(), traceDecisionTopic, i.signalTraceDecisions)
-		// TODO: make this configurable?
-		i.traceDecisions = make(chan string, 100)
+		i.traceDecisions = make(chan string, traceDecisionsBufferSize)
 	}
 
 	// spin up one collector because this is a single threaded collector
@@ -398,6 +400,7 @@ func (i *InMemCollector) collect() {
 			i.redistributeTraces(ctx)
 		case msg, ok := <-i.traceDecisions:
 			if !ok {
+				// channel's been closed; we should shut down.
 				return
 			}
 
@@ -430,6 +433,7 @@ func (i *InMemCollector) collect() {
 				}
 			case msg, ok := <-i.traceDecisions:
 				if !ok {
+					// channel's been closed; we should shut down.
 					return
 				}
 
@@ -562,6 +566,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 	var totalSpansSent int64
 
+	toDelete := generics.NewSet[string]()
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
 		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendReadyTrace", "num_spans", int64(t.DescendantCount()))
@@ -575,6 +580,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				continue
 			}
 			i.send(ctx, t, td)
+			toDelete.Add(t.TraceID)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendSpanLimit))
@@ -583,18 +589,24 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 					continue
 				}
 				i.send(ctx, t, td)
+				toDelete.Add(t.TraceID)
 			} else {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
 				td, err := i.makeDecision(t, TraceSendExpired)
 				if err != nil {
+					i.Logger.Error().WithFields(map[string]interface{}{
+						"trace_id": t.TraceID,
+					}).Logf("error making decision for trace: %s", err.Error())
 					continue
 				}
 				i.send(ctx, t, td)
+				toDelete.Add(t.TraceID)
 			}
 		}
 		span2.End()
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
+	i.cache.RemoveTraces(toDelete)
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
@@ -796,7 +808,9 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 			err error
 		)
 		if tr.Kept() {
-			// TODO: late span in this case won't get HasRoot
+			//  late span in this case won't get HasRoot
+			// this means the late span won't be decorated with some metadata
+			// like span count, event count, link count
 			msg, err = newKeptDecisionMessage(TraceDecision{
 				TraceID:    sp.TraceID,
 				Kept:       tr.Kept(),
@@ -811,7 +825,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 					"trace_id":  sp.TraceID,
 					"kept":      tr.Kept(),
 					"late_span": true,
-				}).Logf("Failed to marshal trace decision")
+				}).Logf("Failed to create new kept decision message")
 				return
 			}
 		} else {
@@ -821,7 +835,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 					"trace_id":  sp.TraceID,
 					"kept":      tr.Kept(),
 					"late_span": true,
-				}).Logf("Failed to marshal trace decision")
+				}).Logf("Failed to create new dropped decision message")
 				return
 			}
 		}
@@ -1307,9 +1321,11 @@ func (i *InMemCollector) processTraceDecision(msg string) {
 		// if we don't have the trace in the cache, we don't need to do anything
 		if trace == nil {
 			i.Logger.Debug().Logf("trace not found in cache for trace decision")
-			return
+			continue
 		}
 		toDelete.Add(td.TraceID)
+		trace.SetSampleRate(td.SampleRate)
+		trace.KeepSample = td.Kept
 
 		i.sampleTraceCache.Record(trace, td.Kept, td.KeptReason)
 

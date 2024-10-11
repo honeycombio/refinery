@@ -142,6 +142,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int) []*types.T
 
 		if now.After(t.SendBy) {
 			res = append(res, t)
+			// TODO: we should not remove the trace until it's send
 			d.cache.Remove(t.TraceID)
 			continue
 		}

@@ -122,6 +122,7 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	assert.Equal(t, traces[1], expired[1])
 
 	assert.Equal(t, 2, c.GetCacheEntryCount())
+	c.RemoveTraces(generics.NewSet(expired[0].TraceID, expired[1].TraceID))
 
 	// fill up those slots now, which requires skipping over the old traces
 	newTraces := []*types.Trace{
