@@ -104,7 +104,7 @@ func (i *InMemCollector) Start() error {
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
-	i.Health.Register(CollectorHealthKey, time.Duration(imcConfig.HealthCheckTimeout))
+	//i.Health.Register(CollectorHealthKey, time.Duration(imcConfig.HealthCheckTimeout))
 
 	i.Metrics.Register("trace_duration_ms", "histogram")
 	i.Metrics.Register("trace_span_count", "histogram")
@@ -332,7 +332,7 @@ func (i *InMemCollector) collect() {
 	for {
 		startTime := time.Now()
 
-		i.Health.Ready(CollectorHealthKey, true)
+		// i.Health.Ready(CollectorHealthKey, true)
 		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
 		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
