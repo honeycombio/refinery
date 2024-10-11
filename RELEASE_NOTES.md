@@ -2,6 +2,11 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.8.4
+
+This is a bug fix release and includes the follow change:
+* Changes the new `collector_collect_loop_duration_ms` metric introduced in `v2.8.3` to be a histogram instead of a gauge. This ensures the minimum and maximum values from each interval is recorded. 
+
 ## Version 2.8.3
 
 This is a bug fix release and includes the follow changes+~+:

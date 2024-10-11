@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-09-13 at 18:50:42 UTC from ../../config.yaml using a template generated on 2024-09-13 at 18:50:40 UTC
+# created on 2024-10-11 at 15:40:58 UTC from ../../config.yaml using a template generated on 2024-10-11 at 15:40:56 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1035,6 +1035,22 @@ Collection:
     ## default: 15s
     ## Eligible for live reload.
     # ShutdownDelay: 15s
+
+    ## HealthCheckTimeout Controls the maximum duration allowed for
+    ## collection health checks to complete.
+    ##
+    ## The `HealthCheckTimeout` setting specifies the maximum duration
+    ## allowed for the health checks of the collection subsystems to
+    ## complete. If a subsystem does not respond within this timeout period,
+    ## it will be marked as unhealthy. This timeout value should be set
+    ## carefully to ensure that transient delays do not lead to unnecessary
+    ## failure detection while still allowing for timely identification of
+    ## actual health issues.
+    ##
+    ## Accepts a duration string with units, like "3s".
+    ## default: 3s
+    ## Not eligible for live reload.
+    # HealthCheckTimeout: 3s
 
 ##################
 ## Buffer Sizes ##
