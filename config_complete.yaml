@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-10-10 at 17:01:39 UTC from ../../config.yaml using a template generated on 2024-10-10 at 17:01:33 UTC
+# created on 2024-10-11 at 16:33:00 UTC from ../../config.yaml using a template generated on 2024-10-11 at 16:32:50 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1135,8 +1135,8 @@ Specialized:
     ##
     ## Eligible for live reload.
     # AdditionalAttributes:
-      #  environment: production
       #  ClusterName: MyCluster
+      #  environment: production
 
 ###############
 ## ID Fields ##

@@ -196,7 +196,7 @@ complete:
       unit: Milliseconds
       description: duration of redistributing traces to peers
     - name: collector_collect_loop_duration_ms
-      type: Gauge
+      type: Histogram
       unit: Milliseconds
       description: duration of the collect loop, the primary event processing goroutine
     - name: cluster_stress_level
