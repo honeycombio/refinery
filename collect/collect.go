@@ -129,7 +129,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_kept_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "sample rate of kept traces"},
 	{Name: "trace_aggregate_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "aggregate sample rate of both kept and dropped traces"},
 	{Name: "collector_redistribute_traces_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of redistributing traces to peers"},
-	{Name: "collector_collect_loop_duration_ms", Type: metrics.Gauge, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
+	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
 }
 
 func (i *InMemCollector) Start() error {
