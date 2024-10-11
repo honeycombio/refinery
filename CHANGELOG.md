@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## 2.8.4 2024-10-11
+
+### Fixes
+
+- fix: Switch `collector_collect_loop_duration_ms` metric to be a histogram  (#1381) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
 ## 2.8.3 2024-10-08
 
 ### Changes 
