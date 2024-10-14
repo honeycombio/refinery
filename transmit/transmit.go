@@ -187,6 +187,9 @@ func (d *DefaultTransmission) processResponses(
 					"environment":    environment,
 					"roundtrip_usec": dequeuedAt - enqueuedAt,
 				})
+				if len(r.Body) > 0 {
+					log = log.WithField("response_body", string(r.Body))
+				}
 				for _, k := range d.Config.GetAdditionalErrorFields() {
 					if v, ok := r.Metadata.(map[string]any)[k]; ok {
 						log = log.WithField(k, v)
