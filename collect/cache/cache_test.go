@@ -157,7 +157,7 @@ func BenchmarkCache_Set(b *testing.B) {
 	})
 
 	c = NewTraceCache(metrics, logger)
-	b.Run("UsageCache", func(b *testing.B) {
+	b.Run("TraceCache", func(b *testing.B) {
 		populateCache(c, traces)
 	})
 }
@@ -181,7 +181,7 @@ func BenchmarkCache_Get(b *testing.B) {
 
 	c = NewTraceCache(metrics, logger)
 	populateCache(c, traces)
-	b.Run("UsageCache", func(b *testing.B) {
+	b.Run("TraceCache", func(b *testing.B) {
 		for traceID, _ := range traces {
 			c.Get(traceID)
 		}
@@ -207,7 +207,7 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 
 	c = NewTraceCache(metrics, logger)
 	populateCache(c, traces)
-	b.Run("UsageCache", func(b *testing.B) {
+	b.Run("TraceCache", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
 		}
@@ -235,7 +235,7 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 
 	c = NewTraceCache(metrics, logger)
 	populateCache(c, traces)
-	b.Run("UsageCache", func(b *testing.B) {
+	b.Run("TraceCache", func(b *testing.B) {
 		c.RemoveTraces(deletes)
 	})
 }
