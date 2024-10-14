@@ -2,6 +2,21 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.8.4
+
+This is a bug fix release and includes the follow change:
+* Changes the new `collector_collect_loop_duration_ms` metric introduced in `v2.8.3` to be a histogram instead of a gauge. This ensures the minimum and maximum values from each interval is recorded. 
+
+## Version 2.8.3
+
+This is a bug fix release and includes the follow changes+~+:
+* Fixes a bug when building sampler key using a very high cardinality field. The fix is to only take the first 100 unique field values.
+* Fixes a bug so the `is_alive` and `is_ready` metrics now report either 0 or 1 correctly.
+
+It also adds support for Refinery to record the original sender user agent in event data under the key `meta.refinery.incoming_user_agent` adds a configurtion option for the health check timeout.
+
+It also adds support for configuring the timeout of the Collection health check subsystem. If your readiness or liveness probes are failing often due to the `collector` subsystem, you can increase `Collection.HealthCheckTimeout` to give the `collector` subsystem more time before it is considered unhealthy.
+
 ## Version 2.8.2
 
 This is a bug fix release.

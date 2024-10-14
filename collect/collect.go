@@ -128,6 +128,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "dropped_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces dropped due to stress relief"},
 	{Name: "trace_kept_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "sample rate of kept traces"},
 	{Name: "trace_aggregate_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "aggregate sample rate of both kept and dropped traces"},
+	{Name: "collector_redistribute_traces_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of redistributing traces to peers"},
+	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -140,7 +142,7 @@ func (i *InMemCollector) Start() error {
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
-	i.Health.Register(CollectorHealthKey, 3*time.Second)
+	i.Health.Register(CollectorHealthKey, time.Duration(imcConfig.HealthCheckTimeout))
 
 	for _, metric := range inMemCollectorMetrics {
 		i.Metrics.Register(metric)
@@ -338,6 +340,8 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
+		startTime := time.Now()
+
 		i.Health.Ready(CollectorHealthKey, true)
 		// record channel lengths as histogram but also as gauges
 		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
@@ -384,24 +388,30 @@ func (i *InMemCollector) collect() {
 					return
 				}
 				i.processSpan(sp)
-				continue
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					return
 				}
 				i.processSpan(sp)
-				continue
 			case <-i.reload:
 				i.reloadConfigs()
 			}
 		}
+
+		i.Metrics.Histogram("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 	}
 }
 
 func (i *InMemCollector) redistributeTraces() {
 	_, span := otelutil.StartSpan(context.Background(), i.Tracer, "redistributeTraces")
-	defer span.End()
+	redistrubutionStartTime := i.Clock.Now()
+
+	defer func() {
+		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", i.Clock.Now().Sub(redistrubutionStartTime).Milliseconds())
+		span.End()
+	}()
+
 	// loop through eveything in the cache of live traces
 	// if it doesn't belong to this peer, we should forward it to the correct peer
 	peers, err := i.Peers.GetPeers()

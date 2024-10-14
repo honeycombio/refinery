@@ -221,6 +221,7 @@ func newStartedApp(
 }
 
 func post(t testing.TB, req *http.Request) {
+	req.Header.Set("User-Agent", "Test-Client")
 	resp, err := httpClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -403,6 +404,7 @@ func TestPeerRouting(t *testing.T) {
 			"field10":                            float64(10),
 			"long":                               "this is a test of the emergency broadcast system",
 			"meta.refinery.original_sample_rate": uint(2),
+			"meta.refinery.incoming_user_agent":  "Test-Client",
 			"foo":                                "bar",
 		},
 		Metadata: map[string]any{
@@ -535,6 +537,7 @@ func TestEventsEndpoint(t *testing.T) {
 				"trace.trace_id":                     "1",
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -582,6 +585,7 @@ func TestEventsEndpoint(t *testing.T) {
 				"trace.trace_id":                     "1",
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -656,6 +660,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 				"trace.trace_id":                     traceID,
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -704,6 +709,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 				"trace.trace_id":                     traceID,
 				"foo":                                "bar",
 				"meta.refinery.original_sample_rate": uint(10),
+				"meta.refinery.incoming_user_agent":  "Test-Client",
 			},
 			Metadata: map[string]any{
 				"api_host":    "http://api.honeycomb.io",
@@ -773,7 +779,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 			"meta.refinery.min_span":       true,
 			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
 			"meta.refinery.root":           false,
-			"meta.refinery.span_data_size": 157,
+			"meta.refinery.span_data_size": 168,
 		},
 		Metadata: map[string]any{
 			"api_host":    "http://localhost:17001",
