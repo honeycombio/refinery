@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"sync"
+	"math"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -194,115 +194,83 @@ func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	}
 }
 
+// TraceCache uses an LRU cache to store traces
+// It does not control the maximum size of the cache, instead allowing it to grow indefinitely.
+// The collector is responsible for managing the cache size and removing traces when necessary.
 type TraceCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
-	maxCapacity int
-	cache       *lru.Cache[string, cacheEntry]
-	available   *sync.Pool
-}
-
-type cacheEntry struct {
-	Trace    *types.Trace
-	NumBytes int
+	cache *lru.Cache[string, *types.Trace]
 }
 
 var _ Cache = (*TraceCache)(nil)
 
-func NewTraceCache(maxCapacity int, metrics metrics.Metrics, logger logger.Logger) *TraceCache {
+var traceCacheMetadata = []metrics.Metadata{
+	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "The number of traces currently stored in the cache"},
+}
+
+func NewTraceCache(metrics metrics.Metrics, logger logger.Logger) *TraceCache {
 	logger.Debug().Logf("Starting TraceCache")
 	defer func() { logger.Debug().Logf("Finished starting TraceCache") }()
 
-	cache, err := lru.New[string, cacheEntry](maxCapacity)
+	for _, metadata := range traceCacheMetadata {
+		metrics.Register(metadata)
+	}
+
+	// allow the cache to grow really large by using math.MaxInt32 (2147483647) as cache size
+	cache, err := lru.New[string, *types.Trace](math.MaxInt32)
 	if err != nil {
 		logger.Error().Logf("Failed to create LRU cache: %s", err)
 		return nil
 	}
 
-	// create a pool of cache entries to reduce GC pressure
-	// and prepolulate it with the max capacity
-	available := &sync.Pool{
-		New: func() any {
-			return cacheEntry{}
-		},
-	}
-	// for i := 0; i < maxCapacity; i++ {
-	// 	available.Put(cacheEntry{})
-	// }
-
 	return &TraceCache{
 		Metrics: metrics,
 		Logger:  logger,
-
-		maxCapacity: maxCapacity,
-		cache:       cache,
-		available:   available,
+		cache:   cache,
 	}
 }
 
-func (u *TraceCache) GetCacheCapacity() int {
-	return u.cache.Len()
+func (c *TraceCache) GetCacheCapacity() int {
+	return math.MaxInt32
 }
 
-func (u *TraceCache) Get(traceID string) *types.Trace {
-	entry, ok := u.cache.Get(traceID)
-	if ok {
-		return entry.Trace
-	}
+func (c *TraceCache) Get(traceID string) *types.Trace {
+	trace, _ := c.cache.Get(traceID)
+	return trace
+}
+
+func (c *TraceCache) GetAll() []*types.Trace {
+	return c.cache.Values()
+}
+
+func (c *TraceCache) Set(trace *types.Trace) *types.Trace {
+	c.cache.Add(trace.TraceID, trace)
 	return nil
 }
 
-func (u *TraceCache) GetAll() []*types.Trace {
-	traces := make([]*types.Trace, 0, u.cache.Len())
-	for _, trace := range u.cache.Values() {
-		traces = append(traces, trace.Trace)
-	}
-	return traces
-}
+func (c *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
+	c.Metrics.Histogram("collect_cache_entries", c.cache.Len())
 
-func (u *TraceCache) Set(trace *types.Trace) *types.Trace {
-	var entry cacheEntry
-	var oldTrace *types.Trace
-
-	// if at capacity, evict the oldest trace
-	if u.cache.Len() >= u.maxCapacity {
-		// evict the oldest trace
-		_, entry, _ = u.cache.RemoveOldest()
-		oldTrace = entry.Trace
-	} else {
-		// try to get a cache item from the pool, will create a new one if none available
-		entry = u.available.Get().(cacheEntry)
-	}
-
-	// update the cache entry and add it back to the cache
-	entry.Trace = trace
-	u.cache.Add(trace.TraceID, entry)
-	return oldTrace
-}
-
-func (u *TraceCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	expired := make([]*types.Trace, 0, 0)
 	for {
-		_, value, ok := u.cache.GetOldest()
-		if !ok || now.Before(value.Trace.SendBy) {
-			break
+		// look for traces that are past their SendBy time
+		_, trace, ok := c.cache.GetOldest()
+		if ok && now.After(trace.SendBy) {
+			expired = append(expired, trace)
+			c.cache.Remove(trace.TraceID)
+			continue
 		}
-		u.removeEntry(value)
-		expired = append(expired, value.Trace)
+		break
 	}
 	return expired
 }
 
-func (u *TraceCache) RemoveTraces(toDelete generics.Set[string]) {
-	for _, traceID := range toDelete.Members() {
-		if entry, ok := u.cache.Get(traceID); ok {
-			u.removeEntry(entry)
-		}
-	}
-}
+func (c *TraceCache) RemoveTraces(toDelete generics.Set[string]) {
+	c.Metrics.Histogram("collect_cache_entries", c.cache.Len())
 
-func (u *TraceCache) removeEntry(entry cacheEntry) {
-	u.cache.Remove(entry.Trace.TraceID)
-	u.available.Put(entry)
+	for _, traceID := range toDelete.Members() {
+		c.cache.Remove(traceID)
+	}
 }
