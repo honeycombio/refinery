@@ -489,11 +489,13 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 }
 
 func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
-	_, span := i.Tracer.Start(ctx, "sendExpiredTracesInCache")
+	ctx, span := i.Tracer.Start(ctx, "sendExpiredTracesInCache")
 	defer span.End()
 	traces := i.cache.TakeExpiredTraces(now)
+	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)))
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	for _, t := range traces {
+		_, span2 := i.Tracer.Start(ctx, "sendExpiredTrace", trace.WithAttributes(attribute.Float64("num_spans", float64(t.DescendantCount()))))
 		if t.RootSpan != nil {
 			i.send(t, TraceSendGotRoot)
 		} else {
@@ -503,6 +505,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				i.send(t, TraceSendExpired)
 			}
 		}
+		span2.End()
 	}
 }
 
