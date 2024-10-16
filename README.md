@@ -155,6 +155,9 @@ A quick start for specific scenarios is below:
 * Set `SendKey` to a valid Honeycomb Key
 * Set `SendKeyMode` to `listedonly`
 
++**NOTE**
++
++When using Beelines with a classic API key to send data to Refinery, ensure that the `SendKey` is also a classic Key, not an environment and service(E&S) key.
 
 ## Dry Run Mode
 
