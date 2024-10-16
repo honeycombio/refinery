@@ -53,28 +53,26 @@ func TestTakeExpiredTraces(t *testing.T) {
 
 	now := time.Now()
 	traces := []*types.Trace{
-		{TraceID: "1", SendBy: now.Add(-time.Minute), Sent: true},
-		{TraceID: "2", SendBy: now.Add(-time.Minute)},
-		{TraceID: "3", SendBy: now.Add(time.Minute)},
-		{TraceID: "4"},
+		{TraceID: "1", SendBy: now.Add(-time.Minute), Sent: true}, // expired
+		{TraceID: "2", SendBy: now.Add(-time.Minute)},             // expired
+		{TraceID: "3", SendBy: now.Add(time.Minute)},              // not expired
+		{TraceID: "4", SendBy: now.Add(time.Minute * 2)},          // not expired
 	}
 	for _, t := range traces {
 		c.Set(t)
 	}
 
 	expired := c.TakeExpiredTraces(now)
-	assert.Equal(t, 3, len(expired))
+	assert.Equal(t, 2, len(expired))
 	assert.Equal(t, traces[0], expired[0])
 	assert.Equal(t, traces[1], expired[1])
-	assert.Equal(t, traces[3], expired[2])
 
-	assert.Equal(t, 1, len(c.cache))
+	assert.Equal(t, 2, c.GetCacheEntryCount())
 
 	all := c.GetAll()
-	assert.Equal(t, 1, len(all))
-	for i := range all {
-		assert.Equal(t, traces[2], all[i])
-	}
+	assert.Equal(t, 2, len(all))
+	assert.Equal(t, traces[2], all[0])
+	assert.Equal(t, traces[3], all[1])
 }
 
 func TestRemoveSentTraces(t *testing.T) {
@@ -109,8 +107,8 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	now := time.Now()
 	traces := []*types.Trace{
 		{TraceID: "1", SendBy: now.Add(-time.Minute), Sent: true},
-		{TraceID: "2", SendBy: now.Add(time.Minute)},
-		{TraceID: "3", SendBy: now.Add(-time.Minute)},
+		{TraceID: "2", SendBy: now.Add(-time.Minute)},
+		{TraceID: "3", SendBy: now.Add(time.Minute)},
 		{TraceID: "4", SendBy: now.Add(time.Minute)},
 	}
 	for _, tr := range traces {
@@ -121,9 +119,9 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	expired := c.TakeExpiredTraces(now)
 	assert.Equal(t, 2, len(expired))
 	assert.Equal(t, traces[0], expired[0])
-	assert.Equal(t, traces[2], expired[1])
+	assert.Equal(t, traces[1], expired[1])
 
-	assert.Equal(t, 2, len(c.cache))
+	assert.Equal(t, 2, c.GetCacheEntryCount())
 
 	// fill up those slots now, which requires skipping over the old traces
 	newTraces := []*types.Trace{
@@ -139,25 +137,17 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	// now we should have traces 2, 5, 4 and 6, and 4 is next to be examined
 	prev := c.Set(&types.Trace{TraceID: "7", SendBy: now})
 	// make sure we kicked out #4
-	assert.Equal(t, traces[3], prev)
+	assert.Equal(t, traces[2], prev)
 }
 
 // Benchamark the cache's Set method
 func BenchmarkCache_Set(b *testing.B) {
 	metrics := &metrics.MockMetrics{}
 	metrics.Start()
-	logger := &logger.NullLogger{}
-
 	_, traces := generateTraces(b.N)
 
-	var c Cache
-	c = NewInMemCache(100000, metrics, logger)
+	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	b.Run("InMemCache", func(b *testing.B) {
-		populateCache(c, traces)
-	})
-
-	c = NewTraceCache(metrics, logger)
-	b.Run("TraceCache", func(b *testing.B) {
 		populateCache(c, traces)
 	})
 }
@@ -166,22 +156,11 @@ func BenchmarkCache_Set(b *testing.B) {
 func BenchmarkCache_Get(b *testing.B) {
 	metrics := &metrics.MockMetrics{}
 	metrics.Start()
-	logger := &logger.NullLogger{}
-
 	_, traces := generateTraces(b.N)
 
-	var c Cache
-	c = NewInMemCache(100000, metrics, logger)
+	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
-		for traceID, _ := range traces {
-			c.Get(traceID)
-		}
-	})
-
-	c = NewTraceCache(metrics, logger)
-	populateCache(c, traces)
-	b.Run("TraceCache", func(b *testing.B) {
 		for traceID, _ := range traces {
 			c.Get(traceID)
 		}
@@ -192,22 +171,11 @@ func BenchmarkCache_Get(b *testing.B) {
 func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 	metrics := &metrics.MockMetrics{}
 	metrics.Start()
-	logger := &logger.NullLogger{}
-
 	now, traces := generateTraces(b.N)
 
-	var c Cache
-	c = NewInMemCache(100000, metrics, logger)
+	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
-		}
-	})
-
-	c = NewTraceCache(metrics, logger)
-	populateCache(c, traces)
-	b.Run("TraceCache", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			c.TakeExpiredTraces(now.Add(time.Duration(i) * time.Second))
 		}
@@ -218,24 +186,16 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 func BenchmarkCache_RemoveTraces(b *testing.B) {
 	metrics := &metrics.MockMetrics{}
 	metrics.Start()
-	logger := &logger.NullLogger{}
-
 	_, traces := generateTraces(b.N)
+
 	deletes := generics.NewSetWithCapacity[string](b.N / 2)
 	for i := 0; i < b.N/2; i++ {
 		deletes.Add("trace" + fmt.Sprint(i))
 	}
 
-	var c Cache
-	c = NewInMemCache(100000, metrics, logger)
+	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
-		c.RemoveTraces(deletes)
-	})
-
-	c = NewTraceCache(metrics, logger)
-	populateCache(c, traces)
-	b.Run("TraceCache", func(b *testing.B) {
 		c.RemoveTraces(deletes)
 	})
 }
