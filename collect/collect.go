@@ -510,7 +510,9 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)))
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	var numGoRoutines int
+	var totalSpansSent int64
 	for _, t := range traces {
+		totalSpansSent += int64(t.DescendantCount())
 		ctx2, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
 		if t.RootSpan != nil {
 			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
@@ -526,7 +528,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		}
 		span2.End()
 	}
-	span.SetAttributes(attribute.Int("num_goroutines", numGoRoutines))
+	span.SetAttributes(attribute.Int("num_goroutines", numGoRoutines), attribute.Int64("total_spans_sent", totalSpansSent))
 }
 
 func (i *InMemCollector) sendHelper(ctx context.Context, trace *types.Trace, sendReason string) int {
