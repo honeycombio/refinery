@@ -21,6 +21,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
@@ -485,6 +486,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "upstreamTransmission"},
 		&inject.Object{Value: &transmit.MockTransmission{}, Name: "peerTransmission"},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
 		&inject.Object{Value: &sharder.MockSharder{}},
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},

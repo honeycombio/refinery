@@ -33,6 +33,7 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
@@ -196,6 +197,7 @@ func newStartedApp(
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
 		&inject.Object{Value: collector},
+		&inject.Object{Value: &pubsub.LocalPubSub{}},
 		&inject.Object{Value: metricsr, Name: "metrics"},
 		&inject.Object{Value: metricsr, Name: "genericMetrics"},
 		&inject.Object{Value: metricsr, Name: "upstreamMetrics"},
@@ -777,7 +779,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 		Data: map[string]interface{}{
 			"trace_id":                     "2",
 			"meta.refinery.min_span":       true,
-			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
+			"meta.annotation_type":         types.SpanTypeUnknown,
 			"meta.refinery.root":           false,
 			"meta.refinery.span_data_size": 168,
 		},
