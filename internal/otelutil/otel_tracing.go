@@ -2,7 +2,6 @@ package otelutil
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/url"
@@ -89,7 +88,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 	}
 
 	cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
-	apihost, err := url.Parse(fmt.Sprintf("%s:443", cfg.APIHost))
+	apihost, err := url.Parse(fmt.Sprintf("%s", cfg.APIHost))
 	if err != nil {
 		log.Fatalf("failed to parse otel API host: %v", err)
 	}
@@ -113,12 +112,12 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		}
 	}
 
-	tlsconfig := &tls.Config{}
-	secureOption := otlptracehttp.WithTLSClientConfig(tlsconfig)
+	//tlsconfig := &tls.Config{}
+	//secureOption := otlptracehttp.WithTLSClientConfig(tlsconfig)
 	exporter, err := otlptrace.New(
 		context.Background(),
 		otlptracehttp.NewClient(
-			secureOption,
+			otlptracehttp.WithInsecure(),
 			otlptracehttp.WithEndpoint(apihost.Host),
 			otlptracehttp.WithHeaders(headers),
 			otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
