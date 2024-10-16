@@ -380,12 +380,14 @@ func (i *InMemCollector) collect() {
 					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
 					_, span2 := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
 					i.checkAlloc()
+					span2.End()
 
 					// Briefly unlock the cache, to allow test access.
+					_, span3 := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
 					i.mutex.Unlock()
 					runtime.Gosched()
 					i.mutex.Lock()
-					span2.End()
+					span3.End()
 				}
 			case <-i.redistributeTimer.Notify():
 				i.redistributeTraces(ctx)
@@ -507,22 +509,33 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	traces := i.cache.TakeExpiredTraces(now)
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)))
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
+	var numGoRoutines int
 	for _, t := range traces {
 		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
 		if t.RootSpan != nil {
 			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
-			i.send(t, TraceSendGotRoot)
+			numGoRoutines += i.sendHelper(t, TraceSendGotRoot)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendSpanLimit))
-				i.send(t, TraceSendSpanLimit)
+				numGoRoutines += i.sendHelper(t, TraceSendSpanLimit)
 			} else {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
-				i.send(t, TraceSendExpired)
+				numGoRoutines += i.sendHelper(t, TraceSendExpired)
 			}
 		}
 		span2.End()
 	}
+	span.SetAttributes(attribute.Int("num_goroutines", numGoRoutines))
+}
+
+func (i *InMemCollector) sendHelper(trace *types.Trace, sendReason string) int {
+	if trace.DescendantCount() > 1000 {
+		go i.send(trace, sendReason)
+		return 1
+	}
+	i.send(trace, sendReason)
+	return 0
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
