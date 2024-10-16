@@ -368,7 +368,7 @@ func (i *InMemCollector) collect() {
 				case <-i.done:
 				default:
 					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
-					_, span2 := i.Tracer.Start(ctx, "checkAlloc")
+					_, span2 := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
 					i.checkAlloc()
 
 					// Briefly unlock the cache, to allow test access.
