@@ -166,11 +166,9 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
 	var res []*types.Trace
-	for i, t := range d.traceBuffer {
+	for _, t := range d.traceBuffer {
 		if t != nil && now.After(t.SendBy) {
 			res = append(res, t)
-			d.traceBuffer[i] = nil
-			delete(d.cache, t.TraceID)
 		}
 	}
 	return res

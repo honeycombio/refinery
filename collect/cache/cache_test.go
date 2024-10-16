@@ -67,14 +67,6 @@ func TestTakeExpiredTraces(t *testing.T) {
 	assert.Equal(t, traces[0], expired[0])
 	assert.Equal(t, traces[1], expired[1])
 	assert.Equal(t, traces[3], expired[2])
-
-	assert.Equal(t, 1, len(c.cache))
-
-	all := c.GetAll()
-	assert.Equal(t, 1, len(all))
-	for i := range all {
-		assert.Equal(t, traces[2], all[i])
-	}
 }
 
 func TestRemoveSentTraces(t *testing.T) {
@@ -123,7 +115,7 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	assert.Equal(t, traces[0], expired[0])
 	assert.Equal(t, traces[2], expired[1])
 
-	assert.Equal(t, 2, len(c.cache))
+	c.RemoveTraces(generics.NewSet(expired[0].TraceID, expired[1].TraceID))
 
 	// fill up those slots now, which requires skipping over the old traces
 	newTraces := []*types.Trace{
