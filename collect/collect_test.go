@@ -194,7 +194,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(2 * time.Millisecond),
 			SendDelay:    config.Duration(1 * time.Millisecond),
-			TraceTimeout: config.Duration(60 * time.Second),
+			TraceTimeout: config.Duration(1 * time.Second),
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
