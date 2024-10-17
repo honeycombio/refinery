@@ -59,6 +59,14 @@ const (
 	TraceSendLateSpan       = "trace_send_late_span"
 )
 
+type sendableTrace struct {
+	*types.Trace
+	reason     string
+	sendReason string
+	sampleKey  string
+	shouldSend bool
+}
+
 // InMemCollector is a single threaded collector.
 type InMemCollector struct {
 	Config  config.Config   `inject:""`
@@ -89,6 +97,7 @@ type InMemCollector struct {
 
 	incoming          chan *types.Span
 	fromPeer          chan *types.Span
+	outgoingTraces    chan sendableTrace
 	reload            chan struct{}
 	done              chan struct{}
 	redistributeTimer *redistributeNotifier
@@ -158,6 +167,7 @@ func (i *InMemCollector) Start() error {
 
 	i.incoming = make(chan *types.Span, imcConfig.GetIncomingQueueSize())
 	i.fromPeer = make(chan *types.Span, imcConfig.GetPeerQueueSize())
+	i.outgoingTraces = make(chan sendableTrace, 100_000)
 	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
@@ -178,6 +188,7 @@ func (i *InMemCollector) Start() error {
 
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
+	go i.sendTraces()
 
 	return nil
 }
@@ -905,42 +916,13 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 	} else {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
-
-	for _, sp := range trace.GetSpans() {
-		if sp.IsDecisionSpan() {
-			continue
-		}
-		if i.Config.GetAddRuleReasonToTrace() {
-			sp.Data["meta.refinery.reason"] = reason
-			sp.Data["meta.refinery.send_reason"] = sendReason
-			if key != "" {
-				sp.Data["meta.refinery.sample_key"] = key
-			}
-		}
-
-		// update the root span (if we have one, which we might not if the trace timed out)
-		// with the final total as of our send time
-		if sp.IsRoot {
-			if i.Config.GetAddCountsToRoot() {
-				sp.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
-				sp.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
-				sp.Data["meta.span_count"] = int64(trace.SpanCount())
-				sp.Data["meta.event_count"] = int64(trace.DescendantCount())
-			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data["meta.span_count"] = int64(trace.DescendantCount())
-			}
-		}
-
-		isDryRun := i.Config.GetIsDryRun()
-		if isDryRun {
-			sp.Data[config.DryRunFieldName] = shouldSend
-		}
-		if i.hostname != "" {
-			sp.Data["meta.refinery.local_hostname"] = i.hostname
-		}
-		mergeTraceAndSpanSampleRates(sp, trace.SampleRate(), isDryRun)
-		i.addAdditionalAttributes(sp)
-		i.Transmission.EnqueueSpan(sp)
+	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
+	i.outgoingTraces <- sendableTrace{
+		Trace:      trace,
+		reason:     reason,
+		sendReason: sendReason,
+		sampleKey:  key,
+		shouldSend: shouldSend,
 	}
 }
 
@@ -973,6 +955,7 @@ func (i *InMemCollector) Stop() error {
 
 	close(i.incoming)
 	close(i.fromPeer)
+	close(i.outgoingTraces)
 
 	return nil
 }
@@ -1184,6 +1167,50 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 
 	dc.APIHost = targetShard.GetAddress()
 	return dc
+}
+
+func (i *InMemCollector) sendTraces() {
+	for t := range i.outgoingTraces {
+		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
+		for _, sp := range t.GetSpans() {
+			if sp.IsDecisionSpan() {
+				continue
+			}
+
+			if i.Config.GetAddRuleReasonToTrace() {
+				sp.Data["meta.refinery.reason"] = t.reason
+				sp.Data["meta.refinery.send_reason"] = t.sendReason
+				if t.sampleKey != "" {
+					sp.Data["meta.refinery.sample_key"] = t.sampleKey
+				}
+			}
+
+			// update the root span (if we have one, which we might not if the trace timed out)
+			// with the final total as of our send time
+			if sp.IsRoot {
+				if i.Config.GetAddCountsToRoot() {
+					sp.Data["meta.span_event_count"] = int64(t.SpanEventCount())
+					sp.Data["meta.span_link_count"] = int64(t.SpanLinkCount())
+					sp.Data["meta.span_count"] = int64(t.SpanCount())
+					sp.Data["meta.event_count"] = int64(t.DescendantCount())
+				} else if i.Config.GetAddSpanCountToRoot() {
+					sp.Data["meta.span_count"] = int64(t.DescendantCount())
+				}
+			}
+
+			isDryRun := i.Config.GetIsDryRun()
+			if isDryRun {
+				sp.Data[config.DryRunFieldName] = t.shouldSend
+			}
+			if i.hostname != "" {
+				sp.Data["meta.refinery.local_hostname"] = i.hostname
+			}
+			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
+			i.addAdditionalAttributes(sp)
+			i.Transmission.EnqueueSpan(sp)
+		}
+		span.End()
+	}
 }
 
 func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
