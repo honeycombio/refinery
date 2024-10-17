@@ -168,6 +168,9 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 			d.traceBuffer[i] = nil
 			delete(d.cache, t.TraceID)
 		}
+		if len(res) > 5000 {
+			break
+		}
 	}
 	return res
 }
