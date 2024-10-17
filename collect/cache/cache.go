@@ -136,6 +136,10 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
 
 	var res []*types.Trace
 	for _, t := range d.cache.Values() {
+		if len(res) > 5000 {
+			break
+		}
+
 		if now.After(t.SendBy) {
 			res = append(res, t)
 			d.cache.Remove(t.TraceID)
