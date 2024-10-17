@@ -173,7 +173,7 @@ func main() {
 			PendingWorkCapacity:   uint(c.GetUpstreamBufferSize()),
 			UserAgentAddition:     userAgentAddition,
 			Transport:             upstreamTransport,
-			BlockOnSend:           false,
+			BlockOnSend:           true,
 			EnableMsgpackEncoding: true,
 			Metrics:               upstreamMetricsRecorder,
 		},
