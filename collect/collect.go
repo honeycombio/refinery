@@ -491,8 +491,6 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)))
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 	var totalSpansSent int64
-	var maxDuration time.Duration
-	var longCount int
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
 		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
@@ -509,15 +507,10 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				duration = i.send(t, TraceSendExpired)
 			}
 		}
-		if duration > maxDuration {
-			maxDuration = duration
-		}
-		if duration > time.Millisecond*1 {
-			longCount++
-		}
+		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", duration.Milliseconds()))
 		span2.End()
 	}
-	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent), attribute.Int64("max_get_sample_rate_duration_ms", maxDuration.Milliseconds()), attribute.Int("num_long_get_sample_rate_", longCount))
+	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
