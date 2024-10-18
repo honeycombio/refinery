@@ -279,7 +279,7 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
-		WithField("new_trace_count", i.cache.GetCacheCapacity()).
+		WithField("new_trace_count", i.cache.GetCacheEntryCount()).
 		Logf("Making some trace decisions early due to memory overrun.")
 
 	// Manually GC here - without this we can easily end up evicting more than we
