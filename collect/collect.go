@@ -521,9 +521,11 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
 	defer span.End()
 
+	startTime := time.Now()
 	traces := i.cache.TakeExpiredTraces(now)
+	dur := time.Now().Sub(startTime)
 
-	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)))
+	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
 
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 
