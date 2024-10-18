@@ -224,7 +224,7 @@ func (i *InMemCollector) reloadConfigs() {
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
-func (i *InMemCollector) checkAlloc() {
+func (i *InMemCollector) checkAlloc() int {
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
@@ -233,7 +233,7 @@ func (i *InMemCollector) checkAlloc() {
 	runtime.ReadMemStats(&mem)
 	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
-		return
+		return -1
 	}
 
 	// Figure out what fraction of the total cache we should remove. We'd like it to be
@@ -247,6 +247,7 @@ func (i *InMemCollector) checkAlloc() {
 	// To do this, we sort the traces by their CacheImpact value and then remove traces
 	// until the total size is less than the amount to which we want to shrink.
 	allTraces := i.cache.GetAll()
+	cacheSize := len(allTraces)
 	timeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	if timeout == 0 {
 		timeout = 60 * time.Second
@@ -287,6 +288,7 @@ func (i *InMemCollector) checkAlloc() {
 	// Manually GC here - without this we can easily end up evicting more than we
 	// need to, since total alloc won't be updated until after a GC pass.
 	runtime.GC()
+	return cacheSize
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
@@ -380,7 +382,8 @@ func (i *InMemCollector) collect() {
 				default:
 					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
 					_, span2 := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
-					i.checkAlloc()
+					cacheSize := i.checkAlloc()
+					span2.SetAttributes(attribute.Int("cache_size", cacheSize))
 					span2.End()
 
 					// Briefly unlock the cache, to allow test access.
@@ -493,7 +496,10 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	var totalSpansSent int64
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
-		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
+		// I am suspicious of why this call takes too long.
+		// I wonder if it is the ctx size being copied
+		// https://ui-kibble.honeycomb.io/dogfood/datasets/refinery-traces/result/vZ9de1MCmoX/trace/BMAsBRpzzqA?fields[]=s_name&fields[]=s_serviceName&fields[]=c_num_spans&fields[]=c_total_spans_sent&fields[]=c_num_traces_to_expire&span=3d4722ebda9089a1
+		_, span2 := i.Tracer.Start(ctx, "sendExpiredTrace", trace.WithAttributes(attribute.Int64("num_spans", int64(t.DescendantCount()))))
 		var duration time.Duration
 		var reason string
 		if t.RootSpan != nil {
