@@ -495,19 +495,20 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		totalSpansSent += int64(t.DescendantCount())
 		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
 		var duration time.Duration
+		var reason string
 		if t.RootSpan != nil {
 			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
-			duration = i.send(t, TraceSendGotRoot)
+			duration, reason = i.send(t, TraceSendGotRoot)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendSpanLimit))
-				duration = i.send(t, TraceSendSpanLimit)
+				duration, reason = i.send(t, TraceSendSpanLimit)
 			} else {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
-				duration = i.send(t, TraceSendExpired)
+				duration, reason = i.send(t, TraceSendExpired)
 			}
 		}
-		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", duration.Milliseconds()))
+		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", duration.Milliseconds()), attribute.String("sample_reason", reason))
 		span2.End()
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
@@ -780,14 +781,14 @@ func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
 	return true
 }
 
-func (i *InMemCollector) send(trace *types.Trace, sendReason string) time.Duration {
+func (i *InMemCollector) send(trace *types.Trace, sendReason string) (time.Duration, string) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
 			WithString("trace_id", trace.TraceID).
 			WithString("dataset", trace.Dataset).
 			Logf("skipping send because someone else already sent trace to dataset")
-		return 0
+		return 0, ""
 	}
 	trace.Sent = true
 
@@ -854,7 +855,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) time.Durati
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling")
-		return duration
+		return duration, reason
 	}
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
@@ -872,7 +873,7 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) time.Durati
 		sampleKey:  key,
 		shouldSend: shouldSend,
 	}
-	return duration
+	return duration, reason
 }
 
 func (i *InMemCollector) Stop() error {
