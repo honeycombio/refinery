@@ -558,7 +558,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", sampleRateCalculationDuration.Milliseconds()), attribute.String("sample_reason", reason))
 		span2.End()
 	}
-	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent), attribute.Int64("max_get_sample_rate_duration_ms", maxDuration.Milliseconds()), attribute.Int("num_long_get_sample_rate_", longCount))
+	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
