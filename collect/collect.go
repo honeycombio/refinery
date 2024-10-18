@@ -517,28 +517,48 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
 	defer span.End()
+
 	traces := i.cache.TakeExpiredTraces(now)
+
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)))
+
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
+
 	var totalSpansSent int64
+	var maxDuration time.Duration
+	var longCount int
+
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
-		ctx2, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
+
+		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
+
+		var sampleRateCalculationDuration time.Duration
+		var reason string
 		if t.RootSpan != nil {
 			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
-			i.send(ctx2, t, TraceSendGotRoot)
+
+			sampleRateCalculationDuration, reason = i.send(ctx, t, TraceSendGotRoot)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendSpanLimit))
-				i.send(ctx2, t, TraceSendSpanLimit)
+
+				sampleRateCalculationDuration, reason = i.send(ctx, t, TraceSendSpanLimit)
 			} else {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
-				i.send(ctx2, t, TraceSendExpired)
+				sampleRateCalculationDuration, reason = i.send(ctx, t, TraceSendExpired)
 			}
 		}
+		if sampleRateCalculationDuration > maxDuration {
+			maxDuration = sampleRateCalculationDuration
+		}
+		if sampleRateCalculationDuration > time.Millisecond*1 {
+			longCount++
+		}
+		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", sampleRateCalculationDuration.Milliseconds()), attribute.String("sample_reason", reason))
 		span2.End()
 	}
-	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
+	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent), attribute.Int64("max_get_sample_rate_duration_ms", maxDuration.Milliseconds()), attribute.Int("num_long_get_sample_rate_", longCount))
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
@@ -818,33 +838,14 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	}
 }
 
-<<<<<<< HEAD
-func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
-=======
-func (i *InMemCollector) isRootSpan(sp *types.Span) bool {
-	// log event should never be considered a root span, check for that first
-	if signalType := sp.Data["meta.signal_type"]; signalType == "log" {
-		return false
-	}
-	// check if the event has a parent id using the configured parent id field names
-	for _, parentIdFieldName := range i.Config.GetParentIdFieldNames() {
-		parentId := sp.Data[parentIdFieldName]
-		if _, ok := parentId.(string); ok && parentId != "" {
-			return false
-		}
-	}
-	return true
-}
-
-func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, sendReason string) {
->>>>>>> fe57491 (Experiment with capping the number of traces to export)
+func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, sendReason string) (time.Duration, string) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
 			WithString("trace_id", trace.TraceID).
 			WithString("dataset", trace.Dataset).
 			Logf("skipping send because someone else already sent trace to dataset")
-		return
+		return 0, ""
 	}
 	trace.Sent = true
 
@@ -893,10 +894,12 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, sendReaso
 	}
 
 	// make sampling decision and update the trace
-	_, span := otelutil.StartSpan(ctx, i.Tracer, "getSampleRate")
+	startTime := time.Now()
+
 	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
-	span.SetAttributes(attribute.String("sample_reason", reason))
-	span.End()
+
+	duration := time.Now().Sub(startTime)
+
 	trace.SetSampleRate(rate)
 	trace.KeepSample = shouldSend
 	logFields["reason"] = reason
@@ -906,15 +909,13 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, sendReaso
 	// This will observe sample rate attempts even if the trace is dropped
 	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
-	_, span2 := otelutil.StartSpan(ctx, i.Tracer, "recordTraceDecision")
 	i.sampleTraceCache.Record(trace, shouldSend, reason)
-	span2.End()
 
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !shouldSend && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
-		return
+		return duration, reason
 	}
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
@@ -934,6 +935,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, sendReaso
 		sampleKey:  key,
 		shouldSend: shouldSend,
 	}
+	return duration, reason
 }
 
 func (i *InMemCollector) Stop() error {
