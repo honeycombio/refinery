@@ -525,37 +525,26 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
 
 	var totalSpansSent int64
-	var maxDuration time.Duration
-	var longCount int
 
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
 
 		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", t.DescendantCount())
-
-		var sampleRateCalculationDuration time.Duration
+		var duration time.Duration
 		var reason string
 		if t.RootSpan != nil {
 			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
-
-			sampleRateCalculationDuration, reason = i.send(ctx, t, TraceSendGotRoot)
+			duration, reason = i.send(ctx, t, TraceSendGotRoot)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendSpanLimit))
-
-				sampleRateCalculationDuration, reason = i.send(ctx, t, TraceSendSpanLimit)
+				duration, reason = i.send(ctx, t, TraceSendSpanLimit)
 			} else {
 				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
-				sampleRateCalculationDuration, reason = i.send(ctx, t, TraceSendExpired)
+				duration, reason = i.send(ctx, t, TraceSendExpired)
 			}
 		}
-		if sampleRateCalculationDuration > maxDuration {
-			maxDuration = sampleRateCalculationDuration
-		}
-		if sampleRateCalculationDuration > time.Millisecond*1 {
-			longCount++
-		}
-		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", sampleRateCalculationDuration.Milliseconds()), attribute.String("sample_reason", reason))
+		span2.SetAttributes(attribute.Int64("get_sample_rate_duration_ms", duration.Milliseconds()), attribute.String("sample_reason", reason))
 		span2.End()
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
