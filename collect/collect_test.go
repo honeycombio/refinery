@@ -107,8 +107,11 @@ func TestAddRootSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID1 = "mytrace"
@@ -217,8 +220,11 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	// Generate events until one is sampled and appears on the transmission queue for sending.
@@ -308,8 +314,11 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	span := &types.Span{
@@ -376,8 +385,11 @@ func TestAddSpan(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -455,8 +467,11 @@ func TestDryRunMode(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID1 = "abc123"
@@ -755,8 +770,11 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	for i := 0; i < 500; i++ {
@@ -928,8 +946,11 @@ func TestAddCountsToRoot(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1018,8 +1039,10 @@ func TestLateRootGetsCounts(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1108,8 +1131,11 @@ func TestAddSpanCount(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1194,8 +1220,11 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1272,8 +1301,11 @@ func TestLateSpanNotDecorated(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "traceABC"
@@ -1342,8 +1374,11 @@ func TestAddAdditionalAttributes(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "trace123"
@@ -1500,8 +1535,11 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	var traceID = "traceABC"
@@ -1605,8 +1643,11 @@ func TestSpanWithRuleReasons(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	traceIDs := []string{"trace1", "trace2"}
@@ -1701,6 +1742,7 @@ func TestRedistributeTraces(t *testing.T) {
 	peerTransmission := &transmit.MockTransmission{}
 	peerTransmission.Start()
 	coll := newTestCollector(conf, transmission, peerTransmission)
+
 	s := &sharder.MockSharder{
 		Self: &sharder.TestShard{Addr: "api1"},
 	}
@@ -1786,6 +1828,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	peerTransmission := &transmit.MockTransmission{}
 	peerTransmission.Start()
 	coll := newTestCollector(conf, transmission, peerTransmission)
+
 	coll.hostname = "host123"
 	coll.Sharder = &sharder.MockSharder{
 		Self:  &sharder.TestShard{Addr: "api1"},
@@ -1800,6 +1843,8 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 
 	sentTraceChan := make(chan sentRecord, 1)
@@ -1894,8 +1939,11 @@ func TestBigTracesGoEarly(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 500)
 	coll.fromPeer = make(chan *types.Span, 500)
+	coll.outgoingTraces = make(chan sendableTrace, 500)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	// this name was chosen to be Kept with the deterministic/2 sampler

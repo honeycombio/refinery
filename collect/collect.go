@@ -167,7 +167,7 @@ func (i *InMemCollector) Start() error {
 
 	i.incoming = make(chan *types.Span, imcConfig.GetIncomingQueueSize())
 	i.fromPeer = make(chan *types.Span, imcConfig.GetPeerQueueSize())
-	i.outgoingTraces = make(chan sendableTrace, 100_000)
+	i.outgoingTraces = make(chan sendableTrace, i.Config.GetUpstreamBufferSize())
 	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
