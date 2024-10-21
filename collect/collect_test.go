@@ -126,7 +126,7 @@ func TestAddRootSpan(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
@@ -148,7 +148,7 @@ func TestAddRootSpan(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
 	// * send the trace
@@ -334,7 +334,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	coll.AddSpan(span)
 
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Eventually(t, func() bool {
 		transmission.Mux.RLock()
@@ -405,7 +405,7 @@ func TestAddSpan(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 	trace := coll.getFromCache(traceID)
 	require.NotNil(t, trace)
 	assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
@@ -501,7 +501,7 @@ func TestDryRunMode(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
@@ -525,7 +525,7 @@ func TestDryRunMode(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Equal(t, traceID2, coll.getFromCache(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 
@@ -538,7 +538,7 @@ func TestDryRunMode(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	// adding root span to send the trace
 	transmission.Mux.RLock()
@@ -562,7 +562,7 @@ func TestDryRunMode(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	// adding one span with no parent ID should:
 	// * create the trace in the cache
@@ -975,7 +975,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		}
 		coll.AddSpanFromPeer(span)
 	}
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Equal(t, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	transmission.Mux.RLock()
@@ -992,7 +992,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
@@ -1088,7 +1088,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
@@ -1186,7 +1186,7 @@ func TestAddSpanCount(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	transmission.Mux.RLock()
@@ -1267,7 +1267,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -1404,7 +1404,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -1565,7 +1565,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		},
 	}
 	coll.AddSpanFromPeer(span)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -1577,7 +1577,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	transmission.Mux.RLock()
 	assert.Equal(t, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
@@ -1707,7 +1707,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		coll.AddSpan(rootSpan)
 	}
 	// now we add the root span and verify that both got sent and that the root span had the span count
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 3)
 
 	transmission.Mux.RLock()
 	assert.Equal(t, 6, len(transmission.Events), "adding a root span should send all spans in the trace")
