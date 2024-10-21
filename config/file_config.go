@@ -185,12 +185,13 @@ type RefineryTelemetryConfig struct {
 }
 
 type TracesConfig struct {
-	SendDelay    Duration `yaml:"SendDelay" default:"2s"`
-	BatchTimeout Duration `yaml:"BatchTimeout" default:"100ms"`
-	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s"`
-	MaxBatchSize uint     `yaml:"MaxBatchSize" default:"500"`
-	SendTicker   Duration `yaml:"SendTicker" default:"100ms"`
-	SpanLimit    uint     `yaml:"SpanLimit"`
+	SendDelay        Duration `yaml:"SendDelay" default:"2s"`
+	BatchTimeout     Duration `yaml:"BatchTimeout" default:"100ms"`
+	TraceTimeout     Duration `yaml:"TraceTimeout" default:"60s"`
+	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
+	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
+	SpanLimit        uint     `yaml:"SpanLimit"`
+	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"0"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {
