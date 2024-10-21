@@ -462,12 +462,12 @@ func TestDryRunMode(t *testing.T) {
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
+	require.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5000)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 	go coll.sendTraces()
@@ -480,15 +480,15 @@ func TestDryRunMode(t *testing.T) {
 	// sampling decisions based on trace ID
 	sampleRate1, keepTraceID1, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
 	// would be dropped if dry run mode was not enabled
-	assert.False(t, keepTraceID1)
-	assert.Equal(t, uint(10), sampleRate1)
+	require.False(t, keepTraceID1)
+	require.Equal(t, uint(10), sampleRate1)
 	sampleRate2, keepTraceID2, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
-	assert.True(t, keepTraceID2)
-	assert.Equal(t, uint(10), sampleRate2)
+	require.True(t, keepTraceID2)
+	require.Equal(t, uint(10), sampleRate2)
 	sampleRate3, keepTraceID3, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
 	// would be dropped if dry run mode was not enabled
-	assert.False(t, keepTraceID3)
-	assert.Equal(t, uint(10), sampleRate3)
+	require.False(t, keepTraceID3)
+	require.Equal(t, uint(10), sampleRate3)
 
 	span := &types.Span{
 		TraceID: traceID1,
@@ -505,10 +505,10 @@ func TestDryRunMode(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+	require.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
-	assert.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
-	assert.Equal(t, keepTraceID1, transmission.Events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	require.Equal(t, 1, len(transmission.Events), "adding a root span should send the span")
+	require.Equal(t, keepTraceID1, transmission.Events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
 
 	// add a non-root span, create the trace in the cache
@@ -525,7 +525,7 @@ func TestDryRunMode(t *testing.T) {
 	coll.AddSpanFromPeer(span)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
-	assert.Equal(t, traceID2, coll.getFromCache(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	require.Equal(t, traceID2, coll.getFromCache(traceID2).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
 		TraceID: traceID2,
@@ -540,15 +540,15 @@ func TestDryRunMode(t *testing.T) {
 
 	// adding root span to send the trace
 	transmission.Mux.RLock()
-	assert.Equal(t, 3, len(transmission.Events), "adding another root span should send the span")
+	require.Equal(t, 3, len(transmission.Events), "adding another root span should send the span")
 	// both spans should be marked with the sampling decision
-	assert.Equal(t, keepTraceID2, transmission.Events[1].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
-	assert.Equal(t, keepTraceID2, transmission.Events[2].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	require.Equal(t, keepTraceID2, transmission.Events[1].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	require.Equal(t, keepTraceID2, transmission.Events[2].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
 	// check that meta value associated with dry run mode is properly applied
-	assert.Equal(t, uint(10), transmission.Events[1].Data["meta.dryrun.sample_rate"])
+	require.Equal(t, uint(10), transmission.Events[1].Data["meta.dryrun.sample_rate"])
 	// check expected sampleRate against span data
-	assert.Equal(t, sampleRate1, transmission.Events[0].Data["meta.dryrun.sample_rate"])
-	assert.Equal(t, sampleRate2, transmission.Events[1].Data["meta.dryrun.sample_rate"])
+	require.Equal(t, sampleRate1, transmission.Events[0].Data["meta.dryrun.sample_rate"])
+	require.Equal(t, sampleRate2, transmission.Events[1].Data["meta.dryrun.sample_rate"])
 	transmission.Mux.RUnlock()
 
 	span = &types.Span{
@@ -566,10 +566,10 @@ func TestDryRunMode(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
+	require.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
 	transmission.Mux.RLock()
-	assert.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
-	assert.Equal(t, keepTraceID3, transmission.Events[3].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
+	require.Equal(t, 4, len(transmission.Events), "adding a root span should send the span")
+	require.Equal(t, keepTraceID3, transmission.Events[3].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
 	transmission.Mux.RUnlock()
 }
 
