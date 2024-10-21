@@ -89,7 +89,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 	}
 
 	cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
-	apihost, err := url.Parse(fmt.Sprintf("%s:443", cfg.APIHost))
+	apihost, err := url.Parse(fmt.Sprintf("%s", cfg.APIHost))
 	if err != nil {
 		log.Fatalf("failed to parse otel API host: %v", err)
 	}
@@ -113,15 +113,20 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		}
 	}
 
-	tlsconfig := &tls.Config{}
-	secureOption := otlptracehttp.WithTLSClientConfig(tlsconfig)
+	options := []otlptracehttp.Option{
+		otlptracehttp.WithEndpoint(apihost.Host),
+		otlptracehttp.WithHeaders(headers),
+		otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
+	}
+	if cfg.Insecure {
+		options = append(options, otlptracehttp.WithInsecure())
+	} else {
+		options = append(options, otlptracehttp.WithTLSClientConfig(&tls.Config{}))
+	}
 	exporter, err := otlptrace.New(
 		context.Background(),
 		otlptracehttp.NewClient(
-			secureOption,
-			otlptracehttp.WithEndpoint(apihost.Host),
-			otlptracehttp.WithHeaders(headers),
-			otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
+			options...,
 		),
 	)
 	if err != nil {
