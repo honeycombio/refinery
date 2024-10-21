@@ -533,10 +533,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
-		// I am suspicious of why this call takes too long.
-		// I wonder if it is the ctx size being copied
-		// https://ui-kibble.honeycomb.io/dogfood/datasets/refinery-traces/result/vZ9de1MCmoX/trace/BMAsBRpzzqA?fields[]=s_name&fields[]=s_serviceName&fields[]=c_num_spans&fields[]=c_total_spans_sent&fields[]=c_num_traces_to_expire&span=3d4722ebda9089a1
-		_, span2 := i.Tracer.Start(ctx, "sendExpiredTrace", trace.WithAttributes(attribute.Int64("num_spans", int64(t.DescendantCount()))))
+		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendExpiredTrace", "num_spans", int64(t.DescendantCount()))
 		var duration time.Duration
 		var reason string
 		if t.RootSpan != nil {
