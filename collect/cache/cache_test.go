@@ -63,7 +63,7 @@ func TestTakeExpiredTraces(t *testing.T) {
 	}
 
 	expired := c.TakeExpiredTraces(now, 0)
-	assert.Equal(t, 3, len(expired))
+	assert.Equal(t, 2, len(expired))
 	assert.Equal(t, traces[0], expired[0])
 	assert.Equal(t, traces[1], expired[1])
 

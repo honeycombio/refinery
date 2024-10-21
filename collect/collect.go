@@ -1176,6 +1176,7 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 
 func (i *InMemCollector) sendTraces() {
 	for t := range i.outgoingTraces {
+		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
 		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
 		for _, sp := range t.GetSpans() {
 			if sp.IsDecisionSpan() {
