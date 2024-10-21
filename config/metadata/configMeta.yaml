@@ -401,10 +401,13 @@ groups:
           frequently.
 
       - name: MaxExpiredTraces
-        type: uint
+        type: int
         valuetype: nondefault
         default: 5000
         reload: true
+        validations:
+          - type: minimum
+            arg: 0
         summary: Max number of expired traces to process.
         description: >
           This setting controls how many traces are processed when it is time to

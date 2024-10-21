@@ -191,7 +191,7 @@ type TracesConfig struct {
 	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
 	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
 	SpanLimit        uint     `yaml:"SpanLimit"`
-	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"0"`
+	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"5000"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {
@@ -208,6 +208,10 @@ func (t TracesConfig) GetTraceTimeout() time.Duration {
 
 func (t TracesConfig) GetMaxBatchSize() uint {
 	return t.MaxBatchSize
+}
+
+func (t TracesConfig) GetMaxExpiredTraces() uint {
+	return t.MaxExpiredTraces
 }
 
 func (t TracesConfig) GetSendTickerValue() time.Duration {
