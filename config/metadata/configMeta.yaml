@@ -1175,6 +1175,9 @@ groups:
           multiples (100x to 1000x) of the total number of concurrently active
           traces (average trace throughput * average trace duration).
 
+          NOTE: This setting is now deprecated and no longer controls the cache size.
+          Instead the maxmimum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
+
       - name: PeerQueueSize
         type: int
         default: 30_000

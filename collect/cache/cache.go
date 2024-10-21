@@ -68,11 +68,8 @@ func NewInMemCache(
 		met.Register(metadata)
 	}
 
-	// if using the default capacity, allow the cache to grow really large by using math.MaxInt32 (2147483647)
-	if capacity == DefaultInMemCacheCapacity {
-		capacity = math.MaxInt32
-	}
-	cache, err := lru.New[string, *types.Trace](capacity)
+	// allow the cache to grow really large by using math.MaxInt32 (2147483647)
+	cache, err := lru.New[string, *types.Trace](math.MaxInt32)
 	if err != nil {
 		logger.Error().Logf("Failed to create LRU cache: %s", err)
 		return nil
