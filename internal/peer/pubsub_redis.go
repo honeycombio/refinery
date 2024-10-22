@@ -229,7 +229,11 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 	// This keeps the sharding logic happy.
 	peers := p.peers.Members()
 	if len(peers) == 0 {
-		peers = []string{"http://127.0.0.1:8081"}
+		myaddr, err := p.publicAddr()
+		if err != nil {
+			return nil, err
+		}
+		peers = []string{myaddr}
 	}
 	return peers, nil
 }
