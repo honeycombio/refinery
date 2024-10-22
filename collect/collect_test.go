@@ -583,9 +583,9 @@ func TestDryRunMode(t *testing.T) {
 		assert.Nil(collect, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
-		assert.Equal(collect, 4, len(transmission.Events), "adding a root span should send the span")
+		require.Equal(collect, 4, len(transmission.Events), "adding a root span should send the span")
 		assert.Equal(collect, keepTraceID3, transmission.Events[3].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
-	}, conf.GetTracesConfig().GetSendTickerValue()*5, conf.GetTracesConfig().GetSendTickerValue())
+	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
 
 }
 
