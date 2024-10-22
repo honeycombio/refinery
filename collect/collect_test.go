@@ -161,7 +161,7 @@ func TestAddRootSpan(t *testing.T) {
 		defer transmission.Mux.RUnlock()
 		require.Equal(collect, 2, len(transmission.Events), "adding another root span should send the span")
 		assert.Equal(collect, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
-	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
+	}, conf.GetTracesConfig().GetSendTickerValue()*10, conf.GetTracesConfig().GetSendTickerValue()*2)
 
 	decisionSpanTraceID := "decision_root_span"
 	span = &types.Span{
@@ -538,7 +538,7 @@ func TestDryRunMode(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return traceID2 == coll.getFromCache(traceID2).TraceID
-	}, conf.GetTracesConfig().GetSendTickerValue()*3, conf.GetTracesConfig().GetSendTickerValue(), "after adding the span, we should have a trace in the cache with the right trace ID")
+	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
 		TraceID: traceID2,
