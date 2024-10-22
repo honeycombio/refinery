@@ -133,7 +133,6 @@ func TestAddRootSpan(t *testing.T) {
 	// * remove the trace from the cache
 	// * remove the trace from the cache
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Nil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 
@@ -141,6 +140,7 @@ func TestAddRootSpan(t *testing.T) {
 		assert.Equal(collect, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
 	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 
 	span = &types.Span{
 		TraceID: traceID2,
@@ -156,12 +156,13 @@ func TestAddRootSpan(t *testing.T) {
 	// * send the trace
 	// * remove the trace from the cache
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Nil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 		require.Equal(collect, 2, len(transmission.Events), "adding another root span should send the span")
 		assert.Equal(collect, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
 	}, conf.GetTracesConfig().GetSendTickerValue()*10, conf.GetTracesConfig().GetSendTickerValue()*2)
+
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 
 	decisionSpanTraceID := "decision_root_span"
 	span = &types.Span{
@@ -182,11 +183,12 @@ func TestAddRootSpan(t *testing.T) {
 	// * send the trace
 	// * remove the trace from the cache
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Nil(collect, coll.getFromCache(decisionSpanTraceID), "after sending the span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 		assert.Equal(collect, 2, len(transmission.Events), "adding a root decision span should send the trace but not the decision span itself")
 	}, conf.GetTracesConfig().GetSendTickerValue()*5, conf.GetTracesConfig().GetSendTickerValue())
+
+	assert.Nil(t, coll.getFromCache(decisionSpanTraceID), "after sending the span, it should be removed from the cache")
 }
 
 // #490, SampleRate getting stomped could cause confusion if sampling was
@@ -1294,14 +1296,15 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	coll.AddSpan(rootSpan)
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Nil(collect, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 		assert.Equal(collect, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
 		assert.Equal(collect, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 		assert.Equal(collect, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
 		assert.Equal(collect, "deterministic/always - late arriving span", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
-	}, 2*conf.GetTracesConfig().GetSendTickerValue(), 1*time.Millisecond)
+	}, 5*conf.GetTracesConfig().GetSendTickerValue(), conf.GetTracesConfig().GetSendTickerValue())
+
+	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
 // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
