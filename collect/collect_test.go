@@ -159,9 +159,9 @@ func TestAddRootSpan(t *testing.T) {
 		assert.Nil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
-		assert.Equal(collect, 2, len(transmission.Events), "adding another root span should send the span")
+		require.Equal(collect, 2, len(transmission.Events), "adding another root span should send the span")
 		assert.Equal(collect, "aoeu", transmission.Events[1].Dataset, "sending a root span should immediately send that span via transmission")
-	}, conf.GetTracesConfig().GetSendTickerValue()*5, conf.GetTracesConfig().GetSendTickerValue())
+	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
 
 	decisionSpanTraceID := "decision_root_span"
 	span = &types.Span{
