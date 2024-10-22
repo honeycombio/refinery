@@ -405,9 +405,10 @@ groups:
         valuetype: nondefault
         default: 5000
         reload: true
+        firstVersion: 2.9
         validations:
           - type: minimum
-            arg: 0
+            arg: 1000
         summary: Max number of expired traces to process.
         description: >
           This setting controls how many traces are processed when it is time to
@@ -415,10 +416,10 @@ groups:
           `SendTicker` duration. If this number is too small it will mean Refinery
           is spending less time calculating sampling decisions, resulting in data
           arriving at Honeycomb slower.
-          
+
           If your `collector_collect_loop_duration_ms` is above 3 seconds it is
           recommended to reduce this value and the `SendTicker` duration. This
-          will mean Refinery makes less sampling decision calculations each 
+          will mean Refinery makes fewer sampling decision calculations each
           `SendTicker` tick, but gets the chance to make decisions more often.
 
   - name: Debugging
