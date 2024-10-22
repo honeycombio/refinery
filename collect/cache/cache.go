@@ -1,10 +1,8 @@
 package cache
 
 import (
-	"math"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -44,7 +42,8 @@ type DefaultInMemCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
-	cache    *lru.Cache[string, *types.Trace]
+	cache    map[string]*types.Trace
+	queue    []string // used as a FIFO queue of trace IDs
 	capacity int
 }
 
@@ -68,18 +67,12 @@ func NewInMemCache(
 		met.Register(metadata)
 	}
 
-	// allow the cache to grow really large by using math.MaxInt32 (2147483647)
-	cache, err := lru.New[string, *types.Trace](math.MaxInt32)
-	if err != nil {
-		logger.Error().Logf("Failed to create LRU cache: %s", err)
-		return nil
-	}
-
 	return &DefaultInMemCache{
 		Metrics:  met,
 		Logger:   logger,
-		cache:    cache,
 		capacity: capacity,
+		cache:    make(map[string]*types.Trace),
+		queue:    make([]string, 0, 0),
 	}
 }
 
@@ -88,7 +81,7 @@ func (d *DefaultInMemCache) GetCacheCapacity() int {
 }
 
 func (d *DefaultInMemCache) GetCacheEntryCount() int {
-	return d.cache.Len()
+	return len(d.cache)
 }
 
 // Set adds the trace to the ring. When the ring wraps around and hits a trace
@@ -101,62 +94,98 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 		return nil
 	}
 
-	// set retTrace to a trace if it is getting kicked out without having been
-	// sent. Leave it nil if we're not kicking out an unsent trace.
-	var retTrace *types.Trace
-	if d.cache.Len() >= d.capacity {
-		_, retTrace, _ = d.cache.RemoveOldest()
-		// if it hasn't already been sent,
-		// record that we're overrunning the buffer
-		if !retTrace.Sent {
-			d.Metrics.Increment("collect_cache_buffer_overrun")
+	var evictedTrace *types.Trace
+	_, exists := d.cache[trace.TraceID]
+	if !exists {
+		// if we're at capacity, we need to evict the oldest trace
+		if len(d.cache) >= d.capacity {
+			for len(d.queue) > 0 {
+				// get the oldest trace from the queue
+				traceID := d.queue[0]
+
+				// get the trace from the cache
+				evictedTrace = d.cache[traceID]
+				if evictedTrace != nil {
+					// if it hasn't already been sent,
+					// record that we're overrunning the buffer
+					if !evictedTrace.Sent {
+						d.Metrics.Increment("collect_cache_buffer_overrun")
+					}
+
+					// remove the trace from the cache and queue
+					delete(d.cache, traceID)
+					d.queue = d.queue[1:]
+					break
+				}
+			}
+
+			// check that we found a trace to evict
+			if evictedTrace == nil {
+				d.Logger.Warn().Logf("Failed to evict a trace from the cache when at capacity")
+			}
 		}
+
+		// add new trace to queue
+		d.queue = append(d.queue, trace.TraceID)
 	}
 
-	d.cache.Add(trace.TraceID, trace)
-	return retTrace
+	// add new trace to cache
+	d.cache[trace.TraceID] = trace
+	return evictedTrace
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
-	trace, _ := d.cache.Get(traceID)
-	return trace
+	return d.cache[traceID]
 }
 
 // GetAll is not thread safe and should only be used when that's ok
 // Returns all non-nil trace entries.
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
-	return d.cache.Values()
+	items := make([]*types.Trace, 0, len(d.cache))
+	for _, trace := range d.cache {
+		items = append(items, trace)
+	}
+	return items
 }
 
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int) []*types.Trace {
 	d.Metrics.Gauge("collect_cache_capacity", float64(d.capacity))
-	d.Metrics.Histogram("collect_cache_entries", float64(d.cache.Len()))
+	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
-	var res []*types.Trace
-	for _, t := range d.cache.Values() {
-		if max > 0 && len(res) >= max {
-			break
-		}
+	var expired []*types.Trace
+	for len(d.queue) > 0 {
+		// get oldest trace ID from queue
+		traceID := d.queue[0]
 
-		if now.After(t.SendBy) {
-			res = append(res, t)
-			d.cache.Remove(t.TraceID)
-			continue
+		// lookup trace in cache
+		trace := d.cache[traceID]
+		if trace != nil {
+			// check if trace has expired
+			if now.Before(trace.SendBy) {
+				// not expired, we stop looking as the queue is ordered by insertion time
+				break
+			}
+
+			// trace has expired
+			expired = append(expired, trace)
+
+			// remove the trace from the cache and queue
+			delete(d.cache, traceID)
+			d.queue = d.queue[1:]
 		}
-		break
 	}
-	return res
+	return expired
 }
 
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	d.Metrics.Gauge("collect_cache_capacity", float64(d.capacity))
-	d.Metrics.Histogram("collect_cache_entries", float64(d.cache.Len()))
+	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
 	for _, traceID := range toDelete.Members() {
-		d.cache.Remove(traceID)
+		delete(d.cache, traceID)
 	}
 }

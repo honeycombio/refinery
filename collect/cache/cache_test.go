@@ -140,6 +140,24 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	assert.Equal(t, traces[2], prev)
 }
 
+func TestSettingTheSameTraceDoesNotReaddItsIDToTheQueue(t *testing.T) {
+	s := &metrics.MockMetrics{}
+	s.Start()
+	c := NewInMemCache(4, s, &logger.NullLogger{})
+	now := time.Now()
+
+	trace := &types.Trace{
+		TraceID: "1",
+		SendBy:  now.Add(-time.Minute),
+	}
+
+	for i := 0; i < 10; i++ {
+		c.Set(trace)
+		assert.Len(t, c.GetAll(), 1)
+		assert.Len(t, c.queue, 1)
+	}
+}
+
 // Benchamark the cache's Set method
 func BenchmarkCache_Set(b *testing.B) {
 	metrics := &metrics.MockMetrics{}
