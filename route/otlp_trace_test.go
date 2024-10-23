@@ -88,7 +88,7 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 	})
 
@@ -105,7 +105,7 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 	})
 
@@ -142,7 +142,7 @@ func TestOTLPHandler(t *testing.T) {
 
 		time.Sleep(conf.GetTracesConfigVal.GetSendTickerValue() * 2)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 
 		spanEvent := events[0]
@@ -190,7 +190,7 @@ func TestOTLPHandler(t *testing.T) {
 
 		time.Sleep(conf.GetTracesConfigVal.GetSendTickerValue() * 2)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 
 		spanLink := events[1]
@@ -277,7 +277,7 @@ func TestOTLPHandler(t *testing.T) {
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 	})
 
@@ -313,7 +313,7 @@ func TestOTLPHandler(t *testing.T) {
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 	})
 
@@ -352,7 +352,7 @@ func TestOTLPHandler(t *testing.T) {
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 	})
 
@@ -380,7 +380,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, w.Code, http.StatusOK)
 		assert.Equal(t, "{}", w.Body.String())
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 	})
 
@@ -408,7 +408,7 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(1)
 		assert.Equal(t, 1, len(events))
 
 		event := events[0]
@@ -444,7 +444,7 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(1)
 		assert.Equal(t, 1, len(events))
 
 		event := events[0]
@@ -480,7 +480,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "not found in list of authorized keys")
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(0)
 		assert.Equal(t, 0, len(events))
 	})
 
@@ -508,7 +508,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(0)
 		assert.Equal(t, 0, len(events))
 	})
 
@@ -529,7 +529,7 @@ func TestOTLPHandler(t *testing.T) {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
@@ -559,7 +559,7 @@ func TestOTLPHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(2)
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]

@@ -430,7 +430,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		router.postOTLPLogs(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		events := mockTransmission.GetAll()
+		events := mockTransmission.Get(1)
 		assert.Equal(t, 1, len(events))
 		event := events[0]
 		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])

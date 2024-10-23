@@ -22,13 +22,16 @@ func (m *MockTransmission) Stop() error {
 	return nil
 }
 
-func (m *MockTransmission) GetAll() []*types.Event {
-	events := []*types.Event{}
+func (m *MockTransmission) Get(expectedCount int) []*types.Event {
+	events := make([]*types.Event, 0, len(m.Events))
 	for {
 		select {
 		case ev := <-m.Events:
 			events = append(events, ev)
 		default:
+			if len(events) != expectedCount {
+				continue
+			}
 			return events
 		}
 	}
