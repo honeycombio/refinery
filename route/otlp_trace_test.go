@@ -41,6 +41,7 @@ func TestOTLPHandler(t *testing.T) {
 	mockMetrics.Start()
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
+	defer mockTransmission.Stop()
 	decoders, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
@@ -86,8 +87,9 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		mockTransmission.Flush()
+
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 	})
 
 	t.Run("span without status", func(t *testing.T) {
@@ -103,8 +105,8 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		mockTransmission.Flush()
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 	})
 
 	// TODO: (MG) figure out how we can test JSON created from OTLP requests
@@ -140,10 +142,10 @@ func TestOTLPHandler(t *testing.T) {
 
 		time.Sleep(conf.GetTracesConfigVal.GetSendTickerValue() * 2)
 
-		mockTransmission.Mux.Lock()
-		assert.Equal(t, 2, len(mockTransmission.Events))
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 
-		spanEvent := mockTransmission.Events[0]
+		spanEvent := events[0]
 		// assert.Equal(t, time.Unix(0, int64(12345)).UTC(), spanEvent.Timestamp)
 		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanEvent.Data["trace.trace_id"])
 		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data["trace.span_id"])
@@ -151,8 +153,6 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, "span_with_event", spanEvent.Data["parent.name"])
 		assert.Equal(t, "span_event", spanEvent.Data["meta.annotation_type"])
 		assert.Equal(t, "event_attr_key", spanEvent.Data["event_attr_val"])
-		mockTransmission.Mux.Unlock()
-		mockTransmission.Flush()
 	})
 
 	t.Run("creates events for span links", func(t *testing.T) {
@@ -189,16 +189,17 @@ func TestOTLPHandler(t *testing.T) {
 		}
 
 		time.Sleep(conf.GetTracesConfigVal.GetSendTickerValue() * 2)
-		assert.Equal(t, 2, len(mockTransmission.Events))
 
-		spanLink := mockTransmission.Events[1]
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
+
+		spanLink := events[1]
 		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanLink.Data["trace.trace_id"])
 		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data["trace.span_id"])
 		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data["trace.link.trace_id"])
 		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data["trace.link.span_id"])
 		assert.Equal(t, "link", spanLink.Data["meta.annotation_type"])
 		assert.Equal(t, "link_attr_val", spanLink.Data["link_attr_key"])
-		mockTransmission.Flush()
 	})
 
 	t.Run("invalid headers", func(t *testing.T) {
@@ -276,8 +277,8 @@ func TestOTLPHandler(t *testing.T) {
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		mockTransmission.Flush()
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 	})
 
 	t.Run("can receive OTLP over HTTP/protobuf with gzip encoding", func(t *testing.T) {
@@ -312,8 +313,8 @@ func TestOTLPHandler(t *testing.T) {
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		mockTransmission.Flush()
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 	})
 
 	t.Run("can receive OTLP over HTTP/protobuf with zstd encoding", func(t *testing.T) {
@@ -351,8 +352,8 @@ func TestOTLPHandler(t *testing.T) {
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		mockTransmission.Flush()
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 	})
 
 	t.Run("accepts OTLP over HTTP/JSON ", func(t *testing.T) {
@@ -379,8 +380,8 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, w.Code, http.StatusOK)
 		assert.Equal(t, "{}", w.Body.String())
 
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		mockTransmission.Flush()
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
 	})
 
 	t.Run("events created with legacy keys use dataset header", func(t *testing.T) {
@@ -406,11 +407,13 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		assert.Equal(t, 1, len(mockTransmission.Events))
-		event := mockTransmission.Events[0]
+
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 1, len(events))
+
+		event := events[0]
 		assert.Equal(t, "my-dataset", event.Dataset)
 		assert.Equal(t, "", event.Environment)
-		mockTransmission.Flush()
 	})
 
 	t.Run("events created with non-legacy keys lookup and use environment name", func(t *testing.T) {
@@ -440,11 +443,13 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		assert.Equal(t, 1, len(mockTransmission.Events))
-		event := mockTransmission.Events[0]
+
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 1, len(events))
+
+		event := events[0]
 		assert.Equal(t, "my-service", event.Dataset)
 		assert.Equal(t, "local", event.Environment)
-		mockTransmission.Flush()
 	})
 
 	t.Run("rejects bad API keys - HTTP", func(t *testing.T) {
@@ -475,8 +480,8 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "not found in list of authorized keys")
 
-		assert.Equal(t, 0, len(mockTransmission.Events))
-		mockTransmission.Flush()
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 0, len(events))
 	})
 
 	t.Run("rejects bad API keys - gRPC", func(t *testing.T) {
@@ -502,8 +507,9 @@ func TestOTLPHandler(t *testing.T) {
 		_, err := traceServer.Export(ctx, req)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
-		assert.Equal(t, 0, len(mockTransmission.Events))
-		mockTransmission.Flush()
+
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 0, len(events))
 	})
 
 	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
@@ -522,10 +528,12 @@ func TestOTLPHandler(t *testing.T) {
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		event := mockTransmission.Events[0]
+
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
+
+		event := events[0]
 		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
-		mockTransmission.Flush()
 	})
 
 	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
@@ -551,8 +559,10 @@ func TestOTLPHandler(t *testing.T) {
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 
-		assert.Equal(t, 2, len(mockTransmission.Events))
-		event := mockTransmission.Events[0]
+		events := mockTransmission.GetAll()
+		assert.Equal(t, 2, len(events))
+
+		event := events[0]
 		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
 		mockTransmission.Flush()
 	})
