@@ -34,7 +34,7 @@ Samplers:
             ClearFrequency: 1m0s
             FieldList:
                 - request.method
-                - http.target
+                - root.http.target
                 - response.status_code
             UseTraceLength: true
     env2:
@@ -47,7 +47,7 @@ Samplers:
             BurstDetectionDelay: 3
             FieldList:
                 - request.method
-                - http.target
+                - root.http.target
                 - response.status_code
             UseTraceLength: true
     env3:
@@ -134,3 +134,4 @@ Samplers:
             GoalThroughputPerSec: 100
             FieldList:
                 - request.method
+                - root.http.target

@@ -97,6 +97,9 @@ Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
+For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
+This is useful when you want to sample based on the root span's properties rather than the entire trace, and helps to reduce the cardinality of the sampler key.
 In contrast, for example, consider as a bad set of fields: a combination of `HTTP endpoint`, `status code`, and `pod id`, since it would result in keys that are all unique, and therefore result in sampling 100% of traces.
 For example, rather than a set of fields, using only the `HTTP endpoint` field is a **bad** choice, as it is not unique enough, and therefore interesting traces, like traces that experienced a `500`, might not be sampled.
 Field names may come from any span in the trace; if they occur on multiple spans, then all unique values will be included in the key.
@@ -199,6 +202,9 @@ Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
+For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
+This is useful when you want to sample based on the root span's properties rather than the entire trace, and helps to reduce the cardinality of the sampler key.
 In contrast, for example, consider as a bad set of fields: a combination of `HTTP endpoint`, `status code`, and `pod id`, since it would result in keys that are all unique, and therefore result in sampling 100% of traces.
 For example, rather than a set of fields, using only the `HTTP endpoint` field is a **bad** choice, as it is not unique enough, and therefore interesting traces, like traces that experienced a `500`, might not be sampled.
 Field names may come from any span in the trace; if they occur on multiple spans, then all unique values will be included in the key.
@@ -313,6 +319,9 @@ Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
+For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
+This is useful when you want to sample based on the root span's properties rather than the entire trace, and helps to reduce the cardinality of the sampler key.
 In contrast, for example, consider as a bad set of fields: a combination of `HTTP endpoint`, `status code`, and `pod id`, since it would result in keys that are all unique, and therefore result in sampling 100% of traces.
 For example, rather than a set of fields, using only the `HTTP endpoint` field is a **bad** choice, as it is not unique enough, and therefore interesting traces, like traces that experienced a `500`, might not be sampled.
 Field names may come from any span in the trace; if they occur on multiple spans, then all unique values will be included in the key.
@@ -398,6 +407,9 @@ Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
+For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
+This is useful when you want to sample based on the root span's properties rather than the entire trace, and helps to reduce the cardinality of the sampler key.
 In contrast, for example, consider as a bad set of fields: a combination of `HTTP endpoint`, `status code`, and `pod id`, since it would result in keys that are all unique, and therefore result in sampling 100% of traces.
 For example, rather than a set of fields, using only the `HTTP endpoint` field is a **bad** choice, as it is not unique enough, and therefore interesting traces, like traces that experienced a `500`, might not be sampled.
 Field names may come from any span in the trace; if they occur on multiple spans, then all unique values will be included in the key.
@@ -608,6 +620,9 @@ Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
+As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
+For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
+This is useful when you want to sample based on the root span's properties rather than the entire trace, and helps to reduce the cardinality of the sampler key.
 In contrast, for example, consider as a bad set of fields: a combination of `HTTP endpoint`, `status code`, and `pod id`, since it would result in keys that are all unique, and therefore result in sampling 100% of traces.
 For example, rather than a set of fields, using only the `HTTP endpoint` field is a **bad** choice, as it is not unique enough, and therefore interesting traces, like traces that experienced a `500`, might not be sampled.
 Field names may come from any span in the trace; if they occur on multiple spans, then all unique values will be included in the key.
