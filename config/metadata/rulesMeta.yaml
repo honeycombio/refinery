@@ -102,6 +102,14 @@ groups:
           all endpoints under normal traffic and call out when there is
           failing traffic to any endpoint.
 
+          As of Refinery 2.8.0, the `root.` prefix can be used to limit the
+          field value to that of the root span. For example,
+          `root.http.response.status_code` will only consider the
+          `http.response.status_code` field from the root span rather than a
+          combination of all the spans in the trace.  This is useful when you
+          want to sample based on the root span's properties rather than the
+          entire trace, and helps to reduce the cardinality of the sampler key.
+
           In contrast, for example, consider as a bad set of fields: a
           combination of `HTTP endpoint`, `status code`, and `pod id`, since it
           would result in keys that are all unique, and therefore result in
