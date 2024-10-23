@@ -400,6 +400,28 @@ groups:
           Decreasing this will check the trace cache for timeouts more
           frequently.
 
+      - name: MaxExpiredTraces
+        type: int
+        valuetype: nondefault
+        default: 5000
+        reload: true
+        firstVersion: 2.9
+        validations:
+          - type: minimum
+            arg: 1000
+        summary: Max number of expired traces to process.
+        description: >
+          This setting controls how many traces are processed when it is time to
+          make a sampling decision. Up to this many traces will be processed every
+          `SendTicker` duration. If this number is too small it will mean Refinery
+          is spending less time calculating sampling decisions, resulting in data
+          arriving at Honeycomb slower.
+
+          If your `collector_collect_loop_duration_ms` is above 3 seconds it is
+          recommended to reduce this value and the `SendTicker` duration. This
+          will mean Refinery makes fewer sampling decision calculations each
+          `SendTicker` tick, but gets the chance to make decisions more often.
+
   - name: Debugging
     title: "Debugging"
     description: contains configuration values used when setting up and debugging Refinery.
