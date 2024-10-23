@@ -71,8 +71,8 @@ func NewInMemCache(
 		Metrics:  met,
 		Logger:   logger,
 		capacity: capacity,
-		cache:    make(map[string]*types.Trace),
-		queue:    make([]string, 0, 0),
+		cache:    make(map[string]*types.Trace, capacity),
+		queue:    make([]string, 0, capacity),
 	}
 }
 
