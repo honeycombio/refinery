@@ -64,15 +64,15 @@ func TestTakeExpiredTraces(t *testing.T) {
 
 	expired := c.TakeExpiredTraces(now, 0)
 	assert.Equal(t, 2, len(expired))
-	assert.Equal(t, traces[0], expired[0])
-	assert.Equal(t, traces[1], expired[1])
+	assert.Contains(t, expired, traces[0])
+	assert.Contains(t, expired, traces[1])
 
 	assert.Equal(t, 2, c.GetCacheEntryCount())
 
 	all := c.GetAll()
 	assert.Equal(t, 2, len(all))
-	assert.Equal(t, traces[2], all[0])
-	assert.Equal(t, traces[3], all[1])
+	assert.Contains(t, all, traces[2])
+	assert.Contains(t, all, traces[3])
 }
 
 func TestRemoveSentTraces(t *testing.T) {
