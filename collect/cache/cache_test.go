@@ -165,9 +165,12 @@ func BenchmarkCache_Set(b *testing.B) {
 	_, traces := generateTraces(b.N)
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
-	b.Run("InMemCache", func(b *testing.B) {
-		populateCache(c, traces)
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	populateCache(c, traces)
 }
 
 // Benchmark the cache's Get method
@@ -178,11 +181,14 @@ func BenchmarkCache_Get(b *testing.B) {
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
-	b.Run("InMemCache", func(b *testing.B) {
-		for traceID, _ := range traces {
-			c.Get(traceID)
-		}
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for traceID, _ := range traces {
+		c.Get(traceID)
+	}
 }
 
 // Benchmark the cache's TakeExpiredTraces method
@@ -193,11 +199,14 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
-	b.Run("InMemCache", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0)
-		}
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0)
+	}
 }
 
 // Benchmark the cache's RemoveTraces method
@@ -213,9 +222,12 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
-	b.Run("InMemCache", func(b *testing.B) {
-		c.RemoveTraces(deletes)
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	c.RemoveTraces(deletes)
 }
 
 func generateTraces(n int) (time.Time, map[string]*types.Trace) {
