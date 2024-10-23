@@ -1,6 +1,7 @@
 package collect
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -129,7 +130,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * remove the trace from the cache
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := transmission.GetAll()
+		events := transmission.Get(1)
 		require.Equal(collect, 1, len(events), "adding a root span should send the span")
 		assert.Equal(collect, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
@@ -151,7 +152,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * remove the trace from the cache
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 
-		events := transmission.GetAll()
+		events := transmission.Get(1)
 		require.Equal(collect, 1, len(events), "adding another root span should send the span")
 		assert.Equal(collect, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
 	}, conf.GetTracesConfig().GetSendTickerValue()*10, conf.GetTracesConfig().GetSendTickerValue()*2)
@@ -176,10 +177,8 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := transmission.GetAll()
-		assert.Equal(collect, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
-	}, conf.GetTracesConfig().GetSendTickerValue()*5, conf.GetTracesConfig().GetSendTickerValue())
+	events := transmission.Get(0)
+	assert.Equal(t, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
 
 	assert.Nil(t, coll.getFromCache(decisionSpanTraceID), "after sending the span, it should be removed from the cache")
 }
@@ -187,105 +186,108 @@ func TestAddRootSpan(t *testing.T) {
 // #490, SampleRate getting stomped could cause confusion if sampling was
 // happening upstream of refinery. Writing down what got sent to refinery
 // will help people figure out what is going on.
-//func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
-//	// The sample rate applied by Refinery in this test's config.
-//	const expectedDeterministicSampleRate = int(2)
-//	// The sample rate happening upstream of Refinery.
-//	const originalSampleRate = uint(50)
-//
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(2 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(1 * time.Second),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
-//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//	}
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//	stc, err := newCache()
-//	assert.NoError(t, err, "lru cache should start")
-//	coll.sampleTraceCache = stc
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.outgoingTraces = make(chan sendableTrace, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	go coll.sendTraces()
-//
-//	defer coll.Stop()
-//
-//	// Generate events until one is sampled and appears on the transmission queue for sending.
-//	sendAttemptCount := 0
-//	for getEventsLength(transmission) < 1 {
-//		sendAttemptCount++
-//		span := &types.Span{
-//			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
-//			Event: types.Event{
-//				Dataset:    "aoeu",
-//				APIKey:     legacyAPIKey,
-//				SampleRate: originalSampleRate,
-//				Data:       make(map[string]interface{}),
-//			},
-//		}
-//		err := coll.AddSpan(span)
-//		require.NoError(t, err, "must be able to add the span")
-//		time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
-//	}
-//
-//	transmission.Mux.RLock()
-//	require.Greater(t, len(transmission.Events), 0,
-//		"At least one event should have been sampled and transmitted by now for us to make assertions upon.")
-//	upstreamSampledEvent := transmission.Events[0]
-//	transmission.Mux.RUnlock()
-//
-//	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data["meta.refinery.original_sample_rate"],
-//		"metadata should be populated with original sample rate")
-//	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
-//		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
-//
-//	// Generate one more event with no upstream sampling applied.
-//	err = coll.AddSpan(&types.Span{
-//		TraceID: fmt.Sprintf("trace-%v", 1000),
-//		Event: types.Event{
-//			Dataset:    "no-upstream-sampling",
-//			APIKey:     legacyAPIKey,
-//			SampleRate: 0, // no upstream sampling
-//			Data:       make(map[string]interface{}),
-//		},
-//		IsRoot: true,
-//	})
-//	require.NoError(t, err, "must be able to add the span")
-//
-//	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
-//	// should be the last event on the transmission queue.
-//	var noUpstreamSampleRateEvent *types.Event
-//	require.Eventually(t, func() bool {
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		noUpstreamSampleRateEvent = transmission.Events[len(transmission.Events)-1]
-//		return noUpstreamSampleRateEvent.Dataset == "no-upstream-sampling"
-//	}, 5*time.Second, conf.GetTracesConfig().GetSendTickerValue()*2, "the event with no upstream sampling should have appeared in the transmission queue by now")
-//
-//	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
-//		"original sample rate should not be set in metadata when original sample rate is zero")
-//}
-//
-//// HoneyComb treats a missing or 0 SampleRate the same as 1, but
-//// behaves better/more consistently if the SampleRate is explicitly
-//// set instead of inferred
+func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
+	// The sample rate applied by Refinery in this test's config.
+	const expectedDeterministicSampleRate = int(2)
+	// The sample rate happening upstream of Refinery.
+	const originalSampleRate = uint(50)
+
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(1 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	// Generate events until one is sampled and appears on the transmission queue for sending.
+	sendAttemptCount := 0
+	for len(transmission.Events) < 1 {
+		sendAttemptCount++
+		span := &types.Span{
+			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
+			Event: types.Event{
+				Dataset:    "aoeu",
+				APIKey:     legacyAPIKey,
+				SampleRate: originalSampleRate,
+				Data:       make(map[string]interface{}),
+			},
+		}
+		err := coll.AddSpan(span)
+		require.NoError(t, err, "must be able to add the span")
+		time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
+	}
+
+	var upstreamSampledEvent *types.Event
+	for event := range transmission.Events {
+		upstreamSampledEvent = event
+		break
+	}
+
+	assert.NotNil(t, upstreamSampledEvent)
+	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data["meta.refinery.original_sample_rate"],
+		"metadata should be populated with original sample rate")
+	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
+		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
+
+	// Generate one more event with no upstream sampling applied.
+	err = coll.AddSpan(&types.Span{
+		TraceID: fmt.Sprintf("trace-%v", 1000),
+		Event: types.Event{
+			Dataset:    "no-upstream-sampling",
+			APIKey:     legacyAPIKey,
+			SampleRate: 0, // no upstream sampling
+			Data:       make(map[string]interface{}),
+		},
+		IsRoot: true,
+	})
+	require.NoError(t, err, "must be able to add the span")
+
+	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
+	// should be the last event on the transmission queue.
+	var noUpstreamSampleRateEvent *types.Event
+	for event := range transmission.Events {
+		if event.Dataset == "no-upstream-sampling" {
+			noUpstreamSampleRateEvent = event
+			break
+		}
+	}
+
+	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
+		"original sample rate should not be set in metadata when original sample rate is zero")
+}
+
+// HoneyComb treats a missing or 0 SampleRate the same as 1, but
+// behaves better/more consistently if the SampleRate is explicitly
+// set instead of inferred
 //func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 //	conf := &config.MockConfig{
 //		GetTracesConfigVal: config.TracesConfig{
@@ -344,12 +346,6 @@ func TestAddRootSpan(t *testing.T) {
 //	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue())
 //}
 //
-//func getEventsLength(transmission *transmit.MockTransmission) int {
-//	transmission.Mux.RLock()
-//	defer transmission.Mux.RUnlock()
-//
-//	return len(transmission.Events)
-//}
 //
 //// TestAddSpan tests that adding a span winds up with a trace object in the
 //// cache
