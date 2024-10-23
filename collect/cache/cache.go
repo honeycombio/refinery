@@ -171,10 +171,12 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int) []*types.T
 			// trace has expired
 			expired = append(expired, trace)
 
-			// remove the trace from the cache and queue
+			// remove the trace from the cache
 			delete(d.cache, traceID)
-			d.queue = d.queue[1:]
 		}
+
+		// remove the trace ID from the queue
+		d.queue = d.queue[1:]
 	}
 	return expired
 }
