@@ -1,35 +1,47 @@
 package transmit
 
 import (
-	"sync"
-
 	"github.com/honeycombio/refinery/types"
 )
 
 type MockTransmission struct {
-	Events []*types.Event
-	Mux    sync.RWMutex
+	Events   chan *types.Event
+	Capacity int
 }
 
 func (m *MockTransmission) Start() error {
-	m.Events = make([]*types.Event, 0)
+	if m.Capacity == 0 {
+		m.Capacity = 100
+	}
+	m.Events = make(chan *types.Event, m.Capacity)
 	return nil
 }
 
+func (m *MockTransmission) Stop() error {
+	close(m.Events)
+	return nil
+}
+
+func (m *MockTransmission) GetAll() []*types.Event {
+	events := []*types.Event{}
+	for {
+		select {
+		case ev := <-m.Events:
+			events = append(events, ev)
+		default:
+			return events
+		}
+	}
+}
+
 func (m *MockTransmission) EnqueueEvent(ev *types.Event) {
-	m.Mux.Lock()
-	defer m.Mux.Unlock()
-	m.Events = append(m.Events, ev)
+	m.Events <- ev
 }
 func (m *MockTransmission) EnqueueSpan(ev *types.Span) {
-	m.Mux.Lock()
-	defer m.Mux.Unlock()
-	m.Events = append(m.Events, &ev.Event)
+	m.Events <- &ev.Event
 }
 func (m *MockTransmission) Flush() {
-	m.Mux.Lock()
-	defer m.Mux.Unlock()
-	m.Events = m.Events[:0]
+	m.Events = make(chan *types.Event, m.Capacity)
 }
 
 func (m *MockTransmission) RegisterMetrics() {}
