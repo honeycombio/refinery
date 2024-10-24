@@ -129,13 +129,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 			break
 		}
 
-<<<<<<< Updated upstream
-		if now.After(t.SendBy) {
-			res = append(res, t)
-			d.cache.Remove(t.TraceID)
-=======
 		if d.cache[traceID] == nil {
->>>>>>> Stashed changes
 			continue
 		}
 
