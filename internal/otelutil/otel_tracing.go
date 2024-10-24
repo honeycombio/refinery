@@ -89,7 +89,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 	}
 
 	cfg.APIHost = strings.TrimSuffix(cfg.APIHost, "/")
-	apihost, err := url.Parse(fmt.Sprintf("%s", cfg.APIHost))
+	apihost, err := url.Parse(cfg.APIHost)
 	if err != nil {
 		log.Fatalf("failed to parse otel API host: %v", err)
 	}
