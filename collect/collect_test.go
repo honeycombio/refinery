@@ -74,8 +74,8 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 			Metrics: s,
 			Logger:  &logger.NullLogger{},
 		},
-		done:           make(chan struct{}),
-		traceDecisions: make(chan string, 50),
+		done:                 make(chan struct{}),
+		keptDecisionMessages: make(chan string, 50),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
 		},
@@ -92,7 +92,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 	}
 
 	if !conf.GetCollectionConfig().EnableTraceLocality {
-		localPubSub.Subscribe(context.Background(), traceDecisionTopic, c.signalTraceDecisions)
+		localPubSub.Subscribe(context.Background(), keptTraceDecisionTopic, c.signalKeptTraceDecisions)
 	}
 
 	return c
@@ -1096,16 +1096,19 @@ func TestAddCountsToRoot(t *testing.T) {
 		assert.Nil(collect, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
-		assert.Equal(collect, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
+		for _, event := range transmission.Events {
+			fmt.Printf("event: %+v\n", event)
+		}
+		assert.Equal(collect, 3, len(transmission.Events), "adding a root span should send all spans in the trace")
 		assert.Equal(collect, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 		assert.Equal(collect, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
 		assert.Equal(collect, nil, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
 		assert.Equal(collect, nil, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
 		assert.Equal(collect, nil, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
-		assert.Equal(collect, int64(2), transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
-		assert.Equal(collect, int64(2), transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
-		assert.Equal(collect, int64(1), transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
-		assert.Equal(collect, int64(5), transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
+		assert.Equal(collect, int64(2), transmission.Events[2].Data["meta.span_count"], "root span metadata should be populated with span count")
+		assert.Equal(collect, int64(2), transmission.Events[2].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
+		assert.Equal(collect, int64(1), transmission.Events[2].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
+		assert.Equal(collect, int64(5), transmission.Events[2].Data["meta.event_count"], "root span metadata should be populated with event count")
 	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2)
 
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")

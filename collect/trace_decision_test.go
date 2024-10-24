@@ -7,28 +7,44 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUnmarshalTraceDecisionMessage(t *testing.T) {
+func TestNewDroppedTraceDecision(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  string
+		want []string
+	}{
+		{
+			name: "multiple dropped decisions",
+			msg:  "1,2,3",
+			want: []string{"1", "2", "3"},
+		},
+		{
+			name: "single dropped decision",
+			msg:  "1",
+			want: []string{"1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := newDroppedTraceDecision(tt.msg)
+			assert.EqualValues(t, tt.want, got)
+		})
+	}
+}
+
+func TestNewKeptTraceDecision(t *testing.T) {
 	tests := []struct {
 		name    string
 		msg     string
-		want    []TraceDecision
+		want    *TraceDecision
 		wantErr bool
 	}{
 		{
-			name: "dropped decision",
-			msg:  "drop:1,2,3",
-			want: []TraceDecision{
-				{TraceID: "1"},
-				{TraceID: "2"},
-				{TraceID: "3"},
-			},
-			wantErr: false,
-		},
-		{
 			name: "kept decision",
-			msg:  `kept:{"TraceID":"1", "Kept": true, "SampleRate": 100, "SendReason":"` + TraceSendGotRoot + `"}`,
-			want: []TraceDecision{
-				{TraceID: "1", Kept: true, SampleRate: 100, SendReason: TraceSendGotRoot},
+			msg:  `{"TraceID":"1", "Kept": true, "SampleRate": 100, "SendReason":"` + TraceSendGotRoot + `"}`,
+			want: &TraceDecision{
+				TraceID: "1", Kept: true, SampleRate: 100, SendReason: TraceSendGotRoot,
 			},
 			wantErr: false,
 		},
@@ -38,16 +54,12 @@ func TestUnmarshalTraceDecisionMessage(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
-		{
-			name:    "unexpected message prefix",
-			msg:     "unexpected:1",
-			want:    nil,
-			wantErr: true,
-		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := unmarshalTraceDecisionMessage(tt.msg)
+			got, err := newKeptTraceDecision(tt.msg)
+
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -58,7 +70,6 @@ func TestUnmarshalTraceDecisionMessage(t *testing.T) {
 		})
 	}
 }
-
 func TestNewDroppedDecisionMessage(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -75,13 +86,13 @@ func TestNewDroppedDecisionMessage(t *testing.T) {
 		{
 			name:     "one traceID",
 			traceIDs: []string{"1"},
-			want:     "drop:1",
+			want:     "1",
 			wantErr:  false,
 		},
 		{
 			name:     "multiple traceIDs",
 			traceIDs: []string{"1", "2", "3"},
-			want:     "drop:1,2,3",
+			want:     "1,2,3",
 			wantErr:  false,
 		},
 	}
@@ -113,7 +124,7 @@ func TestNewKeptDecisionMessage(t *testing.T) {
 				SendReason: TraceSendGotRoot,
 				KeptReason: "deterministic",
 			},
-			want:    `kept:{"TraceID":"1","Kept":true,"SampleRate":100,"SendReason":"trace_send_got_root","HasRoot":false,"KeptReason":"deterministic"}`,
+			want:    `{"TraceID":"1","Kept":true,"SampleRate":100,"SendReason":"trace_send_got_root","HasRoot":false,"KeptReason":"deterministic"}`,
 			wantErr: false,
 		},
 		{

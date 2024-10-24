@@ -89,7 +89,15 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 	}
 }
 
+// defaultConfig returns a config with the given basePort and redisDB.
+// tests in this file are running in parallel, so we need to ensure that
+// each test gets a unique port and redisDB.
+//
+// by default, every Redis instance supports 16 databases.
 func defaultConfig(basePort int, redisDB int) *config.MockConfig {
+	if redisDB >= 16 {
+		panic("redisDB must be less than 16")
+	}
 	return &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(2 * time.Millisecond),

@@ -28,7 +28,7 @@ type Cache interface {
 
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
-	TakeExpiredTraces(now time.Time, max int) []*types.Trace
+	TakeExpiredTraces(now time.Time, max int, exclude func(*types.Trace) bool) []*types.Trace
 
 	// RemoveTraces accepts a set of trace IDs and removes any matching ones from
 	RemoveTraces(toDelete generics.Set[string])
@@ -130,7 +130,7 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
-func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int) []*types.Trace {
+func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, exclude func(*types.Trace) bool) []*types.Trace {
 	d.Metrics.Gauge("collect_cache_capacity", float64(d.capacity))
 	d.Metrics.Histogram("collect_cache_entries", float64(d.cache.Len()))
 
@@ -141,8 +141,10 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int) []*types.T
 		}
 
 		if now.After(t.SendBy) {
+			if exclude != nil && exclude(t) {
+				continue
+			}
 			res = append(res, t)
-			// TODO: we should not remove the trace until it's send
 			d.cache.Remove(t.TraceID)
 			continue
 		}
