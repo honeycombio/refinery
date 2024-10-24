@@ -26,26 +26,6 @@ func TestCacheSetGet(t *testing.T) {
 	assert.Equal(t, trace, tr, "fetched trace should equal what we put in")
 }
 
-// TestBufferOverrun verifies that when we have more in-flight traces than the
-// size of the buffer, we get a buffer overrun metric emitted
-func TestBufferOverrun(t *testing.T) {
-	s := &metrics.MockMetrics{}
-	s.Start()
-	c := NewInMemCache(2, s, &logger.NullLogger{})
-
-	traces := []*types.Trace{
-		{TraceID: "abc123"},
-		{TraceID: "def456"},
-		{TraceID: "ghi789"},
-	}
-
-	c.Set(traces[0])
-	c.Set(traces[1])
-	assert.Equal(t, 0, s.CounterIncrements["collect_cache_buffer_overrun"], "buffer should not yet have overrun")
-	c.Set(traces[2])
-	assert.Equal(t, 1, s.CounterIncrements["collect_cache_buffer_overrun"], "buffer should have overrun")
-}
-
 func TestTakeExpiredTraces(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
@@ -62,17 +42,17 @@ func TestTakeExpiredTraces(t *testing.T) {
 		c.Set(t)
 	}
 
-	expired := c.TakeExpiredTraces(now, 0)
+	expired := c.TakeExpiredTraces(now, 0, nil)
 	assert.Equal(t, 2, len(expired))
-	assert.Equal(t, traces[0], expired[0])
-	assert.Equal(t, traces[1], expired[1])
+	assert.Contains(t, expired, traces[0])
+	assert.Contains(t, expired, traces[1])
 
 	assert.Equal(t, 2, c.GetCacheEntryCount())
 
 	all := c.GetAll()
 	assert.Equal(t, 2, len(all))
-	assert.Equal(t, traces[2], all[0])
-	assert.Equal(t, traces[3], all[1])
+	assert.Contains(t, all, traces[2])
+	assert.Contains(t, all, traces[3])
 }
 
 func TestRemoveSentTraces(t *testing.T) {
@@ -99,6 +79,7 @@ func TestRemoveSentTraces(t *testing.T) {
 	assert.Equal(t, traces[1], all[0])
 }
 
+<<<<<<< Updated upstream
 func TestSkipOldUnsentTraces(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
@@ -139,6 +120,9 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	// make sure we kicked out #4
 	assert.Equal(t, traces[2], prev)
 }
+=======
+// Benchamark the cache's Set method
+>>>>>>> Stashed changes
 
 // Benchamark the cache's Set method
 func BenchmarkCache_Set(b *testing.B) {
@@ -147,9 +131,12 @@ func BenchmarkCache_Set(b *testing.B) {
 	_, traces := generateTraces(b.N)
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
-	b.Run("InMemCache", func(b *testing.B) {
-		populateCache(c, traces)
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	populateCache(c, traces)
 }
 
 // Benchmark the cache's Get method
@@ -160,11 +147,14 @@ func BenchmarkCache_Get(b *testing.B) {
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
-	b.Run("InMemCache", func(b *testing.B) {
-		for traceID, _ := range traces {
-			c.Get(traceID)
-		}
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for traceID, _ := range traces {
+		c.Get(traceID)
+	}
 }
 
 // Benchmark the cache's TakeExpiredTraces method
@@ -175,11 +165,14 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
-	b.Run("InMemCache", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0)
-		}
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0, nil)
+	}
 }
 
 // Benchmark the cache's RemoveTraces method
@@ -195,9 +188,12 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 	populateCache(c, traces)
-	b.Run("InMemCache", func(b *testing.B) {
-		c.RemoveTraces(deletes)
-	})
+
+	// setup is expensive, so reset timer and report allocations
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	c.RemoveTraces(deletes)
 }
 
 func generateTraces(n int) (time.Time, map[string]*types.Trace) {
