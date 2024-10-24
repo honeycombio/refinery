@@ -596,9 +596,6 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
 			td, err := i.makeDecision(t, TraceSendGotRoot)
 			if err != nil {
-				i.Logger.Warn().WithFields(map[string]interface{}{
-					"trace_id": t.TraceID,
-				}).Logf("error making decision for trace: %s", err.Error())
 				continue
 			}
 			i.send(ctx, t, td)
@@ -614,9 +611,6 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
 				td, err := i.makeDecision(t, TraceSendExpired)
 				if err != nil {
-					i.Logger.Error().WithFields(map[string]interface{}{
-						"trace_id": t.TraceID,
-					}).Logf("error making decision for trace: %s", err.Error())
 					continue
 				}
 				i.send(ctx, t, td)
