@@ -310,12 +310,12 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
-		tracesSent.Add(trace.TraceID)
-		totalDataSizeSent += trace.DataSize
 		td, err := i.makeDecision(trace, TraceSendEjectedMemsize)
 		if err != nil {
 			continue
 		}
+		tracesSent.Add(trace.TraceID)
+		totalDataSizeSent += trace.DataSize
 		i.send(ctx, trace, td)
 		if totalDataSizeSent > int(totalToRemove) {
 			break

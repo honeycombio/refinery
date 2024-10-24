@@ -875,6 +875,9 @@ func TestStableMaxAlloc(t *testing.T) {
 		if i < 3 {
 			// add some spans that belongs to peer
 			span.TraceID = peerTraceIDs[i]
+			// add extrac data so that the peer traces have bigger
+			// cache impact, which will get evicted first
+			span.Data["extra_data"] = strings.Repeat("abc", 100)
 
 		}
 		coll.AddSpan(span)
