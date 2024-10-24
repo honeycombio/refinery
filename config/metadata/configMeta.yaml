@@ -878,6 +878,17 @@ groups:
           incoming span generates multiple outgoing spans, a minimum sample rate of `100` is
           strongly advised.
 
+      - name: Insecure
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v2.8.5
+        summary: controls whether to send Refinery's own OpenTelemetry traces via http instead of https.
+        description: >
+          When true Refinery will export its internal traces over http instead of https. Useful if you
+          plan on sending your traces to a different refinery instance for tail sampling.
+
   - name: PeerManagement
     title: "Peer Management"
     description: controls how the Refinery cluster communicates between peers.
