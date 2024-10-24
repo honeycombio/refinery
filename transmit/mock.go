@@ -44,7 +44,7 @@ func (m *MockTransmission) EnqueueSpan(ev *types.Span) {
 	m.Events <- &ev.Event
 }
 func (m *MockTransmission) Flush() {
-	m.Events = make(chan *types.Event, m.Capacity)
+	return
 }
 
 func (m *MockTransmission) RegisterMetrics() {}
