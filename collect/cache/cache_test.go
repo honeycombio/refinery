@@ -62,7 +62,7 @@ func TestTakeExpiredTraces(t *testing.T) {
 		c.Set(t)
 	}
 
-	expired := c.TakeExpiredTraces(now, 0)
+	expired := c.TakeExpiredTraces(now, 0, nil)
 	assert.Equal(t, 2, len(expired))
 	assert.Equal(t, traces[0], expired[0])
 	assert.Equal(t, traces[1], expired[1])
@@ -116,12 +116,13 @@ func TestSkipOldUnsentTraces(t *testing.T) {
 	}
 
 	// this should remove traces 1 and 3
-	expired := c.TakeExpiredTraces(now, 0)
+	expired := c.TakeExpiredTraces(now, 0, nil)
 	assert.Equal(t, 2, len(expired))
 	assert.Equal(t, traces[0], expired[0])
 	assert.Equal(t, traces[1], expired[1])
 
 	assert.Equal(t, 2, c.GetCacheEntryCount())
+	c.RemoveTraces(generics.NewSet(expired[0].TraceID, expired[1].TraceID))
 
 	// fill up those slots now, which requires skipping over the old traces
 	newTraces := []*types.Trace{
@@ -177,7 +178,7 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 	populateCache(c, traces)
 	b.Run("InMemCache", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0)
+			c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0, nil)
 		}
 	})
 }
