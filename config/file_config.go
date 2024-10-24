@@ -278,6 +278,7 @@ type OTelTracingConfig struct {
 	APIKey     string `yaml:"APIKey" cmdenv:"OTelTracesAPIKey,HoneycombAPIKey"`
 	Dataset    string `yaml:"Dataset" default:"Refinery Traces"`
 	SampleRate uint64 `yaml:"SampleRate" default:"100"`
+	Insecure   bool   `yaml:"Insecure" default:"false"`
 }
 
 type PeerManagementConfig struct {
