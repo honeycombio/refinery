@@ -418,239 +418,222 @@ func TestAddSpan(t *testing.T) {
 
 }
 
-//// TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the
-//// sampling decision is marked on each span in the trace
-//func TestDryRunMode(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(20 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(60 * time.Second),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
-//			SampleRate: 10,
-//		},
-//		DryRun:             true,
-//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//	}
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//
-//	samplerFactory := &sample.SamplerFactory{
-//		Config: conf,
-//		Logger: &logger.NullLogger{},
-//	}
-//	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
-//	coll.SamplerFactory = samplerFactory
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//	stc, err := newCache()
-//	assert.NoError(t, err, "lru cache should start")
-//	coll.sampleTraceCache = stc
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.outgoingTraces = make(chan sendableTrace, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	go coll.sendTraces()
-//
-//	defer coll.Stop()
-//
-//	var traceID1 = "abc123"
-//	var traceID2 = "def456"
-//	var traceID3 = "ghi789"
-//	// sampling decisions based on trace ID
-//	sampleRate1, keepTraceID1, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
-//	// would be dropped if dry run mode was not enabled
-//	assert.False(t, keepTraceID1)
-//	assert.Equal(t, uint(10), sampleRate1)
-//	sampleRate2, keepTraceID2, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
-//	assert.True(t, keepTraceID2)
-//	assert.Equal(t, uint(10), sampleRate2)
-//	sampleRate3, keepTraceID3, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
-//	// would be dropped if dry run mode was not enabled
-//	assert.False(t, keepTraceID3)
-//	assert.Equal(t, uint(10), sampleRate3)
-//
-//	span := &types.Span{
-//		TraceID: traceID1,
-//		Event: types.Event{
-//			Data:   map[string]interface{}{},
-//			APIKey: legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpan(span)
-//
-//	// adding one span with no parent ID should:
-//	// * create the trace in the cache
-//	// * send the trace
-//	// * remove the trace from the cache
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		assert.Nil(collect, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//
-//		require.Equal(collect, 1, len(transmission.Events), "adding a root span should send the span")
-//		assert.Equal(collect, keepTraceID1, transmission.Events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
-//	}, conf.GetTracesConfig().GetSendTickerValue()*5, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//	// add a non-root span, create the trace in the cache
-//	span = &types.Span{
-//		TraceID: traceID2,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data: map[string]interface{}{
-//				"trace.parent_id": "unused",
-//			},
-//			APIKey: legacyAPIKey,
-//		},
-//	}
-//	coll.AddSpanFromPeer(span)
-//
-//	assert.Eventually(t, func() bool {
-//		return traceID2 == coll.getFromCache(traceID2).TraceID
-//	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2, "after adding the span, we should have a trace in the cache with the right trace ID")
-//
-//	span = &types.Span{
-//		TraceID: traceID2,
-//		Event: types.Event{
-//			Data:   map[string]interface{}{},
-//			APIKey: legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpanFromPeer(span)
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		// adding root span to send the trace
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		require.Equal(collect, 3, len(transmission.Events), "adding another root span should send the span")
-//		// both spanscollectshould be marked with the sampling decision
-//		assert.Equal(collect, keepTraceID2, transmission.Events[1].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
-//		assert.Equal(collect, keepTraceID2, transmission.Events[2].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
-//		// check that meta value associated with dry run mode is properly applied
-//		assert.Equal(collect, uint(10), transmission.Events[1].Data["meta.dryrun.sample_rate"])
-//		// check expecollectted sampleRate against span data
-//		assert.Equal(collect, sampleRate1, transmission.Events[0].Data["meta.dryrun.sample_rate"])
-//		assert.Equal(collect, sampleRate2, transmission.Events[1].Data["meta.dryrun.sample_rate"])
-//	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//	span = &types.Span{
-//		TraceID: traceID3,
-//		Event: types.Event{
-//			Data:   map[string]interface{}{},
-//			APIKey: legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpan(span)
-//
-//	// adding one span with no parent ID should:
-//	// * create the trace in the cache
-//	// * send the trace
-//	// * remove the trace from the cache
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		assert.Nil(collect, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		require.Equal(collect, 4, len(transmission.Events), "adding a root span should send the span")
-//		assert.Equal(collect, keepTraceID3, transmission.Events[3].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
-//	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//}
-//
-//func TestCacheSizeReload(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(2 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(10 * time.Minute),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			CacheCapacity: 1,
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-//		SampleCache: config.SampleCacheConfig{
-//			KeptSize:          100,
-//			DroppedSize:       100,
-//			SizeCheckInterval: config.Duration(1 * time.Second),
-//		},
-//	}
-//
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//	coll.Peers = &peer.MockPeers{}
-//
-//	err := coll.Start()
-//	assert.NoError(t, err)
-//	defer coll.Stop()
-//
-//	event := types.Event{
-//		Dataset: "dataset",
-//		Data: map[string]interface{}{
-//			"trace.parent_id": "1",
-//		},
-//		APIKey: legacyAPIKey,
-//	}
-//
-//	err = coll.AddSpan(&types.Span{TraceID: "1", Event: event})
-//	assert.NoError(t, err)
-//	err = coll.AddSpan(&types.Span{TraceID: "2", Event: event})
-//	assert.NoError(t, err)
-//
-//	expectedEvents := 1
-//	wait := 1 * time.Second
-//	check := func() bool {
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//
-//		return len(transmission.Events) == expectedEvents
-//	}
-//	assert.Eventually(t, check, 60*wait, wait, "expected one trace evicted and sent")
-//
-//	conf.Mux.Lock()
-//	conf.GetCollectionConfigVal.CacheCapacity = 2
-//	conf.Mux.Unlock()
-//	conf.Reload()
-//
-//	assert.Eventually(t, func() bool {
-//		coll.mutex.RLock()
-//		defer coll.mutex.RUnlock()
-//		return coll.cache.GetCacheCapacity() == 2
-//	}, 60*wait, wait, "cache size to change")
-//
-//	err = coll.AddSpan(&types.Span{TraceID: "3", Event: event})
-//	assert.NoError(t, err)
-//	time.Sleep(5 * conf.GetTracesConfig().GetSendTickerValue())
-//	assert.Eventually(t, func() bool {
-//		return check()
-//	}, 8*conf.GetTracesConfig().GetSendTickerValue(), 4*conf.GetTracesConfig().GetSendTickerValue(), "expected no more traces evicted and sent")
-//
-//	conf.Mux.Lock()
-//	conf.GetCollectionConfigVal.CacheCapacity = 1
-//	conf.Mux.Unlock()
-//	conf.Reload()
-//
-//	expectedEvents = 2
-//	assert.Eventually(t, check, 60*wait, wait, "expected another trace evicted and sent")
-//}
-//
+// // TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the
+// // sampling decision is marked on each span in the trace
+func TestDryRunMode(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(20 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
+			SampleRate: 10,
+		},
+		DryRun:             true,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	samplerFactory := &sample.SamplerFactory{
+		Config: conf,
+		Logger: &logger.NullLogger{},
+	}
+	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
+	coll.SamplerFactory = samplerFactory
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	var traceID1 = "abc123"
+	var traceID2 = "def456"
+	var traceID3 = "ghi789"
+	// sampling decisions based on trace ID
+	sampleRate1, keepTraceID1, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID1})
+	// would be dropped if dry run mode was not enabled
+	assert.False(t, keepTraceID1)
+	assert.Equal(t, uint(10), sampleRate1)
+	sampleRate2, keepTraceID2, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID2})
+	assert.True(t, keepTraceID2)
+	assert.Equal(t, uint(10), sampleRate2)
+	sampleRate3, keepTraceID3, _, _ := sampler.GetSampleRate(&types.Trace{TraceID: traceID3})
+	// would be dropped if dry run mode was not enabled
+	assert.False(t, keepTraceID3)
+	assert.Equal(t, uint(10), sampleRate3)
+
+	span := &types.Span{
+		TraceID: traceID1,
+		Event: types.Event{
+			Data:   map[string]interface{}{},
+			APIKey: legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(span)
+
+	// adding one span with no parent ID should:
+	// * create the trace in the cache
+	// * send the trace
+	// * remove the trace from the cache
+	events := transmission.GetBlock(1)
+	require.Equal(t, 1, len(events), "adding a root span should send the span")
+	assert.Equal(t, keepTraceID1, events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+
+	// add a non-root span, create the trace in the cache
+	span = &types.Span{
+		TraceID: traceID2,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+
+	assert.Eventually(t, func() bool {
+		return traceID2 == coll.getFromCache(traceID2).TraceID
+	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2, "after adding the span, we should have a trace in the cache with the right trace ID")
+
+	span = &types.Span{
+		TraceID: traceID2,
+		Event: types.Event{
+			Data:   map[string]interface{}{},
+			APIKey: legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpanFromPeer(span)
+
+	// adding root span to send the trace
+	events = transmission.GetBlock(2)
+	require.Equal(t, 2, len(events), "adding another root span should send the span")
+	// both spanscollectshould be marked with the sampling decision
+	assert.Equal(t, keepTraceID2, events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID2, events[1].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	// check that meta value associated with dry run mode is properly applied
+	assert.Equal(t, uint(10), events[0].Data["meta.dryrun.sample_rate"])
+	// check expected sampleRate against span data
+	assert.Equal(t, sampleRate1, events[0].Data["meta.dryrun.sample_rate"])
+	assert.Equal(t, sampleRate2, events[1].Data["meta.dryrun.sample_rate"])
+
+	span = &types.Span{
+		TraceID: traceID3,
+		Event: types.Event{
+			Data:   map[string]interface{}{},
+			APIKey: legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(span)
+
+	// adding one span with no parent ID should:
+	// * create the trace in the cache
+	// * send the trace
+	// * remove the trace from the cache
+	events = transmission.GetBlock(1)
+	require.Equal(t, 1, len(events), "adding a root span should send the span")
+	assert.Equal(t, keepTraceID3, events[0].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
+	assert.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
+
+}
+
+func TestCacheSizeReload(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(10 * time.Minute),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
+		GetCollectionConfigVal: config.CollectionConfig{
+			CacheCapacity: 1,
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+	coll.Peers = &peer.MockPeers{}
+
+	err := coll.Start()
+	assert.NoError(t, err)
+	defer coll.Stop()
+
+	event := types.Event{
+		Dataset: "dataset",
+		Data: map[string]interface{}{
+			"trace.parent_id": "1",
+		},
+		APIKey: legacyAPIKey,
+	}
+
+	err = coll.AddSpan(&types.Span{TraceID: "1", Event: event})
+	assert.NoError(t, err)
+	err = coll.AddSpan(&types.Span{TraceID: "2", Event: event})
+	assert.NoError(t, err)
+
+	assert.Len(t, transmission.GetBlock(1), 1, "expected one trace to be sent")
+
+	conf.Mux.Lock()
+	conf.GetCollectionConfigVal.CacheCapacity = 2
+	conf.Mux.Unlock()
+	conf.Reload()
+
+	assert.Eventually(t, func() bool {
+		coll.mutex.RLock()
+		defer coll.mutex.RUnlock()
+		return coll.cache.GetCacheCapacity() == 2
+	}, 6*conf.GetTracesConfig().GetSendTickerValue(), conf.GetTracesConfig().GetSendTickerValue()*2, "cache size to change")
+
+	err = coll.AddSpan(&types.Span{TraceID: "3", Event: event})
+	assert.NoError(t, err)
+
+	assert.Len(t, transmission.GetBlock(0), 0, "expected one trace to be sent")
+
+	conf.Mux.Lock()
+	conf.GetCollectionConfigVal.CacheCapacity = 1
+	conf.Mux.Unlock()
+	conf.Reload()
+
+	assert.Len(t, transmission.GetBlock(1), 1, "expected another trace evicted and sent")
+}
+
 //func TestSampleConfigReload(t *testing.T) {
 //	conf := &config.MockConfig{
 //		GetTracesConfigVal: config.TracesConfig{
