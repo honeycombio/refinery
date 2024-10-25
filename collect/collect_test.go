@@ -428,8 +428,8 @@ func TestAddSpan(t *testing.T) {
 
 }
 
-// // TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the
-// // sampling decision is marked on each span in the trace
+// TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the
+// sampling decision is marked on each span in the trace
 func TestDryRunMode(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -909,9 +909,9 @@ func TestDependencyInjection(t *testing.T) {
 	}
 }
 
-// // TestAddCountsToRoot tests that adding a root span winds up with a trace object in
-// // the cache and that that trace gets span count, span event count, span link count, and event count added to it
-// // This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
+// TestAddCountsToRoot tests that adding a root span winds up with a trace object in
+// the cache and that that trace gets span count, span event count, span link count, and event count added to it
+// This test also makes sure that AddCountsToRoot overrides the AddSpanCountToRoot config.
 func TestAddCountsToRoot(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -1000,8 +1000,8 @@ func TestAddCountsToRoot(t *testing.T) {
 
 }
 
-// // TestLateRootGetsCounts tests that the root span gets decorated with the right counts
-// // even if the trace had already been sent
+// TestLateRootGetsCounts tests that the root span gets decorated with the right counts
+// even if the trace had already been sent
 func TestLateRootGetsCounts(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -1097,8 +1097,8 @@ func TestLateRootGetsCounts(t *testing.T) {
 
 }
 
-// // TestAddSpanCount tests that adding a root span winds up with a trace object in
-// // the cache and that that trace gets span count added to it
+// TestAddSpanCount tests that adding a root span winds up with a trace object in
+// the cache and that that trace gets span count added to it
 func TestAddSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -1188,8 +1188,8 @@ func TestAddSpanCount(t *testing.T) {
 
 }
 
-// // TestLateRootGetsSpanCount tests that the root span gets decorated with the right span count
-// // even if the trace had already been sent
+// TestLateRootGetsSpanCount tests that the root span gets decorated with the right span count
+// even if the trace had already been sent
 func TestLateRootGetsSpanCount(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -1267,8 +1267,8 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
-// // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
-// // if the AddRuleReasonToTrace attribute not set in config
+// TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
+// if the AddRuleReasonToTrace attribute not set in config
 func TestLateSpanNotDecorated(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -1494,8 +1494,8 @@ func TestStressReliefSampleRate(t *testing.T) {
 	assert.Equal(t, uint(1000), eventsWithRoot[0].SampleRate)
 }
 
-// // TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
-// // StressReliefMode is active
+// TestStressReliefDecorateHostname tests that the span gets decorated with hostname if
+// StressReliefMode is active
 func TestStressReliefDecorateHostname(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
