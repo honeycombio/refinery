@@ -18,7 +18,13 @@ func (m *MockTransmission) Start() error {
 }
 
 func (m *MockTransmission) Stop() error {
-	close(m.Events)
+	for {
+		select {
+		case <-m.Events:
+		default:
+			return nil
+		}
+	}
 	return nil
 }
 

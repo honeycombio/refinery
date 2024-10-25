@@ -394,6 +394,8 @@ func (i *InMemCollector) collect() {
 			case <-ticker.C:
 				select {
 				case <-i.done:
+					span.End()
+					return
 				default:
 					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
 					i.checkAlloc(ctx)
