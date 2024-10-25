@@ -119,26 +119,33 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
 	var expired, skipped []*types.Trace
-	for !d.pq.IsEmpty() && len(expired) < max {
+	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
 		// pop the the next trace from the queue
 		traceID, sendBy, ok := d.pq.Pop()
-		if !ok || now.Before(sendBy) {
+		if !ok {
 			break
 		}
 
 		// if the trace is no longer in the cache, skip it
-		if d.cache[traceID] == nil {
+		trace, ok := d.cache[traceID]
+		if !ok {
 			continue
 		}
 
+		// if the trace has not expired yet, re-add it to the queue and stop looking
+		if now.Before(sendBy) {
+			d.pq.Push(traceID, sendBy)
+			break
+		}
+
 		// if a filter is provided and it returns false, skip it but remember it for later
-		if filter != nil && !filter(d.cache[traceID]) {
-			skipped = append(skipped, d.cache[traceID])
+		if filter != nil && !filter(trace) {
+			skipped = append(skipped, trace)
 			continue
 		}
 
 		// add the trace to the list of expired traces and remove it from the cache
-		expired = append(expired, d.cache[traceID])
+		expired = append(expired, trace)
 		delete(d.cache, traceID)
 	}
 
