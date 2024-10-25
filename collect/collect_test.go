@@ -735,12 +735,12 @@ func TestStableMaxAlloc(t *testing.T) {
 	}
 
 	transmission := &transmit.MockTransmission{
-		Capacity: 500,
+		Capacity: 510,
 	}
 	transmission.Start()
 	defer transmission.Stop()
 	peerTransmission := &transmit.MockTransmission{
-		Capacity: 500,
+		Capacity: 510,
 	}
 	peerTransmission.Start()
 	defer peerTransmission.Stop()
