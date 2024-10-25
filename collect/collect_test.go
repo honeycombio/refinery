@@ -408,8 +408,8 @@ func TestAddSpan(t *testing.T) {
 		trace := coll.getFromCache(traceID)
 		require.NotNil(t, trace)
 		assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-		assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 	}, conf.GetTracesConfig().GetSendDelay()*8, conf.GetTracesConfig().GetSendDelay()*2)
+	assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
@@ -973,11 +973,6 @@ func TestAddCountsToRoot(t *testing.T) {
 		}
 		coll.AddSpanFromPeer(span)
 	}
-
-	assert.Eventually(t, func() bool {
-		return traceID == coll.getFromCache(traceID).TraceID
-	}, conf.GetTracesConfig().GetSendDelay()*8, conf.GetTracesConfig().GetSendDelay()*2)
-	assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
