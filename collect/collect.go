@@ -524,7 +524,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	defer span.End()
 
 	startTime := time.Now()
-	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces))
+	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), nil)
 	dur := time.Now().Sub(startTime)
 
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
@@ -667,6 +667,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 	if markTraceForSending && !spanForwarded {
 		span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
 		trace.SendBy = i.Clock.Now().Add(timeout)
+		i.cache.Set(trace)
 	}
 }
 

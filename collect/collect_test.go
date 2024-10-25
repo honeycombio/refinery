@@ -131,12 +131,11 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	// * remove the trace from the cache
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
 		transmission.Mux.RLock()
 		defer transmission.Mux.RUnlock()
 
-		require.Equal(collect, 1, len(transmission.Events), "adding a root span should send the span")
+		assert.Equal(collect, 1, len(transmission.Events), "adding a root span should send the span")
 		assert.Equal(collect, "aoeu", transmission.Events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
 	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2)
