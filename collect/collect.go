@@ -1179,57 +1179,47 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 }
 
 func (i *InMemCollector) sendTraces() {
-	for {
-		select {
-		case <-i.done:
-			return
-		case t := <-i.outgoingTraces:
-			i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
-			_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
-			for _, sp := range t.GetSpans() {
-				if sp.IsDecisionSpan() {
-					continue
-				}
+	for t := range i.outgoingTraces {
+		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
+		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
+		for _, sp := range t.GetSpans() {
+			if sp.IsDecisionSpan() {
+				continue
+			}
 
-				if i.Config.GetAddRuleReasonToTrace() {
-					sp.Data["meta.refinery.reason"] = t.reason
-					sp.Data["meta.refinery.send_reason"] = t.sendReason
-					if t.sampleKey != "" {
-						sp.Data["meta.refinery.sample_key"] = t.sampleKey
-					}
-				}
-
-				// update the root span (if we have one, which we might not if the trace timed out)
-				// with the final total as of our send time
-				if sp.IsRoot {
-					if i.Config.GetAddCountsToRoot() {
-						sp.Data["meta.span_event_count"] = int64(t.SpanEventCount())
-						sp.Data["meta.span_link_count"] = int64(t.SpanLinkCount())
-						sp.Data["meta.span_count"] = int64(t.SpanCount())
-						sp.Data["meta.event_count"] = int64(t.DescendantCount())
-					} else if i.Config.GetAddSpanCountToRoot() {
-						sp.Data["meta.span_count"] = int64(t.DescendantCount())
-					}
-				}
-
-				isDryRun := i.Config.GetIsDryRun()
-				if isDryRun {
-					sp.Data[config.DryRunFieldName] = t.shouldSend
-				}
-				if i.hostname != "" {
-					sp.Data["meta.refinery.local_hostname"] = i.hostname
-				}
-				mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
-				i.addAdditionalAttributes(sp)
-				select {
-				case <-i.done:
-					return
-				default:
-					i.Transmission.EnqueueSpan(sp)
+			if i.Config.GetAddRuleReasonToTrace() {
+				sp.Data["meta.refinery.reason"] = t.reason
+				sp.Data["meta.refinery.send_reason"] = t.sendReason
+				if t.sampleKey != "" {
+					sp.Data["meta.refinery.sample_key"] = t.sampleKey
 				}
 			}
-			span.End()
+
+			// update the root span (if we have one, which we might not if the trace timed out)
+			// with the final total as of our send time
+			if sp.IsRoot {
+				if i.Config.GetAddCountsToRoot() {
+					sp.Data["meta.span_event_count"] = int64(t.SpanEventCount())
+					sp.Data["meta.span_link_count"] = int64(t.SpanLinkCount())
+					sp.Data["meta.span_count"] = int64(t.SpanCount())
+					sp.Data["meta.event_count"] = int64(t.DescendantCount())
+				} else if i.Config.GetAddSpanCountToRoot() {
+					sp.Data["meta.span_count"] = int64(t.DescendantCount())
+				}
+			}
+
+			isDryRun := i.Config.GetIsDryRun()
+			if isDryRun {
+				sp.Data[config.DryRunFieldName] = t.shouldSend
+			}
+			if i.hostname != "" {
+				sp.Data["meta.refinery.local_hostname"] = i.hostname
+			}
+			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
+			i.addAdditionalAttributes(sp)
+			i.Transmission.EnqueueSpan(sp)
 		}
+		span.End()
 	}
 }
 
