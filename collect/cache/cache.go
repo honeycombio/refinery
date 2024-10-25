@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"math"
 	"time"
 
 	"github.com/honeycombio/refinery/generics"
@@ -21,6 +22,9 @@ type Cache interface {
 
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
+
+	// GetCacheCapacity returns the number of traces that can be stored in the cache
+	GetCacheCapacity() int
 
 	// GetCacheEntryCount returns the number of traces currently stored in the cache
 	GetCacheEntryCount() int
@@ -103,6 +107,10 @@ func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
 // Returns all non-nil trace entries.
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
 	return maps.Values(d.cache)
+}
+
+func (d *DefaultInMemCache) GetCacheCapacity() int {
+	return math.MaxInt32
 }
 
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;

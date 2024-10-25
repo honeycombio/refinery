@@ -207,6 +207,23 @@ func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
+	imcConfig := i.Config.GetCollectionConfig()
+
+	if imcConfig.CacheCapacity != i.cache.GetCacheCapacity() {
+		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheCapacity()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
+		c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
+		// pull the old cache contents into the new cache
+		for j, trace := range i.cache.GetAll() {
+			if j >= imcConfig.CacheCapacity {
+				i.send(context.Background(), trace, TraceSendEjectedFull)
+				continue
+			}
+			c.Set(trace)
+		}
+		i.cache = c
+	} else {
+		i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
+	}
 
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
@@ -258,6 +275,9 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// successive traces until we've crossed the totalToRemove threshold
 	// or just run out of traces to delete.
 
+	cap := i.cache.GetCacheCapacity()
+	i.Metrics.Gauge("collector_cache_size", cap)
+
 	totalDataSizeSent := 0
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
@@ -273,6 +293,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
 	i.Logger.Warn().
+		WithField("cache_size", cap).
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
