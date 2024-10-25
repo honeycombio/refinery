@@ -56,6 +56,10 @@ var collectCacheMetrics = []metrics.Metadata{
 	{Name: "collect_cache_buffer_overrun", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of times the trace overwritten in the circular buffer has not yet been sent"},
 	{Name: "collect_cache_capacity", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "The number of traces that can be stored in the cache"},
 	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "The number of traces currently stored in the cache"},
+	{Name: "trace_cache_set_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to set a trace in the cache"},
+	{Name: "trace_cache_take_expired_traces_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to take expired traces from the cache"},
+	{Name: "trace_cache_remove_traces_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to remove traces from the cache"},
+	{Name: "trace_cache_get_all_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to get all traces from the cache"},
 }
 
 func NewInMemCache(
@@ -91,7 +95,9 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	if trace == nil {
 		return nil
 	}
+	start := time.Now()
 
+	defer d.Metrics.Histogram("trace_cache_set_dur_ms", time.Since(start).Milliseconds())
 	// update the cache and priority queue
 	d.cache[trace.TraceID] = trace
 	d.pq.Set(trace.TraceID, trace.SendBy)
@@ -105,6 +111,9 @@ func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
 // GetAll is not thread safe and should only be used when that's ok
 // Returns all non-nil trace entries.
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
+	start := time.Now()
+
+	defer d.Metrics.Histogram("trace_cache_get_all_dur_ms", time.Since(start).Milliseconds())
 	return maps.Values(d.cache)
 }
 
@@ -117,6 +126,9 @@ func (d *DefaultInMemCache) GetCacheCapacity() int {
 // If a filter is provided, it will be called with each trace to determine if it should be skipped.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
+
+	start := time.Now()
+	defer d.Metrics.Histogram("trace_cache_take_expired_traces_dur_ms", time.Since(start).Milliseconds())
 
 	var expired, skipped []*types.Trace
 	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
@@ -161,6 +173,9 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 // the insertion list. This is used in the case of a cache overrun.
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
+	start := time.Now()
+	defer d.Metrics.Histogram("trace_cache_remove_traces_dur_ms", time.Since(start).Milliseconds())
+
 	for _, traceID := range toDelete.Members() {
 		delete(d.cache, traceID)
 		d.pq.Remove(traceID)
