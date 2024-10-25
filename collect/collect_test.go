@@ -129,7 +129,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * remove the trace from the cache
 	// * remove the trace from the cache
 
-	events := transmission.Get(1)
+	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
@@ -148,7 +148,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	events = transmission.Get(1)
+	events = transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
@@ -172,7 +172,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	events = transmission.Get(0)
+	events = transmission.GetBlock(0)
 	assert.Equal(t, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
 
 	assert.Nil(t, coll.getFromCache(decisionSpanTraceID), "after sending the span, it should be removed from the cache")
@@ -242,7 +242,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
 	}
 
-	events := transmission.Get(1)
+	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding another root span should send the span")
 	upstreamSampledEvent := events[0]
 
@@ -267,7 +267,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
 	// should be the last event on the transmission queue.
-	events = transmission.Get(1)
+	events = transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding another root span should send the span")
 	var noUpstreamSampleRateEvent *types.Event
 	for _, event := range events {
@@ -336,7 +336,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	coll.AddSpan(span)
 
-	events := transmission.Get(1)
+	events := transmission.GetBlock(1)
 	assert.Equal(t, uint(1), events[0].SampleRate,
 		"SampleRate should be reset to one after starting at zero")
 }
@@ -398,7 +398,7 @@ func TestAddSpan(t *testing.T) {
 		trace := coll.getFromCache(traceID)
 		require.NotNil(t, trace)
 		assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-		assert.Equal(t, 0, len(transmission.Get(0)), "adding a non-root span should not yet send the span")
+		assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 	}, conf.GetTracesConfig().GetSendDelay()*8, conf.GetTracesConfig().GetSendDelay()*2)
 
 	// ok now let's add the root span and verify that both got sent
@@ -413,7 +413,7 @@ func TestAddSpan(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 
-	assert.Equal(t, 2, len(transmission.Get(2)), "adding a root span should send all spans in the trace")
+	assert.Equal(t, 2, len(transmission.GetBlock(2)), "adding a root span should send all spans in the trace")
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 
 }

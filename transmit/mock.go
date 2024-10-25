@@ -22,18 +22,33 @@ func (m *MockTransmission) Stop() error {
 	return nil
 }
 
-func (m *MockTransmission) Get(expectedCount int) []*types.Event {
+// GetBlock will return up to `expectedCount` events from the channel. If there are
+// fewer than `expectedCount` events in the channel, it will block until there
+// are enough events to return.
+// If `expectedCount` is 0, it will retry up to 3 times before returning the
+// events that are in the channel.
+func (m *MockTransmission) GetBlock(expectedCount int) []*types.Event {
 	events := make([]*types.Event, 0, len(m.Events))
+	var maxDelayCount int
+	if expectedCount == 0 {
+		maxDelayCount = 3
+	}
+
 	for {
 		select {
 		case ev := <-m.Events:
 			events = append(events, ev)
 		default:
-			if len(events) != expectedCount {
+			if maxDelayCount > 0 {
+				maxDelayCount--
 				continue
 			}
-			return events
 		}
+
+		if len(events) != expectedCount {
+			continue
+		}
+		return events
 	}
 }
 
