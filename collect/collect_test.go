@@ -694,7 +694,7 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 1000)
+	coll.outgoingTraces = make(chan sendableTrace, 500)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 	go coll.sendTraces()
