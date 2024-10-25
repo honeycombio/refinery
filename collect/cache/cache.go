@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"math"
 	"time"
 
 	"github.com/honeycombio/refinery/generics"
@@ -14,15 +13,14 @@ import (
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
 type Cache interface {
-	// Set adds the trace to the cache. If it is kicking out a trace from the cache
-	// that has not yet been sent, it will return that trace. Otherwise returns nil.
+	// Set adds the trace to the cache
 	Set(trace *types.Trace)
+
+	// Get returns the trace with the given traceID, or nil if it is not in the cache
 	Get(traceID string) *types.Trace
+
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
-
-	// GetCacheCapacity returns the number of traces that can be stored in the cache
-	GetCacheCapacity() int
 
 	// GetCacheEntryCount returns the number of traces currently stored in the cache
 	GetCacheEntryCount() int
@@ -81,10 +79,6 @@ func NewInMemCache(
 	}
 }
 
-func (d *DefaultInMemCache) GetCacheCapacity() int {
-	return math.MaxInt32
-}
-
 func (d *DefaultInMemCache) GetCacheEntryCount() int {
 	return len(d.cache)
 }
@@ -96,12 +90,8 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) {
 	}
 
 	// update the cache and priority queue
-	if d.cache[trace.TraceID] != nil {
-		d.pq.Push(trace.TraceID, trace.SendBy)
-	} else {
-		d.pq.Update(trace.TraceID, trace.SendBy)
-	}
 	d.cache[trace.TraceID] = trace
+	d.pq.Set(trace.TraceID, trace.SendBy)
 	return
 }
 
@@ -115,39 +105,42 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 	return maps.Values(d.cache)
 }
 
-var anyTraceFilter = func(*types.Trace) bool { return true }
-
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
 // If a filter is provided, it will be called with each trace to determine if it should be skipped.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
-	if filter == nil {
-		filter = anyTraceFilter
-	}
-
-	var traces []*types.Trace
-	for !d.pq.IsEmpty() && len(traces) < max {
-		// peek the first sendBy in the queue to see if we should try to send it
-		sendBy, ok := d.pq.PeekValue()
+	var expired, skipped []*types.Trace
+	for !d.pq.IsEmpty() && len(expired) < max {
+		// pop the the next trace from the queue
+		traceID, sendBy, ok := d.pq.Pop()
 		if !ok || now.Before(sendBy) {
 			break
 		}
 
-		// dequeue the traceID
-		traceID, _, _ := d.pq.Pop()
-
 		// if the trace is no longer in the cache, skip it
-		if d.cache[traceID] == nil || !filter(d.cache[traceID]) {
+		if d.cache[traceID] == nil {
+			continue
+		}
+
+		// if a filter is provided and it returns false, skip it but remember it for later
+		if filter != nil && !filter(d.cache[traceID]) {
+			skipped = append(skipped, d.cache[traceID])
 			continue
 		}
 
 		// add the trace to the list of expired traces and remove it from the cache
-		traces = append(traces, d.cache[traceID])
+		expired = append(expired, d.cache[traceID])
 		delete(d.cache, traceID)
 	}
-	return traces
+
+	// re-add any skipped traces back to the queue using their original sendBy time
+	for _, trace := range skipped {
+		d.pq.Push(trace.TraceID, trace.SendBy)
+	}
+
+	return expired
 }
 
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
