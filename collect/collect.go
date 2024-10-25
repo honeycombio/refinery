@@ -524,7 +524,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	defer span.End()
 
 	startTime := time.Now()
-	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces))
+	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), nil)
 	dur := time.Now().Sub(startTime)
 
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
@@ -601,11 +601,11 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
 		// push this into the cache and if we eject an unsent trace, send it ASAP
-		ejectedTrace := i.cache.Set(trace)
-		if ejectedTrace != nil {
-			span.SetAttributes(attribute.String("disposition", "ejected_trace"))
-			i.send(ctx, ejectedTrace, TraceSendEjectedFull)
-		}
+		// ejectedTrace := i.cache.Set(trace)
+		// if ejectedTrace != nil {
+		// 	span.SetAttributes(attribute.String("disposition", "ejected_trace"))
+		// 	i.send(ctx, ejectedTrace, TraceSendEjectedFull)
+		// }
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.

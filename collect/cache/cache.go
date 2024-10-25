@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"math"
 	"time"
 
 	"github.com/honeycombio/refinery/generics"
@@ -81,11 +82,11 @@ func NewInMemCache(
 }
 
 func (d *DefaultInMemCache) GetCacheCapacity() int {
-	return d.pq.Len()
+	return math.MaxInt32
 }
 
 func (d *DefaultInMemCache) GetCacheEntryCount() int {
-	return d.pq.Len()
+	return len(d.cache)
 }
 
 func (d *DefaultInMemCache) Set(trace *types.Trace) {
@@ -94,12 +95,12 @@ func (d *DefaultInMemCache) Set(trace *types.Trace) {
 		return
 	}
 
-	if _, ok := d.cache[trace.TraceID]; ok {
+	// update the cache and priority queue
+	if d.cache[trace.TraceID] != nil {
+		d.pq.Push(trace.TraceID, trace.SendBy)
+	} else {
 		d.pq.Update(trace.TraceID, trace.SendBy)
-		return
 	}
-
-	d.pq.Set(trace.TraceID, trace.SendBy)
 	d.cache[trace.TraceID] = trace
 	return
 }
@@ -114,39 +115,39 @@ func (d *DefaultInMemCache) GetAll() []*types.Trace {
 	return maps.Values(d.cache)
 }
 
+var anyTraceFilter = func(*types.Trace) bool { return true }
+
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
 // If a filter is provided, it will be called with each trace to determine if it should be skipped.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
-	var res []*types.Trace
-	var count int
-	for {
-		traceID, sendBy, ok := d.pq.Pop()
-		if !ok || now.Before(sendBy) {
-			d.pq.Push(traceID, sendBy)
-			break
-		}
-
-		if d.cache[traceID] == nil {
-			continue
-		}
-
-		if filter != nil && filter(d.cache[traceID]) {
-			d.pq.Push(traceID, sendBy)
-			continue
-		}
-
-		res = append(res, d.cache[traceID])
-		delete(d.cache, traceID)
-		count++
-		if max > 0 && count >= max {
-			break
-		}
-
+	if filter == nil {
+		filter = anyTraceFilter
 	}
-	return res
+
+	var traces []*types.Trace
+	for !d.pq.IsEmpty() && len(traces) < max {
+		// peek the first sendBy in the queue to see if we should try to send it
+		sendBy, ok := d.pq.PeekValue()
+		if !ok || now.Before(sendBy) {
+			break
+		}
+
+		// dequeue the traceID
+		traceID, _, _ := d.pq.Pop()
+
+		// if the trace is no longer in the cache, skip it
+		if d.cache[traceID] == nil || !filter(d.cache[traceID]) {
+			continue
+		}
+
+		// add the trace to the list of expired traces and remove it from the cache
+		traces = append(traces, d.cache[traceID])
+		delete(d.cache, traceID)
+	}
+	return traces
 }
 
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
@@ -154,6 +155,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 	for _, traceID := range toDelete.Members() {
+		d.pq.Remove(traceID)
 		delete(d.cache, traceID)
 	}
 }
