@@ -735,12 +735,12 @@ func TestStableMaxAlloc(t *testing.T) {
 	}
 
 	transmission := &transmit.MockTransmission{
-		Capacity: 510,
+		Capacity: 1000,
 	}
 	transmission.Start()
 	defer transmission.Stop()
 	peerTransmission := &transmit.MockTransmission{
-		Capacity: 510,
+		Capacity: 1000,
 	}
 	peerTransmission.Start()
 	defer peerTransmission.Stop()
@@ -764,7 +764,7 @@ func TestStableMaxAlloc(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 1000)
 	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 500)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
 	go coll.sendTraces()
