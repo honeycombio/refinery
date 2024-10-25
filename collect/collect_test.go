@@ -1000,357 +1000,345 @@ func TestAddCountsToRoot(t *testing.T) {
 
 }
 
-//// TestLateRootGetsCounts tests that the root span gets decorated with the right counts
-//// even if the trace had already been sent
-//func TestLateRootGetsCounts(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(2 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(5 * time.Millisecond),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-//		AddSpanCountToRoot:   true,
-//		AddCountsToRoot:      true,
-//		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
-//		AddRuleReasonToTrace: true,
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//	}
-//
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//	stc, err := newCache()
-//	assert.NoError(t, err, "lru cache should start")
-//	coll.sampleTraceCache = stc
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.outgoingTraces = make(chan sendableTrace, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	go coll.sendTraces()
-//	defer coll.Stop()
-//
-//	var traceID = "mytrace"
-//
-//	for i := 0; i < 4; i++ {
-//		span := &types.Span{
-//			TraceID: traceID,
-//			Event: types.Event{
-//				Dataset: "aoeu",
-//				Data: map[string]interface{}{
-//					"trace.parent_id": "unused",
-//				},
-//				APIKey: legacyAPIKey,
-//			},
-//		}
-//		switch i {
-//		case 0, 1:
-//			span.Data["meta.annotation_type"] = "span_event"
-//		case 2:
-//			span.Data["meta.annotation_type"] = "link"
-//		}
-//		coll.AddSpanFromPeer(span)
-//	}
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		trace := coll.getFromCache(traceID)
-//		assert.Nil(collect, trace, "trace should have been sent although the root span hasn't arrived")
-//		transmission.Mux.RLock()
-//		assert.Equal(collect, 4, len(transmission.Events), "adding a non-root span and waiting should send the span")
-//		transmission.Mux.RUnlock()
-//	}, conf.GetTracesConfig().GetSendTickerValue()*12, conf.GetTracesConfig().GetSendTickerValue()*3)
-//
-//	// now we add the root span and verify that both got sent and that the root span had the span count
-//	rootSpan := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data:    map[string]interface{}{},
-//			APIKey:  legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpan(rootSpan)
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		assert.Nil(collect, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		assert.Equal(collect, 5, len(transmission.Events), "adding a root span should send all spans in the trace")
-//		assert.Equal(collect, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-//		assert.Equal(collect, nil, transmission.Events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-//		assert.Equal(collect, nil, transmission.Events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
-//		assert.Equal(collect, nil, transmission.Events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
-//		assert.Equal(collect, nil, transmission.Events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
-//		assert.Equal(collect, int64(2), transmission.Events[4].Data["meta.span_count"], "root span metadata should be populated with span count")
-//		assert.Equal(collect, int64(2), transmission.Events[4].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
-//		assert.Equal(collect, int64(1), transmission.Events[4].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
-//		assert.Equal(collect, int64(5), transmission.Events[4].Data["meta.event_count"], "root span metadata should be populated with event count")
-//		assert.Equal(collect, "deterministic/always - late arriving span", transmission.Events[4].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
-//	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//}
-//
-//// TestAddSpanCount tests that adding a root span winds up with a trace object in
-//// the cache and that that trace gets span count added to it
-//func TestAddSpanCount(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(2 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(60 * time.Second),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-//		AddSpanCountToRoot: true,
-//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//	}
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//	stc, err := newCache()
-//	assert.NoError(t, err, "lru cache should start")
-//	coll.sampleTraceCache = stc
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.outgoingTraces = make(chan sendableTrace, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	go coll.sendTraces()
-//
-//	defer coll.Stop()
-//
-//	var traceID = "mytrace"
-//
-//	span := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data: map[string]interface{}{
-//				"trace.parent_id": "unused",
-//			},
-//			APIKey: legacyAPIKey,
-//		},
-//	}
-//	decisionSpan := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data: map[string]interface{}{
-//				"trace.parent_id":        "unused",
-//				"meta.refinery.min_span": true,
-//			},
-//			APIKey: legacyAPIKey,
-//		},
-//	}
-//	coll.AddSpanFromPeer(span)
-//	coll.AddSpanFromPeer(decisionSpan)
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		assert.Equal(collect, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		assert.Equal(collect, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
-//	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//	// ok now let's add the root span and verify that both got sent
-//	rootSpan := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data:    map[string]interface{}{},
-//			APIKey:  legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpan(rootSpan)
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		assert.Nil(collect, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		assert.Equal(collect, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-//		assert.Equal(collect, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-//		assert.Equal(collect, int64(3), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
-//	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//}
-//
-//// TestLateRootGetsSpanCount tests that the root span gets decorated with the right span count
-//// even if the trace had already been sent
-//func TestLateRootGetsSpanCount(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(2 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(5 * time.Millisecond),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-//		AddSpanCountToRoot:   true,
-//		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
-//		AddRuleReasonToTrace: true,
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//	}
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//	stc, err := newCache()
-//	assert.NoError(t, err, "lru cache should start")
-//	coll.sampleTraceCache = stc
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.outgoingTraces = make(chan sendableTrace, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	go coll.sendTraces()
-//
-//	defer coll.Stop()
-//
-//	var traceID = "mytrace"
-//
-//	span := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data: map[string]interface{}{
-//				"trace.parent_id": "unused",
-//			},
-//			APIKey: legacyAPIKey,
-//		},
-//	}
-//	coll.AddSpanFromPeer(span)
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		assert.Equal(collect, 1, len(transmission.Events), "adding a non-root span and waiting should send the span")
-//	}, conf.GetTracesConfig().GetSendTickerValue()*12, conf.GetTracesConfig().GetSendTickerValue()*2)
-//
-//	// now we add the root span and verify that both got sent and that the root span had the span count
-//	rootSpan := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data:    map[string]interface{}{},
-//			APIKey:  legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpan(rootSpan)
-//
-//	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-//		transmission.Mux.RLock()
-//		defer transmission.Mux.RUnlock()
-//		assert.Equal(collect, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-//		assert.Equal(collect, nil, transmission.Events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-//		assert.Equal(collect, int64(2), transmission.Events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
-//		assert.Equal(collect, "deterministic/always - late arriving span", transmission.Events[1].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
-//	}, 5*conf.GetTracesConfig().GetSendTickerValue(), conf.GetTracesConfig().GetSendTickerValue())
-//
-//	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
-//}
-//
-//// TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
-//// if the AddRuleReasonToTrace attribute not set in config
-//func TestLateSpanNotDecorated(t *testing.T) {
-//	conf := &config.MockConfig{
-//		GetTracesConfigVal: config.TracesConfig{
-//			SendTicker:   config.Duration(2 * time.Millisecond),
-//			SendDelay:    config.Duration(1 * time.Millisecond),
-//			TraceTimeout: config.Duration(5 * time.Minute),
-//			MaxBatchSize: 500,
-//		},
-//		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-//		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-//		GetCollectionConfigVal: config.CollectionConfig{
-//			ShutdownDelay: config.Duration(1 * time.Millisecond),
-//		},
-//	}
-//
-//	transmission := &transmit.MockTransmission{}
-//	transmission.Start()
-//	peerTransmission := &transmit.MockTransmission{}
-//	peerTransmission.Start()
-//	coll := newTestCollector(conf, transmission, peerTransmission)
-//
-//	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-//	coll.cache = c
-//	stc, err := newCache()
-//	assert.NoError(t, err, "lru cache should start")
-//	coll.sampleTraceCache = stc
-//
-//	coll.incoming = make(chan *types.Span, 5)
-//	coll.fromPeer = make(chan *types.Span, 5)
-//	coll.outgoingTraces = make(chan sendableTrace, 5)
-//	coll.datasetSamplers = make(map[string]sample.Sampler)
-//	go coll.collect()
-//	go coll.sendTraces()
-//
-//	defer coll.Stop()
-//
-//	var traceID = "traceABC"
-//
-//	span := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data: map[string]interface{}{
-//				"trace.parent_id": "unused",
-//			},
-//			APIKey: legacyAPIKey,
-//		},
-//	}
-//	coll.AddSpanFromPeer(span)
-//
-//	rootSpan := &types.Span{
-//		TraceID: traceID,
-//		Event: types.Event{
-//			Dataset: "aoeu",
-//			Data:    map[string]interface{}{},
-//			APIKey:  legacyAPIKey,
-//		},
-//		IsRoot: true,
-//	}
-//	coll.AddSpan(rootSpan)
-//
-//	assert.EventuallyWithT(t, func(c *assert.CollectT) {
-//		transmission.Mux.RLock()
-//		assert.Equal(c, 2, len(transmission.Events), "adding a root span should send all spans in the trace")
-//		if len(transmission.Events) == 2 {
-//			assert.Equal(c, nil, transmission.Events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
-//		}
-//		transmission.Mux.RUnlock()
-//	}, 5*time.Second, conf.GetTracesConfig().GetSendTickerValue())
-//}
-//
+// // TestLateRootGetsCounts tests that the root span gets decorated with the right counts
+// // even if the trace had already been sent
+func TestLateRootGetsCounts(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddSpanCountToRoot:   true,
+		AddCountsToRoot:      true,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+	defer coll.Stop()
+
+	var traceID = "mytrace"
+
+	for i := 0; i < 4; i++ {
+		span := &types.Span{
+			TraceID: traceID,
+			Event: types.Event{
+				Dataset: "aoeu",
+				Data: map[string]interface{}{
+					"trace.parent_id": "unused",
+				},
+				APIKey: legacyAPIKey,
+			},
+		}
+		switch i {
+		case 0, 1:
+			span.Data["meta.annotation_type"] = "span_event"
+		case 2:
+			span.Data["meta.annotation_type"] = "link"
+		}
+		coll.AddSpanFromPeer(span)
+	}
+
+	childSpans := transmission.GetBlock(4)
+	assert.Equal(t, 4, len(childSpans), "adding a non-root span and waiting should send the span")
+	assert.Equal(t, nil, childSpans[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, childSpans[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, childSpans[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
+	assert.Equal(t, nil, childSpans[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
+	assert.Equal(t, nil, childSpans[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	trace := coll.getFromCache(traceID)
+	assert.Nil(t, trace, "trace should have been sent although the root span hasn't arrived")
+
+	// now we add the root span and verify that both got sent and that the root span had the span count
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(rootSpan)
+
+	event := transmission.GetBlock(1)
+	assert.Equal(t, 1, len(event), "adding a root span should send all spans in the trace")
+	assert.Equal(t, int64(2), event[0].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, int64(2), event[0].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
+	assert.Equal(t, int64(1), event[0].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
+	assert.Equal(t, int64(5), event[0].Data["meta.event_count"], "root span metadata should be populated with event count")
+	assert.Equal(t, "deterministic/always - late arriving span", event[0].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
+	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
+
+}
+
+// // TestAddSpanCount tests that adding a root span winds up with a trace object in
+// // the cache and that that trace gets span count added to it
+func TestAddSpanCount(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddSpanCountToRoot: true,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	var traceID = "mytrace"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	decisionSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id":        "unused",
+				"meta.refinery.min_span": true,
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+	coll.AddSpanFromPeer(decisionSpan)
+
+	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
+		assert.Equal(collect, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
+	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2)
+	assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
+
+	// ok now let's add the root span and verify that both got sent
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(rootSpan)
+
+	events := transmission.GetBlock(2)
+	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, nil, events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, int64(3), events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
+
+}
+
+// // TestLateRootGetsSpanCount tests that the root span gets decorated with the right span count
+// // even if the trace had already been sent
+func TestLateRootGetsSpanCount(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddSpanCountToRoot:   true,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	var traceID = "mytrace"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+
+	childSpans := transmission.GetBlock(1)
+	assert.Equal(t, 1, len(childSpans), "adding a non-root span and waiting should send the span")
+	assert.Equal(t, nil, childSpans[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+
+	// now we add the root span and verify that both got sent and that the root span had the span count
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(rootSpan)
+
+	events := transmission.GetBlock(1)
+	assert.Equal(t, 1, len(events), "adding a root span should send all spans in the trace")
+	assert.Equal(t, int64(2), events[0].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, "deterministic/always - late arriving span", events[0].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
+
+	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
+}
+
+// // TestLateRootNotDecorated tests that spans do not get decorated with 'meta.refinery.reason' meta field
+// // if the AddRuleReasonToTrace attribute not set in config
+func TestLateSpanNotDecorated(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Minute),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	var traceID = "traceABC"
+
+	span := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"trace.parent_id": "unused",
+			},
+			APIKey: legacyAPIKey,
+		},
+	}
+	coll.AddSpanFromPeer(span)
+
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data:    map[string]interface{}{},
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+	coll.AddSpan(rootSpan)
+
+	events := transmission.GetBlock(2)
+	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
+	if len(events) == 2 {
+		assert.Equal(t, nil, events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
+	}
+}
+
 //func TestAddAdditionalAttributes(t *testing.T) {
 //	conf := &config.MockConfig{
 //		GetTracesConfigVal: config.TracesConfig{
