@@ -207,23 +207,6 @@ func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig := i.Config.GetCollectionConfig()
-
-	if imcConfig.CacheCapacity != i.cache.GetCacheCapacity() {
-		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheCapacity()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-		c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
-		// pull the old cache contents into the new cache
-		for j, trace := range i.cache.GetAll() {
-			if j >= imcConfig.CacheCapacity {
-				i.send(context.Background(), trace, TraceSendEjectedFull)
-				continue
-			}
-			c.Set(trace)
-		}
-		i.cache = c
-	} else {
-		i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
-	}
 
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
