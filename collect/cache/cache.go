@@ -14,10 +14,9 @@ import (
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
 type Cache interface {
-	// Set adds the trace to the cache
-	Set(trace *types.Trace)
-
-	// Get returns the trace with the given traceID, or nil if it is not in the cache
+	// Set adds the trace to the cache. If it is kicking out a trace from the cache
+	// that has not yet been sent, it will return that trace. Otherwise returns nil.
+	Set(trace *types.Trace) *types.Trace
 	Get(traceID string) *types.Trace
 
 	// GetAll is used during shutdown to get all in-flight traces to flush them
@@ -87,16 +86,16 @@ func (d *DefaultInMemCache) GetCacheEntryCount() int {
 	return len(d.cache)
 }
 
-func (d *DefaultInMemCache) Set(trace *types.Trace) {
+func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
 	// we need to dereference the trace ID so skip bad inserts to avoid panic
 	if trace == nil {
-		return
+		return nil
 	}
 
 	// update the cache and priority queue
 	d.cache[trace.TraceID] = trace
 	d.pq.Set(trace.TraceID, trace.SendBy)
-	return
+	return nil
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
@@ -156,7 +155,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 	for _, traceID := range toDelete.Members() {
-		d.pq.Remove(traceID)
 		delete(d.cache, traceID)
+		d.pq.Remove(traceID)
 	}
 }

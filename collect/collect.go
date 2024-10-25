@@ -600,8 +600,12 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 			SendBy:      now.Add(timeout),
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
-		// store trace in cache
-		i.cache.Set(trace)
+		// push this into the cache and if we eject an unsent trace, send it ASAP
+		ejectedTrace := i.cache.Set(trace)
+		if ejectedTrace != nil {
+			span.SetAttributes(attribute.String("disposition", "ejected_trace"))
+			i.send(ctx, ejectedTrace, TraceSendEjectedFull)
+		}
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
