@@ -377,6 +377,8 @@ func (i *InMemCollector) collect() {
 			case <-ticker.C:
 				select {
 				case <-i.done:
+					span.End()
+					return
 				default:
 					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
 					i.checkAlloc(ctx)
@@ -967,7 +969,7 @@ type sentRecord struct {
 func (i *InMemCollector) sendTracesOnShutdown() {
 	wg := &sync.WaitGroup{}
 	sentChan := make(chan sentRecord, len(i.incoming))
-	forwardChan := make(chan *types.Span, i.Config.GetCollectionConfig().CacheCapacity)
+	forwardChan := make(chan *types.Span, 100_000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i.Config.GetCollectionConfig().ShutdownDelay))
 	defer cancel()
