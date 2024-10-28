@@ -810,6 +810,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 				TraceID:    sp.TraceID,
 				Kept:       tr.Kept(),
 				KeptReason: keptReason,
+				SendReason: TraceSendLateSpan,
 				SampleRate: tr.Rate(),
 				Count:      uint32(tr.SpanCount()),
 				EventCount: uint32(tr.SpanEventCount()),
