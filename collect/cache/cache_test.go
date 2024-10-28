@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -42,15 +43,18 @@ func TestTakeExpiredTraces(t *testing.T) {
 		c.Set(t)
 	}
 
-	expired := c.TakeExpiredTraces(now, 100, nil)
-	assert.Equal(t, 2, len(expired))
-	assert.Contains(t, expired, traces[0])
-	assert.Contains(t, expired, traces[1])
+	expired := c.TakeExpiredTraces(now, 100, func(trace *types.Trace) bool {
+		return trace.ID() != "1"
+	})
+	assert.Equal(t, 1, len(expired))
+	assert.Contains(t, expired, traces[1], expired[0])
+	assert.NotContains(t, expired, traces[0])
 
-	assert.Equal(t, 2, c.GetCacheEntryCount())
+	assert.Equal(t, 3, c.GetCacheEntryCount())
 
 	all := c.GetAll()
-	assert.Equal(t, 2, len(all))
+	assert.Equal(t, 3, len(all))
+	assert.Contains(t, all, traces[0])
 	assert.Contains(t, all, traces[2])
 	assert.Contains(t, all, traces[3])
 }
@@ -88,8 +92,8 @@ func BenchmarkCache_Set(b *testing.B) {
 	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
 
 	// setup is expensive, so reset timer and report allocations
-	b.ResetTimer()
 	b.ReportAllocs()
+	b.ResetTimer()
 
 	populateCache(c, traces)
 }
@@ -104,8 +108,8 @@ func BenchmarkCache_Get(b *testing.B) {
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations
-	b.ResetTimer()
 	b.ReportAllocs()
+	b.ResetTimer()
 
 	for traceID, _ := range traces {
 		c.Get(traceID)
@@ -113,7 +117,7 @@ func BenchmarkCache_Get(b *testing.B) {
 }
 
 // Benchmark the cache's TakeExpiredTraces method
-func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
+func BenchmarkCache_TakeExpiredTracesWithoutFilter(b *testing.B) {
 	metrics := &metrics.MockMetrics{}
 	metrics.Start()
 	now, traces := generateTraces(b.N)
@@ -122,11 +126,31 @@ func BenchmarkCache_TakeExpiredTraces(b *testing.B) {
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations
-	b.ResetTimer()
 	b.ReportAllocs()
+	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
 		c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0, nil)
+	}
+}
+
+func BenchmarkCache_TakeExpiredTracesWithFilter(b *testing.B) {
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+	now, traces := generateTraces(b.N)
+
+	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
+	populateCache(c, traces)
+
+	// setup is expensive, so reset timer and report allocations
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0, func(trace *types.Trace) bool {
+			// filter out 20% of traces
+			return rand.Float32() > 0.2
+		})
 	}
 }
 
@@ -145,8 +169,8 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations
-	b.ResetTimer()
 	b.ReportAllocs()
+	b.ResetTimer()
 
 	c.RemoveTraces(deletes)
 }
