@@ -801,6 +801,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 			msg string
 			err error
 		)
+		topic := keptTraceDecisionTopic
 		if tr.Kept() {
 			//  late span in this case won't get HasRoot
 			// this means the late span won't be decorated with some metadata
@@ -823,6 +824,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 				return
 			}
 		} else {
+			topic = droppedTraceDecisionTopic
 			msg, err = newDroppedDecisionMessage(sp.TraceID)
 			if err != nil {
 				i.Logger.Error().WithFields(map[string]interface{}{
@@ -834,7 +836,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 			}
 		}
 
-		err = i.PubSub.Publish(ctx, keptTraceDecisionTopic, msg)
+		err = i.PubSub.Publish(ctx, topic, msg)
 		if err != nil {
 			i.Logger.Error().WithFields(map[string]interface{}{
 				"trace_id":  sp.TraceID,
