@@ -133,7 +133,6 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	// * remove the trace from the cache
 
 	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding a root span should send the span")
@@ -571,79 +570,6 @@ func TestDryRunMode(t *testing.T) {
 
 }
 
-func TestCacheSizeReload(t *testing.T) {
-	conf := &config.MockConfig{
-		GetTracesConfigVal: config.TracesConfig{
-			SendTicker:   config.Duration(2 * time.Millisecond),
-			SendDelay:    config.Duration(1 * time.Millisecond),
-			TraceTimeout: config.Duration(10 * time.Minute),
-			MaxBatchSize: 500,
-		},
-		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
-		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 1,
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
-		},
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-		SampleCache: config.SampleCacheConfig{
-			KeptSize:          100,
-			DroppedSize:       100,
-			SizeCheckInterval: config.Duration(1 * time.Second),
-		},
-	}
-
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-	defer transmission.Stop()
-	peerTransmission := &transmit.MockTransmission{}
-	peerTransmission.Start()
-	defer peerTransmission.Stop()
-	coll := newTestCollector(conf, transmission, peerTransmission)
-	coll.Peers = &peer.MockPeers{}
-
-	err := coll.Start()
-	assert.NoError(t, err)
-	defer coll.Stop()
-
-	event := types.Event{
-		Dataset: "dataset",
-		Data: map[string]interface{}{
-			"trace.parent_id": "1",
-		},
-		APIKey: legacyAPIKey,
-	}
-
-	err = coll.AddSpan(&types.Span{TraceID: "1", Event: event})
-	assert.NoError(t, err)
-	err = coll.AddSpan(&types.Span{TraceID: "2", Event: event})
-	assert.NoError(t, err)
-
-	assert.Len(t, transmission.GetBlock(1), 1, "expected one trace to be sent")
-
-	conf.Mux.Lock()
-	conf.GetCollectionConfigVal.CacheCapacity = 2
-	conf.Mux.Unlock()
-	conf.Reload()
-
-	assert.Eventually(t, func() bool {
-		coll.mutex.RLock()
-		defer coll.mutex.RUnlock()
-		return coll.cache.GetCacheCapacity() == 2
-	}, 6*conf.GetTracesConfig().GetSendTickerValue(), conf.GetTracesConfig().GetSendTickerValue()*2, "cache size to change")
-
-	err = coll.AddSpan(&types.Span{TraceID: "3", Event: event})
-	assert.NoError(t, err)
-
-	assert.Len(t, transmission.GetBlock(0), 0, "expected one trace to be sent")
-
-	conf.Mux.Lock()
-	conf.GetCollectionConfigVal.CacheCapacity = 1
-	conf.Mux.Unlock()
-	conf.Reload()
-
-	assert.Len(t, transmission.GetBlock(1), 1, "expected another trace evicted and sent")
-}
-
 func TestSampleConfigReload(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -735,7 +661,6 @@ func TestStableMaxAlloc(t *testing.T) {
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
-			CacheCapacity: 1000,
 		},
 	}
 
@@ -816,8 +741,6 @@ func TestStableMaxAlloc(t *testing.T) {
 
 		time.Sleep(conf.GetTracesConfig().GetSendTickerValue())
 	}
-
-	assert.Equal(t, 1000, coll.cache.GetCacheCapacity(), "cache size shouldn't change")
 
 	tracesLeft := len(traces)
 	assert.Less(t, tracesLeft, 480, "should have sent some traces")
