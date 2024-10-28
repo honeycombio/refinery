@@ -93,7 +93,7 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 // tests in this file are running in parallel, so we need to ensure that
 // each test gets a unique port and redisDB.
 //
-// by default, every Redis instance supports 16 databases.
+// by default, every Redis instance supports 16 databases, we use redisDB as a way to separate test data
 func defaultConfig(basePort int, redisDB int) *config.MockConfig {
 	if redisDB >= 16 {
 		panic("redisDB must be less than 16")
