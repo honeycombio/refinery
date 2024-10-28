@@ -231,27 +231,6 @@ func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig := i.Config.GetCollectionConfig()
-
-	if imcConfig.CacheCapacity != i.cache.GetCacheCapacity() {
-		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheCapacity()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-		c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
-		// pull the old cache contents into the new cache
-		for j, trace := range i.cache.GetAll() {
-			if j >= imcConfig.CacheCapacity {
-				td, err := i.makeDecision(trace, TraceSendEjectedFull)
-				if err != nil {
-					continue
-				}
-				i.send(context.Background(), trace, td)
-				continue
-			}
-			c.Set(trace)
-		}
-		i.cache = c
-	} else {
-		i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
-	}
 
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
@@ -580,7 +559,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 	startTime := time.Now()
 	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), func(t *types.Trace) bool {
-		return !i.IsMyTrace(t.ID())
+		return i.IsMyTrace(t.ID())
 	})
 
 	dur := time.Now().Sub(startTime)
@@ -737,6 +716,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 	if markTraceForSending && !spanForwarded {
 		span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
 		trace.SendBy = i.Clock.Now().Add(timeout)
+		i.cache.Set(trace)
 	}
 }
 
@@ -1067,7 +1047,7 @@ type sentRecord struct {
 func (i *InMemCollector) sendTracesOnShutdown() {
 	wg := &sync.WaitGroup{}
 	sentChan := make(chan sentRecord, len(i.incoming))
-	forwardChan := make(chan *types.Span, i.Config.GetCollectionConfig().CacheCapacity)
+	forwardChan := make(chan *types.Span, 100_000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i.Config.GetCollectionConfig().ShutdownDelay))
 	defer cancel()
