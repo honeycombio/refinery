@@ -82,10 +82,15 @@ func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error
 	subs = append(subs, ps.topics[topic]...)
 	ps.mut.Unlock()
 	for _, sub := range subs {
-		// don't wait around for slow consumers
-		if sub.cb != nil {
-			go sub.cb(ctx, message)
+		var cb SubscriptionCallback
+		sub.mut.RLock()
+		cb = sub.cb
+		if cb == nil {
+			continue
 		}
+		sub.mut.RUnlock()
+		// don't wait around for slow consumers
+		go cb(ctx, message)
 	}
 	return nil
 }

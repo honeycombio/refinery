@@ -76,6 +76,8 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		},
 		done:                 make(chan struct{}),
 		keptDecisionMessages: make(chan string, 50),
+		dropDecisionMessages: make(chan string, 50),
+		dropDecisionBatch:    make(chan string, 5),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
 		},
@@ -262,9 +264,11 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.dropDecisionBatch = make(chan string, 5)
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	go coll.collect()
+	go coll.sendDropDecisions()
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -2106,4 +2110,73 @@ func TestCreateDecisionSpan(t *testing.T) {
 	ds = coll.createDecisionSpan(rootSpan, trace, peerShard)
 	expected.Data["meta.refinery.root"] = true
 	assert.EqualValues(t, expected, ds)
+}
+
+func TestSendDropDecisions(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+	coll.dropDecisionBatch = make(chan string, 5)
+
+	messages := make(chan string, 5)
+	coll.PubSub.Subscribe(context.Background(), droppedTraceDecisionTopic, func(ctx context.Context, msg string) {
+		messages <- msg
+	})
+
+	// drop decisions should be sent once the timer expires
+	collectionCfg := conf.GetCollectionConfig()
+	collectionCfg.DropDecisionSendInterval = config.Duration(2 * time.Millisecond)
+	conf.GetCollectionConfigVal = collectionCfg
+
+	closed := make(chan struct{})
+	go func() {
+		coll.sendDropDecisions()
+		close(closed)
+	}()
+
+	coll.dropDecisionBatch <- "trace1"
+	close(coll.dropDecisionBatch)
+	droppedMessage := <-messages
+	assert.Equal(t, "trace1", droppedMessage)
+
+	<-closed
+
+	// drop decision should be sent once it reaches the batch size
+	collectionCfg = conf.GetCollectionConfig()
+	collectionCfg.DropDecisionSendInterval = config.Duration(60 * time.Second)
+	collectionCfg.MaxDropDecisionBatchSize = 5
+	conf.GetCollectionConfigVal = collectionCfg
+	coll.dropDecisionBatch = make(chan string, 5)
+
+	closed = make(chan struct{})
+	go func() {
+		coll.sendDropDecisions()
+		close(closed)
+	}()
+
+	for i := 0; i < 5; i++ {
+		coll.dropDecisionBatch <- fmt.Sprintf("trace%d", i)
+	}
+	close(coll.dropDecisionBatch)
+	droppedMessage = <-messages
+	assert.Equal(t, "trace0,trace1,trace2,trace3,trace4", droppedMessage)
+
+	<-closed
 }
