@@ -155,6 +155,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_redistribute_traces_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of redistributing traces to peers"},
 	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
 	{Name: "collector_outgoing_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of traces waiting to be send to upstream"},
+	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -1650,6 +1651,8 @@ func (i *InMemCollector) sendDropDecisions() {
 
 		// if we need to send, do so
 		if send && len(traceIDs) > 0 {
+			i.Metrics.Histogram("collector_drop_decision_batch_count", len(traceIDs))
+
 			// copy the traceIDs so we can clear the list
 			idsToProcess := make([]string, len(traceIDs))
 			copy(idsToProcess, traceIDs)
