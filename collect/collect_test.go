@@ -57,6 +57,9 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Metrics: s,
 	}
 	localPubSub.Start()
+	redistributeNotifier := newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock)
+	redistributeNotifier.initialDelay = 2 * time.Millisecond
+	redistributeNotifier.maxDelay = 10 * time.Millisecond
 
 	c := &InMemCollector{
 		Config:           conf,
@@ -88,7 +91,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 				TraceIDs: peerTraceIDs,
 			},
 		},
-		redistributeTimer: newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock),
+		redistributeTimer: redistributeNotifier,
 	}
 
 	if !conf.GetCollectionConfig().EnableTraceLocality {
@@ -1744,9 +1747,20 @@ func TestRedistributeTraces(t *testing.T) {
 	}
 
 	coll.Sharder = s
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
 
-	err := coll.Start()
-	assert.NoError(t, err)
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	go coll.collect()
+	go coll.sendTraces()
+
 	defer coll.Stop()
 
 	dataset := "aoeu"
@@ -1799,7 +1813,7 @@ func TestRedistributeTraces(t *testing.T) {
 	coll.mutex.Lock()
 	coll.cache.Set(trace)
 	coll.mutex.Unlock()
-	coll.Peers.RegisterUpdatedPeersCallback(coll.redistributeTimer.Reset)
+	coll.redistributeTimer.Reset()
 
 	peerEvents := peerTransmission.GetBlock(1)
 	assert.Len(t, peerEvents, 1)
