@@ -1618,13 +1618,15 @@ func (i *InMemCollector) sendDropDecisions() {
 		return
 	}
 
-	tickerInterval := time.Duration(i.Config.GetCollectionConfig().DropDecisionSendInterval)
+	timerInterval := time.Duration(i.Config.GetCollectionConfig().DropDecisionSendInterval)
 	if i.Config.GetCollectionConfig().DropDecisionSendInterval == 0 {
-		tickerInterval = defaultDropDecisionTicker
+		timerInterval = defaultDropDecisionTicker
 	}
 
-	ticker := i.Clock.NewTicker(tickerInterval)
-	defer ticker.Stop()
+	// use a timer here so that we don't send a batch immediately after
+	// reaching the max batch size
+	timer := i.Clock.NewTimer(timerInterval)
+	defer timer.Stop()
 	traceIDs := make([]string, 0, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize)
 	send := false
 	eg := &errgroup.Group{}
@@ -1644,8 +1646,8 @@ func (i *InMemCollector) sendDropDecisions() {
 			if len(traceIDs) >= i.Config.GetCollectionConfig().MaxDropDecisionBatchSize {
 				send = true
 			}
-		case <-ticker.Chan():
-			// ticker fired, so send what we have
+		case <-timer.Chan():
+			// timer fired, so send what we have
 			send = true
 		}
 
@@ -1677,6 +1679,14 @@ func (i *InMemCollector) sendDropDecisions() {
 
 				return nil
 			})
+			if !timer.Stop() {
+				select {
+				case <-timer.Chan():
+				default:
+				}
+			}
+
+			timer.Reset(timerInterval)
 			send = false
 		}
 	}
