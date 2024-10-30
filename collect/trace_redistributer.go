@@ -69,14 +69,22 @@ func (r *redistributeNotifier) Stop() {
 	close(r.done)
 }
 
+// run runs the redistribution notifier loop.
+// It will notify the trigger channel when it's time to redistribute traces.
+// A notification will be sent every time the backoff timer expires.
+// The backoff timer is reset when a reset signal is received.
 func (r *redistributeNotifier) run() {
 	var attempts int
 	currentBackOff := r.initialDelay
 	lastBackoff := currentBackOff
 
+	// start a back off timer with the initial delay
 	timer := r.clock.NewTimer(currentBackOff)
 	for {
 
+		// only reset the timer if we have received
+		// a reset signal or we are in the middle of
+		// a redistribution cycle.
 		if currentBackOff != lastBackoff {
 			if !timer.Stop() {
 				// drain the timer channel
@@ -94,18 +102,24 @@ func (r *redistributeNotifier) run() {
 			timer.Stop()
 			return
 		case <-r.reset:
+			// reset the backoff timer and attempts
+			// if we receive a reset signal.
 			currentBackOff = r.initialDelay
 			attempts = 0
 		case <-timer.Chan():
-			// if we've reached the max attempts,
 			if attempts >= r.maxAttempts {
+				// if we've reached the max attempts,
+				// we will block the goroutine here until
+				// we receive a reset signal or refinery starts to shutdown.
 				r.metrics.Gauge("trace_redistribution_count", 0)
 				select {
 				case <-r.done:
+					return
 				case <-r.reset:
 				}
 				currentBackOff = r.initialDelay
 				attempts = 0
+				currentBackOff = r.calculateBackoff(currentBackOff)
 				continue
 			}
 
@@ -122,6 +136,8 @@ func (r *redistributeNotifier) run() {
 	}
 }
 
+// calculateBackoff calculates the backoff interval for the next redistribution cycle.
+// It uses exponential backoff with a base time and adds jitter to avoid retry collisions.
 func (r *redistributeNotifier) calculateBackoff(lastBackoff time.Duration) time.Duration {
 	// Calculate the backoff interval using exponential backoff with a base time.
 	backoff := time.Duration(math.Min(float64(lastBackoff)*2, float64(r.maxDelay)))
