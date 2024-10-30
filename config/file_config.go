@@ -92,20 +92,21 @@ type AccessKeyConfig struct {
 }
 
 // truncate the key to 8 characters for logging
-func (a *AccessKeyConfig) sanitize(key string) string {
+func (a *AccessKeyConfig) Sanitize(key string) string {
 	return fmt.Sprintf("%.8s...", key)
 }
 
-// CheckAndMaybeReplaceKey checks the given API key against the configuration
+func (a *AccessKeyConfig) IsAccepted(key string) bool {
+	if a.AcceptOnlyListedKeys {
+		return slices.Contains(a.ReceiveKeys, key)
+	}
+	return true
+}
+
+// GetReplaceKey checks the given API key against the configuration
 // and possibly replaces it with the configured SendKey, if the settings so indicate.
 // It returns the key to use, or an error if the key is invalid given the settings.
-func (a *AccessKeyConfig) CheckAndMaybeReplaceKey(apiKey string) (string, error) {
-	// Apply AcceptOnlyListedKeys logic BEFORE we consider replacement
-	if a.AcceptOnlyListedKeys && !slices.Contains(a.ReceiveKeys, apiKey) {
-		err := fmt.Errorf("api key %s not found in list of authorized keys", a.sanitize(apiKey))
-		return "", err
-	}
-
+func (a *AccessKeyConfig) GetReplaceKey(apiKey string) (string, error) {
 	if a.SendKey != "" {
 		overwriteWith := ""
 		switch a.SendKeyMode {
