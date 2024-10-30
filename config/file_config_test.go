@@ -68,7 +68,7 @@ func TestAccessKeyConfig_CheckAndMaybeReplaceKey(t *testing.T) {
 				SendKeyMode:          tt.fields.SendKeyMode,
 				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
 			}
-			got, err := a.CheckAndMaybeReplaceKey(tt.apiKey)
+			got, err := a.GetReplaceKey(tt.apiKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
