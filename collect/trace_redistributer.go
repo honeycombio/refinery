@@ -70,7 +70,13 @@ func (r *redistributeNotifier) Stop() {
 }
 
 // run runs the redistribution notifier loop.
-// It will notify the trigger channel when it's time to redistribute traces.
+// It will notify the trigger channel when it's time to redistribute traces, which we want
+// to happen when the number of peers changes. But we don't want to do it immediately,
+// because peer membership changes often happen in bunches, so we wait a while
+// before triggering the redistribution.
+// 
+// The redistribution is run 3 times, with increasing durations, so that we properly redistribute 
+// anything that was arriving near the same time as the peer change.
 // A notification will be sent every time the backoff timer expires.
 // The backoff timer is reset when a reset signal is received.
 func (r *redistributeNotifier) run() {
