@@ -16,7 +16,7 @@ import (
 type Cache interface {
 	// Set adds the trace to the cache. If it is kicking out a trace from the cache
 	// that has not yet been sent, it will return that trace. Otherwise returns nil.
-	Set(trace *types.Trace) *types.Trace
+	Set(trace *types.Trace)
 	Get(traceID string) *types.Trace
 
 	// GetAll is used during shutdown to get all in-flight traces to flush them
@@ -90,18 +90,18 @@ func (d *DefaultInMemCache) GetCacheEntryCount() int {
 	return len(d.cache)
 }
 
-func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
+func (d *DefaultInMemCache) Set(trace *types.Trace) {
 	// we need to dereference the trace ID so skip bad inserts to avoid panic
 	if trace == nil {
-		return nil
+		return
 	}
 	start := time.Now()
 
-	defer d.Metrics.Histogram("trace_cache_set_dur_ms", time.Since(start).Milliseconds())
+	defer d.Metrics.Histogram("trace_cache_set_dur_ms", float64(time.Since(start).Milliseconds()))
 	// update the cache and priority queue
 	d.cache[trace.TraceID] = trace
 	d.pq.Set(trace.TraceID, trace.SendBy)
-	return nil
+	return
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
@@ -113,7 +113,7 @@ func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
 	start := time.Now()
 
-	defer d.Metrics.Histogram("trace_cache_get_all_dur_ms", time.Since(start).Milliseconds())
+	defer d.Metrics.Histogram("trace_cache_get_all_dur_ms", float64(time.Since(start).Milliseconds()))
 	return maps.Values(d.cache)
 }
 
@@ -128,7 +128,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
 	start := time.Now()
-	defer d.Metrics.Histogram("trace_cache_take_expired_traces_dur_ms", time.Since(start).Milliseconds())
+	defer d.Metrics.Histogram("trace_cache_take_expired_traces_dur_ms", float64(time.Since(start).Milliseconds()))
 
 	var expired, skipped []*types.Trace
 	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
@@ -174,7 +174,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 	start := time.Now()
-	defer d.Metrics.Histogram("trace_cache_remove_traces_dur_ms", time.Since(start).Milliseconds())
+	defer d.Metrics.Histogram("trace_cache_remove_traces_dur_ms", float64(time.Since(start).Milliseconds()))
 
 	for _, traceID := range toDelete.Members() {
 		delete(d.cache, traceID)
