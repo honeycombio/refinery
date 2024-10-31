@@ -156,7 +156,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
 	{Name: "collector_outgoing_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of traces waiting to be send to upstream"},
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
-	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing a decision when they are sent"},
+	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
+	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -572,6 +573,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	startTime := time.Now()
 	expiredTraces := make([]*types.Trace, 0)
 	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
+	var orphanTraceCount int
 	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), func(t *types.Trace) bool {
 		if i.IsMyTrace(t.ID()) {
 			return true
@@ -581,6 +583,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		// if a trace has expired more than 4 times the trace timeout, we should just make a decision for it
 		// instead of waiting for the decider node
 		if timeoutDuration > traceTimeout*4 {
+			orphanTraceCount++
 			return true
 		}
 
@@ -596,6 +599,8 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	})
 
 	dur := time.Now().Sub(startTime)
+	i.Metrics.Gauge("collector_expired_traces_missing_decisions", len(expiredTraces))
+	i.Metrics.Gauge("collector_expired_traces_orphans", orphanTraceCount)
 
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
 
