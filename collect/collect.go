@@ -156,6 +156,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
 	{Name: "collector_outgoing_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of traces waiting to be send to upstream"},
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
+	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
+	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -291,6 +293,13 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
+		if !i.IsMyTrace(trace.ID()) {
+			i.Logger.Debug().WithFields(map[string]interface{}{
+				"trace_id": trace.ID(),
+			}).Logf("cannot eject trace that does not belong to this peer")
+
+			continue
+		}
 		td, err := i.makeDecision(trace, TraceSendEjectedMemsize)
 		if err != nil {
 			continue
@@ -560,11 +569,36 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	defer span.End()
 
 	startTime := time.Now()
+	expiredTraces := make([]*types.Trace, 0)
+	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
+	var orphanTraceCount int
 	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), func(t *types.Trace) bool {
-		return i.IsMyTrace(t.ID())
+		if i.IsMyTrace(t.ID()) {
+			return true
+		}
+
+		timeoutDuration := now.Sub(t.SendBy)
+		// if a trace has expired more than 4 times the trace timeout, we should just make a decision for it
+		// instead of waiting for the decider node
+		if timeoutDuration > traceTimeout*4 {
+			orphanTraceCount++
+			return true
+		}
+
+		// if a trace has expired more than 2 times the trace timeout, we should forward it to its decider
+		// and wait for the decider to publish the trace decision again
+		if timeoutDuration > traceTimeout*2 {
+			expiredTraces = append(expiredTraces, t)
+		}
+
+		// by returning false we will not remove the trace from the cache
+		// the trace will be removed from the cache when the peer receives the trace decision
+		return false
 	})
 
 	dur := time.Now().Sub(startTime)
+	i.Metrics.Gauge("collector_expired_traces_missing_decisions", len(expiredTraces))
+	i.Metrics.Gauge("collector_expired_traces_orphans", orphanTraceCount)
 
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
 
@@ -574,9 +608,8 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 	for _, t := range traces {
 		totalSpansSent += int64(t.DescendantCount())
-		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "sendReadyTrace", "num_spans", int64(t.DescendantCount()))
+
 		if t.RootSpan != nil {
-			span2.SetAttributes(attribute.String("send_reason", TraceSendGotRoot))
 			td, err := i.makeDecision(t, TraceSendGotRoot)
 			if err != nil {
 				continue
@@ -584,14 +617,12 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			i.send(ctx, t, td)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				span2.SetAttributes(attribute.String("send_reason", TraceSendSpanLimit))
 				td, err := i.makeDecision(t, TraceSendSpanLimit)
 				if err != nil {
 					continue
 				}
 				i.send(ctx, t, td)
 			} else {
-				span2.SetAttributes(attribute.String("send_reason", TraceSendExpired))
 				td, err := i.makeDecision(t, TraceSendExpired)
 				if err != nil {
 					continue
@@ -599,7 +630,18 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				i.send(ctx, t, td)
 			}
 		}
-		span2.End()
+
+	}
+
+	for _, trace := range expiredTraces {
+		// if a trace has expired and it doesn't belong to this peer, we should ask its decider to
+		// publish the trace decision again
+		i.PeerTransmission.EnqueueEvent(i.createDecisionSpan(&types.Span{
+			TraceID: trace.ID(),
+			Event: types.Event{
+				Context: trace.GetSpans()[0].Context,
+			},
+		}, trace, i.Sharder.WhichShard(trace.ID())))
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
 }
@@ -649,14 +691,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
 		// push this into the cache and if we eject an unsent trace, send it ASAP
-		ejectedTrace := i.cache.Set(trace)
-		if ejectedTrace != nil {
-			span.SetAttributes(attribute.String("disposition", "ejected_trace"))
-			td, err := i.makeDecision(ejectedTrace, TraceSendEjectedFull)
-			if err == nil {
-				i.send(ctx, ejectedTrace, td)
-			}
-		}
+		i.cache.Set(trace)
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
@@ -1246,10 +1281,6 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 	}
 
 	dc.APIHost = targetShard.GetAddress()
-	i.Logger.Warn().WithFields(map[string]interface{}{
-		"dc": dc,
-		"sp": sp.Data,
-	}).Logf("creating decision span")
 	return dc
 }
 
@@ -1479,15 +1510,6 @@ func (i *InMemCollector) processKeptDecision(msg string) {
 	i.cache.RemoveTraces(toDelete)
 }
 func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
-	if !i.IsMyTrace(trace.ID()) {
-		err := errors.New("cannot make a decision for partial traces")
-
-		i.Logger.Warn().WithFields(map[string]interface{}{
-			"trace_id": trace.ID(),
-		}).Logf(err.Error())
-
-		return nil, err
-	}
 
 	if trace.Sent {
 		return nil, errors.New("trace already sent")
