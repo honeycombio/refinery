@@ -296,7 +296,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 		if !i.IsMyTrace(trace.ID()) {
 			i.Logger.Debug().WithFields(map[string]interface{}{
 				"trace_id": trace.ID(),
-			}).Logf("cannot make a decision for partial traces")
+			}).Logf("cannot eject trace that does not belong to this peer")
 
 			continue
 		}
