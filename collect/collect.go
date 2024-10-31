@@ -294,11 +294,9 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
 		if !i.IsMyTrace(trace.ID()) {
-			err := errors.New("cannot make a decision for partial traces")
-
-			i.Logger.Warn().WithFields(map[string]interface{}{
+			i.Logger.Debug().WithFields(map[string]interface{}{
 				"trace_id": trace.ID(),
-			}).Logf(err.Error())
+			}).Logf("cannot make a decision for partial traces")
 
 			continue
 		}
@@ -589,7 +587,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 		// if a trace has expired more than 2 times the trace timeout, we should forward it to its decider
 		// and wait for the decider to publish the trace decision again
-		if now.Sub(t.SendBy) > traceTimeout*2 {
+		if timeoutDuration > traceTimeout*2 {
 			expiredTraces = append(expiredTraces, t)
 		}
 
