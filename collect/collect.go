@@ -158,6 +158,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
 	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
 	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
+	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
+	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -210,7 +212,7 @@ func (i *InMemCollector) Start() error {
 		i.PubSub.Subscribe(context.Background(), keptTraceDecisionTopic, i.signalKeptTraceDecisions)
 		i.PubSub.Subscribe(context.Background(), droppedTraceDecisionTopic, i.signalDroppedTraceDecisions)
 
-		i.dropDecisionBatch = make(chan string, 1000)
+		i.dropDecisionBatch = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize*3)
 	}
 
 	// spin up one collector because this is a single threaded collector
@@ -401,13 +403,6 @@ func (i *InMemCollector) collect() {
 			return
 		case <-i.redistributeTimer.Notify():
 			i.redistributeTraces(ctx)
-		case msg, ok := <-i.keptDecisionMessages:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
-			}
-
-			i.processKeptDecision(msg)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -1463,6 +1458,7 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 
 func (i *InMemCollector) processDropDecisions(msg string) {
 	ids := newDroppedTraceDecision(msg)
+	i.Metrics.Increment("drop_decisions_received")
 
 	if len(ids) == 0 {
 		return
@@ -1492,6 +1488,8 @@ func (i *InMemCollector) processKeptDecision(msg string) {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
 		return
 	}
+	i.Metrics.Increment("kept_decisions_received")
+
 	toDelete := generics.NewSet[string]()
 	trace := i.cache.Get(td.TraceID)
 	// if we don't have the trace in the cache, we don't need to do anything
