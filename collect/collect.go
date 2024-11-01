@@ -564,6 +564,9 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	defer span.End()
 
 	startTime := time.Now()
+	defer func() {
+		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", time.Since(startTime).Milliseconds())
+	}()
 	expiredTraces := make([]*types.Trace, 0)
 	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	var orphanTraceCount int
@@ -1457,6 +1460,11 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 }
 
 func (i *InMemCollector) processDropDecisions(msg string) {
+	start := time.Now()
+	defer func() {
+		i.Metrics.Histogram("collector_process_drop_decisions_dur_ms", time.Since(start).Milliseconds())
+	}()
+
 	ids := newDroppedTraceDecision(msg)
 	i.Metrics.Increment("drop_decisions_received")
 
@@ -1483,6 +1491,11 @@ func (i *InMemCollector) processDropDecisions(msg string) {
 }
 
 func (i *InMemCollector) processKeptDecision(msg string) {
+	start := time.Now()
+	defer func() {
+		i.Metrics.Histogram("collector_process_kept_decisions_dur_ms", time.Since(start).Milliseconds())
+	}()
+
 	td, err := newKeptTraceDecision(msg)
 	if err != nil {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
@@ -1596,6 +1609,11 @@ func (i *InMemCollector) IsMyTrace(traceID string) bool {
 }
 
 func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
+	start := time.Now()
+	defer func() {
+		i.Metrics.Histogram("collector_publish_trace_decision_dur_ms", time.Since(start).Milliseconds())
+	}()
+
 	var (
 		decisionMsg string
 		err         error
