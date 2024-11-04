@@ -409,6 +409,13 @@ func (i *InMemCollector) collect() {
 			return
 		case <-i.redistributeTimer.Notify():
 			i.redistributeTraces(ctx)
+		case sp, ok := <-i.incoming:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processSpan(ctx, sp)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
