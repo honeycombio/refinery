@@ -23,7 +23,7 @@ import (
 const stressReliefTopic = "refinery-stress-relief"
 
 type StressReliever interface {
-	UpdateFromConfig(cfg config.StressReliefConfig)
+	UpdateFromConfig()
 	Recalc() uint
 	Stressed() bool
 	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
@@ -41,10 +41,10 @@ type MockStressReliever struct {
 	SampleRate              uint
 }
 
-func (m *MockStressReliever) Start() error                                   { return nil }
-func (m *MockStressReliever) UpdateFromConfig(cfg config.StressReliefConfig) {}
-func (m *MockStressReliever) Recalc() uint                                   { return 0 }
-func (m *MockStressReliever) Stressed() bool                                 { return m.IsStressed }
+func (m *MockStressReliever) Start() error      { return nil }
+func (m *MockStressReliever) UpdateFromConfig() {}
+func (m *MockStressReliever) Recalc() uint      { return 0 }
+func (m *MockStressReliever) Stressed() bool    { return m.IsStressed }
 func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
 	return m.SampleRate, m.ShouldKeep, "mock"
 }
@@ -76,6 +76,7 @@ var _ StressReliever = &StressRelief{}
 
 type StressRelief struct {
 	RefineryMetrics metrics.Metrics `inject:"metrics"`
+	Config          config.Config   `inject:""`
 	Logger          logger.Logger   `inject:""`
 	Health          health.Recorder `inject:""`
 	PubSub          pubsub.PubSub   `inject:""`
@@ -141,8 +142,8 @@ func (s *StressRelief) Start() error {
 
 	// All of the numerator metrics are gauges. The denominator metrics are constants.
 	s.calcs = []StressReliefCalculation{
-		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (peer)"},
-		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "CacheCapacity (incoming)"},
+		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "PeerQueueSize"},
+		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "IncomingQueueSize"},
 		{Numerator: "libhoney_peer_queue_length", Denominator: "PEER_BUFFER_SIZE", Algorithm: "sqrt", Reason: "PeerBufferSize"},
 		{Numerator: "libhoney_upstream_queue_length", Denominator: "UPSTREAM_BUFFER_SIZE", Algorithm: "sqrt", Reason: "UpstreamBufferSize"},
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
@@ -248,9 +249,11 @@ func (s *StressRelief) onStressLevelUpdate(ctx context.Context, msg string) {
 	}
 }
 
-func (s *StressRelief) UpdateFromConfig(cfg config.StressReliefConfig) {
+func (s *StressRelief) UpdateFromConfig() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	cfg := s.Config.GetStressReliefConfig()
 
 	switch cfg.Mode {
 	case "never", "":
@@ -416,9 +419,14 @@ func (s *StressRelief) Recalc() uint {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	// The overall stress level is the max of the individual and cluster stress levels
-	// If a single node is under significant stress, it can activate stress relief mode
-	s.overallStressLevel = uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
+	overallStressLevel := clusterStressLevel
+
+	if s.Config.GetCollectionConfig().EnableTraceLocality {
+		// The overall stress level is the max of the individual and cluster stress levels
+		// If a single node is under significant stress, it can activate stress relief mode
+		overallStressLevel = uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
+	}
+	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", s.overallStressLevel)
 
 	s.reason = reason

@@ -50,7 +50,8 @@ type Trace struct {
 	Sent       bool
 	keptReason uint
 
-	SendBy time.Time
+	SendBy  time.Time
+	Retried bool
 
 	// ArrivalTime is the server time when the first span arrived for this trace.
 	// Used to calculate how long traces spend sitting in Refinery

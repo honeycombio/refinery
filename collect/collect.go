@@ -167,7 +167,7 @@ func (i *InMemCollector) Start() error {
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
 	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
-	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
+	i.StressRelief.UpdateFromConfig()
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -578,15 +578,17 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		timeoutDuration := now.Sub(t.SendBy)
 		// if a trace has expired more than 4 times the trace timeout, we should just make a decision for it
 		// instead of waiting for the decider node
-		if timeoutDuration > traceTimeout*8 {
+		if timeoutDuration > traceTimeout*4 {
 			orphanTraceCount++
 			return true
 		}
 
 		// if a trace has expired more than 2 times the trace timeout, we should forward it to its decider
 		// and wait for the decider to publish the trace decision again
-		if timeoutDuration > traceTimeout*4 {
+		// only retry it once
+		if timeoutDuration > traceTimeout*2 && !t.Retried {
 			expiredTraces = append(expiredTraces, t)
+			t.Retried = true
 		}
 
 		// by returning false we will not remove the trace from the cache
@@ -1521,7 +1523,6 @@ func (i *InMemCollector) processKeptDecision(msg string) {
 	i.cache.RemoveTraces(toDelete)
 }
 func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
-
 	if trace.Sent {
 		return nil, errors.New("trace already sent")
 	}
