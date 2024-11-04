@@ -5,14 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"runtime"
 	"sort"
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
@@ -22,12 +24,20 @@ import (
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/pubsub"
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	keptTraceDecisionTopic    = "trace_decision_kept"
+	droppedTraceDecisionTopic = "trace_decision_dropped"
+	decisionMessageBufferSize = 10_000
+	defaultDropDecisionTicker = 1 * time.Second
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
@@ -58,6 +68,14 @@ const (
 	TraceSendLateSpan       = "trace_send_late_span"
 )
 
+type sendableTrace struct {
+	*types.Trace
+	reason     string
+	sendReason string
+	sampleKey  string
+	shouldSend bool
+}
+
 // InMemCollector is a single threaded collector.
 type InMemCollector struct {
 	Config  config.Config   `inject:""`
@@ -69,6 +87,7 @@ type InMemCollector struct {
 
 	Transmission     transmit.Transmission  `inject:"upstreamTransmission"`
 	PeerTransmission transmit.Transmission  `inject:"peerTransmission"`
+	PubSub           pubsub.PubSub          `inject:""`
 	Metrics          metrics.Metrics        `inject:"genericMetrics"`
 	SamplerFactory   *sample.SamplerFactory `inject:""`
 	StressRelief     StressReliever         `inject:"stressRelief"`
@@ -88,11 +107,16 @@ type InMemCollector struct {
 
 	incoming          chan *types.Span
 	fromPeer          chan *types.Span
+	outgoingTraces    chan sendableTrace
 	reload            chan struct{}
 	done              chan struct{}
 	redistributeTimer *redistributeNotifier
 
-	hostname string
+	dropDecisionMessages chan string
+	keptDecisionMessages chan string
+
+	dropDecisionBatch chan string
+	hostname          string
 }
 
 var inMemCollectorMetrics = []metrics.Metadata{
@@ -130,6 +154,10 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_aggregate_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "aggregate sample rate of both kept and dropped traces"},
 	{Name: "collector_redistribute_traces_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of redistributing traces to peers"},
 	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
+	{Name: "collector_outgoing_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of traces waiting to be send to upstream"},
+	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
+	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
+	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -157,6 +185,7 @@ func (i *InMemCollector) Start() error {
 
 	i.incoming = make(chan *types.Span, imcConfig.GetIncomingQueueSize())
 	i.fromPeer = make(chan *types.Span, imcConfig.GetPeerQueueSize())
+	i.outgoingTraces = make(chan sendableTrace, 100_000)
 	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
@@ -175,8 +204,20 @@ func (i *InMemCollector) Start() error {
 		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
 	}
 
+	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+		i.keptDecisionMessages = make(chan string, decisionMessageBufferSize)
+		i.dropDecisionMessages = make(chan string, decisionMessageBufferSize)
+		i.PubSub.Subscribe(context.Background(), keptTraceDecisionTopic, i.signalKeptTraceDecisions)
+		i.PubSub.Subscribe(context.Background(), droppedTraceDecisionTopic, i.signalDroppedTraceDecisions)
+
+		i.dropDecisionBatch = make(chan string, 1000)
+	}
+
 	// spin up one collector because this is a single threaded collector
 	go i.collect()
+	go i.sendTraces()
+	// spin up a drop decision batch sender
+	go i.sendDropDecisions()
 
 	return nil
 }
@@ -194,23 +235,6 @@ func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
-	imcConfig := i.Config.GetCollectionConfig()
-
-	if imcConfig.CacheCapacity != i.cache.GetCacheCapacity() {
-		i.Logger.Debug().WithField("cache_size.previous", i.cache.GetCacheCapacity()).WithField("cache_size.new", imcConfig.CacheCapacity).Logf("refreshing the cache because it changed size")
-		c := cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
-		// pull the old cache contents into the new cache
-		for j, trace := range i.cache.GetAll() {
-			if j >= imcConfig.CacheCapacity {
-				i.send(trace, TraceSendEjectedFull)
-				continue
-			}
-			c.Set(trace)
-		}
-		i.cache = c
-	} else {
-		i.Logger.Debug().Logf("skipping reloading the in-memory cache on config reload because it hasn't changed capacity")
-	}
 
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
@@ -222,7 +246,10 @@ func (i *InMemCollector) reloadConfigs() {
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
-func (i *InMemCollector) checkAlloc() {
+func (i *InMemCollector) checkAlloc(ctx context.Context) {
+	_, span := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
+	defer span.End()
+
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
@@ -245,6 +272,8 @@ func (i *InMemCollector) checkAlloc() {
 	// To do this, we sort the traces by their CacheImpact value and then remove traces
 	// until the total size is less than the amount to which we want to shrink.
 	allTraces := i.cache.GetAll()
+	span.SetAttributes(attribute.Int("cache_size", len(allTraces)))
+
 	timeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	if timeout == 0 {
 		timeout = 60 * time.Second
@@ -264,9 +293,20 @@ func (i *InMemCollector) checkAlloc() {
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
+		if !i.IsMyTrace(trace.ID()) {
+			i.Logger.Debug().WithFields(map[string]interface{}{
+				"trace_id": trace.ID(),
+			}).Logf("cannot eject trace that does not belong to this peer")
+
+			continue
+		}
+		td, err := i.makeDecision(trace, TraceSendEjectedMemsize)
+		if err != nil {
+			continue
+		}
 		tracesSent.Add(trace.TraceID)
 		totalDataSizeSent += trace.DataSize
-		i.send(trace, TraceSendEjectedMemsize)
+		i.send(ctx, trace, td)
 		if totalDataSizeSent > int(totalToRemove) {
 			break
 		}
@@ -279,12 +319,13 @@ func (i *InMemCollector) checkAlloc() {
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).
-		WithField("new_trace_count", i.cache.GetCacheCapacity()).
+		WithField("new_trace_count", i.cache.GetCacheEntryCount()).
 		Logf("Making some trace decisions early due to memory overrun.")
 
 	// Manually GC here - without this we can easily end up evicting more than we
 	// need to, since total alloc won't be updated until after a GC pass.
 	runtime.GC()
+	return
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
@@ -340,6 +381,7 @@ func (i *InMemCollector) collect() {
 	defer i.mutex.Unlock()
 
 	for {
+		ctx, span := otelutil.StartSpan(context.Background(), i.Tracer, "collect")
 		startTime := time.Now()
 
 		i.Health.Ready(CollectorHealthKey, true)
@@ -355,56 +397,87 @@ func (i *InMemCollector) collect() {
 		// other.
 		select {
 		case <-i.done:
+			span.End()
 			return
 		case <-i.redistributeTimer.Notify():
-			i.redistributeTraces()
-		case sp, ok := <-i.fromPeer:
+			i.redistributeTraces(ctx)
+		case msg, ok := <-i.keptDecisionMessages:
 			if !ok {
 				// channel's been closed; we should shut down.
 				return
 			}
-			i.processSpan(sp)
+
+			i.processKeptDecision(msg)
+		case sp, ok := <-i.fromPeer:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processSpan(ctx, sp)
 		default:
 			select {
 			case <-i.done:
+				span.End()
 				return
+			case msg, ok := <-i.dropDecisionMessages:
+				if !ok {
+					// channel's been closed; we should shut down.
+					return
+				}
+
+				i.processDropDecisions(msg)
+			case msg, ok := <-i.keptDecisionMessages:
+				if !ok {
+					// channel's been closed; we should shut down.
+					return
+				}
+
+				i.processKeptDecision(msg)
 			case <-ticker.C:
 				select {
 				case <-i.done:
+					span.End()
+					return
 				default:
-					i.sendExpiredTracesInCache(i.Clock.Now())
-					i.checkAlloc()
+					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
+					i.checkAlloc(ctx)
 
 					// Briefly unlock the cache, to allow test access.
+					_, span3 := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
 					i.mutex.Unlock()
 					runtime.Gosched()
 					i.mutex.Lock()
+					span3.End()
 				}
 			case <-i.redistributeTimer.Notify():
-				i.redistributeTraces()
+				i.redistributeTraces(ctx)
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
+					span.End()
 					return
 				}
-				i.processSpan(sp)
+				i.processSpan(ctx, sp)
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
+					span.End()
 					return
 				}
-				i.processSpan(sp)
+				i.processSpan(ctx, sp)
 			case <-i.reload:
 				i.reloadConfigs()
 			}
 		}
 
 		i.Metrics.Histogram("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
+		span.End()
 	}
 }
 
-func (i *InMemCollector) redistributeTraces() {
-	_, span := otelutil.StartSpan(context.Background(), i.Tracer, "redistributeTraces")
+func (i *InMemCollector) redistributeTraces(ctx context.Context) {
+	_, span := otelutil.StartSpan(ctx, i.Tracer, "redistributeTraces")
 	redistrubutionStartTime := i.Clock.Now()
 
 	defer func() {
@@ -420,26 +493,35 @@ func (i *InMemCollector) redistributeTraces() {
 		return
 	}
 	numOfPeers := len(peers)
+	span.SetAttributes(attribute.Int("num_peers", numOfPeers))
 	if numOfPeers == 0 {
 		return
 	}
 
 	traces := i.cache.GetAll()
+	span.SetAttributes(attribute.Int("num_traces_to_redistribute", len(traces)))
 	forwardedTraces := generics.NewSetWithCapacity[string](len(traces) / numOfPeers)
 	for _, trace := range traces {
 		if trace == nil {
 			continue
 		}
+		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "distributeTrace", "num_spans", trace.DescendantCount())
 
 		newTarget := i.Sharder.WhichShard(trace.TraceID)
+
+		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
 			if !i.Config.GetCollectionConfig().EnableTraceLocality {
 				// Drop all proxy spans since peers will resend them
 				trace.RemoveDecisionSpans()
 			}
+			span2.SetAttributes(attribute.Bool("self", true))
+			span2.End()
 			continue
 		}
+
+		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
 		for _, sp := range trace.GetSpans() {
 			if sp.IsDecisionSpan() {
@@ -467,6 +549,7 @@ func (i *InMemCollector) redistributeTraces() {
 		}
 
 		forwardedTraces.Add(trace.TraceID)
+		span2.End()
 	}
 
 	otelutil.AddSpanFields(span, map[string]interface{}{
@@ -481,29 +564,96 @@ func (i *InMemCollector) redistributeTraces() {
 	}
 }
 
-func (i *InMemCollector) sendExpiredTracesInCache(now time.Time) {
-	traces := i.cache.TakeExpiredTraces(now)
+func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
+	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
+	defer span.End()
+
+	startTime := time.Now()
+	expiredTraces := make([]*types.Trace, 0)
+	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
+	var orphanTraceCount int
+	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), func(t *types.Trace) bool {
+		if i.IsMyTrace(t.ID()) {
+			return true
+		}
+
+		timeoutDuration := now.Sub(t.SendBy)
+		// if a trace has expired more than 4 times the trace timeout, we should just make a decision for it
+		// instead of waiting for the decider node
+		if timeoutDuration > traceTimeout*4 {
+			orphanTraceCount++
+			return true
+		}
+
+		// if a trace has expired more than 2 times the trace timeout, we should forward it to its decider
+		// and wait for the decider to publish the trace decision again
+		if timeoutDuration > traceTimeout*2 {
+			expiredTraces = append(expiredTraces, t)
+		}
+
+		// by returning false we will not remove the trace from the cache
+		// the trace will be removed from the cache when the peer receives the trace decision
+		return false
+	})
+
+	dur := time.Now().Sub(startTime)
+	i.Metrics.Gauge("collector_expired_traces_missing_decisions", len(expiredTraces))
+	i.Metrics.Gauge("collector_expired_traces_orphans", orphanTraceCount)
+
+	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
+
 	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
+
+	var totalSpansSent int64
+
 	for _, t := range traces {
+		totalSpansSent += int64(t.DescendantCount())
+
 		if t.RootSpan != nil {
-			i.send(t, TraceSendGotRoot)
+			td, err := i.makeDecision(t, TraceSendGotRoot)
+			if err != nil {
+				continue
+			}
+			i.send(ctx, t, td)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				i.send(t, TraceSendSpanLimit)
+				td, err := i.makeDecision(t, TraceSendSpanLimit)
+				if err != nil {
+					continue
+				}
+				i.send(ctx, t, td)
 			} else {
-				i.send(t, TraceSendExpired)
+				td, err := i.makeDecision(t, TraceSendExpired)
+				if err != nil {
+					continue
+				}
+				i.send(ctx, t, td)
 			}
 		}
+
 	}
+
+	for _, trace := range expiredTraces {
+		// if a trace has expired and it doesn't belong to this peer, we should ask its decider to
+		// publish the trace decision again
+		i.PeerTransmission.EnqueueEvent(i.createDecisionSpan(&types.Span{
+			TraceID: trace.ID(),
+			Event: types.Event{
+				Context: trace.GetSpans()[0].Context,
+			},
+		}, trace, i.Sharder.WhichShard(trace.ID())))
+	}
+	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
-func (i *InMemCollector) processSpan(sp *types.Span) {
-	ctx := context.Background()
+func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
+	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "processSpan")
 	defer func() {
 		i.Metrics.Increment("span_processed")
 		i.Metrics.Down("spans_waiting")
+		span.End()
 	}()
 
 	tcfg := i.Config.GetTracesConfig()
@@ -512,6 +662,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
 		if sr, keptReason, found := i.sampleTraceCache.CheckSpan(sp); found {
+			span.SetAttributes(attribute.String("disposition", "already_sent"))
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -521,6 +672,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
+		span.SetAttributes(attribute.Bool("create_new_trace", true))
 		i.Metrics.Increment("trace_accepted")
 
 		timeout := tcfg.GetTraceTimeout()
@@ -539,15 +691,13 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
 		// push this into the cache and if we eject an unsent trace, send it ASAP
-		ejectedTrace := i.cache.Set(trace)
-		if ejectedTrace != nil {
-			i.send(ejectedTrace, TraceSendEjectedFull)
-		}
+		i.cache.Set(trace)
 	}
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
 		if sr, reason, found := i.sampleTraceCache.CheckSpan(sp); found {
+			span.SetAttributes(attribute.String("disposition", "already_sent"))
 			i.Metrics.Increment("trace_sent_cache_hit")
 			i.dealWithSentTrace(ctx, sr, reason, sp)
 			return
@@ -560,6 +710,7 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
+	span.SetAttributes(attribute.String("disposition", "live_trace"))
 
 	// Figure out if we should handle this span locally or pass on to a peer
 	var spanForwarded bool
@@ -600,7 +751,9 @@ func (i *InMemCollector) processSpan(sp *types.Span) {
 
 	// we should only mark a trace for sending if we are the destination shard
 	if markTraceForSending && !spanForwarded {
+		span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
 		trace.SendBy = i.Clock.Now().Add(timeout)
+		i.cache.Set(trace)
 	}
 }
 
@@ -681,7 +834,54 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 	// if we receive a proxy span after a trace decision has been made,
 	// we should just broadcast the decision again
 	if sp.IsDecisionSpan() {
-		// TODO: broadcast the decision again
+		var (
+			msg string
+			err error
+		)
+		topic := keptTraceDecisionTopic
+		if tr.Kept() {
+			//  late span in this case won't get HasRoot
+			// this means the late span won't be decorated with some metadata
+			// like span count, event count, link count
+			msg, err = newKeptDecisionMessage(TraceDecision{
+				TraceID:    sp.TraceID,
+				Kept:       tr.Kept(),
+				KeptReason: keptReason,
+				SendReason: TraceSendLateSpan,
+				SampleRate: tr.Rate(),
+				Count:      uint32(tr.SpanCount()),
+				EventCount: uint32(tr.SpanEventCount()),
+				LinkCount:  uint32(tr.SpanLinkCount()),
+			})
+			if err != nil {
+				i.Logger.Error().WithFields(map[string]interface{}{
+					"trace_id":  sp.TraceID,
+					"kept":      tr.Kept(),
+					"late_span": true,
+				}).Logf("Failed to create new kept decision message")
+				return
+			}
+		} else {
+			topic = droppedTraceDecisionTopic
+			msg, err = newDroppedDecisionMessage(sp.TraceID)
+			if err != nil {
+				i.Logger.Error().WithFields(map[string]interface{}{
+					"trace_id":  sp.TraceID,
+					"kept":      tr.Kept(),
+					"late_span": true,
+				}).Logf("Failed to create new dropped decision message")
+				return
+			}
+		}
+
+		err = i.PubSub.Publish(ctx, topic, msg)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id":  sp.TraceID,
+				"kept":      tr.Kept(),
+				"late_span": true,
+			}).Logf("Failed to publish trace decision")
+		}
 		return
 	}
 
@@ -767,7 +967,8 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	}
 }
 
-func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
+// this is only called when a trace decision is received
+func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *TraceDecision) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
 		i.Logger.Debug().
@@ -780,113 +981,59 @@ func (i *InMemCollector) send(trace *types.Trace, sendReason string) {
 
 	traceDur := i.Clock.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
-	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
-	if trace.RootSpan != nil {
-		i.Metrics.Increment("trace_send_has_root")
-	} else {
-		i.Metrics.Increment("trace_send_no_root")
-	}
 
-	i.Metrics.Increment(sendReason)
-
-	var sampler sample.Sampler
-	var found bool
-
-	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerKey, isLegacyKey := trace.GetSamplerKey()
 	logFields := logrus.Fields{
-		"trace_id": trace.TraceID,
+		"trace_id": td.TraceID,
 	}
-	if isLegacyKey {
-		logFields["dataset"] = samplerKey
-	} else {
-		logFields["environment"] = samplerKey
-	}
-
-	// If we have a root span, update it with the count before determining the SampleRate.
-	if trace.RootSpan != nil {
-		rs := trace.RootSpan
-		if i.Config.GetAddCountsToRoot() {
-			rs.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
-			rs.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
-			rs.Data["meta.span_count"] = int64(trace.SpanCount())
-			rs.Data["meta.event_count"] = int64(trace.DescendantCount())
-		} else if i.Config.GetAddSpanCountToRoot() {
-			rs.Data["meta.span_count"] = int64(trace.DescendantCount())
-		}
-	}
-
-	// use sampler key to find sampler; create and cache if not found
-	if sampler, found = i.datasetSamplers[samplerKey]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerKey, isLegacyKey)
-		i.datasetSamplers[samplerKey] = sampler
-	}
-
-	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
-	trace.SetSampleRate(rate)
-	trace.KeepSample = shouldSend
-	logFields["reason"] = reason
-	if key != "" {
-		logFields["sample_key"] = key
-	}
-	// This will observe sample rate attempts even if the trace is dropped
-	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
-
-	i.sampleTraceCache.Record(trace, shouldSend, reason)
-
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
-	if !shouldSend && !i.Config.GetIsDryRun() {
+	if !td.Kept && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
 		return
 	}
+
+	if td.HasRoot {
+		rs := trace.RootSpan
+		if rs != nil {
+			if i.Config.GetAddCountsToRoot() {
+				rs.Data["meta.span_event_count"] = int64(td.EventCount)
+				rs.Data["meta.span_link_count"] = int64(td.LinkCount)
+				rs.Data["meta.span_count"] = int64(td.Count)
+				rs.Data["meta.event_count"] = int64(td.DescendantCount())
+			} else if i.Config.GetAddSpanCountToRoot() {
+				rs.Data["meta.span_count"] = int64(td.DescendantCount())
+			}
+		}
+	}
+
+	i.Metrics.Increment(td.SendReason)
+	if types.IsLegacyAPIKey(trace.APIKey) {
+		logFields["dataset"] = td.SamplerSelector
+	} else {
+		logFields["environment"] = td.SamplerSelector
+	}
+	logFields["reason"] = td.KeptReason
+	if td.SamplerKey != "" {
+		logFields["sample_key"] = td.SamplerKey
+	}
+
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
-	i.Metrics.Histogram("trace_kept_sample_rate", float64(rate))
+	i.Metrics.Histogram("trace_kept_sample_rate", float64(td.SampleRate))
 
 	// ok, we're not dropping this trace; send all the spans
-	if i.Config.GetIsDryRun() && !shouldSend {
+	if i.Config.GetIsDryRun() && !td.Kept {
 		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but sending because dry run mode is enabled")
 	} else {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
-
-	for _, sp := range trace.GetSpans() {
-		if sp.IsDecisionSpan() {
-			continue
-		}
-		if i.Config.GetAddRuleReasonToTrace() {
-			sp.Data["meta.refinery.reason"] = reason
-			sp.Data["meta.refinery.send_reason"] = sendReason
-			if key != "" {
-				sp.Data["meta.refinery.sample_key"] = key
-			}
-		}
-
-		// update the root span (if we have one, which we might not if the trace timed out)
-		// with the final total as of our send time
-		if sp.IsRoot {
-			if i.Config.GetAddCountsToRoot() {
-				sp.Data["meta.span_event_count"] = int64(trace.SpanEventCount())
-				sp.Data["meta.span_link_count"] = int64(trace.SpanLinkCount())
-				sp.Data["meta.span_count"] = int64(trace.SpanCount())
-				sp.Data["meta.event_count"] = int64(trace.DescendantCount())
-			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data["meta.span_count"] = int64(trace.DescendantCount())
-			}
-		}
-
-		isDryRun := i.Config.GetIsDryRun()
-		if isDryRun {
-			sp.Data[config.DryRunFieldName] = shouldSend
-		}
-		if i.hostname != "" {
-			sp.Data["meta.refinery.local_hostname"] = i.hostname
-		}
-		mergeTraceAndSpanSampleRates(sp, trace.SampleRate(), isDryRun)
-		i.addAdditionalAttributes(sp)
-		i.Transmission.EnqueueSpan(sp)
+	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
+	i.outgoingTraces <- sendableTrace{
+		Trace:      trace,
+		reason:     td.KeptReason,
+		sendReason: td.SendReason,
+		sampleKey:  td.SamplerKey,
+		shouldSend: td.Kept,
 	}
 }
 
@@ -919,6 +1066,11 @@ func (i *InMemCollector) Stop() error {
 
 	close(i.incoming)
 	close(i.fromPeer)
+	close(i.outgoingTraces)
+
+	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+		close(i.dropDecisionBatch)
+	}
 
 	return nil
 }
@@ -939,7 +1091,7 @@ type sentRecord struct {
 func (i *InMemCollector) sendTracesOnShutdown() {
 	wg := &sync.WaitGroup{}
 	sentChan := make(chan sentRecord, len(i.incoming))
-	forwardChan := make(chan *types.Span, i.Config.GetCollectionConfig().CacheCapacity)
+	forwardChan := make(chan *types.Span, 100_000)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i.Config.GetCollectionConfig().ShutdownDelay))
 	defer cancel()
@@ -1132,20 +1284,49 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 	return dc
 }
 
-func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
-	r := &redistributeNotifier{
-		initialDelay: 3 * time.Second,
-		maxDelay:     30 * time.Second,
-		maxAttempts:  5,
-		done:         make(chan struct{}),
-		clock:        clock,
-		logger:       logger,
-		metrics:      met,
-		triggered:    make(chan struct{}),
-		reset:        make(chan struct{}),
-	}
+func (i *InMemCollector) sendTraces() {
+	for t := range i.outgoingTraces {
+		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
+		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
+		for _, sp := range t.GetSpans() {
+			if sp.IsDecisionSpan() {
+				continue
+			}
 
-	return r
+			if i.Config.GetAddRuleReasonToTrace() {
+				sp.Data["meta.refinery.reason"] = t.reason
+				sp.Data["meta.refinery.send_reason"] = t.sendReason
+				if t.sampleKey != "" {
+					sp.Data["meta.refinery.sample_key"] = t.sampleKey
+				}
+			}
+
+			// update the root span (if we have one, which we might not if the trace timed out)
+			// with the final total as of our send time
+			if sp.IsRoot {
+				if i.Config.GetAddCountsToRoot() {
+					sp.Data["meta.span_event_count"] = int64(t.SpanEventCount())
+					sp.Data["meta.span_link_count"] = int64(t.SpanLinkCount())
+					sp.Data["meta.span_count"] = int64(t.SpanCount())
+					sp.Data["meta.event_count"] = int64(t.DescendantCount())
+				} else if i.Config.GetAddSpanCountToRoot() {
+					sp.Data["meta.span_count"] = int64(t.DescendantCount())
+				}
+			}
+
+			isDryRun := i.Config.GetIsDryRun()
+			if isDryRun {
+				sp.Data[config.DryRunFieldName] = t.shouldSend
+			}
+			if i.hostname != "" {
+				sp.Data["meta.refinery.local_hostname"] = i.hostname
+			}
+			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
+			i.addAdditionalAttributes(sp)
+			i.Transmission.EnqueueSpan(sp)
+		}
+		span.End()
+	}
 }
 
 type redistributeNotifier struct {
@@ -1160,6 +1341,22 @@ type redistributeNotifier struct {
 	done      chan struct{}
 	triggered chan struct{}
 	once      sync.Once
+}
+
+func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
+	r := &redistributeNotifier{
+		initialDelay: 3 * time.Second,
+		maxDelay:     30 * time.Second,
+		maxAttempts:  5,
+		done:         make(chan struct{}),
+		clock:        clock,
+		logger:       logger,
+		metrics:      met,
+		triggered:    make(chan struct{}),
+		reset:        make(chan struct{}),
+	}
+
+	return r
 }
 
 func (r *redistributeNotifier) Notify() <-chan struct{} {
@@ -1229,6 +1426,290 @@ func (r *redistributeNotifier) run() {
 		case <-r.done:
 			timer.Stop()
 			return
+		}
+	}
+}
+
+func (i *InMemCollector) signalKeptTraceDecisions(ctx context.Context, msg string) {
+	if len(msg) == 0 {
+		return
+	}
+
+	select {
+	case <-i.done:
+		return
+	case <-ctx.Done():
+		return
+	case i.keptDecisionMessages <- msg:
+	default:
+		i.Logger.Warn().Logf("kept trace decision channel is full. Dropping message")
+	}
+}
+func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg string) {
+	if len(msg) == 0 {
+		return
+	}
+
+	select {
+	case <-i.done:
+		return
+	case <-ctx.Done():
+		return
+	case i.dropDecisionMessages <- msg:
+	default:
+		i.Logger.Warn().Logf("dropped trace decision channel is full. Dropping message")
+	}
+}
+
+func (i *InMemCollector) processDropDecisions(msg string) {
+	ids := newDroppedTraceDecision(msg)
+
+	if len(ids) == 0 {
+		return
+	}
+
+	toDelete := generics.NewSet[string]()
+	for _, id := range ids {
+
+		trace := i.cache.Get(id)
+		// if we don't have the trace in the cache, we don't need to do anything
+		if trace == nil {
+			i.Logger.Debug().Logf("trace not found in cache for trace decision")
+			continue
+		}
+		toDelete.Add(id)
+
+		i.sampleTraceCache.Record(trace, false, "")
+
+	}
+
+	i.cache.RemoveTraces(toDelete)
+}
+
+func (i *InMemCollector) processKeptDecision(msg string) {
+	td, err := newKeptTraceDecision(msg)
+	if err != nil {
+		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
+		return
+	}
+	toDelete := generics.NewSet[string]()
+	trace := i.cache.Get(td.TraceID)
+	// if we don't have the trace in the cache, we don't need to do anything
+	if trace == nil {
+		i.Logger.Debug().Logf("trace not found in cache for trace decision")
+		return
+	}
+	toDelete.Add(td.TraceID)
+	trace.SetSampleRate(td.SampleRate)
+	trace.KeepSample = td.Kept
+
+	i.sampleTraceCache.Record(trace, td.Kept, td.KeptReason)
+
+	i.send(context.Background(), trace, td)
+
+	i.cache.RemoveTraces(toDelete)
+}
+func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
+
+	if trace.Sent {
+		return nil, errors.New("trace already sent")
+	}
+
+	ctx, span := otelutil.StartSpan(context.Background(), i.Tracer, "makeDecision")
+	defer span.End()
+	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"trace_id": trace.ID(),
+		"root":     trace.RootSpan,
+		"send_by":  trace.SendBy,
+		"arrival":  trace.ArrivalTime,
+	})
+
+	var sampler sample.Sampler
+	var found bool
+	// get sampler key (dataset for legacy keys, environment for new keys)
+	samplerSelector, isLegacyKey := trace.GetSamplerKey()
+
+	// use sampler key to find sampler; create and cache if not found
+	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, isLegacyKey)
+		i.datasetSamplers[samplerSelector] = sampler
+	}
+
+	startGetSampleRate := i.Clock.Now()
+	// make sampling decision and update the trace
+	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	i.Metrics.Histogram("get_sample_rate_duration_ms", float64(time.Since(startGetSampleRate).Milliseconds()))
+
+	trace.SetSampleRate(rate)
+	trace.KeepSample = shouldSend
+	// This will observe sample rate attempts even if the trace is dropped
+	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
+
+	i.sampleTraceCache.Record(trace, shouldSend, reason)
+
+	var hasRoot bool
+	if trace.RootSpan != nil {
+		i.Metrics.Increment("trace_send_has_root")
+		hasRoot = true
+	} else {
+		i.Metrics.Increment("trace_send_no_root")
+	}
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"kept":        shouldSend,
+		"reason":      reason,
+		"sampler":     key,
+		"selector":    samplerSelector,
+		"rate":        rate,
+		"send_reason": sendReason,
+		"hasRoot":     hasRoot,
+	})
+	i.Logger.Warn().WithField("key", key).Logf("making decision for trace")
+	td := TraceDecision{
+		TraceID:         trace.ID(),
+		Kept:            shouldSend,
+		KeptReason:      reason,
+		SamplerKey:      key,
+		SamplerSelector: samplerSelector,
+		SampleRate:      rate,
+		SendReason:      sendReason,
+		Count:           trace.SpanCount(),
+		EventCount:      trace.SpanEventCount(),
+		LinkCount:       trace.SpanLinkCount(),
+		HasRoot:         hasRoot,
+	}
+
+	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+		i.publishTraceDecision(ctx, td)
+	}
+
+	return &td, nil
+}
+
+func (i *InMemCollector) IsMyTrace(traceID string) bool {
+	// if trace locality is enabled, we should always process the trace
+	if i.Config.GetCollectionConfig().EnableTraceLocality {
+		return true
+	}
+
+	return i.Sharder.WhichShard(traceID).Equals(i.Sharder.MyShard())
+}
+
+func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
+	var (
+		decisionMsg string
+		err         error
+	)
+
+	if td.Kept {
+		decisionMsg, err = newKeptDecisionMessage(td)
+	} else {
+		// if we're dropping the trace, we should add it to the batch so we can send it later
+		i.dropDecisionBatch <- td.TraceID
+		return
+	}
+
+	if err != nil {
+		i.Logger.Error().WithFields(map[string]interface{}{
+			"trace_id": td.TraceID,
+			"kept":     td.Kept,
+			"reason":   td.KeptReason,
+			"sampler":  td.SamplerKey,
+			"selector": td.SamplerSelector,
+			"error":    err.Error(),
+		}).Logf("Failed to create trace decision message")
+	}
+
+	err = i.PubSub.Publish(ctx, keptTraceDecisionTopic, decisionMsg)
+	if err != nil {
+		i.Logger.Error().WithFields(map[string]interface{}{
+			"trace_id": td.TraceID,
+			"kept":     td.Kept,
+			"reason":   td.KeptReason,
+			"sampler":  td.SamplerKey,
+			"selector": td.SamplerSelector,
+			"error":    err.Error(),
+		}).Logf("Failed to publish trace decision")
+	}
+}
+
+func (i *InMemCollector) sendDropDecisions() {
+	if i.Config.GetCollectionConfig().EnableTraceLocality {
+		return
+	}
+
+	timerInterval := time.Duration(i.Config.GetCollectionConfig().DropDecisionSendInterval)
+	if i.Config.GetCollectionConfig().DropDecisionSendInterval == 0 {
+		timerInterval = defaultDropDecisionTicker
+	}
+
+	// use a timer here so that we don't send a batch immediately after
+	// reaching the max batch size
+	timer := i.Clock.NewTimer(timerInterval)
+	defer timer.Stop()
+	traceIDs := make([]string, 0, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize)
+	send := false
+	eg := &errgroup.Group{}
+	for {
+		select {
+		case <-i.done:
+			eg.Wait()
+			return
+		case id, ok := <-i.dropDecisionBatch:
+			if !ok {
+				eg.Wait()
+				return
+			}
+			// if we get a trace ID, add it to the list
+			traceIDs = append(traceIDs, id)
+			// if we exceeded the max count, we need to send
+			if len(traceIDs) >= i.Config.GetCollectionConfig().MaxDropDecisionBatchSize {
+				send = true
+			}
+		case <-timer.Chan():
+			// timer fired, so send what we have
+			send = true
+		}
+
+		// if we need to send, do so
+		if send && len(traceIDs) > 0 {
+			i.Metrics.Histogram("collector_drop_decision_batch_count", len(traceIDs))
+
+			// copy the traceIDs so we can clear the list
+			idsToProcess := make([]string, len(traceIDs))
+			copy(idsToProcess, traceIDs)
+			// clear the list
+			traceIDs = traceIDs[:0]
+
+			// now process the result in a goroutine so we can keep listening
+			eg.Go(func() error {
+				select {
+				case <-i.done:
+					return nil
+				default:
+					msg, err := newDroppedDecisionMessage(idsToProcess...)
+					if err != nil {
+						i.Logger.Error().Logf("Failed to marshal dropped trace decision")
+					}
+					err = i.PubSub.Publish(context.Background(), droppedTraceDecisionTopic, msg)
+					if err != nil {
+						i.Logger.Error().Logf("Failed to publish dropped trace decision")
+					}
+				}
+
+				return nil
+			})
+			if !timer.Stop() {
+				select {
+				case <-timer.Chan():
+				default:
+				}
+			}
+
+			timer.Reset(timerInterval)
+			send = false
 		}
 	}
 }

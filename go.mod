@@ -14,7 +14,7 @@ require (
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.8
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.0
-	github.com/honeycombio/husky v0.30.0
+	github.com/honeycombio/husky v0.31.0
 	github.com/honeycombio/libhoney-go v1.23.1
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.4.0
@@ -42,7 +42,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1
 	go.uber.org/automaxprocs v1.6.0
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e
-	google.golang.org/grpc v1.66.1
+	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.34.2
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -74,6 +74,7 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/rdleal/go-priorityq v0.0.0-20240324224830-28716009213d
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect

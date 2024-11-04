@@ -1,29 +1,36 @@
 package cache
 
 import (
+	"math"
 	"time"
 
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
+	"github.com/rdleal/go-priorityq/kpq"
+	"golang.org/x/exp/maps"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
 type Cache interface {
 	// Set adds the trace to the cache. If it is kicking out a trace from the cache
 	// that has not yet been sent, it will return that trace. Otherwise returns nil.
-	Set(trace *types.Trace) *types.Trace
+	Set(trace *types.Trace)
 	Get(traceID string) *types.Trace
+
 	// GetAll is used during shutdown to get all in-flight traces to flush them
 	GetAll() []*types.Trace
 
 	// GetCacheCapacity returns the number of traces that can be stored in the cache
 	GetCacheCapacity() int
 
+	// GetCacheEntryCount returns the number of traces currently stored in the cache
+	GetCacheEntryCount() int
+
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
-	TakeExpiredTraces(now time.Time) []*types.Trace
+	TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace
 
 	// RemoveTraces accepts a set of trace IDs and removes any matching ones from
 	RemoveTraces(toDelete generics.Set[string])
@@ -39,12 +46,8 @@ type DefaultInMemCache struct {
 	Metrics metrics.Metrics
 	Logger  logger.Logger
 
+	pq    *kpq.KeyedPriorityQueue[string, time.Time]
 	cache map[string]*types.Trace
-
-	// traceBuffer is a circular buffer of currently stored traces
-	traceBuffer []*types.Trace
-	// currentIndex is the current location in the circle.
-	currentIndex int
 }
 
 const DefaultInMemCacheCapacity = 10000
@@ -53,6 +56,10 @@ var collectCacheMetrics = []metrics.Metadata{
 	{Name: "collect_cache_buffer_overrun", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of times the trace overwritten in the circular buffer has not yet been sent"},
 	{Name: "collect_cache_capacity", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "The number of traces that can be stored in the cache"},
 	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "The number of traces currently stored in the cache"},
+	{Name: "trace_cache_set_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to set a trace in the cache"},
+	{Name: "trace_cache_take_expired_traces_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to take expired traces from the cache"},
+	{Name: "trace_cache_remove_traces_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to remove traces from the cache"},
+	{Name: "trace_cache_get_all_dur_ms", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "duration to get all traces from the cache"},
 }
 
 func NewInMemCache(
@@ -67,80 +74,34 @@ func NewInMemCache(
 		met.Register(metadata)
 	}
 
-	if capacity == 0 {
-		capacity = DefaultInMemCacheCapacity
+	cmp := func(v1, v2 time.Time) bool {
+		return v1.Before(v2)
 	}
 
 	return &DefaultInMemCache{
-		Metrics:     met,
-		Logger:      logger,
-		cache:       make(map[string]*types.Trace, capacity),
-		traceBuffer: make([]*types.Trace, capacity),
+		Metrics: met,
+		Logger:  logger,
+		pq:      kpq.NewKeyedPriorityQueue[string](cmp),
+		cache:   make(map[string]*types.Trace),
 	}
-
 }
 
-func (d *DefaultInMemCache) GetCacheCapacity() int {
-	return len(d.traceBuffer)
+func (d *DefaultInMemCache) GetCacheEntryCount() int {
+	return len(d.cache)
 }
 
-// looks for an insertion point by trying the next N slots in the circular buffer
-// returns the index of the first empty slot it finds, or the first slot that
-// has a trace that has already been sent. If it doesn't find anything, it
-// returns the index of the last slot it looked at.
-func (d *DefaultInMemCache) findNextInsertionPoint(maxtries int) int {
-	ip := d.currentIndex
-	for i := 0; i < maxtries; i++ {
-		ip++
-		if ip >= len(d.traceBuffer) {
-			ip = 0
-		}
-		oldTrace := d.traceBuffer[ip]
-		if oldTrace == nil || oldTrace.Sent {
-			break
-		}
-	}
-	// we didn't find anything we can overwrite, so we have to kick one out
-	return ip
-}
-
-// Set adds the trace to the ring. When the ring wraps around and hits a trace
-// that has not been sent, it will try up to 5 times to skip that entry and find
-// a slot that is available. If it is unable to do so, it will kick out the
-// trace it is overwriting and return that trace. Otherwise returns nil.
-func (d *DefaultInMemCache) Set(trace *types.Trace) *types.Trace {
-
-	// set retTrace to a trace if it is getting kicked out without having been
-	// sent. Leave it nil if we're not kicking out an unsent trace.
-	var retTrace *types.Trace
-
+func (d *DefaultInMemCache) Set(trace *types.Trace) {
 	// we need to dereference the trace ID so skip bad inserts to avoid panic
 	if trace == nil {
-		return nil
+		return
 	}
+	start := time.Now()
 
-	// store the trace
+	defer d.Metrics.Histogram("trace_cache_set_dur_ms", float64(time.Since(start).Microseconds())/1000.0)
+	// update the cache and priority queue
 	d.cache[trace.TraceID] = trace
-
-	// figure out where to put it; try 5 times to find an empty slot
-	ip := d.findNextInsertionPoint(5)
-	// make sure we will record the trace in the right place
-	defer func() { d.currentIndex = ip }()
-	// expunge the trace at this point in the insertion ring, if necessary
-	oldTrace := d.traceBuffer[ip]
-	if oldTrace != nil {
-		delete(d.cache, oldTrace.TraceID)
-		if !oldTrace.Sent {
-			// if it hasn't already been sent,
-			// record that we're overrunning the buffer
-			d.Metrics.Increment("collect_cache_buffer_overrun")
-			// and return the trace so it can be sent.
-			retTrace = oldTrace
-		}
-	}
-	// record the trace in the insertion ring
-	d.traceBuffer[ip] = trace
-	return retTrace
+	d.pq.Set(trace.TraceID, trace.SendBy)
+	return
 }
 
 func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
@@ -150,44 +111,73 @@ func (d *DefaultInMemCache) Get(traceID string) *types.Trace {
 // GetAll is not thread safe and should only be used when that's ok
 // Returns all non-nil trace entries.
 func (d *DefaultInMemCache) GetAll() []*types.Trace {
-	tmp := make([]*types.Trace, 0, len(d.traceBuffer))
-	for _, t := range d.traceBuffer {
-		if t != nil {
-			tmp = append(tmp, t)
-		}
-	}
-	return tmp
+	start := time.Now()
+
+	defer d.Metrics.Histogram("trace_cache_get_all_dur_ms", float64(time.Since(start).Microseconds())/1000.0)
+	return maps.Values(d.cache)
+}
+
+func (d *DefaultInMemCache) GetCacheCapacity() int {
+	return math.MaxInt32
 }
 
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
-func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time) []*types.Trace {
-	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.traceBuffer)))
+// If a filter is provided, it will be called with each trace to determine if it should be skipped.
+func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
 
-	var res []*types.Trace
-	for i, t := range d.traceBuffer {
-		if t != nil && now.After(t.SendBy) {
-			res = append(res, t)
-			d.traceBuffer[i] = nil
-			delete(d.cache, t.TraceID)
+	start := time.Now()
+	defer d.Metrics.Histogram("trace_cache_take_expired_traces_dur_ms", float64(time.Since(start).Microseconds())/1000.0)
+
+	var expired, skipped []*types.Trace
+	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
+		// pop the the next trace from the queue
+		traceID, sendBy, ok := d.pq.Pop()
+		if !ok {
+			break
 		}
+
+		// if the trace is no longer in the cache, skip it
+		trace, ok := d.cache[traceID]
+		if !ok {
+			continue
+		}
+
+		// if the trace has not expired yet, re-add it to the queue and stop looking
+		if now.Before(sendBy) {
+			d.pq.Push(traceID, sendBy)
+			break
+		}
+
+		// if a filter is provided and it returns false, skip it but remember it for later
+		if filter != nil && !filter(trace) {
+			skipped = append(skipped, trace)
+			continue
+		}
+
+		// add the trace to the list of expired traces and remove it from the cache
+		expired = append(expired, trace)
+		delete(d.cache, traceID)
 	}
-	return res
+
+	// re-add any skipped traces back to the queue using their original sendBy time
+	for _, trace := range skipped {
+		d.pq.Push(trace.TraceID, trace.SendBy)
+	}
+
+	return expired
 }
 
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
-	d.Metrics.Gauge("collect_cache_capacity", float64(len(d.traceBuffer)))
 	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
+	start := time.Now()
+	defer d.Metrics.Histogram("trace_cache_remove_traces_dur_ms", float64(time.Since(start).Microseconds())/1000.0)
 
-	for i, t := range d.traceBuffer {
-		if t != nil {
-			if toDelete.Contains(t.TraceID) {
-				d.traceBuffer[i] = nil
-				delete(d.cache, t.TraceID)
-			}
-		}
+	for _, traceID := range toDelete.Members() {
+		delete(d.cache, traceID)
+		d.pq.Remove(traceID)
 	}
 }

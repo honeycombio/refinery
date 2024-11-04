@@ -185,12 +185,13 @@ type RefineryTelemetryConfig struct {
 }
 
 type TracesConfig struct {
-	SendDelay    Duration `yaml:"SendDelay" default:"2s"`
-	BatchTimeout Duration `yaml:"BatchTimeout" default:"100ms"`
-	TraceTimeout Duration `yaml:"TraceTimeout" default:"60s"`
-	MaxBatchSize uint     `yaml:"MaxBatchSize" default:"500"`
-	SendTicker   Duration `yaml:"SendTicker" default:"100ms"`
-	SpanLimit    uint     `yaml:"SpanLimit"`
+	SendDelay        Duration `yaml:"SendDelay" default:"2s"`
+	BatchTimeout     Duration `yaml:"BatchTimeout" default:"100ms"`
+	TraceTimeout     Duration `yaml:"TraceTimeout" default:"60s"`
+	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
+	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
+	SpanLimit        uint     `yaml:"SpanLimit"`
+	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"5000"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {
@@ -207,6 +208,10 @@ func (t TracesConfig) GetTraceTimeout() time.Duration {
 
 func (t TracesConfig) GetMaxBatchSize() uint {
 	return t.MaxBatchSize
+}
+
+func (t TracesConfig) GetMaxExpiredTraces() uint {
+	return t.MaxExpiredTraces
 }
 
 func (t TracesConfig) GetSendTickerValue() time.Duration {
@@ -273,6 +278,7 @@ type OTelTracingConfig struct {
 	APIKey     string `yaml:"APIKey" cmdenv:"OTelTracesAPIKey,HoneycombAPIKey"`
 	Dataset    string `yaml:"Dataset" default:"Refinery Traces"`
 	SampleRate uint64 `yaml:"SampleRate" default:"100"`
+	Insecure   bool   `yaml:"Insecure" default:"false"`
 }
 
 type PeerManagementConfig struct {
@@ -308,6 +314,9 @@ type CollectionConfig struct {
 	DisableRedistribution bool       `yaml:"DisableRedistribution"`
 	ShutdownDelay         Duration   `yaml:"ShutdownDelay" default:"15s"`
 	EnableTraceLocality   bool       `yaml:"EnableTraceLocality"`
+
+	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
+	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.

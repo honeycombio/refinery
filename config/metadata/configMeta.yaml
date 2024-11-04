@@ -400,6 +400,28 @@ groups:
           Decreasing this will check the trace cache for timeouts more
           frequently.
 
+      - name: MaxExpiredTraces
+        type: int
+        valuetype: nondefault
+        default: 5000
+        reload: true
+        firstVersion: 2.9
+        validations:
+          - type: minimum
+            arg: 1000
+        summary: Max number of expired traces to process.
+        description: >
+          This setting controls how many traces are processed when it is time to
+          make a sampling decision. Up to this many traces will be processed every
+          `SendTicker` duration. If this number is too small it will mean Refinery
+          is spending less time calculating sampling decisions, resulting in data
+          arriving at Honeycomb slower.
+
+          If your `collector_collect_loop_duration_ms` is above 3 seconds it is
+          recommended to reduce this value and the `SendTicker` duration. This
+          will mean Refinery makes fewer sampling decision calculations each
+          `SendTicker` tick, but gets the chance to make decisions more often.
+
   - name: Debugging
     title: "Debugging"
     description: contains configuration values used when setting up and debugging Refinery.
@@ -879,6 +901,17 @@ groups:
           incoming span generates multiple outgoing spans, a minimum sample rate of `100` is
           strongly advised.
 
+      - name: Insecure
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v2.8.5
+        summary: controls whether to send Refinery's own OpenTelemetry traces via http instead of https.
+        description: >
+          When true Refinery will export its internal traces over http instead of https. Useful if you
+          plan on sending your traces to a different refinery instance for tail sampling.
+
   - name: PeerManagement
     title: "Peer Management"
     description: controls how the Refinery cluster communicates between peers.
@@ -1175,6 +1208,9 @@ groups:
           multiples (100x to 1000x) of the total number of concurrently active
           traces (average trace throughput * average trace duration).
 
+          NOTE: This setting is now deprecated and no longer controls the cache size.
+          Instead the maxmimum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
+
       - name: PeerQueueSize
         type: int
         default: 30_000
@@ -1305,6 +1341,26 @@ groups:
         summary: controls the maximum duration allowed for collection health checks to complete.
         description: >
           The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete. If a subsystem does not respond within this timeout period, it will be marked as unhealthy. This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+
+      - name: MaxDropDecisionBatchSize
+        type: int
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 1000
+        reload: false
+        summary: Maximum size for batching drop decisions.
+        description: >
+          Specifies the maximum number of drop decisions that can be batched before triggering processing. This ensures that drop decisions do not accumulate indefinitely, allowing timely and efficient management of spans by processing them in bulk. If the number of drop decisions reaches this limit, the batch will be processed immediately, even if the timeout has not been reached.
+
+      - name: DropDecisionSendInterval
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 1s
+        reload: false
+        summary: Interval for sending drop decisions in batches.
+        description: >
+          Sets the time interval for sending accumulated drop decisions in batches. This ensures that drop decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxDropDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
 
   - name: BufferSizes
     title: "Buffer Sizes"
