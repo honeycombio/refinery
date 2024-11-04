@@ -578,14 +578,14 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		timeoutDuration := now.Sub(t.SendBy)
 		// if a trace has expired more than 4 times the trace timeout, we should just make a decision for it
 		// instead of waiting for the decider node
-		if timeoutDuration > traceTimeout*4 {
+		if timeoutDuration > traceTimeout*8 {
 			orphanTraceCount++
 			return true
 		}
 
 		// if a trace has expired more than 2 times the trace timeout, we should forward it to its decider
 		// and wait for the decider to publish the trace decision again
-		if timeoutDuration > traceTimeout*2 {
+		if timeoutDuration > traceTimeout*4 {
 			expiredTraces = append(expiredTraces, t)
 		}
 
