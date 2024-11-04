@@ -115,8 +115,9 @@ type InMemCollector struct {
 	dropDecisionMessages chan string
 	keptDecisionMessages chan string
 
-	dropDecisionBatch chan string
-	hostname          string
+	dropDecisionBatch  chan string
+	keptDecisionBuffer chan string
+	hostname           string
 }
 
 var inMemCollectorMetrics = []metrics.Metadata{
@@ -212,7 +213,8 @@ func (i *InMemCollector) Start() error {
 		i.PubSub.Subscribe(context.Background(), keptTraceDecisionTopic, i.signalKeptTraceDecisions)
 		i.PubSub.Subscribe(context.Background(), droppedTraceDecisionTopic, i.signalDroppedTraceDecisions)
 
-		i.dropDecisionBatch = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize*3)
+		i.dropDecisionBatch = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize*5)
+		i.keptDecisionBuffer = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize)
 	}
 
 	// spin up one collector because this is a single threaded collector
@@ -220,6 +222,7 @@ func (i *InMemCollector) Start() error {
 	go i.sendTraces()
 	// spin up a drop decision batch sender
 	go i.sendDropDecisions()
+	go i.sendKeptDecisions()
 
 	return nil
 }
@@ -294,6 +297,9 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	totalDataSizeSent := 0
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
+	// should we also send off orphan traces here?
+	// not expired, expired, orphaned
+	// if it's more than 2 times of the trace timeout and it's not my trace, then it should be eligible to eject
 	for _, trace := range allTraces {
 		if !i.IsMyTrace(trace.ID()) {
 			i.Logger.Debug().WithFields(map[string]interface{}{
@@ -656,6 +662,9 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 		span.End()
 	}()
 
+	// TODO:
+	// if we check trace ownership here before we add it into the cache
+	// then we don't need to run redistribution multiple times on one signal
 	tcfg := i.Config.GetTracesConfig()
 
 	trace := i.cache.Get(sp.TraceID)
@@ -1070,6 +1079,7 @@ func (i *InMemCollector) Stop() error {
 
 	if !i.Config.GetCollectionConfig().EnableTraceLocality {
 		close(i.dropDecisionBatch)
+		close(i.keptDecisionBuffer)
 	}
 
 	return nil
@@ -1622,33 +1632,41 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 
 	if td.Kept {
 		decisionMsg, err = newKeptDecisionMessage(td)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id": td.TraceID,
+				"kept":     td.Kept,
+				"reason":   td.KeptReason,
+				"sampler":  td.SamplerKey,
+				"selector": td.SamplerSelector,
+				"error":    err.Error(),
+			}).Logf("Failed to create trace decision message")
+			return
+		}
+
+		i.keptDecisionBuffer <- decisionMsg
+		return
 	} else {
 		// if we're dropping the trace, we should add it to the batch so we can send it later
 		i.dropDecisionBatch <- td.TraceID
 		return
 	}
+}
 
-	if err != nil {
-		i.Logger.Error().WithFields(map[string]interface{}{
-			"trace_id": td.TraceID,
-			"kept":     td.Kept,
-			"reason":   td.KeptReason,
-			"sampler":  td.SamplerKey,
-			"selector": td.SamplerSelector,
-			"error":    err.Error(),
-		}).Logf("Failed to create trace decision message")
+func (i *InMemCollector) sendKeptDecisions() {
+	if i.Config.GetCollectionConfig().EnableTraceLocality {
+		return
 	}
 
-	err = i.PubSub.Publish(ctx, keptTraceDecisionTopic, decisionMsg)
-	if err != nil {
-		i.Logger.Error().WithFields(map[string]interface{}{
-			"trace_id": td.TraceID,
-			"kept":     td.Kept,
-			"reason":   td.KeptReason,
-			"sampler":  td.SamplerKey,
-			"selector": td.SamplerSelector,
-			"error":    err.Error(),
-		}).Logf("Failed to publish trace decision")
+	ctx := context.Background()
+	for msg := range i.keptDecisionBuffer {
+		err := i.PubSub.Publish(ctx, keptTraceDecisionTopic, msg)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"error": err.Error(),
+			}).Logf("Failed to publish trace decision")
+		}
+
 	}
 }
 
