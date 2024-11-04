@@ -240,7 +240,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
-	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
+	i.StressRelief.UpdateFromConfig()
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
