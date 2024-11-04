@@ -33,17 +33,18 @@ func TestStressRelief_Monitor(t *testing.T) {
 	})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
-
-	cfg := config.StressReliefConfig{
-		Mode:                      "monitor",
-		ActivationLevel:           80,
-		DeactivationLevel:         50,
-		SamplingRate:              2,
-		MinimumActivationDuration: config.Duration(5 * time.Second),
+	sr.Config = &config.MockConfig{
+		StressRelief: config.StressReliefConfig{
+			Mode:                      "monitor",
+			ActivationLevel:           80,
+			DeactivationLevel:         50,
+			SamplingRate:              2,
+			MinimumActivationDuration: config.Duration(5 * time.Second),
+		},
 	}
 
 	// On startup, the stress relief should not be active
-	sr.UpdateFromConfig(cfg)
+	sr.UpdateFromConfig()
 	require.False(t, sr.Stressed())
 
 	// Test 1
@@ -90,17 +91,18 @@ func TestStressRelief_Peer(t *testing.T) {
 	})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
-
-	cfg := config.StressReliefConfig{
-		Mode:                      "monitor",
-		ActivationLevel:           80,
-		DeactivationLevel:         65,
-		SamplingRate:              2,
-		MinimumActivationDuration: config.Duration(5 * time.Second),
+	sr.Config = &config.MockConfig{
+		StressRelief: config.StressReliefConfig{
+			Mode:                      "monitor",
+			ActivationLevel:           80,
+			DeactivationLevel:         65,
+			SamplingRate:              2,
+			MinimumActivationDuration: config.Duration(5 * time.Second),
+		},
 	}
 
 	// On startup, the stress relief should not be active
-	sr.UpdateFromConfig(cfg)
+	sr.UpdateFromConfig()
 	require.False(t, sr.Stressed())
 
 	// activate stress relief in one refinery
@@ -136,7 +138,9 @@ func TestStressRelief_Peer(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 }
 
-func TestStressRelief_OverallStressLevel(t *testing.T) {
+//TODO: Add a test for OverallStressLevel calculation with EnableTraceLocality to false
+
+func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	sr, stop := newStressRelief(t, clock, nil)
 	defer stop()
@@ -151,16 +155,20 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
-
-	cfg := config.StressReliefConfig{
-		Mode:                      "monitor",
-		ActivationLevel:           80,
-		DeactivationLevel:         65,
-		MinimumActivationDuration: config.Duration(5 * time.Second),
+	sr.Config = &config.MockConfig{
+		StressRelief: config.StressReliefConfig{
+			Mode:                      "monitor",
+			ActivationLevel:           80,
+			DeactivationLevel:         65,
+			MinimumActivationDuration: config.Duration(5 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			EnableTraceLocality: true,
+		},
 	}
 
 	// On startup, the stress relief should not be active
-	sr.UpdateFromConfig(cfg)
+	sr.UpdateFromConfig()
 	require.False(t, sr.Stressed())
 
 	// Test 1
