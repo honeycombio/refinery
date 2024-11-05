@@ -985,6 +985,8 @@ func TestAddCountsToRoot(t *testing.T) {
 		coll.AddSpanFromPeer(span)
 	}
 
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -996,6 +998,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
+
 	events := transmission.GetBlock(3)
 	assert.Equal(t, 3, len(events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")

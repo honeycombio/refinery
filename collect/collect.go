@@ -161,6 +161,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
 	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
 	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
+	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
+	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -214,7 +216,7 @@ func (i *InMemCollector) Start() error {
 		i.PubSub.Subscribe(context.Background(), droppedTraceDecisionTopic, i.signalDroppedTraceDecisions)
 
 		i.dropDecisionBatch = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize*5)
-		i.keptDecisionBuffer = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize)
+		i.keptDecisionBuffer = make(chan string, 100_000)
 	}
 
 	// spin up one collector because this is a single threaded collector
@@ -1651,11 +1653,22 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 			return
 		}
 
-		i.keptDecisionBuffer <- decisionMsg
+		select {
+		case i.keptDecisionBuffer <- decisionMsg:
+		default:
+			i.Metrics.Increment("collector_kept_decisions_queue_full")
+			i.Logger.Warn().Logf("kept trace decision buffer is full. Dropping message")
+		}
 		return
 	} else {
 		// if we're dropping the trace, we should add it to the batch so we can send it later
-		i.dropDecisionBatch <- td.TraceID
+
+		select {
+		case i.dropDecisionBatch <- td.TraceID:
+		default:
+			i.Metrics.Increment("collector_drop_decisions_queue_full")
+			i.Logger.Warn().Logf("drop trace decision buffer is full. Dropping message")
+		}
 		return
 	}
 }
