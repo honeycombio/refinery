@@ -2194,3 +2194,72 @@ func TestSendDropDecisions(t *testing.T) {
 
 	<-closed
 }
+
+func TestExpiredTracesCleanup(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(500 * time.Millisecond),
+			MaxBatchSize: 1500,
+		},
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddSpanCountToRoot:   true,
+		AddCountsToRoot:      true,
+		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		AddRuleReasonToTrace: true,
+	}
+
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+
+	for _, traceID := range peerTraceIDs {
+		trace := &types.Trace{
+			TraceID: traceID,
+			SendBy:  coll.Clock.Now(),
+		}
+		trace.AddSpan(&types.Span{
+			TraceID: trace.ID(),
+			Event: types.Event{
+				Context: context.Background(),
+			},
+		})
+		coll.cache.Set(trace)
+	}
+
+	assert.Eventually(t, func() bool {
+		return coll.cache.GetCacheEntryCount() == len(peerTraceIDs)
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	traceTimeout := time.Duration(conf.GetTracesConfig().TraceTimeout)
+	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(3*traceTimeout))
+
+	events := peerTransmission.GetBlock(3)
+	assert.Len(t, events, 3)
+
+	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(5*traceTimeout))
+
+	assert.Eventually(t, func() bool {
+		return len(coll.outgoingTraces) == 3
+	}, 100*time.Millisecond, 10*time.Millisecond)
+
+	// at this point, the expired traces should have been removed from the trace cache
+	assert.Zero(t, coll.cache.GetCacheEntryCount())
+
+}

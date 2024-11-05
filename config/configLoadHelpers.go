@@ -74,7 +74,25 @@ func getReaderFor(u string) (io.ReadCloser, Format, error) {
 		}
 		return r, formatFromFilename(uu.Path), nil
 	case "http", "https":
-		resp, err := http.Get(u)
+		// We need to make an HTTP request but we might need to add the
+		// x-honeycomb-team header which we get from the environment; we use the
+		// same header for all requests. This isn't particularly flexible, but
+		// we think that it's good enough for the experimental stage of this
+		// feature.
+		req, err := http.NewRequest("GET", u, nil)
+		if err != nil {
+			return nil, FormatUnknown, err
+		}
+
+		// We use a different envvar for the team key because it's not the same
+		// key used for ingestion. This is not currently documented because it's
+		// experimental and we might change it later.
+		key := os.Getenv("HONEYCOMB_CONFIG_KEY")
+		if key != "" {
+			req.Header.Set("X-Honeycomb-Team", key)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return nil, FormatUnknown, err
 		}
