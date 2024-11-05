@@ -310,7 +310,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 			continue
 		}
-		td, err := i.makeDecision(trace, TraceSendEjectedMemsize)
+		td, err := i.makeDecision(ctx, trace, TraceSendEjectedMemsize)
 		if err != nil {
 			continue
 		}
@@ -411,20 +411,13 @@ func (i *InMemCollector) collect() {
 			return
 		case <-i.redistributeTimer.Notify():
 			i.redistributeTraces(ctx)
-		case sp, ok := <-i.incoming:
-			if !ok {
-				// channel's been closed; we should shut down.
-				span.End()
-				return
-			}
-			i.processSpan(ctx, sp)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp)
+			i.processSpan(ctx, sp, "peer")
 		default:
 			select {
 			case <-i.done:
@@ -468,14 +461,14 @@ func (i *InMemCollector) collect() {
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp)
+				i.processSpan(ctx, sp, "incoming")
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp)
+				i.processSpan(ctx, sp, "peer")
 			case <-i.reload:
 				i.reloadConfigs()
 			}
@@ -622,23 +615,24 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	var totalSpansSent int64
 
 	for _, t := range traces {
+		ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTrace")
 		totalSpansSent += int64(t.DescendantCount())
 
 		if t.RootSpan != nil {
-			td, err := i.makeDecision(t, TraceSendGotRoot)
+			td, err := i.makeDecision(ctx, t, TraceSendGotRoot)
 			if err != nil {
 				continue
 			}
 			i.send(ctx, t, td)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				td, err := i.makeDecision(t, TraceSendSpanLimit)
+				td, err := i.makeDecision(ctx, t, TraceSendSpanLimit)
 				if err != nil {
 					continue
 				}
 				i.send(ctx, t, td)
 			} else {
-				td, err := i.makeDecision(t, TraceSendExpired)
+				td, err := i.makeDecision(ctx, t, TraceSendExpired)
 				if err != nil {
 					continue
 				}
@@ -646,24 +640,27 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			}
 		}
 
+		span.End()
 	}
 
 	for _, trace := range expiredTraces {
 		// if a trace has expired and it doesn't belong to this peer, we should ask its decider to
 		// publish the trace decision again
-		i.PeerTransmission.EnqueueEvent(i.createDecisionSpan(&types.Span{
+		dc := i.createDecisionSpan(&types.Span{
 			TraceID: trace.ID(),
 			Event: types.Event{
 				Context: trace.GetSpans()[0].Context,
 			},
-		}, trace, i.Sharder.WhichShard(trace.ID())))
+		}, trace, i.Sharder.WhichShard(trace.ID()))
+		dc.Data["meta.refinery.expired_trace"] = true
+		i.PeerTransmission.EnqueueEvent(dc)
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
 }
 
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
-func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
+func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source string) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "processSpan")
 	defer func() {
 		i.Metrics.Increment("span_processed")
@@ -726,6 +723,12 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 		i.dealWithSentTrace(ctx, cache.NewKeptTraceCacheEntry(trace), "", sp)
 	}
 
+	// if the span is sent for signaling expired traces,
+	// we should not add it to the cache
+	if sp.Data["meta.refinery.expired_trace"] != nil {
+		return
+	}
+
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
 	span.SetAttributes(attribute.String("disposition", "live_trace"))
@@ -735,8 +738,9 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 	if !i.Config.GetCollectionConfig().EnableTraceLocality {
 		// if this trace doesn't belong to us, we should forward a decision span to its decider
 		targetShard := i.Sharder.WhichShard(trace.ID())
+
 		if !targetShard.Equals(i.Sharder.MyShard()) && !sp.IsDecisionSpan() {
-			i.Metrics.Increment("incoming_router_peer")
+			i.Metrics.Increment(source + "_router_peer")
 			i.Logger.Debug().
 				WithString("peer", targetShard.GetAddress()).
 				Logf("Sending span to peer")
@@ -996,6 +1000,8 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 		return
 	}
 	trace.Sent = true
+	_, span := otelutil.StartSpan(ctx, i.Tracer, "send")
+	defer span.End()
 
 	traceDur := i.Clock.Since(trace.ArrivalTime)
 	i.Metrics.Histogram("trace_duration_ms", float64(traceDur.Milliseconds()))
@@ -1541,12 +1547,12 @@ func (i *InMemCollector) processKeptDecision(msg string) {
 
 	i.cache.RemoveTraces(toDelete)
 }
-func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*TraceDecision, error) {
+func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (*TraceDecision, error) {
 	if trace.Sent {
 		return nil, errors.New("trace already sent")
 	}
 
-	ctx, span := otelutil.StartSpan(context.Background(), i.Tracer, "makeDecision")
+	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "makeDecision")
 	defer span.End()
 	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
 
@@ -1633,6 +1639,9 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 	defer func() {
 		i.Metrics.Histogram("collector_publish_trace_decision_dur_ms", time.Since(start).Milliseconds())
 	}()
+
+	_, span := otelutil.StartSpanWith(ctx, i.Tracer, "publishTraceDecision", "decision", td.Kept)
+	defer span.End()
 
 	var (
 		decisionMsg string
