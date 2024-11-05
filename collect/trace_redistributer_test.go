@@ -29,13 +29,11 @@ func TestRedistributeNotifier(t *testing.T) {
 
 	go r.run()
 
+	assert.Len(t, r.triggered, 0)
 	// Test that the notifier is not triggered before the initial delay
 	clock.BlockUntil(1)
 	clock.Advance(20 * time.Millisecond)
-
-	assert.Eventually(t, func() bool {
-		return len(r.triggered) == 0
-	}, 200*time.Millisecond, 10*time.Millisecond)
+	assert.Len(t, r.triggered, 0)
 
 	// Test that the notifier is triggered after the initial delay
 	currentBackOff := r.initialDelay

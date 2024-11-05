@@ -16,7 +16,7 @@ type redistributeNotifier struct {
 	logger       logger.Logger
 	initialDelay time.Duration
 	maxAttempts  int
-	maxDelay     time.Duration
+	maxDelay     float64
 	metrics      metrics.Metrics
 
 	reset     chan struct{}
@@ -28,7 +28,7 @@ type redistributeNotifier struct {
 func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
 	r := &redistributeNotifier{
 		initialDelay: 3 * time.Second,
-		maxDelay:     30 * time.Second,
+		maxDelay:     float64(30 * time.Second),
 		maxAttempts:  5,
 		done:         make(chan struct{}),
 		clock:        clock,
@@ -74,8 +74,8 @@ func (r *redistributeNotifier) Stop() {
 // to happen when the number of peers changes. But we don't want to do it immediately,
 // because peer membership changes often happen in bunches, so we wait a while
 // before triggering the redistribution.
-// 
-// The redistribution is run 3 times, with increasing durations, so that we properly redistribute 
+//
+// The redistribution is run 3 times, with increasing durations, so that we properly redistribute
 // anything that was arriving near the same time as the peer change.
 // A notification will be sent every time the backoff timer expires.
 // The backoff timer is reset when a reset signal is received.
@@ -146,7 +146,7 @@ func (r *redistributeNotifier) run() {
 // It uses exponential backoff with a base time and adds jitter to avoid retry collisions.
 func (r *redistributeNotifier) calculateBackoff(lastBackoff time.Duration) time.Duration {
 	// Calculate the backoff interval using exponential backoff with a base time.
-	backoff := time.Duration(math.Min(float64(lastBackoff)*2, float64(r.maxDelay)))
+	backoff := time.Duration(math.Min(float64(lastBackoff)*2, r.maxDelay))
 	// Add jitter to the backoff to avoid retry collisions.
 	jitter := time.Duration(rand.Float64() * float64(backoff) * 0.5)
 	return backoff + jitter
