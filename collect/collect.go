@@ -724,6 +724,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 		// we will just use the default late span reason as the sent reason which is
 		// set inside the dealWithSentTrace function
 		i.dealWithSentTrace(ctx, cache.NewKeptTraceCacheEntry(trace), "", sp)
+		return
 	}
 
 	// great! trace is live. add the span.
