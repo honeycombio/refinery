@@ -1772,6 +1772,7 @@ func TestRedistributeTraces(t *testing.T) {
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
 	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.keptDecisionBuffer = make(chan string, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 
 	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
