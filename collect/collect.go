@@ -190,7 +190,7 @@ func (i *InMemCollector) Start() error {
 	i.done = make(chan struct{})
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	i.done = make(chan struct{})
-	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock)
+	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock, i.Config.GetCollectionConfig().RedistributionDelay)
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {

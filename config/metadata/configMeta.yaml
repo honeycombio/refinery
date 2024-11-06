@@ -1306,6 +1306,19 @@ groups:
           By disabling this behavior, it can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout`
           are redistributed.
 
+      - name: RedistributionDelay
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 30s
+        reload: false
+        summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
+        description: >
+          This value should be longer than the amount of time between each scaling operations, such as adding or removing a pod in a
+          kubernetes deployment.
+          Each redistrution generates additional traffic between peers. If this value is too short, multiple consecutive redistribution
+          event will occur and may overwhelm the cluster.
+
       - name: ShutdownDelay
         type: duration
         valuetype: nondefault
