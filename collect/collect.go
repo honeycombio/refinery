@@ -638,6 +638,8 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			TraceID: trace.ID(),
 			Event: types.Event{
 				Context: trace.GetSpans()[0].Context,
+				APIKey:  trace.APIKey,
+				Dataset: trace.Dataset,
 			},
 		}, trace, i.Sharder.WhichShard(trace.ID())))
 	}
