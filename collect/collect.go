@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"math/rand/v2"
 	"os"
 	"runtime"
 	"sort"
@@ -303,7 +301,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// not expired, expired, orphaned
 	// if it's more than 2 times of the trace timeout and it's not my trace, then it should be eligible to eject
 	for _, trace := range allTraces {
-		if !i.IsMyTrace(trace.ID()) {
+		if _, ok := i.IsMyTrace(trace.ID()); !ok {
 			i.Logger.Debug().WithFields(map[string]interface{}{
 				"trace_id": trace.ID(),
 			}).Logf("cannot eject trace that does not belong to this peer")
@@ -567,7 +565,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	var orphanTraceCount int
 	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), func(t *types.Trace) bool {
-		if i.IsMyTrace(t.ID()) {
+		if _, ok := i.IsMyTrace(t.ID()); ok {
 			return true
 		}
 
@@ -640,6 +638,8 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			TraceID: trace.ID(),
 			Event: types.Event{
 				Context: trace.GetSpans()[0].Context,
+				APIKey:  trace.APIKey,
+				Dataset: trace.Dataset,
 			},
 		}, trace, i.Sharder.WhichShard(trace.ID()))
 		dc.Data["meta.refinery.expired_trace"] = true
@@ -658,9 +658,19 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		span.End()
 	}()
 
-	// TODO:
-	// if we check trace ownership here before we add it into the cache
-	// then we don't need to run redistribution multiple times on one signal
+	targetShard, isMyTrace := i.IsMyTrace(sp.TraceID)
+	// if the span is a decision span and the trace no longer belong to us, we should not forward it to the peer
+	if !isMyTrace && sp.IsDecisionSpan() {
+		return
+	}
+
+	// if trace locality is enabled, we should forward all spans to its correct peer
+	if i.Config.GetCollectionConfig().EnableTraceLocality && !isMyTrace {
+		sp.APIHost = targetShard.GetAddress()
+		i.PeerTransmission.EnqueueSpan(sp)
+		return
+	}
+
 	tcfg := i.Config.GetTracesConfig()
 
 	trace := i.cache.Get(sp.TraceID)
@@ -724,23 +734,18 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	trace.AddSpan(sp)
 	span.SetAttributes(attribute.String("disposition", "live_trace"))
 
-	// Figure out if we should handle this span locally or pass on to a peer
 	var spanForwarded bool
-	if !i.Config.GetCollectionConfig().EnableTraceLocality {
-		// if this trace doesn't belong to us, we should forward a decision span to its decider
-		targetShard := i.Sharder.WhichShard(trace.ID())
+	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
+	if !trace.Sent && !isMyTrace {
+		i.Metrics.Increment(source + "_router_peer")
+		i.Logger.Debug().
+			WithString("peer", targetShard.GetAddress()).
+			Logf("Sending span to peer")
 
-		if !targetShard.Equals(i.Sharder.MyShard()) && !sp.IsDecisionSpan() {
-			i.Metrics.Increment(source + "_router_peer")
-			i.Logger.Debug().
-				WithString("peer", targetShard.GetAddress()).
-				Logf("Sending span to peer")
+		dc := i.createDecisionSpan(sp, trace, targetShard)
 
-			dc := i.createDecisionSpan(sp, trace, targetShard)
-
-			i.PeerTransmission.EnqueueEvent(dc)
-			spanForwarded = true
-		}
+		i.PeerTransmission.EnqueueEvent(dc)
+		spanForwarded = true
 	}
 
 	// we may override these values in conditions below
@@ -1309,107 +1314,6 @@ func (i *InMemCollector) sendTraces() {
 	}
 }
 
-type redistributeNotifier struct {
-	clock        clockwork.Clock
-	logger       logger.Logger
-	initialDelay time.Duration
-	maxAttempts  int
-	maxDelay     time.Duration
-	metrics      metrics.Metrics
-
-	reset     chan struct{}
-	done      chan struct{}
-	triggered chan struct{}
-	once      sync.Once
-}
-
-func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
-	r := &redistributeNotifier{
-		initialDelay: 3 * time.Second,
-		maxDelay:     30 * time.Second,
-		maxAttempts:  5,
-		done:         make(chan struct{}),
-		clock:        clock,
-		logger:       logger,
-		metrics:      met,
-		triggered:    make(chan struct{}),
-		reset:        make(chan struct{}),
-	}
-
-	return r
-}
-
-func (r *redistributeNotifier) Notify() <-chan struct{} {
-	return r.triggered
-}
-
-func (r *redistributeNotifier) Reset() {
-	var started bool
-	r.once.Do(func() {
-		go r.run()
-		started = true
-	})
-
-	if started {
-		return
-	}
-
-	select {
-	case r.reset <- struct{}{}:
-	case <-r.done:
-		return
-	default:
-		r.logger.Debug().Logf("A trace redistribution is ongoing. Ignoring reset.")
-	}
-}
-
-func (r *redistributeNotifier) Stop() {
-	close(r.done)
-}
-
-func (r *redistributeNotifier) run() {
-	var attempts int
-	lastBackoff := r.initialDelay
-	for {
-		// if we've reached the max attempts, reset the backoff and attempts
-		// only when the reset signal is received.
-		if attempts >= r.maxAttempts {
-			r.metrics.Gauge("trace_redistribution_count", 0)
-			<-r.reset
-			lastBackoff = r.initialDelay
-			attempts = 0
-		}
-		select {
-		case <-r.done:
-			return
-		case r.triggered <- struct{}{}:
-		}
-
-		attempts++
-		r.metrics.Gauge("trace_redistribution_count", attempts)
-
-		// Calculate the backoff interval using exponential backoff with a base time.
-		backoff := time.Duration(math.Min(float64(lastBackoff)*2, float64(r.maxDelay)))
-		// Add jitter to the backoff to avoid retry collisions.
-		jitter := time.Duration(rand.Float64() * float64(backoff) * 0.5)
-		nextBackoff := backoff + jitter
-		lastBackoff = nextBackoff
-
-		timer := r.clock.NewTimer(nextBackoff)
-		select {
-		case <-timer.Chan():
-			timer.Stop()
-		case <-r.reset:
-			lastBackoff = r.initialDelay
-			attempts = 0
-			timer.Stop()
-		case <-r.done:
-			timer.Stop()
-			return
-		}
-	}
-}
-
 func (i *InMemCollector) signalKeptTraceDecisions(ctx context.Context, msg string) {
 	if len(msg) == 0 {
 		return
@@ -1580,13 +1484,15 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	return &td, nil
 }
 
-func (i *InMemCollector) IsMyTrace(traceID string) bool {
+func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 	// if trace locality is enabled, we should always process the trace
 	if i.Config.GetCollectionConfig().EnableTraceLocality {
-		return true
+		return i.Sharder.MyShard(), true
 	}
 
-	return i.Sharder.WhichShard(traceID).Equals(i.Sharder.MyShard())
+	targeShard := i.Sharder.WhichShard(traceID)
+
+	return targeShard, i.Sharder.MyShard().Equals(targeShard)
 }
 
 func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
