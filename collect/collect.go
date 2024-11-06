@@ -113,8 +113,9 @@ type InMemCollector struct {
 	dropDecisionMessages chan string
 	keptDecisionMessages chan string
 
-	dropDecisionBatch chan string
-	hostname          string
+	dropDecisionBatch  chan string
+	keptDecisionBuffer chan string
+	hostname           string
 }
 
 var inMemCollectorMetrics = []metrics.Metadata{
@@ -156,6 +157,10 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
 	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
 	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
+	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
+	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
+	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
+	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -208,7 +213,8 @@ func (i *InMemCollector) Start() error {
 		i.PubSub.Subscribe(context.Background(), keptTraceDecisionTopic, i.signalKeptTraceDecisions)
 		i.PubSub.Subscribe(context.Background(), droppedTraceDecisionTopic, i.signalDroppedTraceDecisions)
 
-		i.dropDecisionBatch = make(chan string, 1000)
+		i.dropDecisionBatch = make(chan string, i.Config.GetCollectionConfig().MaxDropDecisionBatchSize*5)
+		i.keptDecisionBuffer = make(chan string, 100_000)
 	}
 
 	// spin up one collector because this is a single threaded collector
@@ -216,6 +222,7 @@ func (i *InMemCollector) Start() error {
 	go i.sendTraces()
 	// spin up a drop decision batch sender
 	go i.sendDropDecisions()
+	go i.sendKeptDecisions()
 
 	return nil
 }
@@ -399,13 +406,6 @@ func (i *InMemCollector) collect() {
 			return
 		case <-i.redistributeTimer.Notify():
 			i.redistributeTraces(ctx)
-		case msg, ok := <-i.keptDecisionMessages:
-			if !ok {
-				// channel's been closed; we should shut down.
-				return
-			}
-
-			i.processKeptDecision(msg)
 		case sp, ok := <-i.fromPeer:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -841,54 +841,18 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 	// if we receive a proxy span after a trace decision has been made,
 	// we should just broadcast the decision again
 	if sp.IsDecisionSpan() {
-		var (
-			msg string
-			err error
-		)
-		topic := keptTraceDecisionTopic
-		if tr.Kept() {
-			//  late span in this case won't get HasRoot
-			// this means the late span won't be decorated with some metadata
-			// like span count, event count, link count
-			msg, err = newKeptDecisionMessage(TraceDecision{
-				TraceID:    sp.TraceID,
-				Kept:       tr.Kept(),
-				KeptReason: keptReason,
-				SendReason: TraceSendLateSpan,
-				SampleRate: tr.Rate(),
-				Count:      uint32(tr.SpanCount()),
-				EventCount: uint32(tr.SpanEventCount()),
-				LinkCount:  uint32(tr.SpanLinkCount()),
-			})
-			if err != nil {
-				i.Logger.Error().WithFields(map[string]interface{}{
-					"trace_id":  sp.TraceID,
-					"kept":      tr.Kept(),
-					"late_span": true,
-				}).Logf("Failed to create new kept decision message")
-				return
-			}
-		} else {
-			topic = droppedTraceDecisionTopic
-			msg, err = newDroppedDecisionMessage(sp.TraceID)
-			if err != nil {
-				i.Logger.Error().WithFields(map[string]interface{}{
-					"trace_id":  sp.TraceID,
-					"kept":      tr.Kept(),
-					"late_span": true,
-				}).Logf("Failed to create new dropped decision message")
-				return
-			}
+		//  late span in this case won't get HasRoot
+		td := TraceDecision{
+			TraceID:    sp.TraceID,
+			Kept:       tr.Kept(),
+			KeptReason: keptReason,
+			SendReason: TraceSendLateSpan,
+			SampleRate: tr.Rate(),
+			Count:      uint32(tr.SpanCount()),
+			EventCount: uint32(tr.SpanEventCount()),
+			LinkCount:  uint32(tr.SpanLinkCount()),
 		}
-
-		err = i.PubSub.Publish(ctx, topic, msg)
-		if err != nil {
-			i.Logger.Error().WithFields(map[string]interface{}{
-				"trace_id":  sp.TraceID,
-				"kept":      tr.Kept(),
-				"late_span": true,
-			}).Logf("Failed to publish trace decision")
-		}
+		i.publishTraceDecision(ctx, td)
 		return
 	}
 
@@ -1077,6 +1041,7 @@ func (i *InMemCollector) Stop() error {
 
 	if !i.Config.GetCollectionConfig().EnableTraceLocality {
 		close(i.dropDecisionBatch)
+		close(i.keptDecisionBuffer)
 	}
 
 	return nil
@@ -1368,6 +1333,8 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 }
 
 func (i *InMemCollector) processDropDecisions(msg string) {
+	i.Metrics.Increment("drop_decisions_received")
+
 	ids := newDroppedTraceDecision(msg)
 
 	if len(ids) == 0 {
@@ -1393,6 +1360,8 @@ func (i *InMemCollector) processDropDecisions(msg string) {
 }
 
 func (i *InMemCollector) processKeptDecision(msg string) {
+	i.Metrics.Increment("kept_decisions_received")
+
 	td, err := newKeptTraceDecision(msg)
 	if err != nil {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
@@ -1513,33 +1482,50 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 
 	if td.Kept {
 		decisionMsg, err = newKeptDecisionMessage(td)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"trace_id": td.TraceID,
+				"kept":     td.Kept,
+				"reason":   td.KeptReason,
+				"sampler":  td.SamplerKey,
+				"selector": td.SamplerSelector,
+				"error":    err.Error(),
+			}).Logf("Failed to create trace decision message")
+			return
+		}
+
+		select {
+		case i.keptDecisionBuffer <- decisionMsg:
+		default:
+			i.Metrics.Increment("collector_kept_decisions_queue_full")
+			i.Logger.Warn().Logf("kept trace decision buffer is full. Dropping message")
+		}
+		return
 	} else {
-		// if we're dropping the trace, we should add it to the batch so we can send it later
-		i.dropDecisionBatch <- td.TraceID
+		select {
+		case i.dropDecisionBatch <- td.TraceID:
+		default:
+			i.Metrics.Increment("collector_drop_decisions_queue_full")
+			i.Logger.Warn().Logf("drop trace decision buffer is full. Dropping message")
+		}
+		return
+	}
+}
+
+func (i *InMemCollector) sendKeptDecisions() {
+	if i.Config.GetCollectionConfig().EnableTraceLocality {
 		return
 	}
 
-	if err != nil {
-		i.Logger.Error().WithFields(map[string]interface{}{
-			"trace_id": td.TraceID,
-			"kept":     td.Kept,
-			"reason":   td.KeptReason,
-			"sampler":  td.SamplerKey,
-			"selector": td.SamplerSelector,
-			"error":    err.Error(),
-		}).Logf("Failed to create trace decision message")
-	}
+	ctx := context.Background()
+	for msg := range i.keptDecisionBuffer {
+		err := i.PubSub.Publish(ctx, keptTraceDecisionTopic, msg)
+		if err != nil {
+			i.Logger.Error().WithFields(map[string]interface{}{
+				"error": err.Error(),
+			}).Logf("Failed to publish trace decision")
+		}
 
-	err = i.PubSub.Publish(ctx, keptTraceDecisionTopic, decisionMsg)
-	if err != nil {
-		i.Logger.Error().WithFields(map[string]interface{}{
-			"trace_id": td.TraceID,
-			"kept":     td.Kept,
-			"reason":   td.KeptReason,
-			"sampler":  td.SamplerKey,
-			"selector": td.SamplerSelector,
-			"error":    err.Error(),
-		}).Logf("Failed to publish trace decision")
 	}
 }
 
