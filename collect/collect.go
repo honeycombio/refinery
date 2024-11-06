@@ -420,41 +420,31 @@ func (i *InMemCollector) collect() {
 			i.processSpan(ctx, sp, "peer")
 		default:
 			select {
-			case <-i.done:
-				span.End()
-				return
 			case msg, ok := <-i.dropDecisionMessages:
 				if !ok {
 					// channel's been closed; we should shut down.
+					span.End()
 					return
 				}
-
 				i.processDropDecisions(msg)
 			case msg, ok := <-i.keptDecisionMessages:
 				if !ok {
 					// channel's been closed; we should shut down.
-					return
-				}
-
-				i.processKeptDecision(msg)
-			case <-ticker.C:
-				select {
-				case <-i.done:
 					span.End()
 					return
-				default:
-					i.sendExpiredTracesInCache(ctx, i.Clock.Now())
-					i.checkAlloc(ctx)
-
-					// Briefly unlock the cache, to allow test access.
-					_, span3 := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
-					i.mutex.Unlock()
-					runtime.Gosched()
-					i.mutex.Lock()
-					span3.End()
 				}
-			case <-i.redistributeTimer.Notify():
-				i.redistributeTraces(ctx)
+				i.processKeptDecision(msg)
+			case <-ticker.C:
+				i.sendExpiredTracesInCache(ctx, i.Clock.Now())
+				i.checkAlloc(ctx)
+
+				// maybe only do this if in test mode?
+				// Briefly unlock the cache, to allow test access.
+				_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
+				i.mutex.Unlock()
+				runtime.Gosched()
+				i.mutex.Lock()
+				goSchedSpan.End()
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -480,7 +470,7 @@ func (i *InMemCollector) collect() {
 }
 
 func (i *InMemCollector) redistributeTraces(ctx context.Context) {
-	_, span := otelutil.StartSpan(ctx, i.Tracer, "redistributeTraces")
+	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "redistributeTraces")
 	redistrubutionStartTime := i.Clock.Now()
 
 	defer func() {
@@ -508,23 +498,21 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		if trace == nil {
 			continue
 		}
-		_, span2 := otelutil.StartSpanWith(ctx, i.Tracer, "distributeTrace", "num_spans", trace.DescendantCount())
+		_, redistributeTraceSpan := otelutil.StartSpanWith(ctx, i.Tracer, "distributeTrace", "num_spans", trace.DescendantCount())
 
 		newTarget := i.Sharder.WhichShard(trace.TraceID)
 
-		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
+		redistributeTraceSpan.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
 			if !i.Config.GetCollectionConfig().EnableTraceLocality {
 				// Drop all proxy spans since peers will resend them
 				trace.RemoveDecisionSpans()
 			}
-			span2.SetAttributes(attribute.Bool("self", true))
-			span2.End()
+			redistributeTraceSpan.SetAttributes(attribute.Bool("self", true))
+			redistributeTraceSpan.End()
 			continue
 		}
-
-		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
 		for _, sp := range trace.GetSpans() {
 			if sp.IsDecisionSpan() {
@@ -552,7 +540,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		}
 
 		forwardedTraces.Add(trace.TraceID)
-		span2.End()
+		redistributeTraceSpan.End()
 	}
 
 	otelutil.AddSpanFields(span, map[string]interface{}{
@@ -569,12 +557,12 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
-	defer span.End()
-
 	startTime := time.Now()
 	defer func() {
 		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", time.Since(startTime).Milliseconds())
+		span.End()
 	}()
+
 	expiredTraces := make([]*types.Trace, 0)
 	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	var orphanTraceCount int
@@ -615,12 +603,13 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	var totalSpansSent int64
 
 	for _, t := range traces {
-		ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTrace")
+		ctx, sendExpiredTraceSpan := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTrace")
 		totalSpansSent += int64(t.DescendantCount())
 
 		if t.RootSpan != nil {
 			td, err := i.makeDecision(ctx, t, TraceSendGotRoot)
 			if err != nil {
+				sendExpiredTraceSpan.End()
 				continue
 			}
 			i.send(ctx, t, td)
@@ -628,19 +617,20 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
 				td, err := i.makeDecision(ctx, t, TraceSendSpanLimit)
 				if err != nil {
+					sendExpiredTraceSpan.End()
 					continue
 				}
 				i.send(ctx, t, td)
 			} else {
 				td, err := i.makeDecision(ctx, t, TraceSendExpired)
 				if err != nil {
+					sendExpiredTraceSpan.End()
 					continue
 				}
 				i.send(ctx, t, td)
 			}
 		}
-
-		span.End()
+		sendExpiredTraceSpan.End()
 	}
 
 	for _, trace := range expiredTraces {
