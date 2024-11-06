@@ -509,6 +509,10 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
+		/*
+
+		 */
+
 		if newTarget.Equals(i.Sharder.MyShard()) {
 			span2.SetAttributes(attribute.Bool("self", true))
 			span2.End()

@@ -25,6 +25,7 @@ type redistributeNotifier struct {
 
 func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
 	r := &redistributeNotifier{
+		// TODO: make the delay configurable
 		initialDelay: 3 * time.Second,
 		maxDelay:     float64(30 * time.Second),
 		done:         make(chan struct{}),
