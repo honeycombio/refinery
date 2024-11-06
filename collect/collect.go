@@ -510,10 +510,6 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
-			if !i.Config.GetCollectionConfig().EnableTraceLocality {
-				// Drop all proxy spans since peers will resend them
-				trace.RemoveDecisionSpans()
-			}
 			span2.SetAttributes(attribute.Bool("self", true))
 			span2.End()
 			continue
@@ -521,10 +517,16 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
+		if newTarget.GetAddress() == trace.DeciderShardAddr {
+			span2.End()
+			continue
+		}
+
+		trace.DeciderShardAddr = newTarget.GetAddress()
+		// Remove decision spans from the trace that no longer belongs to the current node
+		trace.RemoveDecisionSpans()
+
 		for _, sp := range trace.GetSpans() {
-			if sp.IsDecisionSpan() {
-				continue
-			}
 
 			if !i.Config.GetCollectionConfig().EnableTraceLocality {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
@@ -663,7 +665,8 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 	}
 
 	// if trace locality is enabled, we should forward all spans to its correct peer
-	if i.Config.GetCollectionConfig().EnableTraceLocality && !isMyTrace {
+	if i.Config.GetCollectionConfig().EnableTraceLocality && !targetShard.Equals(i.Sharder.MyShard()) {
+		sp.APIHost = targetShard.GetAddress()
 		i.PeerTransmission.EnqueueSpan(sp)
 		return
 	}
@@ -694,12 +697,13 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 
 		now := i.Clock.Now()
 		trace = &types.Trace{
-			APIHost:     sp.APIHost,
-			APIKey:      sp.APIKey,
-			Dataset:     sp.Dataset,
-			TraceID:     sp.TraceID,
-			ArrivalTime: now,
-			SendBy:      now.Add(timeout),
+			APIHost:          sp.APIHost,
+			APIKey:           sp.APIKey,
+			Dataset:          sp.Dataset,
+			TraceID:          sp.TraceID,
+			ArrivalTime:      now,
+			SendBy:           now.Add(timeout),
+			DeciderShardAddr: targetShard.GetAddress(),
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
 		// push this into the cache and if we eject an unsent trace, send it ASAP

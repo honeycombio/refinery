@@ -1793,6 +1793,9 @@ func TestRedistributeTraces(t *testing.T) {
 			Data:    make(map[string]interface{}),
 		},
 	}
+	// TODO:
+	// test traces only be redistributed when its destination has changed
+
 	// decision span should not be forwarded
 	decisionSpan := &types.Span{
 		TraceID: "11",
