@@ -190,7 +190,7 @@ func (i *InMemCollector) Start() error {
 	i.done = make(chan struct{})
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	i.done = make(chan struct{})
-	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock, i.Config.GetCollectionConfig().RedistributionDelay)
+	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock, time.Duration(i.Config.GetCollectionConfig().RedistributionDelay))
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -509,10 +509,6 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
-		/*
-
-		 */
-
 		if newTarget.Equals(i.Sharder.MyShard()) {
 			span2.SetAttributes(attribute.Bool("self", true))
 			span2.End()
@@ -521,11 +517,14 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 		span2.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
+		// if the ownership of the trace hasn't changed, we don't need to forward new decision spans
 		if newTarget.GetAddress() == trace.DeciderShardAddr {
 			span2.End()
 			continue
 		}
 
+		// Trace doesn't belong to us and its ownership has changed. We should forward
+		// decision spans to its new owner
 		trace.DeciderShardAddr = newTarget.GetAddress()
 		// Remove decision spans from the trace that no longer belongs to the current node
 		trace.RemoveDecisionSpans()

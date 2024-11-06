@@ -57,8 +57,11 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		Metrics: s,
 	}
 	localPubSub.Start()
-	redistributeNotifier := newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock)
-	redistributeNotifier.initialDelay = 2 * time.Millisecond
+	redistributionDelay := time.Duration(conf.GetCollectionConfig().RedistributionDelay)
+	if redistributionDelay == 0 {
+		redistributionDelay = 2 * time.Millisecond
+	}
+	redistributeNotifier := newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock, redistributionDelay)
 
 	c := &InMemCollector{
 		Config:           conf,
@@ -1724,7 +1727,7 @@ func TestRedistributeTraces(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
 			SendDelay:    config.Duration(1 * time.Millisecond),
-			TraceTimeout: config.Duration(1 * time.Second),
+			TraceTimeout: config.Duration(1 * time.Minute),
 			SendTicker:   config.Duration(2 * time.Millisecond),
 		},
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
@@ -1761,44 +1764,69 @@ func TestRedistributeTraces(t *testing.T) {
 	assert.NoError(t, err, "lru cache should start")
 	coll.sampleTraceCache = stc
 
-	go coll.collect()
-	go coll.sendTraces()
+	coll.Start()
 
 	defer coll.Stop()
 
 	dataset := "aoeu"
 
+	peerEvents := peerTransmission.GetBlock(0)
+	assert.Len(t, peerEvents, 0)
+
+	// Traces don't belong to us and its ownership has not changed
+	// Redistribution should do nothing
+	peerTraceID := "11"
+	s.Other = &sharder.TestShard{Addr: "api2", TraceIDs: []string{peerTraceID}}
+	acutalSpan := &types.Span{
+		TraceID: peerTraceID,
+		Event: types.Event{
+			Dataset: dataset,
+			APIKey:  legacyAPIKey,
+			Data:    make(map[string]interface{}),
+		},
+	}
+
+	trace := &types.Trace{
+		TraceID:          peerTraceID,
+		Dataset:          dataset,
+		SendBy:           coll.Clock.Now().Add(5 * time.Second),
+		DeciderShardAddr: s.Other.GetAddress(),
+	}
+	trace.AddSpan(acutalSpan)
+
+	coll.mutex.Lock()
+	coll.cache.Set(trace)
+	coll.mutex.Unlock()
+	coll.redistributeTimer.Reset()
+
+	peerEvents = peerTransmission.GetBlock(0)
+	assert.Len(t, peerEvents, 0)
+
+	// if the ownership has changed and the trace doesn't belong to us
+	// redistribution should forward a decision span to its new owner
+	s.Other = &sharder.TestShard{Addr: "api3", TraceIDs: []string{peerTraceID}}
+
+	coll.redistributeTimer.Reset()
+
+	peerEvents = peerTransmission.GetBlock(1)
+	assert.Len(t, peerEvents, 1)
+	assert.Equal(t, s.Other.GetAddress(), peerEvents[0].APIHost)
+
+	// Trace belongs to us
+	// Redistribution should do nothing
+	myTraceID := "1"
 	span := &types.Span{
-		TraceID: "1",
+		TraceID: myTraceID,
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			APIHost: "api1",
 			Data:    make(map[string]interface{}),
 		},
+		IsRoot: true,
 	}
-
-	coll.AddSpan(span)
-
-	events := transmission.GetBlock(1)
-	assert.Len(t, events, 1)
-	assert.Equal(t, "api1", events[0].APIHost)
-
-	s.Other = &sharder.TestShard{Addr: "api2", TraceIDs: []string{"11"}}
-	acutalSpan := &types.Span{
-		TraceID: "11",
-		Event: types.Event{
-			Dataset: dataset,
-			APIKey:  legacyAPIKey,
-			Data:    make(map[string]interface{}),
-		},
-	}
-	// TODO:
-	// test traces only be redistributed when its destination has changed
-
-	// decision span should not be forwarded
 	decisionSpan := &types.Span{
-		TraceID: "11",
+		TraceID: myTraceID,
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
@@ -1808,22 +1836,39 @@ func TestRedistributeTraces(t *testing.T) {
 			},
 		},
 	}
-	trace := &types.Trace{
-		TraceID: acutalSpan.TraceID,
-		Dataset: dataset,
-		SendBy:  coll.Clock.Now().Add(5 * time.Second),
+
+	myTrace := &types.Trace{
+		TraceID:          myTraceID,
+		Dataset:          dataset,
+		SendBy:           coll.Clock.Now().Add(5 * time.Second),
+		DeciderShardAddr: s.Other.GetAddress(),
 	}
-	trace.AddSpan(acutalSpan)
-	trace.AddSpan(decisionSpan)
+
+	myTrace.AddSpan(span)
+	myTrace.AddSpan(decisionSpan)
 
 	coll.mutex.Lock()
-	coll.cache.Set(trace)
+	coll.cache.Set(myTrace)
 	coll.mutex.Unlock()
 	coll.redistributeTimer.Reset()
 
-	peerEvents := peerTransmission.GetBlock(1)
+	peerEvents = peerTransmission.GetBlock(0)
+	assert.Len(t, peerEvents, 0)
+	coll.mutex.Lock()
+	coll.cache.Get(myTraceID)
+	coll.mutex.Unlock()
+	assert.Len(t, myTrace.GetSpans(), 2)
+
+	// if the trace previously belongs to us and now belongs to other peers
+	// redistribution should forward a decision span to its new owner
+	// and remove all decision spans from the cache
+	s.Other = &sharder.TestShard{Addr: "api4", TraceIDs: []string{myTraceID}}
+
+	coll.redistributeTimer.Reset()
+
+	peerEvents = peerTransmission.GetBlock(1)
 	assert.Len(t, peerEvents, 1)
-	assert.Equal(t, "api2", peerEvents[0].APIHost)
+	assert.Equal(t, s.Other.GetAddress(), peerEvents[0].APIHost)
 }
 
 func TestDrainTracesOnShutdown(t *testing.T) {

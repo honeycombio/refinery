@@ -15,12 +15,12 @@ func TestRedistributeNotifier(t *testing.T) {
 
 	clock := clockwork.NewFakeClock()
 	r := &redistributeNotifier{
-		clock:        clock,
-		initialDelay: 50 * time.Millisecond, // Set the initial delay
-		metrics:      &metrics.NullMetrics{},
-		reset:        make(chan struct{}),
-		done:         make(chan struct{}),
-		triggered:    make(chan struct{}, 4), // Buffered to allow easier testing
+		clock:     clock,
+		delay:     50 * time.Millisecond, // Set the initial delay
+		metrics:   &metrics.NullMetrics{},
+		reset:     make(chan struct{}),
+		done:      make(chan struct{}),
+		triggered: make(chan struct{}, 4), // Buffered to allow easier testing
 	}
 
 	defer r.Stop()
@@ -34,7 +34,7 @@ func TestRedistributeNotifier(t *testing.T) {
 	assert.Len(t, r.triggered, 0)
 
 	// Test that the notifier is triggered after the initial delay
-	currentBackOff := r.initialDelay
+	currentBackOff := r.delay
 	clock.BlockUntil(1)
 	currentBackOff = r.calculateDelay(currentBackOff)
 	clock.Advance(currentBackOff + 100*time.Millisecond) // Advance the clock by the backoff time plus a little extra
