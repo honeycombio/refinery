@@ -163,7 +163,7 @@ func (i *InMemCollector) Start() error {
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
 	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
-	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
+	i.StressRelief.UpdateFromConfig()
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -236,7 +236,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
-	i.StressRelief.UpdateFromConfig(i.Config.GetStressReliefConfig())
+	i.StressRelief.UpdateFromConfig()
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
