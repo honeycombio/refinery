@@ -1,7 +1,6 @@
 package collect
 
 import (
-	"math"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -15,7 +14,6 @@ type redistributeNotifier struct {
 	clock        clockwork.Clock
 	logger       logger.Logger
 	initialDelay time.Duration
-	maxAttempts  int
 	maxDelay     float64
 	metrics      metrics.Metrics
 
@@ -29,7 +27,6 @@ func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock cl
 	r := &redistributeNotifier{
 		initialDelay: 3 * time.Second,
 		maxDelay:     float64(30 * time.Second),
-		maxAttempts:  5,
 		done:         make(chan struct{}),
 		clock:        clock,
 		logger:       logger,
@@ -74,24 +71,19 @@ func (r *redistributeNotifier) Stop() {
 // to happen when the number of peers changes. But we don't want to do it immediately,
 // because peer membership changes often happen in bunches, so we wait a while
 // before triggering the redistribution.
-//
-// The redistribution is run 3 times, with increasing durations, so that we properly redistribute
-// anything that was arriving near the same time as the peer change.
-// A notification will be sent every time the backoff timer expires.
-// The backoff timer is reset when a reset signal is received.
 func (r *redistributeNotifier) run() {
-	var attempts int
-	currentBackOff := r.initialDelay
-	lastBackoff := currentBackOff
+	currentDelay := r.calculateDelay(r.initialDelay)
 
 	// start a back off timer with the initial delay
-	timer := r.clock.NewTimer(currentBackOff)
+	timer := r.clock.NewTimer(currentDelay)
 	for {
-
-		// only reset the timer if we have received
-		// a reset signal or we are in the middle of
-		// a redistribution cycle.
-		if currentBackOff != lastBackoff {
+		select {
+		case <-r.done:
+			timer.Stop()
+			return
+		case <-r.reset:
+			// reset the delay timer when we receive a reset signal.
+			currentDelay = r.calculateDelay(r.initialDelay)
 			if !timer.Stop() {
 				// drain the timer channel
 				select {
@@ -99,55 +91,21 @@ func (r *redistributeNotifier) run() {
 				default:
 				}
 			}
-			timer.Reset(currentBackOff)
-			lastBackoff = currentBackOff
-		}
-
-		select {
-		case <-r.done:
-			timer.Stop()
-			return
-		case <-r.reset:
-			// reset the backoff timer and attempts
-			// if we receive a reset signal.
-			currentBackOff = r.initialDelay
-			attempts = 0
+			timer.Reset(currentDelay)
 		case <-timer.Chan():
-			if attempts >= r.maxAttempts {
-				// if we've reached the max attempts,
-				// we will block the goroutine here until
-				// we receive a reset signal or refinery starts to shutdown.
-				r.metrics.Gauge("trace_redistribution_count", 0)
-				select {
-				case <-r.done:
-					return
-				case <-r.reset:
-				}
-				currentBackOff = r.initialDelay
-				attempts = 0
-				currentBackOff = r.calculateBackoff(currentBackOff)
-				continue
-			}
-
 			select {
 			case <-r.done:
 				return
 			case r.triggered <- struct{}{}:
 			}
-
-			attempts++
-			r.metrics.Gauge("trace_redistribution_count", attempts)
-			currentBackOff = r.calculateBackoff(currentBackOff)
 		}
 	}
 }
 
 // calculateBackoff calculates the backoff interval for the next redistribution cycle.
 // It uses exponential backoff with a base time and adds jitter to avoid retry collisions.
-func (r *redistributeNotifier) calculateBackoff(lastBackoff time.Duration) time.Duration {
-	// Calculate the backoff interval using exponential backoff with a base time.
-	backoff := time.Duration(math.Min(float64(lastBackoff)*2, r.maxDelay))
+func (r *redistributeNotifier) calculateDelay(currentDelay time.Duration) time.Duration {
 	// Add jitter to the backoff to avoid retry collisions.
-	jitter := time.Duration(rand.Float64() * float64(backoff) * 0.5)
-	return backoff + jitter
+	jitter := time.Duration(rand.Float64() * float64(currentDelay) * 0.5)
+	return currentDelay + jitter
 }

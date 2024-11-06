@@ -59,7 +59,6 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 	localPubSub.Start()
 	redistributeNotifier := newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock)
 	redistributeNotifier.initialDelay = 2 * time.Millisecond
-	redistributeNotifier.maxDelay = 10 * time.Millisecond
 
 	c := &InMemCollector{
 		Config:           conf,

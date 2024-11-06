@@ -291,7 +291,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
-		if !i.IsMyTrace(trace.ID()) {
+		if _, ok := i.IsMyTrace(trace.ID()); !ok {
 			i.Logger.Debug().WithFields(map[string]interface{}{
 				"trace_id": trace.ID(),
 			}).Logf("cannot eject trace that does not belong to this peer")
@@ -571,7 +571,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	var orphanTraceCount int
 	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), func(t *types.Trace) bool {
-		if i.IsMyTrace(t.ID()) {
+		if _, ok := i.IsMyTrace(t.ID()); ok {
 			return true
 		}
 
@@ -654,6 +654,18 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 		span.End()
 	}()
 
+	targetShard, isMyTrace := i.IsMyTrace(sp.TraceID)
+	// if the span is a decision span and the trace no longer belong to us, we should not forward it to the peer
+	if !isMyTrace && sp.IsDecisionSpan() {
+		return
+	}
+
+	// if trace locality is enabled, we should forward all spans to its correct peer
+	if i.Config.GetCollectionConfig().EnableTraceLocality && !isMyTrace {
+		i.PeerTransmission.EnqueueSpan(sp)
+		return
+	}
+
 	tcfg := i.Config.GetTracesConfig()
 
 	trace := i.cache.Get(sp.TraceID)
@@ -710,22 +722,17 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span) {
 	trace.AddSpan(sp)
 	span.SetAttributes(attribute.String("disposition", "live_trace"))
 
-	// Figure out if we should handle this span locally or pass on to a peer
 	var spanForwarded bool
-	if !i.Config.GetCollectionConfig().EnableTraceLocality {
-		// if this trace doesn't belong to us, we should forward a decision span to its decider
-		targetShard := i.Sharder.WhichShard(trace.ID())
-		if !targetShard.Equals(i.Sharder.MyShard()) && !sp.IsDecisionSpan() {
-			i.Metrics.Increment("incoming_router_peer")
-			i.Logger.Debug().
-				WithString("peer", targetShard.GetAddress()).
-				Logf("Sending span to peer")
+	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
+	if !trace.Sent && !isMyTrace {
+		i.Metrics.Increment("incoming_router_peer")
+		i.Logger.Debug().
+			Logf("Sending span to peer")
 
-			dc := i.createDecisionSpan(sp, trace, targetShard)
+		dc := i.createDecisionSpan(sp, trace, targetShard)
 
-			i.PeerTransmission.EnqueueEvent(dc)
-			spanForwarded = true
-		}
+		i.PeerTransmission.EnqueueEvent(dc)
+		spanForwarded = true
 	}
 
 	// we may override these values in conditions below
@@ -1485,13 +1492,15 @@ func (i *InMemCollector) makeDecision(trace *types.Trace, sendReason string) (*T
 	return &td, nil
 }
 
-func (i *InMemCollector) IsMyTrace(traceID string) bool {
+func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 	// if trace locality is enabled, we should always process the trace
 	if i.Config.GetCollectionConfig().EnableTraceLocality {
-		return true
+		return i.Sharder.MyShard(), true
 	}
 
-	return i.Sharder.WhichShard(traceID).Equals(i.Sharder.MyShard())
+	targeShard := i.Sharder.WhichShard(traceID)
+
+	return targeShard, i.Sharder.MyShard().Equals(targeShard)
 }
 
 func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
