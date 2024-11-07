@@ -1314,10 +1314,11 @@ groups:
         reload: false
         summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
         description: >
-          This value should be longer than the amount of time between each scaling operations, such as adding or removing a pod in a
-          kubernetes deployment.
-          Each redistrution generates additional traffic between peers. If this value is too short, multiple consecutive redistribution
-          event will occur and may overwhelm the cluster.
+          This value should be longer than the amount of time between individual pod changes in a bulk scaling operation 
+          (changing the cluster size by more than one pod).
+          Each redistribution generates additional traffic between peers.
+          If this value is too short, multiple consecutive redistributions will occur and the resulting traffic
+          may overwhelm the cluster.
 
       - name: ShutdownDelay
         type: duration
