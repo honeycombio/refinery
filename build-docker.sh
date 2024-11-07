@@ -22,7 +22,7 @@ fi
 #     --always - … and if a tag can't be found, fallback to the commit ID.
 # Ex: v2.1.1-45-ga1b2c3d
 #   - The build was on git commit ID a1b2c3d.
-#   - 2.1.1 is the most recent version tag in the history behind that commit
+#   - v2.1.1 is the most recent version tag in the history behind that commit
 #   - That commit is 45 commits ahead of that version tag.
 VERSION=$(git describe --tags --match='v[0-9]*' --always)
 
