@@ -45,8 +45,7 @@ func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 		}
 
 		keycfg := r.Config.GetAccessKeyConfig()
-		if !keycfg.IsAccepted(apiKey) {
-			err := fmt.Errorf("api key %s not found in list of authorized keys", keycfg.Sanitize(apiKey))
+		if err := keycfg.IsAccepted(apiKey); err != nil {
 			r.handlerReturnWithError(w, ErrAuthInvalid, err)
 			return
 		}

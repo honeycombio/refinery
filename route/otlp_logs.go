@@ -3,7 +3,6 @@ package route
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -63,8 +62,8 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	}
 
 	apicfg := l.router.Config.GetAccessKeyConfig()
-	if !apicfg.IsAccepted(ri.ApiKey) {
-		return nil, status.Error(codes.Unauthenticated, fmt.Sprintf("api key %s not found in list of authorized keys", apicfg.Sanitize(ri.ApiKey)))
+	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey)
 

@@ -1,6 +1,12 @@
 package config
 
-import "testing"
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
 
 func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
@@ -82,12 +88,12 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 		name   string
 		fields fields
 		key    string
-		want   bool
+		want   error
 	}{
-		{"no keys", fields{}, "key1", true},
-		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", true},
-		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", false},
-		{"accept missing key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", false},
+		{"no keys", fields{}, "key1", nil},
+		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", nil},
+		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", errors.New("api key key2... not found in list of authorized keys")},
+		{"accept missing key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", errors.New("api key ... not found in list of authorized keys")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -97,9 +103,12 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 				SendKeyMode:          tt.fields.SendKeyMode,
 				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
 			}
-			if got := a.IsAccepted(tt.key); got != tt.want {
-				t.Errorf("AccessKeyConfig.IsAccepted() = %v, want %v", got, tt.want)
+			err := a.IsAccepted(tt.key)
+			if tt.want == nil {
+				require.NoError(t, err)
+				return
 			}
+			assert.Equal(t, tt.want.Error(), err.Error())
 		})
 	}
 }

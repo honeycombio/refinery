@@ -91,16 +91,17 @@ type AccessKeyConfig struct {
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
 }
 
-// truncate the key to 8 characters for logging
-func (a *AccessKeyConfig) Sanitize(key string) string {
-	return fmt.Sprintf("%.8s...", key)
-}
-
-func (a *AccessKeyConfig) IsAccepted(key string) bool {
+// IsAccepted checks if the given key is in the list of accepted keys.
+// if the key is not in the list, it returns an error with the key truncated to 8 characters for logging.
+func (a *AccessKeyConfig) IsAccepted(key string) error {
 	if a.AcceptOnlyListedKeys {
-		return slices.Contains(a.ReceiveKeys, key)
+		if slices.Contains(a.ReceiveKeys, key) {
+			return nil
+		}
+
+		return fmt.Errorf("api key %.8s... not found in list of authorized keys", key)
 	}
-	return true
+	return nil
 }
 
 // GetReplaceKey checks the given API key against the configuration
