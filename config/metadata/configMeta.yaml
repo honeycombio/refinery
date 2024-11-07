@@ -1306,6 +1306,20 @@ groups:
           By disabling this behavior, it can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout`
           are redistributed.
 
+      - name: RedistributionDelay
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 30s
+        reload: false
+        summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
+        description: >
+          This value should be longer than the amount of time between individual pod changes in a bulk scaling operation 
+          (changing the cluster size by more than one pod).
+          Each redistribution generates additional traffic between peers.
+          If this value is too short, multiple consecutive redistributions will occur and the resulting traffic
+          may overwhelm the cluster.
+
       - name: ShutdownDelay
         type: duration
         valuetype: nondefault
@@ -1341,6 +1355,26 @@ groups:
         summary: controls the maximum duration allowed for collection health checks to complete.
         description: >
           The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete. If a subsystem does not respond within this timeout period, it will be marked as unhealthy. This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+
+      - name: MaxDropDecisionBatchSize
+        type: int
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 1000
+        reload: false
+        summary: Maximum size for batching drop decisions.
+        description: >
+          Specifies the maximum number of drop decisions that can be batched before triggering processing. This ensures that drop decisions do not accumulate indefinitely, allowing timely and efficient management of spans by processing them in bulk. If the number of drop decisions reaches this limit, the batch will be processed immediately, even if the timeout has not been reached.
+
+      - name: DropDecisionSendInterval
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 1s
+        reload: false
+        summary: Interval for sending drop decisions in batches.
+        description: >
+          Sets the time interval for sending accumulated drop decisions in batches. This ensures that drop decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxDropDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
 
   - name: BufferSizes
     title: "Buffer Sizes"
