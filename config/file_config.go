@@ -304,16 +304,19 @@ type RedisPeerManagementConfig struct {
 
 type CollectionConfig struct {
 	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity         int        `yaml:"CacheCapacity" default:"10_000"`
-	PeerQueueSize         int        `yaml:"PeerQueueSize"`
-	IncomingQueueSize     int        `yaml:"IncomingQueueSize"`
-	AvailableMemory       MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
-	HealthCheckTimeout    Duration   `yaml:"HealthCheckTimeout" default:"3s"`
-	MaxMemoryPercentage   int        `yaml:"MaxMemoryPercentage" default:"75"`
-	MaxAlloc              MemorySize `yaml:"MaxAlloc"`
-	DisableRedistribution bool       `yaml:"DisableRedistribution"`
-	ShutdownDelay         Duration   `yaml:"ShutdownDelay" default:"15s"`
-	EnableTraceLocality   bool       `yaml:"EnableTraceLocality"`
+	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
+	PeerQueueSize       int        `yaml:"PeerQueueSize"`
+	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
+	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
+	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"3s"`
+	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
+	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
+
+	DisableRedistribution bool     `yaml:"DisableRedistribution"`
+	RedistributionDelay   Duration `yaml:"RedistributionDelay" default:"30s"`
+
+	ShutdownDelay       Duration `yaml:"ShutdownDelay" default:"15s"`
+	EnableTraceLocality bool     `yaml:"EnableTraceLocality"`
 
 	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
 	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`

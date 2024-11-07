@@ -11,11 +11,10 @@ import (
 )
 
 type redistributeNotifier struct {
-	clock        clockwork.Clock
-	logger       logger.Logger
-	initialDelay time.Duration
-	maxDelay     float64
-	metrics      metrics.Metrics
+	clock   clockwork.Clock
+	logger  logger.Logger
+	delay   time.Duration
+	metrics metrics.Metrics
 
 	reset     chan struct{}
 	done      chan struct{}
@@ -23,16 +22,15 @@ type redistributeNotifier struct {
 	once      sync.Once
 }
 
-func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock) *redistributeNotifier {
+func newRedistributeNotifier(logger logger.Logger, met metrics.Metrics, clock clockwork.Clock, delay time.Duration) *redistributeNotifier {
 	r := &redistributeNotifier{
-		initialDelay: 3 * time.Second,
-		maxDelay:     float64(30 * time.Second),
-		done:         make(chan struct{}),
-		clock:        clock,
-		logger:       logger,
-		metrics:      met,
-		triggered:    make(chan struct{}),
-		reset:        make(chan struct{}),
+		delay:     delay,
+		done:      make(chan struct{}),
+		clock:     clock,
+		logger:    logger,
+		metrics:   met,
+		triggered: make(chan struct{}),
+		reset:     make(chan struct{}),
 	}
 
 	return r
@@ -72,7 +70,7 @@ func (r *redistributeNotifier) Stop() {
 // because peer membership changes often happen in bunches, so we wait a while
 // before triggering the redistribution.
 func (r *redistributeNotifier) run() {
-	currentDelay := r.calculateDelay(r.initialDelay)
+	currentDelay := r.calculateDelay(r.delay)
 
 	// start a back off timer with the initial delay
 	timer := r.clock.NewTimer(currentDelay)
@@ -83,7 +81,7 @@ func (r *redistributeNotifier) run() {
 			return
 		case <-r.reset:
 			// reset the delay timer when we receive a reset signal.
-			currentDelay = r.calculateDelay(r.initialDelay)
+			currentDelay = r.calculateDelay(r.delay)
 			if !timer.Stop() {
 				// drain the timer channel
 				select {

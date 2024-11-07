@@ -195,7 +195,7 @@ func (i *InMemCollector) Start() error {
 	i.done = make(chan struct{})
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	i.done = make(chan struct{})
-	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock)
+	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock, time.Duration(i.Config.GetCollectionConfig().RedistributionDelay))
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -503,19 +503,24 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		redistributeTraceSpan.SetAttributes(attribute.String("shard", newTarget.GetAddress()))
 
 		if newTarget.Equals(i.Sharder.MyShard()) {
-			if !i.Config.GetCollectionConfig().EnableTraceLocality {
-				// Drop all proxy spans since peers will resend them
-				trace.RemoveDecisionSpans()
-			}
 			redistributeTraceSpan.SetAttributes(attribute.Bool("self", true))
 			redistributeTraceSpan.End()
 			continue
 		}
 
+		// if the ownership of the trace hasn't changed, we don't need to forward new decision spans
+		if newTarget.GetAddress() == trace.DeciderShardAddr {
+			redistributeTraceSpan.End()
+			continue
+		}
+
+		// Trace doesn't belong to us and its ownership has changed. We should forward
+		// decision spans to its new owner
+		trace.DeciderShardAddr = newTarget.GetAddress()
+		// Remove decision spans from the trace that no longer belongs to the current node
+		trace.RemoveDecisionSpans()
+
 		for _, sp := range trace.GetSpans() {
-			if sp.IsDecisionSpan() {
-				continue
-			}
 
 			if !i.Config.GetCollectionConfig().EnableTraceLocality {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
@@ -665,7 +670,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	}
 
 	// if trace locality is enabled, we should forward all spans to its correct peer
-	if i.Config.GetCollectionConfig().EnableTraceLocality && !isMyTrace {
+	if i.Config.GetCollectionConfig().EnableTraceLocality && !targetShard.Equals(i.Sharder.MyShard()) {
 		sp.APIHost = targetShard.GetAddress()
 		i.PeerTransmission.EnqueueSpan(sp)
 		return
@@ -704,12 +709,13 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 		now := i.Clock.Now()
 		trace = &types.Trace{
-			APIHost:     sp.APIHost,
-			APIKey:      sp.APIKey,
-			Dataset:     sp.Dataset,
-			TraceID:     sp.TraceID,
-			ArrivalTime: now,
-			SendBy:      now.Add(timeout),
+			APIHost:          sp.APIHost,
+			APIKey:           sp.APIKey,
+			Dataset:          sp.Dataset,
+			TraceID:          sp.TraceID,
+			ArrivalTime:      now,
+			SendBy:           now.Add(timeout),
+			DeciderShardAddr: targetShard.GetAddress(),
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
 		// push this into the cache and if we eject an unsent trace, send it ASAP
@@ -1346,13 +1352,9 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 }
 
 func (i *InMemCollector) processDropDecisions(msg string) {
-	start := time.Now()
-	defer func() {
-		i.Metrics.Histogram("collector_process_drop_decisions_dur_ms", time.Since(start).Milliseconds())
-	}()
+	i.Metrics.Increment("drop_decisions_received")
 
 	ids := newDroppedTraceDecision(msg)
-	i.Metrics.Increment("drop_decisions_received")
 
 	if len(ids) == 0 {
 		return
@@ -1377,17 +1379,13 @@ func (i *InMemCollector) processDropDecisions(msg string) {
 }
 
 func (i *InMemCollector) processKeptDecision(msg string) {
-	start := time.Now()
-	defer func() {
-		i.Metrics.Histogram("collector_process_kept_decisions_dur_ms", time.Since(start).Milliseconds())
-	}()
+	i.Metrics.Increment("kept_decisions_received")
 
 	td, err := newKeptTraceDecision(msg)
 	if err != nil {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
 		return
 	}
-	i.Metrics.Increment("kept_decisions_received")
 
 	toDelete := generics.NewSet[string]()
 	trace := i.cache.Get(td.TraceID)
@@ -1531,8 +1529,6 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 		}
 		return
 	} else {
-		// if we're dropping the trace, we should add it to the batch so we can send it later
-
 		select {
 		case i.dropDecisionBatch <- td.TraceID:
 		default:
