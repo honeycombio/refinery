@@ -15,12 +15,12 @@ if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
     TAGS+=",latest"
 fi
 
-# Local builds just get "dev" for version
-VERSION="dev"
+# Determine a version number based on most recent version tag in git.
+VERSION=$(git describe --tags --match='v[0-9]*' --always)
 
-# If we are doing a dev build on circle, we will version it as the circleci buildnumber
-if [[ -n "${CIRCLE_BUILD_NUM}" ]]; then
-    VERSION="${CIRCLE_BUILD_NUM}"
+# If we are doing a dev build on circle, append the build number (job id) to the version
+if [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then
+  VERSION="${VERSION}-ci${CIRCLE_BUILD_NUM}"
 fi
 
 # if we're running off a git tag, it is a release which we tag with the versions as well as latest
