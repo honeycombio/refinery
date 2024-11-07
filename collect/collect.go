@@ -297,11 +297,10 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	totalDataSizeSent := 0
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
-	// should we also send off orphan traces here?
-	// not expired, expired, orphaned
-	// if it's more than 2 times of the trace timeout and it's not my trace, then it should be eligible to eject
+	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
 	for _, trace := range allTraces {
-		if _, ok := i.IsMyTrace(trace.ID()); !ok {
+		// only eject traces that belong to this peer or the trace is an orphan
+		if _, ok := i.IsMyTrace(trace.ID()); !ok && !trace.IsOrphan(traceTimeout, i.Clock.Now()) {
 			i.Logger.Debug().WithFields(map[string]interface{}{
 				"trace_id": trace.ID(),
 			}).Logf("cannot eject trace that does not belong to this peer")
@@ -574,10 +573,9 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 			return true
 		}
 
-		timeoutDuration := now.Sub(t.SendBy)
-		// if a trace has expired more than 4 times the trace timeout, we should just make a decision for it
+		// if the trace is an orphan trace, we should just make a decision for it
 		// instead of waiting for the decider node
-		if timeoutDuration > traceTimeout*4 {
+		if t.IsOrphan(traceTimeout, now) {
 			orphanTraceCount++
 			return true
 		}
@@ -585,7 +583,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		// if a trace has expired more than 2 times the trace timeout, we should forward it to its decider
 		// and wait for the decider to publish the trace decision again
 		// only retry it once
-		if timeoutDuration > traceTimeout*2 && !t.Retried {
+		if now.Sub(t.SendBy) > traceTimeout*2 && !t.Retried {
 			expiredTraces = append(expiredTraces, t)
 			t.Retried = true
 		}
@@ -734,6 +732,12 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		// we will just use the default late span reason as the sent reason which is
 		// set inside the dealWithSentTrace function
 		i.dealWithSentTrace(ctx, cache.NewKeptTraceCacheEntry(trace), "", sp)
+	}
+
+	// if the span is sent for signaling expired traces,
+	// we should not add it to the cache
+	if sp.Data["meta.refinery.expired_trace"] != nil {
+		return
 	}
 
 	// great! trace is live. add the span.

@@ -786,14 +786,15 @@ func TestStableMaxAlloc(t *testing.T) {
 				APIKey:  legacyAPIKey,
 			},
 		}
+
 		if i < 3 {
 			// add some spans that belongs to peer
 			span.TraceID = peerTraceIDs[i]
 			// add extrac data so that the peer traces have bigger
 			// cache impact, which will get evicted first
 			span.Data["extra_data"] = strings.Repeat("abc", 100)
-
 		}
+
 		coll.AddSpan(span)
 	}
 
@@ -812,6 +813,11 @@ func TestStableMaxAlloc(t *testing.T) {
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
 	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	peerTrace := coll.cache.Get(peerTraceIDs[0])
+
+	peerTrace.SendBy = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout() * 5)
+	assert.True(t, peerTrace.IsOrphan(conf.GetTracesConfig().GetTraceTimeout(), coll.Clock.Now()))
+
 	coll.mutex.Unlock()
 	// wait for the cache to take some action
 	var traces []*types.Trace
@@ -835,7 +841,7 @@ func TestStableMaxAlloc(t *testing.T) {
 			peerTracesLeft++
 		}
 	}
-	assert.Equal(t, 3, peerTracesLeft, "should have kept the peer traces")
+	assert.Equal(t, 2, peerTracesLeft, "should have kept the peer traces")
 	coll.mutex.Unlock()
 
 	// We discarded the most costly spans, and sent them.
@@ -2325,6 +2331,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 
 	events := peerTransmission.GetBlock(3)
 	assert.Len(t, events, 3)
+	assert.NotEmpty(t, events[0].Data["meta.refinery.expired_trace"])
 
 	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(5*traceTimeout))
 
