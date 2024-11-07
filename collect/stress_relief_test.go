@@ -91,7 +91,6 @@ func TestStressRelief_Peer(t *testing.T) {
 	})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
-
 	sr.Config = &config.MockConfig{
 		StressRelief: config.StressReliefConfig{
 			Mode:                      "monitor",
@@ -153,7 +152,6 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	})
 
 	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
-
 	sr.Config = &config.MockConfig{
 		StressRelief: config.StressReliefConfig{
 			Mode:                      "monitor",
@@ -168,7 +166,7 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 
 	// Test 1
 	// when a single peer's individual stress level is above the activation level
-	// the overall stress level should be cased on the cluster's stress level
+	// the overall stress level should be based on the cluster's stress level
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
 	clock.Advance(time.Second * 1)
 	sr.stressLevels = make(map[string]stressReport, 100)

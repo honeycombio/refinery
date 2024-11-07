@@ -206,12 +206,12 @@ func TestAddRootSpan(t *testing.T) {
 	// * create the trace in the cache
 	// * send the trace
 	// * remove the trace from the cache
-	events = transmission.GetBlock(0)
-	assert.Equal(t, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
-
 	assert.Eventually(t, func() bool {
 		return coll.getFromCache(decisionSpanTraceID) == nil
-	}, conf.GetTracesConfig().GetSendDelay()*8, conf.GetTracesConfig().GetSendDelay()*2, "after sending the span, it should be removed from the cache")
+	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2, "after sending the span, it should be removed from the cache")
+
+	events = transmission.GetBlock(0)
+	assert.Equal(t, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
 
 	peerSpan := &types.Span{
 		TraceID: peerTraceIDs[0],
@@ -271,6 +271,8 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
 	coll.dropDecisionBatch = make(chan string, 5)
+	coll.keptDecisionBuffer = make(chan string, 5)
+
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan string, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
@@ -373,6 +375,8 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	coll.incoming = make(chan *types.Span, 5)
 	coll.fromPeer = make(chan *types.Span, 5)
+	coll.keptDecisionBuffer = make(chan string, 5)
+
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan string, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
@@ -782,14 +786,15 @@ func TestStableMaxAlloc(t *testing.T) {
 				APIKey:  legacyAPIKey,
 			},
 		}
+
 		if i < 3 {
 			// add some spans that belongs to peer
 			span.TraceID = peerTraceIDs[i]
 			// add extrac data so that the peer traces have bigger
 			// cache impact, which will get evicted first
 			span.Data["extra_data"] = strings.Repeat("abc", 100)
-
 		}
+
 		coll.AddSpan(span)
 	}
 
@@ -808,6 +813,11 @@ func TestStableMaxAlloc(t *testing.T) {
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
 	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	peerTrace := coll.cache.Get(peerTraceIDs[0])
+
+	peerTrace.SendBy = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout() * 5)
+	assert.True(t, peerTrace.IsOrphan(conf.GetTracesConfig().GetTraceTimeout(), coll.Clock.Now()))
+
 	coll.mutex.Unlock()
 	// wait for the cache to take some action
 	var traces []*types.Trace
@@ -831,7 +841,7 @@ func TestStableMaxAlloc(t *testing.T) {
 			peerTracesLeft++
 		}
 	}
-	assert.Equal(t, 3, peerTracesLeft, "should have kept the peer traces")
+	assert.Equal(t, 2, peerTracesLeft, "should have kept the peer traces")
 	coll.mutex.Unlock()
 
 	// We discarded the most costly spans, and sent them.
@@ -988,6 +998,8 @@ func TestAddCountsToRoot(t *testing.T) {
 		coll.AddSpanFromPeer(span)
 	}
 
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
@@ -999,6 +1011,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
+
 	events := transmission.GetBlock(3)
 	assert.Equal(t, 3, len(events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
@@ -2318,6 +2331,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 
 	events := peerTransmission.GetBlock(3)
 	assert.Len(t, events, 3)
+	assert.NotEmpty(t, events[0].Data["meta.refinery.expired_trace"])
 
 	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(5*traceTimeout))
 

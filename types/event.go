@@ -51,7 +51,8 @@ type Trace struct {
 	keptReason       uint
 	DeciderShardAddr string
 
-	SendBy time.Time
+	SendBy  time.Time
+	Retried bool
 
 	// ArrivalTime is the server time when the first span arrived for this trace.
 	// Used to calculate how long traces spend sitting in Refinery
@@ -187,6 +188,11 @@ func (t *Trace) GetSamplerKey() (string, bool) {
 	}
 
 	return env, false
+}
+
+// IsOrphan returns true if the trace is older than 4 times the traceTimeout
+func (t *Trace) IsOrphan(traceTimeout time.Duration, now time.Time) bool {
+	return now.Sub(t.SendBy) >= traceTimeout*4
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace
