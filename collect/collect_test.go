@@ -812,10 +812,13 @@ func TestStableMaxAlloc(t *testing.T) {
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
 	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
-	peerTrace := coll.cache.Get(peerTraceIDs[0])
+	orphanPeerTrace := coll.cache.Get(peerTraceIDs[0])
 
-	peerTrace.SendBy = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout() * 5)
-	assert.True(t, peerTrace.IsOrphan(conf.GetTracesConfig().GetTraceTimeout(), coll.Clock.Now()))
+	orphanPeerTrace.SendBy = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout() * 5)
+	peerSpan := orphanPeerTrace.GetSpans()[0]
+	// cache impact is also calculated based on the arrival time
+	peerSpan.ArrivalTime = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout())
+	assert.True(t, orphanPeerTrace.IsOrphan(conf.GetTracesConfig().GetTraceTimeout(), coll.Clock.Now()))
 
 	coll.mutex.Unlock()
 	// wait for the cache to take some action
