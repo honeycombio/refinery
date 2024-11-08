@@ -157,8 +157,10 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
 	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
 	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
-	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
-	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
+	{Name: "drop_decision_batches_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
+	{Name: "drop_decision_batches_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
+	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of drop decision messages received"},
+	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
 	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
 	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
 }
@@ -1356,13 +1358,15 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 }
 
 func (i *InMemCollector) processDropDecisions(msg string) {
+	i.Metrics.Increment("drop_decision_batches_received")
+
 	ids := newDroppedTraceDecision(msg)
 
 	if len(ids) == 0 {
 		return
 	}
 
-	i.Metrics.Count("drop_decisions_received", int64(len(ids)))
+	i.Metrics.Count("drop_decisions_received", len(ids))
 
 	toDelete := generics.NewSet[string]()
 	for _, id := range ids {
@@ -1383,13 +1387,16 @@ func (i *InMemCollector) processDropDecisions(msg string) {
 }
 
 func (i *InMemCollector) processKeptDecision(msg string) {
-	i.Metrics.Increment("kept_decisions_received")
+	i.Metrics.Increment("kept_decision_batches_received")
 
 	td, err := newKeptTraceDecision(msg)
 	if err != nil {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
 		return
 	}
+
+	// TODO: when we batch keep decisions too, we should count the number of traces in the batch, eg:
+	// i.Metrics.Count("kept_decisions_received", int64(len(td)))
 
 	toDelete := generics.NewSet[string]()
 	trace := i.cache.Get(td.TraceID)
