@@ -489,6 +489,10 @@ groups:
           `meta.refinery.dryrun.sample_rate` will be set to the sample rate
           that would have been used.
 
+          NOTE: This settng is not compatible with `EnableTraceLocality` set to
+          false because drop trace decisions shared among peers does not contain
+          all relevant information to send traces to Honeycomb.
+
   - name: Logger
     title: "Refinery Logger"
     description: contains configuration for logging.
@@ -1341,10 +1345,12 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         default: false
-        reload: true
+        reload: false
         summary: controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
         description: >
           If `true`, Refinery's will route all spans that belongs to the same trace to a single peer.
+
+          NOTE: This setting is not compatible with `DryRun` when set to false. See `DryRun` for more information.
 
       - name: HealthCheckTimeout
         type: duration
@@ -1371,7 +1377,7 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         default: 1s
-        reload: false
+        reload: true
         summary: Interval for sending drop decisions in batches.
         description: >
           Sets the time interval for sending accumulated drop decisions in batches. This ensures that drop decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxDropDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
@@ -1391,7 +1397,7 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         default: 100ms
-        reload: false
+        reload: true
         summary: Interval for sending kept decisions in batches.
         description: >
           Sets the time interval for sending accumulated kept decisions in batches. This ensures that kept decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxKeptDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
