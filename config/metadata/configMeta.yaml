@@ -1318,7 +1318,7 @@ groups:
         reload: false
         summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
         description: >
-          This value should be longer than the amount of time between individual pod changes in a bulk scaling operation 
+          This value should be longer than the amount of time between individual pod changes in a bulk scaling operation
           (changing the cluster size by more than one pod).
           Each redistribution generates additional traffic between peers.
           If this value is too short, multiple consecutive redistributions will occur and the resulting traffic
@@ -1381,6 +1381,26 @@ groups:
         summary: Interval for sending drop decisions in batches.
         description: >
           Sets the time interval for sending accumulated drop decisions in batches. This ensures that drop decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxDropDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
+
+      - name: MaxKeptDecisionBatchSize
+        type: int
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 1000
+        reload: false
+        summary: Maximum size for batching kept decisions.
+        description: >
+          Specifies the maximum number of kept decisions that can be batched before triggering processing. This ensures that kept decisions do not accumulate indefinitely, allowing timely and efficient management of spans by processing them in bulk. If the number of kept decisions reaches this limit, the batch will be processed immediately, even if the timeout has not been reached.
+
+      - name: KeptDecisionSendInterval
+        type: duration
+        valuetype: nondefault
+        firstversion: v2.9
+        default: 100ms
+        reload: false
+        summary: Interval for sending kept decisions in batches.
+        description: >
+          Sets the time interval for sending accumulated kept decisions in batches. This ensures that kept decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxKeptDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
 
   - name: BufferSizes
     title: "Buffer Sizes"
