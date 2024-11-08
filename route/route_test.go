@@ -353,6 +353,7 @@ func TestOTLPRequest(t *testing.T) {
 	}
 
 	muxxer := mux.NewRouter()
+	muxxer.Use(router.apiKeyProcessor)
 	router.AddOTLPMuxxer(muxxer)
 	server := httptest.NewServer(muxxer)
 	defer server.Close()

@@ -5,12 +5,14 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gorilla/mux"
 	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
@@ -122,16 +124,25 @@ func TestLogsOTLPHandler(t *testing.T) {
 
 		for _, tC := range testCases {
 			t.Run(tC.name, func(t *testing.T) {
-				request, err := http.NewRequest("POST", "/v1/traces", anEmptyRequestBody)
+				muxxer := mux.NewRouter()
+				muxxer.Use(router.apiKeyProcessor)
+				router.AddOTLPMuxxer(muxxer)
+				server := httptest.NewServer(muxxer)
+				defer server.Close()
+
+				request, err := http.NewRequest("POST", server.URL+"/v1/traces", anEmptyRequestBody)
 				require.NoError(t, err)
 				request.Header = http.Header{}
 				request.Header.Set("content-type", tC.requestContentType)
-				response := httptest.NewRecorder()
-				router.postOTLPTrace(response, request)
 
-				assert.Equal(t, tC.expectedResponseStatus, response.Code)
-				assert.Equal(t, tC.expectedResponseContentType, response.Header().Get("content-type"))
-				assert.Equal(t, tC.expectedResponseBody, response.Body.String())
+				resp, err := http.DefaultClient.Do(request)
+				require.NoError(t, err)
+				assert.Equal(t, tC.expectedResponseStatus, resp.StatusCode)
+				assert.Equal(t, tC.expectedResponseContentType, resp.Header.Get("content-type"))
+				body, err := io.ReadAll(resp.Body)
+				require.NoError(t, err)
+
+				assert.Equal(t, tC.expectedResponseBody, string(body))
 			})
 		}
 	})
@@ -149,15 +160,21 @@ func TestLogsOTLPHandler(t *testing.T) {
 			t.Error(err)
 		}
 
-		request, _ := http.NewRequest("POST", "/v1/logs", strings.NewReader(string(body)))
+		muxxer := mux.NewRouter()
+		muxxer.Use(router.apiKeyProcessor)
+		router.AddOTLPMuxxer(muxxer)
+		server := httptest.NewServer(muxxer)
+		defer server.Close()
+
+		request, _ := http.NewRequest("POST", server.URL+"/v1/logs", strings.NewReader(string(body)))
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/protobuf")
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
-		w := httptest.NewRecorder()
-		router.postOTLPLogs(w, request)
-		assert.Equal(t, w.Code, http.StatusOK)
+		resp, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		events := mockTransmission.GetBlock(1)
 		assert.Equal(t, 1, len(events))
@@ -289,16 +306,25 @@ func TestLogsOTLPHandler(t *testing.T) {
 			t.Error(err)
 		}
 
-		request, _ := http.NewRequest("POST", "/v1/logs", bytes.NewReader(body))
+		muxxer := mux.NewRouter()
+		muxxer.Use(router.apiKeyProcessor)
+		router.AddOTLPMuxxer(muxxer)
+		server := httptest.NewServer(muxxer)
+		defer server.Close()
+
+		request, _ := http.NewRequest("POST", server.URL+"/v1/logs", bytes.NewReader(body))
 		request.Header = http.Header{}
 		request.Header.Set("content-type", "application/json")
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
-		w := httptest.NewRecorder()
-		router.postOTLPLogs(w, request)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-		assert.Contains(t, w.Body.String(), "not found in list of authorized keys")
+		resp, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+
+		assert.Contains(t, string(respBody), "not found in list of authorized keys")
 
 		events := mockTransmission.GetBlock(0)
 		assert.Equal(t, 0, len(events))
