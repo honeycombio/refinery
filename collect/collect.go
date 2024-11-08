@@ -1422,10 +1422,7 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 
 		i.sampleTraceCache.Record(trace, decision.Kept, decision.KeptReason)
 
-		// Send the processed trace (only in Kept case)
-		if decisionType == keptDecision {
-			i.send(context.Background(), trace, &decision)
-		}
+		i.send(context.Background(), trace, &decision)
 	}
 
 	i.cache.RemoveTraces(toDelete)
