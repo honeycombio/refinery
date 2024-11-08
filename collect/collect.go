@@ -158,8 +158,10 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
 	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
 	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
-	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
-	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
+	{Name: "drop_decision_batches_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision batches received"},
+	{Name: "kept_decision_batches_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision batches received"},
+	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of drop decisions received"},
+	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of kept decisions received"},
 	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
 	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
 }
@@ -1371,8 +1373,7 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 	}
 }
 func (i *InMemCollector) processTraceDecisions(msg string, decisionType decisionType) {
-
-	i.Metrics.Increment(fmt.Sprintf("%s_decisions_received", decisionType.String()))
+	i.Metrics.Increment(fmt.Sprintf("%s_decision_batches_received", decisionType.String()))
 	if len(msg) == 0 {
 		return
 	}
@@ -1397,6 +1398,8 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 		i.Logger.Error().Logf("unknown decision type %s while processing trace decisions", decisionType)
 		return
 	}
+
+	i.Metrics.Count(fmt.Sprintf("%s_decisions_received", decisionType.String()), len(decisions))
 
 	if len(decisions) == 0 {
 		return
