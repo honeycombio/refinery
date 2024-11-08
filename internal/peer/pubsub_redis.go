@@ -78,6 +78,11 @@ func (p *peerCommand) marshal() string {
 
 var _ Peers = (*RedisPubsubPeers)(nil)
 
+type peerRecord struct {
+	id      string
+	address string
+}
+
 type RedisPubsubPeers struct {
 	Config     config.Config   `inject:""`
 	Metrics    metrics.Metrics `inject:"metrics"`
@@ -93,7 +98,7 @@ type RedisPubsubPeers struct {
 	// since the pubsub subscription is still active.
 	Done chan struct{}
 
-	peers     *generics.SetWithTTL[string]
+	peers     *generics.SetWithTTL[peerRecord]
 	hash      uint64
 	callbacks []func()
 	sub       pubsub.Subscription
@@ -121,9 +126,9 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	p.Metrics.Count("peer_messages", 1)
 	switch cmd.action {
 	case Unregister:
-		p.peers.Remove(cmd.address)
+		p.peers.Remove(peerRecord{id: cmd.id, address: cmd.address})
 	case Register:
-		p.peers.Add(cmd.address)
+		p.peers.Add(peerRecord{id: cmd.id, address: cmd.address})
 	}
 	p.checkHash()
 }
@@ -146,7 +151,7 @@ func (p *RedisPubsubPeers) Start() error {
 		p.Logger = &logger.NullLogger{}
 	}
 
-	p.peers = generics.NewSetWithTTL[string](PeerEntryTimeout)
+	p.peers = generics.NewSetWithTTL[peerRecord](PeerEntryTimeout)
 	p.callbacks = make([]func(), 0)
 	p.Logger.Info().Logf("subscribing to pubsub peers channel")
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
@@ -159,7 +164,7 @@ func (p *RedisPubsubPeers) Start() error {
 	if err != nil {
 		return err
 	}
-	p.peers.Add(myaddr)
+	p.peers.Add(peerRecord{id: p.InstanceID, address: myaddr})
 	return nil
 }
 
@@ -241,9 +246,14 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		peers = []string{myaddr}
+		return []string{myaddr}, nil
 	}
-	return peers, nil
+
+	var peerAddresses []string
+	for _, peer := range peers {
+		peerAddresses = append(peerAddresses, peer.address)
+	}
+	return peerAddresses, nil
 }
 
 func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
@@ -332,11 +342,11 @@ func (p *RedisPubsubPeers) getIdentifierFromInterface() (string, error) {
 	return myIdentifier, nil
 }
 
-// hashList hashes a list of strings into a single uint64
-func hashList(list []string) uint64 {
+// hashList hashes a list of peerRecord's into a single uint64
+func hashList(list []peerRecord) uint64 {
 	var h uint64 = 255798297204 // arbitrary seed
-	for _, s := range list {
-		h = wyhash.Hash([]byte(s), h)
+	for _, peer := range list {
+		h = wyhash.Hash([]byte(peer.id), h)
 	}
 	return h
 }
