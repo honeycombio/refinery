@@ -1529,24 +1529,6 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 	}
 }
 
-type decisionType int
-
-func (d decisionType) String() string {
-	switch d {
-	case keptDecision:
-		return "kept"
-	case dropDecision:
-		return "drop"
-	default:
-		return "unknown"
-	}
-}
-
-var (
-	keptDecision decisionType = 1
-	dropDecision decisionType = 2
-)
-
 func (i *InMemCollector) sendKeptDecisions() {
 	if i.Config.GetCollectionConfig().EnableTraceLocality {
 		return

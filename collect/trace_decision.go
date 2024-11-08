@@ -6,6 +6,24 @@ import (
 	"strings"
 )
 
+type decisionType int
+
+func (d decisionType) String() string {
+	switch d {
+	case keptDecision:
+		return "kept"
+	case dropDecision:
+		return "drop"
+	default:
+		return "unknown"
+	}
+}
+
+var (
+	keptDecision decisionType = 1
+	dropDecision decisionType = 2
+)
+
 type newDecisionMessage func([]TraceDecision) (string, error)
 
 func newDroppedDecisionMessage(tds []TraceDecision) (string, error) {
