@@ -11,23 +11,24 @@ func TestNewDroppedTraceDecision(t *testing.T) {
 	tests := []struct {
 		name string
 		msg  string
-		want []string
+		want []TraceDecision
 	}{
 		{
 			name: "multiple dropped decisions",
 			msg:  "1,2,3",
-			want: []string{"1", "2", "3"},
+			want: []TraceDecision{{TraceID: "1"}, {TraceID: "2"}, {TraceID: "3"}},
 		},
 		{
 			name: "single dropped decision",
 			msg:  "1",
-			want: []string{"1"},
+			want: []TraceDecision{{TraceID: "1"}},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newDroppedTraceDecision(tt.msg)
+			got, err := newDroppedTraceDecision(tt.msg)
+			require.NoError(t, err)
 			assert.EqualValues(t, tt.want, got)
 		})
 	}
@@ -37,15 +38,14 @@ func TestNewKeptTraceDecision(t *testing.T) {
 	tests := []struct {
 		name    string
 		msg     string
-		want    *TraceDecision
+		want    []TraceDecision
 		wantErr bool
 	}{
 		{
 			name: "kept decision",
-			msg:  `{"TraceID":"1", "Kept": true, "SampleRate": 100, "SendReason":"` + TraceSendGotRoot + `"}`,
-			want: &TraceDecision{
-				TraceID: "1", Kept: true, SampleRate: 100, SendReason: TraceSendGotRoot,
-			},
+			msg:  `[{"TraceID":"1", "Kept": true, "SampleRate": 100, "SendReason":"` + TraceSendGotRoot + `"}]`,
+			want: []TraceDecision{
+				{TraceID: "1", Kept: true, SampleRate: 100, SendReason: TraceSendGotRoot}},
 			wantErr: false,
 		},
 		{
@@ -72,33 +72,34 @@ func TestNewKeptTraceDecision(t *testing.T) {
 }
 func TestNewDroppedDecisionMessage(t *testing.T) {
 	tests := []struct {
-		name     string
-		traceIDs []string
-		want     string
-		wantErr  bool
+		name      string
+		decisions []TraceDecision
+		want      string
+		wantErr   bool
 	}{
 		{
-			name:     "no traceIDs provided",
-			traceIDs: nil,
-			want:     "",
-			wantErr:  true,
+			name:      "no traceIDs provided",
+			decisions: nil,
+			want:      "",
+			wantErr:   true,
 		},
 		{
-			name:     "one traceID",
-			traceIDs: []string{"1"},
-			want:     "1",
-			wantErr:  false,
+			name:      "one traceID",
+			decisions: []TraceDecision{{TraceID: "1"}},
+			want:      "1",
+			wantErr:   false,
 		},
 		{
-			name:     "multiple traceIDs",
-			traceIDs: []string{"1", "2", "3"},
-			want:     "1,2,3",
-			wantErr:  false,
+			name: "multiple traceIDs",
+			decisions: []TraceDecision{{TraceID: "1"},
+				{TraceID: "2"}, {TraceID: "3"}},
+			want:    "1,2,3",
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := newDroppedDecisionMessage(tt.traceIDs...)
+			got, err := newDroppedDecisionMessage(tt.decisions)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -111,25 +112,27 @@ func TestNewDroppedDecisionMessage(t *testing.T) {
 func TestNewKeptDecisionMessage(t *testing.T) {
 	tests := []struct {
 		name    string
-		td      TraceDecision
+		td      []TraceDecision
 		want    string
 		wantErr bool
 	}{
 		{
 			name: "kept decision",
-			td: TraceDecision{
-				TraceID:    "1",
-				Kept:       true,
-				SampleRate: 100,
-				SendReason: TraceSendGotRoot,
-				KeptReason: "deterministic",
+			td: []TraceDecision{
+				{
+					TraceID:    "1",
+					Kept:       true,
+					SampleRate: 100,
+					SendReason: TraceSendGotRoot,
+					KeptReason: "deterministic",
+				},
 			},
-			want:    `{"TraceID":"1","Kept":true,"SampleRate":100,"SendReason":"trace_send_got_root","HasRoot":false,"KeptReason":"deterministic"}`,
+			want:    `[{"TraceID":"1","Kept":true,"SampleRate":100,"SendReason":"trace_send_got_root","HasRoot":false,"KeptReason":"deterministic"}]`,
 			wantErr: false,
 		},
 		{
 			name:    "invalid",
-			td:      TraceDecision{},
+			td:      nil,
 			want:    "",
 			wantErr: true,
 		},
