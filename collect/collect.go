@@ -1356,13 +1356,13 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 }
 
 func (i *InMemCollector) processDropDecisions(msg string) {
-	i.Metrics.Increment("drop_decisions_received")
-
 	ids := newDroppedTraceDecision(msg)
 
 	if len(ids) == 0 {
 		return
 	}
+
+	i.Metrics.Count("drop_decisions_received", int64(len(ids)))
 
 	toDelete := generics.NewSet[string]()
 	for _, id := range ids {
