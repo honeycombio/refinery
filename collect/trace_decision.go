@@ -6,18 +6,32 @@ import (
 	"strings"
 )
 
-func newDroppedDecisionMessage(traceIDs ...string) (string, error) {
+type newDecisionMessage func([]TraceDecision) (string, error)
+
+func newDroppedDecisionMessage(tds []TraceDecision) (string, error) {
+	if len(tds) == 0 {
+		return "", fmt.Errorf("no dropped trace decisions provided")
+	}
+
+	traceIDs := make([]string, 0, len(tds))
+	for _, td := range tds {
+		if td.TraceID != "" {
+			traceIDs = append(traceIDs, td.TraceID)
+		}
+	}
+
 	if len(traceIDs) == 0 {
-		return "", fmt.Errorf("no traceIDs provided")
+		return "", fmt.Errorf("no valid trace IDs provided")
 	}
-	data := strings.Join(traceIDs, ",")
-	return string(data), nil
+
+	return strings.Join(traceIDs, ","), nil
 }
-func newKeptDecisionMessage(td TraceDecision) (string, error) {
-	if td.TraceID == "" {
-		return "", fmt.Errorf("no traceID provided")
+func newKeptDecisionMessage(tds []TraceDecision) (string, error) {
+	if len(tds) == 0 {
+		return "", fmt.Errorf("no kept trace decisions provided")
 	}
-	data, err := json.Marshal(td)
+
+	data, err := json.Marshal(tds)
 	if err != nil {
 		return "", err
 	}
@@ -25,23 +39,28 @@ func newKeptDecisionMessage(td TraceDecision) (string, error) {
 	return string(data), nil
 }
 
-func newDroppedTraceDecision(msg string) []string {
-	var traceIDs []string
+func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
+	if msg == "" {
+		return nil, fmt.Errorf("empty drop message")
+	}
+	var decisions []TraceDecision
 	for _, traceID := range strings.Split(msg, ",") {
-		traceIDs = append(traceIDs, traceID)
+		decisions = append(decisions, TraceDecision{
+			TraceID: traceID,
+		})
 	}
 
-	return traceIDs
+	return decisions, nil
 }
 
-func newKeptTraceDecision(msg string) (*TraceDecision, error) {
-	keptDecision := &TraceDecision{}
-	err := json.Unmarshal([]byte(msg), keptDecision)
+func newKeptTraceDecision(msg string) ([]TraceDecision, error) {
+	keptDecisions := make([]TraceDecision, 0)
+	err := json.Unmarshal([]byte(msg), &keptDecisions)
 	if err != nil {
 		return nil, err
 	}
 
-	return keptDecision, nil
+	return keptDecisions, nil
 }
 
 type TraceDecision struct {
