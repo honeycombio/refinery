@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -345,6 +346,10 @@ func (p *RedisPubsubPeers) getIdentifierFromInterface() (string, error) {
 // hashList hashes a list of peerRecord's into a single uint64
 func hashList(list []peerRecord) uint64 {
 	var h uint64 = 255798297204 // arbitrary seed
+	// sort the list so we get a consistent hash
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].id < list[j].id
+	})
 	for _, peer := range list {
 		h = wyhash.Hash([]byte(peer.id), h)
 	}
