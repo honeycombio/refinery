@@ -40,25 +40,32 @@ const (
 )
 
 type peerCommand struct {
-	action peerAction
-	peer   string
+	action  peerAction
+	address string
+	id      string
 }
 
-func newPeerCommand(action peerAction, peer string) *peerCommand {
+func newPeerCommand(action peerAction, address string, id string) *peerCommand {
 	return &peerCommand{
-		action: action,
-		peer:   peer,
+		action:  action,
+		address: address,
+		id:      id,
 	}
 }
 
 func (p *peerCommand) unmarshal(msg string) bool {
-	if len(msg) < 2 {
+	idx := strings.Index(msg, ",")
+	if len(msg) < 2 || idx == -1 {
 		return false
 	}
+	// first letter indicates the action (eg register, unregister)
 	p.action = peerAction(msg[:1])
-	p.peer = msg[1:]
 	switch p.action {
 	case Register, Unregister:
+		// the remainder is the peer address and ID, separated by a comma
+		msgData := msg[1:]
+		p.address = msgData[:idx-1]
+		p.id = msgData[idx:]
 		return true
 	default:
 		return false
@@ -66,17 +73,18 @@ func (p *peerCommand) unmarshal(msg string) bool {
 }
 
 func (p *peerCommand) marshal() string {
-	return string(p.action) + p.peer
+	return string(p.action) + p.address + "," + p.id
 }
 
 var _ Peers = (*RedisPubsubPeers)(nil)
 
 type RedisPubsubPeers struct {
-	Config  config.Config   `inject:""`
-	Metrics metrics.Metrics `inject:"metrics"`
-	Logger  logger.Logger   `inject:""`
-	PubSub  pubsub.PubSub   `inject:""`
-	Clock   clockwork.Clock `inject:""`
+	Config     config.Config   `inject:""`
+	Metrics    metrics.Metrics `inject:"metrics"`
+	Logger     logger.Logger   `inject:""`
+	PubSub     pubsub.PubSub   `inject:""`
+	Clock      clockwork.Clock `inject:""`
+	InstanceID string          `inject:"instanceID"`
 
 	// Done is a channel that will be closed when the service should stop.
 	// After it is closed, peers service should signal the rest of the cluster
@@ -113,9 +121,9 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	p.Metrics.Count("peer_messages", 1)
 	switch cmd.action {
 	case Unregister:
-		p.peers.Remove(cmd.peer)
+		p.peers.Remove(cmd.address)
 	case Register:
-		p.peers.Add(cmd.peer)
+		p.peers.Add(cmd.address)
 	}
 	p.checkHash()
 }
@@ -182,7 +190,7 @@ func (p *RedisPubsubPeers) Ready() error {
 
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
-				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr).marshal())
+				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr, p.InstanceID).marshal())
 				if err != nil {
 					p.Logger.Error().WithFields(map[string]interface{}{
 						"error":       err,
@@ -214,7 +222,7 @@ func (p *RedisPubsubPeers) stop() {
 		return
 	}
 
-	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr).marshal())
+	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
 	if err != nil {
 		p.Logger.Error().WithFields(map[string]interface{}{
 			"error":       err,

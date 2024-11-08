@@ -41,15 +41,17 @@ func Test_publicAddr(t *testing.T) {
 }
 
 func TestPeerActions(t *testing.T) {
-	cmd := newPeerCommand(Register, "foo")
-	assert.Equal(t, "Rfoo", cmd.marshal())
-	assert.Equal(t, "foo", cmd.peer)
+	cmd := newPeerCommand(Register, "foo", "id1")
+	assert.Equal(t, "Rfoo,id1", cmd.marshal())
+	assert.Equal(t, "foo", cmd.address)
 	assert.Equal(t, Register, cmd.action)
+	assert.Equal(t, "id1", cmd.id)
 	cmd2 := peerCommand{}
-	b := cmd2.unmarshal("Ubar")
+	b := cmd2.unmarshal("Ubar,id2")
 	assert.True(t, b)
-	assert.Equal(t, "bar", cmd2.peer)
+	assert.Equal(t, "bar", cmd2.address)
 	assert.Equal(t, Unregister, cmd2.action)
+	assert.Equal(t, "id2", cmd2.id)
 
 	b = cmd2.unmarshal("invalid")
 	assert.False(t, b)

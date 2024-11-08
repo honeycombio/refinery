@@ -17,6 +17,7 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/google/uuid"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/jonboulle/clockwork"
@@ -41,6 +42,9 @@ import (
 // set by travis.
 var BuildID string
 var version string
+
+// instanceID is a unique identifier for this instance of refinery.
+var instanceID = uuid.NewString()
 
 type graphLogger struct {
 }
@@ -265,6 +269,7 @@ func main() {
 		{Value: refineryHealth},
 		{Value: &configwatcher.ConfigWatcher{}},
 		{Value: &a},
+		{Value: instanceID, Name: "instanceID"},
 	}
 	err = g.Provide(objects...)
 	if err != nil {
