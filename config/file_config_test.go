@@ -1,8 +1,14 @@
 package config
 
-import "testing"
+import (
+	"errors"
+	"testing"
 
-func TestAccessKeyConfig_CheckAndMaybeReplaceKey(t *testing.T) {
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
 		ReceiveKeys          []string
 		SendKey              string
@@ -10,11 +16,6 @@ func TestAccessKeyConfig_CheckAndMaybeReplaceKey(t *testing.T) {
 		AcceptOnlyListedKeys bool
 	}
 
-	fNone := fields{}
-	fRcvAccept := fields{
-		ReceiveKeys:          []string{"key1", "key2"},
-		AcceptOnlyListedKeys: true,
-	}
 	fSendAll := fields{
 		ReceiveKeys: []string{"key1", "key2"},
 		SendKey:     "sendkey",
@@ -43,10 +44,6 @@ func TestAccessKeyConfig_CheckAndMaybeReplaceKey(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"empty", fNone, "userkey", "userkey", false},
-		{"acceptonly known key", fRcvAccept, "key1", "key1", false},
-		{"acceptonly unknown key", fRcvAccept, "badkey", "", true},
-		{"acceptonly missing key", fRcvAccept, "", "", true},
 		{"send all known", fSendAll, "key1", "sendkey", false},
 		{"send all unknown", fSendAll, "userkey", "sendkey", false},
 		{"send all missing", fSendAll, "", "sendkey", false},
@@ -68,7 +65,7 @@ func TestAccessKeyConfig_CheckAndMaybeReplaceKey(t *testing.T) {
 				SendKeyMode:          tt.fields.SendKeyMode,
 				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
 			}
-			got, err := a.CheckAndMaybeReplaceKey(tt.apiKey)
+			got, err := a.GetReplaceKey(tt.apiKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -76,6 +73,42 @@ func TestAccessKeyConfig_CheckAndMaybeReplaceKey(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() = '%v', want '%v'", got, tt.want)
 			}
+		})
+	}
+}
+
+func TestAccessKeyConfig_IsAccepted(t *testing.T) {
+	type fields struct {
+		ReceiveKeys          []string
+		SendKey              string
+		SendKeyMode          string
+		AcceptOnlyListedKeys bool
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		key    string
+		want   error
+	}{
+		{"no keys", fields{}, "key1", nil},
+		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", nil},
+		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", errors.New("api key key2... not found in list of authorized keys")},
+		{"accept missing key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", errors.New("api key ... not found in list of authorized keys")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &AccessKeyConfig{
+				ReceiveKeys:          tt.fields.ReceiveKeys,
+				SendKey:              tt.fields.SendKey,
+				SendKeyMode:          tt.fields.SendKeyMode,
+				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
+			}
+			err := a.IsAccepted(tt.key)
+			if tt.want == nil {
+				require.NoError(t, err)
+				return
+			}
+			assert.Equal(t, tt.want.Error(), err.Error())
 		})
 	}
 }

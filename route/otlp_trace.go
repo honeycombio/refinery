@@ -25,7 +25,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 
 	apicfg := r.Config.GetAccessKeyConfig()
-	keyToUse, err := apicfg.CheckAndMaybeReplaceKey(ri.ApiKey)
+	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey)
 
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
@@ -63,7 +63,11 @@ func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTrac
 	}
 
 	apicfg := t.router.Config.GetAccessKeyConfig()
-	keyToUse, err := apicfg.CheckAndMaybeReplaceKey(ri.ApiKey)
+	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
+	}
+
+	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey)
 
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
