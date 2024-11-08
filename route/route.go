@@ -996,6 +996,7 @@ func (r *Router) startGRPCHealthMonitor() {
 func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
 	// require an auth header for OTLP requests
 	otlpMuxxer := muxxer.PathPrefix("/v1/").Methods("POST").Subrouter()
+	otlpMuxxer.Use(r.apiKeyProcessor)
 
 	// handle OTLP trace requests
 	otlpMuxxer.HandleFunc("/traces", r.postOTLPTrace).Name("otlp_traces")

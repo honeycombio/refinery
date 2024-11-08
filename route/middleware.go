@@ -13,7 +13,7 @@ import (
 
 // for generating request IDs
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
 func (r *Router) queryTokenChecker(next http.Handler) http.Handler {
@@ -45,15 +45,11 @@ func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 		}
 
 		keycfg := r.Config.GetAccessKeyConfig()
-
-		overwriteWith, err := keycfg.CheckAndMaybeReplaceKey(apiKey)
-		if err != nil {
-			r.handlerReturnWithError(w, ErrAuthNeeded, err)
+		if err := keycfg.IsAccepted(apiKey); err != nil {
+			r.handlerReturnWithError(w, ErrAuthInvalid, err)
 			return
 		}
-		if overwriteWith != apiKey {
-			req.Header.Set(types.APIKeyHeader, overwriteWith)
-		}
+
 		next.ServeHTTP(w, req)
 	})
 }

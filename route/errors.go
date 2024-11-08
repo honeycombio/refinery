@@ -31,6 +31,7 @@ var (
 	ErrJSONBuildFailed     = handlerError{nil, "failed to build JSON response", http.StatusInternalServerError, false, true}
 	ErrPostBody            = handlerError{nil, "failed to read request body", http.StatusInternalServerError, false, false}
 	ErrAuthNeeded          = handlerError{nil, "unknown API key - check your credentials", http.StatusBadRequest, true, true}
+	ErrAuthInvalid         = handlerError{nil, "invalid API key - check your credentials", http.StatusUnauthorized, true, true}
 	ErrConfigReadFailed    = handlerError{nil, "failed to read config", http.StatusBadRequest, false, false}
 	ErrUpstreamFailed      = handlerError{nil, "failed to create upstream request", http.StatusServiceUnavailable, true, true}
 	ErrUpstreamUnavailable = handlerError{nil, "upstream target unavailable", http.StatusServiceUnavailable, true, true}
