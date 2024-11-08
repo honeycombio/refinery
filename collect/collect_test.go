@@ -120,6 +120,10 @@ func TestAddRootSpan(t *testing.T) {
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
+		GetAccessKeyConfigVal: config.AccessKeyConfig{
+			SendKey:     "another-key",
+			SendKeyMode: "all",
+		},
 	}
 	transmission := &transmit.MockTransmission{}
 	transmission.Start()
@@ -166,6 +170,7 @@ func TestAddRootSpan(t *testing.T) {
 	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	assert.Equal(t, "another-key", events[0].APIKey, "api key should be replaced with the send key")
 
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 
@@ -185,6 +190,7 @@ func TestAddRootSpan(t *testing.T) {
 	events = transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	assert.Equal(t, "another-key", events[0].APIKey, "api key should be replaced with the send key")
 
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 
