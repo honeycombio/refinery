@@ -15,8 +15,10 @@ import (
 	_ "go.uber.org/automaxprocs"
 	"golang.org/x/exp/slices"
 
+	"github.com/dgryski/go-wyhash"
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/google/uuid"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/jonboulle/clockwork"
@@ -84,6 +86,11 @@ func main() {
 		}
 		os.Exit(0)
 	}
+
+	// instanceID is a unique identifier for this instance of refinery.
+	// We use a hash of a UUID to get a smaller string.
+	h := wyhash.Hash([]byte(uuid.NewString()), 356783547862)
+	instanceID := fmt.Sprintf("%08.8x", (h&0xFFFF_FFFF)^(h>>32))
 
 	a := app.App{
 		Version: version,
@@ -265,6 +272,7 @@ func main() {
 		{Value: refineryHealth},
 		{Value: &configwatcher.ConfigWatcher{}},
 		{Value: &a},
+		{Value: instanceID, Name: "instanceID"},
 	}
 	err = g.Provide(objects...)
 	if err != nil {
@@ -373,43 +381,43 @@ func main() {
 }
 
 var libhoneyMetrics = []metrics.Metadata{
-	metrics.Metadata{
+	{
 		Name:        "queue_length",
 		Type:        metrics.Gauge,
 		Unit:        metrics.Dimensionless,
 		Description: "number of events waiting to be sent to destination",
 	},
-	metrics.Metadata{
+	{
 		Name:        "queue_overflow",
 		Type:        metrics.Counter,
 		Unit:        metrics.Dimensionless,
 		Description: "number of events dropped due to queue overflow",
 	},
-	metrics.Metadata{
+	{
 		Name:        "send_errors",
 		Type:        metrics.Counter,
 		Unit:        metrics.Dimensionless,
 		Description: "number of errors encountered while sending events to destination",
 	},
-	metrics.Metadata{
+	{
 		Name:        "send_retries",
 		Type:        metrics.Counter,
 		Unit:        metrics.Dimensionless,
 		Description: "number of times a batch of events was retried",
 	},
-	metrics.Metadata{
+	{
 		Name:        "batches_sent",
 		Type:        metrics.Counter,
 		Unit:        metrics.Dimensionless,
 		Description: "number of batches of events sent to destination",
 	},
-	metrics.Metadata{
+	{
 		Name:        "messages_sent",
 		Type:        metrics.Counter,
 		Unit:        metrics.Dimensionless,
 		Description: "number of messages sent to destination",
 	},
-	metrics.Metadata{
+	{
 		Name:        "response_decode_errors",
 		Type:        metrics.Counter,
 		Unit:        metrics.Dimensionless,

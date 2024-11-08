@@ -40,43 +40,59 @@ const (
 )
 
 type peerCommand struct {
-	action peerAction
-	peer   string
+	action  peerAction
+	id      string
+	address string
 }
 
-func newPeerCommand(action peerAction, peer string) *peerCommand {
+func newPeerCommand(action peerAction, address string, id string) *peerCommand {
 	return &peerCommand{
-		action: action,
-		peer:   peer,
+		action:  action,
+		id:      id,
+		address: address,
 	}
 }
 
+// we want these commands to be short to minimize the amount of data we're
+// sending over the wire, so we build a little protocol here:
+// R<address>,<8-byte-id>  to register
+// U<address>,<8-byte-id>  to unregister
+// If we don't have an ID, then it's old-format Refinery and we just ignore it.
 func (p *peerCommand) unmarshal(msg string) bool {
-	if len(msg) < 2 {
+	idx := strings.Index(msg, ",")
+	if len(msg) < 2 || idx == -1 {
 		return false
 	}
+	// first letter indicates the action (eg register, unregister)
 	p.action = peerAction(msg[:1])
-	p.peer = msg[1:]
 	switch p.action {
 	case Register, Unregister:
+		// the remainder is the peer address and ID, separated by a comma
+		msgData := msg[1:]
+		p.address = msgData[:idx-1]
+		p.id = msgData[idx:]
 		return true
 	default:
 		return false
 	}
 }
 
+// marshal returns a string representation of the peerCommand
+// see unmarshal for the format
+// we use this sprintf to ensure that we always get the right number of characters
 func (p *peerCommand) marshal() string {
-	return string(p.action) + p.peer
+	return string(p.action) + p.address + "," + p.id
 }
 
 var _ Peers = (*RedisPubsubPeers)(nil)
 
 type RedisPubsubPeers struct {
-	Config  config.Config   `inject:""`
-	Metrics metrics.Metrics `inject:"metrics"`
-	Logger  logger.Logger   `inject:""`
-	PubSub  pubsub.PubSub   `inject:""`
-	Clock   clockwork.Clock `inject:""`
+	Config     config.Config   `inject:""`
+	Metrics    metrics.Metrics `inject:"metrics"`
+	Logger     logger.Logger   `inject:""`
+	PubSub     pubsub.PubSub   `inject:""`
+	Clock      clockwork.Clock `inject:""`
+	InstanceID string          `inject:"instanceID"`
 
 	// Done is a channel that will be closed when the service should stop.
 	// After it is closed, peers service should signal the rest of the cluster
@@ -85,7 +101,7 @@ type RedisPubsubPeers struct {
 	// since the pubsub subscription is still active.
 	Done chan struct{}
 
-	peers     *generics.SetWithTTL[string]
+	peers     *generics.MapWithTTL[string, string]
 	hash      uint64
 	callbacks []func()
 	sub       pubsub.Subscription
@@ -93,7 +109,7 @@ type RedisPubsubPeers struct {
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
 func (p *RedisPubsubPeers) checkHash() {
-	peers := p.peers.Members()
+	peers := p.peers.SortedKeys()
 	newhash := hashList(peers)
 	if newhash != p.hash {
 		p.hash = newhash
@@ -113,9 +129,9 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	p.Metrics.Count("peer_messages", 1)
 	switch cmd.action {
 	case Unregister:
-		p.peers.Remove(cmd.peer)
+		p.peers.Delete(cmd.id)
 	case Register:
-		p.peers.Add(cmd.peer)
+		p.peers.Set(cmd.id, cmd.address)
 	}
 	p.checkHash()
 }
@@ -138,7 +154,7 @@ func (p *RedisPubsubPeers) Start() error {
 		p.Logger = &logger.NullLogger{}
 	}
 
-	p.peers = generics.NewSetWithTTL[string](PeerEntryTimeout)
+	p.peers = generics.NewMapWithTTL[string, string](PeerEntryTimeout, nil)
 	p.callbacks = make([]func(), 0)
 	p.Logger.Info().Logf("subscribing to pubsub peers channel")
 	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
@@ -151,7 +167,7 @@ func (p *RedisPubsubPeers) Start() error {
 	if err != nil {
 		return err
 	}
-	p.peers.Add(myaddr)
+	p.peers.Set(p.InstanceID, myaddr)
 	return nil
 }
 
@@ -182,7 +198,7 @@ func (p *RedisPubsubPeers) Ready() error {
 
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
-				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr).marshal())
+				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr, p.InstanceID).marshal())
 				if err != nil {
 					p.Logger.Error().WithFields(map[string]interface{}{
 						"error":       err,
@@ -192,9 +208,10 @@ func (p *RedisPubsubPeers) Ready() error {
 				cancel()
 			case <-logTicker.Chan():
 				p.Logger.Debug().WithFields(map[string]any{
-					"peers":     p.peers.Members(),
+					"ids":       p.peers.SortedKeys(),
+					"peers":     p.peers.SortedValues(),
 					"hash":      p.hash,
-					"num_peers": len(p.peers.Members()),
+					"num_peers": p.peers.Length(),
 					"self":      myaddr,
 				}).Logf("peer report")
 			}
@@ -214,7 +231,7 @@ func (p *RedisPubsubPeers) stop() {
 		return
 	}
 
-	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr).marshal())
+	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
 	if err != nil {
 		p.Logger.Error().WithFields(map[string]interface{}{
 			"error":       err,
@@ -227,7 +244,7 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 	// we never want to return an empty list of peers, so if the system returns
 	// an empty list, return a single peer (its name doesn't really matter).
 	// This keeps the sharding logic happy.
-	peers := p.peers.Members()
+	peers := p.peers.SortedValues()
 	if len(peers) == 0 {
 		myaddr, err := p.publicAddr()
 		if err != nil {
