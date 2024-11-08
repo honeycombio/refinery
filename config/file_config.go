@@ -91,21 +91,23 @@ type AccessKeyConfig struct {
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
 }
 
-// truncate the key to 8 characters for logging
-func (a *AccessKeyConfig) sanitize(key string) string {
-	return fmt.Sprintf("%.8s...", key)
+// IsAccepted checks if the given key is in the list of accepted keys.
+// if the key is not in the list, it returns an error with the key truncated to 8 characters for logging.
+func (a *AccessKeyConfig) IsAccepted(key string) error {
+	if a.AcceptOnlyListedKeys {
+		if slices.Contains(a.ReceiveKeys, key) {
+			return nil
+		}
+
+		return fmt.Errorf("api key %.8s... not found in list of authorized keys", key)
+	}
+	return nil
 }
 
-// CheckAndMaybeReplaceKey checks the given API key against the configuration
+// GetReplaceKey checks the given API key against the configuration
 // and possibly replaces it with the configured SendKey, if the settings so indicate.
 // It returns the key to use, or an error if the key is invalid given the settings.
-func (a *AccessKeyConfig) CheckAndMaybeReplaceKey(apiKey string) (string, error) {
-	// Apply AcceptOnlyListedKeys logic BEFORE we consider replacement
-	if a.AcceptOnlyListedKeys && !slices.Contains(a.ReceiveKeys, apiKey) {
-		err := fmt.Errorf("api key %s not found in list of authorized keys", a.sanitize(apiKey))
-		return "", err
-	}
-
+func (a *AccessKeyConfig) GetReplaceKey(apiKey string) (string, error) {
 	if a.SendKey != "" {
 		overwriteWith := ""
 		switch a.SendKeyMode {

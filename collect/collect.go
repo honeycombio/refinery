@@ -157,8 +157,10 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_drop_decision_batch_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of drop decisions sent in a batch"},
 	{Name: "collector_expired_traces_missing_decisions", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of decision spans forwarded for expired traces missing trace decision"},
 	{Name: "collector_expired_traces_orphans", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of expired traces missing trace decision when they are sent"},
-	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision message received"},
-	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision message received"},
+	{Name: "drop_decision_batches_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of drop decision batches received"},
+	{Name: "kept_decision_batches_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept decision batches received"},
+	{Name: "drop_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of drop decisions received"},
+	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of kept decisions received"},
 	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
 	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
 }
@@ -1283,6 +1285,19 @@ func (i *InMemCollector) sendTraces() {
 	for t := range i.outgoingTraces {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
 		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
+
+		// if we have a key replacement rule, we should
+		// replace the key with the new key
+		keycfg := i.Config.GetAccessKeyConfig()
+		overwriteWith, err := keycfg.GetReplaceKey(t.APIKey)
+		if err != nil {
+			i.Logger.Warn().Logf("error replacing key: %s", err.Error())
+			continue
+		}
+		if overwriteWith != t.APIKey {
+			t.APIKey = overwriteWith
+		}
+
 		for _, sp := range t.GetSpans() {
 			if sp.IsDecisionSpan() {
 				continue
@@ -1318,6 +1333,8 @@ func (i *InMemCollector) sendTraces() {
 			}
 			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
 			i.addAdditionalAttributes(sp)
+
+			sp.APIKey = t.APIKey
 			i.Transmission.EnqueueSpan(sp)
 		}
 		span.End()
@@ -1356,13 +1373,15 @@ func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg st
 }
 
 func (i *InMemCollector) processDropDecisions(msg string) {
-	i.Metrics.Increment("drop_decisions_received")
+	i.Metrics.Increment("drop_decision_batches_received")
 
 	ids := newDroppedTraceDecision(msg)
 
 	if len(ids) == 0 {
 		return
 	}
+
+	i.Metrics.Count("drop_decisions_received", len(ids))
 
 	toDelete := generics.NewSet[string]()
 	for _, id := range ids {
@@ -1383,13 +1402,16 @@ func (i *InMemCollector) processDropDecisions(msg string) {
 }
 
 func (i *InMemCollector) processKeptDecision(msg string) {
-	i.Metrics.Increment("kept_decisions_received")
+	i.Metrics.Increment("kept_decision_batches_received")
 
 	td, err := newKeptTraceDecision(msg)
 	if err != nil {
 		i.Logger.Error().Logf("Failed to unmarshal trace decision message. %s", err)
 		return
 	}
+
+	// TODO: when we batch keep decisions too, we should count the number of traces in the batch, eg:
+	// i.Metrics.Count("kept_decisions_received", int64(len(td)))
 
 	toDelete := generics.NewSet[string]()
 	trace := i.cache.Get(td.TraceID)
