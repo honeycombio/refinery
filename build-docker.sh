@@ -23,13 +23,13 @@ if [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then
 fi
 
 ### Image tagging ###
-TAGS=""
+DEV_VERSION_TAG=${VERSION#"v"} # trim the v prefix per version-tagging convention
+TAGS="${DEV_VERSION_TAG}"
 
-## CI dev tagging: apply the dev branch name as a tag
+## CI dev tagging: append the dev branch name to image tags
 if [[ -n "${CIRCLE_BRANCH:-}" ]]; then
   BRANCH_TAG=${CIRCLE_BRANCH//\//-}
-  VERSION_TAG=${VERSION#"v"} # trim the v prefix per version-tagging convention
-  TAGS="${VERSION_TAG},branch-${BRANCH_TAG}"
+  TAGS+=",branch-${BRANCH_TAG}"
 
   # If the dev build is on main, we tag it as latest in ECR
   if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
@@ -44,15 +44,14 @@ fi
 # it is probably best if people just use the major or minor version tags
 
 if [[ -n ${CIRCLE_TAG:-} ]]; then
-  # trim 'v' prefix if present
-  VERSION=${CIRCLE_TAG#"v"}
+  VERSION=${CIRCLE_TAG#"v"} # trim the v prefix per version-tagging convention
 
   # Extract major, major.minor, and major.minor.patch versions
   MAJOR_VERSION=${VERSION%%.*}
   MINOR_VERSION=${VERSION%.*}
 
-  # Append versions to image tags
-  # So 2.1.1 would be tagged with "2","2.1","2.1.1"
+  # Reset tag list: add major, major.minor, major.minor.patch, and latest
+  # So 2.1.1 would be tagged with "2","2.1","2.1.1", and "latest".
   TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
 fi
 
