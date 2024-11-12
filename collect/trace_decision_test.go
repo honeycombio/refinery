@@ -43,9 +43,9 @@ func TestNewKeptTraceDecision(t *testing.T) {
 	}{
 		{
 			name: "kept decision",
-			msg:  `[{"TraceID":"1", "Kept": true, "SampleRate": 100, "SendReason":"` + TraceSendGotRoot + `"}]`,
+			msg:  `[{"TraceID":"1", "Kept": true, "Rate": 100, "SendReason":"` + TraceSendGotRoot + `"}]`,
 			want: []TraceDecision{
-				{TraceID: "1", Kept: true, SampleRate: 100, SendReason: TraceSendGotRoot}},
+				{TraceID: "1", Kept: true, Rate: 100, SendReason: TraceSendGotRoot}},
 			wantErr: false,
 		},
 		{
@@ -122,12 +122,12 @@ func TestNewKeptDecisionMessage(t *testing.T) {
 				{
 					TraceID:    "1",
 					Kept:       true,
-					SampleRate: 100,
+					Rate:       100,
 					SendReason: TraceSendGotRoot,
-					KeptReason: "deterministic",
+					Reason:     "deterministic",
 				},
 			},
-			want:    `[{"TraceID":"1","Kept":true,"SampleRate":100,"SendReason":"trace_send_got_root","HasRoot":false,"KeptReason":"deterministic"}]`,
+			want:    `[{"TraceID":"1","Kept":true,"Rate":100,"SendReason":"trace_send_got_root","HasRoot":false,"Reason":"deterministic"}]`,
 			wantErr: false,
 		},
 		{
