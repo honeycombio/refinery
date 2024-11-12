@@ -1396,7 +1396,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        default: 100ms
+        default: 1s
         reload: true
         summary: Interval for sending kept decisions in batches.
         description: >
