@@ -26,7 +26,7 @@ fi
 TAGS=""
 
 ## CI dev tagging: apply the dev branch name as a tag
-if [[ -n "${CIRCLE_BRANCH}" ]]; then
+if [[ -n "${CIRCLE_BRANCH:-}" ]]; then
   BRANCH_TAG=${CIRCLE_BRANCH//\//-}
   VERSION_TAG=${VERSION#"v"} # trim the v prefix per version-tagging convention
   TAGS="${VERSION_TAG},branch-${BRANCH_TAG}"
@@ -56,6 +56,8 @@ if [[ -n ${CIRCLE_TAG:-} ]]; then
   TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
 fi
 
+GIT_COMMIT=${CIRCLE_SHA1:-$(git rev-parse HEAD)}
+
 unset GOOS
 unset GOARCH
 export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
@@ -68,5 +70,5 @@ export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
   --platform "linux/amd64,linux/arm64" \
   --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
   --image-label org.opencontainers.image.licenses=Apache-2.0 \
-  --image-label org.opencontainers.image.revision=${CIRCLE_SHA1} \
+  --image-label org.opencontainers.image.revision=${GIT_COMMIT} \
   ./cmd/refinery
