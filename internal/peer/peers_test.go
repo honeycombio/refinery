@@ -63,6 +63,7 @@ func newPeers(c config.Config) (Peers, error) {
 		{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		{Value: &logger.NullLogger{}},
 		{Value: clockwork.NewFakeClock()},
+		{Value: "12345678", Name: "instanceID"},
 	}
 	err := g.Provide(objects...)
 	if err != nil {
