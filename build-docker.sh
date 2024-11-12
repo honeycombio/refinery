@@ -3,18 +3,6 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-TAGS=""
-# Check if CIRCLE_BRANCH is set and not empty
-if [[ -n "${CIRCLE_BRANCH}" ]]; then
-    BRANCH_TAG=${CIRCLE_BRANCH//\//-}
-    TAGS="${CIRCLE_BUILD_NUM},branch-${BRANCH_TAG}"
-fi
-
-# We only want to tag main with latest on ECR
-if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
-    TAGS+=",latest"
-fi
-
 # Determine a version number based on most recent version tag in git.
 #   git describe - Return the most recent annotated tag that is reachable from a commit.
 #     --tags - OK, any tag, not just the annotated ones. We don't always remember to annotate a version tag.
@@ -33,6 +21,23 @@ VERSION=$(git describe --tags --match='v[0-9]*' --always)
 if [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then
   VERSION="${VERSION}-ci${CIRCLE_BUILD_NUM}"
 fi
+
+### Image tagging ###
+TAGS=""
+
+## CI dev tagging: apply the dev branch name as a tag
+if [[ -n "${CIRCLE_BRANCH}" ]]; then
+  BRANCH_TAG=${CIRCLE_BRANCH//\//-}
+  VERSION_TAG=${VERSION#"v"} # trim the v prefix per version-tagging convention
+  TAGS="${VERSION_TAG},branch-${BRANCH_TAG}"
+
+  # If the dev build is on main, we tag it as latest in ECR
+  if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
+      TAGS+=",latest"
+  fi
+fi
+
+## CI release tagging: apply major, major.minor, major.minor.patch, and latest tags
 
 # if we're running off a git tag, it is a release which we tag with the versions as well as latest
 # caution: this means if we ever release an update to a previous version, it will be marked latest
