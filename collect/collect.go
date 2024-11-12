@@ -1415,12 +1415,14 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 		}
 		toDelete.Add(decision.TraceID)
 
-		if decisionType == keptDecision {
-			trace.SetSampleRate(decision.Rate)
-			trace.KeepSample = decision.Kept
-		}
+		if _, _, ok := i.sampleTraceCache.CheckTrace(decision.TraceID); !ok {
+			if decisionType == keptDecision {
+				trace.SetSampleRate(decision.Rate)
+				trace.KeepSample = decision.Kept
+			}
 
-		i.sampleTraceCache.Record(&decision, decision.Kept, decision.Reason)
+			i.sampleTraceCache.Record(&decision, decision.Kept, decision.Reason)
+		}
 
 		i.send(context.Background(), trace, &decision)
 	}
