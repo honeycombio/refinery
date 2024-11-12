@@ -12,7 +12,9 @@ set -o xtrace
 #   - The build was on git commit ID a1b2c3d.
 #   - v2.1.1 is the most recent version tag in the history behind that commit
 #   - That commit is 45 commits ahead of that version tag.
-VERSION=$(git describe --tags --match='v[0-9]*' --always)
+VERSION_FROM_GIT=$(git describe --tags --match='v[0-9]*' --always)
+# trim the v prefix per Docker image version-tagging conventions
+VERSION=${VERSION_FROM_GIT#'v'}
 
 # If we are doing a dev build on circle, append the build number (job id) to the version
 # Ex: v2.1.1-45-ga1b2c3d-ci8675309
@@ -23,8 +25,7 @@ if [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then
 fi
 
 ### Image tagging ###
-DEV_VERSION_TAG=${VERSION#"v"} # trim the v prefix per version-tagging convention
-TAGS="${DEV_VERSION_TAG}"
+TAGS="${VERSION}"
 
 ## CI dev tagging: append the dev branch name to image tags
 if [[ -n "${CIRCLE_BRANCH:-}" ]]; then
