@@ -1485,7 +1485,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 		"send_reason": sendReason,
 		"hasRoot":     hasRoot,
 	})
-	i.Logger.Warn().WithField("key", key).Logf("making decision for trace")
+	i.Logger.Debug().WithField("key", key).Logf("making decision for trace")
 	td := TraceDecision{
 		TraceID:         trace.ID(),
 		Kept:            shouldSend,
