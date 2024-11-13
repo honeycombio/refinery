@@ -12,7 +12,7 @@ updates:
     labels:
       - "type: dependencies"
     reviewers:
-      - "honeycombio/collection-team"
+      - "honeycombio/pipeline-team"
     groups:
       minor-patch:
         update-types:
