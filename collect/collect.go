@@ -36,7 +36,7 @@ const (
 	dropTraceDecisionTopic            = "trace_decision_dropped"
 	decisionMessageBufferSize         = 10_000
 	defaultDropDecisionTickerInterval = 1 * time.Second
-	defaultKeptDecisionTickerInterval = 100 * time.Millisecond
+	defaultKeptDecisionTickerInterval = 1 * time.Second
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
@@ -869,9 +869,9 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		td := TraceDecision{
 			TraceID:    sp.TraceID,
 			Kept:       tr.Kept(),
-			KeptReason: keptReason,
+			Reason:     keptReason,
 			SendReason: TraceSendLateSpan,
-			SampleRate: tr.Rate(),
+			Rate:       tr.Rate(),
 			Count:      uint32(tr.SpanCount()),
 			EventCount: uint32(tr.SpanEventCount()),
 			LinkCount:  uint32(tr.SpanLinkCount()),
@@ -1016,7 +1016,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 
 	i.Metrics.Increment("trace_send_kept")
 	// This will observe sample rate decisions only if the trace is kept
-	i.Metrics.Histogram("trace_kept_sample_rate", float64(td.SampleRate))
+	i.Metrics.Histogram("trace_kept_sample_rate", float64(td.Rate))
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !td.Kept {
@@ -1027,7 +1027,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	i.outgoingTraces <- sendableTrace{
 		Trace:      trace,
-		reason:     td.KeptReason,
+		reason:     td.Reason,
 		sendReason: td.SendReason,
 		sampleKey:  td.SamplerKey,
 		shouldSend: td.Kept,
@@ -1415,12 +1415,14 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 		}
 		toDelete.Add(decision.TraceID)
 
-		if decisionType == keptDecision {
-			trace.SetSampleRate(decision.SampleRate)
-			trace.KeepSample = decision.Kept
-		}
+		if _, _, ok := i.sampleTraceCache.CheckTrace(decision.TraceID); !ok {
+			if decisionType == keptDecision {
+				trace.SetSampleRate(decision.Rate)
+				trace.KeepSample = decision.Kept
+			}
 
-		i.sampleTraceCache.Record(trace, decision.Kept, decision.KeptReason)
+			i.sampleTraceCache.Record(&decision, decision.Kept, decision.Reason)
+		}
 
 		i.send(context.Background(), trace, &decision)
 	}
@@ -1487,10 +1489,10 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	td := TraceDecision{
 		TraceID:         trace.ID(),
 		Kept:            shouldSend,
-		KeptReason:      reason,
+		Reason:          reason,
 		SamplerKey:      key,
 		SamplerSelector: samplerSelector,
-		SampleRate:      rate,
+		Rate:            rate,
 		SendReason:      sendReason,
 		Count:           trace.SpanCount(),
 		EventCount:      trace.SpanEventCount(),
