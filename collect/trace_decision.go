@@ -1,10 +1,13 @@
 package collect
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"strings"
+	"sync"
 
+	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/collect/cache"
 )
 
@@ -46,19 +49,6 @@ func newDroppedDecisionMessage(tds []TraceDecision) (string, error) {
 
 	return strings.Join(traceIDs, ","), nil
 }
-func newKeptDecisionMessage(tds []TraceDecision) (string, error) {
-	if len(tds) == 0 {
-		return "", fmt.Errorf("no kept trace decisions provided")
-	}
-
-	data, err := json.Marshal(tds)
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
-}
-
 func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
 	if msg == "" {
 		return nil, fmt.Errorf("empty drop message")
@@ -73,14 +63,23 @@ func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
 	return decisions, nil
 }
 
+func newKeptDecisionMessage(tds []TraceDecision) (string, error) {
+	if len(tds) == 0 {
+		return "", fmt.Errorf("no kept trace decisions provided")
+	}
+	compressed, err := compress(tds)
+	if err != nil {
+		return "", err
+	}
+	return string(compressed), nil
+}
+
 func newKeptTraceDecision(msg string) ([]TraceDecision, error) {
-	keptDecisions := make([]TraceDecision, 0)
-	err := json.Unmarshal([]byte(msg), &keptDecisions)
+	compressed, err := decompress([]byte(msg))
 	if err != nil {
 		return nil, err
 	}
-
-	return keptDecisions, nil
+	return compressed, nil
 }
 
 var _ cache.KeptTrace = &TraceDecision{}
@@ -92,16 +91,16 @@ type TraceDecision struct {
 	// keptDecision
 	Kept            bool
 	Rate            uint
-	SamplerKey      string `json:",omitempty"`
-	SamplerSelector string `json:",omitempty"`
+	SamplerKey      string
+	SamplerSelector string
 	SendReason      string
 	HasRoot         bool
 	Reason          string
-	Count           uint32 `json:",omitempty"` // number of spans in the trace
-	EventCount      uint32 `json:",omitempty"` // number of span events in the trace
-	LinkCount       uint32 `json:",omitempty"` // number of span links in the trace
+	Count           uint32
+	EventCount      uint32
+	LinkCount       uint32
 
-	keptReasonIdx uint `json:",omitempty"`
+	keptReasonIdx uint
 }
 
 func (td *TraceDecision) DescendantCount() uint32 {
@@ -134,4 +133,57 @@ func (td *TraceDecision) KeptReason() uint {
 
 func (td *TraceDecision) SetKeptReason(reasonIdx uint) {
 	td.keptReasonIdx = reasonIdx
+}
+
+var bufferPool = sync.Pool{
+	New: func() any { return new(bytes.Buffer) },
+}
+
+var snappyWriterPool = sync.Pool{
+	New: func() any { return snappy.NewBufferedWriter(nil) },
+}
+
+func compress(tds []TraceDecision) ([]byte, error) {
+	// Get a buffer from the pool and reset it
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer bufferPool.Put(buf)
+
+	// Get a snappy writer from the pool, set it to write to the buffer, and reset it
+	compr := snappyWriterPool.Get().(*snappy.Writer)
+	compr.Reset(buf)
+	defer snappyWriterPool.Put(compr)
+
+	enc := gob.NewEncoder(compr)
+	if err := enc.Encode(tds); err != nil {
+		return nil, err
+	}
+
+	// Flush snappy writer
+	if err := compr.Close(); err != nil {
+		return nil, err
+	}
+
+	// Copy the buffer’s bytes to avoid reuse issues when returning
+	out := make([]byte, buf.Len())
+	copy(out, buf.Bytes())
+	return out, nil
+}
+
+func decompress(data []byte) ([]TraceDecision, error) {
+	// Get a buffer from the pool and set it up with data
+	buf := bufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	buf.Write(data)
+	defer bufferPool.Put(buf)
+
+	// Snappy reader to decompress data in buffer
+	compr := snappy.NewReader(buf)
+	dec := gob.NewDecoder(compr)
+
+	var tds []TraceDecision
+	if err := dec.Decode(&tds); err != nil {
+		return nil, err
+	}
+	return tds, nil
 }
