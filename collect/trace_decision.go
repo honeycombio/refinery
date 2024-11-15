@@ -43,23 +43,26 @@ func newDroppedDecisionMessage(tds []TraceDecision) (string, error) {
 		}
 	}
 
-	if len(traceIDs) == 0 {
-		return "", fmt.Errorf("no valid trace IDs provided")
+	compressed, err := compress(strings.Join(traceIDs, ","))
+	if err != nil {
+		return "", err
+	}
+	return string(compressed), nil
+}
+
+func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
+	data, err := decompressDropDecisions([]byte(msg))
+	if err != nil {
+		return nil, err
 	}
 
-	return strings.Join(traceIDs, ","), nil
-}
-func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
-	if msg == "" {
-		return nil, fmt.Errorf("empty drop message")
-	}
-	var decisions []TraceDecision
-	for _, traceID := range strings.Split(msg, ",") {
+	traceIDs := strings.Split(data, ",")
+	decisions := make([]TraceDecision, 0, len(traceIDs))
+	for _, traceID := range traceIDs {
 		decisions = append(decisions, TraceDecision{
 			TraceID: traceID,
 		})
 	}
-
 	return decisions, nil
 }
 
@@ -75,7 +78,7 @@ func newKeptDecisionMessage(tds []TraceDecision) (string, error) {
 }
 
 func newKeptTraceDecision(msg string) ([]TraceDecision, error) {
-	compressed, err := decompress([]byte(msg))
+	compressed, err := decompressKeptDecisions([]byte(msg))
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +146,7 @@ var snappyWriterPool = sync.Pool{
 	New: func() any { return snappy.NewBufferedWriter(nil) },
 }
 
-func compress(tds []TraceDecision) ([]byte, error) {
+func compress(data any) ([]byte, error) {
 	// Get a buffer from the pool and reset it
 	buf := bufferPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -155,7 +158,7 @@ func compress(tds []TraceDecision) ([]byte, error) {
 	defer snappyWriterPool.Put(compr)
 
 	enc := gob.NewEncoder(compr)
-	if err := enc.Encode(tds); err != nil {
+	if err := enc.Encode(data); err != nil {
 		return nil, err
 	}
 
@@ -168,20 +171,38 @@ func compress(tds []TraceDecision) ([]byte, error) {
 	return bytes.Clone(buf.Bytes()), nil
 }
 
-func decompress(data []byte) ([]TraceDecision, error) {
+func decompressKeptDecisions(data []byte) ([]TraceDecision, error) {
 	// Get a buffer from the pool and set it up with data
 	buf := bufferPool.Get().(*bytes.Buffer)
+	defer bufferPool.Put(buf)
 	buf.Reset()
 	buf.Write(data)
-	defer bufferPool.Put(buf)
 
 	// Snappy reader to decompress data in buffer
-	compr := snappy.NewReader(buf)
-	dec := gob.NewDecoder(compr)
+	reader := snappy.NewReader(buf)
+	dec := gob.NewDecoder(reader)
 
 	var tds []TraceDecision
 	if err := dec.Decode(&tds); err != nil {
 		return nil, err
 	}
 	return tds, nil
+}
+
+func decompressDropDecisions(data []byte) (string, error) {
+	// Get a buffer from the pool and set it up with data
+	buf := bufferPool.Get().(*bytes.Buffer)
+	defer bufferPool.Put(buf)
+	buf.Reset()
+	buf.Write(data)
+
+	// Snappy reader to decompress data in buffer
+	reader := snappy.NewReader(buf)
+	dec := gob.NewDecoder(reader)
+
+	var traceIDs string
+	if err := dec.Decode(&traceIDs); err != nil {
+		return "", err
+	}
+	return traceIDs, nil
 }

@@ -7,74 +7,35 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestNewDroppedTraceDecision(t *testing.T) {
-	tests := []struct {
-		name string
-		msg  string
-		want []TraceDecision
-	}{
+func TestDropDecisionRoundTrip(t *testing.T) {
+	// Test data for dropped decisions covering all fields
+	tds := []TraceDecision{
 		{
-			name: "multiple dropped decisions",
-			msg:  "1,2,3",
-			want: []TraceDecision{{TraceID: "1"}, {TraceID: "2"}, {TraceID: "3"}},
+			TraceID: "trace1",
 		},
 		{
-			name: "single dropped decision",
-			msg:  "1",
-			want: []TraceDecision{{TraceID: "1"}},
+			TraceID: "trace2",
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := newDroppedTraceDecision(tt.msg)
-			require.NoError(t, err)
-			assert.EqualValues(t, tt.want, got)
-		})
+	// Step 1: Create a dropped decision message
+	msg, err := newDroppedDecisionMessage(tds)
+	assert.NoError(t, err, "expected no error for valid dropped decision message")
+	assert.NotEmpty(t, msg, "expected non-empty message")
+
+	// Step 2: Decompress the message back to TraceDecision using newDroppedTraceDecision
+	decompressedTds, err := newDroppedTraceDecision(msg)
+	assert.NoError(t, err, "expected no error during decompression of the dropped decision message")
+	assert.Len(t, decompressedTds, len(tds), "expected decompressed TraceDecision length to match original")
+
+	// Step 3: Verify that the decompressed data matches the original TraceDecision data
+	for i, td := range decompressedTds {
+		assert.Equal(t, td.TraceID, tds[i].TraceID, "expected TraceID to match")
 	}
 }
 
-func TestNewDroppedDecisionMessage(t *testing.T) {
-	tests := []struct {
-		name      string
-		decisions []TraceDecision
-		want      string
-		wantErr   bool
-	}{
-		{
-			name:      "no traceIDs provided",
-			decisions: nil,
-			want:      "",
-			wantErr:   true,
-		},
-		{
-			name:      "one traceID",
-			decisions: []TraceDecision{{TraceID: "1"}},
-			want:      "1",
-			wantErr:   false,
-		},
-		{
-			name: "multiple traceIDs",
-			decisions: []TraceDecision{{TraceID: "1"},
-				{TraceID: "2"}, {TraceID: "3"}},
-			want:    "1,2,3",
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := newDroppedDecisionMessage(tt.decisions)
-			if tt.wantErr {
-				require.Error(t, err)
-				return
-			}
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
 func TestKeptDecisionRoundTrip(t *testing.T) {
 	// Test data for kept decisions covering all fields
 	tds := []TraceDecision{
@@ -111,12 +72,12 @@ func TestKeptDecisionRoundTrip(t *testing.T) {
 	assert.NoError(t, err, "expected no error for valid kept decision message")
 	assert.NotEmpty(t, msg, "expected non-empty message")
 
-	// Step 3: Decompress the message back to TraceDecision using newKeptTraceDecision
+	// Step 2: Decompress the message back to TraceDecision using newKeptTraceDecision
 	decompressedTds, err := newKeptTraceDecision(msg)
 	assert.NoError(t, err, "expected no error during decompression of the kept decision message")
 	assert.Len(t, decompressedTds, len(tds), "expected decompressed TraceDecision length to match original")
 
-	// Step 4: Verify that the decompressed data matches the original TraceDecision data
+	// Step 3: Verify that the decompressed data matches the original TraceDecision data
 	for i, td := range decompressedTds {
 		assert.Equal(t, td.TraceID, tds[i].TraceID, "expected TraceID to match")
 		assert.Equal(t, td.Kept, tds[i].Kept, "expected Kept status to match")

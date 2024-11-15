@@ -2254,7 +2254,10 @@ func TestSendDropDecisions(t *testing.T) {
 	coll.dropDecisionBuffer <- TraceDecision{TraceID: "trace1"}
 	close(coll.dropDecisionBuffer)
 	droppedMessage := <-messages
-	assert.Equal(t, "trace1", droppedMessage)
+
+	decompressedData, err := decompressDropDecisions([]byte(droppedMessage))
+	assert.NoError(t, err)
+	assert.Equal(t, "trace1", decompressedData)
 
 	<-closed
 
@@ -2278,7 +2281,10 @@ func TestSendDropDecisions(t *testing.T) {
 	}
 	close(coll.dropDecisionBuffer)
 	droppedMessage = <-messages
-	assert.Equal(t, "trace0,trace1,trace2,trace3,trace4", droppedMessage)
+
+	decompressedData, err = decompressDropDecisions([]byte(droppedMessage))
+	assert.NoError(t, err)
+	assert.Equal(t, "trace0,trace1,trace2,trace3,trace4", decompressedData)
 
 	<-closed
 }
