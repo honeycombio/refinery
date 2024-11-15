@@ -165,9 +165,7 @@ func compress(tds []TraceDecision) ([]byte, error) {
 	}
 
 	// Copy the buffer’s bytes to avoid reuse issues when returning
-	out := make([]byte, buf.Len())
-	copy(out, buf.Bytes())
-	return out, nil
+	return bytes.Clone(buf.Bytes()), nil
 }
 
 func decompress(data []byte) ([]TraceDecision, error) {
