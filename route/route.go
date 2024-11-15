@@ -44,6 +44,7 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
+	"go.opentelemetry.io/otel/trace"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
@@ -70,6 +71,7 @@ type Router struct {
 	Sharder              sharder.Sharder       `inject:""`
 	Collector            collect.Collector     `inject:""`
 	Metrics              metrics.Metrics       `inject:"genericMetrics"`
+	Tracer               trace.Tracer          `inject:"tracer"`
 
 	// version is set on startup so that the router may answer HTTP requests for
 	// the version
@@ -366,6 +368,9 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
+	ctx, span := r.Tracer.Start(req.Context(), "handle_event")
+	defer span.End()
+
 	bodyReader, err := r.getMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
@@ -378,14 +383,14 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ev, err := r.requestToEvent(req, reqBod)
+	ev, err := r.requestToEvent(ctx, req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
 	addIncomingUserAgent(ev, getUserAgentFromRequest(req))
 
-	reqID := req.Context().Value(types.RequestIDContextKey{})
+	reqID := ctx.Value(types.RequestIDContextKey{})
 	err = r.processEvent(ev, reqID)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
@@ -393,7 +398,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event, error) {
+func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod []byte) (*types.Event, error) {
 	// get necessary bits out of the incoming event
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
@@ -424,7 +429,7 @@ func (r *Router) requestToEvent(req *http.Request, reqBod []byte) (*types.Event,
 	}
 
 	return &types.Event{
-		Context:     req.Context(),
+		Context:     ctx,
 		APIHost:     apiHost,
 		APIKey:      apiKey,
 		Dataset:     dataset,
@@ -439,7 +444,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
 
-	reqID := req.Context().Value(types.RequestIDContextKey{})
+	ctx, span := r.Tracer.Start(req.Context(), "handle_batch")
+	defer span.End()
+
+	reqID := ctx.Value(types.RequestIDContextKey{})
 	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
 
 	bodyReader, err := r.getMaybeCompressedBody(req)
@@ -483,7 +491,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
 		ev := &types.Event{
-			Context:     req.Context(),
+			Context:     ctx,
 			APIHost:     apiHost,
 			APIKey:      apiKey,
 			Dataset:     dataset,

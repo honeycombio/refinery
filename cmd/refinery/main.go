@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
 	_ "go.uber.org/automaxprocs"
@@ -19,6 +21,7 @@ import (
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	"github.com/google/uuid"
+	"github.com/honeycombio/husky"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/jonboulle/clockwork"
@@ -237,8 +240,13 @@ func main() {
 	if c.GetOTelTracingConfig().Enabled {
 		// let's set up some OTel tracing
 		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer)
-	}
 
+		// add telemtry callback so husky can enrich spans with attributes
+		husky.AddTelemetryAttributeFunc = func(ctx context.Context, key string, value any) {
+			span := trace.SpanFromContext(ctx)
+			span.SetAttributes(attribute.String(key, value.(string)))
+		}
+	}
 	defer shutdown()
 
 	// we need to include all the metrics types so we can inject them in case they're needed
