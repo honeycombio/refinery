@@ -241,7 +241,7 @@ func main() {
 		// let's set up some OTel tracing
 		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer)
 
-		// add telemtry callback so husky can enrich spans with attributes
+		// add telemetry callback so husky can enrich spans with attributes
 		husky.AddTelemetryAttributeFunc = func(ctx context.Context, key string, value any) {
 			span := trace.SpanFromContext(ctx)
 			span.SetAttributes(attribute.String(key, value.(string)))
