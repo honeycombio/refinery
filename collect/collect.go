@@ -418,52 +418,61 @@ func (i *InMemCollector) collect() {
 				return
 			}
 			i.processSpan(ctx, sp, "peer")
-		default:
-			select {
-			case msg, ok := <-i.dropDecisionMessages:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processTraceDecisions(msg, dropDecision)
-			case msg, ok := <-i.keptDecisionMessages:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processTraceDecisions(msg, keptDecision)
-			case <-ticker.C:
-				i.sendExpiredTracesInCache(ctx, i.Clock.Now())
-				i.checkAlloc(ctx)
 
-				// maybe only do this if in test mode?
-				// Briefly unlock the cache, to allow test access.
-				_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
-				i.mutex.Unlock()
-				runtime.Gosched()
-				i.mutex.Lock()
-				goSchedSpan.End()
-			case sp, ok := <-i.incoming:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processSpan(ctx, sp, "incoming")
-			case sp, ok := <-i.fromPeer:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processSpan(ctx, sp, "peer")
-			case <-i.reload:
-				i.reloadConfigs()
-			}
+			//			var count int
+			//		outer:
+			//			for count < 100 {
+			//				select {
+			//				case sp, ok := <-i.fromPeer:
+			//					if !ok {
+			//						span.End()
+			//						return
+			//					}
+			//					count++
+			//					i.processSpan(ctx, sp, "peer")
+			//				default:
+			//					break outer
+			//				}
+			//			}
+		default:
 		}
 
+		select {
+		case msg, ok := <-i.dropDecisionMessages:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processTraceDecisions(msg, dropDecision)
+		case msg, ok := <-i.keptDecisionMessages:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processTraceDecisions(msg, keptDecision)
+		case <-ticker.C:
+			i.sendExpiredTracesInCache(ctx, i.Clock.Now())
+			i.checkAlloc(ctx)
+
+			// maybe only do this if in test mode?
+			// Briefly unlock the cache, to allow test access.
+			_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
+			i.mutex.Unlock()
+			runtime.Gosched()
+			i.mutex.Lock()
+			goSchedSpan.End()
+		case sp, ok := <-i.incoming:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processSpan(ctx, sp, "incoming")
+		case <-i.reload:
+			i.reloadConfigs()
+		}
 		i.Metrics.Histogram("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 		span.End()
 	}
@@ -1532,7 +1541,7 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 		case i.keptDecisionBuffer <- td:
 		default:
 			i.Metrics.Increment("collector_kept_decisions_queue_full")
-			i.Logger.Warn().Logf("kept trace decision buffer is full. Dropping message")
+			i.Logger.Debug().Logf("kept trace decision buffer is full. Dropping message")
 		}
 		return
 	} else {
@@ -1540,7 +1549,7 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 		case i.dropDecisionBuffer <- td:
 		default:
 			i.Metrics.Increment("collector_drop_decisions_queue_full")
-			i.Logger.Warn().Logf("drop trace decision buffer is full. Dropping message")
+			i.Logger.Debug().Logf("drop trace decision buffer is full. Dropping message")
 		}
 		return
 	}
