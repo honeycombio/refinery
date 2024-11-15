@@ -3,8 +3,6 @@ package collect
 import (
 	"context"
 	"fmt"
-	"math"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -302,48 +300,6 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	localLevel = sr.Recalc()
 	assert.Equal(t, sr.overallStressLevel, localLevel)
 	assert.False(t, sr.stressed)
-}
-
-// TestStressRelief_Sample tests that traces are sampled deterministically
-// by traceID.
-// The test generates 10000 traceIDs and checks that the sampling rate is
-// within 10% of the expected value.
-func TestStressRelief_ShouldSampleDeterministically(t *testing.T) {
-	traceCount := 10000
-	traceIDs := make([]string, 0, traceCount)
-	for i := 0; i < traceCount; i++ {
-		traceIDs = append(traceIDs, fmt.Sprintf("%016x%016x", rand.Int63(), rand.Int63()))
-	}
-
-	sr := &StressRelief{
-		overallStressLevel: 90,
-		activateLevel:      60,
-	}
-
-	var sampled int
-	var dropped int
-	var sampledTraceID string
-	var droppedTraceID string
-	for _, traceID := range traceIDs {
-		if sr.ShouldSampleDeterministically(traceID) {
-			sampled++
-			if sampledTraceID == "" {
-				sampledTraceID = traceID
-			}
-		} else {
-			if droppedTraceID == "" {
-				droppedTraceID = traceID
-			}
-			dropped++
-		}
-	}
-
-	difference := float64(sampled)/float64(traceCount)*100 - float64(sr.deterministicFraction())
-	require.LessOrEqual(t, math.Floor(math.Abs(float64(difference))), float64(10), sampled)
-
-	// make sure that the same traceID always gets the same result
-	require.True(t, sr.ShouldSampleDeterministically(sampledTraceID))
-	require.False(t, sr.ShouldSampleDeterministically(droppedTraceID))
 }
 
 func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub) (*StressRelief, func()) {

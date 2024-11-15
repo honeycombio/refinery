@@ -27,7 +27,6 @@ type StressReliever interface {
 	Recalc() uint
 	Stressed() bool
 	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
-	ShouldSampleDeterministically(traceID string) bool
 
 	startstop.Starter
 }
@@ -530,30 +529,4 @@ func (s *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reas
 	}
 	hash := wyhash.Hash([]byte(traceID), hashSeed)
 	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic/" + s.reason
-}
-
-// ShouldSampleDeterministically returns true if the trace should be deterministically sampled.
-// It uses the traceID to calculate a hash and then divides it by the maximum possible value
-// to get a percentage. If the percentage is less than the deterministic fraction, it returns true.
-func (s *StressRelief) ShouldSampleDeterministically(traceID string) bool {
-	samplePercentage := s.deterministicFraction()
-	hash := wyhash.Hash([]byte(traceID), hashSeed)
-
-	return float64(hash)/float64(math.MaxUint64)*100 < float64(samplePercentage)
-}
-
-// deterministicFraction returns the fraction of traces that should be deterministic sampled
-// It calculates the result by using the stress level as the fraction between the activation
-// level and 100%. The result is rounded to the nearest integer.
-//
-// for example:
-// - if the stress level is 90 and the activation level is 80, the result will be 50
-// - meaning that 50% of the traces should be deterministic sampled
-func (s *StressRelief) deterministicFraction() uint {
-	if s.overallStressLevel < s.activateLevel {
-		return 0
-	}
-
-	// round to the nearest integer
-	return uint(float64(s.overallStressLevel-s.activateLevel)/float64(100-s.activateLevel)*100 + 0.5)
 }
