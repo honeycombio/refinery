@@ -13,6 +13,12 @@ import (
 
 type decisionType int
 
+// decisionMessageSeparator is the separator used to separate the sender ID from the compressed decisions
+// in the decision message.
+// The pipe character should not be used in URLs or IP addresses because it's not a valid character in these
+// contexts.
+const decisionMessageSeparator = "|"
+
 func (d decisionType) String() string {
 	switch d {
 	case keptDecision:
@@ -29,34 +35,47 @@ var (
 	dropDecision decisionType = 2
 )
 
-type newDecisionMessage func([]TraceDecision) (string, error)
+type newDecisionMessage func(tds []TraceDecision, senderID string) (string, error)
 
-func newDroppedDecisionMessage(tds []TraceDecision) (string, error) {
+func newDroppedDecisionMessage(tds []TraceDecision, senderID string) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no dropped trace decisions provided")
 	}
+	if senderID == "" {
+		return "", fmt.Errorf("no sender ID provided")
+	}
 
-	traceIDs := make([]string, 0, len(tds))
+	payload := make([]string, 0, len(tds))
 	for _, td := range tds {
 		if td.TraceID != "" {
-			traceIDs = append(traceIDs, td.TraceID)
+			payload = append(payload, td.TraceID)
 		}
 	}
 
-	compressed, err := compress(strings.Join(traceIDs, ","))
+	compressed, err := compress(strings.Join(payload, ","))
 	if err != nil {
 		return "", err
 	}
-	return string(compressed), nil
+	return senderID + decisionMessageSeparator + string(compressed), nil
 }
 
-func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
-	data, err := decompressDropDecisions([]byte(msg))
+func newDroppedTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
+	// Use IndexRune here since it's faster than SplitN and requires less allocation
+	separatorIdx := strings.IndexRune(msg, rune(decisionMessageSeparator[0]))
+	if separatorIdx == -1 {
+		return nil, fmt.Errorf("invalid dropped decision message")
+	}
+
+	if msg[:separatorIdx] != senderID {
+		return nil, nil
+	}
+
+	ids, err := decompressDropDecisions([]byte(msg[separatorIdx+1:]))
 	if err != nil {
 		return nil, err
 	}
 
-	traceIDs := strings.Split(data, ",")
+	traceIDs := strings.Split(ids, ",")
 	decisions := make([]TraceDecision, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
 		decisions = append(decisions, TraceDecision{
@@ -66,23 +85,46 @@ func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
 	return decisions, nil
 }
 
-func newKeptDecisionMessage(tds []TraceDecision) (string, error) {
+func newKeptDecisionMessage(tds []TraceDecision, senderID string) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no kept trace decisions provided")
 	}
+
+	if senderID == "" {
+		return "", fmt.Errorf("no sender ID provided")
+	}
+
 	compressed, err := compress(tds)
 	if err != nil {
 		return "", err
 	}
-	return string(compressed), nil
+	return senderID + decisionMessageSeparator + string(compressed), nil
 }
 
-func newKeptTraceDecision(msg string) ([]TraceDecision, error) {
-	compressed, err := decompressKeptDecisions([]byte(msg))
+func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
+	// Use IndexRune here since it's faster than SplitN and requires less allocation
+	separatorIdx := strings.IndexRune(msg, rune(decisionMessageSeparator[0]))
+	if separatorIdx == -1 {
+		return nil, fmt.Errorf("invalid dropped decision message")
+	}
+
+	if msg[:separatorIdx] != senderID {
+		return nil, nil
+	}
+
+	compressed, err := decompressKeptDecisions([]byte(msg[separatorIdx+1:]))
 	if err != nil {
 		return nil, err
 	}
 	return compressed, nil
+}
+
+func isMyDecision(msg string, senderID string) bool {
+	if senderID == "" {
+		return false
+	}
+
+	return strings.HasPrefix(msg, senderID+decisionMessageSeparator)
 }
 
 var _ cache.KeptTrace = &TraceDecision{}

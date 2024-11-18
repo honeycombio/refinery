@@ -21,12 +21,12 @@ func TestDropDecisionRoundTrip(t *testing.T) {
 	}
 
 	// Step 1: Create a dropped decision message
-	msg, err := newDroppedDecisionMessage(tds)
+	msg, err := newDroppedDecisionMessage(tds, "sender1")
 	assert.NoError(t, err, "expected no error for valid dropped decision message")
 	assert.NotEmpty(t, msg, "expected non-empty message")
 
 	// Step 2: Decompress the message back to TraceDecision using newDroppedTraceDecision
-	decompressedTds, err := newDroppedTraceDecision(msg)
+	decompressedTds, err := newDroppedTraceDecision(msg, "sender1")
 	assert.NoError(t, err, "expected no error during decompression of the dropped decision message")
 	assert.Len(t, decompressedTds, len(tds), "expected decompressed TraceDecision length to match original")
 
@@ -68,12 +68,12 @@ func TestKeptDecisionRoundTrip(t *testing.T) {
 	}
 
 	// Step 1: Create a kept decision message
-	msg, err := newKeptDecisionMessage(tds)
+	msg, err := newKeptDecisionMessage(tds, "sender1")
 	assert.NoError(t, err, "expected no error for valid kept decision message")
 	assert.NotEmpty(t, msg, "expected non-empty message")
 
 	// Step 2: Decompress the message back to TraceDecision using newKeptTraceDecision
-	decompressedTds, err := newKeptTraceDecision(msg)
+	decompressedTds, err := newKeptTraceDecision(msg, "sender1")
 	assert.NoError(t, err, "expected no error during decompression of the kept decision message")
 	assert.Len(t, decompressedTds, len(tds), "expected decompressed TraceDecision length to match original")
 
@@ -123,7 +123,7 @@ func BenchmarkDynamicCompressedEncoding(b *testing.B) {
 	// Run the benchmark
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := newKeptDecisionMessage(decisions)
+		_, err := newKeptDecisionMessage(decisions, "sender1")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -132,14 +132,14 @@ func BenchmarkDynamicCompressedEncoding(b *testing.B) {
 
 func BenchmarkDynamicJSONDecoding(b *testing.B) {
 	decisions := generateRandomDecisions(1000)
-	jsonData, err := newKeptDecisionMessage(decisions)
+	jsonData, err := newKeptDecisionMessage(decisions, "sender1")
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := newKeptTraceDecision(jsonData)
+		_, err := newKeptTraceDecision(jsonData, "sender1")
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -148,14 +148,14 @@ func BenchmarkDynamicJSONDecoding(b *testing.B) {
 
 func BenchmarkDynamicCompressedDecoding(b *testing.B) {
 	decisions := generateRandomDecisions(1000)
-	compressedData, err := newKeptDecisionMessage(decisions)
+	compressedData, err := newKeptDecisionMessage(decisions, "sender1")
 	if err != nil {
 		b.Fatal(err)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := newKeptTraceDecision(compressedData)
+		_, err := newKeptTraceDecision(compressedData, "sender1")
 		if err != nil {
 			b.Fatal(err)
 		}
