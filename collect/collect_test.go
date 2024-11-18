@@ -214,7 +214,7 @@ func TestAddRootSpan(t *testing.T) {
 	// * remove the trace from the cache
 	assert.Eventually(t, func() bool {
 		return coll.getFromCache(decisionSpanTraceID) == nil
-	}, conf.GetTracesConfig().GetSendTickerValue()*8, conf.GetTracesConfig().GetSendTickerValue()*2, "after sending the span, it should be removed from the cache")
+	}, time.Second*1, time.Millisecond*100, "after sending the span, it should be removed from the cache")
 
 	events = transmission.GetBlock(0)
 	assert.Equal(t, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
