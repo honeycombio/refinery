@@ -120,6 +120,10 @@ func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) 
 }
 
 func isMyDecision(msg string, senderID string) bool {
+	if senderID == "" {
+		return false
+	}
+
 	return strings.HasPrefix(msg, senderID+decisionMessageSeparator)
 }
 
