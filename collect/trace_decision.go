@@ -66,7 +66,8 @@ func newDroppedTraceDecision(msg string, senderID string) ([]TraceDecision, erro
 		return nil, fmt.Errorf("invalid dropped decision message")
 	}
 
-	if msg[:separatorIdx] != senderID {
+	// If the sender ID is the same as the current service, ignore the message
+	if msg[:separatorIdx] == senderID {
 		return nil, nil
 	}
 
@@ -108,7 +109,8 @@ func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) 
 		return nil, fmt.Errorf("invalid dropped decision message")
 	}
 
-	if msg[:separatorIdx] != senderID {
+	// If the sender ID is the same as the current service, ignore the message
+	if msg[:separatorIdx] == senderID {
 		return nil, nil
 	}
 

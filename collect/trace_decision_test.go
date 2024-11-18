@@ -26,7 +26,7 @@ func TestDropDecisionRoundTrip(t *testing.T) {
 	assert.NotEmpty(t, msg, "expected non-empty message")
 
 	// Step 2: Decompress the message back to TraceDecision using newDroppedTraceDecision
-	decompressedTds, err := newDroppedTraceDecision(msg, "sender1")
+	decompressedTds, err := newDroppedTraceDecision(msg, "sender2")
 	assert.NoError(t, err, "expected no error during decompression of the dropped decision message")
 	assert.Len(t, decompressedTds, len(tds), "expected decompressed TraceDecision length to match original")
 
@@ -34,6 +34,15 @@ func TestDropDecisionRoundTrip(t *testing.T) {
 	for i, td := range decompressedTds {
 		assert.Equal(t, td.TraceID, tds[i].TraceID, "expected TraceID to match")
 	}
+
+	// Make sure we only ignore messages that are produced from the same node
+	msg, err = newDroppedDecisionMessage(tds, "sender1")
+	assert.NoError(t, err, "expected no error for valid dropped decision message")
+	assert.NotEmpty(t, msg, "expected non-empty message")
+
+	decompressedTds, err = newDroppedTraceDecision(msg, "sender1")
+	assert.NoError(t, err, "expected no error during decompression of the dropped decision message")
+	assert.Empty(t, decompressedTds)
 }
 
 func TestKeptDecisionRoundTrip(t *testing.T) {
@@ -73,7 +82,7 @@ func TestKeptDecisionRoundTrip(t *testing.T) {
 	assert.NotEmpty(t, msg, "expected non-empty message")
 
 	// Step 2: Decompress the message back to TraceDecision using newKeptTraceDecision
-	decompressedTds, err := newKeptTraceDecision(msg, "sender1")
+	decompressedTds, err := newKeptTraceDecision(msg, "sender2")
 	assert.NoError(t, err, "expected no error during decompression of the kept decision message")
 	assert.Len(t, decompressedTds, len(tds), "expected decompressed TraceDecision length to match original")
 
@@ -91,6 +100,17 @@ func TestKeptDecisionRoundTrip(t *testing.T) {
 		assert.Equal(t, td.EventCount, tds[i].EventCount, "expected EventCount to match")
 		assert.Equal(t, td.LinkCount, tds[i].LinkCount, "expected LinkCount to match")
 	}
+
+	// Make sure we only ignore messages that are produced from the same node
+	msg, err = newKeptDecisionMessage(tds, "sender1")
+	assert.NoError(t, err, "expected no error for valid kept decision message")
+	assert.NotEmpty(t, msg, "expected non-empty message")
+
+	// Step 2: Decompress the message back to TraceDecision using newKeptTraceDecision
+	decompressedTds, err = newKeptTraceDecision(msg, "sender1")
+	assert.NoError(t, err, "expected no error during decompression of the kept decision message")
+	assert.Empty(t, decompressedTds)
+
 }
 
 // used in test only
