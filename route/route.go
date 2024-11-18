@@ -44,6 +44,8 @@ import (
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
@@ -183,8 +185,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 	authedMuxxer.Use(r.apiKeyProcessor)
 
 	// handle events and batches
-	authedMuxxer.HandleFunc("/events/{datasetName}", r.event).Name("event")
-	authedMuxxer.HandleFunc("/batch/{datasetName}", r.batch).Name("batch")
+	// Adds the OpenTelemetry instrumentation to the handler to enable tracing
+	authedMuxxer.Handle("/events/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.event), "event")).Name("event")
+	authedMuxxer.Handle("/batch/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.batch), "batch")).Name("batch")
 
 	// require an auth header for OTLP requests
 	r.AddOTLPMuxxer(muxxer)
@@ -227,6 +230,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 				Time:                  time.Duration(grpcConfig.KeepAlive),
 				Timeout:               time.Duration(grpcConfig.KeepAliveTimeout),
 			}),
+			// Add the OpenTelemetry interceptor to the gRPC server to enable tracing
+			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		}
 		r.grpcServer = grpc.NewServer(serverOpts...)
 
@@ -368,9 +373,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
-	ctx, span := r.Tracer.Start(req.Context(), "handle_event")
-	defer span.End()
-
+	ctx := req.Context()
 	bodyReader, err := r.getMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
@@ -444,9 +447,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
 
-	ctx, span := r.Tracer.Start(req.Context(), "handle_batch")
-	defer span.End()
-
+	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
 	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
 
