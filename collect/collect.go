@@ -1342,6 +1342,15 @@ func (i *InMemCollector) signalKeptTraceDecisions(ctx context.Context, msg strin
 		return
 	}
 
+	peerID, err := i.Peers.GetInstanceID()
+	if err != nil {
+		return
+	}
+
+	if isMyDecision(msg, peerID) {
+		return
+	}
+
 	select {
 	case <-i.done:
 		return
@@ -1354,6 +1363,15 @@ func (i *InMemCollector) signalKeptTraceDecisions(ctx context.Context, msg strin
 }
 func (i *InMemCollector) signalDroppedTraceDecisions(ctx context.Context, msg string) {
 	if len(msg) == 0 {
+		return
+	}
+
+	peerID, err := i.Peers.GetInstanceID()
+	if err != nil {
+		return
+	}
+
+	if isMyDecision(msg, peerID) {
 		return
 	}
 
@@ -1373,18 +1391,23 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 		return
 	}
 
+	peerID, err := i.Peers.GetInstanceID()
+	if err != nil {
+		i.Logger.Error().Logf("Failed to get peer ID. %s", err)
+		return
+	}
+
 	// Deserialize the message into trace decisions
 	decisions := make([]TraceDecision, 0)
-	var err error
 	switch decisionType {
 	case keptDecision:
-		decisions, err = newKeptTraceDecision(msg)
+		decisions, err = newKeptTraceDecision(msg, peerID)
 		if err != nil {
 			i.Logger.Error().Logf("Failed to unmarshal kept trace decision message. %s", err)
 			return
 		}
 	case dropDecision:
-		decisions, err = newDroppedTraceDecision(msg)
+		decisions, err = newDroppedTraceDecision(msg, peerID)
 		if err != nil {
 			i.Logger.Error().Logf("Failed to unmarshal drop trace decision message. %s", err)
 			return
@@ -1573,6 +1596,11 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 	ctx := context.Background()
 	var createDecisionMessage newDecisionMessage
 	var metricName, topic string
+	peerID, err := i.Peers.GetInstanceID()
+	if err != nil {
+		i.Logger.Error().Logf("Failed to get peer ID. %s", err)
+		return
+	}
 	switch decisionType {
 	case keptDecision:
 		metricName = "collector_kept_decisions_batch_size"
@@ -1620,7 +1648,7 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 				case <-i.done:
 					return nil
 				default:
-					msg, err := createDecisionMessage(decisionsToProcess)
+					msg, err := createDecisionMessage(decisionsToProcess, peerID)
 					if err != nil {
 						i.Logger.Error().WithFields(map[string]interface{}{
 							"error": err.Error(),

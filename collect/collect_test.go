@@ -85,6 +85,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		dropDecisionBuffer:   make(chan TraceDecision, 5),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
+			ID:    "api1",
 		},
 		Sharder: &sharder.MockSharder{
 			Self: &sharder.TestShard{
@@ -2255,9 +2256,15 @@ func TestSendDropDecisions(t *testing.T) {
 	close(coll.dropDecisionBuffer)
 	droppedMessage := <-messages
 
-	decompressedData, err := decompressDropDecisions([]byte(droppedMessage))
+	peerID, err := coll.Peers.GetInstanceID()
+	require.NoError(t, err)
+	decompressedData, err := newDroppedTraceDecision(droppedMessage, peerID)
 	assert.NoError(t, err)
-	assert.Equal(t, "trace1", decompressedData)
+	droppedTraceID := make([]string, 0)
+	for _, td := range decompressedData {
+		droppedTraceID = append(droppedTraceID, td.TraceID)
+	}
+	assert.Equal(t, []string{"trace1"}, droppedTraceID)
 
 	<-closed
 
@@ -2282,9 +2289,13 @@ func TestSendDropDecisions(t *testing.T) {
 	close(coll.dropDecisionBuffer)
 	droppedMessage = <-messages
 
-	decompressedData, err = decompressDropDecisions([]byte(droppedMessage))
+	decompressedData, err = newDroppedTraceDecision(droppedMessage, peerID)
 	assert.NoError(t, err)
-	assert.Equal(t, "trace0,trace1,trace2,trace3,trace4", decompressedData)
+	droppedTraceID = make([]string, 0)
+	for _, td := range decompressedData {
+		droppedTraceID = append(droppedTraceID, td.TraceID)
+	}
+	assert.Equal(t, "trace0,trace1,trace2,trace3,trace4", strings.Join(droppedTraceID, ","))
 
 	<-closed
 }

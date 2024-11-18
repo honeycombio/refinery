@@ -29,34 +29,46 @@ var (
 	dropDecision decisionType = 2
 )
 
-type newDecisionMessage func([]TraceDecision) (string, error)
+type newDecisionMessage func(tds []TraceDecision, senderID string) (string, error)
 
-func newDroppedDecisionMessage(tds []TraceDecision) (string, error) {
+func newDroppedDecisionMessage(tds []TraceDecision, senderID string) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no dropped trace decisions provided")
 	}
+	if senderID == "" {
+		return "", fmt.Errorf("no sender ID provided")
+	}
 
-	traceIDs := make([]string, 0, len(tds))
+	payload := make([]string, 0, len(tds))
 	for _, td := range tds {
 		if td.TraceID != "" {
-			traceIDs = append(traceIDs, td.TraceID)
+			payload = append(payload, td.TraceID)
 		}
 	}
 
-	compressed, err := compress(strings.Join(traceIDs, ","))
+	compressed, err := compress(strings.Join(payload, ","))
 	if err != nil {
 		return "", err
 	}
-	return string(compressed), nil
+	return senderID + "|" + string(compressed), nil
 }
 
-func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
-	data, err := decompressDropDecisions([]byte(msg))
+func newDroppedTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
+	data := strings.SplitN(msg, "|", 2)
+	if len(data) != 2 {
+		return nil, fmt.Errorf("invalid dropped decision message")
+	}
+
+	if data[0] != senderID {
+		return nil, nil
+	}
+
+	ids, err := decompressDropDecisions([]byte(data[1]))
 	if err != nil {
 		return nil, err
 	}
 
-	traceIDs := strings.Split(data, ",")
+	traceIDs := strings.Split(ids, ",")
 	decisions := make([]TraceDecision, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
 		decisions = append(decisions, TraceDecision{
@@ -66,23 +78,45 @@ func newDroppedTraceDecision(msg string) ([]TraceDecision, error) {
 	return decisions, nil
 }
 
-func newKeptDecisionMessage(tds []TraceDecision) (string, error) {
+func newKeptDecisionMessage(tds []TraceDecision, senderID string) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no kept trace decisions provided")
 	}
+
+	if senderID == "" {
+		return "", fmt.Errorf("no sender ID provided")
+	}
+
 	compressed, err := compress(tds)
 	if err != nil {
 		return "", err
 	}
-	return string(compressed), nil
+	return senderID + "|" + string(compressed), nil
 }
 
-func newKeptTraceDecision(msg string) ([]TraceDecision, error) {
-	compressed, err := decompressKeptDecisions([]byte(msg))
+func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
+	data := strings.SplitN(msg, "|", 2)
+	if len(data) != 2 {
+		return nil, fmt.Errorf("invalid dropped decision message")
+	}
+
+	if data[0] != senderID {
+		return nil, nil
+	}
+
+	compressed, err := decompressKeptDecisions([]byte(data[1]))
 	if err != nil {
 		return nil, err
 	}
 	return compressed, nil
+}
+
+func isMyDecision(msg string, senderID string) bool {
+	data := strings.SplitN(msg, "|", 2)
+	if len(data) != 2 {
+		return false
+	}
+	return data[0] == senderID
 }
 
 var _ cache.KeptTrace = &TraceDecision{}
