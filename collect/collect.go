@@ -802,11 +802,6 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 	_, span := otelutil.StartSpanWith(context.Background(), i.Tracer, "collector.ProcessSpanImmediately", "trace_id", sp.TraceID)
 	defer span.End()
 
-	if !i.StressRelief.ShouldSampleDeterministically(sp.TraceID) {
-		otelutil.AddSpanField(span, "nondeterministic", 1)
-		return false, false
-	}
-
 	var rate uint
 	record, reason, found := i.sampleTraceCache.CheckSpan(sp)
 	if !found {
