@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -13,6 +14,9 @@ import (
 )
 
 func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
+	ctx, span := otelutil.StartSpan(req.Context(), r.Tracer, "postOTLPLogs")
+	defer span.End()
+
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 
 	if err := ri.ValidateLogsHeaders(); err != nil {
@@ -31,13 +35,13 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result, err := huskyotlp.TranslateLogsRequestFromReader(req.Context(), req.Body, ri)
+	result, err := huskyotlp.TranslateLogsRequestFromReader(ctx, req.Body, ri)
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
 
-	if err := r.processOTLPRequest(req.Context(), result.Batches, keyToUse, ri.UserAgent); err != nil {
+	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -56,6 +60,9 @@ func NewLogsServer(router *Router) *LogsServer {
 }
 
 func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsServiceRequest) (*collectorlogs.ExportLogsServiceResponse, error) {
+	ctx, span := otelutil.StartSpan(ctx, l.router.Tracer, "ExportOTLPLogs")
+	defer span.End()
+
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	if err := ri.ValidateLogsHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -13,8 +14,10 @@ import (
 )
 
 func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
-	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
+	ctx, span := otelutil.StartSpan(req.Context(), r.Tracer, "postOTLPTrace")
+	defer span.End()
 
+	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
@@ -32,13 +35,13 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	result, err := huskyotlp.TranslateTraceRequestFromReader(req.Context(), req.Body, ri)
+	result, err := huskyotlp.TranslateTraceRequestFromReader(ctx, req.Body, ri)
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
 
-	if err := r.processOTLPRequest(req.Context(), result.Batches, keyToUse, ri.UserAgent); err != nil {
+	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -57,6 +60,9 @@ func NewTraceServer(router *Router) *TraceServer {
 }
 
 func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTraceServiceRequest) (*collectortrace.ExportTraceServiceResponse, error) {
+	ctx, span := otelutil.StartSpan(ctx, t.router.Tracer, "ExportOTLPTrace")
+	defer span.End()
+
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
