@@ -23,6 +23,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	logs "go.opentelemetry.io/proto/otlp/logs/v1"
@@ -67,6 +68,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		},
 		Collector:      mockCollector,
 		incomingOrPeer: "incoming",
+		Tracer:         noop.Tracer{},
 	}
 	logsServer := NewLogsServer(router)
 

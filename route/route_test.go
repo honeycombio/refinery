@@ -350,6 +350,7 @@ func TestOTLPRequest(t *testing.T) {
 		},
 		Logger:           &logger.MockLogger{},
 		environmentCache: newEnvironmentCache(time.Second, nil),
+		Tracer:           noop.Tracer{},
 	}
 
 	muxxer := mux.NewRouter()

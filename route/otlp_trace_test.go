@@ -22,6 +22,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/trace/noop"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	resource "go.opentelemetry.io/proto/otlp/resource/v1"
@@ -74,6 +75,7 @@ func TestOTLPHandler(t *testing.T) {
 		Logger:           &logger.MockLogger{},
 		zstdDecoders:     decoders,
 		environmentCache: newEnvironmentCache(time.Second, nil),
+		Tracer:           noop.Tracer{},
 	}
 
 	t.Run("span with status", func(t *testing.T) {
