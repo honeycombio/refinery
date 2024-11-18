@@ -2256,9 +2256,8 @@ func TestSendDropDecisions(t *testing.T) {
 	close(coll.dropDecisionBuffer)
 	droppedMessage := <-messages
 
-	peerID, err := coll.Peers.GetInstanceID()
-	require.NoError(t, err)
-	decompressedData, err := newDroppedTraceDecision(droppedMessage, peerID)
+	// pretend we are a peer that received the message
+	decompressedData, err := newDroppedTraceDecision(droppedMessage, "another-peer")
 	assert.NoError(t, err)
 	droppedTraceID := make([]string, 0)
 	for _, td := range decompressedData {
@@ -2289,7 +2288,7 @@ func TestSendDropDecisions(t *testing.T) {
 	close(coll.dropDecisionBuffer)
 	droppedMessage = <-messages
 
-	decompressedData, err = newDroppedTraceDecision(droppedMessage, peerID)
+	decompressedData, err = newDroppedTraceDecision(droppedMessage, "another-peer")
 	assert.NoError(t, err)
 	droppedTraceID = make([]string, 0)
 	for _, td := range decompressedData {
