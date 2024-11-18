@@ -186,8 +186,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	// handle events and batches
 	// Adds the OpenTelemetry instrumentation to the handler to enable tracing
-	authedMuxxer.Handle("/events/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.event), "event")).Name("event")
-	authedMuxxer.Handle("/batch/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.batch), "batch")).Name("batch")
+	authedMuxxer.Handle("/events/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.event), "handle_event")).Name("event")
+	authedMuxxer.Handle("/batch/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.batch), "handle_batch")).Name("batch")
 
 	// require an auth header for OTLP requests
 	r.AddOTLPMuxxer(muxxer)
