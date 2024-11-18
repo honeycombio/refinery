@@ -13,6 +13,12 @@ import (
 
 type decisionType int
 
+// decisionMessageSeparator is the separator used to separate the sender ID from the compressed decisions
+// in the decision message.
+// The pipe character should not be used in URLs or IP addresses because it's not a valid character in these
+// contexts.
+const decisionMessageSeparator = "|"
+
 func (d decisionType) String() string {
 	switch d {
 	case keptDecision:
@@ -50,20 +56,21 @@ func newDroppedDecisionMessage(tds []TraceDecision, senderID string) (string, er
 	if err != nil {
 		return "", err
 	}
-	return senderID + "|" + string(compressed), nil
+	return senderID + decisionMessageSeparator + string(compressed), nil
 }
 
 func newDroppedTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
-	data := strings.SplitN(msg, "|", 2)
-	if len(data) != 2 {
+	// Use IndexRune here since it's faster than SplitN and requires less allocation
+	separatorIdx := strings.IndexRune(msg, rune(decisionMessageSeparator[0]))
+	if separatorIdx == -1 {
 		return nil, fmt.Errorf("invalid dropped decision message")
 	}
 
-	if data[0] != senderID {
+	if msg[:separatorIdx] != senderID {
 		return nil, nil
 	}
 
-	ids, err := decompressDropDecisions([]byte(data[1]))
+	ids, err := decompressDropDecisions([]byte(msg[separatorIdx+1:]))
 	if err != nil {
 		return nil, err
 	}
@@ -91,20 +98,21 @@ func newKeptDecisionMessage(tds []TraceDecision, senderID string) (string, error
 	if err != nil {
 		return "", err
 	}
-	return senderID + "|" + string(compressed), nil
+	return senderID + decisionMessageSeparator + string(compressed), nil
 }
 
 func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
-	data := strings.SplitN(msg, "|", 2)
-	if len(data) != 2 {
+	// Use IndexRune here since it's faster than SplitN and requires less allocation
+	separatorIdx := strings.IndexRune(msg, rune(decisionMessageSeparator[0]))
+	if separatorIdx == -1 {
 		return nil, fmt.Errorf("invalid dropped decision message")
 	}
 
-	if data[0] != senderID {
+	if msg[:separatorIdx] != senderID {
 		return nil, nil
 	}
 
-	compressed, err := decompressKeptDecisions([]byte(data[1]))
+	compressed, err := decompressKeptDecisions([]byte(msg[separatorIdx+1:]))
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +120,7 @@ func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) 
 }
 
 func isMyDecision(msg string, senderID string) bool {
-	data := strings.SplitN(msg, "|", 2)
-	if len(data) != 2 {
-		return false
-	}
-	return data[0] == senderID
+	return strings.HasPrefix(msg, senderID+decisionMessageSeparator)
 }
 
 var _ cache.KeptTrace = &TraceDecision{}

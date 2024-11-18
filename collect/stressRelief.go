@@ -204,6 +204,8 @@ func (s *StressRelief) Start() error {
 	return nil
 }
 
+const stressReliefMessageSeparator = "|"
+
 type stressReliefMessage struct {
 	peerID string
 	level  uint
@@ -214,7 +216,7 @@ func newStressReliefMessage(level uint, peerID string) *stressReliefMessage {
 }
 
 func (msg *stressReliefMessage) String() string {
-	return msg.peerID + "|" + fmt.Sprint(msg.level)
+	return msg.peerID + stressReliefMessageSeparator + fmt.Sprint(msg.level)
 }
 
 func unmarshalStressReliefMessage(msg string) (*stressReliefMessage, error) {
@@ -222,13 +224,17 @@ func unmarshalStressReliefMessage(msg string) (*stressReliefMessage, error) {
 		return nil, fmt.Errorf("empty message")
 	}
 
-	parts := strings.SplitN(msg, "|", 2)
-	level, err := strconv.Atoi(parts[1])
+	separatorIdx := strings.IndexRune(msg, rune(stressReliefMessageSeparator[0]))
+	if separatorIdx == -1 {
+		return nil, fmt.Errorf("invalid stress relief message")
+	}
+
+	level, err := strconv.Atoi(msg[separatorIdx+1:])
 	if err != nil {
 		return nil, err
 	}
 
-	return newStressReliefMessage(uint(level), parts[0]), nil
+	return newStressReliefMessage(uint(level), msg[:separatorIdx]), nil
 }
 
 func (s *StressRelief) onStressLevelUpdate(ctx context.Context, msg string) {
