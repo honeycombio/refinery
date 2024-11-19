@@ -417,55 +417,69 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp, "peer")
-		default:
-			select {
-			case msg, ok := <-i.dropDecisionMessages:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processTraceDecisions(msg, dropDecision)
-			case msg, ok := <-i.keptDecisionMessages:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processTraceDecisions(msg, keptDecision)
-			case <-ticker.C:
-				i.sendExpiredTracesInCache(ctx, i.Clock.Now())
-				i.checkAlloc(ctx)
-
-				// maybe only do this if in test mode?
-				// Briefly unlock the cache, to allow test access.
-				_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
-				i.mutex.Unlock()
-				runtime.Gosched()
-				i.mutex.Lock()
-				goSchedSpan.End()
-			case sp, ok := <-i.incoming:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processSpan(ctx, sp, "incoming")
-			case sp, ok := <-i.fromPeer:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processSpan(ctx, sp, "peer")
-			case <-i.reload:
-				i.reloadConfigs()
+			drainSpanQueue(ctx, sp, i.fromPeer, "peer", i.processSpan)
+		case sp, ok := <-i.incoming:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
 			}
+			drainSpanQueue(ctx, sp, i.incoming, "incoming", i.processSpan)
+		case msg, ok := <-i.dropDecisionMessages:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processTraceDecisions(msg, dropDecision)
+		case msg, ok := <-i.keptDecisionMessages:
+			if !ok {
+				// channel's been closed; we should shut down.
+				span.End()
+				return
+			}
+			i.processTraceDecisions(msg, keptDecision)
+		case <-ticker.C:
+			i.sendExpiredTracesInCache(ctx, i.Clock.Now())
+			i.checkAlloc(ctx)
+
+			// maybe only do this if in test mode?
+			// Briefly unlock the cache, to allow test access.
+			_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
+			i.mutex.Unlock()
+			runtime.Gosched()
+			i.mutex.Lock()
+			goSchedSpan.End()
+		case <-i.reload:
+			i.reloadConfigs()
 		}
 
 		i.Metrics.Histogram("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
 		span.End()
+	}
+}
+
+func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span, queueName string, processSpanFunc func(context.Context, *types.Span, string)) {
+	// process the original span
+	processSpanFunc(ctx, span, queueName)
+
+	// let't try to process as many spans as we can in the next 100ms
+	// TODO: make timer configurable?
+	timer := time.NewTimer(time.Millisecond * 100)
+	for {
+		select {
+		case <-timer.C:
+			// we've spent enough time processing spans
+			return
+		case sp, ok := <-ch:
+			if !ok {
+				return
+			}
+			processSpanFunc(ctx, sp, queueName)
+		default:
+			// nothing else in the channel
+			return
+		}
 	}
 }
 
