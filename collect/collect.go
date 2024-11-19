@@ -164,6 +164,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of kept decisions received"},
 	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
 	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
+	{Name: "num_span_drained_from_incoming", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans drained from incoming queue"},
+	{Name: "num_span_drained_from_peer", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans drained from peer queue"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -417,14 +419,17 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			drainSpanQueue(ctx, sp, i.fromPeer, "peer", i.processSpan)
+			count := drainSpanQueue(ctx, sp, i.fromPeer, "peer", i.processSpan)
+			i.Metrics.Gauge("num_span_drained_from_peer", count)
+
 		case sp, ok := <-i.incoming:
 			if !ok {
 				// channel's been closed; we should shut down.
 				span.End()
 				return
 			}
-			drainSpanQueue(ctx, sp, i.incoming, "incoming", i.processSpan)
+			count := drainSpanQueue(ctx, sp, i.incoming, "incoming", i.processSpan)
+			i.Metrics.Gauge("num_span_drained_from_incoming", count)
 		case msg, ok := <-i.dropDecisionMessages:
 			if !ok {
 				// channel's been closed; we should shut down.
@@ -459,9 +464,10 @@ func (i *InMemCollector) collect() {
 	}
 }
 
-func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span, queueName string, processSpanFunc func(context.Context, *types.Span, string)) {
+func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span, queueName string, processSpanFunc func(context.Context, *types.Span, string)) int {
 	// process the original span
 	processSpanFunc(ctx, span, queueName)
+	count := 1
 
 	// let't try to process as many spans as we can in the next 100ms
 	// TODO: make timer configurable?
@@ -470,15 +476,16 @@ func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span
 		select {
 		case <-timer.C:
 			// we've spent enough time processing spans
-			return
+			return count
 		case sp, ok := <-ch:
 			if !ok {
-				return
+				return count
 			}
 			processSpanFunc(ctx, sp, queueName)
+			count++
 		default:
 			// nothing else in the channel
-			return
+			return count
 		}
 	}
 }
