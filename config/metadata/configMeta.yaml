@@ -1340,7 +1340,7 @@ groups:
           This value should be set to a bit less than the normal timeout period
           for shutting down without forcibly terminating the process.
 
-      - name: EnableTraceLocality
+      - name: DisableTraceLocality
         type: bool
         valuetype: nondefault
         firstversion: v2.9
