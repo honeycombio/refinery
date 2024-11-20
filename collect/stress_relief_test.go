@@ -135,7 +135,7 @@ func TestStressRelief_Peer(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 }
 
-func TestStressRelief_OverallStressLevel(t *testing.T) {
+func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	sr, stop := newStressRelief(t, clock, nil)
 	defer stop()
@@ -156,6 +156,9 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 			ActivationLevel:           80,
 			DeactivationLevel:         65,
 			MinimumActivationDuration: config.Duration(5 * time.Second),
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			DisableTraceLocality: true,
 		},
 	}
 	// On startup, the stress relief should not be active
@@ -238,9 +241,6 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 			ActivationLevel:           80,
 			DeactivationLevel:         65,
 			MinimumActivationDuration: config.Duration(5 * time.Second),
-		},
-		GetCollectionConfigVal: config.CollectionConfig{
-			EnableTraceLocality: true,
 		},
 	}
 	// On startup, the stress relief should not be active

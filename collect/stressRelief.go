@@ -424,12 +424,12 @@ func (s *StressRelief) Recalc() uint {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	overallStressLevel := clusterStressLevel
+	// The overall stress level is the max of the individual and cluster stress levels
+	// If a single node is under significant stress, it can activate stress relief mode
+	overallStressLevel := uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
 
-	if s.Config.GetCollectionConfig().EnableTraceLocality {
-		// The overall stress level is the max of the individual and cluster stress levels
-		// If a single node is under significant stress, it can activate stress relief mode
-		overallStressLevel = uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
+	if s.Config.GetCollectionConfig().DisableTraceLocality {
+		overallStressLevel = clusterStressLevel
 	}
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", s.overallStressLevel)

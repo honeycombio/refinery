@@ -118,10 +118,9 @@ func defaultConfig(basePort int, redisDB int) *config.MockConfig {
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetHoneycombAPIVal:       "http://api.honeycomb.io",
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity:       10000,
-			ShutdownDelay:       config.Duration(1 * time.Second),
-			HealthCheckTimeout:  config.Duration(3 * time.Second),
-			EnableTraceLocality: true,
+			CacheCapacity:      10000,
+			ShutdownDelay:      config.Duration(1 * time.Second),
+			HealthCheckTimeout: config.Duration(3 * time.Second),
 		},
 		TraceIdFieldNames:  []string{"trace.trace_id"},
 		ParentIdFieldNames: []string{"trace.parent_id"},
@@ -767,7 +766,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 		redisDB := 12 + i
 		cfg := defaultConfig(basePort, redisDB)
 		collectionCfg := cfg.GetCollectionConfig()
-		collectionCfg.EnableTraceLocality = false
+		collectionCfg.DisableTraceLocality = true
 		cfg.GetCollectionConfigVal = collectionCfg
 
 		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
