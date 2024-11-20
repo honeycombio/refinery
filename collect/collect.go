@@ -1576,6 +1576,7 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 
 	if td.Kept {
 		select {
+		case <-i.done:
 		case i.keptDecisionBuffer <- td:
 		default:
 			i.Metrics.Increment("collector_kept_decisions_queue_full")
@@ -1584,6 +1585,7 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 		return
 	} else {
 		select {
+		case <-i.done:
 		case i.dropDecisionBuffer <- td:
 		default:
 			i.Metrics.Increment("collector_drop_decisions_queue_full")
