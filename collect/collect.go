@@ -419,7 +419,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			count := drainSpanQueue(ctx, sp, i.fromPeer, "peer", i.processSpan)
+			count := drainSpanQueue(ctx, sp, i.fromPeer, "peer", 1000, i.processSpan)
 			i.Metrics.Gauge("num_span_drained_from_peer", count)
 
 		case sp, ok := <-i.incoming:
@@ -428,7 +428,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			count := drainSpanQueue(ctx, sp, i.incoming, "incoming", i.processSpan)
+			count := drainSpanQueue(ctx, sp, i.incoming, "incoming", 1000, i.processSpan)
 			i.Metrics.Gauge("num_span_drained_from_incoming", count)
 		case msg, ok := <-i.dropDecisionMessages:
 			if !ok {
@@ -464,7 +464,7 @@ func (i *InMemCollector) collect() {
 	}
 }
 
-func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span, queueName string, processSpanFunc func(context.Context, *types.Span, string)) int {
+func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span, queueName string, limit int, processSpanFunc func(context.Context, *types.Span, string)) int {
 	// process the original span
 	processSpanFunc(ctx, span, queueName)
 	count := 1
@@ -472,7 +472,15 @@ func drainSpanQueue(ctx context.Context, span *types.Span, ch <-chan *types.Span
 	// let't try to process as many spans as we can in the next 100ms
 	// TODO: make timer configurable?
 	timer := time.NewTimer(time.Millisecond * 100)
+	defer timer.Stop()
+
 	for {
+
+		// if we've processed enough spans, we should return
+		if limit != 0 && count >= limit {
+			return count
+		}
+
 		select {
 		case <-timer.C:
 			// we've spent enough time processing spans
