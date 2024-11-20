@@ -317,8 +317,8 @@ type CollectionConfig struct {
 	DisableRedistribution bool     `yaml:"DisableRedistribution"`
 	RedistributionDelay   Duration `yaml:"RedistributionDelay" default:"30s"`
 
-	ShutdownDelay       Duration `yaml:"ShutdownDelay" default:"15s"`
-	EnableTraceLocality bool     `yaml:"EnableTraceLocality"`
+	ShutdownDelay        Duration `yaml:"ShutdownDelay" default:"15s"`
+	DisableTraceLocality bool     `yaml:"DisableTraceLocality"`
 
 	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
 	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`

@@ -210,7 +210,7 @@ func (i *InMemCollector) Start() error {
 		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
 	}
 
-	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+	if i.Config.GetCollectionConfig().DisableTraceLocality {
 		i.keptDecisionMessages = make(chan string, decisionMessageBufferSize)
 		i.dropDecisionMessages = make(chan string, decisionMessageBufferSize)
 		i.PubSub.Subscribe(context.Background(), keptTraceDecisionTopic, i.signalKeptTraceDecisions)
@@ -524,7 +524,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 		for _, sp := range trace.GetSpans() {
 
-			if !i.Config.GetCollectionConfig().EnableTraceLocality {
+			if i.Config.GetCollectionConfig().DisableTraceLocality {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
 				i.PeerTransmission.EnqueueEvent(dc)
 				continue
@@ -664,17 +664,26 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		span.End()
 	}()
 
-	targetShard, isMyTrace := i.IsMyTrace(sp.TraceID)
-	// if the span is a decision span and the trace no longer belong to us, we should not forward it to the peer
-	if !isMyTrace && sp.IsDecisionSpan() {
-		return
-	}
-
+	var (
+		targetShard sharder.Shard
+		isMyTrace   bool
+	)
 	// if trace locality is enabled, we should forward all spans to its correct peer
-	if i.Config.GetCollectionConfig().EnableTraceLocality && !targetShard.Equals(i.Sharder.MyShard()) {
-		sp.APIHost = targetShard.GetAddress()
-		i.PeerTransmission.EnqueueSpan(sp)
-		return
+	if i.Config.GetCollectionConfig().DisableTraceLocality {
+		targetShard, isMyTrace = i.IsMyTrace(sp.TraceID)
+		// if the span is a decision span and the trace no longer belong to us, we should not forward it to the peer
+		if !isMyTrace && sp.IsDecisionSpan() {
+			return
+		}
+
+	} else {
+		targetShard = i.Sharder.WhichShard(sp.TraceID)
+		isMyTrace = true
+		if !targetShard.Equals(i.Sharder.MyShard()) {
+			sp.APIHost = targetShard.GetAddress()
+			i.PeerTransmission.EnqueueSpan(sp)
+			return
+		}
 	}
 
 	tcfg := i.Config.GetTracesConfig()
@@ -1060,7 +1069,7 @@ func (i *InMemCollector) Stop() error {
 	close(i.fromPeer)
 	close(i.outgoingTraces)
 
-	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+	if i.Config.GetCollectionConfig().DisableTraceLocality {
 		close(i.dropDecisionBuffer)
 		close(i.keptDecisionBuffer)
 	}
@@ -1518,7 +1527,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 		HasRoot:         hasRoot,
 	}
 
-	if !i.Config.GetCollectionConfig().EnableTraceLocality {
+	if i.Config.GetCollectionConfig().DisableTraceLocality {
 		i.publishTraceDecision(ctx, td)
 	}
 
@@ -1526,14 +1535,16 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 }
 
 func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
-	// if trace locality is enabled, we should always process the trace
-	if i.Config.GetCollectionConfig().EnableTraceLocality {
-		return i.Sharder.MyShard(), true
+	// if trace locality is disabled, we should only process
+	// traces that belong to the current refinery
+	if i.Config.GetCollectionConfig().DisableTraceLocality {
+		targeShard := i.Sharder.WhichShard(traceID)
+
+		return targeShard, i.Sharder.MyShard().Equals(targeShard)
 	}
 
-	targeShard := i.Sharder.WhichShard(traceID)
+	return i.Sharder.MyShard(), true
 
-	return targeShard, i.Sharder.MyShard().Equals(targeShard)
 }
 
 func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
@@ -1567,7 +1578,7 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 }
 
 func (i *InMemCollector) sendKeptDecisions() {
-	if i.Config.GetCollectionConfig().EnableTraceLocality {
+	if !i.Config.GetCollectionConfig().DisableTraceLocality {
 		return
 	}
 	interval := time.Duration(i.Config.GetCollectionConfig().KeptDecisionSendInterval)
@@ -1578,7 +1589,7 @@ func (i *InMemCollector) sendKeptDecisions() {
 }
 
 func (i *InMemCollector) sendDropDecisions() {
-	if i.Config.GetCollectionConfig().EnableTraceLocality {
+	if !i.Config.GetCollectionConfig().DisableTraceLocality {
 		return
 	}
 	interval := time.Duration(i.Config.GetCollectionConfig().DropDecisionSendInterval)

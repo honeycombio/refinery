@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -99,7 +98,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		redistributeTimer: redistributeNotifier,
 	}
 
-	if !conf.GetCollectionConfig().EnableTraceLocality {
+	if conf.GetCollectionConfig().DisableTraceLocality {
 		localPubSub.Subscribe(context.Background(), keptTraceDecisionTopic, c.signalKeptTraceDecisions)
 	}
 
@@ -194,6 +193,12 @@ func TestAddRootSpan(t *testing.T) {
 	assert.Equal(t, "another-key", events[0].APIKey, "api key should be replaced with the send key")
 
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
+
+	conf.Mux.Lock()
+	collectionCfg := conf.GetCollectionConfigVal
+	collectionCfg.DisableTraceLocality = true
+	conf.GetCollectionConfigVal = collectionCfg
+	conf.Mux.Unlock()
 
 	decisionSpanTraceID := "decision_root_span"
 	span = &types.Span{
@@ -522,8 +527,8 @@ func TestDryRunMode(t *testing.T) {
 		DryRun:             true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay:       config.Duration(1 * time.Millisecond),
-			EnableTraceLocality: true,
+			ShutdownDelay:        config.Duration(1 * time.Millisecond),
+			DisableTraceLocality: true,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -793,13 +798,14 @@ func TestStableMaxAlloc(t *testing.T) {
 			},
 		}
 
-		if i < 3 {
-			// add some spans that belongs to peer
-			span.TraceID = peerTraceIDs[i]
-			// add extrac data so that the peer traces have bigger
-			// cache impact, which will get evicted first
-			span.Data["extra_data"] = strings.Repeat("abc", 100)
-		}
+		// TODO: enable this once we want to turn on DisableTraceLocality
+		//	if i < 3 {
+		//		// add some spans that belongs to peer
+		//		span.TraceID = peerTraceIDs[i]
+		//		// add extrac data so that the peer traces have bigger
+		//		// cache impact, which will get evicted first
+		//		span.Data["extra_data"] = strings.Repeat("abc", 100)
+		//	}
 
 		coll.AddSpan(span)
 	}
@@ -819,13 +825,15 @@ func TestStableMaxAlloc(t *testing.T) {
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
 	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
-	orphanPeerTrace := coll.cache.Get(peerTraceIDs[0])
 
-	orphanPeerTrace.SendBy = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout() * 5)
-	peerSpan := orphanPeerTrace.GetSpans()[0]
-	// cache impact is also calculated based on the arrival time
-	peerSpan.ArrivalTime = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout())
-	assert.True(t, orphanPeerTrace.IsOrphan(conf.GetTracesConfig().GetTraceTimeout(), coll.Clock.Now()))
+	// TODO: enable this once we want to turn on DisableTraceLocality
+	//	orphanPeerTrace := coll.cache.Get(peerTraceIDs[0])
+	//
+	//	orphanPeerTrace.SendBy = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout() * 5)
+	//	peerSpan := orphanPeerTrace.GetSpans()[0]
+	//	// cache impact is also calculated based on the arrival time
+	//	peerSpan.ArrivalTime = coll.Clock.Now().Add(-conf.GetTracesConfig().GetTraceTimeout())
+	//	assert.True(t, orphanPeerTrace.IsOrphan(conf.GetTracesConfig().GetTraceTimeout(), coll.Clock.Now()))
 
 	coll.mutex.Unlock()
 	// wait for the cache to take some action
@@ -844,13 +852,14 @@ func TestStableMaxAlloc(t *testing.T) {
 	tracesLeft := len(traces)
 	assert.Less(t, tracesLeft, 480, "should have sent some traces")
 	assert.Greater(t, tracesLeft, 100, "should have NOT sent some traces")
-	peerTracesLeft := 0
-	for _, trace := range traces {
-		if slices.Contains(peerTraceIDs, trace.TraceID) {
-			peerTracesLeft++
-		}
-	}
-	assert.Equal(t, 2, peerTracesLeft, "should have kept the peer traces")
+	// TODO: enable this once we want to turn on DisableTraceLocality
+	//	peerTracesLeft := 0
+	//	for _, trace := range traces {
+	//		if slices.Contains(peerTraceIDs, trace.TraceID) {
+	//			peerTracesLeft++
+	//		}
+	//	}
+	//	assert.Equal(t, 2, peerTracesLeft, "should have kept the peer traces")
 	coll.mutex.Unlock()
 
 	// We discarded the most costly spans, and sent them.
@@ -2224,7 +2233,8 @@ func TestSendDropDecisions(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:        config.Duration(1 * time.Millisecond),
+			DisableTraceLocality: true,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -2306,6 +2316,9 @@ func TestExpiredTracesCleanup(t *testing.T) {
 			SendDelay:    config.Duration(1 * time.Millisecond),
 			TraceTimeout: config.Duration(500 * time.Millisecond),
 			MaxBatchSize: 1500,
+		},
+		GetCollectionConfigVal: config.CollectionConfig{
+			DisableTraceLocality: true,
 		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
