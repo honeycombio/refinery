@@ -489,9 +489,9 @@ groups:
           `meta.refinery.dryrun.sample_rate` will be set to the sample rate
           that would have been used.
 
-          NOTE: This settng is not compatible with `EnableTraceLocality` set to
-          false because drop trace decisions shared among peers does not contain
-          all relevant information to send traces to Honeycomb.
+          NOTE: This setting is not compatible with `DisableTraceLocality=true`,
+          because drop trace decisions shared among peers do not contain all
+          the relevant information needed to send traces to Honeycomb.
 
   - name: Logger
     title: "Refinery Logger"
@@ -1348,9 +1348,18 @@ groups:
         reload: false
         summary: controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
         description: >
-          If `true`, Refinery's will route all spans that belongs to the same trace to a single peer.
+          When `false`, Refinery will route all spans that belong to the same trace to a single peer. This is the
+          default behavior ("Trace Locality") and the way Refinery has worked in the past. When `true`, Refinery
+          will instead keep spans on the node where they were received, and forward proxy spans that contain only
+          the key information needed to make a trace decision. This can reduce the amount of traffic between peers
+          in most cases, and can help avoid a situation where a single large trace can cause a memory overrun on
+          a single node.
 
-          NOTE: This setting is not compatible with `DryRun` when set to false. See `DryRun` for more information.
+          If `true`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery
+          and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all
+          nodes in the cluster. It is important to adjust the size of the Redis cluster in this case.
+
+          NOTE: This setting is not compatible with `DryRun` when set to true. See `DryRun` for more information.
 
       - name: HealthCheckTimeout
         type: duration
