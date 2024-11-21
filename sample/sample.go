@@ -45,10 +45,9 @@ func (s *SamplerFactory) updatePeerCounts() {
 	// all the samplers who want it should use the stored count
 	for _, sampler := range s.samplers {
 		if clusterSizer, ok := sampler.(ClusterSizer); ok {
-			s.Logger.Warn().Logf("set cluster size to %d", s.peerCount)
 			clusterSizer.SetClusterSize(s.peerCount)
 		} else {
-			s.Logger.Warn().Logf("sampler does not implement ClusterSizer")
+			s.Logger.Debug().Logf("sampler does not implement ClusterSizer")
 		}
 	}
 }
