@@ -113,6 +113,9 @@ func (m *MapWithTTL[K, V]) Values() []V {
 // SortedValues returns the values of the map, sorted by key
 func (m *MapWithTTL[K, V]) SortedValues() []V {
 	keys := m.SortedKeys()
+
+	m.mut.RLock()
+	defer m.mut.RUnlock()
 	values := make([]V, 0, len(keys))
 	for _, k := range keys {
 		values = append(values, m.Items[k].Value)
