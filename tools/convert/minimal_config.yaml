@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-10-11 at 16:32:57 UTC
+# automatically generated on 2024-11-22 at 17:59:52 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -29,6 +29,7 @@ Traces:
   SpanLimit: 0
   MaxBatchSize: 500
   SendTicker: 100ms
+  MaxExpiredTraces: 5_000
 Debugging:
   DebugServiceAddr: "localhost:6060"
   QueryAuthToken: "some-private-value"
@@ -71,6 +72,7 @@ OTelTracing:
   APIKey: SetThisToAHoneycombKey
   Dataset: "Refinery Traces"
   SampleRate: 100
+  Insecure: false
 PeerManagement:
   Type: file
   Identifier: "192.168.1.1"
@@ -102,9 +104,14 @@ Collection:
   MaxMemoryPercentage: 75
   MaxAlloc: 0
   DisableRedistribution: false
+  RedistributionDelay: 30s
   ShutdownDelay: 15s
-  EnableTraceLocality: false
+  DisableTraceLocality: false
   HealthCheckTimeout: 3s
+  MaxDropDecisionBatchSize: 1_000
+  DropDecisionSendInterval: 1s
+  MaxKeptDecisionBatchSize: 1_000
+  KeptDecisionSendInterval: 1s
 BufferSizes:
   UpstreamBufferSize: 10_000
   PeerBufferSize: 100_000

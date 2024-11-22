@@ -81,6 +81,9 @@ The remainder of this document describes the samplers that can be used within th
 {{- if .LastVersion -}}
   {{- continue -}}
 {{- end -}}
+{{- if .Unpublished -}}
+  {{- continue -}}
+{{- end -}}
 {{ template "rules_sitefield" . }}
 {{- end -}}
 
