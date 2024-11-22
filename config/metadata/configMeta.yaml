@@ -409,7 +409,7 @@ groups:
         validations:
           - type: minimum
             arg: 1000
-        summary: Max number of expired traces to process.
+        summary: is the maximum number of expired traces to process.
         description: >
           This setting controls how many traces are processed when it is time to
           make a sampling decision. Up to this many traces will be processed every
@@ -1375,6 +1375,7 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
+        unpublished: true
         default: 1000
         reload: false
         summary: Maximum size for batching drop decisions.
@@ -1385,6 +1386,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        unpublished: true
         default: 1s
         reload: true
         summary: Interval for sending drop decisions in batches.
@@ -1395,6 +1397,7 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
+        unpublished: true
         default: 1000
         reload: false
         summary: Maximum size for batching kept decisions.
@@ -1405,6 +1408,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        unpublished: true
         default: 1s
         reload: true
         summary: Interval for sending kept decisions in batches.

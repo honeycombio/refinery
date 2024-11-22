@@ -58,6 +58,9 @@ The remainder of this page describes the samplers that can be used within the `S
 {{- if .LastVersion -}}
   {{- continue -}}
 {{- end -}}
+{{- if .Unpublished -}}
+  {{- continue -}}
+{{- end -}}
 {{ template "rules_sitefield" . }}
 {{- end -}}
 

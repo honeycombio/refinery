@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2024-10-11 at 16:33:00 UTC.
+It was automatically generated on 2024-11-22 at 17:59:56 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -13,6 +13,10 @@ This table includes metrics with fully defined names.
 | collect_cache_buffer_overrun | Counter | Dimensionless | The number of times the trace overwritten in the circular buffer has not yet been sent |
 | collect_cache_capacity | Gauge | Dimensionless | The number of traces that can be stored in the cache |
 | collect_cache_entries | Histogram | Dimensionless | The number of traces currently stored in the cache |
+| trace_cache_set_dur_ms | Histogram | Dimensionless | duration to set a trace in the cache |
+| trace_cache_take_expired_traces_dur_ms | Histogram | Dimensionless | duration to take expired traces from the cache |
+| trace_cache_remove_traces_dur_ms | Histogram | Dimensionless | duration to remove traces from the cache |
+| trace_cache_get_all_dur_ms | Histogram | Dimensionless | duration to get all traces from the cache |
 | cuckoo_current_capacity | Gauge | Dimensionless | current capacity of the cuckoo filter |
 | cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
 | cuckoo_current_load_factor | Gauge | Percent | the fraction of slots occupied in the current cuckoo filter |
@@ -60,6 +64,16 @@ This table includes metrics with fully defined names.
 | trace_aggregate_sample_rate | Histogram | Dimensionless | aggregate sample rate of both kept and dropped traces |
 | collector_redistribute_traces_duration_ms | Histogram | Milliseconds | duration of redistributing traces to peers |
 | collector_collect_loop_duration_ms | Histogram | Milliseconds | duration of the collect loop, the primary event processing goroutine |
+| collector_outgoing_queue | Histogram | Dimensionless | number of traces waiting to be send to upstream |
+| collector_drop_decision_batch_count | Histogram | Dimensionless | number of drop decisions sent in a batch |
+| collector_expired_traces_missing_decisions | Gauge | Dimensionless | number of decision spans forwarded for expired traces missing trace decision |
+| collector_expired_traces_orphans | Gauge | Dimensionless | number of expired traces missing trace decision when they are sent |
+| drop_decision_batches_received | Counter | Dimensionless | number of drop decision batches received |
+| kept_decision_batches_received | Counter | Dimensionless | number of kept decision batches received |
+| drop_decisions_received | Counter | Dimensionless | total number of drop decisions received |
+| kept_decisions_received | Counter | Dimensionless | total number of kept decisions received |
+| collector_kept_decisions_queue_full | Counter | Dimensionless | number of times kept trace decision queue is full |
+| collector_drop_decisions_queue_full | Counter | Dimensionless | number of times drop trace decision queue is full |
 | cluster_stress_level | Gauge | Dimensionless | The overall stress level of the cluster |
 | individual_stress_level | Gauge | Dimensionless | The stress level of the individual node |
 | stress_level | Gauge | Dimensionless | The stress level that's being used to determine whether to activate stress relief |

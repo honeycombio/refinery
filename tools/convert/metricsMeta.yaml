@@ -11,6 +11,22 @@ complete:
       type: Histogram
       unit: Dimensionless
       description: The number of traces currently stored in the cache
+    - name: trace_cache_set_dur_ms
+      type: Histogram
+      unit: Dimensionless
+      description: duration to set a trace in the cache
+    - name: trace_cache_take_expired_traces_dur_ms
+      type: Histogram
+      unit: Dimensionless
+      description: duration to take expired traces from the cache
+    - name: trace_cache_remove_traces_dur_ms
+      type: Histogram
+      unit: Dimensionless
+      description: duration to remove traces from the cache
+    - name: trace_cache_get_all_dur_ms
+      type: Histogram
+      unit: Dimensionless
+      description: duration to get all traces from the cache
     - name: cuckoo_current_capacity
       type: Gauge
       unit: Dimensionless
@@ -199,6 +215,46 @@ complete:
       type: Histogram
       unit: Milliseconds
       description: duration of the collect loop, the primary event processing goroutine
+    - name: collector_outgoing_queue
+      type: Histogram
+      unit: Dimensionless
+      description: number of traces waiting to be send to upstream
+    - name: collector_drop_decision_batch_count
+      type: Histogram
+      unit: Dimensionless
+      description: number of drop decisions sent in a batch
+    - name: collector_expired_traces_missing_decisions
+      type: Gauge
+      unit: Dimensionless
+      description: number of decision spans forwarded for expired traces missing trace decision
+    - name: collector_expired_traces_orphans
+      type: Gauge
+      unit: Dimensionless
+      description: number of expired traces missing trace decision when they are sent
+    - name: drop_decision_batches_received
+      type: Counter
+      unit: Dimensionless
+      description: number of drop decision batches received
+    - name: kept_decision_batches_received
+      type: Counter
+      unit: Dimensionless
+      description: number of kept decision batches received
+    - name: drop_decisions_received
+      type: Counter
+      unit: Dimensionless
+      description: total number of drop decisions received
+    - name: kept_decisions_received
+      type: Counter
+      unit: Dimensionless
+      description: total number of kept decisions received
+    - name: collector_kept_decisions_queue_full
+      type: Counter
+      unit: Dimensionless
+      description: number of times kept trace decision queue is full
+    - name: collector_drop_decisions_queue_full
+      type: Counter
+      unit: Dimensionless
+      description: number of times drop trace decision queue is full
     - name: cluster_stress_level
       type: Gauge
       unit: Dimensionless

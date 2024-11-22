@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-10-11 at 16:32:56 UTC.
+# Automatically generated on 2024-11-22 at 17:59:51 UTC.
 
 General:
   - ConfigurationVersion
@@ -53,6 +53,8 @@ Traces:
   - MaxBatchSize
 
   - SendTicker
+
+  - MaxExpiredTraces
 
 
 Debugging:
@@ -134,6 +136,8 @@ OTelTracing:
 
   - SampleRate
 
+  - Insecure
+
 
 PeerManagement:
   - Type (originally PeerManagement.Type)
@@ -186,11 +190,21 @@ Collection:
 
   - DisableRedistribution
 
+  - RedistributionDelay
+
   - ShutdownDelay
 
-  - EnableTraceLocality
+  - DisableTraceLocality
 
   - HealthCheckTimeout
+
+  - MaxDropDecisionBatchSize
+
+  - DropDecisionSendInterval
+
+  - MaxKeptDecisionBatchSize
+
+  - KeptDecisionSendInterval
 
 
 BufferSizes:

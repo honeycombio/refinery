@@ -317,6 +317,20 @@ Decreasing this will check the trace cache for timeouts more frequently.
 - Type: `duration`
 - Default: `100ms`
 
+### `MaxExpiredTraces`
+
+`MaxExpiredTraces` is the maximum number of expired traces to process.
+
+This setting controls how many traces are processed when it is time to make a sampling decision.
+Up to this many traces will be processed every `SendTicker` duration.
+If this number is too small it will mean Refinery is spending less time calculating sampling decisions, resulting in data arriving at Honeycomb slower.
+If your `collector_collect_loop_duration_ms` is above 3 seconds it is recommended to reduce this value and the `SendTicker` duration.
+This will mean Refinery makes fewer sampling decision calculations each `SendTicker` tick, but gets the chance to make decisions more often.
+
+- Eligible for live reload.
+- Type: `int`
+- Default: `5000`
+
 ## Debugging
 
 `Debugging` contains configuration values used when setting up and debugging Refinery.
@@ -367,6 +381,7 @@ This is useful for evaluating sampling rules.
 When DryRun is enabled, traces is decorated with `meta.refinery.
 dryrun.kept` that is set to `true` or `false`, based on whether the trace would be kept or dropped.
 In addition, `SampleRate` will be set to the incoming rate for all traces, and the field `meta.refinery.dryrun.sample_rate` will be set to the sample rate that would have been used.
+NOTE: This setting is not compatible with `DisableTraceLocality=true`, because drop trace decisions shared among peers do not contain all the relevant information needed to send traces to Honeycomb.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -705,6 +720,16 @@ Since each incoming span generates multiple outgoing spans, a minimum sample rat
 - Type: `int`
 - Default: `100`
 
+### `Insecure`
+
+`Insecure` controls whether to send Refinery's own OpenTelemetry traces via http instead of https.
+
+When true Refinery will export its internal traces over http instead of https.
+Useful if you plan on sending your traces to a different refinery instance for tail sampling.
+
+- Not eligible for live reload.
+- Type: `bool`
+
 ## Peer Management
 
 `PeerManagement` controls how the Refinery cluster communicates between peers.
@@ -870,6 +895,8 @@ The collection cache is used to collect all active spans into traces.
 It is organized as a circular buffer.
 When the buffer wraps around, Refinery will try a few times to find an empty slot; if it fails, it starts ejecting traces from the cache earlier than would otherwise be necessary.
 Ideally, the size of the cache should be many multiples (100x to 1000x) of the total number of concurrently active traces (average trace throughput * average trace duration).
+NOTE: This setting is now deprecated and no longer controls the cache size.
+Instead the maxmimum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
 
 - Eligible for live reload.
 - Type: `int`
@@ -955,6 +982,18 @@ By disabling this behavior, it can help to prevent disruptive bursts of network 
 - Eligible for live reload.
 - Type: `bool`
 
+### `RedistributionDelay`
+
+`RedistributionDelay` controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
+
+This value should be longer than the amount of time between individual pod changes in a bulk scaling operation (changing the cluster size by more than one pod).
+Each redistribution generates additional traffic between peers.
+If this value is too short, multiple consecutive redistributions will occur and the resulting traffic may overwhelm the cluster.
+
+- Not eligible for live reload.
+- Type: `duration`
+- Default: `30s`
+
 ### `ShutdownDelay`
 
 `ShutdownDelay` controls the maximum time Refinery can use while draining traces at shutdown.
@@ -967,13 +1006,20 @@ This value should be set to a bit less than the normal timeout period for shutti
 - Type: `duration`
 - Default: `15s`
 
-### `EnableTraceLocality`
+### `DisableTraceLocality`
 
-`EnableTraceLocality` controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
+`DisableTraceLocality` controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
 
-If `true`, Refinery's will route all spans that belongs to the same trace to a single peer.
+When `false`, Refinery will route all spans that belong to the same trace to a single peer.
+This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
+When `true`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.
+This can reduce the amount of traffic between peers in most cases, and can help avoid a situation where a single large trace can cause a memory overrun on a single node.
+If `true`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all nodes in the cluster.
+It is important to adjust the size of the Redis cluster in this case.
+NOTE: This setting is not compatible with `DryRun` when set to true.
+See `DryRun` for more information.
 
-- Eligible for live reload.
+- Not eligible for live reload.
 - Type: `bool`
 
 ### `HealthCheckTimeout`

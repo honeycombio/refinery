@@ -6,6 +6,12 @@
     {{- println -}}
     {{- $group.Name | indent 0 }}:
     {{- range $group.Fields -}}
+        {{- if .LastVersion -}}
+            {{- continue -}}
+        {{- end -}}
+        {{- if .Unpublished -}}
+            {{- continue -}}
+        {{- end -}}
         {{- $field := . }}
         {{- println -}}
         {{ print $field.Name ": " | indent 2 -}}
