@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2024-10-11 at 16:32:57 UTC
+# automatically generated on 2024-11-22 at 18:35:03 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -29,6 +29,7 @@ Traces:
   SpanLimit: 0
   MaxBatchSize: 500
   SendTicker: 100ms
+  MaxExpiredTraces: 5_000
 Debugging:
   DebugServiceAddr: "localhost:6060"
   QueryAuthToken: "some-private-value"
@@ -71,6 +72,7 @@ OTelTracing:
   APIKey: SetThisToAHoneycombKey
   Dataset: "Refinery Traces"
   SampleRate: 100
+  Insecure: false
 PeerManagement:
   Type: file
   Identifier: "192.168.1.1"
@@ -88,12 +90,9 @@ RedisPeerManagement:
   Username: ""
   Password: ""
   AuthCode: ""
-  Prefix: customPrefix
-  Database: 1
   UseTLS: false
   UseTLSInsecure: false
   Timeout: 5s
-  Strategy: hash
 Collection:
   CacheCapacity: 10_000
   PeerQueueSize: 30_000
@@ -102,8 +101,9 @@ Collection:
   MaxMemoryPercentage: 75
   MaxAlloc: 0
   DisableRedistribution: false
+  RedistributionDelay: 30s
   ShutdownDelay: 15s
-  EnableTraceLocality: false
+  DisableTraceLocality: false
   HealthCheckTimeout: 3s
 BufferSizes:
   UpstreamBufferSize: 10_000
@@ -111,8 +111,6 @@ BufferSizes:
 Specialized:
   EnvironmentCacheTTL: 1h
   CompressPeerCommunication: true
-  Collector: InMemCollector
-  CacheOverrunStrategy: resize
   AdditionalAttributes: 
     ClusterName: MyCluster
     environment: production
@@ -137,7 +135,6 @@ GRPCServerParameters:
   MaxSendMsgSize: 15MB
   MaxRecvMsgSize: 15MB
 SampleCache:
-  Type: cuckoo
   KeptSize: 10_000
   DroppedSize: 1_000_000
   SizeCheckInterval: 10s
@@ -147,4 +144,3 @@ StressRelief:
   DeactivationLevel: 75
   SamplingRate: 100
   MinimumActivationDuration: 10s
-  MinimumStartupDuration: 3s

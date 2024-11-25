@@ -40,6 +40,9 @@ The remainder of this page describes the sections within the file and the fields
 {{- if .LastVersion -}}
   {{- continue -}}
 {{- end -}}
+{{- if .Unpublished -}}
+  {{- continue -}}
+{{- end -}}
 {{ template "docsite_field" . }}
 {{- end -}}
 

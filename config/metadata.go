@@ -45,6 +45,7 @@ type Field struct {
 	Pattern      string       `yaml:"pattern,omitempty"`
 	Envvar       string       `yaml:"envvar,omitempty"`
 	CommandLine  string       `yaml:"commandLine,omitempty"`
+	Unpublished  bool         `yaml:"unpublished,omitempty"`
 }
 
 type Group struct {

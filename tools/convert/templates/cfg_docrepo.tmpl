@@ -47,6 +47,9 @@ The remainder of this document describes the sections within the file and the fi
 {{- if .LastVersion -}}
   {{- continue -}}
 {{- end -}}
+{{- if .Unpublished -}}
+  {{- continue -}}
+{{- end -}}
 {{ template "docsite_field" . }}
 {{- end -}}
 
