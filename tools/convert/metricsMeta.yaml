@@ -11,22 +11,6 @@ complete:
       type: Histogram
       unit: Dimensionless
       description: The number of traces currently stored in the cache
-    - name: trace_cache_set_dur_ms
-      type: Histogram
-      unit: Dimensionless
-      description: duration to set a trace in the cache
-    - name: trace_cache_take_expired_traces_dur_ms
-      type: Histogram
-      unit: Dimensionless
-      description: duration to take expired traces from the cache
-    - name: trace_cache_remove_traces_dur_ms
-      type: Histogram
-      unit: Dimensionless
-      description: duration to remove traces from the cache
-    - name: trace_cache_get_all_dur_ms
-      type: Histogram
-      unit: Dimensionless
-      description: duration to get all traces from the cache
     - name: cuckoo_current_capacity
       type: Gauge
       unit: Dimensionless
