@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-11-22 at 17:59:58 UTC.
+It was automatically generated on 2024-11-26 at 18:43:37 UTC.
 
 ## The Config file
 
@@ -589,7 +589,7 @@ It is recommended that you create a separate team and key for Refinery metrics.
 - Not eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY`
+- Environment variable: `REFINERY_HONEYCOMB_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY`
 
 ### `Dataset`
 
@@ -647,7 +647,7 @@ If this is blank, then Refinery will not set the Honeycomb-specific headers for 
 - Not eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_OTEL_METRICS_API_KEY, HONEYCOMB_API_KEY`
+- Environment variable: `REFINERY_OTEL_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY`
 
 ### `Dataset`
 

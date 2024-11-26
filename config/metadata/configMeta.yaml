@@ -715,7 +715,7 @@ groups:
         validations:
           - type: format
             arg: apikey
-        envvar: REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY
+        envvar: REFINERY_HONEYCOMB_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY
         commandline: legacy-metrics-api-key
         summary: is the API key used by Refinery to send its metrics to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the environment variable or a configuration file.
         description: >
@@ -785,7 +785,7 @@ groups:
         validations:
           - type: format
             arg: apikey
-        envvar: REFINERY_OTEL_METRICS_API_KEY, HONEYCOMB_API_KEY
+        envvar: REFINERY_OTEL_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY
         commandline: otel-metrics-api-key
         firstversion: v2.0
         summary: is the API key used to send Honeycomb metrics via OpenTelemetry. Setting this value via a command line flag may expose credentials - it is recommended to use the environment variable or a configuration file.
