@@ -572,7 +572,7 @@ It is recommended that you create a separate team and key for Refinery metrics.
 - Not eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_HONEYCOMB_METRICS_API_KEY, HONEYCOMB_API_KEY`
+- Environment variable: `REFINERY_HONEYCOMB_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY`
 
 ### `Dataset`
 
@@ -630,7 +630,7 @@ If this is blank, then Refinery will not set the Honeycomb-specific headers for 
 - Not eligible for live reload.
 - Type: `string`
 - Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_OTEL_METRICS_API_KEY, HONEYCOMB_API_KEY`
+- Environment variable: `REFINERY_OTEL_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY`
 
 ### `Dataset`
 
