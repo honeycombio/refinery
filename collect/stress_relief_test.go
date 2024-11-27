@@ -158,7 +158,7 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 			MinimumActivationDuration: config.Duration(5 * time.Second),
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			DisableTraceLocality: true,
+			TraceCache: "distributed",
 		},
 	}
 	// On startup, the stress relief should not be active

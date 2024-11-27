@@ -766,7 +766,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 		redisDB := 12 + i
 		cfg := defaultConfig(basePort, redisDB)
 		collectionCfg := cfg.GetCollectionConfig()
-		collectionCfg.DisableTraceLocality = true
+		collectionCfg.TraceCache = "distributed"
 		cfg.GetCollectionConfigVal = collectionCfg
 
 		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
