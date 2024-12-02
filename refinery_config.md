@@ -381,7 +381,7 @@ This is useful for evaluating sampling rules.
 When DryRun is enabled, traces is decorated with `meta.refinery.
 dryrun.kept` that is set to `true` or `false`, based on whether the trace would be kept or dropped.
 In addition, `SampleRate` will be set to the incoming rate for all traces, and the field `meta.refinery.dryrun.sample_rate` will be set to the sample rate that would have been used.
-NOTE: This setting is not compatible with `DisableTraceLocality=true`, because drop trace decisions shared among peers do not contain all the relevant information needed to send traces to Honeycomb.
+NOTE: This setting is not compatible with `TraceCache=distributed`, because drop trace decisions shared among peers do not contain all the relevant information needed to send traces to Honeycomb.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -1006,21 +1006,23 @@ This value should be set to a bit less than the normal timeout period for shutti
 - Type: `duration`
 - Default: `15s`
 
-### `DisableTraceLocality`
+### `TraceLocalityMode`
 
-`DisableTraceLocality` controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
+`TraceLocalityMode` controls how Refinery handles spans that belong to the same trace in a clustered environment.
 
-When `false`, Refinery will route all spans that belong to the same trace to a single peer.
+When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
 This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
-When `true`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.
-This can reduce the amount of traffic between peers in most cases, and can help avoid a situation where a single large trace can cause a memory overrun on a single node.
-If `true`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all nodes in the cluster.
+When `distributed`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.
+This can reduce the amount of traffic between peers, and can help avoid a situation where a single large trace can cause a memory overrun on a single node.
+If `distributed`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all nodes in the cluster.
 It is important to adjust the size of the Redis cluster in this case.
-NOTE: This setting is not compatible with `DryRun` when set to true.
+The total volume of network traffic in `distributed` mode should be expected to decrease unless the cluster size is very large (hundreds of nodes).
+NOTE: This setting is not compatible with `DryRun` when set to `distributed`.
 See `DryRun` for more information.
 
 - Not eligible for live reload.
-- Type: `bool`
+- Type: `string`
+- Default: `concentrated`
 
 ### `HealthCheckTimeout`
 

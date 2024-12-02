@@ -614,7 +614,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		}
 	}
 
-	if !r.Config.GetCollectionConfig().DisableTraceLocality {
+	if r.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		// Figure out if we should handle this span locally or pass on to a peer
 		targetShard := r.Sharder.WhichShard(traceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {

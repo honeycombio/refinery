@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-11-22 at 17:59:51 UTC.
+# Automatically generated on 2024-12-02 at 16:40:46 UTC.
 
 General:
   - ConfigurationVersion
@@ -194,7 +194,7 @@ Collection:
 
   - ShutdownDelay
 
-  - DisableTraceLocality
+  - TraceLocalityMode
 
   - HealthCheckTimeout
 
