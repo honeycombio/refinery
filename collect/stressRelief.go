@@ -428,7 +428,7 @@ func (s *StressRelief) Recalc() uint {
 	// If a single node is under significant stress, it can activate stress relief mode
 	overallStressLevel := uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
 
-	if s.Config.GetCollectionConfig().DisableTraceLocality {
+	if !s.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		overallStressLevel = clusterStressLevel
 	}
 	s.overallStressLevel = overallStressLevel

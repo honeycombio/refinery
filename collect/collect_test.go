@@ -98,7 +98,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		redistributeTimer: redistributeNotifier,
 	}
 
-	if conf.GetCollectionConfig().DisableTraceLocality {
+	if !conf.GetCollectionConfig().TraceLocalityEnabled() {
 		localPubSub.Subscribe(context.Background(), keptTraceDecisionTopic, c.signalKeptTraceDecisions)
 	}
 
@@ -196,7 +196,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	conf.Mux.Lock()
 	collectionCfg := conf.GetCollectionConfigVal
-	collectionCfg.DisableTraceLocality = true
+	collectionCfg.TraceLocalityMode = "distributed"
 	conf.GetCollectionConfigVal = collectionCfg
 	conf.Mux.Unlock()
 
@@ -527,8 +527,8 @@ func TestDryRunMode(t *testing.T) {
 		DryRun:             true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay:        config.Duration(1 * time.Millisecond),
-			DisableTraceLocality: true,
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			TraceLocalityMode: "distributed",
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -2233,8 +2233,8 @@ func TestSendDropDecisions(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay:        config.Duration(1 * time.Millisecond),
-			DisableTraceLocality: true,
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			TraceLocalityMode: "distributed",
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -2318,7 +2318,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 			MaxBatchSize: 1500,
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			DisableTraceLocality: true,
+			TraceLocalityMode: "distributed",
 		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
