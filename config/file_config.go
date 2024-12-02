@@ -317,8 +317,8 @@ type CollectionConfig struct {
 	DisableRedistribution bool     `yaml:"DisableRedistribution"`
 	RedistributionDelay   Duration `yaml:"RedistributionDelay" default:"30s"`
 
-	ShutdownDelay Duration `yaml:"ShutdownDelay" default:"15s"`
-	TraceCache    string   `yaml:"TraceCache" default:"concentrated"`
+	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
+	TraceLocalityMode string   `yaml:"TraceLocalityMode" default:"concentrated"`
 
 	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
 	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`
@@ -357,7 +357,7 @@ func (c CollectionConfig) GetIncomingQueueSize() int {
 
 // TraceLocalityEnabled returns whether trace locality is enabled.
 func (c CollectionConfig) TraceLocalityEnabled() bool {
-	switch c.TraceCache {
+	switch c.TraceLocalityMode {
 	case "concentrated":
 		return true
 	case "distributed":

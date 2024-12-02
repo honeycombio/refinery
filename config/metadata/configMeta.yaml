@@ -1340,13 +1340,13 @@ groups:
           This value should be set to a bit less than the normal timeout period
           for shutting down without forcibly terminating the process.
 
-      - name: TraceCache
+      - name: TraceLocalityMode
         type: string
         valuetype: nondefault
         firstversion: v2.9
         default: "concentrated"
         reload: false
-        summary: controls whether all spans that belongs to the same trace are sent to a single Refinery for processing.
+        summary: controls the how Refinery handles spans that belongs to the same trace in a clustered environment.
         description: >
           When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer. This is the
           default behavior ("Trace Locality") and the way Refinery has worked in the past. When `distributed`, Refinery
