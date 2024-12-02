@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2024-11-22 at 17:59:50 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2024-12-02 at 16:12:16 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -425,7 +425,7 @@ Debugging:
     ## to the incoming rate for all traces, and the field
     ## `meta.refinery.dryrun.sample_rate` will be set to the sample rate that
     ## would have been used.
-    ## NOTE: This setting is not compatible with `DisableTraceLocality=true`,
+    ## NOTE: This setting is not compatible with `TraceCache=distributed`,
     ## because drop trace decisions shared among peers do not contain all the
     ## relevant information needed to send traces to Honeycomb.
     ##
@@ -1078,27 +1078,29 @@ Collection:
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "ShutdownDelay" "ShutdownDelay" "15s" }}
 
-    ## DisableTraceLocality controls whether all spans that belongs to the
-    ## same trace are sent to a single Refinery for processing.
+    ## TraceLocalityMode controls the how Refinery handles spans that belongs
+    ## to the same trace in a clustered environment.
     ##
-    ## When `false`, Refinery will route all spans that belong to the same
-    ## trace to a single peer. This is the default behavior ("Trace
-    ## Locality") and the way Refinery has worked in the past. When `true`,
-    ## Refinery will instead keep spans on the node where they were received,
-    ## and forward proxy spans that contain only the key information needed
-    ## to make a trace decision. This can reduce the amount of traffic
-    ## between peers in most cases, and can help avoid a situation where a
-    ## single large trace can cause a memory overrun on a single node.
-    ## If `true`, the amount of traffic between peers will be reduced, but
-    ## the amount of traffic between Refinery and Redis will significantly
-    ## increase, because Refinery uses Redis to distribute the trace
-    ## decisions to all nodes in the cluster. It is important to adjust the
-    ## size of the Redis cluster in this case.
+    ## When `concentrated`, Refinery will route all spans that belong to the
+    ## same trace to a single peer. This is the default behavior ("Trace
+    ## Locality") and the way Refinery has worked in the past. When
+    ## `distributed`, Refinery will instead keep spans on the node where they
+    ## were received, and forward proxy spans that contain only the key
+    ## information needed to make a trace decision. This can reduce the
+    ## amount of traffic between peers in most cases, and can help avoid a
+    ## situation where a single large trace can cause a memory overrun on a
+    ## single node.
+    ## If `distributed`, the amount of traffic between peers will be reduced,
+    ## but the amount of traffic between Refinery and Redis will
+    ## significantly increase, because Refinery uses Redis to distribute the
+    ## trace decisions to all nodes in the cluster. It is important to adjust
+    ## the size of the Redis cluster in this case.
     ## NOTE: This setting is not compatible with `DryRun` when set to true.
     ## See `DryRun` for more information.
     ##
+    ## default: concentrated
     ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "DisableTraceLocality" "DisableTraceLocality" false }}
+    {{ nonDefaultOnly .Data "TraceLocalityMode" "TraceLocalityMode" "concentrated" }}
 
     ## HealthCheckTimeout controls the maximum duration allowed for
     ## collection health checks to complete.
