@@ -1,5 +1,101 @@
 # Refinery Changelog
 
+## 2.9.0 2024-12-03
+
+This release introduces a variety of enhancements and bug fixes. It has two major features: one that improves memory consumption reporting, and one experimental feature for configuring trace locality mode.
+See full details in [the Release Notes](./RELEASE_NOTES.md).
+
+### Features
+
+- feat: rename DisableTraceLocality to TraceCache (#1450) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add 'unpublished' flag to configs (#1446) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Rename EnableTraceLocality to DisableTraceLocality (#1442) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: add a limit to queue draining logic (#1441) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Try to drain incoming and peer queues for an amount of time (#1440) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: ignore trace decision messages produced by the publishers (#1437) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add basic telemetry to event, batch and OTLP endpoints (#1431) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: compress kept trace decision message (#1430) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: publish instanceID during peer comms (#1420) | [Kent Quirk](https://github.com/)
+- feat: increase KeptDecisionSendInterval default value to 1s (#1421) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: set a better version for dev builds (#1415) | [Robb Kidd](https://github.com/robbkidd)
+- feat: compress kept trace decision message (#1430) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: publish instanceID during peer comms (#1420) | [Kent Quirk](https://github.com/kentquirk)
+- feat: increase KeptDecisionSendInterval default value to 1s (#1421) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: set a better version for dev builds (#1415) | [Robb Kidd](https://github.com/robbkidd)
+- feat: batch kept decisions (#1419) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: only redistribute traces when its ownership has changed (#1411) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: only enalbe stress relief for the entire cluster together (#1413) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: send kept trace decision in a separate goroutine (#1412) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Add a way to specify the team key for config fetches (experimental) (#1410) | [Kent Quirk](https://github.com/kentquirk)
+- feat: send drop decisions in batch (#1402) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Update in-memory trace cache to use LRU instead of ring buffer (#1359) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: Log response bodies when sending events to Honeycomb (#1386) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: make collector health check timeout configurable (#1371) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Record original user agent for spans and logs (#1358) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: forward decision span through peer endpoint (#1342) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: extract decision span from full span (#1338) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat(doc): separate table for metrics contains prefix (#1354) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: generate metrics documentation (#1351) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: Improve shutdown logic (#1347) | [Kent Quirk](https://github.com/kentquirk)
+- feat: Update Honeycomb logger to use EMAThroughput sampler (#1328) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: Improve log messages to be more informative (#1322) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- feat: extract key fields from rules config (#1327) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Fixes
+
+- fix: documentation bug (#1449) | [Kent Quirk](https://github.com/kentquirk)
+- fix: missing read lock in MapWithTTL (#1445) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: revert draining logic for incoming and peer queue (#1443) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: only ignore messages that are coming from the node itself (#1438) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: Update flaky test (#1436) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- fix: send all traffic through deterministic sampler during stress relief activated (#1433) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: more reliable dev version tagging (#1424) | [Robb Kidd](https://github.com/robbkidd)
+- fix: do not use trace object during processTraceDecisions (#1423) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: more reliable dev version tagging (#1424) | [Robb Kidd](https://github.com/robbkidd)
+- fix: do not use trace object during processTraceDecisions (#1423) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: count the number of IDs in drop decision messages (#1416) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- fix: replace api key with SendKey before transmission (#1404) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: deal with orphan traces and expired traces (#1408) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: reset redistribution delay on peer membership change (#1403) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: explictly assign float64 type for trace cache metrics (#1406) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: deal with orphan traces in trace cache (#1405) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: use current node address as default peer list (#1388) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: Only set incoming user agent if not already present (#1366) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- fix: Put a limit on the size of sampler keys (#1364) | [Kent Quirk](https://github.com/kentquirk)
+- fix: set 0 for otel metrics during registration (#1352) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: remove InMemoryCollector from liveness check on shutdown (#1349) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: ConvertNumeric now handles bools (#1336) | [Kent Quirk](https://github.com/kentquirk)
+- fix: remove unnecessary assertion to any (#1333) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: Use peer transmission during redistribute and shutdown events (#1332) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+
+### Maintenance
+
+- maint(deps): bump the minor-patch group with 6 updates (#1451) | [dependabot](https://github.com/dependabot)
+- maint: update metrics doc (#1448) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: remove trace cache metrics (#1447) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: clean up sampler log entry (#1444) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint(deps): bump the minor-patch group with 11 updates (#1428) | [dependabot](https://github.com/dependabot)
+- maint: Add missing LICENSE file (#1429) | [Kent Quirk](https://github.com/kentquirk)
+- maint: build fixes (#1427) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Update log level for making a trace decision to debug (#1425) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- docs: update config docs for compatability of using DryRun and EnableTraceLocality together (#1418) | [Mike
+  Goldsmith](https://github.com/MikeGoldsmith)
+- maint: Add missing LICENSE file (#1429) | [Kent Quirk](https://github.com/kentquirk)
+- maint: build fixes (#1427) | [Kent Quirk](https://github.com/kentquirk)
+- maint: Update log level for making a trace decision to debug (#1425) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- docs: update config docs for compatability of using DryRun and EnableTraceLocality together (#1418) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- maint: add comments about an edge case in SendKey (#1387) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: Update OTel dependencies (#1409) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+  lmuth](https://github.com/vinozzZ)
+- docs: Document the ability to use prefix in dynamic sampler FieldList (#1396) | [Irving Popovetsky](https://github.com/irvingpop)
+  (demo_metrics_doc)- maint: cherry pick v2.8.4 commits into main. (#1383) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint: Update main documentation with 2.8.3 release (#1374) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- docs: Update configMeta.yaml with capitalization fixes (#1373) | [Mary J.](https://github.com/mjingle)
+- maint: add collector_redistribute_traces_duration_ms metric (#1368) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint(deps): bump the minor-patch group with 13 updates (#1357) | [dependabot](https://github.com/dependabot)
+- maint: Refactor metrics registration to streamline declaration and enable easier documentation generation (#1350) | [Yingrong Zhao](https://github.com/vinozzZ)
+- maint: rename sent_reason_cache to kept_reason_cache (#1346) | [Yingrong Zhao](https://github.com/vinozzZ)
+
 ## 2.8.4 2024-10-11
 
 ### Fixes
