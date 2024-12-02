@@ -294,8 +294,8 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// successive traces until we've crossed the totalToRemove threshold
 	// or just run out of traces to delete.
 
-	cap := i.cache.GetCacheCapacity()
-	i.Metrics.Gauge("collector_cache_size", cap)
+	cacheSize := len(allTraces)
+	i.Metrics.Gauge("collector_cache_size", cacheSize)
 
 	totalDataSizeSent := 0
 	tracesSent := generics.NewSet[string]()
@@ -325,7 +325,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
 	i.Logger.Warn().
-		WithField("cache_size", cap).
+		WithField("cache_size", cacheSize).
 		WithField("alloc", mem.Alloc).
 		WithField("num_traces_sent", len(tracesSent)).
 		WithField("datasize_sent", totalDataSizeSent).

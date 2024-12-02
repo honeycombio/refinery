@@ -95,7 +95,6 @@ func GenerateMetricsMetadata() error {
 											continue
 										}
 										if slices.Contains(packagesContainsPrefix, pkg.Name) {
-											fmt.Println("name", pkg.Name)
 											usages.HasPrefix = append(usages.HasPrefix, usage)
 										} else {
 											usages.Complete = append(usages.Complete, usage)
