@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2024-11-25 at 17:24:16 UTC.
+It was automatically generated on 2024-12-02 at 18:38:37 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -10,8 +10,6 @@ This table includes metrics with fully defined names.
 
 | Name | Type | Unit | Description |
 |------|------|------|-------------|
-| collect_cache_buffer_overrun | Counter | Dimensionless | The number of times the trace overwritten in the circular buffer has not yet been sent |
-| collect_cache_capacity | Gauge | Dimensionless | The number of traces that can be stored in the cache |
 | collect_cache_entries | Histogram | Dimensionless | The number of traces currently stored in the cache |
 | cuckoo_current_capacity | Gauge | Dimensionless | current capacity of the cuckoo filter |
 | cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
