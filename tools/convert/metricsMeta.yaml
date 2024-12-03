@@ -1,12 +1,4 @@
 complete:
-    - name: collect_cache_buffer_overrun
-      type: Counter
-      unit: Dimensionless
-      description: The number of times the trace overwritten in the circular buffer has not yet been sent
-    - name: collect_cache_capacity
-      type: Gauge
-      unit: Dimensionless
-      description: The number of traces that can be stored in the cache
     - name: collect_cache_entries
       type: Histogram
       unit: Dimensionless
