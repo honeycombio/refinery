@@ -24,6 +24,7 @@ See full details in [the Release Notes](./RELEASE_NOTES.md).
 - feat: only redistribute traces when its ownership has changed (#1411) | [Yingrong Zhao](https://github.com/vinozzZ)
 - feat: Add a way to specify the team key for config fetches (experimental) (#1410) | [Kent Quirk](https://github.com/kentquirk)
 - feat: send drop decisions in batch (#1402) | [Yingrong Zhao](https://github.com/vinozzZ)
+- feat: use priority queue to implement trace cache (#1399) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 - feat: Update in-memory trace cache to use LRU instead of ring buffer (#1359) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 - feat: Log response bodies when sending events to Honeycomb (#1386) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 - feat: make collector health check timeout configurable (#1371) | [Yingrong Zhao](https://github.com/vinozzZ)

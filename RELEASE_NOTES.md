@@ -14,6 +14,8 @@ We’re hopeful this change to memory consumption will lead to a more reliable w
 
 However, because Refinery concentrates all of the spans on a single trace to the same node, it’s possible that a very large trace can cause memory spikes on a single node in a way that is immune to horizontal scaling. If your service generates very large traces (10,000 spans or more) you should address that issue before attempting autoscaling.
 
+These improvements deprecate the `CacheCapacity` configuration option and the associated metrics `collector_cache_capacity` and `collect_cache_buffer_overrun`. Refinery now dynamically manages memory based on the available resources. It uses `AvailableMemory` and `MaxMemoryPercentage` or `MaxAlloc` to determine the maximum memory it can consume, ensuring more efficient and adaptive memory utilization without relying on fixed capacity settings.
+
 ### Trace Locality Mode (Experimental)
 
 Since early days, Refinery has allocated individual traces to specific Refinery instances using the span’s trace ID, with an equal portion allocated to each. Refinery forwards spans belonging to other instances so that all spans for a given trace ID are stored and handled by a single instance. This method, which is known as “Trace Locality” with a default configuration option of concentrated, has served Refinery well for a long time but has two major issues:
