@@ -6,7 +6,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 This release has two major features: one that improves memory consumption reporting, and one experimental feature for configuring trace locality mode.
 
-### Improved Memory Reporting
+### Improved Memory Usage
 
 Refinery 2.9 changes the way each instance consumes and releases memory which results in a more accurate representation of actual memory usage. Previously an instance would consume up to it’s allocated maximum and then stay roughly at that level. Now it will release memory faster for traces that it’s made a decision on leading to a more accurate memory usage indicator.
 
