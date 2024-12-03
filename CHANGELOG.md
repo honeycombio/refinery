@@ -70,6 +70,7 @@ See full details in [the Release Notes](./RELEASE_NOTES.md).
 
 ### Maintenance
 
+- maint: remove unused collect_cache metrics (#1452) | [Yingrong Zhao](https://github.com/vinozzZ)
 - maint(deps): bump the minor-patch group with 6 updates (#1451) | [dependabot](https://github.com/dependabot)
 - maint: update metrics doc (#1448) | [Yingrong Zhao](https://github.com/vinozzZ)
 - maint: remove trace cache metrics (#1447) | [Yingrong Zhao](https://github.com/vinozzZ)
