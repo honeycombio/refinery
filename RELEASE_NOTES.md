@@ -8,34 +8,36 @@ This release has two major features: one that improves memory consumption report
 
 ### Improved Memory Usage
 
-Refinery 2.9 changes the way each instance consumes and releases memory which results in a more accurate representation of actual memory usage. Previously an instance would consume up to it’s allocated maximum and then stay roughly at that level. Now it will release memory faster for traces that it’s made a decision on leading to a more accurate memory usage indicator.
+Refinery 2.9 changes the way each instance consumes and releases memory which results in a more accurate representation of actual memory usage. Previously an instance would consume up to its allocated maximum and then stay roughly at that level. Now it will release memory faster for traces after making a decision, leading to a more accurate memory usage indicator.
 
-We’re hopeful this change to memory consumption will lead to a more reliable way to automatically scale a Refinery cluster such as with Kubernetes HPA auto scalers.
+We're hopeful this change to memory consumption will lead to a more reliable way to automatically scale a Refinery cluster such as with Kubernetes HPA auto scalers.
 
-However, because Refinery concentrates all of the spans on a single trace to the same node, it’s possible that a very large trace can cause memory spikes on a single node in a way that is immune to horizontal scaling. If your service generates very large traces (10,000 spans or more) you should address that issue before attempting autoscaling.
+However, because Refinery concentrates all of the spans on a single trace to the same node, it's possible that a very large trace can cause memory spikes on a single node in a way that is immune to horizontal scaling. If your service generates very large traces (10,000 spans or more) you should address that issue before attempting autoscaling.
+
+These improvements deprecate the `CacheCapacity` configuration option and the associated metrics `collector_cache_capacity` and `collect_cache_buffer_overrun`. Refinery now dynamically manages memory based on the available resources. It uses `AvailableMemory` and `MaxMemoryPercentage` or `MaxAlloc` to determine the maximum memory it can consume, ensuring more efficient and adaptive memory utilization without relying on fixed capacity settings.
 
 ### Trace Locality Mode (Experimental)
 
-Since early days, Refinery has allocated individual traces to specific Refinery instances using the span’s trace ID, with an equal portion allocated to each. Refinery forwards spans belonging to other instances so that all spans for a given trace ID are stored and handled by a single instance. This method, which is known as “Trace Locality” with a default configuration option of concentrated, has served Refinery well for a long time but has two major issues:
+Since early days, Refinery has allocated individual traces to specific Refinery instances using the span's trace ID, with an equal portion allocated to each. Refinery forwards spans belonging to other instances so that all spans for a given trace ID are stored and handled by a single instance. This method, which has been known as "Trace Locality", has served Refinery well for a long time but has two major issues:
 
 1. It requires peer communication to forward these spans to the designated instance, and this traffic grows as the number of instances in the cluster increases.
 2. Very large traces (10,000+ spans) exert increased memory pressure on the designated instances which can result in degraded stability, particularly in the amount of memory needed to store all the spans. This is also the primary reason why horizontally automatic scaling is inconsistent, as a single node might have irregular memory consumption compared to others.
 
-Refinery 2.9 introduces a new experimental feature that allows configuring different mode for trace locality within the cluster. With TraceLocalityMode set to distributed, spans are accepted and held by the first instance they are received on and a special, smaller “decision” span is sent to the designated owner. Decision spans only contain the data required for the designed Refinery instance to make a decision and depending on the size of the span and the rules configuration, they can be significantly smaller. We have seen reductions of 70-90% in our testing.
+Refinery 2.9 introduces a new experimental feature that allows configuring different mode for trace locality within the cluster. With TraceLocalityMode set to distributed, spans are accepted and held by the first instance they are received on and a special, smaller "decision" span is sent to the designated owner. Decision spans only contain the data required for the designed Refinery instance to make a decision and depending on the size of the span and the rules configuration, they can be significantly smaller. We have seen reductions of 70-90% in our testing.
 
-Now that spans are spread across the cluster, when the designated instance of a trace makes a decision, it needs to share that decision with its peers so they can apply the decision on the spans they are holding. This is done using Redis’ publish/subscribe (pubsub) messaging system, which allows each Refinery instance to subscribe to decision messages.
+Now that spans are spread across the cluster, when the designated instance of a trace makes a decision, it needs to share that decision with its peers so they can apply the decision on the spans they are holding. This is done using Redis' publish/subscribe (pubsub) messaging system, which allows each Refinery instance to subscribe to decision messages.
 
 With distributed mode, the cluster is more resilient to large traces as spans are distributed across all instances and has reduced peer communication as less data is transferred between instances using the decision spans. Horizontal automatic scaling is also more consistent.
 
 In our testing, we have seen that memory usage on the nodes in the cluster tends to rise and fall together, which we believe may lead us to the ability to reliably scale horizontally based on memory consumption.
 
-If you’re interested in testing this experimental feature, please reach out to your account manager. We’re very eager to get additional feedback.
+If you're interested in testing this experimental feature, please reach out to your account manager. We're very eager to get additional feedback.
 
 Note: The increased use of Redis as the mechanism to share trace decisions between instances requires a larger Redis installation than has been needed to date. Our initial testing indicates that Redis requires more CPU and network IO compared to previous Refinery clusters that only handled peer changes.
 
 ### Bug fixes
 
-In addition to the above features, we’ve also resolved the following bugs.
+In addition to the above features, we've also resolved the following bugs.
 
 _Collect loop taking too long_
 
@@ -47,25 +49,25 @@ _Consecutive trace redistribution events_
 
 When the number of instances changes in a Refinery cluster, each instance schedules a redistribution of traces that no longer belong to it (eg a change in owner). When consecutive changes to the number of peers happens, eg a kubernetes deployment that restarts pods, this can result in instances performing consecutive redistribution actions.
 
-We’ve added the new `RedistributionDelay` configuration option; this is the duration that each instance will wait before performing trace redistribution. Each change in the cluster instances resets the timer so that trace redistribution happens after the cluster has stabilized.
+We've added the new `RedistributionDelay` configuration option; this is the duration that each instance will wait before performing trace redistribution. Each change in the cluster instances resets the timer so that trace redistribution happens after the cluster has stabilized.
 
 _SendKey_
 
-There were two bug fixes related to the new SendKey feature that allows Refinery to use it’s configured Honeycomb API key when sending telemetry. The first adds support for using SendKey via the command line. The second was a bug where if the list of allowed keys did not contain the send key, spans forwarded to peers would be dropped.
+There were two bug fixes related to the new SendKey feature that allows Refinery to use its configured Honeycomb API key when sending telemetry. The first adds support for using SendKey via the command line. The second was a bug where if the list of allowed keys did not contain the send key, spans forwarded to peers would be dropped.
 
 ### Configuration Changes
 
 The following is a list of configuration changes for the 2.9 release.
 
 - MaxExpiredTraces - The maximum number of traces that can be processed per cycle of the collect loop. This is used to prevent the collect loop from taking too long and causing health checks to fail.
-- Insecure - Allows Refinery’s internal telemetry to be send to an unsecured source, for example an OpenTelemetry Collector on the same network
+- Insecure - Allows Refinery's internal telemetry to be send to an unsecured source, for example an OpenTelemetry Collector on the same network
 - RedistributionDelay - The amount of time to wait after the last cluster peers have been updated before redistributing traces to new owners. Each observed change during the delay will reset the timer so that only one redistribution event occurs.
 - CacheCapacity - This was the number of traces to keep in the cache's circular buffer. However, in this release, the trace cache was reimplemented using a priority queue which uses memory dynamically. This setting is now deprecated and no longer controls the cache size. Instead the maximum memory usage is controlled by MaxMemoryPercentage and MaxAlloc.
 
 ## Version 2.8.4
 
 This is a bug fix release and includes the follow change:
-* Changes the new `collector_collect_loop_duration_ms` metric introduced in `v2.8.3` to be a histogram instead of a gauge. This ensures the minimum and maximum values from each interval is recorded. 
+* Changes the new `collector_collect_loop_duration_ms` metric introduced in `v2.8.3` to be a histogram instead of a gauge. This ensures the minimum and maximum values from each interval is recorded.
 
 ## Version 2.8.3
 
