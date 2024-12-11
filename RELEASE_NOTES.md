@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.9.1
 
-This is a bug fix release and includes the follow change:
+This is a bug fix release and includes the following changes:
 * Registers all metrics during process start up to ensure they record their initial and ongoing values
 
 ## Version 2.9.0
