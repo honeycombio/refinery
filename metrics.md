@@ -93,6 +93,10 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
 | _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
 | _router_event | Counter | Dimensionless | the number of events received |
+| _router_span | Counter | Dimensionless | the number of spans received |
+| _router_dropped | Counter | Dimensionless | the number of events dropped because the channel was full |
+| _router_nonspan | Counter | Dimensionless | the number of non-span events received |
+| _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
 | queue_overflow | Counter | Dimensionless | number of events dropped due to queue overflow |
 | send_errors | Counter | Dimensionless | number of errors encountered while sending events to destination |

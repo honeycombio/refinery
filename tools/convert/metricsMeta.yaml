@@ -300,6 +300,22 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: the number of events received
+    - name: _router_span
+      type: Counter
+      unit: Dimensionless
+      description: the number of spans received
+    - name: _router_dropped
+      type: Counter
+      unit: Dimensionless
+      description: the number of events dropped because the channel was full
+    - name: _router_nonspan
+      type: Counter
+      unit: Dimensionless
+      description: the number of non-span events received
+    - name: _router_peer
+      type: Counter
+      unit: Dimensionless
+      description: the number of spans proxied to a peer
     - name: queue_length
       type: Gauge
       unit: Dimensionless

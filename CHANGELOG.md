@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 2.9.1 2024-12-12
+
+### Fixes
+
+- register OTEL metrics if it's missing (#1456) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Maintenance
+
+- call out cache changes and add missing changelog entry (#1454) | [Yingrong Zhao](https://github.com/vinozzZ)
+- update Husky to 0.34.0 (#1459) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+
 ## 2.9.0 2024-12-03
 
 This release introduces a variety of enhancements and bug fixes. It has two major features: one that improves memory consumption reporting, and one experimental feature for configuring trace locality mode.
