@@ -9,7 +9,7 @@
 ### Maintenance
 
 - call out cache changes and add missing changelog entry (#1454) | [Yingrong Zhao](https://github.com/vinozzZ)
-- maint: update Husky to 0.34.0 (#1459) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- update Husky to 0.34.0 (#1459) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 
 ## 2.9.0 2024-12-03
 
