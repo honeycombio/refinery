@@ -181,8 +181,8 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	}
 
 	localLevel := sr.Recalc()
-	require.NotEqual(t, localLevel, sr.overallStressLevel)
-	require.False(t, sr.stressed)
+	require.Equal(t, localLevel, sr.overallStressLevel)
+	require.True(t, sr.stressed)
 
 	// Test 2
 	// when a single peer's individual stress level is below the activation level
@@ -215,7 +215,7 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	}
 	clock.Advance(sr.minDuration * 2)
 	localLevel = sr.Recalc()
-	assert.NotEqual(t, sr.overallStressLevel, localLevel)
+	assert.Equal(t, sr.overallStressLevel, localLevel)
 	assert.False(t, sr.stressed)
 }
 
