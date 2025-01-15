@@ -428,9 +428,6 @@ func (s *StressRelief) Recalc() uint {
 	// If a single node is under significant stress, it can activate stress relief mode
 	overallStressLevel := uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
 
-	if !s.Config.GetCollectionConfig().TraceLocalityEnabled() {
-		overallStressLevel = clusterStressLevel
-	}
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", s.overallStressLevel)
 
@@ -497,8 +494,7 @@ func (s *StressRelief) clusterStressLevel(localLevel uint) uint {
 	defer s.lock.Unlock()
 
 	s.stressLevels[report.key] = report
-	var total float64
-	availablePeers := 0
+	var maximumStressLevel uint
 	for _, report := range s.stressLevels {
 		if s.Clock.Since(report.timestamp) > peer.PeerEntryTimeout {
 			delete(s.stressLevels, report.key)
@@ -508,15 +504,13 @@ func (s *StressRelief) clusterStressLevel(localLevel uint) uint {
 		if report.level == 0 {
 			continue
 		}
-		availablePeers++
-		total += float64(report.level * report.level)
+
+		if report.level > maximumStressLevel {
+			maximumStressLevel = report.level
+		}
 	}
 
-	if availablePeers == 0 {
-		availablePeers = 1
-	}
-
-	return uint(math.Sqrt(total / float64(availablePeers)))
+	return maximumStressLevel
 }
 
 // Stressed() indicates whether the system should act as if it's stressed.
