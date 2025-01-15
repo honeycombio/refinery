@@ -453,14 +453,23 @@ func (e *FileConfigError) Error() string {
 // In order to do proper validation, we actually read the file twice -- once into
 // a map, and once into the actual config object.
 func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
+	configReaders, err := getReadersForLocations(opts.ConfigLocations)
+	if err != nil {
+		return nil, err
+	}
+	rulesReaders, err := getReadersForLocations(opts.RulesLocations)
+	if err != nil {
+		return nil, err
+	}
+
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(opts)
+		cfgFails, err := validateConfigs(configReaders, opts)
 		if err != nil {
 			return nil, err
 		}
 
-		ruleFails, err := validateRules(opts.RulesLocations)
+		ruleFails, err := validateRules(rulesReaders)
 		if err != nil {
 			return nil, err
 		}
@@ -477,13 +486,13 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 
 	// Now load the files
 	mainconf := &configContents{}
-	mainhash, err := readConfigInto(mainconf, opts.ConfigLocations, opts)
+	mainhash, err := readConfigInto(mainconf, configReaders, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	var rulesconf *V2SamplerConfig
-	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocations, nil)
+	ruleshash, err := readConfigInto(&rulesconf, rulesReaders, nil)
 	if err != nil {
 		return nil, err
 	}
