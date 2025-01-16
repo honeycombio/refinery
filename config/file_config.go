@@ -453,11 +453,11 @@ func (e *FileConfigError) Error() string {
 // In order to do proper validation, we actually read the file twice -- once into
 // a map, and once into the actual config object.
 func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
-	configReaders, err := getReadersForLocations(opts.ConfigLocations)
+	configReaders, err := getConfigDataForLocations(opts.ConfigLocations)
 	if err != nil {
 		return nil, err
 	}
-	rulesReaders, err := getReadersForLocations(opts.RulesLocations)
+	rulesReaders, err := getConfigDataForLocations(opts.RulesLocations)
 	if err != nil {
 		return nil, err
 	}

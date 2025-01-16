@@ -127,60 +127,61 @@ func load(data []byte, format Format, into any) error {
 	}
 }
 
-type configReader struct {
-	body     []byte
+type configData struct {
+	data     []byte
 	format   Format
 	location string
 }
 
-func getReadersForLocations(locations []string) ([]configReader, error) {
-	readers := make([]configReader, len(locations))
+// getConfigDataForLocations returns a slice of configData grabbed from each location.
+func getConfigDataForLocations(locations []string) ([]configData, error) {
+	results := make([]configData, len(locations))
 	for i, location := range locations {
 		// trim leading and trailing whitespace just in case
 		location := strings.TrimSpace(location)
-		body, format, err := getReaderFor(location)
+		data, format, err := getReaderFor(location)
 		if err != nil {
 			return nil, err
 		}
-		readers[i] = configReader{
-			body:     body,
+		results[i] = configData{
+			data:     data,
 			format:   format,
 			location: location,
 		}
 	}
-	return readers, nil
+	return results, nil
 }
 
 // This loads all the named configs into destination in the order they are listed.
 // It returns the MD5 hash of the collected configs as a string (if there's only one
 // config, this is the hash of that config; if there are multiple, it's the hash of
 // all of them concatenated together).
-func loadConfigsInto(dest any, readers []configReader) (string, error) {
+func loadConfigsInto(dest any, configs []configData) (string, error) {
 	// start a hash of the configs we read
 	h := md5.New()
-	for _, reader := range readers {
+	for _, c := range configs {
 		// write the data to the hash
-		h.Write(reader.body)
+		h.Write(c.data)
 
 		// when working on a struct, load only overwrites destination values that are
-		// explicitly named. So we can just keep loading successive files into
+		// explicitly named. So we can just keep loading successive sources into
 		// the same object without losing data we've already specified.
-		if err := load(reader.body, reader.format, dest); err != nil {
-			return "", fmt.Errorf("loadConfigsInto unable to load config %s: %w", reader.location, err)
+		if err := load(c.data, c.format, dest); err != nil {
+			return "", fmt.Errorf("loadConfigsInto unable to load config %s: %w", c.location, err)
 		}
 	}
 	hash := hex.EncodeToString(h.Sum(nil))
 	return hash, nil
 }
 
-func loadConfigsIntoMap(dest map[string]any, readers []configReader) error {
-	for _, reader := range readers {
+func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
+	for _, c := range configs {
 		// when working on a map, when loading a nested object, load will overwrite the entire destination
 		// value, so we can't just keep loading successive files into the same object. Instead, we
 		// need to load into a new object and then merge it into the map.
 		temp := make(map[string]any)
-		if err := load(reader.body, reader.format, &temp); err != nil {
-			return fmt.Errorf("loadConfigsInto unable to load config %s: %w", reader.location, err)
+		if err := load(c.data, c.format, &temp); err != nil {
+			return fmt.Errorf("loadConfigsInto unable to load config %s: %w", c.location, err)
 		}
 		for k, v := range temp {
 			switch vm := v.(type) {
@@ -208,10 +209,10 @@ func loadConfigsIntoMap(dest map[string]any, readers []configReader) error {
 // validateConfigs reads the configs from the given location and validates them.
 // It returns a list of failures; if the list is empty, the config is valid.
 // err is non-nil only for significant errors like a missing file.
-func validateConfigs(readers []configReader, opts *CmdEnv) ([]string, error) {
+func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 	// first read the configs into a map so we can validate them
 	userData := make(map[string]any)
-	err := loadConfigsIntoMap(userData, readers)
+	err := loadConfigsIntoMap(userData, configs)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +230,7 @@ func validateConfigs(readers []configReader, opts *CmdEnv) ([]string, error) {
 	// Basic validation worked. Now we need to reload everything into our struct so that
 	// we can apply defaults and options, and then validate a second time.
 	var config configContents
-	_, err = loadConfigsInto(&config, readers)
+	_, err = loadConfigsInto(&config, configs)
 	if err != nil {
 		return nil, err
 	}
@@ -258,8 +259,8 @@ func validateConfigs(readers []configReader, opts *CmdEnv) ([]string, error) {
 		config.OTelTracing.APIKey = "InvalidHoneycombAPIKey"
 	}
 
-	// The validator needs a map[string]any to work with, so we need to
-	// yaml bytes (we always use YAML) and then reload it.
+	// The validator needs a map[string]any to work with, so we marshal to
+	// yaml bytes for an easy conversion to map[string]any.
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("readConfigInto unable to remarshal config: %w", err)
@@ -275,10 +276,10 @@ func validateConfigs(readers []configReader, opts *CmdEnv) ([]string, error) {
 	return failures, nil
 }
 
-func validateRules(readers []configReader) ([]string, error) {
+func validateRules(configs []configData) ([]string, error) {
 	// first read the configs into a map so we can validate them
 	userData := make(map[string]any)
-	err := loadConfigsIntoMap(userData, readers)
+	err := loadConfigsIntoMap(userData, configs)
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +294,8 @@ func validateRules(readers []configReader) ([]string, error) {
 }
 
 // readConfigInto reads the config from the given location and applies it to the given struct.
-func readConfigInto(dest any, readers []configReader, opts *CmdEnv) (string, error) {
-	hash, err := loadConfigsInto(dest, readers)
+func readConfigInto(dest any, configs []configData, opts *CmdEnv) (string, error) {
+	hash, err := loadConfigsInto(dest, configs)
 	if err != nil {
 		return hash, err
 	}

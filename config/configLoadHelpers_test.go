@@ -198,10 +198,10 @@ func Test_loadConfigsInto(t *testing.T) {
 	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
 	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
 	cfgfiles := createTempConfigs(t, cm1, cm2)
-	readers, err := getReadersForLocations(cfgfiles)
+	configs, err := getConfigDataForLocations(cfgfiles)
 	require.NoError(t, err)
 	cfg := configContents{}
-	hash, err := loadConfigsInto(&cfg, readers)
+	hash, err := loadConfigsInto(&cfg, configs)
 	require.NoError(t, err)
 	require.Equal(t, "2381a6563085f50ac56663b67ca85299", hash)
 	require.Equal(t, 2, cfg.General.ConfigurationVersion)
@@ -214,11 +214,11 @@ func Test_loadConfigsIntoMap(t *testing.T) {
 	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
 	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
 	cfgfiles := createTempConfigs(t, cm1, cm2)
-	readers, err := getReadersForLocations(cfgfiles)
+	configs, err := getConfigDataForLocations(cfgfiles)
 	require.NoError(t, err)
 
 	cfg := map[string]any{}
-	err = loadConfigsIntoMap(cfg, readers)
+	err = loadConfigsIntoMap(cfg, configs)
 	require.NoError(t, err)
 	gen := cfg["General"].(map[string]any)
 	require.Equal(t, 2, gen["ConfigurationVersion"])
@@ -265,9 +265,9 @@ func Test_validateConfigs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfgfiles := createTempConfigs(t, tt.cfgs...)
 			opts := &CmdEnv{ConfigLocations: cfgfiles}
-			readers, err := getReadersForLocations(cfgfiles)
+			configs, err := getConfigDataForLocations(cfgfiles)
 			require.NoError(t, err)
-			got, err := validateConfigs(readers, opts)
+			got, err := validateConfigs(configs, opts)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateConfigs() error = %v, wantErr %v", err, tt.wantErr)
 				return
