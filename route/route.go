@@ -128,6 +128,8 @@ func (r *Router) SetVersion(ver string) {
 var routerMetrics = []metrics.Metadata{
 	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
 	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
+	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
+	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
 	{Name: "_router_span", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans received"},
 	{Name: "_router_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events dropped because the channel was full"},
 	{Name: "_router_nonspan", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of non-span events received"},
@@ -537,6 +539,7 @@ func (router *Router) processOTLPRequest(
 	batches []huskyotlp.Batch,
 	apiKey string,
 	incomingUserAgent string) error {
+	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
 
 	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
 
@@ -612,7 +615,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		if processed {
 			if !kept {
 				return nil
-
 			}
 
 			// If the span was kept, we want to generate a probe that we'll forward

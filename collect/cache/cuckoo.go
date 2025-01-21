@@ -39,7 +39,7 @@ type CuckooTraceChecker struct {
 
 const (
 	// This is how many items can be in the Add Queue before we start blocking on Add.
-	AddQueueDepth = 1000
+	defaultAddQueueDepth = 1000
 	// This is how long we'll sleep between possible lock cycles.
 	AddQueueSleepTime = 100 * time.Microsecond
 )
@@ -52,13 +52,16 @@ var cuckooTraceCheckerMetrics = []metrics.Metadata{
 	{Name: AddQueueLockTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "the time spent holding the add queue lock"},
 }
 
-func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker {
+func NewCuckooTraceChecker(capacity uint, addQueueDepth uint, m metrics.Metrics) *CuckooTraceChecker {
+	if addQueueDepth == 0 {
+		addQueueDepth = defaultAddQueueDepth
+	}
 	c := &CuckooTraceChecker{
 		capacity: capacity,
 		current:  cuckoo.NewFilter(capacity),
 		future:   nil,
 		met:      m,
-		addch:    make(chan string, AddQueueDepth),
+		addch:    make(chan string, defaultAddQueueDepth),
 	}
 	for _, metric := range cuckooTraceCheckerMetrics {
 		m.Register(metric)

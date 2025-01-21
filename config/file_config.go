@@ -402,6 +402,7 @@ type GRPCServerParameters struct {
 type SampleCacheConfig struct {
 	KeptSize          uint     `yaml:"KeptSize" default:"10_000"`
 	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000"`
+	DroppedQueueSize  uint     `yaml:"DroppedQueueSize" default: "1000"`
 	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s"`
 }
 
