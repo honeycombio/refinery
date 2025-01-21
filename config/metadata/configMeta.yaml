@@ -1774,6 +1774,16 @@ groups:
           Changing its size with live reload sets a future limit, but does not
           have an immediate effect.
 
+      - name: DroppedQueueSize
+        type: int
+        valuetype: nondefault
+        default: 1000
+        reload: true
+        summary: is the maximum number of in-flight drop decision allowed before adding to the dropped trace cache.
+        description: >
+          The dropped decision queue is used to buffer drop decisions before they are stored in the decision cache.
+          If this queue fills up, then subsequent drop decisions will be discarded.
+
       - name: SizeCheckInterval
         v1group: SampleCacheConfig/SampleCache
         v1name: SizeCheckInterval
