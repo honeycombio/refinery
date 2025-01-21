@@ -1777,7 +1777,7 @@ groups:
       - name: DroppedQueueSize
         type: int
         valuetype: nondefault
-        default: 1000
+        default: 10000
         reload: true
         summary: is the maximum number of in-flight drop decision allowed before adding to the dropped trace cache.
         description: >
