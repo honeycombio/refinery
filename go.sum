@@ -76,8 +76,8 @@ github.com/honeycombio/dynsampler-go v0.6.0 h1:fs4mrfeFGU5V+ClwpblFzbWqn4Apb+lKl
 github.com/honeycombio/dynsampler-go v0.6.0/go.mod h1:pJqWFeoMN3syX74PEvlusieyGBbtIBjmTVjLc3thmK4=
 github.com/honeycombio/husky v0.34.0 h1:dQKxRIpzDeofzm5T3ivCguVfaHKyH38s/1ki9cUf9cs=
 github.com/honeycombio/husky v0.34.0/go.mod h1:1iA9ohFPRQ3VJUPx/xFpv/Q1ZmTdbS8FDn94Guc9JuA=
-github.com/honeycombio/libhoney-go v1.24.0 h1:PPgVrd8FOiQeL24FOEuhF9SFA3oDgaA/AU/Agu2ZKkA=
-github.com/honeycombio/libhoney-go v1.24.0/go.mod h1:oW9gF/appfQoDjtXfcfH5hp5v3F0xpTy42+NBRCYk9k=
+github.com/honeycombio/libhoney-go v1.25.0 h1:r33tlX90HtafK0bgRcjfNnsrJ9ZMTKuI/1DYaOFCc1o=
+github.com/honeycombio/libhoney-go v1.25.0/go.mod h1:Fc0HjqlwYf5xy6H34EItpOverAGbCixnYOX3YTUQovg=
 github.com/honeycombio/opentelemetry-proto-go/otlp v1.3.1-compat h1:i9CAIguM5tMQC9xSRihqdFBoh40OBOhuhfR8OrXsZ9o=
 github.com/honeycombio/opentelemetry-proto-go/otlp v1.3.1-compat/go.mod h1:ZyEcAltAA7tCBVo5o+5klmG2l+43E1fjpxGxvOIskic=
 github.com/jessevdk/go-flags v1.6.1 h1:Cvu5U8UGrLay1rZfv/zP7iLpSHGUZ/Ou68T0iX1bBK4=
