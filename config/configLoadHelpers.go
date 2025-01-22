@@ -56,8 +56,8 @@ func formatFromResponse(resp *http.Response) Format {
 	}
 }
 
-// getReaderFor returns an io.ReadCloser for the given URL or filename.
-func getReaderFor(u string) ([]byte, Format, error) {
+// getBytesFor returns an []byte for the given URL or filename.
+func getBytesFor(u string) ([]byte, Format, error) {
 	if u == "" {
 		return nil, FormatUnknown, fmt.Errorf("empty url")
 	}
@@ -139,7 +139,7 @@ func getConfigDataForLocations(locations []string) ([]configData, error) {
 	for i, location := range locations {
 		// trim leading and trailing whitespace just in case
 		location := strings.TrimSpace(location)
-		data, format, err := getReaderFor(location)
+		data, format, err := getBytesFor(location)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +157,7 @@ func getConfigDataForLocations(locations []string) ([]configData, error) {
 // config, this is the hash of that config; if there are multiple, it's the hash of
 // all of them concatenated together).
 func loadConfigsInto(dest any, configs []configData) (string, error) {
-	// start a hash of the configs we read
+	// start a hash of the configs we process
 	h := md5.New()
 	for _, c := range configs {
 		// write the data to the hash
@@ -206,11 +206,11 @@ func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
 	return nil
 }
 
-// validateConfigs reads the configs from the given location and validates them.
+// validateConfigs gets the configs from the given location and validates them.
 // It returns a list of failures; if the list is empty, the config is valid.
 // err is non-nil only for significant errors like a missing file.
 func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
-	// first read the configs into a map so we can validate them
+	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
 	err := loadConfigsIntoMap(userData, configs)
 	if err != nil {
@@ -237,12 +237,12 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 
 	// apply defaults and options
 	if err := defaults.Set(&config); err != nil {
-		return nil, fmt.Errorf("readConfigInto unable to apply defaults: %w", err)
+		return nil, fmt.Errorf("loadConfigsInto unable to apply defaults: %w", err)
 	}
 
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(&config)); err != nil {
-		return nil, fmt.Errorf("readConfigInto unable to apply command line options: %w", err)
+		return nil, fmt.Errorf("loadConfigsInto unable to apply command line options: %w", err)
 	}
 
 	// possibly inject some keys to keep the validator happy
@@ -263,7 +263,7 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 	// yaml bytes for an easy conversion to map[string]any.
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return nil, fmt.Errorf("readConfigInto unable to remarshal config: %w", err)
+		return nil, fmt.Errorf("loadConfigsInto unable to remarshal config: %w", err)
 	}
 
 	var rewrittenUserData map[string]any
@@ -277,7 +277,7 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 }
 
 func validateRules(configs []configData) ([]string, error) {
-	// first read the configs into a map so we can validate them
+	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
 	err := loadConfigsIntoMap(userData, configs)
 	if err != nil {
@@ -293,8 +293,8 @@ func validateRules(configs []configData) ([]string, error) {
 	return failures, nil
 }
 
-// readConfigInto reads the config from the given location and applies it to the given struct.
-func readConfigInto(dest any, configs []configData, opts *CmdEnv) (string, error) {
+// applyConfigInto applies the given configs to the given struct.
+func applyConfigInto(dest any, configs []configData, opts *CmdEnv) (string, error) {
 	hash, err := loadConfigsInto(dest, configs)
 	if err != nil {
 		return hash, err
@@ -307,12 +307,12 @@ func readConfigInto(dest any, configs []configData, opts *CmdEnv) (string, error
 
 	// now we've got the config, apply defaults to zero values
 	if err := defaults.Set(dest); err != nil {
-		return hash, fmt.Errorf("readConfigInto unable to apply defaults: %w", err)
+		return hash, fmt.Errorf("applyConfigInto unable to apply defaults: %w", err)
 	}
 
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
-		return hash, fmt.Errorf("readConfigInto unable to apply command line options: %w", err)
+		return hash, fmt.Errorf("applyConfigInto unable to apply command line options: %w", err)
 	}
 
 	return hash, nil
