@@ -48,6 +48,8 @@ var cuckooTraceCheckerMetrics = []metrics.Metadata{
 	{Name: CurrentCapacity, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "current capacity of the cuckoo filter"},
 	{Name: FutureLoadFactor, Type: metrics.Gauge, Unit: metrics.Percent, Description: "the fraction of slots occupied in the future cuckoo filter"},
 	{Name: CurrentLoadFactor, Type: metrics.Gauge, Unit: metrics.Percent, Description: "the fraction of slots occupied in the current cuckoo filter"},
+	{Name: AddQueueFull, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of times the add queue was full and a drop decision was dropped"},
+	{Name: AddQueueLockTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "the time spent holding the add queue lock"},
 }
 
 func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker {
