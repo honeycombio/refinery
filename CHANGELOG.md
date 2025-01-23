@@ -1,5 +1,18 @@
 # Refinery Changelog
 
+## 2.9.2 2025-01-23
+
+### Fixes
+
+fix: only load config and rules once (#1470) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+fix: add incoming/peer_router_otlp metrics for otlp traffic (#1474) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Maintenance
+
+maint(deps): bump the minor-patch group across 1 directory with 14 updates (#1475) | [dependabot](https://github.com/dependabot)
+feat: update libhoney to 1.25.0 (#1473) | [Yingrong Zhao](https://github.com/vinozzZ)
+maint: bump golang.org/x/net to v0.33.0 (#1466) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
 ## 2.9.1 2024-12-12
 
 ### Fixes
