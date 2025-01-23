@@ -61,7 +61,7 @@ func NewCuckooTraceChecker(capacity uint, addQueueDepth uint, m metrics.Metrics)
 		current:  cuckoo.NewFilter(capacity),
 		future:   nil,
 		met:      m,
-		addch:    make(chan string, defaultAddQueueDepth),
+		addch:    make(chan string, addQueueDepth),
 	}
 	for _, metric := range cuckooTraceCheckerMetrics {
 		m.Register(metric)
