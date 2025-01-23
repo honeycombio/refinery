@@ -132,6 +132,8 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events dropped because the channel was full"},
 	{Name: "_router_nonspan", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of non-span events received"},
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
+	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
+	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -535,6 +537,8 @@ func (router *Router) processOTLPRequest(
 	batches []huskyotlp.Batch,
 	apiKey string,
 	incomingUserAgent string) error {
+
+	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
 
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
