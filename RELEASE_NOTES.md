@@ -2,10 +2,16 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.9.2
+
+Honeycomb's backend can now accept events with sizes up to 1 million bytes. This release enables Refinery to conform to the same limit and supports sending events up to 1MB.
+It also improves Refinery's internal metrics by introducing a new metric, `incoming_router_otlp`, to track the amount of OTLP requests Refinery has received.
+
 ## Version 2.9.1
 
 This is a bug fix release and includes the following changes:
-* Registers all metrics during process start up to ensure they record their initial and ongoing values
+
+- Registers all metrics during process start up to ensure they record their initial and ongoing values
 
 ## Version 2.9.0
 

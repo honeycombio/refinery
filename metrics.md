@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2024-12-02 at 18:38:37 UTC.
+It was automatically generated on 2025-01-23 at 16:59:37 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -14,6 +14,8 @@ This table includes metrics with fully defined names.
 | cuckoo_current_capacity | Gauge | Dimensionless | current capacity of the cuckoo filter |
 | cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
 | cuckoo_current_load_factor | Gauge | Percent | the fraction of slots occupied in the current cuckoo filter |
+| cuckoo_addqueue_full | Counter | Dimensionless | the number of times the add queue was full and a drop decision was dropped |
+| cuckoo_addqueue_locktime_uS | Histogram | Microseconds | the time spent holding the add queue lock |
 | cache_recent_dropped_traces | Gauge | Dimensionless | the current size of the most recent dropped trace cache |
 | collect_sent_reasons_cache_entries | Histogram | Dimensionless | Number of entries in the sent reasons cache |
 | is_ready | Gauge | Dimensionless | Whether the system is ready to receive traffic |
@@ -58,6 +60,7 @@ This table includes metrics with fully defined names.
 | trace_aggregate_sample_rate | Histogram | Dimensionless | aggregate sample rate of both kept and dropped traces |
 | collector_redistribute_traces_duration_ms | Histogram | Milliseconds | duration of redistributing traces to peers |
 | collector_collect_loop_duration_ms | Histogram | Milliseconds | duration of the collect loop, the primary event processing goroutine |
+| collector_send_expired_traces_in_cache_dur_ms | Histogram | Milliseconds | duration of sending expired traces in cache |
 | collector_outgoing_queue | Histogram | Dimensionless | number of traces waiting to be send to upstream |
 | collector_drop_decision_batch_count | Histogram | Dimensionless | number of drop decisions sent in a batch |
 | collector_expired_traces_missing_decisions | Gauge | Dimensionless | number of decision spans forwarded for expired traces missing trace decision |
@@ -97,6 +100,8 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_dropped | Counter | Dimensionless | the number of events dropped because the channel was full |
 | _router_nonspan | Counter | Dimensionless | the number of non-span events received |
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
+| _router_batch | Counter | Dimensionless | the number of batches of events received |
+| _router_otlp | Counter | Dimensionless | the number of batches of otlp requests received |
 | queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
 | queue_overflow | Counter | Dimensionless | number of events dropped due to queue overflow |
 | send_errors | Counter | Dimensionless | number of errors encountered while sending events to destination |

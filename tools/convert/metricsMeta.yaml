@@ -15,6 +15,14 @@ complete:
       type: Gauge
       unit: Percent
       description: the fraction of slots occupied in the current cuckoo filter
+    - name: cuckoo_addqueue_full
+      type: Counter
+      unit: Dimensionless
+      description: the number of times the add queue was full and a drop decision was dropped
+    - name: cuckoo_addqueue_locktime_uS
+      type: Histogram
+      unit: Microseconds
+      description: the time spent holding the add queue lock
     - name: cache_recent_dropped_traces
       type: Gauge
       unit: Dimensionless
@@ -191,6 +199,10 @@ complete:
       type: Histogram
       unit: Milliseconds
       description: duration of the collect loop, the primary event processing goroutine
+    - name: collector_send_expired_traces_in_cache_dur_ms
+      type: Histogram
+      unit: Milliseconds
+      description: duration of sending expired traces in cache
     - name: collector_outgoing_queue
       type: Histogram
       unit: Dimensionless
@@ -316,6 +328,14 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: the number of spans proxied to a peer
+    - name: _router_batch
+      type: Counter
+      unit: Dimensionless
+      description: the number of batches of events received
+    - name: _router_otlp
+      type: Counter
+      unit: Dimensionless
+      description: the number of batches of otlp requests received
     - name: queue_length
       type: Gauge
       unit: Dimensionless
