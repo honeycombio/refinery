@@ -450,17 +450,26 @@ func (e *FileConfigError) Error() string {
 // newFileConfig does the work of creating and loading the start of a config object
 // from the given arguments.
 // It's used by both the main init as well as the reload code.
-// In order to do proper validation, we actually read the file twice -- once into
-// a map, and once into the actual config object.
+// In order to do proper validation, we actually process the data twice -- once as
+// a map, and once as the actual config object.
 func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
+	configData, err := getConfigDataForLocations(opts.ConfigLocations)
+	if err != nil {
+		return nil, err
+	}
+	rulesData, err := getConfigDataForLocations(opts.RulesLocations)
+	if err != nil {
+		return nil, err
+	}
+
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(opts)
+		cfgFails, err := validateConfigs(configData, opts)
 		if err != nil {
 			return nil, err
 		}
 
-		ruleFails, err := validateRules(opts.RulesLocations)
+		ruleFails, err := validateRules(rulesData)
 		if err != nil {
 			return nil, err
 		}
@@ -477,13 +486,13 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 
 	// Now load the files
 	mainconf := &configContents{}
-	mainhash, err := readConfigInto(mainconf, opts.ConfigLocations, opts)
+	mainhash, err := applyConfigInto(mainconf, configData, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	var rulesconf *V2SamplerConfig
-	ruleshash, err := readConfigInto(&rulesconf, opts.RulesLocations, nil)
+	ruleshash, err := applyConfigInto(&rulesconf, rulesData, nil)
 	if err != nil {
 		return nil, err
 	}

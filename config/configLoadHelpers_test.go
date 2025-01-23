@@ -93,7 +93,7 @@ func Test_loadDuration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := load(strings.NewReader(tt.text), tt.format, tt.into); (err != nil) != tt.wantErr {
+			if err := load([]byte(tt.text), tt.format, tt.into); (err != nil) != tt.wantErr {
 				t.Errorf("load() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(tt.into, tt.want) {
@@ -123,7 +123,7 @@ func Test_loadMemsize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := load(strings.NewReader(tt.text), tt.format, tt.into); (err != nil) != tt.wantErr {
+			if err := load([]byte(tt.text), tt.format, tt.into); (err != nil) != tt.wantErr {
 				t.Errorf("load() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !reflect.DeepEqual(tt.into, tt.want) {
@@ -198,9 +198,10 @@ func Test_loadConfigsInto(t *testing.T) {
 	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
 	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
 	cfgfiles := createTempConfigs(t, cm1, cm2)
-
+	configs, err := getConfigDataForLocations(cfgfiles)
+	require.NoError(t, err)
 	cfg := configContents{}
-	hash, err := loadConfigsInto(&cfg, cfgfiles)
+	hash, err := loadConfigsInto(&cfg, configs)
 	require.NoError(t, err)
 	require.Equal(t, "2381a6563085f50ac56663b67ca85299", hash)
 	require.Equal(t, 2, cfg.General.ConfigurationVersion)
@@ -213,9 +214,11 @@ func Test_loadConfigsIntoMap(t *testing.T) {
 	cm1 := makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.0.0.0:8080")
 	cm2 := makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "hello")
 	cfgfiles := createTempConfigs(t, cm1, cm2)
+	configs, err := getConfigDataForLocations(cfgfiles)
+	require.NoError(t, err)
 
 	cfg := map[string]any{}
-	err := loadConfigsIntoMap(cfg, cfgfiles)
+	err = loadConfigsIntoMap(cfg, configs)
 	require.NoError(t, err)
 	gen := cfg["General"].(map[string]any)
 	require.Equal(t, 2, gen["ConfigurationVersion"])
@@ -262,7 +265,9 @@ func Test_validateConfigs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfgfiles := createTempConfigs(t, tt.cfgs...)
 			opts := &CmdEnv{ConfigLocations: cfgfiles}
-			got, err := validateConfigs(opts)
+			configs, err := getConfigDataForLocations(cfgfiles)
+			require.NoError(t, err)
+			got, err := validateConfigs(configs, opts)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateConfigs() error = %v, wantErr %v", err, tt.wantErr)
 				return
