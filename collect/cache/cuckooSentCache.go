@@ -170,7 +170,7 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 	if err != nil {
 		return nil, err
 	}
-	dropped := NewCuckooTraceChecker(cfg.DroppedSize, met)
+	dropped := NewCuckooTraceChecker(cfg.DroppedSize, cfg.DroppedQueueSize, met)
 	// we want to keep track of the most recent dropped traces so we can avoid
 	// checking them in the dropped filter, which can have contention issues
 	// under high load. So we use a cache with TTL to keep track of the most

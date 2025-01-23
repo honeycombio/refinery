@@ -31,7 +31,7 @@ func BenchmarkCuckooTraceChecker_Add(b *testing.B) {
 		traceIDs[i] = genID(32)
 	}
 
-	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
+	c := NewCuckooTraceChecker(1000000, 10000, &metrics.NullMetrics{})
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Add(traceIDs[i])
@@ -57,7 +57,7 @@ func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 		}
 	})
 
-	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
+	c := NewCuckooTraceChecker(1000000, 10000, &metrics.NullMetrics{})
 	ch := make(chan int, numGoroutines)
 	for i := 0; i < numGoroutines; i++ {
 		p.Go(func() {
@@ -89,7 +89,7 @@ func BenchmarkCuckooTraceChecker_Check(b *testing.B) {
 		traceIDs[i] = genID(32)
 	}
 
-	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
+	c := NewCuckooTraceChecker(1000000, 10000, &metrics.NullMetrics{})
 	// add every other one to the filter
 	for i := 0; i < b.N; i += 2 {
 		if i%10000 == 0 {
@@ -111,7 +111,7 @@ func BenchmarkCuckooTraceChecker_CheckParallel(b *testing.B) {
 		traceIDs[i] = genID(32)
 	}
 
-	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
+	c := NewCuckooTraceChecker(1000000, 10000, &metrics.NullMetrics{})
 	for i := 0; i < b.N; i += 2 {
 		if i%10000 == 0 {
 			c.Maintain()
@@ -165,7 +165,7 @@ func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 
 	met := &metrics.MockMetrics{}
 	met.Start()
-	c := NewCuckooTraceChecker(1000000, met)
+	c := NewCuckooTraceChecker(1000000, 10000, met)
 	const numCheckers = 30
 	const numAdders = 30
 
