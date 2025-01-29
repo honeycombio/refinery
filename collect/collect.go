@@ -1014,7 +1014,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 	} else {
 		logFields["environment"] = td.SamplerSelector
 	}
-	logFields["reason"] = td.KeptReason
+	logFields["reason"] = td.Reason
 	if td.SamplerKey != "" {
 		logFields["sample_key"] = td.SamplerKey
 	}
