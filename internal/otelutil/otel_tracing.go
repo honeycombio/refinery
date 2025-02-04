@@ -25,6 +25,9 @@ import (
 // telemetry helpers
 
 func AddException(span trace.Span, err error) {
+	if !span.IsRecording() {
+		return
+	}
 	span.AddEvent("exception", trace.WithAttributes(
 		attribute.KeyValue{Key: "exception.type", Value: attribute.StringValue("error")},
 		attribute.KeyValue{Key: "exception.message", Value: attribute.StringValue(err.Error())},
@@ -35,11 +38,19 @@ func AddException(span trace.Span, err error) {
 
 // addSpanField adds a field to a span, using the appropriate method for the type of the value.
 func AddSpanField(span trace.Span, key string, value interface{}) {
+	if !span.IsRecording() {
+		return
+	}
 	span.SetAttributes(Attributes(map[string]interface{}{key: value})...)
 }
 
 // AddSpanFields adds multiple fields to a span, using the appropriate method for the type of each value.
 func AddSpanFields(span trace.Span, fields map[string]interface{}) {
+	if !span.IsRecording() {
+		return
+	}
+
+	// only add the field if the span is active
 	span.SetAttributes(Attributes(fields)...)
 }
 
@@ -74,11 +85,17 @@ func StartSpan(ctx context.Context, tracer trace.Tracer, name string) (context.C
 
 // Starts a span with a single field.
 func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, field string, value interface{}) (context.Context, trace.Span) {
+	if isNoopTracer(tracer) {
+		return tracer.Start(ctx, name)
+	}
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(map[string]interface{}{field: value})...))
 }
 
 // Starts a span with multiple fields.
 func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, fields map[string]interface{}) (context.Context, trace.Span) {
+	if isNoopTracer(tracer) {
+		return tracer.Start(ctx, name)
+	}
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(fields)...))
 }
 
@@ -144,4 +161,9 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		bsp.Shutdown(context.Background())
 		exporter.Shutdown(context.Background())
 	}
+}
+
+func isNoopTracer(tracer trace.Tracer) bool {
+	_, isNoop := tracer.(noop.Tracer)
+	return isNoop
 }
