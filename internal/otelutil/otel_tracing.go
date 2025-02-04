@@ -25,30 +25,33 @@ import (
 // telemetry helpers
 
 func AddException(span trace.Span, err error) {
-	if span.IsRecording() {
-		span.AddEvent("exception", trace.WithAttributes(
-			attribute.KeyValue{Key: "exception.type", Value: attribute.StringValue("error")},
-			attribute.KeyValue{Key: "exception.message", Value: attribute.StringValue(err.Error())},
-			attribute.KeyValue{Key: "exception.stacktrace", Value: attribute.StringValue("stacktrace")},
-			attribute.KeyValue{Key: "exception.escaped", Value: attribute.BoolValue(false)},
-		))
+	if !span.IsRecording() {
+		return
 	}
+	span.AddEvent("exception", trace.WithAttributes(
+		attribute.KeyValue{Key: "exception.type", Value: attribute.StringValue("error")},
+		attribute.KeyValue{Key: "exception.message", Value: attribute.StringValue(err.Error())},
+		attribute.KeyValue{Key: "exception.stacktrace", Value: attribute.StringValue("stacktrace")},
+		attribute.KeyValue{Key: "exception.escaped", Value: attribute.BoolValue(false)},
+	))
 }
 
 // addSpanField adds a field to a span, using the appropriate method for the type of the value.
 func AddSpanField(span trace.Span, key string, value interface{}) {
-	// only add the field if the span is active
-	if span.IsRecording() {
-		span.SetAttributes(Attributes(map[string]interface{}{key: value})...)
+	if !span.IsRecording() {
+		return
 	}
+	span.SetAttributes(Attributes(map[string]interface{}{key: value})...)
 }
 
 // AddSpanFields adds multiple fields to a span, using the appropriate method for the type of each value.
 func AddSpanFields(span trace.Span, fields map[string]interface{}) {
-	// only add the field if the span is active
-	if span.IsRecording() {
-		span.SetAttributes(Attributes(fields)...)
+	if !span.IsRecording() {
+		return
 	}
+
+	// only add the field if the span is active
+	span.SetAttributes(Attributes(fields)...)
 }
 
 // Attributes converts a map of fields to a slice of attribute.KeyValue, setting types appropriately.
