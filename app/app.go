@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/honeycombio/refinery/agent"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -19,6 +20,10 @@ type App struct {
 	// Version is the build ID for Refinery so that the running process may answer
 	// requests for the version
 	Version string
+
+	// opampAgent communicates with the opamp server configured if OpAMP
+	// support is enabled via configuration.
+	opampAgent *agent.Agent
 }
 
 // Start on the App object should block until the proxy is shutting down. After
@@ -57,6 +62,11 @@ func (a *App) Start() error {
 	// and external sources
 	a.IncomingRouter.LnS("incoming")
 	a.PeerRouter.LnS("peer")
+
+	// only enable the opamp agent if it's configured
+	if a.Config.GetOpAMPConfig().Enabled {
+		a.opampAgent = agent.NewAgent(agent.Logger{Logger: a.Logger}, a.Version, a.Config)
+	}
 
 	return nil
 }
