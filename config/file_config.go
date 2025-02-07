@@ -57,6 +57,7 @@ type configContents struct {
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
+	OpAMP                OpAMPConfig               `yaml:"OpAMP"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
@@ -75,6 +76,11 @@ type GeneralConfig struct {
 	MinRefineryVersion   string   `yaml:"MinRefineryVersion" default:"v2.0"`
 	DatasetPrefix        string   `yaml:"DatasetPrefix" `
 	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"15s"`
+}
+
+type OpAMPConfig struct {
+	Endpoint string `yaml:"Endpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
+	Enabled  bool   `yaml:"Enabled" default:"false"`
 }
 
 type NetworkConfig struct {
@@ -923,6 +929,13 @@ func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	defer f.mux.RUnlock()
 
 	return time.Duration(f.mainConfig.Specialized.EnvironmentCacheTTL)
+}
+
+func (f *fileConfig) GetOpAMPConfig() OpAMPConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.OpAMP
 }
 
 func (f *fileConfig) GetOTelTracingConfig() OTelTracingConfig {
