@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2024-12-02 at 16:40:46 UTC.
+# Automatically generated on 2025-02-07 at 16:45:23 UTC.
 
 General:
   - ConfigurationVersion
@@ -109,6 +109,12 @@ LegacyMetrics:
   - Dataset (originally HoneycombMetrics.MetricsDataset)
 
   - ReportingInterval (originally HoneycombMetrics.MetricsReportingInterval)
+
+
+OpAMP:
+  - Enabled
+
+  - Endpoint
 
 
 OTelMetrics:

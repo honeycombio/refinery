@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2024-12-02 at 16:40:51 UTC from ../../config.yaml using a template generated on 2024-12-02 at 16:40:45 UTC
+# created on 2025-02-07 at 16:45:26 UTC from ../../config.yaml using a template generated on 2025-02-07 at 16:45:22 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -642,6 +642,28 @@ LegacyMetrics:
     ## default: 30s
     ## Not eligible for live reload.
     # ReportingInterval: ""
+
+#########################
+## OpAMP Configuration ##
+#########################
+OpAMP:
+  ## OpAMP contains configuration for the OpAMP protocol.
+  ##
+  ####
+    ## Enabled controls whether to enable OpAMP support.
+    ##
+    ## OpAMP support is experimental in Refinery.
+    ##
+    ## Not eligible for live reload.
+    # Enabled: false
+
+    ## Endpoint is the URL of the OpAMP server for this client.
+    ##
+    ## This setting is the URL of the OpAMP server for this client.
+    ##
+    ## default: wss://127.0.0.1:4320/v1/opamp
+    ## Not eligible for live reload.
+    Endpoint: wss://127.0.0.1:4320/v1/opamp
 
 ###########################
 ## OpenTelemetry Metrics ##

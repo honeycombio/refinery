@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2024-12-02 at 16:52:55 UTC.
+It was automatically generated on 2025-02-07 at 16:45:27 UTC.
 
 ## The Config file
 
@@ -36,6 +36,7 @@ The remainder of this document describes the sections within the file and the fi
 - [Stdout Logger](#stdout-logger)
 - [Prometheus Metrics](#prometheus-metrics)
 - [Legacy Metrics](#legacy-metrics)
+- [OpAMP Configuration](#opamp-configuration)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
 - [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
@@ -610,6 +611,29 @@ Between 1 and 60 seconds is typical.
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `30s`
+
+## OpAMP Configuration
+
+`OpAMP` contains configuration for the OpAMP protocol.
+
+### `Enabled`
+
+Enabled controls whether to enable OpAMP support.
+
+OpAMP support is experimental in Refinery.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `Endpoint`
+
+Endpoint is the URL of the OpAMP server for this client.
+
+This setting is the URL of the OpAMP server for this client.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `wss://127.0.0.1:4320/v1/opamp`
 
 ## OpenTelemetry Metrics
 
