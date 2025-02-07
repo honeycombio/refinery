@@ -244,7 +244,12 @@ func main() {
 		// add telemetry callback so husky can enrich spans with attributes
 		husky.AddTelemetryAttributeFunc = func(ctx context.Context, key string, value any) {
 			span := trace.SpanFromContext(ctx)
-			span.SetAttributes(attribute.String(key, value.(string)))
+			switch v := value.(type) {
+			case string:
+				span.SetAttributes(attribute.String(key, v))
+			case bool:
+				span.SetAttributes(attribute.Bool(key, v))
+			}
 		}
 	}
 	defer shutdown()
