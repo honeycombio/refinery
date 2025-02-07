@@ -59,6 +59,9 @@ LegacyMetrics:
   APIKey: SetThisToAHoneycombKey
   Dataset: "Refinery Metrics"
   ReportingInterval: 30s
+OpAMP:
+  Enabled: false
+  Endpoint: "wss://127.0.0.1:4320/v1/opamp"
 OTelMetrics:
   Enabled: false
   APIHost: "https://api.honeycomb.io"

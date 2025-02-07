@@ -746,6 +746,30 @@ groups:
         description: >
           Between 1 and 60 seconds is typical.
 
+  - name: "OpAMP"
+    title: "OpAMP Configuration"
+    description: >
+      contains configuration for the OpAMP protocol.
+    fields:
+      - name: Enabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v2.9.3
+        summary: controls whether to enable OpAMP support.
+        description: >
+          OpAMP support is experimental in Refinery.
+      - name: Endpoint
+        type: string
+        valuetype: assigndefault
+        default: "wss://127.0.0.1:4320/v1/opamp"
+        reload: false
+        firstversion: v2.0
+        summary: is the URL of the OpAMP server for this client.
+        description: >
+          This setting is the URL of the OpAMP server for this client.
+
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"
     description: >
