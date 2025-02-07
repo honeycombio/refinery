@@ -156,6 +156,8 @@ type Config interface {
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string
+
+	GetOpAMPConfig() OpAMPConfig
 }
 
 type ConfigReloadCallback func(configHash, ruleCfgHash string)

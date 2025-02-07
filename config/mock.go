@@ -33,6 +33,7 @@ type MockConfig struct {
 	GetGeneralConfigVal              GeneralConfig
 	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
+	GetOpAmpConfigVal                OpAMPConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
 	GetUpstreamBufferSizeVal         int
@@ -446,4 +447,11 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalAttributes
+}
+
+func (f *MockConfig) GetOpAMPConfig() OpAMPConfig {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.GetOpAmpConfigVal
 }

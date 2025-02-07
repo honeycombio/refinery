@@ -111,6 +111,12 @@ LegacyMetrics:
   - ReportingInterval (originally HoneycombMetrics.MetricsReportingInterval)
 
 
+OpAMP:
+  - Enabled
+
+  - Endpoint
+
+
 OTelMetrics:
   - Enabled
 
