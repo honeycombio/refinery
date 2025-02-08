@@ -453,16 +453,21 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
-	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
+	debugLog := r.iopLogger.Debug().
+		WithField("request_id", reqID).
+		WithField("path", req.URL.Path).
+		WithField("method", req.Method)
 
 	bodyReader, err := r.getMaybeCompressedBody(req)
 	if err != nil {
+		debugLog.WithField("error", err.Error()).Logf("failed to get compressed body")
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
 
 	reqBod, err := io.ReadAll(bodyReader)
 	if err != nil {
+		debugLog.WithField("error", err.Error()).Logf("failed to read request body")
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
@@ -470,64 +475,58 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	batchedEvents := make([]batchedEvent, 0)
 	err = unmarshal(req, bytes.NewReader(reqBod), &batchedEvents)
 	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
+		debugLog.WithFields(map[string]interface{}{
+			"error":                  err.Error(),
+			"request.url":            req.URL,
+			"request.content_type":   req.Header.Get("Content-Type"),
+			"request.content_length": req.ContentLength,
+			"batch.size":             len(reqBod),
+		}).Logf("error parsing batch json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
 
-	dataset, err := getDatasetFromRequest(req)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrReqToEvent, err)
-	}
-	apiHost := r.Config.GetHoneycombAPI()
+	debugLog.WithField("batch.events_count", len(batchedEvents)).Logf("processing batch request")
 
-	apiKey := req.Header.Get(types.APIKeyHeader)
-	if apiKey == "" {
-		apiKey = req.Header.Get(types.APIKeyHeaderShort)
-	}
-
-	// get environment name - will be empty for legacy keys
-	environment, err := r.getEnvironmentName(apiKey)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrReqToEvent, err)
-	}
-
-	userAgent := getUserAgentFromRequest(req)
-	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
+	processedEvents := 0
 	for _, bev := range batchedEvents {
-		ev := &types.Event{
-			Context:     ctx,
-			APIHost:     apiHost,
-			APIKey:      apiKey,
-			Dataset:     dataset,
-			Environment: environment,
-			SampleRate:  bev.getSampleRate(),
-			Timestamp:   bev.getEventTime(),
-			Data:        bev.Data,
+		// Convert the event data to JSON bytes for requestToEvent
+		eventData, err := json.Marshal(bev.Data)
+		if err != nil {
+			debugLog.WithField("error", err.Error()).Logf("failed to marshal event data")
+			continue
 		}
 
-		addIncomingUserAgent(ev, userAgent)
+		ev, err := r.requestToEvent(ctx, req, eventData)
+		if err != nil {
+			debugLog.WithField("error", err.Error()).Logf("failed to convert batched event to event")
+			continue
+		}
+
+		// Parse and set the timestamp if present
+		if bev.Timestamp != "" {
+			ts, err := time.Parse(time.RFC3339Nano, bev.Timestamp)
+			if err != nil {
+				debugLog.WithField("error", err.Error()).Logf("failed to parse event timestamp")
+			} else {
+				ev.Timestamp = ts
+			}
+		}
+
 		err = r.processEvent(ev, reqID)
-
-		var resp BatchResponse
-		switch {
-		case errors.Is(err, collect.ErrWouldBlock):
-			resp.Status = http.StatusTooManyRequests
-			resp.Error = err.Error()
-		case err != nil:
-			resp.Status = http.StatusBadRequest
-			resp.Error = err.Error()
-		default:
-			resp.Status = http.StatusAccepted
+		if err != nil {
+			debugLog.WithField("error", err.Error()).Logf("failed to process batched event")
+			continue
 		}
-		batchedResponses = append(batchedResponses, &resp)
+		processedEvents++
 	}
-	response, err := json.Marshal(batchedResponses)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrJSONBuildFailed, err)
-		return
-	}
-	w.Write(response)
+
+	debugLog.WithFields(map[string]interface{}{
+		"batch.events_processed": processedEvents,
+		"batch.events_failed":    len(batchedEvents) - processedEvents,
+	}).Logf("finished processing batch request")
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (router *Router) processOTLPRequest(

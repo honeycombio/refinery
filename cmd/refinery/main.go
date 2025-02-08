@@ -48,12 +48,18 @@ var BuildID string
 var version string
 
 type graphLogger struct {
+	logger logger.Logger
 }
 
-// TODO: make this log properly
-func (g graphLogger) Debugf(format string, v ...interface{}) {
-	fmt.Printf(format, v...)
-	fmt.Println()
+// Initialize the graph logger
+func newGraphLogger(l logger.Logger) *graphLogger {
+	return &graphLogger{logger: l}
+}
+
+func (g *graphLogger) Debugf(format string, v ...interface{}) {
+	if g.logger != nil {
+		g.logger.Debug().WithField("component", "graph").Logf(format, v...)
+	}
 }
 
 func main() {
@@ -252,7 +258,7 @@ func main() {
 	// we need to include all the metrics types so we can inject them in case they're needed
 	var g inject.Graph
 	if opts.Debug {
-		g.Logger = graphLogger{}
+		g.Logger = newGraphLogger(lgr)
 	}
 	objects := []*inject.Object{
 		{Value: c},

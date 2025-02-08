@@ -49,18 +49,19 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 		"error.err":         he.err.Error(),
 		"error.msg":         he.msg,
 		"error.status_code": he.status,
+		"error.detailed":    he.detailed,
+		"error.friendly":    he.friendly,
+		"error.type":        fmt.Sprintf("%T", he.err),
+		"http.status_code":  he.status,
+		"http.response_msg": he.msg,
 	}
 
-	// this is a little jank but should work for now, we might want to rethink
-	// how this section of the code works to make this nicer
-	if he.msg == ErrCaughtPanic.msg {
-		fields["error.stack_trace"] = string(debug.Stack())
-	}
+	// Add stack trace for all errors, not just panics
+	fields["error.stack_trace"] = string(debug.Stack())
 
-	r.Logger.Error().WithFields(fields).Logf("handler returning error")
+	r.Logger.Error().WithFields(fields).Logf("handler returning error: %s", he.msg)
 
 	w.WriteHeader(he.status)
-
 	errmsg := he.msg
 
 	if he.detailed {
@@ -72,7 +73,6 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	}
 
 	jsonErrMsg := []byte(`{"source":"refinery","error":"` + errmsg + `"}`)
-
 	w.Write(jsonErrMsg)
 }
 

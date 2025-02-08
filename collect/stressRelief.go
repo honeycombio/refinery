@@ -9,15 +9,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash"
 	"github.com/dgryski/go-wyhash"
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const stressReliefTopic = "refinery-stress-relief"
@@ -103,6 +107,8 @@ type StressRelief struct {
 	stressLevels map[string]stressReport
 	// only used in tests
 	disableStressLevelReport bool
+
+	Tracer trace.Tracer
 }
 
 const StressReliefHealthKey = "stress_relief"
@@ -221,31 +227,56 @@ func (msg *stressReliefMessage) String() string {
 
 func unmarshalStressReliefMessage(msg string) (*stressReliefMessage, error) {
 	if len(msg) < 2 {
-		return nil, fmt.Errorf("empty message")
+		return nil, fmt.Errorf("message too short (length=%d)", len(msg))
 	}
 
 	separatorIdx := strings.IndexRune(msg, rune(stressReliefMessageSeparator[0]))
-	if separatorIdx == -1 {
-		return nil, fmt.Errorf("invalid stress relief message")
+	if (separatorIdx == -1) {
+		return nil, fmt.Errorf("invalid message format: missing separator '%s'", stressReliefMessageSeparator)
 	}
 
 	level, err := strconv.Atoi(msg[separatorIdx+1:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid level format: %w", err)
 	}
 
 	return newStressReliefMessage(uint(level), msg[:separatorIdx]), nil
 }
 
 func (s *StressRelief) onStressLevelUpdate(ctx context.Context, msg string) {
+	ctx, span := otelutil.StartSpanWith(ctx, s.Tracer, "stressRelief.onUpdate")
+	defer span.End()
+
 	stressMsg, err := unmarshalStressReliefMessage(msg)
 	if err != nil {
-		s.Logger.Error().Logf("failed to unmarshal stress relief message: %s", err)
+		s.Logger.Error().WithFields(map[string]interface{}{
+			"error":       err.Error(),
+			"error.type":  fmt.Sprintf("%T", err),
+			"message.raw": msg,
+			"component":   "stress_relief",
+		}).Logf("failed to unmarshal stress relief message")
+		span.SetAttributes(
+			"error", true,
+			"error.message", err.Error(),
+			"error.type", fmt.Sprintf("%T", err),
+		)
 		return
 	}
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
+	s.Logger.Debug().WithFields(map[string]interface{}{
+		"stress.peer_id":  stressMsg.peerID,
+		"stress.level":    stressMsg.level,
+		"stress.timestamp": s.Clock.Now().String(),
+		"component":       "stress_relief",
+	}).Logf("updating peer stress level")
+
+	span.SetAttributes(
+		"stress.peer_id", stressMsg.peerID,
+		"stress.level", stressMsg.level,
+	)
 
 	s.stressLevels[stressMsg.peerID] = stressReport{
 		key:       stressMsg.peerID,
@@ -364,7 +395,7 @@ func (s *StressRelief) square(num, denom string) float64 {
 	stress := r * r
 	s.Logger.Debug().
 		WithField("algorithm", "square").
-		WithField("result", stress).
+		.WithField("result", stress).
 		Logf("stress recalc: result")
 	return stress
 }
@@ -444,7 +475,7 @@ func (s *StressRelief) Recalc() uint {
 		s.stressed = true
 	case Monitor:
 		// If it's off, should we activate it?
-		if !s.stressed && s.overallStressLevel >= s.activateLevel {
+		if (!s.stressed && s.overallStressLevel >= s.activateLevel) {
 			s.stressed = true
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -528,11 +559,66 @@ func (s *StressRelief) Stressed() bool {
 }
 
 func (s *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reason string) {
+	ctx, span := otelutil.StartSpanWith(context.Background(), s.Tracer, "stressRelief.getSampleRate",
+		"trace_id", traceID)
+	defer span.End()
+
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	if s.sampleRate <= 1 {
-		return 1, true, "stress_relief/always"
+
+	stressLevel := s.calculateClusterStress(ctx)
+	span.SetAttributes("stress.cluster_level", stressLevel)
+	
+	if stressLevel == 0 {
+		return 1, true, "stress_relief_inactive"
 	}
-	hash := wyhash.Hash([]byte(traceID), hashSeed)
-	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic/" + s.reason
+
+	// Use consistent sampling based on trace ID
+	keep = uint(xxhash.Sum64String(traceID))%100 >= stressLevel
+	if keep {
+		rate = 1
+		reason = "stress_relief_sampled_in"
+	} else {
+		rate = 0
+		reason = "stress_relief_sampled_out"
+	}
+
+	span.SetAttributes(
+		"sample.keep", keep,
+		"sample.rate", rate,
+		"sample.reason", reason,
+	)
+
+	return rate, keep, reason
+}
+
+func (s *StressRelief) calculateClusterStress(ctx context.Context) uint {
+    ctx, span := otelutil.StartSpanWith(ctx, s.Tracer, "stressRelief.calculateClusterStress", "stress.type", "cluster")
+    defer span.End()
+
+    now := s.Clock.Now()
+    expirationTime := now.Add(-s.config.StressReliefReportExpiration)
+    var totalStressLevel uint
+    var validReports uint
+
+    for _, report := range s.stressLevels {
+        if report.timestamp.After(expirationTime) {
+            totalStressLevel += report.level
+            validReports++
+        }
+    }
+
+    var clusterStress uint
+    if validReports > 0 {
+        clusterStress = totalStressLevel / validReports
+    }
+
+    span.SetAttributes(
+        attribute.Int("stress.valid_reports", int(validReports)),
+        attribute.Int("stress.total_level", int(totalStressLevel)),
+        attribute.Int("stress.cluster_level", int(clusterStress)),
+    )
+
+    s.Metrics.Gauge("cluster_stress_level", float64(clusterStress))
+    return clusterStress
 }
