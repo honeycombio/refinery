@@ -182,7 +182,7 @@ complete:
     - name: dropped_from_stress
       type: Counter
       unit: Dimensionless
-      description: number of traces dropped due to stress relief
+      description: number of spans dropped due to stress relief
     - name: trace_kept_sample_rate
       type: Histogram
       unit: Dimensionless
