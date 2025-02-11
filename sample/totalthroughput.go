@@ -105,3 +105,8 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 func (d *TotalThroughputSampler) GetKeyFields() []string {
 	return d.keyFields
 }
+
+func (d *TotalThroughputSampler) CountLateSpan() {}
+
+// Make sure it implements Sampler
+var _ Sampler = (*TotalThroughputSampler)(nil)

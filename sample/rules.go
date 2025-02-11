@@ -491,3 +491,8 @@ func compare(a, b interface{}) (int, bool) {
 
 	return equal, false
 }
+
+func (d *RulesBasedSampler) CountLateSpan() {}
+
+// Make sure it implements Sampler
+var _ Sampler = (*RulesBasedSampler)(nil)

@@ -16,6 +16,7 @@ import (
 type Sampler interface {
 	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string)
 	GetKeyFields() []string
+	CountLateSpan()
 	Start() error
 }
 

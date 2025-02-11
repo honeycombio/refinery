@@ -113,3 +113,14 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 func (d *EMAThroughputSampler) GetKeyFields() []string {
 	return d.keyFields
 }
+
+func (d *EMAThroughputSampler) CountLateSpan() {
+	//We don't want to store the entire key for every trace we keep, but the only really
+	//import thing to do is to make sure that span is counted for the total throughput.
+	//So counting against a fake key should decrease the sampling rate for all future actual
+	//GetSamplingRate calls.
+	var _ = d.dynsampler.GetSampleRate("_")
+}
+
+// Make sure it implements Sampler
+var _ Sampler = (*EMAThroughputSampler)(nil)

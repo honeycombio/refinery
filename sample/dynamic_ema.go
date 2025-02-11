@@ -98,3 +98,8 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 func (d *EMADynamicSampler) GetKeyFields() []string {
 	return d.keyFields
 }
+
+func (d *EMADynamicSampler) CountLateSpan() {}
+
+// Make sure it implements Sampler
+var _ Sampler = (*EMADynamicSampler)(nil)
