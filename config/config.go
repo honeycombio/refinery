@@ -24,7 +24,7 @@ type Config interface {
 
 	// Reload forces the config to attempt to reload its values. If the config
 	// checksum has changed, the reload callbacks will be called.
-	Reload()
+	Reload(opts ...ReloadedConfigDataOption)
 
 	// GetHashes returns the current config and rule hashes
 	GetHashes() (cfg string, rules string)
@@ -167,4 +167,22 @@ type ConfigMetadata struct {
 	ID       string `json:"id"`
 	Hash     string `json:"hash"`
 	LoadedAt string `json:"loaded_at"`
+}
+
+type ReloadedConfigData struct {
+	cData []configData
+	rData []configData
+}
+
+type ReloadedConfigDataOption func(*ReloadedConfigData)
+
+func WithConfigData(in []configData) ReloadedConfigDataOption {
+	return func(c *ReloadedConfigData) {
+		c.cData = in
+	}
+}
+func WithRulesData(in []configData) ReloadedConfigDataOption {
+	return func(c *ReloadedConfigData) {
+		c.rData = in
+	}
 }

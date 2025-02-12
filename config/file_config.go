@@ -453,24 +453,27 @@ func (e *FileConfigError) Error() string {
 	return msg.String()
 }
 
+func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
+	cData, err := getConfigDataForLocations(opts.ConfigLocations)
+	if err != nil {
+		return nil, nil, err
+	}
+	rulesData, err := getConfigDataForLocations(opts.RulesLocations)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cData, rulesData, err
+}
+
 // newFileConfig does the work of creating and loading the start of a config object
 // from the given arguments.
 // It's used by both the main init as well as the reload code.
 // In order to do proper validation, we actually process the data twice -- once as
 // a map, and once as the actual config object.
-func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
-	configData, err := getConfigDataForLocations(opts.ConfigLocations)
-	if err != nil {
-		return nil, err
-	}
-	rulesData, err := getConfigDataForLocations(opts.RulesLocations)
-	if err != nil {
-		return nil, err
-	}
-
+func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, error) {
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(configData, opts)
+		cfgFails, err := validateConfigs(cData, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -492,7 +495,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 
 	// Now load the files
 	mainconf := &configContents{}
-	mainhash, err := applyConfigInto(mainconf, configData, opts)
+	mainhash, err := applyConfigInto(mainconf, cData, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +534,13 @@ func writeYAMLToFile(data any, filename string) error {
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
 func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
-	cfg, err := newFileConfig(opts)
+	cData, rData, err := newConfigAndRules(opts)
+	// TODO: do we exit here or keep going?
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := newFileConfig(opts, cData, rData)
 	// only exit if we have no config at all; if it fails validation, we'll
 	// do the rest and return it anyway
 	if err != nil && cfg == nil {
@@ -562,9 +571,24 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 
 // Reload attempts to reload the configuration; if it has changed, it stores the
 // new data and calls the reload callbacks.
-func (f *fileConfig) Reload() {
+func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) {
+	cData, rData, err := newConfigAndRules(f.opts)
+	if err != nil {
+		f.errorCallback(err)
+		return
+	}
+
+	cStruct := &ReloadedConfigData{
+		cData: cData,
+		rData: rData,
+	}
+
+	for _, opt := range opts {
+		opt(cStruct)
+	}
+
 	// reread the configs
-	cfg, err := newFileConfig(f.opts)
+	cfg, err := newFileConfig(f.opts, cStruct.cData, cStruct.rData)
 	if err != nil {
 		f.errorCallback(err)
 		return

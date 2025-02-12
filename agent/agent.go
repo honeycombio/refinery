@@ -27,6 +27,7 @@ type Agent struct {
 	remoteConfigStatus *protobufs.RemoteConfigStatus
 	opampClientCert    *tls.Certificate
 	caCertPath         string
+	remoteConfig       *protobufs.AgentRemoteConfig
 
 	certRequested       bool
 	clientPrivateKeyPEM []byte
@@ -165,9 +166,38 @@ func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
 	}
 }
 
+func (agent *Agent) reportConfigStatus(status protobufs.RemoteConfigStatuses, errorMessage string) {
+	err := agent.opampClient.SetRemoteConfigStatus(&protobufs.RemoteConfigStatus{
+		LastRemoteConfigHash: agent.remoteConfig.GetConfigHash(),
+		Status:               status,
+		ErrorMessage:         errorMessage,
+	})
+	if err != nil {
+		agent.logger.Errorf(context.Background(), "Could not report OpAMP remote config status: %s", err)
+	}
+}
+
 func (agent *Agent) onMessage(ctx context.Context, msg *types.MessageData) {
 	if msg.RemoteConfig != nil {
-		agent.logger.Debugf(ctx, "got remote config")
+		// deserialize the config and call ReloadConfig
+		agent.logger.Debugf(ctx, "onMessage got remote config: %v", msg)
+		if msg.RemoteConfig.GetConfig().GetConfigMap() != nil {
+			confMap := msg.RemoteConfig.GetConfig().GetConfigMap()
+			var opts []config.ReloadedConfigDataOption
+			if c, ok := confMap["refinery_rules"]; ok {
+				opts = append(opts, config.WithRulesData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://rules")))
+			}
+			if c, ok := confMap["refinery_config"]; ok {
+				opts = append(opts, config.WithConfigData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://config")))
+			}
+			agent.remoteConfig = msg.RemoteConfig
+			agent.logger.Debugf(ctx, "onMessage config opts: %v", opts)
+			if len(opts) > 0 {
+				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLYING, "")
+				agent.effectiveConfig.Reload(opts...)
+				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
+			}
+		}
 	}
 	if msg.OwnMetricsConnSettings != nil {
 		agent.logger.Debugf(ctx, "got own metrics connection settings")
