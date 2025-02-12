@@ -1,23 +1,10 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"gopkg.in/yaml.v3"
 )
-
-// SerializeToJSON serializes the Config to a JSON string
-func SerializeToJSON(cfg Config) (string, error) {
-	// Create a configContents struct and populate it from the Config interface
-	contents := populateConfigContents(cfg)
-
-	jsonBytes, err := json.MarshalIndent(contents, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("error serializing config to JSON: %w", err)
-	}
-	return string(jsonBytes), nil
-}
 
 // SerializeToYAML serializes the Config to a YAML string
 func SerializeToYAML(cfg Config) (string, error) {
