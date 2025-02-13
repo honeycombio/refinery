@@ -108,7 +108,10 @@ func (cw *ConfigWatcher) Start() error {
 	if cw.Tracer == nil {
 		cw.Tracer = noop.NewTracerProvider().Tracer("test")
 	}
-	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 && !cw.Config.GetOpAMPConfig().Enabled {
+	if !cw.Config.GetOpAMPConfig().Enabled {
+		return nil
+	}
+	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
 		go cw.monitor()
 	}
 	cw.subscr = cw.PubSub.Subscribe(context.Background(), ConfigPubsubTopic, cw.SubscriptionListener)
@@ -117,7 +120,11 @@ func (cw *ConfigWatcher) Start() error {
 }
 
 func (cw *ConfigWatcher) Stop() error {
-	close(cw.done)
-	cw.subscr.Close()
+	if cw.done != nil {
+		close(cw.done)
+	}
+	if cw.subscr != nil {
+		cw.subscr.Close()
+	}
 	return nil
 }
