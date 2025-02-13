@@ -111,7 +111,7 @@ func GenerateMetricsMetadata() error {
 
 		}
 		if !found {
-			return fmt.Errorf("Missing metrics.Metadata declaration in the package %s", pkg.Name)
+			fmt.Printf("Missing metrics.Metadata declaration in the package %s\n", pkg.Name)
 		}
 	}
 
