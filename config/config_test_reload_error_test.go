@@ -4,14 +4,15 @@ package config_test
 
 import (
 	"os"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/configwatcher"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestErrorReloading(t *testing.T) {
@@ -32,8 +33,7 @@ func TestErrorReloading(t *testing.T) {
 	opts, err := config.NewCmdEnvOptions([]string{"--config", cfg, "--rules_config", rules})
 	assert.NoError(t, err)
 
-	ch := make(chan interface{}, 1)
-	c, err := config.NewConfig(opts, func(err error) { ch <- 1 })
+	c, err := config.NewConfig(opts)
 	assert.NoError(t, err)
 
 	pubsub := &pubsub.LocalPubSub{
@@ -41,9 +41,11 @@ func TestErrorReloading(t *testing.T) {
 	}
 	pubsub.Start()
 	defer pubsub.Stop()
+	mockLogger := &logger.MockLogger{}
 	watcher := &configwatcher.ConfigWatcher{
 		Config: c,
 		PubSub: pubsub,
+		Logger: mockLogger,
 	}
 	watcher.Start()
 	defer watcher.Stop()
@@ -56,29 +58,18 @@ func TestErrorReloading(t *testing.T) {
 		t.Error("name received", d, "expected", "DeterministicSampler")
 	}
 
-	wg := &sync.WaitGroup{}
-
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-		select {
-		case <-ch:
-		case <-time.After(5 * time.Second):
-			t.Error("No error callback")
-		}
-	}()
-
 	// This is valid YAML, but invalid config
 	rm2 := makeYAML(
 		"RulesVersion", 2,
 		"Samplers.__default__.InvalidSampler.SampleRate", 50,
 	)
 	err = os.WriteFile(rules, []byte(rm2), 0644)
-
 	assert.NoError(t, err)
 
-	wg.Wait()
+	require.EventuallyWithT(t, func(collectionT *assert.CollectT) {
+		require.Len(collectionT, mockLogger.Events, 1)
+		require.Contains(collectionT, mockLogger.Events[0].Fields["error"], "error reloading config")
+	}, 5*time.Second, 1*time.Second)
 
 	// config should error and not update sampler to invalid type
 	d, _ = c.GetSamplerConfigForDestName("dataset5")
