@@ -194,8 +194,12 @@ func (agent *Agent) onMessage(ctx context.Context, msg *types.MessageData) {
 			agent.logger.Debugf(ctx, "onMessage config opts: %v", opts)
 			if len(opts) > 0 {
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLYING, "")
-				agent.effectiveConfig.Reload(opts...)
-				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
+				err := agent.effectiveConfig.Reload(opts...)
+				if err != nil {
+					agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_FAILED, err.Error())
+				} else {
+					agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
+				}
 			}
 		}
 	}

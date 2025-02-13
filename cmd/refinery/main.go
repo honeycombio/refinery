@@ -99,11 +99,7 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts, func(err error) {
-		if a.Logger != nil {
-			a.Logger.Error().WithField("error", err).Logf("error loading config")
-		}
-	})
+	c, err := config.NewConfig(opts)
 	if err != nil {
 		fmt.Printf("%+v\n", err)
 		os.Exit(1)

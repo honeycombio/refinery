@@ -21,7 +21,7 @@ func getConfig(args []string) (config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return config.NewConfig(opts, func(err error) {})
+	return config.NewConfig(opts)
 }
 
 // creates two temporary yaml files from the strings passed in and returns their filenames

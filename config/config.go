@@ -24,7 +24,7 @@ type Config interface {
 
 	// Reload forces the config to attempt to reload its values. If the config
 	// checksum has changed, the reload callbacks will be called.
-	Reload(opts ...ReloadedConfigDataOption)
+	Reload(opts ...ReloadedConfigDataOption) error
 
 	// GetHashes returns the current config and rule hashes
 	GetHashes() (cfg string, rules string)
