@@ -183,6 +183,10 @@ complete:
       type: Counter
       unit: Dimensionless
       description: number of spans dropped due to stress relief
+    - name: kept_from_stress
+      type: Counter
+      unit: Dimensionless
+      description: number of spans kept due to stress relief
     - name: trace_kept_sample_rate
       type: Histogram
       unit: Dimensionless

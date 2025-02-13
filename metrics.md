@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-01-23 at 16:59:37 UTC.
+It was automatically generated on 2025-02-13 at 16:52:11 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -56,6 +56,7 @@ This table includes metrics with fully defined names.
 | trace_send_ejected_memsize | Counter | Dimensionless | number of traces that are ready for decision due to memory overrun |
 | trace_send_late_span | Counter | Dimensionless | number of spans that are sent due to late span arrival |
 | dropped_from_stress | Counter | Dimensionless | number of spans dropped due to stress relief |
+| kept_from_stress | Counter | Dimensionless | number of spans kept due to stress relief |
 | trace_kept_sample_rate | Histogram | Dimensionless | sample rate of kept traces |
 | trace_aggregate_sample_rate | Histogram | Dimensionless | aggregate sample rate of both kept and dropped traces |
 | collector_redistribute_traces_duration_ms | Histogram | Milliseconds | duration of redistributing traces to peers |

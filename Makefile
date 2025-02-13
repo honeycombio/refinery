@@ -110,6 +110,8 @@ clean:
 
 .PHONY: install-tools
 install-tools:
+	@echo "+++ Installing go-licenses"
+	@echo "+++ NOTE: This version requires local go version 1.21.1"
 	go install github.com/google/go-licenses/v2@v2.0.0-alpha.1
 
 .PHONY: update-licenses
