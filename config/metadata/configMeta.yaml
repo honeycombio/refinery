@@ -756,7 +756,7 @@ groups:
         valuetype: nondefault
         default: false
         reload: false
-        firstversion: v2.9.3
+        firstversion: v2.9.4
         summary: controls whether to enable OpAMP support.
         description: >
           OpAMP support is experimental in Refinery.
@@ -765,7 +765,7 @@ groups:
         valuetype: assigndefault
         default: "wss://127.0.0.1:4320/v1/opamp"
         reload: false
-        firstversion: v2.0
+        firstversion: v2.9.4
         summary: is the URL of the OpAMP server for this client.
         description: >
           This setting is the URL of the OpAMP server for this client.
