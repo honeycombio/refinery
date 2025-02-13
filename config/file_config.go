@@ -31,15 +31,14 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type fileConfig struct {
-	mainConfig    *configContents
-	mainHash      string
-	rulesConfig   *V2SamplerConfig
-	rulesHash     string
-	opts          *CmdEnv
-	callbacks     []ConfigReloadCallback
-	errorCallback func(error)
-	mux           sync.RWMutex
-	lastLoadTime  time.Time
+	mainConfig   *configContents
+	mainHash     string
+	rulesConfig  *V2SamplerConfig
+	rulesHash    string
+	opts         *CmdEnv
+	callbacks    []ConfigReloadCallback
+	mux          sync.RWMutex
+	lastLoadTime time.Time
 }
 
 // ensure that fileConfig implements Config
@@ -533,7 +532,7 @@ func writeYAMLToFile(data any, filename string) error {
 // nil, it uses the command line arguments.
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
-func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
+func NewConfig(opts *CmdEnv) (Config, error) {
 	cData, rData, err := newConfigAndRules(opts)
 	// TODO: do we exit here or keep going?
 	if err != nil {
@@ -564,18 +563,16 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	}
 
 	cfg.callbacks = make([]ConfigReloadCallback, 0)
-	cfg.errorCallback = errorCallback
 
 	return cfg, err
 }
 
 // Reload attempts to reload the configuration; if it has changed, it stores the
 // new data and calls the reload callbacks.
-func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) {
+func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	cData, rData, err := newConfigAndRules(f.opts)
 	if err != nil {
-		f.errorCallback(err)
-		return
+		return err
 	}
 
 	cStruct := &ReloadedConfigData{
@@ -590,13 +587,12 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) {
 	// reread the configs
 	cfg, err := newFileConfig(f.opts, cStruct.cData, cStruct.rData)
 	if err != nil {
-		f.errorCallback(err)
-		return
+		return err
 	}
 
 	// if nothing's changed, we're fine
 	if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
-		return
+		return nil
 	}
 
 	// otherwise, update our state and call the callbacks
@@ -610,6 +606,7 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) {
 	for _, cb := range f.callbacks {
 		cb(cfg.mainHash, cfg.rulesHash)
 	}
+	return nil
 }
 
 // GetHashes returns the current hash values for the main and rules configs.
