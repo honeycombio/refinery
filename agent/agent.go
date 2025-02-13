@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"net/http"
@@ -145,10 +146,12 @@ func (agent *Agent) connect() error {
 	return nil
 }
 
-// TODO: call disconnect
-func (agent *Agent) disconnect(ctx context.Context) {
+func (agent *Agent) Stop(ctx context.Context) {
 	agent.logger.Debugf(ctx, "disconnecting from OpAMP server")
-	agent.opampClient.Stop(ctx)
+	err := agent.opampClient.Stop(ctx)
+	if err != nil {
+		agent.logger.Errorf(ctx, "Failed to stop OpAMP client: %v", err)
+	}
 }
 
 func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
@@ -178,37 +181,14 @@ func (agent *Agent) reportConfigStatus(status protobufs.RemoteConfigStatuses, er
 }
 
 func (agent *Agent) onMessage(ctx context.Context, msg *types.MessageData) {
-	if msg.RemoteConfig != nil {
-		// deserialize the config and call ReloadConfig
-		agent.logger.Debugf(ctx, "onMessage got remote config: %v", msg)
-		if msg.RemoteConfig.GetConfig().GetConfigMap() != nil {
-			confMap := msg.RemoteConfig.GetConfig().GetConfigMap()
-			var opts []config.ReloadedConfigDataOption
-			if c, ok := confMap["refinery_rules"]; ok {
-				opts = append(opts, config.WithRulesData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://rules")))
-			}
-			if c, ok := confMap["refinery_config"]; ok {
-				opts = append(opts, config.WithConfigData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://config")))
-			}
-			agent.remoteConfig = msg.RemoteConfig
-			agent.logger.Debugf(ctx, "onMessage config opts: %v", opts)
-			if len(opts) > 0 {
-				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLYING, "")
-				err := agent.effectiveConfig.Reload(opts...)
-				if err != nil {
-					agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_FAILED, err.Error())
-				} else {
-					agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
-				}
-			}
-		}
-	}
 	if msg.OwnMetricsConnSettings != nil {
 		agent.logger.Debugf(ctx, "got own metrics connection settings")
 	}
 	if msg.AgentIdentification != nil {
 		agent.logger.Debugf(ctx, "got agent identification")
 	}
+
+	agent.updateRemoteConfig(ctx, msg)
 
 }
 
@@ -221,4 +201,60 @@ func (agent *Agent) getHealth() *protobufs.ComponentHealth {
 func (agent *Agent) onOpampConnectionSettings(ctx context.Context, settings *protobufs.OpAMPConnectionSettings) error {
 	agent.logger.Debugf(ctx, "got connection settings")
 	return nil
+}
+
+func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageData) {
+	if msg.RemoteConfig == nil {
+		agent.logger.Debugf(context.Background(), "updateRemoteConfig: no remote config in message")
+		return
+	}
+
+	if msg.RemoteConfig.GetConfig().GetConfigMap() != nil {
+		// deserialize the config and call ReloadConfig
+		agent.logger.Debugf(ctx, "onMessage got remote config: %v", msg)
+
+		confMap := msg.RemoteConfig.GetConfig().GetConfigMap()
+
+		if !agent.isConfigChanged(msg.RemoteConfig.GetConfigHash()) {
+			agent.logger.Debugf(ctx, "onMessage remote config is the same as the last one, skipping")
+			return
+		}
+
+		var opts []config.ReloadedConfigDataOption
+		if c, ok := confMap["refinery_rules"]; ok {
+			opts = append(opts, config.WithRulesData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://rules")))
+		}
+		if c, ok := confMap["refinery_config"]; ok {
+			opts = append(opts, config.WithConfigData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://config")))
+		}
+
+		agent.remoteConfig = msg.RemoteConfig
+		agent.logger.Debugf(ctx, "onMessage config opts: %v", opts)
+		if len(opts) > 0 {
+			agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLYING, "")
+			err := agent.effectiveConfig.Reload(opts...)
+			if err != nil {
+				agent.logger.Errorf(ctx, "Failed to reload config: %v", err)
+				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_FAILED, err.Error())
+			} else {
+				agent.logger.Logger.Info().Logf("Successfully reloaded config")
+				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
+			}
+		}
+	}
+}
+
+func (agent *Agent) isConfigChanged(newConfigHash []byte) bool {
+	if agent.remoteConfig == nil {
+		return true
+	}
+	if !bytes.Equal(agent.remoteConfigStatus.GetLastRemoteConfigHash(), newConfigHash) {
+		return true
+	}
+	if agent.remoteConfigStatus.GetStatus() == protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED {
+		return false
+	}
+
+	return true
+
 }

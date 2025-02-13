@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+
 	"github.com/honeycombio/refinery/agent"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
@@ -73,6 +75,7 @@ func (a *App) Start() error {
 
 func (a *App) Stop() error {
 	a.Logger.Debug().Logf("Shutting down App...")
+	a.opampAgent.Stop(context.Background())
 	return nil
 }
 

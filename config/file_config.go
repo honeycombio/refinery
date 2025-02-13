@@ -575,17 +575,17 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
 		return err
 	}
 
-	cStruct := &ReloadedConfigData{
-		cData: cData,
-		rData: rData,
+	newData := &ReloadedConfigData{
+		configs: cData,
+		rules:   rData,
 	}
 
 	for _, opt := range opts {
-		opt(cStruct)
+		opt(newData)
 	}
 
 	// reread the configs
-	cfg, err := newFileConfig(f.opts, cStruct.cData, cStruct.rData)
+	cfg, err := newFileConfig(f.opts, newData.configs, newData.rules)
 	if err != nil {
 		return err
 	}
