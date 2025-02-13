@@ -70,13 +70,15 @@ type MockConfig struct {
 // assert that MockConfig implements Config
 var _ Config = (*MockConfig)(nil)
 
-func (m *MockConfig) Reload(opts ...ReloadedConfigDataOption) {
+func (m *MockConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
 	for _, callback := range m.Callbacks {
 		callback("", "")
 	}
+
+	return nil
 }
 
 func (m *MockConfig) RegisterReloadCallback(callback ConfigReloadCallback) {
