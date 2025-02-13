@@ -103,7 +103,7 @@ func (cw *ConfigWatcher) Start() error {
 	if cw.Tracer == nil {
 		cw.Tracer = noop.NewTracerProvider().Tracer("test")
 	}
-	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
+	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 && !cw.Config.GetOpAMPConfig().Enabled {
 		go cw.monitor()
 	}
 	cw.subscr = cw.PubSub.Subscribe(context.Background(), ConfigPubsubTopic, cw.SubscriptionListener)
