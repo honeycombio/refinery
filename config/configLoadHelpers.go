@@ -134,30 +134,29 @@ type configData struct {
 	location string
 }
 
-// TODO: does this need to be a slice?
-func NewConfigData(data []byte, format Format, location string) []configData {
-	return []configData{{
+func NewConfigData(data []byte, format Format, location string) configData {
+	return configData{
 		data:     data,
 		format:   format,
 		location: location,
-	}}
+	}
 }
 
 // getConfigDataForLocations returns a slice of configData grabbed from each location.
 func getConfigDataForLocations(locations []string) ([]configData, error) {
-	results := make([]configData, len(locations))
-	for i, location := range locations {
+	results := make([]configData, 0, len(locations))
+	for _, location := range locations {
 		// trim leading and trailing whitespace just in case
 		location := strings.TrimSpace(location)
 		data, format, err := getBytesFor(location)
 		if err != nil {
 			return nil, err
 		}
-		results[i] = configData{
+		results = append(results, configData{
 			data:     data,
 			format:   format,
 			location: location,
-		}
+		})
 	}
 	return results, nil
 }

@@ -169,20 +169,23 @@ type ConfigMetadata struct {
 	LoadedAt string `json:"loaded_at"`
 }
 
+// ReloadedConfigData holds the new config data that will be applied to
+// the Config instance through `Reload` method.
 type ReloadedConfigData struct {
-	cData []configData
-	rData []configData
+	configs []configData
+	rules   []configData
 }
 
+// ReloadedConfigDataOption is a function that allows setting the new config data
 type ReloadedConfigDataOption func(*ReloadedConfigData)
 
-func WithConfigData(in []configData) ReloadedConfigDataOption {
+func WithConfigData(in configData) ReloadedConfigDataOption {
 	return func(c *ReloadedConfigData) {
-		c.cData = in
+		c.configs = append(c.configs, in)
 	}
 }
-func WithRulesData(in []configData) ReloadedConfigDataOption {
+func WithRulesData(in configData) ReloadedConfigDataOption {
 	return func(c *ReloadedConfigData) {
-		c.rData = in
+		c.rules = append(c.rules, in)
 	}
 }
