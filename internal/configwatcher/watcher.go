@@ -108,7 +108,7 @@ func (cw *ConfigWatcher) Start() error {
 	if cw.Tracer == nil {
 		cw.Tracer = noop.NewTracerProvider().Tracer("test")
 	}
-	if !cw.Config.GetOpAMPConfig().Enabled {
+	if cw.Config.GetOpAMPConfig().Enabled {
 		return nil
 	}
 	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
