@@ -99,7 +99,9 @@ func (cw *ConfigWatcher) monitor() {
 		case <-cw.done:
 			return
 		case <-ticker.C:
-			cw.Config.Reload()
+			if err := cw.Config.Reload(); err != nil {
+				cw.Logger.Error().Logf("error reloading config: %s", err)
+			}
 		}
 	}
 }
