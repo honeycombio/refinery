@@ -20,6 +20,8 @@ func SerializeToYAML(cfg Config) (string, error) {
 
 // populateConfigContents creates a configContents struct from a Config interface
 func populateConfigContents(cfg Config) configContents {
+	opAMPConfig := cfg.GetOpAMPConfig()
+
 	return configContents{
 		General: cfg.GetGeneralConfig(),
 		Network: NetworkConfig{
@@ -27,6 +29,8 @@ func populateConfigContents(cfg Config) configContents {
 			PeerListenAddr:  cfg.GetPeerListenAddr(),
 			HoneycombAPI:    cfg.GetHoneycombAPI(),
 			HTTPIdleTimeout: Duration(cfg.GetHTTPIdleTimeout()),
+			OpAMPEndpoint:   opAMPConfig.Endpoint,
+			OpAMPEnabled:    opAMPConfig.Enabled,
 		},
 		AccessKeys: cfg.GetAccessKeyConfig(),
 		Telemetry:  getRefineryTelemetryConfig(cfg),
@@ -66,7 +70,6 @@ func populateConfigContents(cfg Config) configContents {
 		GRPCServerParameters: cfg.GetGRPCConfig(),
 		SampleCache:          cfg.GetSampleCacheConfig(),
 		StressRelief:         cfg.GetStressReliefConfig(),
-		OpAMP:                cfg.GetOpAMPConfig(),
 	}
 }
 

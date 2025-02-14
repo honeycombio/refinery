@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-02-13 at 16:52:13 UTC.
+It was automatically generated on 2025-02-14 at 21:35:19 UTC.
 
 ## The Config file
 
@@ -10,9 +10,7 @@ The file is split into sections; each section is a group of related configuratio
 Each section has a name, and the name is used to refer to the section in other parts of the config file.
 
 ## Sample
-
 This is a sample config file:
-
 ```yaml
 General:
   ConfigurationVersion: 2
@@ -27,7 +25,6 @@ OTelMetrics:
 The remainder of this document describes the sections within the file and the fields in each.
 
 ## Table of Contents
-
 - [General Configuration](#general-configuration)
 - [Network Configuration](#network-configuration)
 - [Access Key Configuration](#access-key-configuration)
@@ -39,7 +36,6 @@ The remainder of this document describes the sections within the file and the fi
 - [Stdout Logger](#stdout-logger)
 - [Prometheus Metrics](#prometheus-metrics)
 - [Legacy Metrics](#legacy-metrics)
-- [OpAMP Configuration](#opamp-configuration)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
 - [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
@@ -51,11 +47,9 @@ The remainder of this document describes the sections within the file and the fi
 - [gRPC Server Parameters](#grpc-server-parameters)
 - [Sample Cache](#sample-cache)
 - [Stress Relief](#stress-relief)
-
 ## General Configuration
 
 `General` contains general configuration options that apply to the entire Refinery process.
-
 ### `ConfigurationVersion`
 
 ConfigurationVersion is the file format of this particular configuration file.
@@ -107,7 +101,6 @@ Note that external factors (for example, Kubernetes ConfigMaps) may cause delays
 ## Network Configuration
 
 `Network` contains network configuration options.
-
 ### `ListenAddr`
 
 ListenAddr is the address where Refinery listens for incoming requests.
@@ -157,6 +150,25 @@ This setting is the destination to which Refinery sends all events that it decid
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
 
+### `OpAMPEnabled`
+
+OpAMPEnabled controls whether to enable OpAMP support.
+
+OpAMP support is experimental in Refinery.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `OpAMPEndpoint`
+
+OpAMPEndpoint is the URL of the OpAMP server for this client.
+
+This setting is the URL of the OpAMP server for this client.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `wss://127.0.0.1:4320/v1/opamp`
+
 ## Access Key Configuration
 
 `AccessKeys` contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.
@@ -205,7 +217,7 @@ If `AcceptOnlyListedKeys` is `true`, then `SendKeys` will only be used for event
 `all` overwrites all keys, even missing ones, with `SendKey`.
 `nonblank` overwrites all supplied keys but will not inject `SendKey` if the incoming key is blank.
 `listedonly` overwrites only the keys listed in `ReceiveKeys`.
-`unlisted` uses the `SendKey` for all events _except_ those with keys listed in `ReceiveKeys`, which use their original keys.
+`unlisted` uses the `SendKey` for all events *except* those with keys listed in `ReceiveKeys`, which use their original keys.
 `missingonly` uses the SendKey only to inject keys into events with blank keys.
 All other events use their original keys.
 
@@ -217,7 +229,6 @@ All other events use their original keys.
 ## Refinery Telemetry
 
 `RefineryTelemetry` contains configuration information for the telemetry that Refinery uses to record its own operation.
-
 ### `AddRuleReasonToTrace`
 
 AddRuleReasonToTrace controls whether to decorate traces with Refinery rule evaluation results.
@@ -250,7 +261,6 @@ If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.sp
 AddCountsToRoot controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
 
 If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made:
-
 - `meta.span_count`: the number of child spans on the trace
 - `meta.span_event_count`: the number of span events on the trace
 - `meta.span_link_count`: the number of span links on the trace
@@ -272,7 +282,6 @@ If `true`, then Refinery will add the following tag to all traces: - `meta.refin
 ## Traces
 
 `Traces` contains configuration for how traces are managed.
-
 ### `SendDelay`
 
 SendDelay is the duration to wait after the root span arrives before sending a trace.
@@ -366,7 +375,6 @@ This will mean Refinery makes fewer sampling decision calculations each `SendTic
 ## Debugging
 
 `Debugging` contains configuration values used when setting up and debugging Refinery.
-
 ### `DebugServiceAddr`
 
 DebugServiceAddr is the IP and port where the debug service runs.
@@ -422,7 +430,6 @@ NOTE: This setting is not compatible with `TraceCache=distributed`, because drop
 ## Refinery Logger
 
 `Logger` contains configuration for logging.
-
 ### `Type`
 
 Type is the type of logger to use.
@@ -453,7 +460,6 @@ Level is the logging level above which Refinery should send a log to the logger.
 
 `HoneycombLogger` contains configuration for logging to Honeycomb.
 Only used if `Logger.Type` is "honeycomb".
-
 ### `APIHost`
 
 APIHost is the URL of the Honeycomb API where Refinery sends its logs.
@@ -511,7 +517,6 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 `StdoutLogger` contains configuration for logging to `stdout`.
 Only used if `Logger.Type` is "stdout".
-
 ### `Structured`
 
 Structured controls whether to use structured logging.
@@ -545,7 +550,6 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 ## Prometheus Metrics
 
 `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
-
 ### `Enabled`
 
 Enabled controls whether to expose Refinery metrics over the `PrometheusListenAddr` port.
@@ -626,29 +630,6 @@ Between 1 and 60 seconds is typical.
 - Type: `duration`
 - Default: `30s`
 
-## OpAMP Configuration
-
-`OpAMP` contains configuration for the OpAMP protocol.
-
-### `Enabled`
-
-Enabled controls whether to enable OpAMP support.
-
-OpAMP support is experimental in Refinery.
-
-- Not eligible for live reload.
-- Type: `bool`
-
-### `Endpoint`
-
-Endpoint is the URL of the OpAMP server for this client.
-
-This setting is the URL of the OpAMP server for this client.
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `wss://127.0.0.1:4320/v1/opamp`
-
 ## OpenTelemetry Metrics
 
 `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) metrics.
@@ -722,7 +703,6 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 ## OpenTelemetry Tracing
 
 `OTelTracing` contains configuration for Refinery's own tracing.
-
 ### `Enabled`
 
 Enabled controls whether to send Refinery's own OpenTelemetry traces.
@@ -788,7 +768,6 @@ Useful if you plan on sending your traces to a different refinery instance for t
 ## Peer Management
 
 `PeerManagement` controls how the Refinery cluster communicates between peers.
-
 ### `Type`
 
 Type is the type of peer management to use.
@@ -949,7 +928,7 @@ CacheCapacity is the number of traces to keep in the cache's circular buffer.
 The collection cache is used to collect all active spans into traces.
 It is organized as a circular buffer.
 When the buffer wraps around, Refinery will try a few times to find an empty slot; if it fails, it starts ejecting traces from the cache earlier than would otherwise be necessary.
-Ideally, the size of the cache should be many multiples (100x to 1000x) of the total number of concurrently active traces (average trace throughput \* average trace duration).
+Ideally, the size of the cache should be many multiples (100x to 1000x) of the total number of concurrently active traces (average trace throughput * average trace duration).
 NOTE: This setting is now deprecated and no longer controls the cache size.
 Instead the maxmimum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
 
@@ -1122,7 +1101,6 @@ If this happens, then you should increase this buffer size.
 ## Specialized Configuration
 
 `Specialized` contains special-purpose configuration options that are not typically needed.
-
 ### `EnvironmentCacheTTL`
 
 EnvironmentCacheTTL is the duration for which environment information is cached.
@@ -1398,3 +1376,4 @@ This setting helps to prevent oscillations.
 - Eligible for live reload.
 - Type: `duration`
 - Default: `10s`
+
