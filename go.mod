@@ -22,6 +22,7 @@ require (
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/json-iterator/go v1.1.12
 	github.com/klauspost/compress v1.17.11
+	github.com/open-telemetry/opamp-go v0.19.0
 	github.com/panmari/cuckoofilter v1.0.6
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/pkg/errors v0.9.1
@@ -53,7 +54,10 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+require (
+	github.com/gorilla/websocket v1.5.3 // indirect
+	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

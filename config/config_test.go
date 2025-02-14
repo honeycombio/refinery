@@ -21,7 +21,7 @@ func getConfig(args []string) (config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return config.NewConfig(opts, func(err error) {})
+	return config.NewConfig(opts)
 }
 
 // creates two temporary yaml files from the strings passed in and returns their filenames
@@ -332,6 +332,10 @@ func TestReadDefaults(t *testing.T) {
 	}
 
 	if d := c.GetEnvironmentCacheTTL(); d != time.Hour {
+		t.Error("received", d, "expected", time.Hour)
+	}
+
+	if d := c.GetOpAMPConfig(); d.Enabled {
 		t.Error("received", d, "expected", time.Hour)
 	}
 
