@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2025-02-13 at 16:52:04 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2025-02-14 at 21:35:13 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -127,6 +127,21 @@ Network:
     ## default: https://api.honeycomb.io
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "HoneycombAPI" "HoneycombAPI" "https://api.honeycomb.io" }}
+
+    ## OpAMPEnabled controls whether to enable OpAMP support.
+    ##
+    ## OpAMP support is experimental in Refinery.
+    ##
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "OpAMPEnabled" "OpAMPEnabled" false }}
+
+    ## OpAMPEndpoint is the URL of the OpAMP server for this client.
+    ##
+    ## This setting is the URL of the OpAMP server for this client.
+    ##
+    ## default: wss://127.0.0.1:4320/v1/opamp
+    ## Not eligible for live reload.
+    OpAMPEndpoint: wss://127.0.0.1:4320/v1/opamp
 
 ##############################
 ## Access Key Configuration ##
@@ -640,28 +655,6 @@ LegacyMetrics:
     ## default: 30s
     ## Not eligible for live reload.
     {{ secondsToDuration .Data "ReportingInterval" "HoneycombMetrics.MetricsReportingInterval" "" }}
-
-#########################
-## OpAMP Configuration ##
-#########################
-OpAMP:
-  ## OpAMP contains configuration for the OpAMP protocol.
-  ##
-  ####
-    ## Enabled controls whether to enable OpAMP support.
-    ##
-    ## OpAMP support is experimental in Refinery.
-    ##
-    ## Not eligible for live reload.
-    {{ nonDefaultOnly .Data "Enabled" "Enabled" false }}
-
-    ## Endpoint is the URL of the OpAMP server for this client.
-    ##
-    ## This setting is the URL of the OpAMP server for this client.
-    ##
-    ## default: wss://127.0.0.1:4320/v1/opamp
-    ## Not eligible for live reload.
-    Endpoint: wss://127.0.0.1:4320/v1/opamp
 
 ###########################
 ## OpenTelemetry Metrics ##

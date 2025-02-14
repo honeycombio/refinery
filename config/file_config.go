@@ -56,7 +56,6 @@ type configContents struct {
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
-	OpAMP                OpAMPConfig               `yaml:"OpAMP"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
@@ -77,6 +76,7 @@ type GeneralConfig struct {
 	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"15s"`
 }
 
+// TODO: Implement opamp config in its own config section once we are ready to release the feature
 type OpAMPConfig struct {
 	Endpoint string `yaml:"Endpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
 	Enabled  bool   `yaml:"Enabled" default:"false"`
@@ -87,6 +87,8 @@ type NetworkConfig struct {
 	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
 	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
 	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
+	OpAMPEndpoint   string   `yaml:"OpAMPEndpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
+	OpAMPEnabled    bool     `yaml:"OpAMPEnabled" default:"false"`
 }
 
 type AccessKeyConfig struct {
@@ -956,7 +958,10 @@ func (f *fileConfig) GetOpAMPConfig() OpAMPConfig {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.OpAMP
+	return OpAMPConfig{
+		Enabled:  f.mainConfig.Network.OpAMPEnabled,
+		Endpoint: f.mainConfig.Network.OpAMPEndpoint,
+	}
 }
 
 func (f *fileConfig) GetOTelTracingConfig() OTelTracingConfig {

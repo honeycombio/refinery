@@ -128,6 +128,21 @@ Network:
     ## Eligible for live reload.
     # HoneycombAPI: "https://api.honeycomb.io"
 
+    ## OpAMPEnabled controls whether to enable OpAMP support.
+    ##
+    ## OpAMP support is experimental in Refinery.
+    ##
+    ## Not eligible for live reload.
+    OpAMPEnabled: true
+
+    ## OpAMPEndpoint is the URL of the OpAMP server for this client.
+    ##
+    ## This setting is the URL of the OpAMP server for this client.
+    ##
+    ## default: wss://127.0.0.1:4320/v1/opamp
+    ## Not eligible for live reload.
+    OpAMPEndpoint: ws://127.0.0.1:4320/v1/opamp
+
 ##############################
 ## Access Key Configuration ##
 ##############################
@@ -642,28 +657,6 @@ LegacyMetrics:
     ## default: 30s
     ## Not eligible for live reload.
     # ReportingInterval: ""
-
-#########################
-## OpAMP Configuration ##
-#########################
-OpAMP:
-  ## OpAMP contains configuration for the OpAMP protocol.
-  ##
-  ####
-    ## Enabled controls whether to enable OpAMP support.
-    ##
-    ## OpAMP support is experimental in Refinery.
-    ##
-    ## Not eligible for live reload.
-    # Enabled: false
-
-    ## Endpoint is the URL of the OpAMP server for this client.
-    ##
-    ## This setting is the URL of the OpAMP server for this client.
-    ##
-    ## default: wss://127.0.0.1:4320/v1/opamp
-    ## Not eligible for live reload.
-    Endpoint: wss://127.0.0.1:4320/v1/opamp
 
 ###########################
 ## OpenTelemetry Metrics ##
