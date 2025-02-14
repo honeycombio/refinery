@@ -2,6 +2,11 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.9.3
+
+This is a bug fix release that includes fixes relating to debugging with otel tracing.
+This release also registers the `kept_from_stress` metric, and updates documentation.
+
 ## Version 2.9.2
 
 Honeycomb's backend can now accept events with sizes up to 1 million bytes. This release enables Refinery to conform to the same limit and supports sending events up to 1MB.

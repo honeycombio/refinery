@@ -1,5 +1,19 @@
 # Refinery Changelog
 
+## 2.9.3 2025-02-13
+
+### Fixes
+
+- fix: register kept_from_stress metric (#1487) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: don't assume attribute type in oteltracing (#1483) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: dropped_from_stress description (#1486) | [Mike Terhar](https://github.com/mterhar)
+- fix: error from logrus when sending a trace (#1478) | [Nic](https://github.com/nic-littlepay)
+- fix: only record attributes when otel tracing is enabled (#1480) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Maintenance
+
+- maint(deps): bump the minor-patch group with 3 updates (#1479) | [dependabot[bot]](https://github.com/dependabot)
+
 ## 2.9.2 2025-01-23
 
 ### Fixes
@@ -123,7 +137,7 @@ See full details in [the Release Notes](./RELEASE_NOTES.md).
 
 ## 2.8.3 2024-10-08
 
-### Changes 
+### Changes
 
 - fix: Only set incoming user agent if not already present (#1366) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 - fix: Put a limit on the size of sampler keys (#1364) | [Kent Quirk](https://github.com/kentquirk)
