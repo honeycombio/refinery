@@ -142,6 +142,27 @@ groups:
         description: >
           This setting is the destination to which Refinery sends all events
           that it decides to keep.
+        ## BIG TODO: Once we decide to release this as a feature, please move
+        ## these options to a dedicated OpAMP section
+      - name: OpAMPEnabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v2.9.4
+        summary: controls whether to enable OpAMP support.
+        description: >
+          OpAMP support is experimental in Refinery.
+      - name: OpAMPEndpoint
+        type: string
+        valuetype: assigndefault
+        default: "wss://127.0.0.1:4320/v1/opamp"
+        reload: false
+        firstversion: v2.9.4
+        summary: is the URL of the OpAMP server for this client.
+        description: >
+          This setting is the URL of the OpAMP server for this client.
+
 
   - name: AccessKeys
     title: "Access Key Configuration"
@@ -746,29 +767,6 @@ groups:
         description: >
           Between 1 and 60 seconds is typical.
 
-  - name: "OpAMP"
-    title: "OpAMP Configuration"
-    description: >
-      contains configuration for the OpAMP protocol.
-    fields:
-      - name: Enabled
-        type: bool
-        valuetype: nondefault
-        default: false
-        reload: false
-        firstversion: v2.9.4
-        summary: controls whether to enable OpAMP support.
-        description: >
-          OpAMP support is experimental in Refinery.
-      - name: Endpoint
-        type: string
-        valuetype: assigndefault
-        default: "wss://127.0.0.1:4320/v1/opamp"
-        reload: false
-        firstversion: v2.9.4
-        summary: is the URL of the OpAMP server for this client.
-        description: >
-          This setting is the URL of the OpAMP server for this client.
 
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"

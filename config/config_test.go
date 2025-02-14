@@ -335,6 +335,10 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", time.Hour)
 	}
 
+	if d := c.GetOpAMPConfig(); d.Enabled {
+		t.Error("received", d, "expected", time.Hour)
+	}
+
 	d, name := c.GetSamplerConfigForDestName("dataset-doesnt-exist")
 	assert.IsType(t, &config.DeterministicSamplerConfig{}, d)
 	assert.Equal(t, "DeterministicSampler", name)

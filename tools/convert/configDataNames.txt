@@ -20,6 +20,10 @@ Network:
 
   - HoneycombAPI
 
+  - OpAMPEnabled
+
+  - OpAMPEndpoint
+
 
 AccessKeys:
   - ReceiveKeys (originally APIKeys)
@@ -109,12 +113,6 @@ LegacyMetrics:
   - Dataset (originally HoneycombMetrics.MetricsDataset)
 
   - ReportingInterval (originally HoneycombMetrics.MetricsReportingInterval)
-
-
-OpAMP:
-  - Enabled
-
-  - Endpoint
 
 
 OTelMetrics:
