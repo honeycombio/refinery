@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-02-13 at 16:52:05 UTC.
+# Automatically generated on 2025-02-14 at 21:35:14 UTC.
 
 General:
   - ConfigurationVersion
@@ -19,6 +19,10 @@ Network:
   - HTTPIdleTimeout
 
   - HoneycombAPI
+
+  - OpAMPEnabled
+
+  - OpAMPEndpoint
 
 
 AccessKeys:
@@ -109,12 +113,6 @@ LegacyMetrics:
   - Dataset (originally HoneycombMetrics.MetricsDataset)
 
   - ReportingInterval (originally HoneycombMetrics.MetricsReportingInterval)
-
-
-OpAMP:
-  - Enabled
-
-  - Endpoint
 
 
 OTelMetrics:

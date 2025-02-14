@@ -36,7 +36,6 @@ The remainder of this document describes the sections within the file and the fi
 - [Stdout Logger](#stdout-logger)
 - [Prometheus Metrics](#prometheus-metrics)
 - [Legacy Metrics](#legacy-metrics)
-- [OpAMP Configuration](#opamp-configuration)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
 - [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
@@ -150,6 +149,25 @@ This setting is the destination to which Refinery sends all events that it decid
 - Default: `https://api.honeycomb.io`
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
+
+### `OpAMPEnabled`
+
+OpAMPEnabled controls whether to enable OpAMP support.
+
+OpAMP support is experimental in Refinery.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `OpAMPEndpoint`
+
+OpAMPEndpoint is the URL of the OpAMP server for this client.
+
+This setting is the URL of the OpAMP server for this client.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `wss://127.0.0.1:4320/v1/opamp`
 
 ## Access Key Configuration
 
@@ -611,29 +629,6 @@ Between 1 and 60 seconds is typical.
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `30s`
-
-## OpAMP Configuration
-
-`OpAMP` contains configuration for the OpAMP protocol.
-
-### `Enabled`
-
-Enabled controls whether to enable OpAMP support.
-
-OpAMP support is experimental in Refinery.
-
-- Not eligible for live reload.
-- Type: `bool`
-
-### `Endpoint`
-
-Endpoint is the URL of the OpAMP server for this client.
-
-This setting is the URL of the OpAMP server for this client.
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `wss://127.0.0.1:4320/v1/opamp`
 
 ## OpenTelemetry Metrics
 
