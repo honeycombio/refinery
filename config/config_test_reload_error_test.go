@@ -66,10 +66,10 @@ func TestErrorReloading(t *testing.T) {
 	err = os.WriteFile(rules, []byte(rm2), 0644)
 	assert.NoError(t, err)
 
-	require.EventuallyWithT(t, func(collectionT *assert.CollectT) {
-		require.Len(collectionT, mockLogger.Events, 1)
-		require.Contains(collectionT, mockLogger.Events[0].Fields["error"], "error reloading config")
-	}, 5*time.Second, 1*time.Second)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		require.Len(c, mockLogger.Events, 1)
+		assert.Contains(c, mockLogger.Events[0].Fields["error"], "error reloading config")
+	}, 5*time.Second, 100*time.Millisecond)
 
 	// config should error and not update sampler to invalid type
 	d, _ = c.GetSamplerConfigForDestName("dataset5")
