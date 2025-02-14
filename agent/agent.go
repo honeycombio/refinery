@@ -109,7 +109,9 @@ func (agent *Agent) connect() error {
 			OnError: func(ctx context.Context, err *protobufs.ServerErrorResponse) {
 				agent.logger.Errorf(ctx, "Received error from server: %v", err)
 			},
+			// TODO: when will this get called??
 			SaveRemoteConfigStatus: func(ctx context.Context, status *protobufs.RemoteConfigStatus) {
+				agent.logger.Debugf(ctx, "got remote config status: %v", status)
 				agent.remoteConfigStatus = status
 			},
 			GetEffectiveConfig: func(ctx context.Context) (*protobufs.EffectiveConfig, error) {
@@ -174,14 +176,17 @@ func (agent *Agent) reportConfigStatus(status protobufs.RemoteConfigStatuses, er
 	if err != nil {
 		agent.logger.Errorf(context.Background(), "Could not report OpAMP remote config status: %s", err)
 	}
-	err = agent.opampClient.SetRemoteConfigStatus(&protobufs.RemoteConfigStatus{
+	remoteConfigstatus := &protobufs.RemoteConfigStatus{
 		LastRemoteConfigHash: agent.remoteConfig.GetConfigHash(),
 		Status:               status,
 		ErrorMessage:         errorMessage,
-	})
+	}
+	err = agent.opampClient.SetRemoteConfigStatus(remoteConfigstatus)
 	if err != nil {
 		agent.logger.Errorf(context.Background(), "Could not report OpAMP remote config status: %s", err)
+		return
 	}
+	agent.remoteConfigStatus = remoteConfigstatus
 }
 
 func (agent *Agent) onMessage(ctx context.Context, msg *types.MessageData) {
@@ -190,6 +195,12 @@ func (agent *Agent) onMessage(ctx context.Context, msg *types.MessageData) {
 	}
 	if msg.AgentIdentification != nil {
 		agent.logger.Debugf(ctx, "got agent identification")
+		uid, err := uuid.FromBytes(msg.AgentIdentification.NewInstanceUid)
+		if err != nil {
+			agent.logger.Errorf(ctx, "Failed to parse new instance uid: %v", err)
+			return
+		}
+		agent.updateAgentIdentity(ctx, uid)
 	}
 
 	agent.updateRemoteConfig(ctx, msg)
@@ -261,4 +272,13 @@ func (agent *Agent) isConfigChanged(newConfigHash []byte) bool {
 
 	return true
 
+}
+
+func (agent *Agent) updateAgentIdentity(ctx context.Context, instanceId uuid.UUID) {
+	agent.logger.Debugf(ctx, "Agent identify is being changed from id=%v to id=%v",
+		agent.instanceId,
+		instanceId)
+	agent.instanceId = instanceId
+
+	// TODO: update metrics setting when identity changes
 }
