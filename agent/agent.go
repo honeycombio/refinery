@@ -26,10 +26,10 @@ type Agent struct {
 	agentDescription   *protobufs.AgentDescription
 	opampClient        client.OpAMPClient
 	remoteConfigStatus *protobufs.RemoteConfigStatus
-	opampClientCert    *tls.Certificate
-	caCertPath         string
 	remoteConfig       *protobufs.AgentRemoteConfig
 
+	opampClientCert     *tls.Certificate
+	caCertPath          string
 	certRequested       bool
 	clientPrivateKeyPEM []byte
 
@@ -170,7 +170,11 @@ func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
 }
 
 func (agent *Agent) reportConfigStatus(status protobufs.RemoteConfigStatuses, errorMessage string) {
-	err := agent.opampClient.SetRemoteConfigStatus(&protobufs.RemoteConfigStatus{
+	err := agent.opampClient.SetAgentDescription(agent.agentDescription)
+	if err != nil {
+		agent.logger.Errorf(context.Background(), "Could not report OpAMP remote config status: %s", err)
+	}
+	err = agent.opampClient.SetRemoteConfigStatus(&protobufs.RemoteConfigStatus{
 		LastRemoteConfigHash: agent.remoteConfig.GetConfigHash(),
 		Status:               status,
 		ErrorMessage:         errorMessage,
