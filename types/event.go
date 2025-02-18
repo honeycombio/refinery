@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"slices"
+	"sync"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -31,6 +32,49 @@ type Event struct {
 	SampleRate  uint
 	Timestamp   time.Time
 	Data        map[string]interface{}
+}
+
+func (e *Event) reset() {
+	e.Context = context.Background()
+	e.APIHost = ""
+	e.APIKey = ""
+	e.Dataset = ""
+	e.Environment = ""
+	e.SampleRate = 0
+	e.Timestamp = time.Time{}
+	clear(e.Data)
+}
+
+var pooledEvents = sync.Pool{
+	New: func() interface{} {
+		return &Event{}
+	},
+}
+
+func NewEvent(ctx context.Context, apiHost, apiKey, dataset, environment string, sampleRate uint, timestamp time.Time, data map[string]interface{}) *Event {
+	event := pooledEvents.Get().(*Event)
+	event.Context = ctx
+	event.APIHost = apiHost
+	event.APIKey = apiKey
+	event.Dataset = dataset
+	event.Environment = environment
+	event.SampleRate = sampleRate
+	event.Timestamp = timestamp
+	event.Data = data
+	return event
+}
+
+func NewDecisionEvent(ctx context.Context, apiKey string, dataset string) *Event {
+	event := pooledEvents.Get().(*Event)
+	event.Context = ctx
+	event.APIKey = apiKey
+	event.Dataset = dataset
+	return event
+}
+
+func DisposeEvent(event *Event) {
+	event.reset()
+	pooledEvents.Put(event)
 }
 
 // Trace isn't something that shows up on the wire; it gets created within

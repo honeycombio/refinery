@@ -437,16 +437,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		return nil, err
 	}
 
-	return &types.Event{
-		Context:     ctx,
-		APIHost:     apiHost,
-		APIKey:      apiKey,
-		Dataset:     dataset,
-		Environment: environment,
-		SampleRate:  uint(sampleRate),
-		Timestamp:   eventTime,
-		Data:        data,
-	}, nil
+	return types.NewEvent(ctx, apiHost, apiKey, dataset, environment, uint(sampleRate), eventTime, data), nil
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
@@ -497,16 +488,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
 	for _, bev := range batchedEvents {
-		ev := &types.Event{
-			Context:     ctx,
-			APIHost:     apiHost,
-			APIKey:      apiKey,
-			Dataset:     dataset,
-			Environment: environment,
-			SampleRate:  bev.getSampleRate(),
-			Timestamp:   bev.getEventTime(),
-			Data:        bev.Data,
-		}
+		ev := types.NewEvent(ctx, apiHost, apiKey, dataset, environment, bev.getSampleRate(), bev.getEventTime(), bev.Data)
 
 		addIncomingUserAgent(ev, userAgent)
 		err = r.processEvent(ev, reqID)
@@ -551,16 +533,7 @@ func (router *Router) processOTLPRequest(
 
 	for _, batch := range batches {
 		for _, ev := range batch.Events {
-			event := &types.Event{
-				Context:     ctx,
-				APIHost:     apiHost,
-				APIKey:      apiKey,
-				Dataset:     batch.Dataset,
-				Environment: environment,
-				SampleRate:  uint(ev.SampleRate),
-				Timestamp:   ev.Timestamp,
-				Data:        ev.Attributes,
-			}
+			event := types.NewEvent(ctx, apiHost, apiKey, batch.Dataset, environment, uint(ev.SampleRate), ev.Timestamp, ev.Attributes)
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err = router.processEvent(event, requestID); err != nil {
 				router.Logger.Error().Logf("Error processing event: " + err.Error())
@@ -658,6 +631,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if err != nil {
 		r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
 		debugLog.Logf("Dropping span from batch, channel full")
+		types.DisposeEvent(&span.Event)
 		return err
 	}
 

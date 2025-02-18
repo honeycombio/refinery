@@ -837,6 +837,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
+		types.DisposeEvent(&sp.Event)
 		return true, false
 	}
 
@@ -939,6 +940,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		return
 	}
 	i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Dropping span because of previous decision to drop trace")
+	types.DisposeEvent(&sp.Event)
 }
 
 func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMode bool) {
@@ -992,6 +994,9 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 	if !td.Kept && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
 		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
+		for _, sp := range trace.GetSpans() {
+			types.DisposeEvent(&sp.Event)
+		}
 		return
 	}
 

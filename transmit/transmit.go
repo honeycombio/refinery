@@ -134,6 +134,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 			Logf("failed to enqueue event")
 	}
 	d.Metrics.Up(updownQueuedItems)
+	types.DisposeEvent(ev)
 }
 
 func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
