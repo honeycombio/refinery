@@ -193,19 +193,28 @@ func (agent *Agent) healthCheck() {
 		select {
 		case <-agent.ctx.Done():
 		case <-timer.C:
-			lastHealth := agent.lastHealth
-			report := healthMessage(agent.health.IsAlive())
-			if report.GetHealthy() {
-				report.Healthy = agent.health.IsReady()
-			}
-
-			// report health only if it has changed
-			if lastHealth == nil || lastHealth.GetHealthy() != report.GetHealthy() {
+			report := agent.calculateHealth()
+			if report != nil {
 				agent.lastHealth = report
 				agent.opampClient.SetHealth(report)
 			}
 		}
 	}
+}
+
+func (agent *Agent) calculateHealth() *protobufs.ComponentHealth {
+	lastHealth := agent.lastHealth
+	report := healthMessage(agent.health.IsAlive())
+	if report.GetHealthy() {
+		report.Healthy = agent.health.IsReady()
+	}
+
+	// report health only if it has changed
+	if lastHealth == nil || lastHealth.GetHealthy() != report.GetHealthy() {
+		return report
+	}
+
+	return nil
 }
 
 func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
