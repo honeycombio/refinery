@@ -7,16 +7,21 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
 )
 
-const serviceName = "refinery"
+const (
+	serviceName                    = "refinery"
+	ReportMeasurementsV1Capability = "com.honeycomb.measurements.v1"
+)
 
 type Agent struct {
 	agentType          string
@@ -32,17 +37,26 @@ type Agent struct {
 	caCertPath          string
 	certRequested       bool
 	clientPrivateKeyPEM []byte
+	lastHealth          *protobufs.ComponentHealth
 
 	logger  Logger
+	ctx     context.Context
+	cancel  context.CancelFunc
 	metrics metrics.Metrics
+	health  health.Reporter
 }
 
-func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config) *Agent {
+func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
+	ctx, cancel := context.WithCancel(context.Background())
 	agent := &Agent{
+		ctx:             ctx,
+		cancel:          cancel,
 		logger:          refineryLogger,
 		agentType:       serviceName,
 		agentVersion:    agentVersion,
 		effectiveConfig: currentConfig,
+		metrics:         metrics,
+		health:          health,
 	}
 	agent.createAgentIdentity()
 	agent.logger.Debugf(context.Background(), "starting opamp client, id=%v", agent.instanceId)
@@ -133,10 +147,14 @@ func (agent *Agent) connect() error {
 	if err != nil {
 		return err
 	}
-	err = agent.opampClient.SetHealth(agent.getHealth())
+	err = agent.opampClient.SetHealth(healthMessage(false))
 	if err != nil {
 		return err
 	}
+
+	agent.opampClient.SetCustomCapabilities(&protobufs.CustomCapabilities{
+		Capabilities: []string{ReportMeasurementsV1Capability},
+	})
 
 	agent.logger.Debugf(context.Background(), "starting opamp client")
 
@@ -145,14 +163,48 @@ func (agent *Agent) connect() error {
 		return err
 	}
 	agent.logger.Debugf(context.Background(), "started opamp client")
+
+	go agent.healthCheck()
 	return nil
 }
 
 func (agent *Agent) Stop(ctx context.Context) {
 	agent.logger.Debugf(ctx, "disconnecting from OpAMP server")
-	err := agent.opampClient.Stop(ctx)
+	err := agent.opampClient.SetHealth(
+		&protobufs.ComponentHealth{
+			Healthy: false, LastError: "Refinery is shutdown",
+		},
+	)
+	if err != nil {
+		agent.logger.Errorf(ctx, "Could not report health to OpAMP server: %v", err)
+	}
+	err = agent.opampClient.Stop(ctx)
 	if err != nil {
 		agent.logger.Errorf(ctx, "Failed to stop OpAMP client: %v", err)
+	}
+
+	agent.cancel()
+}
+
+func (agent *Agent) healthCheck() {
+	//TODO: make this ticker configurable
+	timer := time.NewTicker(15 * time.Second)
+	for {
+		select {
+		case <-agent.ctx.Done():
+		case <-timer.C:
+			lastHealth := agent.lastHealth
+			report := healthMessage(agent.health.IsAlive())
+			if report.GetHealthy() {
+				report.Healthy = agent.health.IsReady()
+			}
+
+			// report health only if it has changed
+			if lastHealth == nil || lastHealth.GetHealthy() != report.GetHealthy() {
+				agent.lastHealth = report
+				agent.opampClient.SetHealth(report)
+			}
+		}
 	}
 }
 
@@ -205,12 +257,6 @@ func (agent *Agent) onMessage(ctx context.Context, msg *types.MessageData) {
 
 	agent.updateRemoteConfig(ctx, msg)
 
-}
-
-func (agent *Agent) getHealth() *protobufs.ComponentHealth {
-	return &protobufs.ComponentHealth{
-		Healthy: true,
-	}
 }
 
 func (agent *Agent) onOpampConnectionSettings(ctx context.Context, settings *protobufs.OpAMPConnectionSettings) error {
@@ -281,4 +327,10 @@ func (agent *Agent) updateAgentIdentity(ctx context.Context, instanceId uuid.UUI
 	agent.instanceId = instanceId
 
 	// TODO: update metrics setting when identity changes
+}
+
+func healthMessage(healthy bool) *protobufs.ComponentHealth {
+	return &protobufs.ComponentHealth{
+		Healthy: healthy,
+	}
 }
