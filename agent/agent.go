@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	serviceName                    = "refinery"
-	ReportMeasurementsV1Capability = "com.honeycomb.measurements.v1"
+	serviceName                  = "refinery"
+	sendAgentTelemetryCapability = "io.honeycomb.capabilities.sendAgentTelemetry"
 )
 
 type Agent struct {
@@ -153,7 +153,7 @@ func (agent *Agent) connect() error {
 	}
 
 	agent.opampClient.SetCustomCapabilities(&protobufs.CustomCapabilities{
-		Capabilities: []string{ReportMeasurementsV1Capability},
+		Capabilities: []string{sendAgentTelemetryCapability},
 	})
 
 	agent.logger.Debugf(context.Background(), "starting opamp client")
