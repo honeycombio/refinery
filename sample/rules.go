@@ -96,7 +96,7 @@ func (s *RulesBasedSampler) SetClusterSize(size int) {
 	}
 }
 
-func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string, sampler Sampler) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
 		"trace_id": trace.TraceID,
 	})
@@ -134,9 +134,9 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					logger.WithFields(map[string]interface{}{
 						"rule_name": rule.Name,
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
-					return 1, true, reason + "bad_rule:" + rule.Name, ""
+					return 1, true, reason + "bad_rule:" + rule.Name, "", nil
 				}
-				rate, keep, samplerReason, key = sampler.GetSampleRate(trace)
+				rate, keep, samplerReason, key, _ = sampler.GetSampleRate(trace)
 				reason += rule.Name + ":" + samplerReason
 			} else {
 				rate = uint(rule.SampleRate)
@@ -159,11 +159,11 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				"keep":      keep,
 				"drop_rule": rule.Drop,
 			}).Logf("got sample rate and decision")
-			return rate, keep, reason, key
+			return rate, keep, reason, key, sampler
 		}
 	}
 
-	return 1, true, "no rule matched", ""
+	return 1, true, "no rule matched", "", nil
 }
 
 func (s *RulesBasedSampler) GetKeyFields() []string {

@@ -1474,6 +1474,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	})
 
 	var sampler sample.Sampler
+	var usedSampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
 	samplerSelector, isLegacyKey := trace.GetSamplerKey()
@@ -1486,7 +1487,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 
 	startGetSampleRate := i.Clock.Now()
 	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	rate, shouldSend, reason, key, usedSampler := sampler.GetSampleRate(trace)
 	i.Metrics.Histogram("get_sample_rate_duration_ms", float64(time.Since(startGetSampleRate).Milliseconds()))
 
 	trace.SetSampleRate(rate)
@@ -1520,6 +1521,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 		Reason:          reason,
 		SamplerKey:      key,
 		SamplerSelector: samplerSelector,
+		UsedSampler:     usedSampler,
 		Rate:            rate,
 		SendReason:      sendReason,
 		Count:           trace.SpanCount(),

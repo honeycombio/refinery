@@ -39,7 +39,7 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, _, reason, key := sampler.GetSampleRate(trace)
+	rate, _, reason, key, _ := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 

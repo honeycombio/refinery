@@ -63,7 +63,7 @@ func (d *DynamicSampler) Start() error {
 	return nil
 }
 
-func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string, sampler Sampler) {
 	key, n := d.key.build(trace)
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
@@ -82,7 +82,7 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, d.prefix, key, d
 }
 
 func (d *DynamicSampler) GetKeyFields() []string {

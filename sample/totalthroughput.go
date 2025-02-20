@@ -79,7 +79,7 @@ func (d *TotalThroughputSampler) SetClusterSize(size int) {
 	}
 }
 
-func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string, sampler Sampler) {
 	key, n := d.key.build(trace)
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
@@ -99,7 +99,7 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 	}).Logf("got sample rate and decision")
 
 	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, d.prefix, key, d
 }
 
 func (d *TotalThroughputSampler) GetKeyFields() []string {

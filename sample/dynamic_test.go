@@ -48,7 +48,7 @@ func TestDynamicAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, keep, reason, key := sampler.GetSampleRate(trace)
+	rate, keep, reason, key, _ := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 	assert.Len(t, spans, spanCount, "should have the same number of spans as input")

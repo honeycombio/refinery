@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/sample"
 )
 
 type decisionType int
@@ -140,6 +141,7 @@ type TraceDecision struct {
 	Rate            uint
 	SamplerKey      string
 	SamplerSelector string
+	UsedSampler     sample.Sampler
 	SendReason      string
 	HasRoot         bool
 	Reason          string
