@@ -67,7 +67,7 @@ func (a *App) Start() error {
 
 	// only enable the opamp agent if it's configured
 	if a.Config.GetOpAMPConfig().Enabled {
-		a.opampAgent = agent.NewAgent(agent.Logger{Logger: a.Logger}, a.Version, a.Config)
+		a.opampAgent = agent.NewAgent(agent.Logger{Logger: a.Logger}, a.Version, a.Config, a.Metrics, a.IncomingRouter.Health)
 	}
 
 	return nil
