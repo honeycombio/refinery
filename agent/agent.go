@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"net/http"
 	"os"
 	"runtime"
@@ -39,11 +40,12 @@ type Agent struct {
 	clientPrivateKeyPEM []byte
 	lastHealth          *protobufs.ComponentHealth
 
-	logger  Logger
-	ctx     context.Context
-	cancel  context.CancelFunc
-	metrics metrics.Metrics
-	health  health.Reporter
+	logger     Logger
+	ctx        context.Context
+	cancel     context.CancelFunc
+	metrics    metrics.Metrics
+	usageStore *usageStore
+	health     health.Reporter
 }
 
 func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
@@ -57,6 +59,7 @@ func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.C
 		effectiveConfig: currentConfig,
 		metrics:         metrics,
 		health:          health,
+		usageStore:      newUsageStore(),
 	}
 	agent.createAgentIdentity()
 	agent.logger.Debugf(context.Background(), "starting opamp client, id=%v", agent.instanceId)
@@ -165,6 +168,7 @@ func (agent *Agent) connect() error {
 	agent.logger.Debugf(context.Background(), "started opamp client")
 
 	go agent.healthCheck()
+	go agent.usageReport()
 	return nil
 }
 
@@ -196,9 +200,84 @@ func (agent *Agent) healthCheck() {
 			report := agent.calculateHealth()
 			if report != nil {
 				agent.lastHealth = report
-				agent.opampClient.SetHealth(report)
+				if err := agent.opampClient.SetHealth(report); err != nil {
+					agent.logger.Errorf(context.Background(), "Could not report health to OpAMP server: %v", err)
+				}
+			}
+
+			traceUsage, ok := agent.metrics.Get("bytes_received_trace")
+			if !ok {
+				panic("leaky wallet from trace")
+			}
+			logUsage, ok := agent.metrics.Get("bytes_received_log")
+			if !ok {
+				panic("leaky wallet from log")
+			}
+
+			agent.usageStore.Add(traceUsage, logUsage)
+		}
+	}
+}
+
+func (agent *Agent) usageReport() {
+	timer := time.NewTicker(15 * time.Second)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-agent.ctx.Done():
+			// TODO: drain the existing reports
+			return
+		case <-timer.C:
+			usageReport, err := agent.usageStore.NewReport()
+			if err != nil {
+				if errors.Is(err, errNoData) {
+					continue
+				}
+				agent.logger.Errorf(context.Background(), "Could not generate usage report: %v", err)
+				continue
+			}
+
+			if err := agent.sendUsageReport(usageReport); err != nil {
+				agent.logger.Errorf(context.Background(), "MONEY STEALING Could not send usage report: %v", err)
 			}
 		}
+	}
+}
+
+func (agent *Agent) sendUsageReport(usageReport []byte) error {
+	isSent, err := agent.opampClient.SendCustomMessage(&protobufs.CustomMessage{
+		Capability: sendAgentTelemetryCapability,
+		Data:       usageReport,
+	})
+
+	if err != nil {
+		if errors.Is(err, types.ErrCustomMessagePending) {
+			agent.logger.Debugf(context.Background(), "Usage report is pending")
+			select {
+			case <-agent.ctx.Done():
+				// TODO: we probably need to drain the existing reports
+				return agent.ctx.Err()
+			case <-isSent:
+				// Retry sending the message once
+				isSent, err = agent.opampClient.SendCustomMessage(&protobufs.CustomMessage{
+					Capability: sendAgentTelemetryCapability,
+					Data:       usageReport,
+				})
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			return err
+		}
+	}
+
+	select {
+	case <-agent.ctx.Done():
+		return agent.ctx.Err()
+	case <-isSent:
+		return nil
 	}
 }
 
