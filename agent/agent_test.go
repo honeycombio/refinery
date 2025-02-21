@@ -1,0 +1,130 @@
+package agent
+
+import (
+	"context"
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/open-telemetry/opamp-go/client/types"
+	"github.com/open-telemetry/opamp-go/protobufs"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestAgentOnMessage_RemoteConfig(t *testing.T) {
+	var reloadCalled int
+	cfg := &config.MockConfig{
+		GetLoggerLevelVal:  config.InfoLevel,
+		GetSamplerTypeVal:  "FakeSamplerType",
+		GetSamplerTypeName: "FakeSamplerName",
+	}
+	cfg.Callbacks = []config.ConfigReloadCallback{
+		func(configHash, ruleCfgHash string) {
+			reloadCalled++
+		},
+	}
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", cfg, &metrics.NullMetrics{}, &health.Health{})
+
+	testcases := []struct {
+		name                string
+		configMap           map[string]*protobufs.AgentConfigFile
+		configHash          []byte
+		expectedReloadCount int
+		status              protobufs.RemoteConfigStatuses
+	}{
+		{
+			name:                "empty config map",
+			configMap:           map[string]*protobufs.AgentConfigFile{},
+			configHash:          []byte{0},
+			expectedReloadCount: 0,
+		},
+		{
+			name: "new refinery config from remote config",
+			configMap: map[string]*protobufs.AgentConfigFile{
+				"refinery_config": {
+					Body:        []byte(`{"Logger":{"Level":"debug"}}`),
+					ContentType: "text/yaml",
+				},
+			},
+			configHash:          []byte{1},
+			expectedReloadCount: 1,
+			status:              protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED,
+		},
+		{
+			name: "new refinery rules from remote config",
+			configMap: map[string]*protobufs.AgentConfigFile{
+				"refinery_config": {
+					Body:        []byte(`{"Logger":{"Level":"debug"}}`),
+					ContentType: "text/yaml",
+				},
+				"refinery_rules": {
+					Body: []byte(`{"rules":[{"name":"test","type":"fake"]}`),
+				},
+			},
+			configHash:          []byte{2},
+			expectedReloadCount: 2,
+			status:              protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED,
+		},
+		{
+			name: "same remote config should not cause reload",
+			configMap: map[string]*protobufs.AgentConfigFile{
+				"refinery_config": {
+					Body:        []byte(`{"Logger":{"Level":"debug"}}`),
+					ContentType: "text/yaml",
+				},
+				"refinery_rules": {
+					Body: []byte(`{"rules":[{"name":"test","type":"fake"]}`),
+				},
+			},
+			configHash:          []byte{2},
+			expectedReloadCount: 2,
+			status:              protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED,
+		},
+	}
+
+	for _, tc := range testcases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			agent.onMessage(context.Background(), &types.MessageData{
+				RemoteConfig: &protobufs.AgentRemoteConfig{
+					Config: &protobufs.AgentConfigMap{
+						ConfigMap: tc.configMap,
+					},
+					ConfigHash: tc.configHash,
+				},
+			})
+			require.Eventually(t, func() bool {
+				return tc.expectedReloadCount == reloadCalled
+			}, 1*time.Second, 100*time.Millisecond, fmt.Sprintf("unexpected reload count %d", reloadCalled))
+
+			require.Equal(t, tc.status, agent.remoteConfigStatus.GetStatus(), fmt.Sprintf("unexpected status %s", agent.remoteConfigStatus.GetStatus()))
+			if tc.status == protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED {
+				assert.Equal(t, tc.configHash, agent.remoteConfigStatus.GetLastRemoteConfigHash())
+				assert.Equal(t, tc.configHash, agent.remoteConfig.GetConfigHash())
+				assert.Equal(t, tc.configMap, agent.remoteConfig.GetConfig().GetConfigMap())
+			}
+		})
+	}
+
+}
+
+func TestHealthCheck(t *testing.T) {
+	healthReporter := &health.MockHealthReporter{}
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, healthReporter)
+
+	// health check should start with false
+	require.False(t, agent.calculateHealth().Healthy)
+
+	// health check should be false if Refinery is not ready
+	healthReporter.SetAlive(true)
+	require.False(t, agent.calculateHealth().Healthy)
+
+	// health check should be true if both alive and ready are true
+	healthReporter.SetReady(true)
+	require.True(t, agent.calculateHealth().Healthy)
+}

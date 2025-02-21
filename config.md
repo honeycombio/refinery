@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-02-13 at 16:52:13 UTC.
+It was automatically generated on 2025-02-14 at 21:35:19 UTC.
 
 ## The Config file
 
@@ -149,6 +149,25 @@ This setting is the destination to which Refinery sends all events that it decid
 - Default: `https://api.honeycomb.io`
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
+
+### `OpAMPEnabled`
+
+OpAMPEnabled controls whether to enable OpAMP support.
+
+OpAMP support is experimental in Refinery.
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `OpAMPEndpoint`
+
+OpAMPEndpoint is the URL of the OpAMP server for this client.
+
+This setting is the URL of the OpAMP server for this client.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `wss://127.0.0.1:4320/v1/opamp`
 
 ## Access Key Configuration
 

@@ -9,6 +9,7 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/otelutil"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 	"go.opentelemetry.io/otel/trace"
@@ -24,6 +25,7 @@ const ConfigPubsubTopic = "cfg_update"
 // It avoids sending duplicate messages by comparing the hash of the configs.
 type ConfigWatcher struct {
 	Config  config.Config   `inject:""`
+	Logger  logger.Logger   `inject:""`
 	PubSub  pubsub.PubSub   `inject:""`
 	Tracer  trace.Tracer    `inject:"tracer"`
 	Clock   clockwork.Clock `inject:""`
@@ -78,7 +80,10 @@ func (cw *ConfigWatcher) SubscriptionListener(ctx context.Context, msg string) {
 	cw.mut.Unlock()
 	// maybe reload the config (it will only reload if the hashes are different,
 	// and if they were, it will call the ReloadCallback)
-	cw.Config.Reload()
+	err = cw.Config.Reload()
+	if err != nil {
+		cw.Logger.Error().Logf("error reloading config: %s", err)
+	}
 }
 
 // Monitor periodically wakes up and tells the config to reload itself.
@@ -94,7 +99,9 @@ func (cw *ConfigWatcher) monitor() {
 		case <-cw.done:
 			return
 		case <-ticker.C:
-			cw.Config.Reload()
+			if err := cw.Config.Reload(); err != nil {
+				cw.Logger.Error().Logf("error reloading config: %s", err)
+			}
 		}
 	}
 }
@@ -102,6 +109,9 @@ func (cw *ConfigWatcher) monitor() {
 func (cw *ConfigWatcher) Start() error {
 	if cw.Tracer == nil {
 		cw.Tracer = noop.NewTracerProvider().Tracer("test")
+	}
+	if cw.Config.GetOpAMPConfig().Enabled {
+		return nil
 	}
 	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
 		go cw.monitor()
@@ -112,7 +122,11 @@ func (cw *ConfigWatcher) Start() error {
 }
 
 func (cw *ConfigWatcher) Stop() error {
-	close(cw.done)
-	cw.subscr.Close()
+	if cw.done != nil {
+		close(cw.done)
+	}
+	if cw.subscr != nil {
+		cw.subscr.Close()
+	}
 	return nil
 }
