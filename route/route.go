@@ -597,9 +597,10 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	debugLog = debugLog.WithString("trace_id", traceID)
 
 	span := &types.Span{
-		Event:   *ev,
-		TraceID: traceID,
-		IsRoot:  isRootSpan(ev, r.Config),
+		Event:    *ev,
+		TraceID:  traceID,
+		IsRoot:   isRootSpan(ev, r.Config),
+		ParentID: extractParentID(ev, r.Config),
 	}
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
@@ -1036,6 +1037,17 @@ func getDatasetFromRequest(req *http.Request) (string, error) {
 	return dataset, nil
 }
 
+func extractParentID(ev *types.Event, cfg config.Config) string {
+	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
+		if parentID, ok := ev.Data[parentIdFieldName]; ok {
+			if parentIDStr, ok := parentID.(string); ok && parentIDStr != "" {
+				return parentIDStr
+			}
+		}
+	}
+	return ""
+}
+
 func isRootSpan(ev *types.Event, cfg config.Config) bool {
 	// log event should never be considered a root span, check for that first
 	if signalType := ev.Data["meta.signal_type"]; signalType == "log" {
@@ -1053,13 +1065,8 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 	}
 
 	// check if the event has a parent id using the configured parent id field names
-	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
-		parentId := ev.Data[parentIdFieldName]
-		if _, ok := parentId.(string); ok && parentId != "" {
-			return false
-		}
-	}
-	return true
+	parentID := extractParentID(ev, cfg)
+	return parentID == ""
 }
 
 func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
