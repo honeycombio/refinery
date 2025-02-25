@@ -10,6 +10,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/configwatcher"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -213,6 +214,7 @@ func TestReload(t *testing.T) {
 	watcher := &configwatcher.ConfigWatcher{
 		Config: c,
 		PubSub: pubsub,
+		Logger: &logger.StdoutLogger{},
 	}
 	watcher.Start()
 	defer watcher.Stop()
