@@ -214,7 +214,7 @@ func TestReload(t *testing.T) {
 	watcher := &configwatcher.ConfigWatcher{
 		Config: c,
 		PubSub: pubsub,
-		Logger: &logger.StdoutLogger{},
+		Logger: &logger.NullLogger{},
 	}
 	watcher.Start()
 	defer watcher.Stop()
