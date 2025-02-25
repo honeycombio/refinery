@@ -1,0 +1,43 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - uses: ko-build/setup-ko@v0.7
+
+      - name: Set version variables
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${VERSION#v}  # Remove 'v' prefix if present
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          MAJOR_VERSION=$(echo $VERSION | cut -d. -f1)
+          echo "MAJOR_VERSION=${MAJOR_VERSION}" >> $GITHUB_ENV
+          MINOR_VERSION=$(echo $VERSION | cut -d. -f1,2)
+          echo "MINOR_VERSION=${MINOR_VERSION}" >> $GITHUB_ENV
+          # Set the build ID for the binary
+          echo "GOFLAGS=-ldflags=-X=main.BuildID=${VERSION}" >> $GITHUB_ENV
+          # Set the source build date for ko
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
+
+      - name: Build and push Docker images using ko
+        run: >
+          ko build
+          --bare
+          --platform=linux/amd64,linux/arm64
+          --tags="${VERSION},${MINOR_VERSION},${MAJOR_VERSION},latest"
+          --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery
+          --image-label org.opencontainers.image.licenses=Apache-2.0
+          --image-label org.opencontainers.image.revision=${{ github.sha }}
+          ./cmd/refinery
