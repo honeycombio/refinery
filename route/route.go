@@ -606,7 +606,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		IsRoot:  isRootSpan(ev, r.Config),
 	}
 
-	if r.incomingOrPeer == "incoming" {
+	// only record bytes received for incoming traffic when opamp is enabled
+	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled {
 		if span.Data["meta.signal_type"] == "log" {
 			r.Metrics.Count("bytes_received_logs", span.GetDataSize())
 		} else {
