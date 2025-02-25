@@ -24,24 +24,24 @@ func newUsageStore() *usageStore {
 	}
 }
 
-func (ur *usageStore) Add(traceUsage, logUsage float64) {
+func (ur *usageStore) Add(traceUsage, logUsage float64, timestamp time.Time) {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
 	if traceUsage != 0 {
 		deltaTraceUsage := traceUsage - ur.lastUsageData[signal_trace].val
-		ur.datapoints = append(ur.datapoints, usage{signal: signal_trace, val: deltaTraceUsage, timestamp: time.Now()})
+		ur.datapoints = append(ur.datapoints, usage{signal: signal_trace, val: deltaTraceUsage, timestamp: timestamp})
 		ur.lastUsageData[signal_trace] = usage{signal: signal_trace, val: traceUsage}
 	}
 	if logUsage != 0 {
 		deltaLogUsage := logUsage - ur.lastUsageData[signal_log].val
-		ur.datapoints = append(ur.datapoints, usage{signal: signal_log, val: deltaLogUsage, timestamp: time.Now()})
+		ur.datapoints = append(ur.datapoints, usage{signal: signal_log, val: deltaLogUsage, timestamp: timestamp})
 		ur.lastUsageData[signal_log] = usage{signal: signal_log, val: logUsage}
 	}
 
 }
 
-func (ur *usageStore) NewReport() ([]byte, error) {
+func (ur *usageStore) NewReport(serviceName, version, hostname string) ([]byte, error) {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
@@ -49,9 +49,12 @@ func (ur *usageStore) NewReport() ([]byte, error) {
 		return nil, errNoData
 	}
 
-	otlpMetrics := newOTLPMetrics()
+	otlpMetrics := newOTLPMetrics(serviceName, version, hostname)
 	for _, usage := range ur.datapoints {
-		otlpMetrics.addOTLPSum(usage.timestamp, usage.val, usage.signal)
+		err := otlpMetrics.addOTLPSum(usage.timestamp, usage.val, usage.signal)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	jsonMarshaler := &pmetric.JSONMarshaler{}
@@ -66,8 +69,8 @@ func (ur *usageStore) NewReport() ([]byte, error) {
 type usageSignal string
 
 var (
-	signal_trace usageSignal = "trace"
-	signal_log   usageSignal = "log"
+	signal_trace usageSignal = "traces"
+	signal_log   usageSignal = "logs"
 )
 
 type totalUsage map[usageSignal]usage

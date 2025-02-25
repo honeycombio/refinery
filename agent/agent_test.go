@@ -10,9 +10,12 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
+	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -127,4 +130,61 @@ func TestHealthCheck(t *testing.T) {
 	// health check should be true if both alive and ready are true
 	healthReporter.SetReady(true)
 	require.True(t, agent.calculateHealth().Healthy)
+}
+
+func TestAgentUsageReport(t *testing.T) {
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, &health.MockHealthReporter{})
+	defer agent.Stop(context.Background())
+
+	agent.agentType = "my-agent-type"
+	agent.agentVersion = "my-agent-version"
+	agent.hostname = "my-hostname"
+	fakeClock := clockwork.NewFakeClock()
+	agent.clock = fakeClock
+	mockClient := &MockOpAMPClient{}
+	agent.opampClient = mockClient
+
+	isSent := make(chan struct{})
+	close(isSent)
+	mockClient.On("SendCustomMessage", mock.Anything).Return(isSent, nil)
+
+	go agent.usageReport()
+
+	now := time.Now()
+	agent.usageStore.Add(1, 2, now)
+	agent.usageStore.Add(3, 4, now)
+	err := fakeClock.BlockUntilContext(context.Background(), 1)
+	require.NoError(t, err)
+	fakeClock.Advance(1 * time.Minute)
+	// Format the timestamp to match the expected format in the payload
+	timeUnixNano := now.UnixNano()
+	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"my-agent-type"}},{"key":"service.version","value":{"stringValue":"my-agent-version"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
+		timeUnixNano, timeUnixNano, timeUnixNano, timeUnixNano)
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		// Assert that the mock client was called with the expected custom message
+		mockClient.AssertCalled(t, "SendCustomMessage", &protobufs.CustomMessage{
+			Capability: sendAgentTelemetryCapability,
+			Data:       []byte(expectedPayload),
+		})
+
+	}, 100*time.Millisecond, 10*time.Millisecond)
+}
+
+// MockOpAMPClient is a mock implementation of the OpAMPClient interface
+type MockOpAMPClient struct {
+	mock.Mock
+	client.OpAMPClient
+}
+
+func (m *MockOpAMPClient) SendCustomMessage(msg *protobufs.CustomMessage) (chan struct{}, error) {
+	args := m.Called(msg)
+	return args.Get(0).(chan struct{}), args.Error(1)
+}
+
+func (m *MockOpAMPClient) SetHealth(health *protobufs.ComponentHealth) error {
+	return nil
+}
+
+func (m *MockOpAMPClient) Stop(ctx context.Context) error {
+	return nil
 }

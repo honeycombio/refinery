@@ -14,13 +14,13 @@ type otlpMetrics struct {
 	ms      pmetric.Sum
 }
 
-func newOTLPMetrics() *otlpMetrics {
+func newOTLPMetrics(serviceName, version, hostname string) *otlpMetrics {
 	metrics := pmetric.NewMetrics()
 	rm := metrics.ResourceMetrics().AppendEmpty()
 	resourceAttrs := rm.Resource().Attributes()
-	resourceAttrs.PutStr("service.name", "-service")
-	resourceAttrs.PutStr("service.version", "1.0.0")
-	resourceAttrs.PutStr("host.name", "example-host")
+	resourceAttrs.PutStr("service.name", serviceName)
+	resourceAttrs.PutStr("service.version", version)
+	resourceAttrs.PutStr("host.name", hostname)
 	sm := rm.ScopeMetrics().AppendEmpty()
 	ms := sm.Metrics().AppendEmpty()
 	ms.SetName("bytes_received")
@@ -48,8 +48,8 @@ func convertFloat64ToInt64(value float64) (int64, error) {
 	if value > math.MaxInt64 {
 		return 0, fmt.Errorf("value %f is too large to convert to int64", value)
 	}
-	if value < math.MinInt64 {
-		return 0, fmt.Errorf("value %f is too small to convert to int64", value)
+	if value < 0 {
+		return 0, fmt.Errorf("invalid negative value %f", value)
 	}
 	return int64(value), nil
 }

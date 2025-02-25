@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"errors"
 	"net/http"
 	"os"
@@ -14,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
@@ -25,20 +25,22 @@ const (
 )
 
 type Agent struct {
+	clock              clockwork.Clock
 	agentType          string
 	agentVersion       string
 	instanceId         uuid.UUID
+	hostname           string
 	effectiveConfig    config.Config
 	agentDescription   *protobufs.AgentDescription
 	opampClient        client.OpAMPClient
 	remoteConfigStatus *protobufs.RemoteConfigStatus
 	remoteConfig       *protobufs.AgentRemoteConfig
 
-	opampClientCert     *tls.Certificate
-	caCertPath          string
-	certRequested       bool
-	clientPrivateKeyPEM []byte
-	lastHealth          *protobufs.ComponentHealth
+	//	opampClientCert     *tls.Certificate
+	//	caCertPath          string
+	//	certRequested       bool
+	//	clientPrivateKeyPEM []byte
+	lastHealth *protobufs.ComponentHealth
 
 	logger     Logger
 	ctx        context.Context
@@ -53,6 +55,7 @@ func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.C
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
+		clock:           clockwork.NewRealClock(),
 		logger:          refineryLogger,
 		agentType:       serviceName,
 		agentVersion:    agentVersion,
@@ -77,6 +80,7 @@ func (agent *Agent) createAgentIdentity() {
 	}
 	agent.instanceId = uid
 	hostname, _ := os.Hostname()
+	agent.hostname = hostname
 	agent.agentDescription = &protobufs.AgentDescription{
 		IdentifyingAttributes: []*protobufs.KeyValue{
 			{
@@ -102,7 +106,7 @@ func (agent *Agent) createAgentIdentity() {
 			{
 				Key: "host.name",
 				Value: &protobufs.AnyValue{
-					Value: &protobufs.AnyValue_StringValue{StringValue: hostname},
+					Value: &protobufs.AnyValue_StringValue{StringValue: agent.hostname},
 				},
 			},
 		},
@@ -192,11 +196,11 @@ func (agent *Agent) Stop(ctx context.Context) {
 
 func (agent *Agent) healthCheck() {
 	//TODO: make this ticker configurable
-	timer := time.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(15 * time.Second)
 	for {
 		select {
 		case <-agent.ctx.Done():
-		case <-timer.C:
+		case <-timer.Chan():
 			report := agent.calculateHealth()
 			if report != nil {
 				agent.lastHealth = report
@@ -214,13 +218,13 @@ func (agent *Agent) healthCheck() {
 				panic("leaky wallet from log")
 			}
 
-			agent.usageStore.Add(traceUsage, logUsage)
+			agent.usageStore.Add(traceUsage, logUsage, agent.clock.Now())
 		}
 	}
 }
 
 func (agent *Agent) usageReport() {
-	timer := time.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(15 * time.Second)
 	defer timer.Stop()
 
 	for {
@@ -228,10 +232,11 @@ func (agent *Agent) usageReport() {
 		case <-agent.ctx.Done():
 			// TODO: drain the existing reports
 			return
-		case <-timer.C:
-			usageReport, err := agent.usageStore.NewReport()
+		case <-timer.Chan():
+			usageReport, err := agent.usageStore.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
 			if err != nil {
 				if errors.Is(err, errNoData) {
+					agent.logger.Debugf(context.Background(), "No data to report")
 					continue
 				}
 				agent.logger.Errorf(context.Background(), "Could not generate usage report: %v", err)
@@ -239,7 +244,7 @@ func (agent *Agent) usageReport() {
 			}
 
 			if err := agent.sendUsageReport(usageReport); err != nil {
-				agent.logger.Errorf(context.Background(), "MONEY STEALING Could not send usage report: %v", err)
+				agent.logger.Errorf(context.Background(), "MONEY STEALING. Could not send usage report: %v", err)
 			}
 		}
 	}
