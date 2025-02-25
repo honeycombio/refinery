@@ -76,6 +76,9 @@ func (m *MultiMetrics) Increment(name string) { // for counters
 	for _, ch := range m.children {
 		ch.Increment(name)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name]++
 }
 
 func (m *MultiMetrics) Gauge(name string, val interface{}) { // for gauges
@@ -91,6 +94,9 @@ func (m *MultiMetrics) Count(name string, n interface{}) { // for counters
 	for _, ch := range m.children {
 		ch.Count(name, n)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name] += ConvertNumeric(n)
 }
 
 func (m *MultiMetrics) Histogram(name string, obs interface{}) { // for histogram
