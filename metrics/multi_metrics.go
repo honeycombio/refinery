@@ -12,9 +12,9 @@ var _ Metrics = (*MultiMetrics)(nil)
 // underlying metrics provider (StoreMetrics). It can be configured to send
 // metrics to multiple providers at once.
 //
-// It also stores the values saved with Store(), gauges, and updown counters,
-// which can then be retrieved with Get(). This is for use with StressRelief. It
-// does not track histograms or counters, which are reset after each scrape.
+// It also stores the values saved with Store(), counters, gauges, and updown counters,
+// which can then be retrieved with Get(). This is for use with StressRelief and OpAMP agent. It
+// does not track histograms, which are reset after each scrape.
 type MultiMetrics struct {
 	Config        config.Config `inject:""`
 	LegacyMetrics Metrics       `inject:"legacyMetrics"`
