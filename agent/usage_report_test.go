@@ -62,11 +62,11 @@ func TestUsageTracker_Add(t *testing.T) {
 				assert.Equal(t, tt.expectedLasUsageData[signal_traces], tracker.lastUsageData[signal_traces])
 				assert.Equal(t, tt.expectedLasUsageData[signal_logs], tracker.lastUsageData[signal_logs])
 			}
-			assert.Len(t, tracker.datapoints, tt.expectedLength)
+			assert.Len(t, tracker.currentDataPoints, tt.expectedLength)
 			for i, expected := range tt.expectedData {
-				assert.Equal(t, expected.signal, tracker.datapoints[i].signal)
-				assert.Equal(t, expected.val, tracker.datapoints[i].val)
-				assert.Equal(t, now, tracker.datapoints[i].timestamp, time.Second)
+				assert.Equal(t, expected.signal, tracker.currentDataPoints[i].signal)
+				assert.Equal(t, expected.val, tracker.currentDataPoints[i].val)
+				assert.Equal(t, now, tracker.currentDataPoints[i].timestamp, time.Second)
 			}
 		})
 	}
@@ -120,9 +120,13 @@ func TestUsageTracker_NewReport(t *testing.T) {
 				require.NotNil(t, report)
 				if tt.expectedReport != nil {
 					assert.JSONEq(t, tt.expectedReport(now), string(report))
-					assert.Empty(t, tracker.datapoints)
+					assert.Empty(t, tracker.currentDataPoints)
+					assert.NotEmpty(t, tracker.lastDataPoints)
 				}
 			}
+
+			tracker.completeSend()
+			assert.Empty(t, tracker.lastDataPoints)
 		})
 	}
 }

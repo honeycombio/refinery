@@ -15,14 +15,16 @@ type usageTracker struct {
 	// lastUsageData is a map of the last cumulative usage data for each signal.
 	lastUsageData map[usageSignal]usage
 
-	mut        sync.Mutex
-	datapoints []usage
+	mut               sync.Mutex
+	lastDataPoints    []usage
+	currentDataPoints []usage
 }
 
 func newUsageTracker() *usageTracker {
 	return &usageTracker{
-		lastUsageData: make(map[usageSignal]usage),
-		datapoints:    make([]usage, 0),
+		lastUsageData:     make(map[usageSignal]usage),
+		currentDataPoints: make([]usage, 0),
+		lastDataPoints:    make([]usage, 0),
 	}
 }
 
@@ -36,7 +38,7 @@ func (ur *usageTracker) Add(data usage) {
 	}
 
 	deltaTraceUsage := data.val - ur.lastUsageData[data.signal].val
-	ur.datapoints = append(ur.datapoints, usage{signal: data.signal, val: deltaTraceUsage, timestamp: data.timestamp})
+	ur.currentDataPoints = append(ur.currentDataPoints, usage{signal: data.signal, val: deltaTraceUsage, timestamp: data.timestamp})
 	ur.lastUsageData[data.signal] = usage{signal: data.signal, val: data.val}
 }
 
@@ -45,12 +47,19 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
-	if len(ur.datapoints) == 0 {
+	if len(ur.currentDataPoints) == 0 && len(ur.lastDataPoints) == 0 {
 		return nil, errNoData
 	}
 
 	otlpMetrics := newOTLPMetrics(serviceName, version, hostname)
-	for _, usage := range ur.datapoints {
+	for _, usage := range ur.currentDataPoints {
+		err := otlpMetrics.addOTLPSum(usage.timestamp, usage.val, usage.signal)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, usage := range ur.lastDataPoints {
 		err := otlpMetrics.addOTLPSum(usage.timestamp, usage.val, usage.signal)
 		if err != nil {
 			return nil, err
@@ -62,9 +71,15 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 	if err != nil {
 		return nil, err
 	}
-	// clear datapoints after reporting
-	ur.datapoints = ur.datapoints[:0]
+	ur.lastDataPoints = ur.currentDataPoints
+	ur.currentDataPoints = ur.currentDataPoints[:0]
 	return data, nil
+}
+
+func (ur *usageTracker) completeSend() {
+	ur.mut.Lock()
+	defer ur.mut.Unlock()
+	ur.lastDataPoints = ur.lastDataPoints[:0]
 }
 
 type usageSignal string

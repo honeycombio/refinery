@@ -31,7 +31,8 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 			reloadCalled++
 		},
 	}
-	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", cfg, &metrics.NullMetrics{}, &health.Health{})
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, clockwork.NewFakeClock(), "1.0.0", cfg, &metrics.NullMetrics{}, &health.Health{})
+	defer agent.Stop(context.Background())
 
 	testcases := []struct {
 		name                string
@@ -118,7 +119,8 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	healthReporter := &health.MockHealthReporter{}
-	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, healthReporter)
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, clockwork.NewFakeClock(), "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, healthReporter)
+	defer agent.Stop(context.Background())
 
 	// health check should start with false
 	require.False(t, agent.calculateHealth().Healthy)
@@ -133,22 +135,17 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestAgentUsageReport(t *testing.T) {
-	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, &health.MockHealthReporter{})
+	fakeClock := clockwork.NewFakeClock()
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, fakeClock, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, &health.MockHealthReporter{})
 	defer agent.Stop(context.Background())
 
-	agent.agentType = "my-agent-type"
-	agent.agentVersion = "my-agent-version"
 	agent.hostname = "my-hostname"
-	fakeClock := clockwork.NewFakeClock()
-	agent.clock = fakeClock
 	mockClient := &MockOpAMPClient{}
 	agent.opampClient = mockClient
 
 	isSent := make(chan struct{})
 	close(isSent)
 	mockClient.On("SendCustomMessage", mock.Anything).Return(isSent, nil)
-
-	go agent.usageReport()
 
 	now := time.Now()
 	agent.usageTracker.Add(newTraceCumulativeUsage(1, now))
@@ -160,7 +157,7 @@ func TestAgentUsageReport(t *testing.T) {
 	fakeClock.Advance(1 * time.Minute)
 	// Format the timestamp to match the expected format in the payload
 	timeUnixNano := now.UnixNano()
-	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"my-agent-type"}},{"key":"service.version","value":{"stringValue":"my-agent-version"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
+	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
 		timeUnixNano, timeUnixNano, timeUnixNano, timeUnixNano)
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		// Assert that the mock client was called with the expected custom message

@@ -9,10 +9,12 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/route"
+	"github.com/jonboulle/clockwork"
 )
 
 type App struct {
 	Config         config.Config     `inject:""`
+	Clock          clockwork.Clock   `inject:""`
 	Logger         logger.Logger     `inject:""`
 	IncomingRouter route.Router      `inject:"inline"`
 	PeerRouter     route.Router      `inject:"inline"`
@@ -67,7 +69,7 @@ func (a *App) Start() error {
 
 	// only enable the opamp agent if it's configured
 	if a.Config.GetOpAMPConfig().Enabled {
-		a.opampAgent = agent.NewAgent(agent.Logger{Logger: a.Logger}, a.Version, a.Config, a.Metrics, a.IncomingRouter.Health)
+		a.opampAgent = agent.NewAgent(agent.Logger{Logger: a.Logger}, a.Clock, a.Version, a.Config, a.Metrics, a.IncomingRouter.Health)
 	}
 
 	return nil

@@ -50,12 +50,12 @@ type Agent struct {
 	health       health.Reporter
 }
 
-func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
+func NewAgent(refineryLogger Logger, clock clockwork.Clock, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
 	ctx, cancel := context.WithCancel(context.Background())
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
-		clock:           clockwork.NewRealClock(),
+		clock:           clock,
 		logger:          refineryLogger,
 		agentType:       serviceName,
 		agentVersion:    agentVersion,
@@ -196,7 +196,7 @@ func (agent *Agent) Stop(ctx context.Context) {
 
 func (agent *Agent) healthCheck() {
 	//TODO: make this ticker configurable
-	timer := agent.clock.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(5 * time.Second)
 	for {
 		select {
 		case <-agent.ctx.Done():
@@ -226,7 +226,7 @@ func (agent *Agent) healthCheck() {
 }
 
 func (agent *Agent) usageReport() {
-	timer := agent.clock.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(5 * time.Second)
 	defer timer.Stop()
 
 	for {
@@ -248,6 +248,8 @@ func (agent *Agent) usageReport() {
 			if err := agent.sendUsageReport(usageReport); err != nil {
 				agent.logger.Errorf(context.Background(), "MONEY STEALING. Could not send usage report: %v", err)
 			}
+
+			agent.usageTracker.completeSend()
 		}
 	}
 }
