@@ -12,9 +12,9 @@ var _ Metrics = (*MultiMetrics)(nil)
 // underlying metrics provider (StoreMetrics). It can be configured to send
 // metrics to multiple providers at once.
 //
-// It also stores the values saved with Store(), gauges, and updown counters,
-// which can then be retrieved with Get(). This is for use with StressRelief. It
-// does not track histograms or counters, which are reset after each scrape.
+// It also stores the values saved with Store(), counters, gauges, and updown counters,
+// which can then be retrieved with Get(). This is for use with StressRelief and OpAMP agent. It
+// does not track histograms, which are reset after each scrape.
 type MultiMetrics struct {
 	Config        config.Config `inject:""`
 	LegacyMetrics Metrics       `inject:"legacyMetrics"`
@@ -76,6 +76,9 @@ func (m *MultiMetrics) Increment(name string) { // for counters
 	for _, ch := range m.children {
 		ch.Increment(name)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name]++
 }
 
 func (m *MultiMetrics) Gauge(name string, val interface{}) { // for gauges
@@ -91,6 +94,9 @@ func (m *MultiMetrics) Count(name string, n interface{}) { // for counters
 	for _, ch := range m.children {
 		ch.Count(name, n)
 	}
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.values[name] += ConvertNumeric(n)
 }
 
 func (m *MultiMetrics) Histogram(name string, obs interface{}) { // for histogram

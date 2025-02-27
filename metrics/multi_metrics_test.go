@@ -91,10 +91,10 @@ func TestMultiMetrics_Register(t *testing.T) {
 	mm.Down("updown")
 	mm.Gauge("gauge", 42)
 
-	// counter should be 0 because it's not tracked by StoreMetrics
+	// counter should be 1 because it's tracked by StoreMetrics
 	val, ok := mm.Get("counter")
 	assert.True(t, ok)
-	assert.Equal(t, 0, int(val))
+	assert.Equal(t, 1, int(val))
 
 	// updown should be 2 because it's tracked by StoreMetrics
 	val, ok = mm.Get("updown")
