@@ -196,7 +196,7 @@ func (agent *Agent) Stop(ctx context.Context) {
 
 func (agent *Agent) healthCheck() {
 	//TODO: make this ticker configurable
-	timer := agent.clock.NewTicker(5 * time.Second)
+	timer := agent.clock.NewTicker(15 * time.Second)
 	for {
 		select {
 		case <-agent.ctx.Done():
@@ -226,7 +226,7 @@ func (agent *Agent) healthCheck() {
 }
 
 func (agent *Agent) usageReport() {
-	timer := agent.clock.NewTicker(5 * time.Second)
+	timer := agent.clock.NewTicker(15 * time.Second)
 	defer timer.Stop()
 
 	for {
