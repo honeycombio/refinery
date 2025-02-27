@@ -10,7 +10,6 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/jonboulle/clockwork"
 	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
@@ -31,7 +30,7 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 			reloadCalled++
 		},
 	}
-	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, clockwork.NewFakeClock(), "1.0.0", cfg, &metrics.NullMetrics{}, &health.Health{})
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", cfg, &metrics.NullMetrics{}, &health.Health{})
 	defer agent.Stop(context.Background())
 
 	testcases := []struct {
@@ -119,7 +118,7 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	healthReporter := &health.MockHealthReporter{}
-	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, clockwork.NewFakeClock(), "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, healthReporter)
+	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, healthReporter)
 	defer agent.Stop(context.Background())
 
 	// health check should start with false
@@ -135,13 +134,23 @@ func TestHealthCheck(t *testing.T) {
 }
 
 func TestAgentUsageReport(t *testing.T) {
-	fakeClock := clockwork.NewFakeClock()
-	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, fakeClock, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, &health.MockHealthReporter{})
-	defer agent.Stop(context.Background())
-
-	agent.hostname = "my-hostname"
 	mockClient := &MockOpAMPClient{}
-	agent.opampClient = mockClient
+	ctx, cancel := context.WithCancel(context.Background())
+	agent := &Agent{
+		ctx:             ctx,
+		cancel:          cancel,
+		logger:          Logger{&logger.NullLogger{}},
+		agentType:       serviceName,
+		agentVersion:    "1.0.0",
+		opampClient:     mockClient,
+		effectiveConfig: &config.MockConfig{},
+		metrics:         &metrics.NullMetrics{},
+		health:          &health.MockHealthReporter{},
+		usageTracker:    newUsageTracker(),
+	}
+	agent.createAgentIdentity()
+	agent.hostname = "my-hostname"
+	defer cancel()
 
 	isSent := make(chan struct{})
 	close(isSent)
@@ -152,23 +161,21 @@ func TestAgentUsageReport(t *testing.T) {
 	agent.usageTracker.Add(newLogCumulativeUsage(2, now))
 	agent.usageTracker.Add(newTraceCumulativeUsage(3, now))
 	agent.usageTracker.Add(newLogCumulativeUsage(4, now))
-	err := fakeClock.BlockUntilContext(context.Background(), 1)
+
+	err := agent.sendUsageReport()
 	require.NoError(t, err)
 
-	fakeClock.BlockUntilContext(context.Background(), 1)
-	fakeClock.Advance(1 * time.Minute)
 	// Format the timestamp to match the expected format in the payload
 	timeUnixNano := now.UnixNano()
 	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
 		timeUnixNano, timeUnixNano, timeUnixNano, timeUnixNano)
-	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		// Assert that the mock client was called with the expected custom message
-		mockClient.AssertCalled(t, "SendCustomMessage", &protobufs.CustomMessage{
-			Capability: sendAgentTelemetryCapability,
-			Data:       []byte(expectedPayload),
-		})
 
-	}, 100*time.Millisecond, 10*time.Millisecond)
+	// Assert that the mock client was called with the expected custom message
+	mockClient.AssertCalled(t, "SendCustomMessage", &protobufs.CustomMessage{
+		Capability: sendAgentTelemetryCapability,
+		Data:       []byte(expectedPayload),
+	})
+
 }
 
 // MockOpAMPClient is a mock implementation of the OpAMPClient interface

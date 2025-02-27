@@ -50,12 +50,12 @@ type Agent struct {
 	health       health.Reporter
 }
 
-func NewAgent(refineryLogger Logger, clock clockwork.Clock, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
+func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
 	ctx, cancel := context.WithCancel(context.Background())
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
-		clock:           clock,
+		clock:           clockwork.NewRealClock(),
 		logger:          refineryLogger,
 		agentType:       serviceName,
 		agentVersion:    agentVersion,
@@ -235,26 +235,24 @@ func (agent *Agent) usageReport() {
 			// TODO: drain the existing reports
 			return
 		case <-timer.Chan():
-			usageReport, err := agent.usageTracker.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
-			if err != nil {
+			if err := agent.sendUsageReport(); err != nil {
 				if errors.Is(err, errNoData) {
 					agent.logger.Debugf(context.Background(), "No data to report")
 					continue
 				}
-				agent.logger.Errorf(context.Background(), "Could not generate usage report: %v", err)
-				continue
-			}
-
-			if err := agent.sendUsageReport(usageReport); err != nil {
 				agent.logger.Errorf(context.Background(), "MONEY STEALING. Could not send usage report: %v", err)
 			}
 
-			agent.usageTracker.completeSend()
 		}
 	}
 }
 
-func (agent *Agent) sendUsageReport(usageReport []byte) error {
+func (agent *Agent) sendUsageReport() error {
+	usageReport, err := agent.usageTracker.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
+	if err != nil {
+		return err
+	}
+
 	isSent, err := agent.opampClient.SendCustomMessage(&protobufs.CustomMessage{
 		Capability: sendAgentTelemetryCapability,
 		Data:       usageReport,
@@ -286,6 +284,7 @@ func (agent *Agent) sendUsageReport(usageReport []byte) error {
 	case <-agent.ctx.Done():
 		return agent.ctx.Err()
 	case <-isSent:
+		agent.usageTracker.completeSend()
 		return nil
 	}
 }
