@@ -10,38 +10,38 @@ import (
 
 var errNoData = errors.New("no data to report")
 
-type usageStore struct {
-	lastUsageData totalUsage
+// usageTracker is a store for usage data. It keeps track of the last usage data and the delta between each update.
+type usageTracker struct {
+	// lastUsageData is a map of the last cumulative usage data for each signal.
+	lastUsageData map[usageSignal]usage
 
 	mut        sync.Mutex
 	datapoints []usage
 }
 
-func newUsageStore() *usageStore {
-	return &usageStore{
-		lastUsageData: make(totalUsage),
+func newUsageTracker() *usageTracker {
+	return &usageTracker{
+		lastUsageData: make(map[usageSignal]usage),
 		datapoints:    make([]usage, 0),
 	}
 }
 
-func (ur *usageStore) Add(traceUsage, logUsage float64, timestamp time.Time) {
+// Add records the current cumulative usage and calculates the delta between the last update.
+func (ur *usageTracker) Add(data usage) {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
-	if traceUsage != 0 {
-		deltaTraceUsage := traceUsage - ur.lastUsageData[signal_trace].val
-		ur.datapoints = append(ur.datapoints, usage{signal: signal_trace, val: deltaTraceUsage, timestamp: timestamp})
-		ur.lastUsageData[signal_trace] = usage{signal: signal_trace, val: traceUsage}
-	}
-	if logUsage != 0 {
-		deltaLogUsage := logUsage - ur.lastUsageData[signal_log].val
-		ur.datapoints = append(ur.datapoints, usage{signal: signal_log, val: deltaLogUsage, timestamp: timestamp})
-		ur.lastUsageData[signal_log] = usage{signal: signal_log, val: logUsage}
+	if data.val == 0 {
+		return
 	}
 
+	deltaTraceUsage := data.val - ur.lastUsageData[data.signal].val
+	ur.datapoints = append(ur.datapoints, usage{signal: data.signal, val: deltaTraceUsage, timestamp: data.timestamp})
+	ur.lastUsageData[data.signal] = usage{signal: data.signal, val: data.val}
 }
 
-func (ur *usageStore) NewReport(serviceName, version, hostname string) ([]byte, error) {
+// NewReport creates a new usage report with the current delta usage data.
+func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte, error) {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
@@ -62,6 +62,7 @@ func (ur *usageStore) NewReport(serviceName, version, hostname string) ([]byte, 
 	if err != nil {
 		return nil, err
 	}
+	// clear datapoints after reporting
 	ur.datapoints = ur.datapoints[:0]
 	return data, nil
 }
@@ -69,14 +70,28 @@ func (ur *usageStore) NewReport(serviceName, version, hostname string) ([]byte, 
 type usageSignal string
 
 var (
-	signal_trace usageSignal = "traces"
-	signal_log   usageSignal = "logs"
+	signal_traces usageSignal = "traces"
+	signal_logs   usageSignal = "logs"
 )
-
-type totalUsage map[usageSignal]usage
 
 type usage struct {
 	signal    usageSignal
 	val       float64
 	timestamp time.Time
+}
+
+func newTraceCumulativeUsage(value float64, timestamp time.Time) usage {
+	return usage{
+		signal:    signal_traces,
+		val:       value,
+		timestamp: timestamp,
+	}
+}
+
+func newLogCumulativeUsage(value float64, timestamp time.Time) usage {
+	return usage{
+		signal:    signal_logs,
+		val:       value,
+		timestamp: timestamp,
+	}
 }

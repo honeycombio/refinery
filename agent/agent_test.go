@@ -151,8 +151,10 @@ func TestAgentUsageReport(t *testing.T) {
 	go agent.usageReport()
 
 	now := time.Now()
-	agent.usageStore.Add(1, 2, now)
-	agent.usageStore.Add(3, 4, now)
+	agent.usageTracker.Add(newTraceCumulativeUsage(1, now))
+	agent.usageTracker.Add(newLogCumulativeUsage(2, now))
+	agent.usageTracker.Add(newTraceCumulativeUsage(3, now))
+	agent.usageTracker.Add(newLogCumulativeUsage(4, now))
 	err := fakeClock.BlockUntilContext(context.Background(), 1)
 	require.NoError(t, err)
 	fakeClock.Advance(1 * time.Minute)

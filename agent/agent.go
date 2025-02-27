@@ -42,12 +42,12 @@ type Agent struct {
 	//	clientPrivateKeyPEM []byte
 	lastHealth *protobufs.ComponentHealth
 
-	logger     Logger
-	ctx        context.Context
-	cancel     context.CancelFunc
-	metrics    metrics.Metrics
-	usageStore *usageStore
-	health     health.Reporter
+	logger       Logger
+	ctx          context.Context
+	cancel       context.CancelFunc
+	metrics      metrics.Metrics
+	usageTracker *usageTracker
+	health       health.Reporter
 }
 
 func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
@@ -62,7 +62,7 @@ func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.C
 		effectiveConfig: currentConfig,
 		metrics:         metrics,
 		health:          health,
-		usageStore:      newUsageStore(),
+		usageTracker:    newUsageTracker(),
 	}
 	agent.createAgentIdentity()
 	agent.logger.Debugf(context.Background(), "starting opamp client, id=%v", agent.instanceId)
@@ -211,14 +211,16 @@ func (agent *Agent) healthCheck() {
 
 			traceUsage, ok := agent.metrics.Get("bytes_received_trace")
 			if !ok {
-				panic("leaky wallet from trace")
+				agent.logger.Errorf(context.Background(), "unexpected missing trace usage metric")
 			}
 			logUsage, ok := agent.metrics.Get("bytes_received_log")
 			if !ok {
-				panic("leaky wallet from log")
+				agent.logger.Errorf(context.Background(), "unexpected missing log usage metric")
 			}
 
-			agent.usageStore.Add(traceUsage, logUsage, agent.clock.Now())
+			now := agent.clock.Now()
+			agent.usageTracker.Add(newTraceCumulativeUsage(traceUsage, now))
+			agent.usageTracker.Add(newLogCumulativeUsage(logUsage, now))
 		}
 	}
 }
@@ -233,7 +235,7 @@ func (agent *Agent) usageReport() {
 			// TODO: drain the existing reports
 			return
 		case <-timer.Chan():
-			usageReport, err := agent.usageStore.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
+			usageReport, err := agent.usageTracker.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
 			if err != nil {
 				if errors.Is(err, errNoData) {
 					agent.logger.Debugf(context.Background(), "No data to report")
