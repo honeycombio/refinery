@@ -8,7 +8,10 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-var errNoData = errors.New("no data to report")
+var (
+	errNoData     = errors.New("no data to report")
+	jsonMarshaler = &pmetric.JSONMarshaler{}
+)
 
 // usageTracker is a store for usage data. It keeps track of the last usage data and the delta between each update.
 type usageTracker struct {
@@ -66,7 +69,6 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 		}
 	}
 
-	jsonMarshaler := &pmetric.JSONMarshaler{}
 	data, err := jsonMarshaler.MarshalMetrics(otlpMetrics.metrics)
 	if err != nil {
 		return nil, err
