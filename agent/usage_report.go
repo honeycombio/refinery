@@ -71,11 +71,13 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 	if err != nil {
 		return nil, err
 	}
+	// clear the current data points and keep the last data points until we know the report was sent
 	ur.lastDataPoints = ur.currentDataPoints
 	ur.currentDataPoints = ur.currentDataPoints[:0]
 	return data, nil
 }
 
+// completeSend clears the last data points after the report is sent.
 func (ur *usageTracker) completeSend() {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
