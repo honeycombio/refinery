@@ -154,6 +154,8 @@ func TestAgentUsageReport(t *testing.T) {
 	agent.usageTracker.Add(newLogCumulativeUsage(4, now))
 	err := fakeClock.BlockUntilContext(context.Background(), 1)
 	require.NoError(t, err)
+
+	fakeClock.BlockUntilContext(context.Background(), 1)
 	fakeClock.Advance(1 * time.Minute)
 	// Format the timestamp to match the expected format in the payload
 	timeUnixNano := now.UnixNano()
