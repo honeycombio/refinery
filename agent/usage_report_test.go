@@ -86,46 +86,11 @@ func TestUsageTracker_NewReport(t *testing.T) {
 			},
 			expectedError: nil,
 			expectedReport: func(now time.Time) string {
-				expectedPayload := map[string]interface{}{
-					"resourceMetrics": []map[string]interface{}{
-						{
-							"resource": map[string]interface{}{
-								"attributes": []map[string]interface{}{
-									{"key": "service.name", "value": map[string]string{"stringValue": "my-service"}},
-									{"key": "service.version", "value": map[string]string{"stringValue": "1.0.0"}},
-									{"key": "host.name", "value": map[string]string{"stringValue": "my-hostname"}},
-								},
-							},
-							"scopeMetrics": []map[string]interface{}{
-								{
-									"scope": map[string]interface{}{},
-									"metrics": []map[string]interface{}{
-										{
-											"name": "bytes_received",
-											"sum": map[string]interface{}{
-												"dataPoints": []map[string]interface{}{
-													{
-														"attributes":   []map[string]interface{}{{"key": "signal", "value": map[string]string{"stringValue": "traces"}}},
-														"timeUnixNano": fmt.Sprintf("%d", now.UnixNano()),
-														"asInt":        "1",
-													},
-													{
-														"attributes":   []map[string]interface{}{{"key": "signal", "value": map[string]string{"stringValue": "logs"}}},
-														"timeUnixNano": fmt.Sprintf("%d", now.UnixNano()),
-														"asInt":        "2",
-													},
-												},
-												"aggregationTemporality": 1,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				}
-				expectedPayloadBytes, _ := json.Marshal(expectedPayload)
-				return string(expectedPayloadBytes)
+				data := newOTLPResourceMetricsPayload([]usage{
+					{signal: signal_traces, val: 1, timestamp: now},
+					{signal: signal_logs, val: 2, timestamp: now},
+				})
+				return string(data)
 			},
 		},
 		{
@@ -160,4 +125,45 @@ func TestUsageTracker_NewReport(t *testing.T) {
 			}
 		})
 	}
+}
+
+func newOTLPResourceMetricsPayload(data []usage) []byte {
+	var dataPoints []map[string]interface{}
+	for _, d := range data {
+		dataPoints = append(dataPoints, map[string]interface{}{
+			"attributes":   []map[string]interface{}{{"key": "signal", "value": map[string]string{"stringValue": string(d.signal)}}},
+			"timeUnixNano": fmt.Sprintf("%d", d.timestamp.UnixNano()),
+			"asInt":        fmt.Sprintf("%d", int(d.val)),
+		})
+	}
+
+	payload := map[string]interface{}{
+		"resourceMetrics": []map[string]interface{}{
+			{
+				"resource": map[string]interface{}{
+					"attributes": []map[string]interface{}{
+						{"key": "service.name", "value": map[string]string{"stringValue": "my-service"}},
+						{"key": "service.version", "value": map[string]string{"stringValue": "1.0.0"}},
+						{"key": "host.name", "value": map[string]string{"stringValue": "my-hostname"}},
+					},
+				},
+				"scopeMetrics": []map[string]interface{}{
+					{
+						"metrics": []map[string]interface{}{
+							{
+								"name": "bytes_received",
+								"sum": map[string]interface{}{
+									"aggregationTemporality": 1,
+									"dataPoints":             dataPoints,
+								},
+							},
+						},
+						"scope": map[string]interface{}{},
+					},
+				},
+			},
+		},
+	}
+	bytes, _ := json.Marshal(payload)
+	return bytes
 }
