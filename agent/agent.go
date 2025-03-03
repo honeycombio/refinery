@@ -172,7 +172,7 @@ func (agent *Agent) connect() error {
 	agent.logger.Debugf(context.Background(), "started opamp client")
 
 	go agent.healthCheck()
-	go agent.usageReport()
+	go agent.reportUsagePeriodically()
 	return nil
 }
 
@@ -225,7 +225,7 @@ func (agent *Agent) healthCheck() {
 	}
 }
 
-func (agent *Agent) usageReport() {
+func (agent *Agent) reportUsagePeriodically() {
 	timer := agent.clock.NewTicker(15 * time.Second)
 	defer timer.Stop()
 
