@@ -1,6 +1,7 @@
 module github.com/honeycombio/refinery
 
 go 1.24.0
+
 require (
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/creasty/defaults v1.8.0
@@ -52,6 +53,7 @@ require (
 )
 
 require (
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-licenses/v2 v2.0.0-alpha.1 // indirect
 	github.com/google/licenseclassifier/v2 v2.0.0 // indirect
@@ -61,6 +63,7 @@ require (
 	github.com/sergi/go-diff v1.2.0 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
@@ -93,6 +96,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.26.0
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.37.0 // indirect
