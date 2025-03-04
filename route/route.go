@@ -396,6 +396,8 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	r.Metrics.Count("bytes_received_trace", len(reqBod))
+
 	ev, err := r.requestToEvent(ctx, req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
