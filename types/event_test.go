@@ -102,6 +102,11 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
 		"meta.refinery.span_data_size": 14,
 	}, got.Data)
+
+	// Test with critical path flag
+	sp.IsOnCriticalPath = true
+	got = sp.ExtractDecisionContext()
+	assert.Equal(t, true, got.Data["meta.refinery.is_critical_path"])
 }
 
 func TestSpan_IsDecisionSpan(t *testing.T) {
@@ -171,3 +176,5 @@ func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
 		sp.GetDataSize()
 	}
 }
+
+

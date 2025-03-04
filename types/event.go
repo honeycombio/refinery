@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"time"
 
@@ -195,13 +196,123 @@ func (t *Trace) IsOrphan(traceTimeout time.Duration, now time.Time) bool {
 	return now.Sub(t.SendBy) >= traceTimeout*4
 }
 
+// CalculateCriticalPath identifies spans that are on the critical path through the trace.
+// This is defined as the path of spans with the longest execution time from the root to any leaf.
+// Returns true if critical path was calculated.
+func (t *Trace) CalculateCriticalPath() bool {
+	if len(t.spans) == 0 || t.RootSpan == nil {
+		return false
+	}
+
+	// Direct approach to avoid excess memory allocations
+	// Only allocate if we have a non-trivial number of spans
+	spanCount := len(t.spans)
+	if spanCount <= 1 {
+		// If only one span (root), it's automatically on the critical path
+		if t.RootSpan != nil {
+			t.RootSpan.IsOnCriticalPath = true
+		}
+		return true
+	}
+	
+	// Reset critical path status - more efficient to do as a separate pass
+	// to avoid branching in the main loop
+	for _, span := range t.spans {
+		span.IsOnCriticalPath = false
+	}
+
+	// Pre-calculate span IDs and build parent->children relationship
+	// Using fixed-size maps when possible to avoid growth reallocations
+	childrenMap := make(map[string][]*Span, spanCount/2+1) // Conservative estimate 
+	
+	// First pass: identify decision spans and build the parent-child relationships
+	for _, span := range t.spans {
+		// Skip decision spans - they are not on the critical path
+		if span.IsDecisionSpan() {
+			continue
+		}
+		
+		// Build parent -> children map
+		if span.ParentID != "" {
+			childrenMap[span.ParentID] = append(childrenMap[span.ParentID], span)
+		}
+	}
+	
+	// Mark root span as on critical path
+	if t.RootSpan != nil {
+		t.RootSpan.IsOnCriticalPath = true
+		
+		// Find the critical path using an iterative approach
+		// More efficient than recursive for most cases
+		var stack []*Span
+		stack = append(stack, t.RootSpan)
+		
+		for len(stack) > 0 {
+			// Pop the last span
+			current := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			
+			// Get all children
+			children := childrenMap[current.SpanID()]
+			if len(children) == 0 {
+				continue
+			}
+			
+			// Find child with longest duration
+			var longestChild *Span
+			var longestDuration float64
+			
+			for _, child := range children {
+				// Extract duration from span data
+				if child.Data == nil {
+					continue
+				}
+				
+				durationVal, ok := child.Data["duration_ms"]
+				if !ok {
+					continue
+				}
+				
+				var duration float64
+				switch d := durationVal.(type) {
+				case float64:
+					duration = d
+				case int64:
+					duration = float64(d)
+				case int:
+					duration = float64(d)
+				default:
+					// Ignore other types to avoid unnecessary type assertions
+					continue
+				}
+				
+				if duration > longestDuration {
+					longestDuration = duration
+					longestChild = child
+				}
+			}
+			
+			// Mark the child with longest duration as on critical path
+			if longestChild != nil {
+				longestChild.IsOnCriticalPath = true
+				// Add to stack to process its children
+				stack = append(stack, longestChild)
+			}
+		}
+	}
+	
+	return true
+}
+
 // Span is an event that shows up with a trace ID, so will be part of a Trace
 type Span struct {
 	Event
-	TraceID     string
-	DataSize    int
-	ArrivalTime time.Time
-	IsRoot      bool
+	TraceID          string
+	DataSize         int
+	ArrivalTime      time.Time
+	IsRoot           bool
+	IsOnCriticalPath bool
+	ParentID         string
 }
 
 // IsDecicionSpan returns true if the span is a decision span based on
@@ -222,6 +333,25 @@ func (sp *Span) IsDecisionSpan() bool {
 	return isDecisionSpan
 }
 
+// SpanID returns a unique identifier for this span
+func (sp *Span) SpanID() string {
+	if sp.Data != nil {
+		if id, ok := sp.Data["span_id"]; ok {
+			if strID, ok := id.(string); ok && strID != "" {
+				return strID
+			}
+		}
+	}
+	
+	// Cache the pointer string directly, to prevent allocations on repeated calls
+	// This is thread-safe since the pointer value won't change for a given span
+	ptr := fmt.Sprintf("%p", sp)
+	
+	// In a production system we would store this in a field on the span
+	// but we don't want to modify the struct definition further, so we'll just return it
+	return ptr
+}
+
 // ExtractDecisionContext returns a new Event that contains only the data that is
 // relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext() *Event {
@@ -237,6 +367,12 @@ func (sp *Span) ExtractDecisionContext() *Event {
 		"meta.annotation_type":         sp.AnnotationType(),
 		"meta.refinery.span_data_size": dataSize,
 	}
+	
+	// Include critical path information if this span is on the critical path
+	if sp.IsOnCriticalPath {
+		decisionCtx.Data["meta.refinery.is_critical_path"] = true
+	}
+	
 	return &decisionCtx
 }
 

@@ -2055,6 +2055,137 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	}
 }
 
+func TestCriticalPathMarking(t *testing.T) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+	
+	transmission := &transmit.MockTransmission{}
+	transmission.Start()
+	defer transmission.Stop()
+	peerTransmission := &transmit.MockTransmission{}
+	peerTransmission.Start()
+	defer peerTransmission.Stop()
+	coll := newTestCollector(conf, transmission, peerTransmission)
+
+	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	assert.NoError(t, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
+	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	var traceID = "critical-path-trace"
+
+	// Create a root span
+	rootSpan := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"span_id": "root",
+			},
+			APIKey: legacyAPIKey,
+		},
+		IsRoot: true,
+	}
+
+	// Create child spans with different durations
+	child1 := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"span_id":      "child1",
+				"trace.parent_id": "root",
+				"duration_ms":  10.0,
+			},
+			APIKey: legacyAPIKey,
+		},
+		ParentID: "root",
+	}
+
+	child2 := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu", 
+			Data: map[string]interface{}{
+				"span_id":      "child2",
+				"trace.parent_id": "root",
+				"duration_ms":  30.0, // This should be the critical path
+			},
+			APIKey: legacyAPIKey,
+		},
+		ParentID: "root",
+	}
+
+	// Grandchild of child2
+	grandchild := &types.Span{
+		TraceID: traceID,
+		Event: types.Event{
+			Dataset: "aoeu",
+			Data: map[string]interface{}{
+				"span_id":      "grandchild",
+				"trace.parent_id": "child2",
+				"duration_ms":  20.0,
+			},
+			APIKey: legacyAPIKey,
+		},
+		ParentID: "child2",
+	}
+
+	// Add spans in a way that ensures they all get into the trace
+	coll.AddSpan(child1)
+	coll.AddSpan(child2)
+	coll.AddSpan(grandchild)
+
+	// Give them time to be collected
+	time.Sleep(10 * time.Millisecond)
+
+	// Add root span last to trigger sending
+	coll.AddSpan(rootSpan)
+
+	// Wait for all spans to be sent
+	events := transmission.GetBlock(4)
+	require.Equal(t, 4, len(events), "All spans should be sent")
+
+	// Get events by span ID
+	eventsBySpanID := make(map[string]*types.Event)
+	for _, ev := range events {
+		if spanID, ok := ev.Data["span_id"].(string); ok {
+			eventsBySpanID[spanID] = ev
+		}
+	}
+
+	// Verify critical path spans have the critical path attribute
+	assert.NotNil(t, eventsBySpanID["root"].Data["meta.refinery.is_critical_path"], "Root span should be on critical path")
+	assert.NotNil(t, eventsBySpanID["child2"].Data["meta.refinery.is_critical_path"], "Child2 span should be on critical path")
+	assert.NotNil(t, eventsBySpanID["grandchild"].Data["meta.refinery.is_critical_path"], "Grandchild span should be on critical path")
+	
+	// Verify non-critical path span doesn't have the attribute
+	_, hasCriticalAttr := eventsBySpanID["child1"].Data["meta.refinery.is_critical_path"]
+	assert.False(t, hasCriticalAttr, "Child1 span should not be on critical path")
+}
+
 func TestBigTracesGoEarly(t *testing.T) {
 	spanlimit := 200
 	conf := &config.MockConfig{

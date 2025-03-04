@@ -1293,6 +1293,22 @@ func (i *InMemCollector) sendTraces() {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
 		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
 
+		// Calculate critical path through the trace before sending
+		// Only calculate for traces with multiple spans
+		if t.Trace.RootSpan != nil && t.DescendantCount() > 1 {
+			t.Trace.CalculateCriticalPath()
+			
+			// For each span, add critical path info to the Data
+			// This loop is already unavoidable as we must decorate each span
+			for _, sp := range t.Trace.GetSpans() {
+				// Only modify data for spans on critical path
+				if sp.IsOnCriticalPath && sp.Data != nil {
+					// Add is_critical_path attribute to spans on the critical path
+					sp.Data["meta.refinery.is_critical_path"] = true
+				}
+			}
+		}
+
 		// if we have a key replacement rule, we should
 		// replace the key with the new key
 		keycfg := i.Config.GetAccessKeyConfig()
