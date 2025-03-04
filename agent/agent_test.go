@@ -10,9 +10,11 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,6 +31,7 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 		},
 	}
 	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", cfg, &metrics.NullMetrics{}, &health.Health{})
+	defer agent.Stop(context.Background())
 
 	testcases := []struct {
 		name                string
@@ -116,6 +119,7 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 func TestHealthCheck(t *testing.T) {
 	healthReporter := &health.MockHealthReporter{}
 	agent := NewAgent(Logger{Logger: &logger.NullLogger{}}, "1.0.0", &config.MockConfig{}, &metrics.NullMetrics{}, healthReporter)
+	defer agent.Stop(context.Background())
 
 	// health check should start with false
 	require.False(t, agent.calculateHealth().Healthy)
@@ -127,4 +131,68 @@ func TestHealthCheck(t *testing.T) {
 	// health check should be true if both alive and ready are true
 	healthReporter.SetReady(true)
 	require.True(t, agent.calculateHealth().Healthy)
+}
+
+func TestAgentUsageReport(t *testing.T) {
+	mockClient := &MockOpAMPClient{}
+	ctx, cancel := context.WithCancel(context.Background())
+	agent := &Agent{
+		ctx:             ctx,
+		cancel:          cancel,
+		logger:          Logger{&logger.NullLogger{}},
+		agentType:       serviceName,
+		agentVersion:    "1.0.0",
+		opampClient:     mockClient,
+		effectiveConfig: &config.MockConfig{},
+		metrics:         &metrics.NullMetrics{},
+		health:          &health.MockHealthReporter{},
+		usageTracker:    newUsageTracker(),
+	}
+	agent.createAgentIdentity()
+	agent.hostname = "my-hostname"
+	defer cancel()
+
+	isSent := make(chan struct{})
+	close(isSent)
+	mockClient.On("SendCustomMessage", mock.Anything).Return(isSent, nil)
+
+	now := time.Now()
+	agent.usageTracker.Add(newTraceCumulativeUsage(1, now))
+	agent.usageTracker.Add(newLogCumulativeUsage(2, now))
+	agent.usageTracker.Add(newTraceCumulativeUsage(3, now))
+	agent.usageTracker.Add(newLogCumulativeUsage(4, now))
+
+	err := agent.sendUsageReport()
+	require.NoError(t, err)
+
+	// Format the timestamp to match the expected format in the payload
+	timeUnixNano := now.UnixNano()
+	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
+		timeUnixNano, timeUnixNano, timeUnixNano, timeUnixNano)
+
+	// Assert that the mock client was called with the expected custom message
+	mockClient.AssertCalled(t, "SendCustomMessage", &protobufs.CustomMessage{
+		Capability: sendAgentTelemetryCapability,
+		Data:       []byte(expectedPayload),
+	})
+
+}
+
+// MockOpAMPClient is a mock implementation of the OpAMPClient interface
+type MockOpAMPClient struct {
+	mock.Mock
+	client.OpAMPClient
+}
+
+func (m *MockOpAMPClient) SendCustomMessage(msg *protobufs.CustomMessage) (chan struct{}, error) {
+	args := m.Called(msg)
+	return args.Get(0).(chan struct{}), args.Error(1)
+}
+
+func (m *MockOpAMPClient) SetHealth(health *protobufs.ComponentHealth) error {
+	return nil
+}
+
+func (m *MockOpAMPClient) Stop(ctx context.Context) error {
+	return nil
 }
