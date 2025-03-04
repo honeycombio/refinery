@@ -3,7 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
+	"errors"
 	"net/http"
 	"os"
 	"runtime"
@@ -13,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
@@ -24,26 +25,29 @@ const (
 )
 
 type Agent struct {
+	clock              clockwork.Clock
 	agentType          string
 	agentVersion       string
 	instanceId         uuid.UUID
+	hostname           string
 	effectiveConfig    config.Config
 	agentDescription   *protobufs.AgentDescription
 	opampClient        client.OpAMPClient
 	remoteConfigStatus *protobufs.RemoteConfigStatus
 	remoteConfig       *protobufs.AgentRemoteConfig
 
-	opampClientCert     *tls.Certificate
-	caCertPath          string
-	certRequested       bool
-	clientPrivateKeyPEM []byte
-	lastHealth          *protobufs.ComponentHealth
+	//	opampClientCert     *tls.Certificate
+	//	caCertPath          string
+	//	certRequested       bool
+	//	clientPrivateKeyPEM []byte
+	lastHealth *protobufs.ComponentHealth
 
-	logger  Logger
-	ctx     context.Context
-	cancel  context.CancelFunc
-	metrics metrics.Metrics
-	health  health.Reporter
+	logger       Logger
+	ctx          context.Context
+	cancel       context.CancelFunc
+	metrics      metrics.Metrics
+	usageTracker *usageTracker
+	health       health.Reporter
 }
 
 func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
@@ -51,12 +55,14 @@ func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.C
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
+		clock:           clockwork.NewRealClock(),
 		logger:          refineryLogger,
 		agentType:       serviceName,
 		agentVersion:    agentVersion,
 		effectiveConfig: currentConfig,
 		metrics:         metrics,
 		health:          health,
+		usageTracker:    newUsageTracker(),
 	}
 	agent.createAgentIdentity()
 	agent.logger.Debugf(context.Background(), "starting opamp client, id=%v", agent.instanceId)
@@ -74,6 +80,7 @@ func (agent *Agent) createAgentIdentity() {
 	}
 	agent.instanceId = uid
 	hostname, _ := os.Hostname()
+	agent.hostname = hostname
 	agent.agentDescription = &protobufs.AgentDescription{
 		IdentifyingAttributes: []*protobufs.KeyValue{
 			{
@@ -99,7 +106,7 @@ func (agent *Agent) createAgentIdentity() {
 			{
 				Key: "host.name",
 				Value: &protobufs.AnyValue{
-					Value: &protobufs.AnyValue_StringValue{StringValue: hostname},
+					Value: &protobufs.AnyValue_StringValue{StringValue: agent.hostname},
 				},
 			},
 		},
@@ -165,6 +172,7 @@ func (agent *Agent) connect() error {
 	agent.logger.Debugf(context.Background(), "started opamp client")
 
 	go agent.healthCheck()
+	go agent.reportUsagePeriodically()
 	return nil
 }
 
@@ -188,17 +196,96 @@ func (agent *Agent) Stop(ctx context.Context) {
 
 func (agent *Agent) healthCheck() {
 	//TODO: make this ticker configurable
-	timer := time.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(15 * time.Second)
 	for {
 		select {
 		case <-agent.ctx.Done():
-		case <-timer.C:
+		case <-timer.Chan():
 			report := agent.calculateHealth()
 			if report != nil {
 				agent.lastHealth = report
-				agent.opampClient.SetHealth(report)
+				if err := agent.opampClient.SetHealth(report); err != nil {
+					agent.logger.Errorf(context.Background(), "Could not report health to OpAMP server: %v", err)
+				}
 			}
+
+			traceUsage, ok := agent.metrics.Get("bytes_received_trace")
+			if !ok {
+				agent.logger.Errorf(context.Background(), "unexpected missing trace usage metric")
+			}
+			logUsage, ok := agent.metrics.Get("bytes_received_log")
+			if !ok {
+				agent.logger.Errorf(context.Background(), "unexpected missing log usage metric")
+			}
+
+			now := agent.clock.Now()
+			agent.usageTracker.Add(newTraceCumulativeUsage(traceUsage, now))
+			agent.usageTracker.Add(newLogCumulativeUsage(logUsage, now))
 		}
+	}
+}
+
+func (agent *Agent) reportUsagePeriodically() {
+	timer := agent.clock.NewTicker(15 * time.Second)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-agent.ctx.Done():
+			// TODO: drain the existing reports
+			return
+		case <-timer.Chan():
+			if err := agent.sendUsageReport(); err != nil {
+				if errors.Is(err, errNoData) {
+					agent.logger.Debugf(context.Background(), "No data to report")
+					continue
+				}
+				agent.logger.Errorf(context.Background(), "MONEY STEALING. Could not send usage report: %v", err)
+			}
+
+		}
+	}
+}
+
+func (agent *Agent) sendUsageReport() error {
+	usageReport, err := agent.usageTracker.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
+	if err != nil {
+		return err
+	}
+
+	isSent, err := agent.opampClient.SendCustomMessage(&protobufs.CustomMessage{
+		Capability: sendAgentTelemetryCapability,
+		Data:       usageReport,
+	})
+
+	if err != nil {
+		if errors.Is(err, types.ErrCustomMessagePending) {
+			agent.logger.Debugf(context.Background(), "Usage report is pending")
+			select {
+			case <-agent.ctx.Done():
+				// TODO: we probably need to drain the existing reports
+				return agent.ctx.Err()
+			case <-isSent:
+				// Retry sending the message once
+				isSent, err = agent.opampClient.SendCustomMessage(&protobufs.CustomMessage{
+					Capability: sendAgentTelemetryCapability,
+					Data:       usageReport,
+				})
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			return err
+		}
+	}
+
+	select {
+	case <-agent.ctx.Done():
+		return agent.ctx.Err()
+	case <-isSent:
+		agent.usageTracker.completeSend()
+		return nil
 	}
 }
 
