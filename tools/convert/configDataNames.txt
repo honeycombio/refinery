@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-02-14 at 21:35:14 UTC.
+# Automatically generated on 2025-03-06 at 18:09:11 UTC.
 
 General:
   - ConfigurationVersion
@@ -21,6 +21,8 @@ Network:
   - HoneycombAPI
 
   - OpAMPEnabled
+
+  - OpAMPRecordUsage
 
   - OpAMPEndpoint
 

@@ -135,6 +135,15 @@ Network:
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "OpAMPEnabled" "OpAMPEnabled" false }}
 
+    ## OpAMPRecordUsage controls whether to record usage metrics.
+    ##
+    ## This setting is only enabled if both OpAMP is enabled and RecordUsage
+    ## is set to true.
+    ##
+    ## default: true
+    ## Eligible for live reload.
+    {{ nonDefaultOnly .Data "OpAMPRecordUsage" "OpAMPRecordUsage" true }}
+
     ## OpAMPEndpoint is the URL of the OpAMP server for this client.
     ##
     ## This setting is the URL of the OpAMP server for this client.
