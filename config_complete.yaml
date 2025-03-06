@@ -133,7 +133,16 @@ Network:
     ## OpAMP support is experimental in Refinery.
     ##
     ## Not eligible for live reload.
-    OpAMPEnabled: true
+    # OpAMPEnabled: false
+
+    ## OpAMPRecordUsage controls whether to record usage metrics.
+    ##
+    ## This setting is only enabled if both OpAMP is enabled and RecordUsage
+    ## is set to true.
+    ##
+    ## default: true
+    ## Eligible for live reload.
+    # OpAMPRecordUsage: true
 
     ## OpAMPEndpoint is the URL of the OpAMP server for this client.
     ##
@@ -141,7 +150,7 @@ Network:
     ##
     ## default: wss://127.0.0.1:4320/v1/opamp
     ## Not eligible for live reload.
-    OpAMPEndpoint: ws://127.0.0.1:4320/v1/opamp
+    OpAMPEndpoint: wss://127.0.0.1:4320/v1/opamp
 
 ##############################
 ## Access Key Configuration ##

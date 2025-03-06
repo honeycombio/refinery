@@ -22,6 +22,8 @@ Network:
 
   - OpAMPEnabled
 
+  - OpAMPRecordUsage
+
   - OpAMPEndpoint
 
 
