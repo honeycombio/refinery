@@ -135,6 +135,16 @@ OpAMP support is experimental in Refinery.
 - Not eligible for live reload.
 - Type: `bool`
 
+### `OpAMPRecordUsage`
+
+`OpAMPRecordUsage` controls whether to record usage metrics.
+
+This setting is only enabled if both OpAMP is enabled and RecordUsage is set to true.
+
+- Eligible for live reload.
+- Type: `bool`
+- Default: `true`
+
 ### `OpAMPEndpoint`
 
 `OpAMPEndpoint` is the URL of the OpAMP server for this client.

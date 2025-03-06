@@ -153,6 +153,15 @@ groups:
         summary: controls whether to enable OpAMP support.
         description: >
           OpAMP support is experimental in Refinery.
+      - name: OpAMPRecordUsage
+        type: bool
+        valuetype: nondefault
+        default: true
+        reload: true
+        firstversion: v2.9.4
+        summary: controls whether to record usage metrics.
+        description: >
+          This setting is only enabled if both OpAMP is enabled and RecordUsage is set to true.
       - name: OpAMPEndpoint
         type: string
         valuetype: assigndefault

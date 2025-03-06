@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-02-14 at 21:35:15 UTC
+# automatically generated on 2025-03-06 at 17:57:22 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -11,6 +11,7 @@ Network:
   HTTPIdleTimeout: 0s
   HoneycombAPI: "https://api.honeycomb.io"
   OpAMPEnabled: false
+  OpAMPRecordUsage: true
   OpAMPEndpoint: "wss://127.0.0.1:4320/v1/opamp"
 AccessKeys:
   ReceiveKeys: 

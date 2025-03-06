@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-02-14 at 21:35:19 UTC.
+It was automatically generated on 2025-03-06 at 17:57:26 UTC.
 
 ## The Config file
 
@@ -158,6 +158,16 @@ OpAMP support is experimental in Refinery.
 
 - Not eligible for live reload.
 - Type: `bool`
+
+### `OpAMPRecordUsage`
+
+OpAMPRecordUsage controls whether to record usage metrics.
+
+This setting is only enabled if both OpAMP is enabled and RecordUsage is set to true.
+
+- Eligible for live reload.
+- Type: `bool`
+- Default: `true`
 
 ### `OpAMPEndpoint`
 
