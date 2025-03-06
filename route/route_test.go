@@ -800,3 +800,126 @@ func TestAddIncomingUserAgent(t *testing.T) {
 		require.Equal(t, "test-agent", event.Data["meta.refinery.incoming_user_agent"])
 	})
 }
+
+func TestProcessEventMetrics(t *testing.T) {
+
+	tests := []struct {
+		name           string
+		incomingOrPeer string
+		opampEnabled   bool
+		recordUsage    config.DefaultTrue
+		signalType     string
+		expectedCount  int
+		metricName     string
+	}{
+		{
+			name:           "log event with opamp enabled and record usage",
+			incomingOrPeer: "incoming",
+			opampEnabled:   true,
+			recordUsage:    config.DefaultTrue(true),
+			signalType:     "log",
+			expectedCount:  30,
+			metricName:     "bytes_received_logs",
+		},
+		{
+			name:           "trace event with opamp enabled and record usage",
+			incomingOrPeer: "incoming",
+			opampEnabled:   true,
+			recordUsage:    config.DefaultTrue(true),
+			signalType:     "trace",
+			expectedCount:  32,
+			metricName:     "bytes_received_traces",
+		},
+		{
+			name:           "log event with opamp disabled",
+			incomingOrPeer: "incoming",
+			opampEnabled:   false,
+			recordUsage:    config.DefaultTrue(true),
+			signalType:     "log",
+			expectedCount:  0,
+		},
+		{
+			name:           "log event with record usage disabled",
+			incomingOrPeer: "incoming",
+			opampEnabled:   true,
+			recordUsage:    config.DefaultTrue(false),
+			signalType:     "log",
+			expectedCount:  0,
+		},
+		{
+			name:           "log event from peer",
+			incomingOrPeer: "peer",
+			opampEnabled:   true,
+			recordUsage:    config.DefaultTrue(true),
+			signalType:     "log",
+			expectedCount:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockMetrics := &metrics.MockMetrics{}
+			mockMetrics.Start()
+
+			mockConfig := &config.MockConfig{
+				GetOpAmpConfigVal: config.OpAMPConfig{
+					Enabled:     tt.opampEnabled,
+					RecordUsage: &tt.recordUsage,
+				},
+				TraceIdFieldNames: []string{"trace.trace_id"},
+			}
+
+			// Setup mock transmissions
+			mockUpstream := &transmit.MockTransmission{}
+			mockUpstream.Start()
+			mockPeer := &transmit.MockTransmission{}
+			mockPeer.Start()
+
+			mockSharder := &sharder.MockSharder{
+				Self: &sharder.TestShard{
+					Addr: "http://localhost:12345",
+				},
+			}
+
+			router := &Router{
+				Config:               mockConfig,
+				Logger:               &logger.NullLogger{},
+				Metrics:              mockMetrics,
+				UpstreamTransmission: mockUpstream,
+				PeerTransmission:     mockPeer,
+				Collector:            collect.NewMockCollector(),
+				Sharder:              mockSharder,
+				incomingOrPeer:       tt.incomingOrPeer,
+				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.incomingOrPeer},
+			}
+
+			// Create test event with traceID and signal type
+			event := &types.Event{
+				Context:   context.Background(),
+				APIHost:   "test.honeycomb.io",
+				Dataset:   "test-dataset",
+				Timestamp: time.Now(),
+				Data: map[string]interface{}{
+					"trace.trace_id":    "trace-123",
+					"meta.signal_type":  tt.signalType,
+					"test_attribute":    "test_value",
+					"another_attribute": 123,
+				},
+			}
+			span := &types.Span{
+				Event:   *event,
+				TraceID: "trace-123",
+				IsRoot:  true,
+			}
+			size := span.GetDataSize()
+			if tt.expectedCount > 0 {
+				assert.Equal(t, tt.expectedCount, size)
+			}
+
+			// Call processEvent
+			err := router.processEvent(event, "request-123")
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedCount, mockMetrics.CounterIncrements[tt.metricName])
+		})
+	}
+}

@@ -397,8 +397,6 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r.Metrics.Count("bytes_received_trace", len(reqBod))
-
 	ev, err := r.requestToEvent(ctx, req, reqBod)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
@@ -613,8 +611,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		IsRoot:  isRootSpan(ev, r.Config),
 	}
 
-	// only record bytes received for incoming traffic when opamp is enabled
-	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled {
+	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
+	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data["meta.signal_type"] == "log" {
 			r.Metrics.Count("bytes_received_logs", span.GetDataSize())
 		} else {

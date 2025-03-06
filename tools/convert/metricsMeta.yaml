@@ -1,4 +1,12 @@
 complete:
+    - name: is_ready
+      type: Gauge
+      unit: Dimensionless
+      description: Whether the system is ready to receive traffic
+    - name: is_alive
+      type: Gauge
+      unit: Dimensionless
+      description: Whether the system is alive and reporting in
     - name: collect_cache_entries
       type: Histogram
       unit: Dimensionless
@@ -31,14 +39,6 @@ complete:
       type: Histogram
       unit: Dimensionless
       description: Number of entries in the sent reasons cache
-    - name: is_ready
-      type: Gauge
-      unit: Dimensionless
-      description: Whether the system is ready to receive traffic
-    - name: is_alive
-      type: Gauge
-      unit: Dimensionless
-      description: Whether the system is alive and reporting in
     - name: redis_pubsub_published
       type: Counter
       unit: Dimensionless
@@ -344,6 +344,14 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: the number of batches of otlp requests received
+    - name: bytes_received_traces
+      type: Counter
+      unit: Bytes
+      description: the number of bytes received in trace events
+    - name: bytes_received_logs
+      type: Counter
+      unit: Bytes
+      description: the number of bytes received in log events
     - name: queue_length
       type: Gauge
       unit: Dimensionless

@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2025-02-14 at 21:35:13 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2025-03-06 at 18:09:09 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -134,6 +134,15 @@ Network:
     ##
     ## Not eligible for live reload.
     {{ nonDefaultOnly .Data "OpAMPEnabled" "OpAMPEnabled" false }}
+
+    ## OpAMPRecordUsage controls whether to record usage metrics.
+    ##
+    ## This setting is only enabled if both OpAMP is enabled and RecordUsage
+    ## is set to true.
+    ##
+    ## default: true
+    ## Eligible for live reload.
+    {{ nonDefaultOnly .Data "OpAMPRecordUsage" "OpAMPRecordUsage" true }}
 
     ## OpAMPEndpoint is the URL of the OpAMP server for this client.
     ##
