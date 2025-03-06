@@ -209,11 +209,11 @@ func (agent *Agent) healthCheck() {
 				}
 			}
 
-			traceUsage, ok := agent.metrics.Get("bytes_received_trace")
+			traceUsage, ok := agent.metrics.Get("bytes_received_traces")
 			if !ok {
 				agent.logger.Errorf(context.Background(), "unexpected missing trace usage metric")
 			}
-			logUsage, ok := agent.metrics.Get("bytes_received_log")
+			logUsage, ok := agent.metrics.Get("bytes_received_logs")
 			if !ok {
 				agent.logger.Errorf(context.Background(), "unexpected missing log usage metric")
 			}

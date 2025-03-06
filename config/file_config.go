@@ -78,17 +78,19 @@ type GeneralConfig struct {
 
 // TODO: Implement opamp config in its own config section once we are ready to release the feature
 type OpAMPConfig struct {
-	Endpoint string `yaml:"Endpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
-	Enabled  bool   `yaml:"Enabled" default:"false"`
+	Endpoint    string       `yaml:"Endpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
+	Enabled     bool         `yaml:"Enabled" default:"false"`
+	RecordUsage *DefaultTrue `yaml:"SendUsageReport" default:"true"`
 }
 
 type NetworkConfig struct {
-	ListenAddr      string   `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
-	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
-	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
-	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
-	OpAMPEndpoint   string   `yaml:"OpAMPEndpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
-	OpAMPEnabled    bool     `yaml:"OpAMPEnabled" default:"false"`
+	ListenAddr       string       `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr   string       `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI     string       `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	HTTPIdleTimeout  Duration     `yaml:"HTTPIdleTimeout"`
+	OpAMPEndpoint    string       `yaml:"OpAMPEndpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
+	OpAMPEnabled     bool         `yaml:"OpAMPEnabled" default:"false"`
+	OpAMPRecordUsage *DefaultTrue `yaml:"OpAMPRecordUsage" default:"true"`
 }
 
 type AccessKeyConfig struct {
@@ -959,8 +961,9 @@ func (f *fileConfig) GetOpAMPConfig() OpAMPConfig {
 	defer f.mux.RUnlock()
 
 	return OpAMPConfig{
-		Enabled:  f.mainConfig.Network.OpAMPEnabled,
-		Endpoint: f.mainConfig.Network.OpAMPEndpoint,
+		Enabled:     f.mainConfig.Network.OpAMPEnabled,
+		Endpoint:    f.mainConfig.Network.OpAMPEndpoint,
+		RecordUsage: f.mainConfig.Network.OpAMPRecordUsage,
 	}
 }
 
