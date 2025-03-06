@@ -142,7 +142,7 @@ OpAMP support is experimental in Refinery.
 This setting is only enabled if both OpAMP is enabled and RecordUsage is set to true.
 
 - Eligible for live reload.
-- Type: `bool`
+- Type: `defaulttrue`
 - Default: `true`
 
 ### `OpAMPEndpoint`

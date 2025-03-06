@@ -154,7 +154,7 @@ groups:
         description: >
           OpAMP support is experimental in Refinery.
       - name: OpAMPRecordUsage
-        type: bool
+        type: defaulttrue
         valuetype: nondefault
         default: true
         reload: true
