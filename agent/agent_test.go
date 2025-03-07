@@ -137,6 +137,7 @@ func TestHealthCheck(t *testing.T) {
 func TestAgentUsageReport(t *testing.T) {
 	mockClient := &MockOpAMPClient{}
 	ctx, cancel := context.WithCancel(context.Background())
+	clock := clockwork.NewFakeClock()
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
@@ -148,7 +149,7 @@ func TestAgentUsageReport(t *testing.T) {
 		metrics:         &metrics.NullMetrics{},
 		health:          &health.MockHealthReporter{},
 		usageTracker:    newUsageTracker(),
-		clock:           clockwork.NewRealClock(),
+		clock:           clock,
 	}
 	agent.createAgentIdentity()
 	agent.hostname = "my-hostname"
@@ -158,7 +159,6 @@ func TestAgentUsageReport(t *testing.T) {
 	close(isSent)
 	mockClient.On("SendCustomMessage", mock.Anything).Return(isSent, nil)
 
-	now := time.Now()
 	agent.usageTracker.Add(signal_traces, 1)
 	agent.usageTracker.Add(signal_logs, 2)
 	agent.usageTracker.Add(signal_traces, 3)
@@ -168,7 +168,7 @@ func TestAgentUsageReport(t *testing.T) {
 	require.NoError(t, err)
 
 	// Format the timestamp to match the expected format in the payload
-	timeUnixNano := now.UnixNano()
+	timeUnixNano := clock.Now().UnixNano()
 	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"3"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"4"}],"aggregationTemporality":1}}]}]}]}`,
 		timeUnixNano, timeUnixNano)
 
