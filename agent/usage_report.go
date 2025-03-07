@@ -16,37 +16,37 @@ var (
 // usageTracker is a store for usage data. It keeps track of the last usage data and the delta between each update.
 type usageTracker struct {
 	// lastUsageData is a map of the last cumulative usage data for each signal.
-	lastUsageData map[usageSignal]usage
+	lastUsageData map[usageSignal]float64
 
 	mut               sync.Mutex
-	lastDataPoints    []usage
-	currentDataPoints []usage
+	lastDataPoints    map[usageSignal]float64
+	currentDataPoints map[usageSignal]float64
 }
 
 func newUsageTracker() *usageTracker {
 	return &usageTracker{
-		lastUsageData:     make(map[usageSignal]usage),
-		currentDataPoints: make([]usage, 0),
-		lastDataPoints:    make([]usage, 0),
+		lastUsageData:     make(map[usageSignal]float64),
+		currentDataPoints: make(map[usageSignal]float64),
+		lastDataPoints:    make(map[usageSignal]float64),
 	}
 }
 
 // Add records the current cumulative usage and calculates the delta between the last update.
-func (ur *usageTracker) Add(data usage) {
+func (ur *usageTracker) Add(signal usageSignal, data float64) {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
-	if data.val == 0 {
+	if data == 0 {
 		return
 	}
 
-	deltaTraceUsage := data.val - ur.lastUsageData[data.signal].val
-	ur.currentDataPoints = append(ur.currentDataPoints, usage{signal: data.signal, val: deltaTraceUsage, timestamp: data.timestamp})
-	ur.lastUsageData[data.signal] = usage{signal: data.signal, val: data.val}
+	deltaTraceUsage := data - ur.lastUsageData[signal]
+	ur.currentDataPoints[signal] += deltaTraceUsage
+	ur.lastUsageData[signal] = data
 }
 
 // NewReport creates a new usage report with the current delta usage data.
-func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte, error) {
+func (ur *usageTracker) NewReport(serviceName, version, hostname string, now time.Time) ([]byte, error) {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
 
@@ -55,15 +55,15 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 	}
 
 	otlpMetrics := newOTLPMetrics(serviceName, version, hostname)
-	for _, usage := range ur.currentDataPoints {
-		err := otlpMetrics.addOTLPSum(usage.timestamp, usage.val, usage.signal)
+	for signal, usage := range ur.currentDataPoints {
+		err := otlpMetrics.addOTLPSum(now, usage, signal)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	for _, usage := range ur.lastDataPoints {
-		err := otlpMetrics.addOTLPSum(usage.timestamp, usage.val, usage.signal)
+	for signal, usage := range ur.lastDataPoints {
+		err := otlpMetrics.addOTLPSum(now, usage, signal)
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +75,7 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 	}
 	// clear the current data points and keep the last data points until we know the report was sent
 	ur.lastDataPoints = ur.currentDataPoints
-	ur.currentDataPoints = ur.currentDataPoints[:0]
+	ur.currentDataPoints = make(map[usageSignal]float64)
 	return data, nil
 }
 
@@ -83,7 +83,7 @@ func (ur *usageTracker) NewReport(serviceName, version, hostname string) ([]byte
 func (ur *usageTracker) completeSend() {
 	ur.mut.Lock()
 	defer ur.mut.Unlock()
-	ur.lastDataPoints = ur.lastDataPoints[:0]
+	ur.lastDataPoints = make(map[usageSignal]float64)
 }
 
 type usageSignal string
@@ -92,25 +92,3 @@ var (
 	signal_traces usageSignal = "traces"
 	signal_logs   usageSignal = "logs"
 )
-
-type usage struct {
-	signal    usageSignal
-	val       float64
-	timestamp time.Time
-}
-
-func newTraceCumulativeUsage(value float64, timestamp time.Time) usage {
-	return usage{
-		signal:    signal_traces,
-		val:       value,
-		timestamp: timestamp,
-	}
-}
-
-func newLogCumulativeUsage(value float64, timestamp time.Time) usage {
-	return usage{
-		signal:    signal_logs,
-		val:       value,
-		timestamp: timestamp,
-	}
-}
