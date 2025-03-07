@@ -10,12 +10,16 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest/pmetrictest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func TestAgentOnMessage_RemoteConfig(t *testing.T) {
@@ -136,6 +140,7 @@ func TestHealthCheck(t *testing.T) {
 func TestAgentUsageReport(t *testing.T) {
 	mockClient := &MockOpAMPClient{}
 	ctx, cancel := context.WithCancel(context.Background())
+	clock := clockwork.NewFakeClock()
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
@@ -147,6 +152,7 @@ func TestAgentUsageReport(t *testing.T) {
 		metrics:         &metrics.NullMetrics{},
 		health:          &health.MockHealthReporter{},
 		usageTracker:    newUsageTracker(),
+		clock:           clock,
 	}
 	agent.createAgentIdentity()
 	agent.hostname = "my-hostname"
@@ -156,25 +162,50 @@ func TestAgentUsageReport(t *testing.T) {
 	close(isSent)
 	mockClient.On("SendCustomMessage", mock.Anything).Return(isSent, nil)
 
-	now := time.Now()
-	agent.usageTracker.Add(newTraceCumulativeUsage(1, now))
-	agent.usageTracker.Add(newLogCumulativeUsage(2, now))
-	agent.usageTracker.Add(newTraceCumulativeUsage(3, now))
-	agent.usageTracker.Add(newLogCumulativeUsage(4, now))
+	agent.usageTracker.Add(signal_traces, 1)
+	agent.usageTracker.Add(signal_logs, 2)
+	agent.usageTracker.Add(signal_traces, 3)
+	agent.usageTracker.Add(signal_logs, 4)
 
 	err := agent.sendUsageReport()
 	require.NoError(t, err)
 
 	// Format the timestamp to match the expected format in the payload
-	timeUnixNano := now.UnixNano()
-	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
-		timeUnixNano, timeUnixNano, timeUnixNano, timeUnixNano)
+	timeUnixNano := clock.Now()
 
-	// Assert that the mock client was called with the expected custom message
-	mockClient.AssertCalled(t, "SendCustomMessage", &protobufs.CustomMessage{
-		Capability: sendAgentTelemetryCapability,
-		Data:       []byte(expectedPayload),
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	resourceAttrs := rm.Resource().Attributes()
+	resourceAttrs.PutStr("service.name", "refinery")
+	resourceAttrs.PutStr("service.version", "1.0.0")
+	resourceAttrs.PutStr("host.name", "my-hostname")
+	sm := rm.ScopeMetrics().AppendEmpty()
+	ms := sm.Metrics().AppendEmpty()
+	ms.SetName("bytes_received")
+	sum := ms.SetEmptySum()
+	sum.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
+	d1 := sum.DataPoints().AppendEmpty()
+	d1.Attributes().PutStr("signal", "traces")
+	d1.SetIntValue(3)
+	d1.SetTimestamp(pcommon.NewTimestampFromTime(timeUnixNano))
+	d2 := sum.DataPoints().AppendEmpty()
+	d2.Attributes().PutStr("signal", "logs")
+	d2.SetIntValue(4)
+	d2.SetTimestamp(pcommon.NewTimestampFromTime(timeUnixNano))
+
+	matcher := mock.MatchedBy(func(payload *protobufs.CustomMessage) bool {
+		if payload.Capability != sendAgentTelemetryCapability {
+			return false
+		}
+
+		unmarshaler := &pmetric.JSONUnmarshaler{}
+		m, err := unmarshaler.UnmarshalMetrics(payload.Data)
+		require.NoError(t, err)
+
+		return pmetrictest.CompareMetrics(metrics, m, pmetrictest.IgnoreMetricDataPointsOrder()) == nil
 	})
+	// Assert that the mock client was called with the expected custom message
+	mockClient.AssertCalled(t, "SendCustomMessage", matcher)
 
 }
 
