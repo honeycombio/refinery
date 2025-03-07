@@ -10,6 +10,7 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/jonboulle/clockwork"
 	"github.com/open-telemetry/opamp-go/client"
 	"github.com/open-telemetry/opamp-go/client/types"
 	"github.com/open-telemetry/opamp-go/protobufs"
@@ -136,6 +137,7 @@ func TestHealthCheck(t *testing.T) {
 func TestAgentUsageReport(t *testing.T) {
 	mockClient := &MockOpAMPClient{}
 	ctx, cancel := context.WithCancel(context.Background())
+	clock := clockwork.NewFakeClock()
 	agent := &Agent{
 		ctx:             ctx,
 		cancel:          cancel,
@@ -147,6 +149,7 @@ func TestAgentUsageReport(t *testing.T) {
 		metrics:         &metrics.NullMetrics{},
 		health:          &health.MockHealthReporter{},
 		usageTracker:    newUsageTracker(),
+		clock:           clock,
 	}
 	agent.createAgentIdentity()
 	agent.hostname = "my-hostname"
@@ -156,19 +159,18 @@ func TestAgentUsageReport(t *testing.T) {
 	close(isSent)
 	mockClient.On("SendCustomMessage", mock.Anything).Return(isSent, nil)
 
-	now := time.Now()
-	agent.usageTracker.Add(newTraceCumulativeUsage(1, now))
-	agent.usageTracker.Add(newLogCumulativeUsage(2, now))
-	agent.usageTracker.Add(newTraceCumulativeUsage(3, now))
-	agent.usageTracker.Add(newLogCumulativeUsage(4, now))
+	agent.usageTracker.Add(signal_traces, 1)
+	agent.usageTracker.Add(signal_logs, 2)
+	agent.usageTracker.Add(signal_traces, 3)
+	agent.usageTracker.Add(signal_logs, 4)
 
 	err := agent.sendUsageReport()
 	require.NoError(t, err)
 
 	// Format the timestamp to match the expected format in the payload
-	timeUnixNano := now.UnixNano()
-	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"1"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"2"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"2"}],"aggregationTemporality":1}}]}]}]}`,
-		timeUnixNano, timeUnixNano, timeUnixNano, timeUnixNano)
+	timeUnixNano := clock.Now().UnixNano()
+	expectedPayload := fmt.Sprintf(`{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"refinery"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"host.name","value":{"stringValue":"my-hostname"}}]},"scopeMetrics":[{"scope":{},"metrics":[{"name":"bytes_received","sum":{"dataPoints":[{"attributes":[{"key":"signal","value":{"stringValue":"traces"}}],"timeUnixNano":"%d","asInt":"3"},{"attributes":[{"key":"signal","value":{"stringValue":"logs"}}],"timeUnixNano":"%d","asInt":"4"}],"aggregationTemporality":1}}]}]}]}`,
+		timeUnixNano, timeUnixNano)
 
 	// Assert that the mock client was called with the expected custom message
 	mockClient.AssertCalled(t, "SendCustomMessage", &protobufs.CustomMessage{

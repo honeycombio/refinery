@@ -12,38 +12,41 @@ import (
 
 func TestUsageTracker_Add(t *testing.T) {
 	tests := []struct {
-		name                 string
-		usageData            []usage
-		expectedLength       int
-		expectedData         []usage
-		expectedLasUsageData map[usageSignal]usage
+		name           string
+		signalsAndVals []struct {
+			signal usageSignal
+			val    float64
+		}
+		expectedLength int
+		expectedData   map[usageSignal]float64
 	}{
 		{
 			name: "Add usage data",
-			usageData: []usage{
+			signalsAndVals: []struct {
+				signal usageSignal
+				val    float64
+			}{
 				{signal: signal_traces, val: 1},
 				{signal: signal_traces, val: 2},
 				{signal: signal_logs, val: 3},
 				{signal: signal_logs, val: 4},
 			},
-			expectedLength: 4,
-			expectedData: []usage{
-				{signal: signal_traces, val: 1},
-				{signal: signal_traces, val: 1},
-				{signal: signal_logs, val: 3},
-				{signal: signal_logs, val: 1},
-			},
-			expectedLasUsageData: map[usageSignal]usage{
-				signal_traces: {signal: signal_traces, val: 2},
-				signal_logs:   {signal: signal_logs, val: 4},
+			expectedLength: 2,
+			expectedData: map[usageSignal]float64{
+				signal_traces: 2,
+				signal_logs:   4,
 			},
 		},
 		{
 			name: "Add 0 usage data",
-			usageData: []usage{
+			signalsAndVals: []struct {
+				signal usageSignal
+				val    float64
+			}{
 				{signal: signal_traces, val: 0},
 				{signal: signal_logs, val: 0},
 			},
+			expectedData:   make(map[usageSignal]float64),
 			expectedLength: 0,
 		},
 	}
@@ -51,51 +54,45 @@ func TestUsageTracker_Add(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tracker := newUsageTracker()
-			now := time.Now()
 
-			for _, data := range tt.usageData {
-				data.timestamp = now
-				tracker.Add(data)
+			for _, sv := range tt.signalsAndVals {
+				tracker.Add(sv.signal, sv.val)
 			}
 
-			if tt.expectedLasUsageData != nil {
-				assert.Equal(t, tt.expectedLasUsageData[signal_traces], tracker.lastUsageData[signal_traces])
-				assert.Equal(t, tt.expectedLasUsageData[signal_logs], tracker.lastUsageData[signal_logs])
-			}
+			assert.Equal(t, tt.expectedData, tracker.lastUsageData)
 			assert.Len(t, tracker.currentDataPoints, tt.expectedLength)
-			for i, expected := range tt.expectedData {
-				assert.Equal(t, expected.signal, tracker.currentDataPoints[i].signal)
-				assert.Equal(t, expected.val, tracker.currentDataPoints[i].val)
-				assert.Equal(t, now, tracker.currentDataPoints[i].timestamp, time.Second)
-			}
+			assert.Equal(t, tt.expectedData, tracker.currentDataPoints)
 		})
 	}
 }
+
 func TestUsageTracker_NewReport(t *testing.T) {
 	tests := []struct {
 		name           string
-		setup          func(tracker *usageTracker, now time.Time)
+		setup          func(tracker *usageTracker)
 		expectedError  error
 		expectedReport func(now time.Time) string
 	}{
 		{
 			name: "Generate usage report",
-			setup: func(tracker *usageTracker, now time.Time) {
-				tracker.Add(newTraceCumulativeUsage(1, now))
-				tracker.Add(newLogCumulativeUsage(2, now))
+			setup: func(tracker *usageTracker) {
+				tracker.Add(signal_traces, 1)
+				tracker.Add(signal_traces, 2)
+				tracker.Add(signal_logs, 2)
 			},
 			expectedError: nil,
 			expectedReport: func(now time.Time) string {
-				data := newOTLPResourceMetricsPayload([]usage{
-					{signal: signal_traces, val: 1, timestamp: now},
-					{signal: signal_logs, val: 2, timestamp: now},
-				})
+				metrics := map[usageSignal]float64{
+					signal_traces: 2,
+					signal_logs:   2,
+				}
+				data := newOTLPResourceMetricsPayload(metrics, now)
 				return string(data)
 			},
 		},
 		{
 			name: "Generate usage report with no data",
-			setup: func(tracker *usageTracker, now time.Time) {
+			setup: func(tracker *usageTracker) {
 				// No data added
 			},
 			expectedError:  errNoData,
@@ -108,9 +105,9 @@ func TestUsageTracker_NewReport(t *testing.T) {
 			tracker := newUsageTracker()
 			now := time.Now()
 
-			tt.setup(tracker, now)
+			tt.setup(tracker)
 
-			report, err := tracker.NewReport("my-service", "1.0.0", "my-hostname")
+			report, err := tracker.NewReport("my-service", "1.0.0", "my-hostname", now)
 			if tt.expectedError != nil {
 				require.Error(t, err)
 				require.Nil(t, report)
@@ -131,13 +128,13 @@ func TestUsageTracker_NewReport(t *testing.T) {
 	}
 }
 
-func newOTLPResourceMetricsPayload(data []usage) []byte {
+func newOTLPResourceMetricsPayload(metrics map[usageSignal]float64, now time.Time) []byte {
 	var dataPoints []map[string]interface{}
-	for _, d := range data {
+	for signal, value := range metrics {
 		dataPoints = append(dataPoints, map[string]interface{}{
-			"attributes":   []map[string]interface{}{{"key": "signal", "value": map[string]string{"stringValue": string(d.signal)}}},
-			"timeUnixNano": fmt.Sprintf("%d", d.timestamp.UnixNano()),
-			"asInt":        fmt.Sprintf("%d", int(d.val)),
+			"attributes":   []map[string]interface{}{{"key": "signal", "value": map[string]string{"stringValue": string(signal)}}},
+			"timeUnixNano": fmt.Sprintf("%d", now.UnixNano()),
+			"asInt":        fmt.Sprintf("%d", int(value)),
 		})
 	}
 
