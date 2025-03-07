@@ -218,9 +218,8 @@ func (agent *Agent) healthCheck() {
 				agent.logger.Errorf(context.Background(), "unexpected missing log usage metric")
 			}
 
-			now := agent.clock.Now()
-			agent.usageTracker.Add(newTraceCumulativeUsage(traceUsage, now))
-			agent.usageTracker.Add(newLogCumulativeUsage(logUsage, now))
+			agent.usageTracker.Add(signal_traces, traceUsage)
+			agent.usageTracker.Add(signal_logs, logUsage)
 		}
 	}
 }
@@ -248,7 +247,7 @@ func (agent *Agent) reportUsagePeriodically() {
 }
 
 func (agent *Agent) sendUsageReport() error {
-	usageReport, err := agent.usageTracker.NewReport(agent.agentType, agent.agentVersion, agent.hostname)
+	usageReport, err := agent.usageTracker.NewReport(agent.agentType, agent.agentVersion, agent.hostname, agent.clock.Now())
 	if err != nil {
 		return err
 	}
