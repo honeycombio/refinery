@@ -96,7 +96,7 @@ func (s *RulesBasedSampler) SetClusterSize(size int) {
 	}
 }
 
-func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, summarize bool, reason string, key string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
 		"trace_id": trace.TraceID,
 	})
@@ -126,6 +126,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			var keep bool
 			var samplerReason string
 			var key string
+			var summarize bool
 
 			if rule.Sampler != nil {
 				var sampler Sampler
@@ -134,13 +135,14 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					logger.WithFields(map[string]interface{}{
 						"rule_name": rule.Name,
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
-					return 1, true, reason + "bad_rule:" + rule.Name, ""
+					return 1, true, false, reason + "bad_rule:" + rule.Name, ""
 				}
-				rate, keep, samplerReason, key = sampler.GetSampleRate(trace)
+				rate, keep, summarize, samplerReason, key = sampler.GetSampleRate(trace)
 				reason += rule.Name + ":" + samplerReason
 			} else {
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
+				summarize = rule.Summarize
 				reason += rule.Name
 				s.Metrics.Histogram(s.prefix+"_sample_rate", float64(rate))
 			}
@@ -158,12 +160,13 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				"rate":      rate,
 				"keep":      keep,
 				"drop_rule": rule.Drop,
+				"summarize": summarize,
 			}).Logf("got sample rate and decision")
-			return rate, keep, reason, key
+			return rate, keep, summarize, reason, key
 		}
 	}
 
-	return 1, true, "no rule matched", ""
+	return 1, true, false, "no rule matched", ""
 }
 
 func (s *RulesBasedSampler) GetKeyFields() []string {
