@@ -39,7 +39,7 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, _, reason, key := sampler.GetSampleRate(trace)
+	rate, _, summarize, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 
@@ -47,5 +47,5 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 	assert.Equal(t, uint(1), rate, "sample rate should be 1")
 	assert.Equal(t, "windowedthroughput", reason)
 	assert.Equal(t, "4•,200•,true•,/{slug}/fun•,", key)
-
+	assert.False(t, summarize, "summarize should be false")
 }

@@ -22,6 +22,7 @@ type TestRulesData struct {
 	ExpectedKeep      bool
 	ExpectedName      string
 	ExpectedKeyFields []string
+	ExpectedSummarize bool
 }
 
 func TestRules(t *testing.T) {
@@ -54,6 +55,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -83,6 +85,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -112,6 +115,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -141,6 +145,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -175,6 +180,7 @@ func TestRules(t *testing.T) {
 			ExpectedRate:      10,
 			ExpectedName:      "fallback",
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -222,6 +228,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test", "test_two"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -251,6 +258,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      false,
 			ExpectedRate:      0,
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -273,6 +281,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      false,
 			ExpectedRate:      0,
 			ExpectedKeyFields: []string{},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -316,6 +325,7 @@ func TestRules(t *testing.T) {
 			ExpectedRate:      1,
 			ExpectedName:      "no rule matched",
 			ExpectedKeyFields: []string{"first", "second"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -345,6 +355,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"first"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -373,6 +384,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"first"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -401,6 +413,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"first"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -430,6 +443,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"first"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -459,6 +473,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"first"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -488,6 +503,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"first"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -517,6 +533,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -560,6 +577,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      1,
 			ExpectedKeyFields: []string{"meta.span_count"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -614,6 +632,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      false,
 			ExpectedRate:      0,
 			ExpectedKeyFields: []string{"meta.span_count"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -657,6 +676,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      false,
 			ExpectedRate:      0,
 			ExpectedKeyFields: []string{},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -709,6 +729,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      99,
 			ExpectedKeyFields: []string{},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -738,6 +759,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -768,6 +790,7 @@ func TestRules(t *testing.T) {
 			ExpectedName:      "no rule matched",
 			ExpectedRate:      1,
 			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -799,6 +822,7 @@ func TestRules(t *testing.T) {
 			ExpectedName:      "no rule matched",
 			ExpectedRate:      1,
 			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -861,6 +885,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      false,
 			ExpectedRate:      1,
 			ExpectedKeyFields: []string{string(config.NUM_DESCENDANTS)},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -921,6 +946,7 @@ func TestRules(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      1,
 			ExpectedKeyFields: []string{string(config.NUM_DESCENDANTS)},
+			ExpectedSummarize: false,
 		},
 	}
 
@@ -947,7 +973,7 @@ func TestRules(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace)
+		rate, keep, summarize, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -956,7 +982,7 @@ func TestRules(t *testing.T) {
 		}
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "", key)
-
+		assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 		keyFields := sampler.GetKeyFields()
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
@@ -1001,6 +1027,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test.test1"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1031,6 +1058,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test.test1"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1062,6 +1090,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      4,
 			ExpectedKeyFields: []string{"test.test1"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1094,6 +1123,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			ExpectedRate:      1,
 			ExpectedName:      "no rule matched",
 			ExpectedKeyFields: []string{"test.test1"},
+			ExpectedSummarize: false,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1126,6 +1156,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"test.test1", "test.test2"},
+			ExpectedSummarize: false,
 		},
 	}
 
@@ -1150,7 +1181,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			}
 
 			sampler.Start()
-			rate, keep, reason, key := sampler.GetSampleRate(trace)
+			rate, keep, summarize, reason, key := sampler.GetSampleRate(trace)
 
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 			name := d.ExpectedName
@@ -1159,7 +1190,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			}
 			assert.Contains(t, reason, name)
 			assert.Equal(t, "", key)
-
+			assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 			keyFields := sampler.GetKeyFields()
 			slices.Sort(keyFields)
 			assert.Equal(t, d.ExpectedKeyFields, keyFields)
@@ -1215,6 +1246,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"http.status_code", "rule_test"},
+			ExpectedSummarize: false,
 		},
 	}
 
@@ -1238,7 +1270,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace)
+		rate, keep, summarize, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -1247,7 +1279,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		}
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "200•,", key)
-
+		assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 		keyFields := sampler.GetKeyFields()
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
@@ -1306,6 +1338,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 			ExpectedKeep:      true,
 			ExpectedRate:      10,
 			ExpectedKeyFields: []string{"http.status_code", "rule_test"},
+			ExpectedSummarize: false,
 		},
 	}
 
@@ -1329,7 +1362,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace)
+		rate, keep, summarize, reason, key := sampler.GetSampleRate(trace)
 
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
@@ -1338,7 +1371,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		}
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "200•,", key)
-
+		assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 		keyFields := sampler.GetKeyFields()
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
@@ -1354,15 +1387,17 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 
 func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 	testCases := []struct {
-		name           string
-		spans          []*types.Span
-		keepSpanScope  bool
-		keepTraceScope bool
+		name              string
+		spans             []*types.Span
+		keepSpanScope     bool
+		keepTraceScope    bool
+		ExpectedSummarize bool
 	}{
 		{
-			name:           "all conditions match single span",
-			keepSpanScope:  true,
-			keepTraceScope: true,
+			name:              "all conditions match single span",
+			keepSpanScope:     true,
+			keepTraceScope:    true,
+			ExpectedSummarize: false,
 			spans: []*types.Span{
 				{
 					Event: types.Event{
@@ -1383,9 +1418,10 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			},
 		},
 		{
-			name:           "all conditions do not match single span",
-			keepSpanScope:  false,
-			keepTraceScope: true,
+			name:              "all conditions do not match single span",
+			keepSpanScope:     false,
+			keepTraceScope:    true,
+			ExpectedSummarize: false,
 			spans: []*types.Span{
 				{
 					Event: types.Event{
@@ -1456,13 +1492,13 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 				}
 
 				sampler.Start()
-				rate, keep, _, _ := sampler.GetSampleRate(trace)
-
-				assert.Equal(t, uint(1), rate, rate)
+				rate, keep, summarize, _, _ := sampler.GetSampleRate(trace)
+				assert.Equal(t, tc.ExpectedSummarize, summarize)
+				assert.Equal(t, uint(1), rate)
 				if scope == "span" {
-					assert.Equal(t, tc.keepSpanScope, keep, keep)
+					assert.Equal(t, tc.keepSpanScope, keep)
 				} else {
-					assert.Equal(t, tc.keepTraceScope, keep, keep)
+					assert.Equal(t, tc.keepTraceScope, keep)
 				}
 			}
 		})
@@ -2038,8 +2074,9 @@ func TestRulesDatatypes(t *testing.T) {
 				trace.AddSpan(span)
 			}
 
-			rate, keep, _, _ := sampler.GetSampleRate(trace)
+			rate, keep, summarize, _, _ := sampler.GetSampleRate(trace)
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
+			assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 			// because keep depends on sampling rate, we can only test expectedKeep when it should be false
 			if !d.ExpectedKeep {
 				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
@@ -2115,7 +2152,7 @@ func TestRegexpRules(t *testing.T) {
 				trace.AddSpan(span)
 			}
 
-			rate, _, _, _ := sampler.GetSampleRate(trace)
+			rate, _, _, _, _ := sampler.GetSampleRate(trace)
 			assert.Equal(t, d.rate, rate, d)
 		})
 	}
@@ -2186,9 +2223,9 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 		}
 
 		sampler.Start()
-		rate, keep, reason, key := sampler.GetSampleRate(trace)
+		rate, keep, summarize, reason, key := sampler.GetSampleRate(trace)
 		assert.Equal(t, "", key)
-
+		assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 		assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 		name := d.ExpectedName
 		if name == "" {
@@ -2900,9 +2937,9 @@ func TestRulesRootSpanContext(t *testing.T) {
 			spans := trace.GetSpans()
 			assert.Len(t, spans, len(d.Spans), "should have the same number of spans as input")
 
-			rate, _, reason, key := sampler.GetSampleRate(trace)
+			rate, _, summarize, reason, key := sampler.GetSampleRate(trace)
 			assert.Equal(t, "", key)
-
+			assert.Equal(t, d.ExpectedSummarize, summarize, d.Rules)
 			assert.Equal(t, d.ExpectedRate, rate, d.Rules)
 			name := d.ExpectedName
 			if name == "" {

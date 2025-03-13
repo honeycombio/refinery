@@ -137,6 +137,7 @@ type TraceDecision struct {
 	// we could remove this field. The TraceDecision type could be renamed to
 	// keptDecision
 	Kept            bool
+	Summarize       bool // If true, summarize the trace into the summary dataset, whether sent or not
 	Rate            uint
 	SamplerKey      string
 	SamplerSelector string
@@ -211,7 +212,7 @@ func compress(data any) ([]byte, error) {
 		return nil, err
 	}
 
-	// Copy the buffer’s bytes to avoid reuse issues when returning
+	// Copy the buffer's bytes to avoid reuse issues when returning
 	return bytes.Clone(buf.Bytes()), nil
 }
 

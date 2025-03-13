@@ -320,3 +320,82 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 func IsLegacyAPIKey(apiKey string) bool {
 	return huskyotlp.IsClassicApiKey(apiKey)
 }
+
+// SummarizeTrace flattens the trace into a single wide event based on the root span.
+// The metrics should ideally be collected during the initial sampling pass to avoid
+// an extra iteration.
+func (t *Trace) SummarizeTrace(minDuration time.Duration, metrics *TraceSummaryMetrics) {
+	if len(t.spans) == 0 || t.RootSpan == nil {
+		return
+	}
+
+	// Start with root span as our base
+	summary := t.RootSpan
+	summary.Data["meta.summarized"] = true
+	summary.Data["meta.original_span_count"] = len(t.spans)
+
+	// If metrics were collected during sampling pass, use them
+	if metrics != nil {
+		summary.Data["meta.total_duration_ms"] = metrics.TotalDuration
+		summary.Data["meta.max_span_duration_ms"] = metrics.MaxDuration
+		summary.Data["meta.error_count"] = metrics.ErrorCount
+		summary.Data["meta.high_latency_span_count"] = metrics.HighLatencyCount
+		summary.Data["meta.services"] = metrics.Services
+	} else {
+		// Fallback to collecting metrics now (less efficient)
+		var totalDuration float64
+		var maxDuration float64
+		var errorCount int64
+		var highLatencyCount int64
+		services := make(map[string]bool)
+
+		for _, sp := range t.spans {
+			if sp == t.RootSpan {
+				continue
+			}
+
+			if sp.Data != nil {
+				if duration, ok := sp.Data["duration_ms"].(float64); ok {
+					totalDuration += duration
+					if duration > maxDuration {
+						maxDuration = duration
+					}
+					if duration >= float64(minDuration/time.Millisecond) {
+						highLatencyCount++
+					}
+				}
+
+				if status, ok := sp.Data["status.code"].(int64); ok && status > 0 {
+					errorCount++
+				}
+				if errMsg, ok := sp.Data["error"]; ok && errMsg != nil {
+					errorCount++
+				}
+
+				if service, ok := sp.Data["service.name"].(string); ok {
+					services[service] = true
+				}
+			}
+		}
+
+		summary.Data["meta.total_duration_ms"] = totalDuration
+		summary.Data["meta.max_span_duration_ms"] = maxDuration
+		summary.Data["meta.error_count"] = errorCount
+		summary.Data["meta.high_latency_span_count"] = highLatencyCount
+		summary.Data["meta.services"] = services
+	}
+
+	// Replace all spans with just the summary
+	t.spans = []*Span{summary}
+	t.RootSpan = summary
+	t.DataSize = summary.GetDataSize()
+}
+
+// TraceSummaryMetrics holds the metrics collected during sampling pass
+type TraceSummaryMetrics struct {
+	TotalDuration    float64
+	MaxDuration      float64
+	ErrorCount       int64
+	HighLatencyCount int64
+	Services         map[string]bool
+}

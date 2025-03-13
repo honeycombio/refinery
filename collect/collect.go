@@ -995,6 +995,13 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 		return
 	}
 
+	// If summarization is requested, summarize the trace before sending
+	if td.Summarize {
+		trace.SummarizeTrace(1000*time.Millisecond, nil)
+		i.Metrics.Increment("trace_send_summarized")
+		logFields["summarized"] = true
+	}
+
 	if td.HasRoot {
 		rs := trace.RootSpan
 		if rs != nil {
@@ -1030,7 +1037,6 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 	} else {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
-	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	i.outgoingTraces <- sendableTrace{
 		Trace:      trace,
 		reason:     td.Reason,
@@ -1487,7 +1493,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 
 	startGetSampleRate := i.Clock.Now()
 	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	rate, shouldSend, summarize, reason, key := sampler.GetSampleRate(trace)
 	i.Metrics.Histogram("get_sample_rate_duration_ms", float64(time.Since(startGetSampleRate).Milliseconds()))
 
 	trace.SetSampleRate(rate)
@@ -1507,6 +1513,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"kept":        shouldSend,
+		"summarize":   summarize,
 		"reason":      reason,
 		"sampler":     key,
 		"selector":    samplerSelector,
@@ -1518,6 +1525,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	td := TraceDecision{
 		TraceID:         trace.ID(),
 		Kept:            shouldSend,
+		Summarize:       summarize,
 		Reason:          reason,
 		SamplerKey:      key,
 		SamplerSelector: samplerSelector,
