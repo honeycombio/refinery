@@ -395,7 +395,7 @@ func TestDebugAllRules(t *testing.T) {
 		},
 		{
 			format: "toml",
-			expect: "RulesVersion = 0\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\nSummarizeMode = ''",
+			expect: "RulesVersion = 0\n\n[Samplers]\n[Samplers.dataset1]\n[Samplers.dataset1.DeterministicSampler]\nSampleRate = 0\nSummarizeMode = ''\n",
 		},
 		{
 			format: "yaml",

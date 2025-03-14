@@ -684,6 +684,19 @@ groups:
           rule will be evaluated against each span in the trace and the rule
           only succeeds if all of the conditions match on a single span
           together.
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
 
   - name: Conditions
     title: Conditions for the Rules in Rules-based Samplers

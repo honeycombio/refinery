@@ -334,22 +334,64 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 
 	// Start with root span as our base
 	if t.RootSpan.Data != nil {
-		summary = t.RootSpan
-		summary.Dataset = t.SummaryDataset
-		summary.Data["trace.root_span_id"] = summary.Data["trace.span_id"]
+		// Create a deep copy of the root span
+		summary = &Span{
+			Event: Event{
+				Context:     t.RootSpan.Context,
+				APIHost:     t.RootSpan.APIHost,
+				APIKey:      t.RootSpan.APIKey,
+				Dataset:     t.SummaryDataset,
+				Environment: t.RootSpan.Environment,
+				SampleRate:  t.RootSpan.SampleRate,
+				Timestamp:   t.RootSpan.Timestamp,
+				Data:        make(map[string]interface{}, len(t.RootSpan.Data)),
+			},
+			TraceID:     t.RootSpan.TraceID,
+			DataSize:    t.RootSpan.DataSize,
+			ArrivalTime: t.RootSpan.ArrivalTime,
+			IsRoot:      t.RootSpan.IsRoot,
+		}
+		// Deep copy the data map
+		for k, v := range t.RootSpan.Data {
+			summary.Data[k] = v
+		}
+		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
 		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
+		summary.Data["meta.root.name"] = summary.Data["name"]
+		summary.Data["name"] = "Summary root span"
 	} else {
-		// suggested enhahcement to find the first "server" span
-		summary = t.spans[0]
-		summary.Data["Name"] = "Summary span"
+		// Create a deep copy of the first span
+		firstSpan := t.spans[0]
+		summary = &Span{
+			Event: Event{
+				Context:     firstSpan.Context,
+				APIHost:     firstSpan.APIHost,
+				APIKey:      firstSpan.APIKey,
+				Dataset:     t.SummaryDataset,
+				Environment: firstSpan.Environment,
+				SampleRate:  firstSpan.SampleRate,
+				Timestamp:   firstSpan.Timestamp,
+				Data:        make(map[string]interface{}, len(firstSpan.Data)),
+			},
+			TraceID:     firstSpan.TraceID,
+			DataSize:    firstSpan.DataSize,
+			ArrivalTime: firstSpan.ArrivalTime,
+			IsRoot:      firstSpan.IsRoot,
+		}
+		// Deep copy the data map
+		for k, v := range firstSpan.Data {
+			summary.Data[k] = v
+		}
+		summary.Data["name"] = "Summary span, no root"
+		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s"
 	}
 	summary.Data["meta.summarized"] = true
 	summary.Data["meta.summarized.span_count"] = len(t.spans)
 
 	// Fallback to collecting metrics now (less efficient)
-	var totalDuration float64
-	var earliestStart time.Time
-	var latestEnd time.Time
+	earliestStart := time.Now() // needs a future time to look backwards from
+	var latestEnd time.Time     // can be way in the past
 	var errorCount int64
 	var highLatencyCount int64
 	services := make(map[string]bool)
@@ -371,7 +413,7 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 					latestEnd = endTime
 				}
 
-				if duration >= float64(slowSpanDuration/time.Millisecond) {
+				if duration >= float64(slowSpanDuration.Milliseconds()) {
 					highLatencyCount++
 				}
 			}
@@ -385,8 +427,9 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 			}
 		}
 	}
+	totalDuration := latestEnd.Sub(earliestStart).Milliseconds()
 	if totalDuration > 0 {
-		summary.Data["meta.summarized.total_duration_ms"] = totalDuration
+		summary.Data["duration_ms"] = totalDuration
 		summary.Data["meta.summarized.error_count"] = errorCount
 		summary.Data["meta.summarized.high_latency_threshold_ms"] = slowSpanDuration
 		summary.Data["meta.summarized.high_latency_span_count"] = highLatencyCount
