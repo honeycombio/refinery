@@ -1039,9 +1039,22 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 
 	// If summarization is requested, summarize the trace before sending
 	if td.Summarize {
-		trace.SummarizeTrace(1000*time.Millisecond, *td)
-		i.Metrics.Increment("trace_send_summarized")
-		logFields["summarized"] = true
+		summary, err := trace.SummarizeTrace(1000*time.Millisecond, *td)
+		if err != nil {
+			i.Logger.Error().WithFields(logFields).Logf("Error summarizing trace: %s", err.Error())
+		} else {
+			i.Metrics.Increment("trace_send_summarized")
+			logFields["summarized"] = true
+		}
+
+		summary.Data["meta.span_event_count"] = int64(td.EventCount)
+		summary.Data["meta.span_link_count"] = int64(td.LinkCount)
+		summary.Data["meta.span_count"] = int64(td.Count)
+		summary.Data["meta.event_count"] = int64(td.DescendantCount())
+
+		summary.Dataset = i.Config.GetSummarySpanDataset()
+		summary.APIKey = trace.APIKey
+		i.Transmission.EnqueueSpan(summary)
 	}
 
 	if td.HasRoot {

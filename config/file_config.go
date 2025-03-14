@@ -193,13 +193,14 @@ type RefineryTelemetryConfig struct {
 }
 
 type TracesConfig struct {
-	SendDelay        Duration `yaml:"SendDelay" default:"2s"`
-	BatchTimeout     Duration `yaml:"BatchTimeout" default:"100ms"`
-	TraceTimeout     Duration `yaml:"TraceTimeout" default:"60s"`
-	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
-	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
-	SpanLimit        uint     `yaml:"SpanLimit"`
-	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"5000"`
+	SendDelay          Duration `yaml:"SendDelay" default:"2s"`
+	BatchTimeout       Duration `yaml:"BatchTimeout" default:"100ms"`
+	TraceTimeout       Duration `yaml:"TraceTimeout" default:"60s"`
+	MaxBatchSize       uint     `yaml:"MaxBatchSize" default:"500"`
+	SendTicker         Duration `yaml:"SendTicker" default:"100ms"`
+	SpanLimit          uint     `yaml:"SpanLimit"`
+	MaxExpiredTraces   uint     `yaml:"MaxExpiredTraces" default:"5000"`
+	SummarySpanDataset string   `yaml:"SummarySpanDataset"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {
@@ -1069,4 +1070,14 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Specialized.AdditionalAttributes
+}
+
+func (f *fileConfig) GetSummarySpanDataset() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	if f.mainConfig.Traces.SummarySpanDataset == "" {
+		return SummarySpanDataset
+	}
+	return f.mainConfig.Traces.SummarySpanDataset
 }

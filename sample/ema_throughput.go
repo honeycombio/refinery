@@ -106,7 +106,6 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
-	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
 
 	// Handle summarization based on configuration
 	summarize = false
@@ -118,6 +117,15 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	case "kept":
 		summarize = shouldKeep
 	}
+
+	d.Logger.Debug().WithFields(map[string]interface{}{
+		"sample_key":  key,
+		"sample_rate": rate,
+		"sample_keep": shouldKeep,
+		"trace_id":    trace.TraceID,
+		"span_count":  count,
+	}).Logf("got sample rate and decision")
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n, summarize)
 
 	return rate, shouldKeep, summarize, d.prefix, key
 }

@@ -292,6 +292,10 @@ hasprefix:
       type: Histogram
       unit: Dimensionless
       description: Sample rate for traces
+    - name: _num_summarized
+      type: Counter
+      unit: Dimensionless
+      description: Number of traces summarized by the configured sampler
     - name: enqueue_errors
       type: Counter
       unit: Dimensionless

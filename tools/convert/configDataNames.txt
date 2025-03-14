@@ -64,6 +64,8 @@ Traces:
 
   - MaxExpiredTraces
 
+  - SummarySpanDataset
+
 
 Debugging:
   - DebugServiceAddr

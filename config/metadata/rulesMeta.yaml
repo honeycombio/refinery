@@ -43,6 +43,20 @@ groups:
           A `SampleRate` of `1` or less will keep all traces.
 
           Specifying this value is required.
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
+
   - name: DynamicSampler
     title: Dynamic Sampler
     sortorder: 20
@@ -64,6 +78,19 @@ groups:
           - type: requiredInGroup
         summary: is the sample rate to use.
         description: $DeterministicSampler.SampleRate
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
       - name: ClearFrequency
         type: duration
         summary: is the duration over which the sampler will calculate the sample rate.
@@ -175,6 +202,19 @@ groups:
           - type: requiredInGroup
         summary: is the sample rate to use.
         description: $DeterministicSampler.SampleRate
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
       - name: AdjustmentInterval
         type: duration
         summary: is how often the sampler will recalculate the sample rate.
@@ -289,6 +329,19 @@ groups:
           cluster has multiple instances, then you will need to divide your
           total desired sample rate by the number of instances to get this
           value.
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
       - name: UseClusterSize
         type: bool
         summary: indicates whether to use the cluster size to calculate the goal throughput.
@@ -397,6 +450,19 @@ groups:
           cluster has multiple instances, then you will need to divide your
           total desired sample rate by the number of instances to get this
           value.
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
       - name: UseClusterSize
         type: bool
         summary: indicates whether to use the cluster size to calculate the goal throughput.
@@ -469,6 +535,19 @@ groups:
           The desired throughput per second of events sent to Honeycomb. This is
           the number of events per second you want to send. This is not the same
           as the Sample Rate.
+      - name: SummarizeMode
+        type: string
+        valuetype: choice
+        choices: ["none", "all", "dropped", "kept"]
+        default: "none"
+        reload: true
+        summary: Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+        description: >
+          Creates a summary span with some metadata and sends it to the summary span dataset in the same environment.
+          "none" means no summarization occurs.
+          "all" means all traces are summarized.
+          "dropped" means only dropped traces are summarized.
+          "kept" means only kept traces are summarized.
       - name: UseClusterSize
         type: bool
         summary: indicates whether to use the cluster size to calculate the goal throughput.

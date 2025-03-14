@@ -409,6 +409,17 @@ Traces:
     ## Eligible for live reload.
     # MaxExpiredTraces: 5_000
 
+    ## SummarySpanDataset is the dataset name for summary spans.
+    ##
+    ## When traces are summarized, the service.name of the spans isn't
+    ## applicable since traces tend to cross service boundaries. The summary
+    ## spans will be sent to the same environemnt as the trace was going to,
+    ## since it uses the same API key.
+    ##
+    ## default: Summary Spans
+    ## Eligible for live reload.
+    SummarySpanDataset: "Summary Spans"
+
 ###############
 ## Debugging ##
 ###############
