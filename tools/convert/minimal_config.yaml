@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-02-13 at 16:52:06 UTC
+# automatically generated on 2025-03-14 at 00:54:48 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -30,6 +30,7 @@ Traces:
   MaxBatchSize: 500
   SendTicker: 100ms
   MaxExpiredTraces: 5_000
+  SummarySpanDataset: "Summary Spans"
 Debugging:
   DebugServiceAddr: "localhost:6060"
   QueryAuthToken: "some-private-value"

@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-02-13 at 16:52:12 UTC from ../../config.yaml using a template generated on 2025-02-13 at 16:52:04 UTC
+# created on 2025-03-14 at 00:54:51 UTC from ../../config.yaml using a template generated on 2025-03-14 at 00:54:47 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -370,6 +370,17 @@ Traces:
     ## default: 5000
     ## Eligible for live reload.
     # MaxExpiredTraces: 5_000
+
+    ## SummarySpanDataset is the dataset name for summary spans.
+    ##
+    ## When traces are summarized, the service.name of the spans isn't
+    ## applicable since traces tend to cross service boundaries. The summary
+    ## spans will be sent to the same environemnt as the trace was going to,
+    ## since it uses the same API key.
+    ##
+    ## default: Summary Spans
+    ## Eligible for live reload.
+    # SummarySpanDataset: "Summary Spans"
 
 ###############
 ## Debugging ##
