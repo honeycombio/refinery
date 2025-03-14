@@ -142,7 +142,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			} else {
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
-				summarize = rule.Summarize
+				summarize = rule.SummarizeMode == "all" || (rule.SummarizeMode == "kept" && keep) || (rule.SummarizeMode == "dropped" && !keep)
 				reason += rule.Name
 				s.Metrics.Histogram(s.prefix+"_sample_rate", float64(rate))
 			}
@@ -155,6 +155,9 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					// If we dropped because of an explicit drop rule, then increment that too.
 					s.Metrics.Increment(s.prefix + "_num_dropped_by_drop_rule")
 				}
+			}
+			if summarize {
+				s.Metrics.Increment(s.prefix + "_num_summarized")
 			}
 			logger.WithFields(map[string]interface{}{
 				"rate":      rate,

@@ -332,13 +332,13 @@ func (r *RulesBasedDownstreamSampler) GetSamplingFields() []string {
 
 type RulesBasedSamplerRule struct {
 	// Conditions has deliberately different names for json and yaml for conversion from old to new format
-	Name       string                        `json:"name" yaml:"Name,omitempty"`
-	SampleRate int                           `json:"samplerate" yaml:"SampleRate,omitempty"`
-	Drop       bool                          `json:"drop" yaml:"Drop,omitempty"`
-	Summarize  bool                          `json:"summarize" yaml:"Summarize,omitempty"`
-	Scope      string                        `json:"scope" yaml:"Scope,omitempty" validate:"oneof=span trace"`
-	Conditions []*RulesBasedSamplerCondition `json:"condition" yaml:"Conditions,omitempty"`
-	Sampler    *RulesBasedDownstreamSampler  `json:"sampler" yaml:"Sampler,omitempty"`
+	Name          string                        `json:"name" yaml:"Name,omitempty"`
+	SampleRate    int                           `json:"samplerate" yaml:"SampleRate,omitempty"`
+	Drop          bool                          `json:"drop" yaml:"Drop,omitempty"`
+	SummarizeMode string                        `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
+	Scope         string                        `json:"scope" yaml:"Scope,omitempty" validate:"oneof=span trace"`
+	Conditions    []*RulesBasedSamplerCondition `json:"condition" yaml:"Conditions,omitempty"`
+	Sampler       *RulesBasedDownstreamSampler  `json:"sampler" yaml:"Sampler,omitempty"`
 }
 
 func (r *RulesBasedSamplerRule) String() string {

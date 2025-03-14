@@ -75,6 +75,10 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		summarize = shouldKeep
 	}
 
+	if summarize {
+		d.Metrics.Increment(d.prefix + "_num_summarized")
+	}
+
 	return uint(d.sampleRate), shouldKeep, summarize, "deterministic/chance", ""
 }
 

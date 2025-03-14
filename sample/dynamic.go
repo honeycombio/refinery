@@ -74,14 +74,6 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
-	d.Logger.Debug().WithFields(map[string]interface{}{
-		"sample_key":  key,
-		"sample_rate": rate,
-		"sample_keep": shouldKeep,
-		"trace_id":    trace.TraceID,
-		"span_count":  count,
-	}).Logf("got sample rate and decision")
-	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
 
 	// Handle summarization based on configuration
 	summarize = false
@@ -93,6 +85,16 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 	case "kept":
 		summarize = shouldKeep
 	}
+
+	d.Logger.Debug().WithFields(map[string]interface{}{
+		"sample_key":  key,
+		"sample_rate": rate,
+		"sample_keep": shouldKeep,
+		"trace_id":    trace.TraceID,
+		"span_count":  count,
+		"summarize":   summarize,
+	}).Logf("got sample rate and decision")
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, summarize)
 
 	return rate, shouldKeep, summarize, d.prefix, key
 }
