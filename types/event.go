@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"slices"
+	"strings"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -50,6 +51,7 @@ type Trace struct {
 	Sent             bool
 	keptReason       uint
 	DeciderShardAddr string
+	SummaryDataset   string
 
 	SendBy  time.Time
 	Retried bool
@@ -324,78 +326,138 @@ func IsLegacyAPIKey(apiKey string) bool {
 // SummarizeTrace flattens the trace into a single wide event based on the root span.
 // The metrics should ideally be collected during the initial sampling pass to avoid
 // an extra iteration.
-func (t *Trace) SummarizeTrace(minDuration time.Duration, metrics *TraceSummaryMetrics) {
+func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDecision) {
 	if len(t.spans) == 0 || t.RootSpan == nil {
 		return
 	}
 
+	var summary *Span
 	// Start with root span as our base
-	summary := t.RootSpan
-	summary.Data["meta.summarized"] = true
-	summary.Data["meta.original_span_count"] = len(t.spans)
-
-	// If metrics were collected during sampling pass, use them
-	if metrics != nil {
-		summary.Data["meta.total_duration_ms"] = metrics.TotalDuration
-		summary.Data["meta.max_span_duration_ms"] = metrics.MaxDuration
-		summary.Data["meta.error_count"] = metrics.ErrorCount
-		summary.Data["meta.high_latency_span_count"] = metrics.HighLatencyCount
-		summary.Data["meta.services"] = metrics.Services
+	if t.RootSpan.Data != nil {
+		summary = t.RootSpan
+		summary.Dataset = t.SummaryDataset
+		summary.Data["trace.root_span_id"] = summary.Data["trace.span_id"]
+		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "summary" // we need a new id in case the spans are kept.
 	} else {
-		// Fallback to collecting metrics now (less efficient)
-		var totalDuration float64
-		var maxDuration float64
-		var errorCount int64
-		var highLatencyCount int64
-		services := make(map[string]bool)
+		summary = &Span{
+			Event: Event{
+				Data: make(map[string]interface{}),
+			},
+		}
+		summary.Data["trace.span_id"] = t.spans[0].Data["trace.span_id"]
+		summary.Data["meta.summarized.missing_root_span"] = true
+	}
+	summary.Data["meta.summarized"] = true
+	summary.Data["meta.summarized.span_count"] = len(t.spans)
 
-		for _, sp := range t.spans {
-			if sp == t.RootSpan {
-				continue
+	// Fallback to collecting metrics now (less efficient)
+	var totalDuration float64
+	var earliestStart time.Time
+	var latestEnd time.Time
+	var errorCount int64
+	var highLatencyCount int64
+	services := make(map[string]bool)
+
+	for _, sp := range t.spans {
+		if sp == t.RootSpan {
+			continue
+		}
+
+		if sp.Timestamp.Before(earliestStart) {
+			earliestStart = sp.Timestamp
+		}
+
+		if sp.Data != nil {
+			if duration, ok := sp.Data["duration_ms"].(float64); ok {
+
+				endTime := sp.Timestamp.Add(time.Duration(duration) * time.Millisecond)
+				if endTime.After(latestEnd) {
+					latestEnd = endTime
+				}
+
+				if duration >= float64(slowSpanDuration/time.Millisecond) {
+					highLatencyCount++
+				}
 			}
 
-			if sp.Data != nil {
-				if duration, ok := sp.Data["duration_ms"].(float64); ok {
-					totalDuration += duration
-					if duration > maxDuration {
-						maxDuration = duration
-					}
-					if duration >= float64(minDuration/time.Millisecond) {
-						highLatencyCount++
-					}
-				}
+			if status, ok := sp.Data["status.code"].(int64); ok && status > 0 {
+				errorCount++
+			}
 
-				if status, ok := sp.Data["status.code"].(int64); ok && status > 0 {
-					errorCount++
-				}
-				if errMsg, ok := sp.Data["error"]; ok && errMsg != nil {
-					errorCount++
-				}
+			if errMsg, ok := sp.Data["error"]; ok && errMsg != nil {
+				errorCount++
+			}
 
-				if service, ok := sp.Data["service.name"].(string); ok {
-					services[service] = true
-				}
+			if service, ok := sp.Data["service.name"].(string); ok {
+				services[service] = true
 			}
 		}
 
-		summary.Data["meta.total_duration_ms"] = totalDuration
-		summary.Data["meta.max_span_duration_ms"] = maxDuration
-		summary.Data["meta.error_count"] = errorCount
-		summary.Data["meta.high_latency_span_count"] = highLatencyCount
-		summary.Data["meta.services"] = services
+		totalDuration = float64(latestEnd.Sub(earliestStart).Milliseconds())
+
+		summary.Data["meta.summarized.total_duration_ms"] = totalDuration
+		summary.Data["meta.summarized.error_count"] = errorCount
+		summary.Data["meta.summarized.high_latency_threshold_ms"] = slowSpanDuration
+		summary.Data["meta.summarized.high_latency_span_count"] = highLatencyCount
+
+		serviceList := make([]string, 0, len(services))
+		for service := range services {
+			serviceList = append(serviceList, service)
+		}
+		summary.Data["meta.summarized.services"] = strings.Join(serviceList, ",")
 	}
 
-	// Replace all spans with just the summary
-	t.spans = []*Span{summary}
-	t.RootSpan = summary
-	t.DataSize = summary.GetDataSize()
+	// send the summary to a specific dataset!
 }
 
-// TraceSummaryMetrics holds the metrics collected during sampling pass
-type TraceSummaryMetrics struct {
-	TotalDuration    float64
-	MaxDuration      float64
-	ErrorCount       int64
-	HighLatencyCount int64
-	Services         map[string]bool
+type TraceDecision struct {
+	TraceID string
+	// if we don'g need to immediately eject traces from the trace cache,
+	// we could remove this field. The TraceDecision type could be renamed to
+	// keptDecision
+	Kept            bool
+	Summarize       bool // If true, summarize the trace into the summary dataset, whether sent or not
+	Rate            uint
+	SamplerKey      string
+	SamplerSelector string
+	SendReason      string
+	HasRoot         bool
+	Reason          string
+	Count           uint32
+	EventCount      uint32
+	LinkCount       uint32
+
+	keptReasonIdx uint
+}
+
+func (td *TraceDecision) DescendantCount() uint32 {
+	return td.Count + td.EventCount + td.LinkCount
+}
+
+func (td *TraceDecision) SpanCount() uint32 {
+	return td.Count
+}
+
+func (td *TraceDecision) SpanEventCount() uint32 {
+	return td.EventCount
+}
+
+func (td *TraceDecision) SpanLinkCount() uint32 {
+	return td.LinkCount
+}
+
+func (td *TraceDecision) SampleRate() uint {
+	return td.Rate
+}
+
+func (td *TraceDecision) ID() string {
+	return td.TraceID
+}
+
+func (td *TraceDecision) KeptReason() uint {
+	return td.keptReasonIdx
+}
+
+func (td *TraceDecision) SetKeptReason(reasonIdx uint) {
+	td.keptReasonIdx = reasonIdx
 }

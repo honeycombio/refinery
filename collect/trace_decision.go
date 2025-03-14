@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/honeycombio/refinery/collect/cache"
+	"github.com/honeycombio/refinery/types"
 )
 
 type decisionType int
@@ -35,9 +36,9 @@ var (
 	dropDecision decisionType = 2
 )
 
-type newDecisionMessage func(tds []TraceDecision, senderID string) (string, error)
+type newDecisionMessage func(tds []types.TraceDecision, senderID string) (string, error)
 
-func newDroppedDecisionMessage(tds []TraceDecision, senderID string) (string, error) {
+func newDroppedDecisionMessage(tds []types.TraceDecision, senderID string) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no dropped trace decisions provided")
 	}
@@ -59,7 +60,7 @@ func newDroppedDecisionMessage(tds []TraceDecision, senderID string) (string, er
 	return senderID + decisionMessageSeparator + string(compressed), nil
 }
 
-func newDroppedTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
+func newDroppedTraceDecision(msg string, senderID string) ([]types.TraceDecision, error) {
 	// Use IndexRune here since it's faster than SplitN and requires less allocation
 	separatorIdx := strings.IndexRune(msg, rune(decisionMessageSeparator[0]))
 	if separatorIdx == -1 {
@@ -77,16 +78,16 @@ func newDroppedTraceDecision(msg string, senderID string) ([]TraceDecision, erro
 	}
 
 	traceIDs := strings.Split(ids, ",")
-	decisions := make([]TraceDecision, 0, len(traceIDs))
+	decisions := make([]types.TraceDecision, 0, len(traceIDs))
 	for _, traceID := range traceIDs {
-		decisions = append(decisions, TraceDecision{
+		decisions = append(decisions, types.TraceDecision{
 			TraceID: traceID,
 		})
 	}
 	return decisions, nil
 }
 
-func newKeptDecisionMessage(tds []TraceDecision, senderID string) (string, error) {
+func newKeptDecisionMessage(tds []types.TraceDecision, senderID string) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no kept trace decisions provided")
 	}
@@ -102,7 +103,7 @@ func newKeptDecisionMessage(tds []TraceDecision, senderID string) (string, error
 	return senderID + decisionMessageSeparator + string(compressed), nil
 }
 
-func newKeptTraceDecision(msg string, senderID string) ([]TraceDecision, error) {
+func newKeptTraceDecision(msg string, senderID string) ([]types.TraceDecision, error) {
 	// Use IndexRune here since it's faster than SplitN and requires less allocation
 	separatorIdx := strings.IndexRune(msg, rune(decisionMessageSeparator[0]))
 	if separatorIdx == -1 {
@@ -129,59 +130,7 @@ func isMyDecision(msg string, senderID string) bool {
 	return strings.HasPrefix(msg, senderID+decisionMessageSeparator)
 }
 
-var _ cache.KeptTrace = &TraceDecision{}
-
-type TraceDecision struct {
-	TraceID string
-	// if we don'g need to immediately eject traces from the trace cache,
-	// we could remove this field. The TraceDecision type could be renamed to
-	// keptDecision
-	Kept            bool
-	Summarize       bool // If true, summarize the trace into the summary dataset, whether sent or not
-	Rate            uint
-	SamplerKey      string
-	SamplerSelector string
-	SendReason      string
-	HasRoot         bool
-	Reason          string
-	Count           uint32
-	EventCount      uint32
-	LinkCount       uint32
-
-	keptReasonIdx uint
-}
-
-func (td *TraceDecision) DescendantCount() uint32 {
-	return td.Count + td.EventCount + td.LinkCount
-}
-
-func (td *TraceDecision) SpanCount() uint32 {
-	return td.Count
-}
-
-func (td *TraceDecision) SpanEventCount() uint32 {
-	return td.EventCount
-}
-
-func (td *TraceDecision) SpanLinkCount() uint32 {
-	return td.LinkCount
-}
-
-func (td *TraceDecision) SampleRate() uint {
-	return td.Rate
-}
-
-func (td *TraceDecision) ID() string {
-	return td.TraceID
-}
-
-func (td *TraceDecision) KeptReason() uint {
-	return td.keptReasonIdx
-}
-
-func (td *TraceDecision) SetKeptReason(reasonIdx uint) {
-	td.keptReasonIdx = reasonIdx
-}
+var _ cache.KeptTrace = &types.TraceDecision{}
 
 var bufferPool = sync.Pool{
 	New: func() any { return new(bytes.Buffer) },
@@ -216,7 +165,7 @@ func compress(data any) ([]byte, error) {
 	return bytes.Clone(buf.Bytes()), nil
 }
 
-func decompressKeptDecisions(data []byte) ([]TraceDecision, error) {
+func decompressKeptDecisions(data []byte) ([]types.TraceDecision, error) {
 	// Get a buffer from the pool and set it up with data
 	buf := bufferPool.Get().(*bytes.Buffer)
 	defer bufferPool.Put(buf)
@@ -227,7 +176,7 @@ func decompressKeptDecisions(data []byte) ([]TraceDecision, error) {
 	reader := snappy.NewReader(buf)
 	dec := gob.NewDecoder(reader)
 
-	var tds []TraceDecision
+	var tds []types.TraceDecision
 	if err := dec.Decode(&tds); err != nil {
 		return nil, err
 	}
