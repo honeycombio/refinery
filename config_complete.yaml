@@ -380,7 +380,7 @@ Traces:
     ##
     ## default: Summary Spans
     ## Eligible for live reload.
-    # SummarySpanDataset: "Summary Spans"
+    SummarySpanDataset: "Summary Spans"
 
 ###############
 ## Debugging ##
