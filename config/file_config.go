@@ -201,6 +201,7 @@ type TracesConfig struct {
 	SpanLimit          uint     `yaml:"SpanLimit"`
 	MaxExpiredTraces   uint     `yaml:"MaxExpiredTraces" default:"5000"`
 	SummarySpanDataset string   `yaml:"SummarySpanDataset"`
+	SummaryFieldList   []string `yaml:"SummaryFieldList"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {

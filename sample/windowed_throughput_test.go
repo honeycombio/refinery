@@ -19,7 +19,8 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	sampler := &WindowedThroughputSampler{
 		Config: &config.WindowedThroughputSamplerConfig{
-			FieldList: []string{"http.status_code", "request.path", "app.team.id", "important_field"},
+			FieldList:     []string{"http.status_code", "request.path", "app.team.id", "important_field"},
+			SummarizeMode: "none",
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,

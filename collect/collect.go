@@ -118,6 +118,8 @@ type InMemCollector struct {
 	dropDecisionBuffer chan types.TraceDecision
 	keptDecisionBuffer chan types.TraceDecision
 	hostname           string
+	summaryFieldList   []string
+	summarySpanDataset string
 }
 
 var inMemCollectorMetrics = []metrics.Metadata{
@@ -212,6 +214,11 @@ func (i *InMemCollector) Start() error {
 
 	if !i.Config.GetCollectionConfig().DisableRedistribution {
 		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
+	}
+
+	if i.Config.GetSummarySpanDataset() != "" {
+		i.summarySpanDataset = i.Config.GetSummarySpanDataset()
+		i.summaryFieldList = i.Config.GetTracesConfig().SummaryFieldList
 	}
 
 	if !i.Config.GetCollectionConfig().TraceLocalityEnabled() {
@@ -1038,8 +1045,11 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 	}
 
 	// If summarization is requested, summarize the trace before sending
-	if td.Summarize {
-		summary, err := trace.SummarizeTrace(1000*time.Millisecond, *td)
+	if i.summarySpanDataset != "" && td.Summarize {
+		ctx := context.Background()
+		_, span := otelutil.StartSpan(ctx, i.Tracer, "summarizeTraceSpans")
+
+		summary, err := trace.SummarizeTrace(1000, *td, i.summaryFieldList)
 		if err != nil {
 			i.Logger.Error().WithFields(logFields).Logf("Error summarizing trace: %s", err.Error())
 		} else {
@@ -1055,6 +1065,13 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 		summary.Dataset = i.Config.GetSummarySpanDataset()
 		summary.APIKey = trace.APIKey
 		i.Transmission.EnqueueSpan(summary)
+		span.SetAttributes(
+			attribute.Bool("sent", true),
+			attribute.Int64("event_count", int64(td.EventCount)),
+			attribute.Int64("link_count", int64(td.LinkCount)),
+			attribute.Int64("span_count", int64(td.Count)),
+		)
+		span.End()
 	}
 
 	if td.HasRoot {
