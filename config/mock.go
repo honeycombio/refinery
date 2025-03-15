@@ -62,8 +62,8 @@ type MockConfig struct {
 	CfgMetadata                      []ConfigMetadata
 	CfgHash                          string
 	RulesHash                        string
-
-	Mux sync.RWMutex
+	SummarySpanDataset               string
+	Mux                              sync.RWMutex
 }
 
 // assert that MockConfig implements Config
@@ -446,4 +446,14 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalAttributes
+}
+
+func (f *MockConfig) GetSummarySpanDataset() string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	if f.SummarySpanDataset == "" {
+		return SummarySpanDataset
+	}
+	return f.SummarySpanDataset
 }

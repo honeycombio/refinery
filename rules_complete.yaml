@@ -50,6 +50,7 @@ Samplers:
                 - root.http.target
                 - response.status_code
             UseTraceLength: true
+            SummarizeMode: all
     env3:
         DeterministicSampler:
             SampleRate: 10

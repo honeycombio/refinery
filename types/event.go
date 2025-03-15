@@ -2,7 +2,9 @@ package types
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strings"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -50,6 +52,7 @@ type Trace struct {
 	Sent             bool
 	keptReason       uint
 	DeciderShardAddr string
+	SummaryDataset   string
 
 	SendBy  time.Time
 	Retried bool
@@ -319,4 +322,176 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 
 func IsLegacyAPIKey(apiKey string) bool {
 	return huskyotlp.IsClassicApiKey(apiKey)
+}
+
+// SummarizeTrace flattens the trace into a single wide event based on the root span.
+// The metrics should ideally be collected during the initial sampling pass to avoid
+// an extra iteration.
+func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDecision) (summary *Span, err error) {
+	if len(t.spans) == 0 || t.RootSpan == nil {
+		return nil, errors.New("trace has no spans")
+	}
+
+	// Start with root span as our base
+	if t.RootSpan.Data != nil {
+		// Create a deep copy of the root span
+		summary = &Span{
+			Event: Event{
+				Context:     t.RootSpan.Context,
+				APIHost:     t.RootSpan.APIHost,
+				APIKey:      t.RootSpan.APIKey,
+				Dataset:     t.SummaryDataset,
+				Environment: t.RootSpan.Environment,
+				SampleRate:  t.RootSpan.SampleRate,
+				Timestamp:   t.RootSpan.Timestamp,
+				Data:        make(map[string]interface{}, len(t.RootSpan.Data)),
+			},
+			TraceID:     t.RootSpan.TraceID,
+			DataSize:    t.RootSpan.DataSize,
+			ArrivalTime: t.RootSpan.ArrivalTime,
+			IsRoot:      t.RootSpan.IsRoot,
+		}
+		// Deep copy the data map
+		for k, v := range t.RootSpan.Data {
+			summary.Data[k] = v
+		}
+		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
+		summary.Data["meta.root.name"] = summary.Data["name"]
+		summary.Data["name"] = "Summary root span"
+	} else {
+		// Create a deep copy of the first span
+		firstSpan := t.spans[0]
+		summary = &Span{
+			Event: Event{
+				Context:     firstSpan.Context,
+				APIHost:     firstSpan.APIHost,
+				APIKey:      firstSpan.APIKey,
+				Dataset:     t.SummaryDataset,
+				Environment: firstSpan.Environment,
+				SampleRate:  firstSpan.SampleRate,
+				Timestamp:   firstSpan.Timestamp,
+				Data:        make(map[string]interface{}, len(firstSpan.Data)),
+			},
+			TraceID:     firstSpan.TraceID,
+			DataSize:    firstSpan.DataSize,
+			ArrivalTime: firstSpan.ArrivalTime,
+			IsRoot:      firstSpan.IsRoot,
+		}
+		// Deep copy the data map
+		for k, v := range firstSpan.Data {
+			summary.Data[k] = v
+		}
+		summary.Data["name"] = "Summary span, no root"
+		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s"
+	}
+	summary.Data["meta.summarized"] = true
+	summary.Data["meta.summarized.span_count"] = len(t.spans)
+
+	// Fallback to collecting metrics now (less efficient)
+	earliestStart := time.Now() // needs a future time to look backwards from
+	var latestEnd time.Time     // can be way in the past
+	var errorCount int64
+	var highLatencyCount int64
+	services := make(map[string]bool)
+
+	for _, sp := range t.spans {
+		if sp == t.RootSpan {
+			continue
+		}
+
+		if sp.Timestamp.Before(earliestStart) {
+			earliestStart = sp.Timestamp
+		}
+
+		if sp.Data != nil {
+			if duration, ok := sp.Data["duration_ms"].(float64); ok {
+
+				endTime := sp.Timestamp.Add(time.Duration(duration) * time.Millisecond)
+				if endTime.After(latestEnd) {
+					latestEnd = endTime
+				}
+
+				if duration >= float64(slowSpanDuration.Milliseconds()) {
+					highLatencyCount++
+				}
+			}
+			// I think this will find errors?
+			if errMsg, ok := sp.Data["error"]; ok && errMsg != nil {
+				errorCount++
+			}
+
+			if service, ok := sp.Data["service.name"].(string); ok {
+				services[service] = true
+			}
+		}
+	}
+	totalDuration := latestEnd.Sub(earliestStart).Milliseconds()
+	if totalDuration > 0 {
+		summary.Data["duration_ms"] = totalDuration
+		summary.Data["meta.summarized.error_count"] = errorCount
+		summary.Data["meta.summarized.high_latency_threshold_ms"] = slowSpanDuration
+		summary.Data["meta.summarized.high_latency_span_count"] = highLatencyCount
+	}
+
+	serviceList := make([]string, 0, len(services))
+	for service := range services {
+		serviceList = append(serviceList, service)
+	}
+	summary.Data["meta.summarized.services"] = strings.Join(serviceList, ",")
+	// send the summary event back to the collect function so it can be sent.
+	return summary, nil
+}
+
+type TraceDecision struct {
+	TraceID string
+	// if we don'g need to immediately eject traces from the trace cache,
+	// we could remove this field. The TraceDecision type could be renamed to
+	// keptDecision
+	Kept            bool
+	Summarize       bool // If true, summarize the trace into the summary dataset, whether sent or not
+	Rate            uint
+	SamplerKey      string
+	SamplerSelector string
+	SendReason      string
+	HasRoot         bool
+	Reason          string
+	Count           uint32
+	EventCount      uint32
+	LinkCount       uint32
+
+	keptReasonIdx uint
+}
+
+func (td *TraceDecision) DescendantCount() uint32 {
+	return td.Count + td.EventCount + td.LinkCount
+}
+
+func (td *TraceDecision) SpanCount() uint32 {
+	return td.Count
+}
+
+func (td *TraceDecision) SpanEventCount() uint32 {
+	return td.EventCount
+}
+
+func (td *TraceDecision) SpanLinkCount() uint32 {
+	return td.LinkCount
+}
+
+func (td *TraceDecision) SampleRate() uint {
+	return td.Rate
+}
+
+func (td *TraceDecision) ID() string {
+	return td.TraceID
+}
+
+func (td *TraceDecision) KeptReason() uint {
+	return td.keptReasonIdx
+}
+
+func (td *TraceDecision) SetKeptReason(reasonIdx uint) {
+	td.keptReasonIdx = reasonIdx
 }

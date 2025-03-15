@@ -19,7 +19,8 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	sampler := &WindowedThroughputSampler{
 		Config: &config.WindowedThroughputSamplerConfig{
-			FieldList: []string{"http.status_code", "request.path", "app.team.id", "important_field"},
+			FieldList:     []string{"http.status_code", "request.path", "app.team.id", "important_field"},
+			SummarizeMode: "none",
 		},
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics,
@@ -39,7 +40,7 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, _, reason, key := sampler.GetSampleRate(trace)
+	rate, _, summarize, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 
@@ -47,5 +48,5 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 	assert.Equal(t, uint(1), rate, "sample rate should be 1")
 	assert.Equal(t, "windowedthroughput", reason)
 	assert.Equal(t, "4•,200•,true•,/{slug}/fun•,", key)
-
+	assert.False(t, summarize, "summarize should be false")
 }
