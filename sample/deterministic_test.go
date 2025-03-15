@@ -55,7 +55,7 @@ func TestGetSampleRate(t *testing.T) {
 		assert.Equal(t, tst.sampled, keep, "%d: trace ID %s should be %v", i, tst.trace.TraceID, tst.sampled)
 		assert.Equal(t, "deterministic/chance", reason)
 		assert.Equal(t, "", key)
-		assert.Equal(t, tst.sampled, summarize, "%d: trace ID %s should be %v", i, tst.trace.TraceID, tst.sampled)
+		assert.False(t, summarize, "summarize should be false")
 	}
 
 }
