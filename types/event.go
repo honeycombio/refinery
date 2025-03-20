@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,7 +53,6 @@ type Trace struct {
 	Sent             bool
 	keptReason       uint
 	DeciderShardAddr string
-	SummaryDataset   string
 
 	SendBy  time.Time
 	Retried bool
@@ -327,7 +327,7 @@ func IsLegacyAPIKey(apiKey string) bool {
 // SummarizeTrace flattens the trace into a single wide event based on the root span.
 // The metrics should ideally be collected during the initial sampling pass to avoid
 // an extra iteration.
-func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDecision) (summary *Span, err error) {
+func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecision, summaryFields []string) (summary *Span, err error) {
 	if len(t.spans) == 0 || t.RootSpan == nil {
 		return nil, errors.New("trace has no spans")
 	}
@@ -340,25 +340,25 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 				Context:     t.RootSpan.Context,
 				APIHost:     t.RootSpan.APIHost,
 				APIKey:      t.RootSpan.APIKey,
-				Dataset:     t.SummaryDataset,
+				Dataset:     "", // it gets set when it's exported.
 				Environment: t.RootSpan.Environment,
 				SampleRate:  t.RootSpan.SampleRate,
 				Timestamp:   t.RootSpan.Timestamp,
-				Data:        make(map[string]interface{}, len(t.RootSpan.Data)),
+				Data:        make(map[string]interface{}, len(t.RootSpan.Data)+len(summaryFields)),
 			},
 			TraceID:     t.RootSpan.TraceID,
 			DataSize:    t.RootSpan.DataSize,
 			ArrivalTime: t.RootSpan.ArrivalTime,
 			IsRoot:      t.RootSpan.IsRoot,
 		}
-		// Deep copy the data map
+		// Deep copy only the specified fields from the data map
 		for k, v := range t.RootSpan.Data {
 			summary.Data[k] = v
 		}
 		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
 		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
 		summary.Data["meta.root.name"] = summary.Data["name"]
-		summary.Data["name"] = "Summary root span"
+		summary.Data["name"] = "Trace Summary"
 	} else {
 		// Create a deep copy of the first span
 		firstSpan := t.spans[0]
@@ -367,11 +367,11 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 				Context:     firstSpan.Context,
 				APIHost:     firstSpan.APIHost,
 				APIKey:      firstSpan.APIKey,
-				Dataset:     t.SummaryDataset,
+				Dataset:     "", // it gets set when it's exported.
 				Environment: firstSpan.Environment,
 				SampleRate:  firstSpan.SampleRate,
 				Timestamp:   firstSpan.Timestamp,
-				Data:        make(map[string]interface{}, len(firstSpan.Data)),
+				Data:        make(map[string]interface{}, 3+len(summaryFields)),
 			},
 			TraceID:     firstSpan.TraceID,
 			DataSize:    firstSpan.DataSize,
@@ -382,7 +382,7 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 		for k, v := range firstSpan.Data {
 			summary.Data[k] = v
 		}
-		summary.Data["name"] = "Summary span, no root"
+		summary.Data["name"] = "Partial Trace Summary"
 		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
 		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s"
 	}
@@ -395,6 +395,11 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 	var errorCount int64
 	var highLatencyCount int64
 	services := make(map[string]bool)
+	// Create maps to store unique values for each summary field
+	summaryValues := make(map[string]map[string]bool)
+	for _, field := range summaryFields {
+		summaryValues[field] = make(map[string]bool)
+	}
 
 	for _, sp := range t.spans {
 		if sp == t.RootSpan {
@@ -407,13 +412,12 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 
 		if sp.Data != nil {
 			if duration, ok := sp.Data["duration_ms"].(float64); ok {
-
 				endTime := sp.Timestamp.Add(time.Duration(duration) * time.Millisecond)
 				if endTime.After(latestEnd) {
 					latestEnd = endTime
 				}
 
-				if duration >= float64(slowSpanDuration.Milliseconds()) {
+				if duration >= slowSpanDurationMs {
 					highLatencyCount++
 				}
 			}
@@ -425,23 +429,62 @@ func (t *Trace) SummarizeTrace(slowSpanDuration time.Duration, decision TraceDec
 			if service, ok := sp.Data["service.name"].(string); ok {
 				services[service] = true
 			}
+
+			// Collect values for each summary field
+			for field, values := range summaryValues {
+				if val, ok := sp.Data[field]; ok {
+					if strVal, ok := val.(string); ok { // Will this stringify a 500 response code or just skip it?
+						values[strVal] = true
+					}
+				}
+			}
 		}
 	}
 	totalDuration := latestEnd.Sub(earliestStart).Milliseconds()
 	if totalDuration > 0 {
 		summary.Data["duration_ms"] = totalDuration
-		summary.Data["meta.summarized.error_count"] = errorCount
-		summary.Data["meta.summarized.high_latency_threshold_ms"] = slowSpanDuration
-		summary.Data["meta.summarized.high_latency_span_count"] = highLatencyCount
+		summary.Data["summarized.error_count"] = errorCount
+		summary.Data["summarized.high_latency_threshold_ms"] = slowSpanDurationMs
+		summary.Data["summarized.high_latency_span_count"] = highLatencyCount
 	}
 
-	serviceList := make([]string, 0, len(services))
-	for service := range services {
-		serviceList = append(serviceList, service)
+	summary.Data["summarized.services"] = stringifyMapKeys(services, 200)
+
+	// Add summarized values for each summary field
+	for field, values := range summaryValues {
+		if len(values) > 0 {
+			summary.Data["summarized."+field] = stringifyMapKeys(values, 200)
+		}
 	}
-	summary.Data["meta.summarized.services"] = strings.Join(serviceList, ",")
 	// send the summary event back to the collect function so it can be sent.
 	return summary, nil
+}
+
+func stringifyMapKeys(incomingMap map[string]bool, maxStringLen int) string {
+	var b strings.Builder
+	b.Grow(maxStringLen + 3) // Pre-allocate buffer to avoid resizing
+
+	i := 0
+	for service, _ := range incomingMap {
+		if i > 0 {
+			if b.Len()+1 >= maxStringLen {
+				break
+			}
+			b.WriteByte(',')
+		}
+		i += 1
+
+		remaining := maxStringLen - b.Len()
+		if len(service) > remaining {
+			b.WriteString(service[:remaining])
+			break
+		}
+		b.WriteString(service)
+	}
+	if i < len(incomingMap) {
+		b.WriteString(" (" + strconv.Itoa(len(incomingMap)-i) + " more)")
+	}
+	return b.String()
 }
 
 type TraceDecision struct {
