@@ -69,6 +69,12 @@ func getByteSize(val any) int {
 			total += len(str)
 		}
 		return total
+	case []any:
+		total := 0
+		for _, v := range value {
+			total += getByteSize(v)
+		}
+		return total
 	case map[string]any:
 		total := 0
 		for k, v := range value {

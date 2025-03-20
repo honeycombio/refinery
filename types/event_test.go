@@ -136,6 +136,36 @@ func TestSpan_GetDataSizeSliceOfStrings(t *testing.T) {
 	}
 }
 
+func TestSpan_GetDataSizeSlizeOfAny(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 0},
+		{"small", 10, 80},
+		{"large", 100, 800},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: make(map[string]any),
+				},
+			}
+			data := make([]any, tt.num)
+			for i := range tt.num {
+				data[i] = i
+			}
+			sp.Data["data"] = data
+			if got := sp.GetDataSize(); got != tt.want {
+				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSpan_GetDataSizeMap(t *testing.T) {
 	tests := []struct {
 		name string
