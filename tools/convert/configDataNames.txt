@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-03-14 at 00:54:47 UTC.
+# Automatically generated on 2025-03-20 at 17:43:40 UTC.
 
 General:
   - ConfigurationVersion
@@ -57,6 +57,8 @@ Traces:
   - MaxExpiredTraces
 
   - SummarySpanDataset
+
+  - SummaryFieldList
 
 
 Debugging:
