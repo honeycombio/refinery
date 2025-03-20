@@ -418,8 +418,16 @@ Traces:
     ##
     ## default: Summary Spans
     ## Eligible for live reload.
-    SummarySpanDataset: "Summary Spans"
+    SummarySpanDataset: "Trace Summaries"
 
+    ## SummaryFieldList is a list of fields to include in the summary span.
+    ##
+    ## The summarizing function will go through all the spans to pull in the values
+    ## of this field and concatenate them into a single comma-separated string.
+    ##
+    ## default: []
+    SummaryFieldList:
+      - "service.name"
 ###############
 ## Debugging ##
 ###############

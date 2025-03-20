@@ -419,6 +419,18 @@ Traces:
     ## Eligible for live reload.
     {{ nonDefaultOnly .Data "SummarySpanDataset" "SummarySpanDataset" "Summary Spans" }}
 
+    ## SummaryFieldList is a list of fields to include in the summary span.
+    ##
+    ## The summarizing function will go through all the spans to pull in the
+    ## values of this field and concatenate them into a single
+    ## comma-separated string. There is a limit of 200 characters on the
+    ## length of this string. Suggested values here would be service.name,
+    ## http.url, http.response.status_code, k8s.node.name, and
+    ## exception.type.
+    ##
+    ## Eligible for live reload.
+    {{ renderStringarray .Data "SummaryFieldList" "SummaryFieldList" "" }}
+
 ###############
 ## Debugging ##
 ###############

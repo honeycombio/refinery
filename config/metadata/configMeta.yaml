@@ -470,6 +470,22 @@ groups:
           since traces tend to cross service boundaries. The summary spans will be
           sent to the same environemnt as the trace was going to, since it uses the
           same API key.
+      
+      - name: SummaryFieldList
+        type: stringarray
+        valuetype: stringarray
+        example: "service.name"
+        validations:
+          - type: elementType
+            arg: string
+        reload: true
+        summary: is a list of fields to include in the summary span.
+        description: >
+          The summarizing function will go through all the spans to pull in the values
+          of this field and concatenate them into a single comma-separated string.
+          There is a limit of 200 characters on the length of this string.
+          Suggested values here would be service.name, http.url, http.response.status_code,
+          k8s.node.name, and exception.type.
 
   - name: Debugging
     title: "Debugging"

@@ -1037,16 +1037,9 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 	logFields := logrus.Fields{
 		"trace_id": td.TraceID,
 	}
-	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
-	if !td.Kept && !i.Config.GetIsDryRun() {
-		i.Metrics.Increment("trace_send_dropped")
-		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
-		return
-	}
 
 	// If summarization is requested, summarize the trace before sending
 	if i.summarySpanDataset != "" && td.Summarize {
-		ctx := context.Background()
 		_, span := otelutil.StartSpan(ctx, i.Tracer, "summarizeTraceSpans")
 
 		summary, err := trace.SummarizeTrace(1000, *td, i.summaryFieldList)
@@ -1061,6 +1054,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 		summary.Data["meta.span_link_count"] = int64(td.LinkCount)
 		summary.Data["meta.span_count"] = int64(td.Count)
 		summary.Data["meta.event_count"] = int64(td.DescendantCount())
+		summary.Data["meta.sampler.keep"] = td.Kept
 
 		summary.Dataset = i.Config.GetSummarySpanDataset()
 		summary.APIKey = trace.APIKey
@@ -1072,6 +1066,13 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 			attribute.Int64("span_count", int64(td.Count)),
 		)
 		span.End()
+	}
+
+	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
+	if !td.Kept && !i.Config.GetIsDryRun() {
+		i.Metrics.Increment("trace_send_dropped")
+		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
+		return
 	}
 
 	if td.HasRoot {

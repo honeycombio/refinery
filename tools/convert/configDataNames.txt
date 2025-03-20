@@ -66,6 +66,8 @@ Traces:
 
   - SummarySpanDataset
 
+  - SummaryFieldList
+
 
 Debugging:
   - DebugServiceAddr

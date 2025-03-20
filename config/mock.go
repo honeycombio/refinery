@@ -64,6 +64,7 @@ type MockConfig struct {
 	CfgHash                          string
 	RulesHash                        string
 	SummarySpanDataset               string
+	SummaryFieldList                 []string
 	Mux                              sync.RWMutex
 }
 

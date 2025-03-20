@@ -372,7 +372,7 @@ func IsLegacyAPIKey(apiKey string) bool {
 // The metrics should ideally be collected during the initial sampling pass to avoid
 // an extra iteration.
 func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecision, summaryFields []string) (summary *Span, err error) {
-	if len(t.spans) == 0 || t.RootSpan == nil {
+	if len(t.spans) == 0 {
 		return nil, errors.New("trace has no spans")
 	}
 
@@ -386,7 +386,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 				APIKey:      t.RootSpan.APIKey,
 				Dataset:     "", // it gets set when it's exported.
 				Environment: t.RootSpan.Environment,
-				SampleRate:  t.RootSpan.SampleRate,
+				SampleRate:  1,
 				Timestamp:   t.RootSpan.Timestamp,
 				Data:        make(map[string]interface{}, len(t.RootSpan.Data)+len(summaryFields)),
 			},
@@ -399,9 +399,13 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		for k, v := range t.RootSpan.Data {
 			summary.Data[k] = v
 		}
-		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
-		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
-		summary.Data["meta.root.name"] = summary.Data["name"]
+		if summary.Data["trace.span_id"] != nil {
+			summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+			summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
+		}
+		if summary.Data["name"] != nil {
+			summary.Data["meta.root.name"] = summary.Data["name"]
+		}
 		summary.Data["name"] = "Trace Summary"
 	} else {
 		// Create a deep copy of the first span
@@ -413,7 +417,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 				APIKey:      firstSpan.APIKey,
 				Dataset:     "", // it gets set when it's exported.
 				Environment: firstSpan.Environment,
-				SampleRate:  firstSpan.SampleRate,
+				SampleRate:  1,
 				Timestamp:   firstSpan.Timestamp,
 				Data:        make(map[string]interface{}, 3+len(summaryFields)),
 			},
@@ -426,9 +430,11 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		for k, v := range firstSpan.Data {
 			summary.Data[k] = v
 		}
+		if summary.Data["trace.span_id"] != nil {
+			summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+			summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
+		}
 		summary.Data["name"] = "Partial Trace Summary"
-		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
-		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s"
 	}
 	summary.Data["meta.summarized"] = true
 	summary.Data["meta.summarized.span_count"] = len(t.spans)
@@ -438,7 +444,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 	var latestEnd time.Time     // can be way in the past
 	var errorCount int64
 	var highLatencyCount int64
-	services := make(map[string]bool)
+
 	// Create maps to store unique values for each summary field
 	summaryValues := make(map[string]map[string]bool)
 	for _, field := range summaryFields {
@@ -469,11 +475,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 			if errMsg, ok := sp.Data["error"]; ok && errMsg != nil {
 				errorCount++
 			}
-
-			if service, ok := sp.Data["service.name"].(string); ok {
-				services[service] = true
-			}
-
 			// Collect values for each summary field
 			for field, values := range summaryValues {
 				if val, ok := sp.Data[field]; ok {
@@ -491,9 +492,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		summary.Data["summarized.high_latency_threshold_ms"] = slowSpanDurationMs
 		summary.Data["summarized.high_latency_span_count"] = highLatencyCount
 	}
-
-	summary.Data["summarized.services"] = stringifyMapKeys(services, 200)
-
 	// Add summarized values for each summary field
 	for field, values := range summaryValues {
 		if len(values) > 0 {
