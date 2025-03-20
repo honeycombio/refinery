@@ -35,7 +35,7 @@ type Event struct {
 
 // GetDataSize computes the size of the Data element of the Event.
 func (e *Event) GetDataSize() int {
-	total := 0
+	total := len(e.Data) * 8
 	for _, v := range e.Data {
 		total += getByteSize(v)
 	}
