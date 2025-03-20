@@ -33,6 +33,53 @@ type Event struct {
 	Data        map[string]interface{}
 }
 
+// GetDataSize computes the size of the Data element of the Event.
+func (e *Event) GetDataSize() int {
+	total := 0
+	for _, v := range e.Data {
+		total += getByteSize(v)
+	}
+	return total
+}
+
+// getByteSize returns the size of the given value in bytes.
+// This is a rough estimate, but it's good enough for our purposes.
+// Maps and slices are the most complex, so we'll just add up the sizes of their entries.
+func getByteSize(val any) int {
+	switch value := val.(type) {
+	case bool:
+		return 1
+	case float64, int64, int:
+		return 8
+	case string:
+		return len(value)
+	case []byte: // also catch []uint8
+		return len(value)
+	case []bool:
+		return len(value)
+	case []float64:
+		return len(value) * 8
+	case []int64:
+		return len(value) * 8
+	case []int:
+		return len(value) * 8
+	case []string:
+		total := 0
+		for _, str := range value {
+			total += len(str)
+		}
+		return total
+	case map[string]any:
+		total := 0
+		for k, v := range value {
+			total += len(k) + getByteSize(v)
+		}
+		return total
+	default:
+		return 8 // catchall
+	}
+}
+
 // Trace isn't something that shows up on the wire; it gets created within
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
@@ -244,8 +291,6 @@ func (sp *Span) ExtractDecisionContext() *Event {
 // Note that it's not the full size of the span, but we're mainly using this for
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
-	total := 0
-
 	if sp.IsDecisionSpan() {
 		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
 			switch value := v.(type) {
@@ -257,23 +302,8 @@ func (sp *Span) GetDataSize() int {
 		}
 		return 0
 	}
-	// the data types we should be getting from JSON are:
-	// float64, int64, bool, string, []byte
-	for _, v := range sp.Data {
-		switch value := v.(type) {
-		case bool:
-			total += 1
-		case float64, int64, int:
-			total += 8
-		case string:
-			total += len(value)
-		case []byte: // also catch []uint8
-			total += len(value)
-		default:
-			total += 8 // catchall
-		}
-	}
-	return total
+
+	return sp.Event.GetDataSize()
 }
 
 // SpanAnnotationType is an enum for the type of annotation this span is.

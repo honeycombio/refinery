@@ -44,6 +44,128 @@ func TestSpan_GetDataSize(t *testing.T) {
 	}
 }
 
+func TestSpan_GetDataSizeSliceOfInts(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 0},
+		{"small", 10, 80},
+		{"large", 100, 800},
+	}
+
+	t.Run("[]ints", func(t *testing.T) {
+		for _, tt := range tests {
+			t.Run(tt.name+" []int", func(t *testing.T) {
+				sp := &Span{
+					Event: Event{
+						Data: make(map[string]any),
+					},
+				}
+				data := make([]int, tt.num)
+				for i := range tt.num {
+					data[i] = i
+				}
+				sp.Data["data"] = data
+				if got := sp.GetDataSize(); got != tt.want {
+					t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+				}
+			})
+		}
+	})
+}
+
+func TestSpan_GetDataSizeSliceOfFloats(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 0},
+		{"small", 10, 80},
+		{"large", 100, 800},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: make(map[string]any),
+				},
+			}
+			data := make([]float64, tt.num)
+			for i := range tt.num {
+				data[i] = float64(i)
+			}
+			sp.Data["data"] = data
+			if got := sp.GetDataSize(); got != tt.want {
+				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSpan_GetDataSizeSliceOfStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 0},
+		{"small", 10, 45},
+		{"large", 100, 4950},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: make(map[string]any),
+				},
+			}
+			data := make([]string, tt.num)
+			for i := range tt.num {
+				data[i] = strings.Repeat("x", i)
+			}
+			sp.Data["data"] = data
+			if got := sp.GetDataSize(); got != tt.want {
+				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSpan_GetDataSizeMap(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 0},
+		{"small", 10, 90},
+		{"large", 100, 990},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: make(map[string]any),
+				},
+			}
+			data := make(map[string]any)
+			for i := range tt.num {
+				data[strconv.Itoa(i)] = i
+			}
+			sp.Data["data"] = data
+			if got := sp.GetDataSize(); got != tt.want {
+				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSpan_AnnotationType(t *testing.T) {
 	tests := []struct {
 		name string

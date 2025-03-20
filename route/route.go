@@ -128,6 +128,7 @@ func (r *Router) SetVersion(ver string) {
 var routerMetrics = []metrics.Metadata{
 	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
 	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
+	{Name: "_router_event_bytes", Type: metrics.Histogram, Unit: metrics.Bytes, Description: "the number of bytes per event received"},
 	{Name: "_router_span", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans received"},
 	{Name: "_router_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events dropped because the channel was full"},
 	{Name: "_router_nonspan", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of non-span events received"},
@@ -577,6 +578,10 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset).
 		WithString("environment", ev.Environment)
+
+	// record the event bytes size
+	// we do this early so can include all event types (span, event, log, etc)
+	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
 
 	// check if this is a probe from another refinery; if so, we should drop it
 	if ev.Data["meta.refinery.probe"] != nil {
