@@ -1004,7 +1004,6 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 
 	// If summarization is requested, summarize the trace before sending
 	if i.summarySpanDataset != "" && td.Summarize {
-		ctx := context.Background()
 		_, span := otelutil.StartSpan(ctx, i.Tracer, "summarizeTraceSpans")
 
 		summary, err := trace.SummarizeTrace(1000, *td, i.summaryFieldList)
@@ -1019,6 +1018,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *types
 		summary.Data["meta.span_link_count"] = int64(td.LinkCount)
 		summary.Data["meta.span_count"] = int64(td.Count)
 		summary.Data["meta.event_count"] = int64(td.DescendantCount())
+		summary.Data["meta.sampler.keep"] = td.Kept
 
 		summary.Dataset = i.Config.GetSummarySpanDataset()
 		summary.APIKey = trace.APIKey

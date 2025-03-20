@@ -394,7 +394,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 	var latestEnd time.Time     // can be way in the past
 	var errorCount int64
 	var highLatencyCount int64
-	services := make(map[string]bool)
+
 	// Create maps to store unique values for each summary field
 	summaryValues := make(map[string]map[string]bool)
 	for _, field := range summaryFields {
@@ -425,11 +425,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 			if errMsg, ok := sp.Data["error"]; ok && errMsg != nil {
 				errorCount++
 			}
-
-			if service, ok := sp.Data["service.name"].(string); ok {
-				services[service] = true
-			}
-
 			// Collect values for each summary field
 			for field, values := range summaryValues {
 				if val, ok := sp.Data[field]; ok {
@@ -447,9 +442,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		summary.Data["summarized.high_latency_threshold_ms"] = slowSpanDurationMs
 		summary.Data["summarized.high_latency_span_count"] = highLatencyCount
 	}
-
-	summary.Data["summarized.services"] = stringifyMapKeys(services, 200)
-
 	// Add summarized values for each summary field
 	for field, values := range summaryValues {
 		if len(values) > 0 {
