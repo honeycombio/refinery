@@ -55,20 +55,6 @@ func getByteSize(val any) int {
 		return len(value)
 	case []byte: // also catch []uint8
 		return len(value)
-	case []bool:
-		return len(value)
-	case []float64:
-		return len(value) * 8
-	case []int64:
-		return len(value) * 8
-	case []int:
-		return len(value) * 8
-	case []string:
-		total := 0
-		for _, str := range value {
-			total += len(str)
-		}
-		return total
 	case []any:
 		total := 0
 		for _, v := range value {
