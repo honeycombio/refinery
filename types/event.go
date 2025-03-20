@@ -31,15 +31,17 @@ type Event struct {
 	SampleRate  uint
 	Timestamp   time.Time
 	Data        map[string]interface{}
+	dataSize    int
 }
 
 // GetDataSize computes the size of the Data element of the Event.
 func (e *Event) GetDataSize() int {
-	total := 0
-	for k, v := range e.Data {
-		total += len(k) + getByteSize(v)
+	if e.dataSize == 0 {
+		for k, v := range e.Data {
+			e.dataSize += len(k) + getByteSize(v)
+		}
 	}
-	return total
+	return e.dataSize
 }
 
 // getByteSize returns the size of the given value in bytes.
