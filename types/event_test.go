@@ -16,12 +16,12 @@ func TestSpan_GetDataSize(t *testing.T) {
 		numStrings int
 		want       int
 	}{
-		{"all ints small", 10, 0, 160},
-		{"all ints large", 100, 0, 1600},
-		{"all strings small", 0, 10, 125},
-		{"all strings large", 0, 100, 5750},
-		{"mixed small", 10, 10, 285},
-		{"mixed large", 100, 100, 7350},
+		{"all ints small", 10, 0, 260},
+		{"all ints large", 100, 0, 2690},
+		{"all strings small", 0, 10, 255},
+		{"all strings large", 0, 100, 7140},
+		{"mixed small", 10, 10, 425},
+		{"mixed large", 100, 100, 8930},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -50,9 +50,9 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 		num  int
 		want int
 	}{
-		{"empty", 0, 0},
-		{"small", 10, 88},
-		{"large", 100, 808},
+		{"empty", 0, 4},
+		{"small", 10, 84},
+		{"large", 100, 804},
 	}
 
 	for _, tt := range tests {
@@ -66,9 +66,7 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 			for i := range tt.num {
 				data[i] = i
 			}
-			if len(data) > 0 {
-				sp.Data["data"] = data
-			}
+			sp.Data["data"] = data
 			if got := sp.GetDataSize(); got != tt.want {
 				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
 			}
@@ -82,9 +80,9 @@ func TestSpan_GetDataSizeMap(t *testing.T) {
 		num  int
 		want int
 	}{
-		{"empty", 0, 8},
-		{"small", 10, 98},
-		{"large", 100, 998},
+		{"empty", 0, 4},
+		{"small", 10, 94},
+		{"large", 100, 994},
 	}
 
 	for _, tt := range tests {
@@ -162,7 +160,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
 		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
-		"meta.refinery.span_data_size": 30,
+		"meta.refinery.span_data_size": 38,
 	}, got.Data)
 }
 
