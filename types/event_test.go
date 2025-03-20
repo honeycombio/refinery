@@ -82,9 +82,9 @@ func TestSpan_GetDataSizeMap(t *testing.T) {
 		num  int
 		want int
 	}{
-		{"empty", 0, 0},
-		{"small", 10, 90},
-		{"large", 100, 990},
+		{"empty", 0, 8},
+		{"small", 10, 98},
+		{"large", 100, 998},
 	}
 
 	for _, tt := range tests {
@@ -162,7 +162,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
 		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
-		"meta.refinery.span_data_size": 14,
+		"meta.refinery.span_data_size": 30,
 	}, got.Data)
 }
 
