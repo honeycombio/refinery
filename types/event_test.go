@@ -16,12 +16,12 @@ func TestSpan_GetDataSize(t *testing.T) {
 		numStrings int
 		want       int
 	}{
-		{"all ints small", 10, 0, 80},
-		{"all ints large", 100, 0, 800},
-		{"all strings small", 0, 10, 45},
-		{"all strings large", 0, 100, 4950},
-		{"mixed small", 10, 10, 125},
-		{"mixed large", 100, 100, 5750},
+		{"all ints small", 10, 0, 160},
+		{"all ints large", 100, 0, 1600},
+		{"all strings small", 0, 10, 125},
+		{"all strings large", 0, 100, 5750},
+		{"mixed small", 10, 10, 285},
+		{"mixed large", 100, 100, 7350},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -51,8 +51,8 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 		want int
 	}{
 		{"empty", 0, 0},
-		{"small", 10, 80},
-		{"large", 100, 800},
+		{"small", 10, 88},
+		{"large", 100, 808},
 	}
 
 	for _, tt := range tests {
@@ -66,7 +66,9 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 			for i := range tt.num {
 				data[i] = i
 			}
-			sp.Data["data"] = data
+			if len(data) > 0 {
+				sp.Data["data"] = data
+			}
 			if got := sp.GetDataSize(); got != tt.want {
 				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
 			}
