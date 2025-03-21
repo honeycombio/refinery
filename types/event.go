@@ -355,9 +355,13 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		for k, v := range t.RootSpan.Data {
 			summary.Data[k] = v
 		}
-		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
-		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
-		summary.Data["meta.root.name"] = summary.Data["name"]
+		if summary.Data["trace.span_id"] != nil {
+			summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+			summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
+		}
+		if summary.Data["name"] != nil {
+			summary.Data["meta.root.name"] = summary.Data["name"]
+		}
 		summary.Data["name"] = "Trace Summary"
 	} else {
 		// Create a deep copy of the first span
@@ -382,9 +386,11 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		for k, v := range firstSpan.Data {
 			summary.Data[k] = v
 		}
+		if summary.Data["trace.span_id"] != nil {
+			summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
+			summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s" // we need a new id in case the spans are kept.
+		}
 		summary.Data["name"] = "Partial Trace Summary"
-		summary.Data["trace.parent_id"] = summary.Data["trace.span_id"]
-		summary.Data["trace.span_id"] = summary.Data["trace.span_id"].(string) + "-s"
 	}
 	summary.Data["meta.summarized"] = true
 	summary.Data["meta.summarized.span_count"] = len(t.spans)
