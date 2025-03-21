@@ -408,10 +408,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 	}
 
 	for _, sp := range t.spans {
-		if sp == t.RootSpan {
-			continue
-		}
-
 		if sp.Timestamp.Before(earliestStart) {
 			earliestStart = sp.Timestamp
 		}
