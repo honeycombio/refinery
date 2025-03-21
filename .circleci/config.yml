@@ -64,7 +64,7 @@ commands:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.24
       - image: redis:6.2
     steps:
       - checkout
@@ -91,7 +91,7 @@ jobs:
 
   build_binaries:
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.24
     steps:
       - checkout
       - go-build:
@@ -182,7 +182,7 @@ jobs:
 
   build_docker:
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.24
     steps:
       - checkout
       - setup_googleko
@@ -211,7 +211,7 @@ jobs:
 
   publish_docker_to_ecr:
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.24
     steps:
       - checkout
       - setup_remote_docker
@@ -239,7 +239,7 @@ jobs:
 
   publish_docker_to_dockerhub:
     docker:
-      - image: cimg/go:1.21
+      - image: cimg/go:1.24
     steps:
       - checkout
       - setup_remote_docker
