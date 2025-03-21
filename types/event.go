@@ -377,7 +377,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 	}
 
 	// Start with root span as our base
-	if t.RootSpan.Data != nil {
+	if t.RootSpan != nil {
 		// Create a deep copy of the root span
 		summary = &Span{
 			Event: Event{
