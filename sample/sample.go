@@ -14,7 +14,7 @@ import (
 )
 
 type Sampler interface {
-	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string)
+	GetSampleRate(trace *types.Trace) (rate uint, keep bool, summarize bool, reason string, key string)
 	GetKeyFields() []string
 	Start() error
 }
@@ -111,6 +111,7 @@ var samplerMetrics = []metrics.Metadata{
 	{Name: "_num_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by configured sampler"},
 	{Name: "_num_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces kept by configured sampler"},
 	{Name: "_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Sample rate for traces"},
+	{Name: "_num_summarized", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces summarized by the configured sampler"},
 }
 
 func getMetricType(name string) metrics.MetricType {
@@ -143,7 +144,7 @@ func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) 
 
 }
 
-func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint) {
+func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, summarize bool) {
 	for name, val := range sampler.GetMetrics(d.prefix + "_") {
 		switch getMetricType(name) {
 		case metrics.Counter:
@@ -159,6 +160,9 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 		d.met.Increment(d.prefix + "_num_kept")
 	} else {
 		d.met.Increment(d.prefix + "_num_dropped")
+	}
+	if summarize {
+		d.met.Increment(d.prefix + "_num_summarized")
 	}
 	d.met.Histogram(d.prefix+"_sample_rate", float64(rate))
 }

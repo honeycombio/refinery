@@ -75,7 +75,7 @@ func (d *WindowedThroughputSampler) SetClusterSize(size int) {
 	}
 }
 
-func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, summarize bool, reason string, key string) {
 	key, n := d.key.build(trace)
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
@@ -86,6 +86,18 @@ func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
+
+	// Handle summarization based on configuration
+	summarize = false
+	switch d.Config.SummarizeMode {
+	case "all":
+		summarize = true
+	case "dropped":
+		summarize = !shouldKeep
+	case "kept":
+		summarize = shouldKeep
+	}
+
 	d.Logger.Debug().WithFields(map[string]interface{}{
 		"sample_key":  key,
 		"sample_rate": rate,
@@ -93,10 +105,11 @@ func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
-	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, summarize)
 
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, summarize, d.prefix, key
 }
+
 func (d *WindowedThroughputSampler) GetKeyFields() []string {
 	return d.keyFields
 }

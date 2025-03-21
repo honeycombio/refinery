@@ -6,12 +6,13 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/honeycombio/refinery/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestDropDecisionRoundTrip(t *testing.T) {
 	// Test data for dropped decisions covering all fields
-	tds := []TraceDecision{
+	tds := []types.TraceDecision{
 		{
 			TraceID: "trace1",
 		},
@@ -47,7 +48,7 @@ func TestDropDecisionRoundTrip(t *testing.T) {
 
 func TestKeptDecisionRoundTrip(t *testing.T) {
 	// Test data for kept decisions covering all fields
-	tds := []TraceDecision{
+	tds := []types.TraceDecision{
 		{
 			TraceID:         "trace1",
 			Kept:            true,
@@ -114,7 +115,7 @@ func TestKeptDecisionRoundTrip(t *testing.T) {
 }
 
 // used in test only
-func newKeptDecisionMessageJSON(tds []TraceDecision) (string, error) {
+func newKeptDecisionMessageJSON(tds []types.TraceDecision) (string, error) {
 	if len(tds) == 0 {
 		return "", fmt.Errorf("no kept trace decisions provided")
 	}
@@ -216,7 +217,7 @@ func BenchmarkCompressionSizes(b *testing.B) {
 	})
 }
 
-func generateRandomTraceDecision() TraceDecision {
+func generateRandomTraceDecision() types.TraceDecision {
 	traceID := fmt.Sprintf("trace-%d", rand.Int63())
 
 	rate := uint(rand.Intn(100))
@@ -228,7 +229,7 @@ func generateRandomTraceDecision() TraceDecision {
 	sendReason := sendReasons[rand.Intn(len(sendReasons))]
 	reason := reasons[rand.Intn(len(reasons))]
 
-	return TraceDecision{
+	return types.TraceDecision{
 		TraceID:         traceID,
 		Kept:            true,
 		Rate:            rate,
@@ -244,8 +245,8 @@ func generateRandomTraceDecision() TraceDecision {
 }
 
 // GenerateRandomDecisions generates multiple TraceDecision
-func generateRandomDecisions(num int) []TraceDecision {
-	decisions := make([]TraceDecision, num)
+func generateRandomDecisions(num int) []types.TraceDecision {
+	decisions := make([]types.TraceDecision, num)
 	for i := 0; i < num; i++ {
 		decisions[i] = generateRandomTraceDecision()
 	}
@@ -253,7 +254,7 @@ func generateRandomDecisions(num int) []TraceDecision {
 }
 
 // calculate the size of the original JSON encoding
-func jsonEncodeSize(tds []TraceDecision) (int, error) {
+func jsonEncodeSize(tds []types.TraceDecision) (int, error) {
 	data, err := json.Marshal(tds)
 	if err != nil {
 		return 0, err
@@ -262,7 +263,7 @@ func jsonEncodeSize(tds []TraceDecision) (int, error) {
 }
 
 // calculate the size of the Snappy compressed and gob encoding
-func snappyCompressSize(tds []TraceDecision) (int, error) {
+func snappyCompressSize(tds []types.TraceDecision) (int, error) {
 	compressed, err := compress(tds)
 	if err != nil {
 		return 0, err

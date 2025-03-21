@@ -156,7 +156,8 @@ type GetSamplingFielder interface {
 var _ GetSamplingFielder = (*DeterministicSamplerConfig)(nil)
 
 type DeterministicSamplerConfig struct {
-	SampleRate int `json:"samplerate" yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
+	SampleRate    int    `json:"samplerate" yaml:"SampleRate,omitempty" default:"1" validate:"required,gte=1"`
+	SummarizeMode string `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
 }
 
 func (d *DeterministicSamplerConfig) GetSamplingFields() []string {
@@ -167,6 +168,7 @@ var _ GetSamplingFielder = (*DynamicSamplerConfig)(nil)
 
 type DynamicSamplerConfig struct {
 	SampleRate     int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
+	SummarizeMode  string   `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
 	ClearFrequency Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
 	FieldList      []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
 	MaxKeys        int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
@@ -181,6 +183,7 @@ var _ GetSamplingFielder = (*EMADynamicSamplerConfig)(nil)
 
 type EMADynamicSamplerConfig struct {
 	GoalSampleRate      int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
+	SummarizeMode       string   `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
 	AdjustmentInterval  Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
 	Weight              float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
 	AgeOutValue         float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
@@ -199,6 +202,7 @@ var _ GetSamplingFielder = (*EMAThroughputSamplerConfig)(nil)
 
 type EMAThroughputSamplerConfig struct {
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	SummarizeMode        string   `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	InitialSampleRate    int      `json:"initialsamplerate" yaml:"InitialSampleRate,omitempty"`
 	AdjustmentInterval   Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
@@ -221,6 +225,7 @@ type WindowedThroughputSamplerConfig struct {
 	UpdateFrequency      Duration `json:"updatefrequency" yaml:"UpdateFrequency,omitempty"`
 	LookbackFrequency    Duration `json:"lookbackfrequency" yaml:"LookbackFrequency,omitempty"`
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	SummarizeMode        string   `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty"`
 	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
@@ -235,6 +240,7 @@ var _ GetSamplingFielder = (*TotalThroughputSamplerConfig)(nil)
 
 type TotalThroughputSamplerConfig struct {
 	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
+	SummarizeMode        string   `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
@@ -326,12 +332,13 @@ func (r *RulesBasedDownstreamSampler) GetSamplingFields() []string {
 
 type RulesBasedSamplerRule struct {
 	// Conditions has deliberately different names for json and yaml for conversion from old to new format
-	Name       string                        `json:"name" yaml:"Name,omitempty"`
-	SampleRate int                           `json:"samplerate" yaml:"SampleRate,omitempty"`
-	Drop       bool                          `json:"drop" yaml:"Drop,omitempty"`
-	Scope      string                        `json:"scope" yaml:"Scope,omitempty" validate:"oneof=span trace"`
-	Conditions []*RulesBasedSamplerCondition `json:"condition" yaml:"Conditions,omitempty"`
-	Sampler    *RulesBasedDownstreamSampler  `json:"sampler" yaml:"Sampler,omitempty"`
+	Name          string                        `json:"name" yaml:"Name,omitempty"`
+	SampleRate    int                           `json:"samplerate" yaml:"SampleRate,omitempty"`
+	Drop          bool                          `json:"drop" yaml:"Drop,omitempty"`
+	SummarizeMode string                        `json:"summarize_mode" yaml:"SummarizeMode,omitempty" validate:"oneof=none all dropped kept"`
+	Scope         string                        `json:"scope" yaml:"Scope,omitempty" validate:"oneof=span trace"`
+	Conditions    []*RulesBasedSamplerCondition `json:"condition" yaml:"Conditions,omitempty"`
+	Sampler       *RulesBasedDownstreamSampler  `json:"sampler" yaml:"Sampler,omitempty"`
 }
 
 func (r *RulesBasedSamplerRule) String() string {

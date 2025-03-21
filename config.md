@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-02-13 at 16:52:13 UTC.
+It was automatically generated on 2025-03-14 at 00:54:51 UTC.
 
 ## The Config file
 
@@ -352,6 +352,17 @@ This will mean Refinery makes fewer sampling decision calculations each `SendTic
 - Eligible for live reload.
 - Type: `int`
 - Default: `5000`
+
+### `SummarySpanDataset`
+
+SummarySpanDataset is the dataset name for summary spans.
+
+When traces are summarized, the service.name of the spans isn't applicable since traces tend to cross service boundaries.
+The summary spans will be sent to the same environemnt as the trace was going to, since it uses the same API key.
+
+- Eligible for live reload.
+- Type: `string`
+- Default: `Summary Spans`
 
 ## Debugging
 
