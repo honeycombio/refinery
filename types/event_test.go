@@ -16,12 +16,12 @@ func TestSpan_GetDataSize(t *testing.T) {
 		numStrings int
 		want       int
 	}{
-		{"all ints small", 10, 0, 80},
-		{"all ints large", 100, 0, 800},
-		{"all strings small", 0, 10, 45},
-		{"all strings large", 0, 100, 4950},
-		{"mixed small", 10, 10, 125},
-		{"mixed large", 100, 100, 5750},
+		{"all ints small", 10, 0, 260},
+		{"all ints large", 100, 0, 2690},
+		{"all strings small", 0, 10, 255},
+		{"all strings large", 0, 100, 7140},
+		{"mixed small", 10, 10, 425},
+		{"mixed large", 100, 100, 8930},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,6 +37,66 @@ func TestSpan_GetDataSize(t *testing.T) {
 			for i := 0; i < tt.numStrings; i++ {
 				sp.Data[tt.name+"str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 			}
+			if got := sp.GetDataSize(); got != tt.want {
+				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSpan_GetDataSizeSlice(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 4},
+		{"small", 10, 84},
+		{"large", 100, 804},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: make(map[string]any),
+				},
+			}
+			data := make([]any, tt.num)
+			for i := range tt.num {
+				data[i] = i
+			}
+			sp.Data["data"] = data
+			if got := sp.GetDataSize(); got != tt.want {
+				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSpan_GetDataSizeMap(t *testing.T) {
+	tests := []struct {
+		name string
+		num  int
+		want int
+	}{
+		{"empty", 0, 4},
+		{"small", 10, 94},
+		{"large", 100, 994},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &Span{
+				Event: Event{
+					Data: make(map[string]any),
+				},
+			}
+			data := make(map[string]any)
+			for i := range tt.num {
+				data[strconv.Itoa(i)] = i
+			}
+			sp.Data["data"] = data
 			if got := sp.GetDataSize(); got != tt.want {
 				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
 			}
@@ -100,7 +160,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
 		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
-		"meta.refinery.span_data_size": 14,
+		"meta.refinery.span_data_size": 38,
 	}, got.Data)
 }
 

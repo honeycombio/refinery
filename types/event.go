@@ -31,6 +31,47 @@ type Event struct {
 	SampleRate  uint
 	Timestamp   time.Time
 	Data        map[string]interface{}
+	dataSize    int
+}
+
+// GetDataSize computes the size of the Data element of the Event.
+func (e *Event) GetDataSize() int {
+	if e.dataSize == 0 {
+		for k, v := range e.Data {
+			e.dataSize += len(k) + getByteSize(v)
+		}
+	}
+	return e.dataSize
+}
+
+// getByteSize returns the size of the given value in bytes.
+// This is a rough estimate, but it's good enough for our purposes.
+// Maps and slices are the most complex, so we'll just add up the sizes of their entries.
+func getByteSize(val any) int {
+	switch value := val.(type) {
+	case bool:
+		return 1
+	case float64, int64, int:
+		return 8
+	case string:
+		return len(value)
+	case []byte: // also catch []uint8
+		return len(value)
+	case []any:
+		total := 0
+		for _, v := range value {
+			total += getByteSize(v)
+		}
+		return total
+	case map[string]any:
+		total := 0
+		for k, v := range value {
+			total += len(k) + getByteSize(v)
+		}
+		return total
+	default:
+		return 8 // catchall
+	}
 }
 
 // Trace isn't something that shows up on the wire; it gets created within
@@ -81,8 +122,7 @@ func (t *Trace) AddSpan(sp *Span) {
 	// now is when we can calculate the size of it so that our cache size management
 	// code works properly.
 	sp.ArrivalTime = time.Now()
-	sp.DataSize = sp.GetDataSize()
-	t.DataSize += sp.DataSize
+	t.DataSize += sp.GetDataSize()
 	t.spans = append(t.spans, sp)
 	t.totalImpact = 0
 }
@@ -199,7 +239,6 @@ func (t *Trace) IsOrphan(traceTimeout time.Duration, now time.Time) bool {
 type Span struct {
 	Event
 	TraceID     string
-	DataSize    int
 	ArrivalTime time.Time
 	IsRoot      bool
 }
@@ -226,10 +265,7 @@ func (sp *Span) IsDecisionSpan() bool {
 // relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx := sp.Event
-	dataSize := sp.DataSize
-	if dataSize == 0 {
-		dataSize = sp.GetDataSize()
-	}
+	dataSize := sp.Event.GetDataSize()
 	decisionCtx.Data = map[string]interface{}{
 		"trace_id":                     sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
@@ -244,8 +280,6 @@ func (sp *Span) ExtractDecisionContext() *Event {
 // Note that it's not the full size of the span, but we're mainly using this for
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
-	total := 0
-
 	if sp.IsDecisionSpan() {
 		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
 			switch value := v.(type) {
@@ -257,23 +291,8 @@ func (sp *Span) GetDataSize() int {
 		}
 		return 0
 	}
-	// the data types we should be getting from JSON are:
-	// float64, int64, bool, string, []byte
-	for _, v := range sp.Data {
-		switch value := v.(type) {
-		case bool:
-			total += 1
-		case float64, int64, int:
-			total += 8
-		case string:
-			total += len(value)
-		case []byte: // also catch []uint8
-			total += len(value)
-		default:
-			total += 8 // catchall
-		}
-	}
-	return total
+
+	return sp.Event.GetDataSize()
 }
 
 // SpanAnnotationType is an enum for the type of annotation this span is.
@@ -314,7 +333,7 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 	// during the brief period between traceTimeout and the time when the span is sent.
 	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
 	// We can assume DataSize was set when the span was added.
-	return multiplier * sp.DataSize
+	return multiplier * sp.GetDataSize()
 }
 
 func IsLegacyAPIKey(apiKey string) bool {

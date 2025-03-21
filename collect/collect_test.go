@@ -2204,7 +2204,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
 			"meta.refinery.min_span":       true,
 			"meta.refinery.root":           false,
-			"meta.refinery.span_data_size": 30,
+			"meta.refinery.span_data_size": 87,
 			"trace_id":                     traceID1,
 
 			"http.status_code": 200,
@@ -2212,14 +2212,28 @@ func TestCreateDecisionSpan(t *testing.T) {
 		},
 	}
 
-	assert.EqualValues(t, expected, ds)
+	assert.Equal(t, expected.APIHost, ds.APIHost)
+	assert.Equal(t, expected.APIKey, ds.APIKey)
+	assert.Equal(t, expected.Dataset, ds.Dataset)
+	assert.Equal(t, expected.Environment, ds.Environment)
+	assert.Equal(t, expected.SampleRate, ds.SampleRate)
+	assert.Equal(t, expected.Timestamp, ds.Timestamp)
+	assert.Equal(t, expected.Data, ds.Data)
 
 	rootSpan := nonrootSpan
 	rootSpan.IsRoot = true
 
 	ds = coll.createDecisionSpan(rootSpan, trace, peerShard)
 	expected.Data["meta.refinery.root"] = true
-	assert.EqualValues(t, expected, ds)
+
+	assert.Equal(t, expected.APIHost, ds.APIHost)
+	assert.Equal(t, expected.APIKey, ds.APIKey)
+	assert.Equal(t, expected.Dataset, ds.Dataset)
+	assert.Equal(t, expected.Environment, ds.Environment)
+	assert.Equal(t, expected.SampleRate, ds.SampleRate)
+	assert.Equal(t, expected.Timestamp, ds.Timestamp)
+	assert.Equal(t, expected.Data, ds.Data)
+
 }
 
 func TestSendDropDecisions(t *testing.T) {

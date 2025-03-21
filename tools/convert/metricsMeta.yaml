@@ -316,6 +316,10 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: the number of events received
+    - name: _router_event_bytes
+      type: Histogram
+      unit: Bytes
+      description: the number of bytes per event received
     - name: _router_span
       type: Counter
       unit: Dimensionless
