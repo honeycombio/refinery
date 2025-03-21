@@ -264,8 +264,8 @@ func (sp *Span) IsDecisionSpan() bool {
 // ExtractDecisionContext returns a new Event that contains only the data that is
 // relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext() *Event {
-	dataSize := sp.Event.GetDataSize()
 	decisionCtx := sp.Event
+	dataSize := sp.Event.GetDataSize()
 	decisionCtx.Data = map[string]interface{}{
 		"trace_id":                     sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
