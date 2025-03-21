@@ -328,7 +328,7 @@ func IsLegacyAPIKey(apiKey string) bool {
 // The metrics should ideally be collected during the initial sampling pass to avoid
 // an extra iteration.
 func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecision, summaryFields []string) (summary *Span, err error) {
-	if len(t.spans) == 0 || t.RootSpan == nil {
+	if len(t.spans) == 0 {
 		return nil, errors.New("trace has no spans")
 	}
 
@@ -342,7 +342,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 				APIKey:      t.RootSpan.APIKey,
 				Dataset:     "", // it gets set when it's exported.
 				Environment: t.RootSpan.Environment,
-				SampleRate:  t.RootSpan.SampleRate,
+				SampleRate:  1,
 				Timestamp:   t.RootSpan.Timestamp,
 				Data:        make(map[string]interface{}, len(t.RootSpan.Data)+len(summaryFields)),
 			},
@@ -369,7 +369,7 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 				APIKey:      firstSpan.APIKey,
 				Dataset:     "", // it gets set when it's exported.
 				Environment: firstSpan.Environment,
-				SampleRate:  firstSpan.SampleRate,
+				SampleRate:  1,
 				Timestamp:   firstSpan.Timestamp,
 				Data:        make(map[string]interface{}, 3+len(summaryFields)),
 			},
