@@ -110,9 +110,8 @@ clean:
 
 .PHONY: install-tools
 install-tools:
-	@echo "+++ Installing go-licenses"
-	@echo "+++ NOTE: This version requires local go version 1.21.1"
-	go install github.com/google/go-licenses/v2@v2.0.0-alpha.1
+	go get -tool github.com/google/go-licenses/v2@v2.0.0-alpha.1
+	go mod tidy
 
 .PHONY: update-licenses
 update-licenses: install-tools
@@ -120,12 +119,12 @@ update-licenses: install-tools
 	#: We ignore the standard library (go list std) as a workaround for \
 	"https://github.com/google/go-licenses/issues/244." The awk script converts the output \
   of `go list std` (line separated modules) to the input that `--ignore` expects (comma separated modules).
-	go-licenses save --save_path LICENSES --ignore "github.com/honeycombio/refinery" \
+	go tool go-licenses save --save_path LICENSES --ignore "github.com/honeycombio/refinery" \
 		--ignore $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }') ./cmd/refinery;
 
 .PHONY: verify-licenses
 verify-licenses: install-tools
-	go-licenses save --save_path temp --ignore "github.com/honeycombio/refinery" \
+	go tool go-licenses save --save_path temp --ignore "github.com/honeycombio/refinery" \
 		--ignore $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }') ./cmd/refinery; \
 	chmod +r temp; \
     if diff temp LICENSES; then \
