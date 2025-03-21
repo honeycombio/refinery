@@ -492,6 +492,11 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 		summary.Data["summarized.high_latency_threshold_ms"] = slowSpanDurationMs
 		summary.Data["summarized.high_latency_span_count"] = highLatencyCount
 	}
+	summary.Data["meta.refinery.reason"] = decision.Reason
+	summary.Data["meta.refinery.send_reason"] = decision.SendReason
+	if decision.SamplerKey != "" {
+		summary.Data["meta.refinery.sample_key"] = decision.SamplerKey
+	}
 	// Add summarized values for each summary field
 	for field, values := range summaryValues {
 		if len(values) > 0 {
