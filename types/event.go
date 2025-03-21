@@ -122,8 +122,7 @@ func (t *Trace) AddSpan(sp *Span) {
 	// now is when we can calculate the size of it so that our cache size management
 	// code works properly.
 	sp.ArrivalTime = time.Now()
-	sp.DataSize = sp.GetDataSize()
-	t.DataSize += sp.DataSize
+	t.DataSize += sp.GetDataSize()
 	t.spans = append(t.spans, sp)
 	t.totalImpact = 0
 }
@@ -240,7 +239,6 @@ func (t *Trace) IsOrphan(traceTimeout time.Duration, now time.Time) bool {
 type Span struct {
 	Event
 	TraceID     string
-	DataSize    int
 	ArrivalTime time.Time
 	IsRoot      bool
 }
@@ -266,11 +264,8 @@ func (sp *Span) IsDecisionSpan() bool {
 // ExtractDecisionContext returns a new Event that contains only the data that is
 // relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext() *Event {
+	dataSize := sp.Event.GetDataSize()
 	decisionCtx := sp.Event
-	dataSize := sp.DataSize
-	if dataSize == 0 {
-		dataSize = sp.GetDataSize()
-	}
 	decisionCtx.Data = map[string]interface{}{
 		"trace_id":                     sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
@@ -338,7 +333,7 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 	// during the brief period between traceTimeout and the time when the span is sent.
 	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
 	// We can assume DataSize was set when the span was added.
-	return multiplier * sp.DataSize
+	return multiplier * sp.GetDataSize()
 }
 
 func IsLegacyAPIKey(apiKey string) bool {
