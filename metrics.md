@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-02-13 at 16:52:11 UTC.
+It was automatically generated on 2025-03-25 at 13:08:14 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -97,6 +97,7 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
 | _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
 | _router_event | Counter | Dimensionless | the number of events received |
+| _router_event_bytes | Histogram | Bytes | the number of bytes per event received |
 | _router_span | Counter | Dimensionless | the number of spans received |
 | _router_dropped | Counter | Dimensionless | the number of events dropped because the channel was full |
 | _router_nonspan | Counter | Dimensionless | the number of non-span events received |
