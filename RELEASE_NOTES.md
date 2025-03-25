@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.9.4
 
-This is a maintenance release that adds the `incoming_router_event_bytes` and `peer_router_event_bytes` metrics that records the number of bytes per event in a histogram.
+This is a maintenance release that adds the `incoming_router_event_bytes` and `peer_router_event_bytes` metrics, which use a histogram to record the number of bytes per received event.
 The release also includes dependency updates.
 
 ## Version 2.9.3
