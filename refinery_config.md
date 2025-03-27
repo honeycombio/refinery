@@ -938,6 +938,7 @@ If set, then this must be a memory size.
 Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
+A useful value for this setting is about 85% of the pod's total memory.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -977,7 +978,11 @@ If set, `Collections.AvailableMemory` must not be defined.
 `DisableRedistribution` controls whether to transmit traces in cache to remaining peers during cluster scaling event.
 
 If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
-By disabling this behavior, it can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
+Disabling redistribution can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
+However, it will also cause data loss during scale up/down events.
+Redistribution is intended to help prevent data loss and make whole trace decisions on scale up/down events.
+This feature does incur additional resource usage.
+If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
 
 - Eligible for live reload.
 - Type: `bool`
@@ -1329,6 +1334,7 @@ The value must be less than `ActivationLevel`.
 All new traces will be deterministically sampled at this rate based only on the `traceID`.
 It should be chosen to be a rate that sends fewer samples than the average sampling rate Refinery is expected to generate.
 For example, if Refinery is configured to normally sample at a rate of 1 in 10, then Stress Relief should be configured to sample at a rate of at least 1 in 30.
+If this value is set too low it will drastically increase the amount of data sent to Honeycomb, which could overwhelm the upstream queue.
 
 - Eligible for live reload.
 - Type: `int`
