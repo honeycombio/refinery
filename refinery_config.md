@@ -168,7 +168,7 @@ The exact behavior depends on the value of `SendKeyMode`.
 
 `SendKeyMode` controls how SendKey is used to replace or augment API keys used in incoming telemetry.
 
-controls how SendKey is used to replace or supply API keys used in incoming telemetry.
+Controls how SendKey is used to replace or supply API keys used in incoming telemetry.
 If `AcceptOnlyListedKeys` is `true`, then `SendKeys` will only be used for events with keys listed in `ReceiveKeys`.
 `none` uses the incoming key for all telemetry (default).
 `all` overwrites all keys, even missing ones, with `SendKey`.
@@ -219,6 +219,7 @@ If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.sp
 `AddCountsToRoot` controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
 
 If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made:
+
 - `meta.span_count`: the number of child spans on the trace
 - `meta.span_event_count`: the number of span events on the trace
 - `meta.span_link_count`: the number of span links on the trace
@@ -1017,11 +1018,14 @@ This value should be set to a bit less than the normal timeout period for shutti
 
 When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
 This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
+
 When `distributed`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.
 This can reduce the amount of traffic between peers, and can help avoid a situation where a single large trace can cause a memory overrun on a single node.
+
 If `distributed`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all nodes in the cluster.
 It is important to adjust the size of the Redis cluster in this case.
 The total volume of network traffic in `distributed` mode should be expected to decrease unless the cluster size is very large (hundreds of nodes).
+
 NOTE: This setting is not compatible with `DryRun` when set to `distributed`.
 See `DryRun` for more information.
 
@@ -1281,14 +1285,18 @@ Default is 10 seconds.
 ## Stress Relief
 
 `StressRelief` controls the Stress Relief mechanism, which is used to prevent Refinery from being overwhelmed by a large number of traces.
+
 There is a metric called `stress_level` that is emitted as part of Refinery metrics.
 It is a measure of Refinery's throughput rate relative to its processing rate, combined with the amount of room in its internal queues, and ranges from `0` to `100`.
+
 `stress_level` is generally expected to be `0` except under heavy load.
 When stress levels reach `100`, there is an increased chance that Refinery will become unstable.
 To avoid this problem, the Stress Relief system can do deterministic sampling on new trace traffic based solely on `TraceID`, without having to store traces in the cache or take the time processing sampling rules.
 Existing traces in flight will be processed normally, but when Stress Relief is active, trace decisions are made deterministically on a per-span basis; all spans will be sampled according to the `SamplingRate` specified here.
+
 Once Stress Relief activates (by exceeding the `ActivationLevel`), it will not deactivate until `stress_level` falls below the `DeactivationLevel`.
-When it deactivates, normal trace decisions are made -- and any additional spans that arrive for traces that were active during Stress Relief will respect the decisions made during that time.
+When it deactivates, normal trace decisions are made--and any additional spans that arrive for traces that were active during Stress Relief will respect the decisions made during that time.
+
 The measurement of stress is a lagging indicator and is highly dependent on Refinery configuration and scaling.
 Other configuration values should be well tuned first, before adjusting the Stress Relief Activation parameters.
 Stress Relief is not a substitute for proper configuration and scaling, but it can be used as a safety valve to prevent Refinery from becoming unstable under heavy load.
@@ -1349,4 +1357,3 @@ This setting helps to prevent oscillations.
 - Eligible for live reload.
 - Type: `duration`
 - Default: `10s`
-
