@@ -114,6 +114,20 @@ Refinery supports the following key environment variables; please see the comman
 
 Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
 
+### Embedded Environment Variables
+Any string value in the config file (but not in the rules file) can also contain a reference to environment variables.
+These variables will be replaced with the value of the corresponding environment variable.
+This happens once the config file is fully loaded, after processing any command lines.
+
+Environment variable references are in the form of `${ENV_VAR_NAME}`.
+Please note that the `${` and `}` notation is required.
+
+For example, if you wanted to set the `ListenAddr` to the value of the `LISTEN_ADDR` environment variable, you would write:
+```yaml
+Network:
+  ListenAddr: "${LISTEN_ADDR}"
+```
+
 ## Managing Keys
 
 Sending data to Honeycomb requires attaching an API key to telemetry. In order to make managing telemetry easier, Refinery support the `ReceiveKeys` and `SendKey` config options, along with `AcceptOnlyListedKeys` and `SendKeyMode`. In various combinations, they have a lot of expressive power. Please see the configuration documentation for details on how to set these parameters.

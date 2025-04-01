@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -174,6 +175,179 @@ func loadConfigsInto(dest any, configs []configData) (string, error) {
 	return hash, nil
 }
 
+type envGetter func(name string) string
+
+// envGetterFunc is a helper function to get environment variables.
+// This allows us to mock the os.Getenv function for testing purposes.
+func envGetterFunc(name string) string {
+	// Use the standard os.Getenv to get the environment variable
+	return os.Getenv(name)
+}
+
+// expandEnvVarsInValues expands environment variables in string values of a map.
+// Environment variables are in the form ${VAR_NAME} and will be replaced with
+// their values. If an environment variable doesn't exist, the original string remains unchanged.
+func expandEnvVarsInValues(m map[string]any, gf envGetter) map[string]any {
+	result := make(map[string]any, len(m))
+
+	for k, v := range m {
+		switch val := v.(type) {
+		case string:
+			// Process string values to expand environment variables
+			result[k] = expandEnvVarsInString(val, gf)
+		case map[string]any:
+			// Recursively process nested maps
+			result[k] = expandEnvVarsInValues(val, gf)
+		case []any:
+			// Process array values
+			newArray := make([]any, len(val))
+			for i, item := range val {
+				switch itemVal := item.(type) {
+				case string:
+					newArray[i] = expandEnvVarsInString(itemVal, gf)
+				case map[string]any:
+					newArray[i] = expandEnvVarsInValues(itemVal, gf)
+				default:
+					newArray[i] = item
+				}
+			}
+			result[k] = newArray
+		default:
+			// Keep non-string values as they are
+			result[k] = v
+		}
+	}
+
+	return result
+}
+
+// expandEnvVarsInConfig expands environment variables in a pointer to a
+// configuration struct using the yaml tags and a getter function for
+// environment variables. This function will traverse the struct fields and
+// expand any string values that contain environment variables in the form of
+// ${VAR_NAME}. It uses go's reflection package to traverse the struct fields
+// and expand the environment variables in place.
+func expandEnvVarsInConfig(cfg any, gf envGetter) error {
+	// Use reflection to traverse the struct fields
+	val := reflect.ValueOf(cfg)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		return fmt.Errorf("expected a struct or pointer to struct, got %T", cfg)
+	}
+
+	// Traverse the struct fields
+	t := val.Type()
+	for i := range t.NumField() {
+		field := t.Field(i)
+		fieldValue := val.Field(i)
+
+		if fieldValue.IsValid() && fieldValue.CanInterface() {
+			switch v := fieldValue.Interface().(type) {
+			case string:
+				if !fieldValue.CanSet() {
+					fmt.Printf("Field %s is not settable\n", field.Name)
+					continue
+				}
+				// Expand environment variables in string
+				v2 := expandEnvVarsInString(v, gf)
+				if v2 != v {
+					val.Field(i).SetString(v2)
+				}
+			case map[string]any:
+				newMap := expandEnvVarsInValues(v, gf)
+				val.Field(i).Set(reflect.ValueOf(newMap))
+			case map[string]string:
+				for k, item := range v {
+					expandedItem := expandEnvVarsInString(item, gf)
+					if expandedItem != item {
+						v[k] = expandedItem
+					}
+				}
+			case []any:
+				newArray := make([]any, len(v))
+				for j, item := range v {
+					switch itemVal := item.(type) {
+					case string:
+						newArray[j] = expandEnvVarsInString(itemVal, gf)
+					case map[string]any:
+						newArray[j] = expandEnvVarsInValues(itemVal, gf)
+					default:
+						newArray[j] = item
+					}
+				}
+				val.Field(i).Set(reflect.ValueOf(newArray))
+			case []string:
+				// Create a new slice value using reflection
+				for j, item := range v {
+					expandedItem := expandEnvVarsInString(item, gf)
+					if expandedItem != item {
+						// If the expanded item is different, update it in the slice
+						// Note: this won't change the original slice; it will only change the value in the new slice
+						v[j] = expandedItem
+					}
+				}
+			case *DefaultTrue, Duration, MemorySize, Level:
+				// do nothing
+			case bool, int, uint, uint64:
+				// also do nothing
+			default:
+				// the field type may well be a subtype, so we can just recurse into them
+				// for example, if you have a struct inside a struct, this will still work
+				// for other types, we simply log the type to help with debugging
+				// this includes slices, which are handled above
+				valueKind := fieldValue.Kind()
+				if valueKind == reflect.Struct {
+					// construct a pointer to the struct
+					// we need to use reflect.New to create a new pointer to the struct
+					// and then set the field to the new value
+					// this is a bit of a hack, but it works
+					// create a new pointer to the struct
+					newValue := reflect.New(fieldValue.Type()).Elem()
+					// set the new value to the field value
+					newValue.Set(fieldValue)
+					// now recursively call this function on the new value
+					if err := expandEnvVarsInConfig(newValue.Addr().Interface(), gf); err != nil {
+						// if we fail to expand, return the error
+						return fmt.Errorf("failed to expand environment variables in struct field %s: %w", field.Name, err)
+					}
+					// set the field back to the new value
+					val.Field(i).Set(newValue)
+					// continue to the next field
+					continue
+				}
+				// log the type of the field if we couldn't work on it so we can make sure we're
+				// hitting all the values we need
+				fmt.Printf("Field %s has unsupported type %T, skipping env var expansion\n", field.Name, v)
+			}
+		}
+	}
+	return nil
+}
+
+// expandEnvVarsInString expands environment variables in a string.
+// Variables in the form ${VAR_NAME} will be replaced with their values.
+func expandEnvVarsInString(s string, gf envGetter) string {
+	// Regular expression to find ${VAR_NAME} patterns
+	re := regexp.MustCompile(`\${([^}]+)}`)
+
+	// Replace all occurrences of ${VAR_NAME} with their values
+	return re.ReplaceAllStringFunc(s, func(match string) string {
+		// Extract variable name (remove ${ and })
+		varName := match[2 : len(match)-1]
+
+		// Get environment variable value
+		value := gf(varName)
+		if value != "" {
+			return value
+		}
+
+		// If environment variable doesn't exist, return the original match
+		return match
+	})
+}
+
 func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
 	for _, c := range configs {
 		// when working on a map, when loading a nested object, load will overwrite the entire destination
@@ -216,6 +390,8 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	// now expand environment variables in the userData map
+	userData = expandEnvVarsInValues(userData, envGetterFunc)
 
 	metadata, err := LoadConfigMetadata()
 	if err != nil {
@@ -271,6 +447,9 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 		return nil, fmt.Errorf("validateConfig unable to reload hydrated config from buffer: %w", err)
 	}
 
+	// now expand environment variables in the rewrittenUserData map
+	rewrittenUserData = expandEnvVarsInValues(rewrittenUserData, envGetterFunc)
+
 	// and finally validate the rewritten config
 	failures = metadata.Validate(rewrittenUserData)
 	return failures, nil
@@ -313,6 +492,12 @@ func applyConfigInto(dest any, configs []configData, opts *CmdEnv) (string, erro
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(dest)); err != nil {
 		return hash, fmt.Errorf("applyConfigInto unable to apply command line options: %w", err)
+	}
+
+	// and finally load envvars if necessary
+	// this will expand environment variables in the struct itself
+	if err := expandEnvVarsInConfig(dest, envGetterFunc); err != nil {
+		return hash, fmt.Errorf("applyConfigInto unable to expand environment variables in config: %w", err)
 	}
 
 	return hash, nil
