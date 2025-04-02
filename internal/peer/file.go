@@ -15,7 +15,8 @@ type FilePeers struct {
 	Metrics metrics.Metrics `inject:"metrics"`
 	Done    chan struct{}
 
-	id string
+	id        string
+	callbacks []func()
 }
 
 func (p *FilePeers) GetPeers() ([]string, error) {
@@ -41,8 +42,8 @@ func (p *FilePeers) GetInstanceID() (string, error) {
 
 func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
 	// whenever registered, call the callback immediately
-	// otherwise do nothing since they never change
 	callback()
+	p.callbacks = append(p.callbacks, callback)
 }
 
 var filePeersMetrics = []metrics.Metadata{
@@ -58,6 +59,18 @@ func (p *FilePeers) Start() (err error) {
 	if err != nil {
 		return err
 	}
+
+	hash := hashList(p.Cfg.GetPeers())
+	p.callbacks = make([]func(), 0)
+	p.Cfg.RegisterReloadCallback(func(configHash, ruleCfgHash string) {
+		newhash := hashList(p.Cfg.GetPeers())
+		if newhash != hash {
+			hash = newhash
+			for _, cb := range p.callbacks {
+				go cb()
+			}
+		}
+	})
 
 	return nil
 }
