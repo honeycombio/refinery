@@ -1068,7 +1068,7 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 }
 
 func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
-	if trID, ok := ev.Data["trace_id"]; ok {
+	if trID, ok := ev.Data["meta.trace_id"]; ok {
 		return trID.(string)
 	}
 
