@@ -1,5 +1,16 @@
 # Refinery Changelog
 
+## 2.9.4 2025-03-25
+
+### Features
+
+- feat: Record the number of bytes per event (#1510) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+
+### Maintenance
+
+- maint: bump deps (#1511) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+- maint(deps): bump the minor-patch group with 6 updates (#1499) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
 ## 2.9.3 2025-02-13
 
 ### Fixes

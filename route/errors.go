@@ -64,7 +64,7 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	errmsg := he.msg
 
 	if he.detailed {
-		errmsg = fmt.Sprintf(he.msg + ": " + he.err.Error())
+		errmsg = he.msg + ": " + he.err.Error()
 	}
 
 	if !he.friendly {
