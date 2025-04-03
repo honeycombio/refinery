@@ -2205,10 +2205,9 @@ func TestCreateDecisionSpan(t *testing.T) {
 			"meta.refinery.min_span":       true,
 			"meta.refinery.root":           false,
 			"meta.refinery.span_data_size": 87,
-			"trace_id":                     traceID1,
-
-			"http.status_code": 200,
-			"test":             1,
+			"meta.trace_id":                traceID1,
+			"http.status_code":             200,
+			"test":                         1,
 		},
 	}
 
