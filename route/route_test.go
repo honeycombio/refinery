@@ -818,7 +818,7 @@ func TestProcessEventMetrics(t *testing.T) {
 			opampEnabled:   true,
 			recordUsage:    config.DefaultTrue(true),
 			signalType:     "log",
-			expectedCount:  30,
+			expectedCount:  91,
 			metricName:     "bytes_received_logs",
 		},
 		{
@@ -827,7 +827,7 @@ func TestProcessEventMetrics(t *testing.T) {
 			opampEnabled:   true,
 			recordUsage:    config.DefaultTrue(true),
 			signalType:     "trace",
-			expectedCount:  32,
+			expectedCount:  93,
 			metricName:     "bytes_received_traces",
 		},
 		{
