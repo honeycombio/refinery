@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-04-07 at 12:49:41 UTC.
+It was automatically generated on 2025-04-10 at 17:13:48 UTC.
 
 ## The Config file
 
@@ -953,6 +953,8 @@ If set, then this must be a memory size.
 Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
+A useful value for this setting will leave 1-2GB of pod memory for overages.
+For typical configurations this may be about 85%-90% of the pod's total memory.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -991,8 +993,14 @@ If set, `Collections.AvailableMemory` must not be defined.
 
 DisableRedistribution controls whether to transmit traces in cache to remaining peers during cluster scaling event.
 
+Redistribution is intended to help prevent data loss by reconsolidating traces onto the appropriate node after a scaling event.
+During scale down events, all stored spans are forwarded to the new owning Refinery peer instance so it can shut down without dropping spans.
+During scale up events, only stored spans that belong to another Refinery peer instance are forwarded so that instance can make whole trace decisions.
+Refinery uses additional system resources during scale up/down events.
+If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
 If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
-By disabling this behavior, it can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
+Disabling redistribution can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
+However, disabling redistribution may also cause partial data loss of traces that were in flight when scaling occurred.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -1344,6 +1352,7 @@ SamplingRate is the sampling rate to use when Stress Relief is activated.
 All new traces will be deterministically sampled at this rate based only on the `traceID`.
 It should be chosen to be a rate that sends fewer samples than the average sampling rate Refinery is expected to generate.
 For example, if Refinery is configured to normally sample at a rate of 1 in 10, then Stress Relief should be configured to sample at a rate of at least 1 in 30.
+If this value is configured to send more data to Honeycomb during stress relief than the normal average sampling strategy, it may overwhelm the upstream send queue and have the opposite of the desired effect.
 
 - Eligible for live reload.
 - Type: `int`
