@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-04-10 at 17:13:48 UTC.
+It was automatically generated on 2025-04-10 at 19:03:55 UTC.
 
 ## The Config file
 
@@ -994,8 +994,8 @@ If set, `Collections.AvailableMemory` must not be defined.
 DisableRedistribution controls whether to transmit traces in cache to remaining peers during cluster scaling event.
 
 Redistribution is intended to help prevent data loss by reconsolidating traces onto the appropriate node after a scaling event.
-During scale down events, all stored spans are forwarded to the new owning Refinery peer instance so it can shut down without dropping spans.
-During scale up events, only stored spans that belong to another Refinery peer instance are forwarded so that instance can make whole trace decisions.
+During scale down events, all stored spans are forwarded to the new owning Refinery peer instance, so it can shut down without dropping spans.
+During scale up events, only stored spans that belong to another Refinery peer instance are forwarded, so that instance can make whole trace decisions.
 Refinery uses additional system resources during scale up/down events.
 If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
 If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
@@ -1033,7 +1033,7 @@ This value should be set to a bit less than the normal timeout period for shutti
 
 TraceLocalityMode controls how Refinery handles spans that belong to the same trace in a clustered environment.
 
-This is an experimental configuration and should not be changed in production deployments.
+This is an experimental configuration setting and should not be changed in production deployments.
 When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
 This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
 When `distributed`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.

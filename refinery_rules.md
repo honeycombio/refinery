@@ -552,7 +552,7 @@ For most cases, only use negative operators (`!=`, `does-not-contain`, `not-exis
 WARNING: Rules can have `Scope: trace` or `Scope: span`.
 Using a negative operator with `Scope: trace` will cause the condition be true if **any** single span in the entire trace matches.
 Use `Scope: span` with negative operators.
-As a general rule, negative operators are more difficult to get right and should be used sparingly.
+As a general rule, negative operators are more difficult to use correctly and should be used sparingly.
 It is usually more effective to use positive operators and be more explicit about rules applied.
 
 - Type: `string`

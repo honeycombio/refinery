@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-04-10 at 17:13:48 UTC from ../../config.yaml using a template generated on 2025-04-10 at 17:13:44 UTC
+# created on 2025-04-10 at 19:03:55 UTC from ../../config.yaml using a template generated on 2025-04-10 at 19:03:51 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1050,10 +1050,10 @@ Collection:
     ## Redistribution is intended to help prevent data loss by
     ## reconsolidating traces onto the appropriate node after a scaling
     ## event. During scale down events, all stored spans are forwarded to the
-    ## new owning Refinery peer instance so it can shut down without dropping
-    ## spans. During scale up events, only stored spans that belong to
-    ## another Refinery peer instance are forwarded so that instance can make
-    ## whole trace decisions. Refinery uses additional system resources
+    ## new owning Refinery peer instance, so it can shut down without
+    ## dropping spans. During scale up events, only stored spans that belong
+    ## to another Refinery peer instance are forwarded, so that instance can
+    ## make whole trace decisions. Refinery uses additional system resources
     ## during scale up/down events. If the cluster does not have enough
     ## resource capacity headroom, a redistribution event can cause the
     ## cluster to go into stress relief (if enabled).
@@ -1101,8 +1101,8 @@ Collection:
     ## TraceLocalityMode controls how Refinery handles spans that belong to
     ## the same trace in a clustered environment.
     ##
-    ## This is an experimental configuration and should not be changed in
-    ## production deployments.
+    ## This is an experimental configuration setting and should not be
+    ## changed in production deployments.
     ## When `concentrated`, Refinery will route all spans that belong to the
     ## same trace to a single peer. This is the default behavior ("Trace
     ## Locality") and the way Refinery has worked in the past. When
