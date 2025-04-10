@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-04-07 at 12:49:41 UTC.
+It was automatically generated on 2025-04-10 at 17:13:48 UTC.
 
 ## The Config file
 
@@ -10,9 +10,7 @@ The file is split into sections; each section is a group of related configuratio
 Each section has a name, and the name is used to refer to the section in other parts of the config file.
 
 ## Sample
-
 This is a sample config file:
-
 ```yaml
 General:
   ConfigurationVersion: 2
@@ -27,7 +25,6 @@ OTelMetrics:
 The remainder of this document describes the sections within the file and the fields in each.
 
 ## Table of Contents
-
 - [General Configuration](#general-configuration)
 - [Network Configuration](#network-configuration)
 - [Access Key Configuration](#access-key-configuration)
@@ -50,11 +47,9 @@ The remainder of this document describes the sections within the file and the fi
 - [gRPC Server Parameters](#grpc-server-parameters)
 - [Sample Cache](#sample-cache)
 - [Stress Relief](#stress-relief)
-
 ## General Configuration
 
 `General` contains general configuration options that apply to the entire Refinery process.
-
 ### `ConfigurationVersion`
 
 ConfigurationVersion is the file format of this particular configuration file.
@@ -106,7 +101,6 @@ Note that external factors (for example, Kubernetes ConfigMaps) may cause delays
 ## Network Configuration
 
 `Network` contains network configuration options.
-
 ### `ListenAddr`
 
 ListenAddr is the address where Refinery listens for incoming requests.
@@ -216,7 +210,6 @@ All other events use their original keys.
 ## Refinery Telemetry
 
 `RefineryTelemetry` contains configuration information for the telemetry that Refinery uses to record its own operation.
-
 ### `AddRuleReasonToTrace`
 
 AddRuleReasonToTrace controls whether to decorate traces with Refinery rule evaluation results.
@@ -249,7 +242,6 @@ If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.sp
 AddCountsToRoot controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
 
 If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made:
-
 - `meta.span_count`: the number of child spans on the trace
 - `meta.span_event_count`: the number of span events on the trace
 - `meta.span_link_count`: the number of span links on the trace
@@ -271,7 +263,6 @@ If `true`, then Refinery will add the following tag to all traces: - `meta.refin
 ## Traces
 
 `Traces` contains configuration for how traces are managed.
-
 ### `SendDelay`
 
 SendDelay is the duration to wait after the root span arrives before sending a trace.
@@ -365,7 +356,6 @@ This will mean Refinery makes fewer sampling decision calculations each `SendTic
 ## Debugging
 
 `Debugging` contains configuration values used when setting up and debugging Refinery.
-
 ### `DebugServiceAddr`
 
 DebugServiceAddr is the IP and port where the debug service runs.
@@ -421,7 +411,6 @@ NOTE: This setting is not compatible with `TraceCache=distributed`, because drop
 ## Refinery Logger
 
 `Logger` contains configuration for logging.
-
 ### `Type`
 
 Type is the type of logger to use.
@@ -452,7 +441,6 @@ Level is the logging level above which Refinery should send a log to the logger.
 
 `HoneycombLogger` contains configuration for logging to Honeycomb.
 Only used if `Logger.Type` is "honeycomb".
-
 ### `APIHost`
 
 APIHost is the URL of the Honeycomb API where Refinery sends its logs.
@@ -510,7 +498,6 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 `StdoutLogger` contains configuration for logging to `stdout`.
 Only used if `Logger.Type` is "stdout".
-
 ### `Structured`
 
 Structured controls whether to use structured logging.
@@ -544,7 +531,6 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 ## Prometheus Metrics
 
 `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
-
 ### `Enabled`
 
 Enabled controls whether to expose Refinery metrics over the `PrometheusListenAddr` port.
@@ -698,7 +684,6 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 ## OpenTelemetry Tracing
 
 `OTelTracing` contains configuration for Refinery's own tracing.
-
 ### `Enabled`
 
 Enabled controls whether to send Refinery's own OpenTelemetry traces.
@@ -764,7 +749,6 @@ Useful if you plan on sending your traces to a different refinery instance for t
 ## Peer Management
 
 `PeerManagement` controls how the Refinery cluster communicates between peers.
-
 ### `Type`
 
 Type is the type of peer management to use.
@@ -969,7 +953,8 @@ If set, then this must be a memory size.
 Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
-A useful value for this setting is about 85% of the pod's total memory.
+A useful value for this setting will leave 1-2GB of pod memory for overages.
+For typical configurations this may be about 85%-90% of the pod's total memory.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -1008,12 +993,14 @@ If set, `Collections.AvailableMemory` must not be defined.
 
 DisableRedistribution controls whether to transmit traces in cache to remaining peers during cluster scaling event.
 
+Redistribution is intended to help prevent data loss by reconsolidating traces onto the appropriate node after a scaling event.
+During scale down events, all stored spans are forwarded to the new owning Refinery peer instance so it can shut down without dropping spans.
+During scale up events, only stored spans that belong to another Refinery peer instance are forwarded so that instance can make whole trace decisions.
+Refinery uses additional system resources during scale up/down events.
+If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
 If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
 Disabling redistribution can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
-However, it will also cause data loss during scale up/down events.
-Redistribution is intended to help prevent data loss and make whole trace decisions on scale up/down events.
-This feature does incur additional resource usage.
-If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
+However, disabling redistribution may also cause partial data loss of traces that were in flight when scaling occurred.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -1104,7 +1091,6 @@ If this happens, then you should increase this buffer size.
 ## Specialized Configuration
 
 `Specialized` contains special-purpose configuration options that are not typically needed.
-
 ### `EnvironmentCacheTTL`
 
 EnvironmentCacheTTL is the duration for which environment information is cached.
@@ -1366,7 +1352,7 @@ SamplingRate is the sampling rate to use when Stress Relief is activated.
 All new traces will be deterministically sampled at this rate based only on the `traceID`.
 It should be chosen to be a rate that sends fewer samples than the average sampling rate Refinery is expected to generate.
 For example, if Refinery is configured to normally sample at a rate of 1 in 10, then Stress Relief should be configured to sample at a rate of at least 1 in 30.
-If this value is set too low it will drastically increase the amount of data sent to Honeycomb, which could overwhelm the upstream queue.
+If this value is configured to send more data to Honeycomb during stress relief than the normal average sampling strategy, it may overwhelm the upstream send queue and have the opposite of the desired effect.
 
 - Eligible for live reload.
 - Type: `int`
@@ -1381,3 +1367,4 @@ This setting helps to prevent oscillations.
 - Eligible for live reload.
 - Type: `duration`
 - Default: `10s`
+

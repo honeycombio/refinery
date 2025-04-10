@@ -168,7 +168,7 @@ The exact behavior depends on the value of `SendKeyMode`.
 
 `SendKeyMode` controls how SendKey is used to replace or augment API keys used in incoming telemetry.
 
-Controls how SendKey is used to replace or supply API keys used in incoming telemetry.
+controls how SendKey is used to replace or supply API keys used in incoming telemetry.
 If `AcceptOnlyListedKeys` is `true`, then `SendKeys` will only be used for events with keys listed in `ReceiveKeys`.
 `none` uses the incoming key for all telemetry (default).
 `all` overwrites all keys, even missing ones, with `SendKey`.
@@ -219,7 +219,6 @@ If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.sp
 `AddCountsToRoot` controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
 
 If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made:
-
 - `meta.span_count`: the number of child spans on the trace
 - `meta.span_event_count`: the number of span events on the trace
 - `meta.span_link_count`: the number of span links on the trace
@@ -939,7 +938,8 @@ If set, then this must be a memory size.
 Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
-A useful value for this setting is about 85% of the pod's total memory.
+A useful value for this setting will leave 1-2GB of pod memory for overages.
+For typical configurations this may be about 85%-90% of the pod's total memory.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -978,12 +978,14 @@ If set, `Collections.AvailableMemory` must not be defined.
 
 `DisableRedistribution` controls whether to transmit traces in cache to remaining peers during cluster scaling event.
 
+Redistribution is intended to help prevent data loss by reconsolidating traces onto the appropriate node after a scaling event.
+During scale down events, all stored spans are forwarded to the new owning Refinery peer instance so it can shut down without dropping spans.
+During scale up events, only stored spans that belong to another Refinery peer instance are forwarded so that instance can make whole trace decisions.
+Refinery uses additional system resources during scale up/down events.
+If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
 If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
 Disabling redistribution can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
-However, it will also cause data loss during scale up/down events.
-Redistribution is intended to help prevent data loss and make whole trace decisions on scale up/down events.
-This feature does incur additional resource usage.
-If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
+However, disabling redistribution may also cause partial data loss of traces that were in flight when scaling occurred.
 
 - Eligible for live reload.
 - Type: `bool`
@@ -1019,14 +1021,11 @@ This value should be set to a bit less than the normal timeout period for shutti
 This is an experimental configuration and should not be changed in production deployments.
 When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
 This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
-
 When `distributed`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.
 This can reduce the amount of traffic between peers, and can help avoid a situation where a single large trace can cause a memory overrun on a single node.
-
 If `distributed`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all nodes in the cluster.
 It is important to adjust the size of the Redis cluster in this case.
 The total volume of network traffic in `distributed` mode should be expected to decrease unless the cluster size is very large (hundreds of nodes).
-
 NOTE: This setting is not compatible with `DryRun` when set to `distributed`.
 See `DryRun` for more information.
 
@@ -1286,18 +1285,14 @@ Default is 10 seconds.
 ## Stress Relief
 
 `StressRelief` controls the Stress Relief mechanism, which is used to prevent Refinery from being overwhelmed by a large number of traces.
-
 There is a metric called `stress_level` that is emitted as part of Refinery metrics.
 It is a measure of Refinery's throughput rate relative to its processing rate, combined with the amount of room in its internal queues, and ranges from `0` to `100`.
-
 `stress_level` is generally expected to be `0` except under heavy load.
 When stress levels reach `100`, there is an increased chance that Refinery will become unstable.
 To avoid this problem, the Stress Relief system can do deterministic sampling on new trace traffic based solely on `TraceID`, without having to store traces in the cache or take the time processing sampling rules.
 Existing traces in flight will be processed normally, but when Stress Relief is active, trace decisions are made deterministically on a per-span basis; all spans will be sampled according to the `SamplingRate` specified here.
-
 Once Stress Relief activates (by exceeding the `ActivationLevel`), it will not deactivate until `stress_level` falls below the `DeactivationLevel`.
-When it deactivates, normal trace decisions are made--and any additional spans that arrive for traces that were active during Stress Relief will respect the decisions made during that time.
-
+When it deactivates, normal trace decisions are made -- and any additional spans that arrive for traces that were active during Stress Relief will respect the decisions made during that time.
 The measurement of stress is a lagging indicator and is highly dependent on Refinery configuration and scaling.
 Other configuration values should be well tuned first, before adjusting the Stress Relief Activation parameters.
 Stress Relief is not a substitute for proper configuration and scaling, but it can be used as a safety valve to prevent Refinery from becoming unstable under heavy load.
@@ -1343,7 +1338,7 @@ The value must be less than `ActivationLevel`.
 All new traces will be deterministically sampled at this rate based only on the `traceID`.
 It should be chosen to be a rate that sends fewer samples than the average sampling rate Refinery is expected to generate.
 For example, if Refinery is configured to normally sample at a rate of 1 in 10, then Stress Relief should be configured to sample at a rate of at least 1 in 30.
-If this value is set too low it will drastically increase the amount of data sent to Honeycomb, which could overwhelm the upstream queue.
+If this value is configured to send more data to Honeycomb during stress relief than the normal average sampling strategy, it may overwhelm the upstream send queue and have the opposite of the desired effect.
 
 - Eligible for live reload.
 - Type: `int`
@@ -1358,3 +1353,4 @@ This setting helps to prevent oscillations.
 - Eligible for live reload.
 - Type: `duration`
 - Default: `10s`
+
