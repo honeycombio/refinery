@@ -10,7 +10,9 @@ The file is split into sections; each section is a group of related configuratio
 Each section has a name, and the name is used to refer to the section in other parts of the config file.
 
 ## Sample
+
 This is a sample config file:
+
 ```yaml
 General:
   ConfigurationVersion: 2
@@ -25,6 +27,7 @@ OTelMetrics:
 The remainder of this document describes the sections within the file and the fields in each.
 
 ## Table of Contents
+
 - [General Configuration](#general-configuration)
 - [Network Configuration](#network-configuration)
 - [Access Key Configuration](#access-key-configuration)
@@ -47,9 +50,11 @@ The remainder of this document describes the sections within the file and the fi
 - [gRPC Server Parameters](#grpc-server-parameters)
 - [Sample Cache](#sample-cache)
 - [Stress Relief](#stress-relief)
+
 ## General Configuration
 
 `General` contains general configuration options that apply to the entire Refinery process.
+
 ### `ConfigurationVersion`
 
 ConfigurationVersion is the file format of this particular configuration file.
@@ -101,6 +106,7 @@ Note that external factors (for example, Kubernetes ConfigMaps) may cause delays
 ## Network Configuration
 
 `Network` contains network configuration options.
+
 ### `ListenAddr`
 
 ListenAddr is the address where Refinery listens for incoming requests.
@@ -210,6 +216,7 @@ All other events use their original keys.
 ## Refinery Telemetry
 
 `RefineryTelemetry` contains configuration information for the telemetry that Refinery uses to record its own operation.
+
 ### `AddRuleReasonToTrace`
 
 AddRuleReasonToTrace controls whether to decorate traces with Refinery rule evaluation results.
@@ -242,6 +249,7 @@ If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.sp
 AddCountsToRoot controls whether to add metadata fields to root spans that indicates the number of child spans, span events, span links, and honeycomb events.
 
 If `true`, then Refinery will ignore the `AddSpanCountToRoot` setting and add the following fields to the root span based on the values at the time the sampling decision was made:
+
 - `meta.span_count`: the number of child spans on the trace
 - `meta.span_event_count`: the number of span events on the trace
 - `meta.span_link_count`: the number of span links on the trace
@@ -263,6 +271,7 @@ If `true`, then Refinery will add the following tag to all traces: - `meta.refin
 ## Traces
 
 `Traces` contains configuration for how traces are managed.
+
 ### `SendDelay`
 
 SendDelay is the duration to wait after the root span arrives before sending a trace.
@@ -356,6 +365,7 @@ This will mean Refinery makes fewer sampling decision calculations each `SendTic
 ## Debugging
 
 `Debugging` contains configuration values used when setting up and debugging Refinery.
+
 ### `DebugServiceAddr`
 
 DebugServiceAddr is the IP and port where the debug service runs.
@@ -411,6 +421,7 @@ NOTE: This setting is not compatible with `TraceCache=distributed`, because drop
 ## Refinery Logger
 
 `Logger` contains configuration for logging.
+
 ### `Type`
 
 Type is the type of logger to use.
@@ -441,6 +452,7 @@ Level is the logging level above which Refinery should send a log to the logger.
 
 `HoneycombLogger` contains configuration for logging to Honeycomb.
 Only used if `Logger.Type` is "honeycomb".
+
 ### `APIHost`
 
 APIHost is the URL of the Honeycomb API where Refinery sends its logs.
@@ -498,6 +510,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 `StdoutLogger` contains configuration for logging to `stdout`.
 Only used if `Logger.Type` is "stdout".
+
 ### `Structured`
 
 Structured controls whether to use structured logging.
@@ -531,6 +544,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 ## Prometheus Metrics
 
 `PrometheusMetrics` contains configuration for Refinery's internally-generated metrics as made available through Prometheus.
+
 ### `Enabled`
 
 Enabled controls whether to expose Refinery metrics over the `PrometheusListenAddr` port.
@@ -684,6 +698,7 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 ## OpenTelemetry Tracing
 
 `OTelTracing` contains configuration for Refinery's own tracing.
+
 ### `Enabled`
 
 Enabled controls whether to send Refinery's own OpenTelemetry traces.
@@ -749,6 +764,7 @@ Useful if you plan on sending your traces to a different refinery instance for t
 ## Peer Management
 
 `PeerManagement` controls how the Refinery cluster communicates between peers.
+
 ### `Type`
 
 Type is the type of peer management to use.
@@ -1088,6 +1104,7 @@ If this happens, then you should increase this buffer size.
 ## Specialized Configuration
 
 `Specialized` contains special-purpose configuration options that are not typically needed.
+
 ### `EnvironmentCacheTTL`
 
 EnvironmentCacheTTL is the duration for which environment information is cached.
@@ -1364,4 +1381,3 @@ This setting helps to prevent oscillations.
 - Eligible for live reload.
 - Type: `duration`
 - Default: `10s`
-
