@@ -278,3 +278,83 @@ func Test_validateConfigs(t *testing.T) {
 		})
 	}
 }
+
+func Test_expandEnvVarsInString(t *testing.T) {
+	vars := map[string]string{
+		"ENV_VAR_1": "value1",
+		"ENV_VAR_2": "value2",
+	}
+	// envGetter function to simulate os.Getenv
+	envGetter := func(name string) string {
+		// Simulate the behavior of os.Getenv for testing purposes
+		if value, exists := vars[name]; exists {
+			return value
+		}
+		return ""
+	}
+
+	tests := []struct {
+		name string
+		s    string
+		want string
+	}{
+		{"no env vars", "this is a test", "this is a test"},
+		{"single env var", "this is ${ENV_VAR_1} test", "this is value1 test"},
+		{"multiple env vars", "this is ${ENV_VAR_1} and ${ENV_VAR_2} test", "this is value1 and value2 test"},
+		{"env var not set", "this is ${ENV_VAR_NOT_SET} test", "this is ${ENV_VAR_NOT_SET} test"},
+		{"entire string", "${ENV_VAR_1}", "value1"},
+		{"empty env var", "this is ${ENV_VAR_1} and ${ENV_VAR_NOT_SET} and ${ENV_VAR_2}", "this is value1 and ${ENV_VAR_NOT_SET} and value2"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := expandEnvVarsInString(tt.s, envGetter); got != tt.want {
+				t.Errorf("expandEnvVarsInString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_expandEnvVarsInValues(t *testing.T) {
+	vars := map[string]string{
+		"ENV_VAR_1": "value1",
+		"ENV_VAR_2": "value2",
+	}
+	// envGetter function to simulate os.Getenv
+	envGetter := func(name string) string {
+		// Simulate the behavior of os.Getenv for testing purposes
+		if value, exists := vars[name]; exists {
+			return value
+		}
+		return ""
+	}
+
+	basemap := map[string]any{
+		"key1": "value1",
+		"key2": "${ENV_VAR_1}", // should be replaced with value1
+		"key3": "value3",
+		"key4": map[string]any{
+			// nested map
+			"nestedKey1": "partial ${ENV_VAR_2} stuff", // should be replaced with value2
+			"nestedKey2": "staticValue",                // should remain unchanged
+		},
+		"key5": []any{
+			// slice of values
+			"value1",       // should remain unchanged
+			"${ENV_VAR_1}", // should be replaced with value1
+			"value3",       // should remain unchanged
+		},
+		"key6": "${ENV_VAR_NOT_SET}", // should remain unchanged since ENV_VAR_NOT_SET is not defined
+	}
+
+	got := expandEnvVarsInValues(basemap, envGetter)
+	assert.Equal(t, "value1", got["key1"], "key1 should remain unchanged")
+	assert.Equal(t, "value1", got["key2"], "key2 should be replaced with value1")
+	assert.Equal(t, "value3", got["key3"], "key3 should remain unchanged")
+	// Check nested map
+	nestedMap, ok := got["key4"].(map[string]any)
+	require.True(t, ok, "key4 should be a map")
+	assert.Equal(t, "partial value2 stuff", nestedMap["nestedKey1"], "nestedKey1 should be replaced with partial value2 stuff")
+	assert.Equal(t, "staticValue", nestedMap["nestedKey2"], "nestedKey2 should remain unchanged")
+	assert.ElementsMatch(t, []any{"value1", "value1", "value3"}, got["key5"], "key5 should have the second element replaced with value1")
+	assert.Equal(t, "${ENV_VAR_NOT_SET}", got["key6"], "key6 should remain unchanged since ENV_VAR_NOT_SET is not defined")
+}

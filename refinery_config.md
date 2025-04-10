@@ -1016,6 +1016,7 @@ This value should be set to a bit less than the normal timeout period for shutti
 
 `TraceLocalityMode` controls how Refinery handles spans that belong to the same trace in a clustered environment.
 
+This is an experimental configuration and should not be changed in production deployments.
 When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
 This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
 

@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-03-27 at 23:12:23 UTC.
+It was automatically generated on 2025-04-07 at 12:49:41 UTC.
 
 ## The Config file
 
@@ -1030,6 +1030,7 @@ This value should be set to a bit less than the normal timeout period for shutti
 
 TraceLocalityMode controls how Refinery handles spans that belong to the same trace in a clustered environment.
 
+This is an experimental configuration and should not be changed in production deployments.
 When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
 This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
 When `distributed`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.

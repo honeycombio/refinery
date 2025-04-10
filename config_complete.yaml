@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-03-27 at 23:12:22 UTC from ../../config.yaml using a template generated on 2025-03-27 at 23:12:19 UTC
+# created on 2025-04-07 at 12:49:41 UTC from ../../config.yaml using a template generated on 2025-04-07 at 12:49:36 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1094,6 +1094,8 @@ Collection:
     ## TraceLocalityMode controls how Refinery handles spans that belong to
     ## the same trace in a clustered environment.
     ##
+    ## This is an experimental configuration and should not be changed in
+    ## production deployments.
     ## When `concentrated`, Refinery will route all spans that belong to the
     ## same trace to a single peer. This is the default behavior ("Trace
     ## Locality") and the way Refinery has worked in the past. When
