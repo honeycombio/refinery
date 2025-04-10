@@ -661,9 +661,23 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
-		debugLog.Logf("Dropping span from batch, channel full")
-		return err
+		// process immediately or offload to the proper peer
+		targetShard := r.Sharder.WhichShard(traceID)
+		if targetShard.Equals(r.Sharder.MyShard()) {
+			ok, _ := r.Collector.ProcessSpanImmediately(span)
+			// ProcessSpanImmediately function handles the metrics
+			if !ok {
+				r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
+				debugLog.Logf("Dropping span from batch, channel full")
+				return err
+			}
+		} else {
+			ev.APIHost = targetShard.GetAddress()
+			r.PeerTransmission.EnqueueEvent(ev)
+			r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
+			debugLog.Logf("redirected span due to AddSpan channel being full")
+			return err
+		}
 	}
 
 	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
