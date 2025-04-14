@@ -585,6 +585,190 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
 		mockTransmission.Flush()
 	})
+
+	t.Run("use SendKeyMode override - HTTP", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		if err != nil {
+			t.Error(err)
+		}
+
+		for _, tt := range []struct {
+			apiKey         string
+			sendKey        string
+			receiverKeys   []string
+			mode           string
+			wantStatus     int
+			wantBody       string
+			wantEventCount int
+		}{
+			{
+				sendKey:    "my-send-key",
+				mode:       "none",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				mode:       "none",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				sendKey:        "my-send-key",
+				mode:           "all",
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				mode:       "all",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				sendKey:    "my-send-key",
+				mode:       "nonblank",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				mode:       "nonblank",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				apiKey:         "my-api-key",
+				sendKey:        "my-send-key",
+				mode:           "nonblank",
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				apiKey:         "my-api-key",
+				mode:           "nonblank",
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				sendKey:    "my-send-key",
+				mode:       "invalid-mode",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				mode:       "invalid-mode",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				apiKey:         "my-api-key",
+				sendKey:        "my-send-key",
+				receiverKeys:   []string{"my-api-key"},
+				mode:           "listedonly",
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				sendKey:    "my-send-key",
+				mode:       "listedonly",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				mode:       "listedonly",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				sendKey:        "my-send-key",
+				mode:           "missingonly",
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				mode:       "missingonly",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				apiKey:         legacyAPIKey,
+				sendKey:        "my-send-key",
+				receiverKeys:   []string{},
+				mode:           "unlisted",
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				sendKey:    "my-send-key",
+				mode:       "unlisted",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+			{
+				mode:       "unlisted",
+				wantStatus: http.StatusUnauthorized,
+				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
+			},
+		} {
+			t.Run(fmt.Sprintf("ApiKey %s SendKeyMode %s SendKey %s", tt.apiKey, tt.mode, tt.sendKey), func(t *testing.T) {
+				router.environmentCache.addItem(tt.apiKey, "local", time.Minute)
+				router.environmentCache.addItem(tt.sendKey, "local", time.Minute)
+
+				// HTTP
+				request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+				request.Header = http.Header{}
+				if len(tt.apiKey) > 0 {
+					request.Header.Set("x-honeycomb-team", tt.apiKey)
+				}
+				request.Header.Set("content-type", "application/json")
+				w := httptest.NewRecorder()
+				router.Config.(*config.MockConfig).GetAccessKeyConfigVal = config.AccessKeyConfig{
+					SendKey:     tt.sendKey,
+					SendKeyMode: tt.mode,
+					ReceiveKeys: tt.receiverKeys,
+				}
+				router.postOTLPTrace(w, request)
+				require.Equal(t, tt.wantStatus, w.Code)
+				require.Equal(t, tt.wantBody, w.Body.String())
+
+				if tt.wantEventCount > 0 {
+					events := mockTransmission.GetBlock(tt.wantEventCount)
+					assert.Equal(t, tt.wantEventCount, len(events))
+				}
+
+				// gRPC
+				opts := map[string]string{}
+				if len(tt.apiKey) > 0 {
+					opts["x-honeycomb-team"] = tt.apiKey
+				}
+				md := metadata.New(opts)
+				ctx := metadata.NewIncomingContext(context.Background(), md)
+				traceServer := NewTraceServer(router)
+				_, err := traceServer.Export(ctx, req)
+				if tt.wantStatus == http.StatusOK {
+					require.NoError(t, err)
+				} else {
+					require.Error(t, err)
+				}
+
+				if tt.wantEventCount > 0 {
+					events := mockTransmission.GetBlock(tt.wantEventCount)
+					assert.Equal(t, tt.wantEventCount, len(events))
+				}
+			})
+		}
+	})
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {
