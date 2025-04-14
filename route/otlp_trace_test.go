@@ -586,7 +586,7 @@ func TestOTLPHandler(t *testing.T) {
 		mockTransmission.Flush()
 	})
 
-	t.Run("use SendKeyMode override - HTTP", func(t *testing.T) {
+	t.Run("use SendKeyMode override", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				ScopeSpans: []*trace.ScopeSpans{{
@@ -701,7 +701,7 @@ func TestOTLPHandler(t *testing.T) {
 				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
 			},
 			{
-				apiKey:         legacyAPIKey,
+				apiKey:         "my-api-key",
 				sendKey:        "my-send-key",
 				receiverKeys:   []string{},
 				mode:           "unlisted",
