@@ -25,13 +25,15 @@ func populateConfigContents(cfg Config) configContents {
 	return configContents{
 		General: cfg.GetGeneralConfig(),
 		Network: NetworkConfig{
-			ListenAddr:       cfg.GetListenAddr(),
-			PeerListenAddr:   cfg.GetPeerListenAddr(),
-			HoneycombAPI:     cfg.GetHoneycombAPI(),
-			HTTPIdleTimeout:  Duration(cfg.GetHTTPIdleTimeout()),
-			OpAMPEndpoint:    opAMPConfig.Endpoint,
-			OpAMPEnabled:     opAMPConfig.Enabled,
-			OpAMPRecordUsage: getDefaultTrueValue(cfg.GetOpAMPConfig().RecordUsage.Get()),
+			ListenAddr:      cfg.GetListenAddr(),
+			PeerListenAddr:  cfg.GetPeerListenAddr(),
+			HoneycombAPI:    cfg.GetHoneycombAPI(),
+			HTTPIdleTimeout: Duration(cfg.GetHTTPIdleTimeout()),
+		},
+		OpAMP: OpAMPConfig{
+			Endpoint:    opAMPConfig.Endpoint,
+			Enabled:     opAMPConfig.Enabled,
+			RecordUsage: getDefaultTrueValue(cfg.GetOpAMPConfig().RecordUsage.Get()),
 		},
 		AccessKeys: cfg.GetAccessKeyConfig(),
 		Telemetry:  getRefineryTelemetryConfig(cfg),

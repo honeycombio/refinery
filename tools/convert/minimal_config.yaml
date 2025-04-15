@@ -10,9 +10,10 @@ Network:
   PeerListenAddr: "0.0.0.0:8081"
   HTTPIdleTimeout: 0s
   HoneycombAPI: "https://api.honeycomb.io"
-  OpAMPEnabled: false
-  OpAMPRecordUsage: true
-  OpAMPEndpoint: "wss://127.0.0.1:4320/v1/opamp"
+OpAMP:
+  Enabled: false
+  RecordUsage: true
+  Endpoint: "wss://127.0.0.1:4320/v1/opamp"
 AccessKeys:
   ReceiveKeys: 
     - "your-key-goes-here"

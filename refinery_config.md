@@ -126,30 +126,43 @@ This setting is the destination to which Refinery sends all events that it decid
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
 
-### `OpAMPEnabled`
+## OpAMP Configuration
 
-`OpAMPEnabled` controls whether to enable OpAMP support.
+`OpAMP` contains OpAMP configuration options.
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
 
-OpAMP support is experimental in Refinery.
+### `Enabled`
+
+`Enabled` controls whether to enable OpAMP support.
+
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
 
 - Not eligible for live reload.
 - Type: `bool`
 
-### `OpAMPRecordUsage`
+### `RecordUsage`
 
-`OpAMPRecordUsage` controls whether to record usage metrics.
+`RecordUsage` controls whether to record usage metrics.
 
-This setting is only enabled if both OpAMP is enabled and RecordUsage is set to true.
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
 
 - Eligible for live reload.
 - Type: `defaulttrue`
 - Default: `true`
 
-### `OpAMPEndpoint`
+### `Endpoint`
 
-`OpAMPEndpoint` is the URL of the OpAMP server for this client.
+`Endpoint` is the URL of the OpAMP server for this client.
 
-This setting is the URL of the OpAMP server for this client.
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
 
 - Not eligible for live reload.
 - Type: `string`

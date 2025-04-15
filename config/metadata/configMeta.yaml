@@ -142,9 +142,14 @@ groups:
         description: >
           This setting is the destination to which Refinery sends all events
           that it decides to keep.
-        ## BIG TODO: Once we decide to release this as a feature, please move
-        ## these options to a dedicated OpAMP section
-      - name: OpAMPEnabled
+  - name: OpAMP
+    title: "OpAMP Configuration"
+    description: > 
+      contains OpAMP configuration options. OpAMP support is an experimental
+      feature, subject to breaking changes at any time. Not intended or
+      supported for customer use. **FOR INTERNAL USE ONLY**
+    fields:
+      - name: Enabled
         type: bool
         valuetype: nondefault
         default: false
@@ -152,8 +157,9 @@ groups:
         firstversion: v2.9.4
         summary: controls whether to enable OpAMP support.
         description: >
-          OpAMP support is experimental in Refinery.
-      - name: OpAMPRecordUsage
+          OpAMP support is an experimental feature, subject to breaking changes at
+          any time. Not intended or supported for customer use. **FOR INTERNAL USE ONLY**
+      - name: RecordUsage
         type: defaulttrue
         valuetype: nondefault
         default: true
@@ -161,8 +167,9 @@ groups:
         firstversion: v2.9.4
         summary: controls whether to record usage metrics.
         description: >
-          This setting is only enabled if both OpAMP is enabled and RecordUsage is set to true.
-      - name: OpAMPEndpoint
+          OpAMP support is an experimental feature, subject to breaking changes at
+          any time. Not intended or supported for customer use. **FOR INTERNAL USE ONLY**
+      - name: Endpoint
         type: string
         valuetype: assigndefault
         default: "wss://127.0.0.1:4320/v1/opamp"
@@ -170,8 +177,8 @@ groups:
         firstversion: v2.9.4
         summary: is the URL of the OpAMP server for this client.
         description: >
-          This setting is the URL of the OpAMP server for this client.
-
+          OpAMP support is an experimental feature, subject to breaking changes at
+          any time. Not intended or supported for customer use. **FOR INTERNAL USE ONLY**
 
   - name: AccessKeys
     title: "Access Key Configuration"

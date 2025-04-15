@@ -20,11 +20,13 @@ Network:
 
   - HoneycombAPI
 
-  - OpAMPEnabled
 
-  - OpAMPRecordUsage
+OpAMP:
+  - Enabled
 
-  - OpAMPEndpoint
+  - RecordUsage
+
+  - Endpoint
 
 
 AccessKeys:
