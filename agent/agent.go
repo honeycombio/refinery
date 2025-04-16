@@ -22,6 +22,8 @@ import (
 const (
 	serviceName                  = "refinery"
 	sendAgentTelemetryCapability = "io.honeycomb.capabilities.sendAgentTelemetry"
+	defaultHealthCheckInterval   = 15 * time.Second
+	defaultReportUsageInterval   = 15 * time.Second
 )
 
 type Agent struct {
@@ -48,21 +50,26 @@ type Agent struct {
 	metrics      metrics.Metrics
 	usageTracker *usageTracker
 	health       health.Reporter
+
+	healthCheckInterval time.Duration
+	reportUsageInterval time.Duration
 }
 
 func NewAgent(refineryLogger Logger, agentVersion string, currentConfig config.Config, metrics metrics.Metrics, health health.Reporter) *Agent {
 	ctx, cancel := context.WithCancel(context.Background())
 	agent := &Agent{
-		ctx:             ctx,
-		cancel:          cancel,
-		clock:           clockwork.NewRealClock(),
-		logger:          refineryLogger,
-		agentType:       serviceName,
-		agentVersion:    agentVersion,
-		effectiveConfig: currentConfig,
-		metrics:         metrics,
-		health:          health,
-		usageTracker:    newUsageTracker(),
+		ctx:                 ctx,
+		cancel:              cancel,
+		clock:               clockwork.NewRealClock(),
+		logger:              refineryLogger,
+		agentType:           serviceName,
+		agentVersion:        agentVersion,
+		effectiveConfig:     currentConfig,
+		metrics:             metrics,
+		health:              health,
+		usageTracker:        newUsageTracker(),
+		healthCheckInterval: defaultHealthCheckInterval,
+		reportUsageInterval: defaultReportUsageInterval,
 	}
 	agent.createAgentIdentity()
 	agent.logger.Debugf(context.Background(), "starting opamp client, id=%v", agent.instanceId)
@@ -195,8 +202,7 @@ func (agent *Agent) Stop(ctx context.Context) {
 }
 
 func (agent *Agent) healthCheck() {
-	//TODO: make this ticker configurable
-	timer := agent.clock.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(agent.healthCheckInterval)
 	for {
 		select {
 		case <-agent.ctx.Done():
@@ -225,7 +231,7 @@ func (agent *Agent) healthCheck() {
 }
 
 func (agent *Agent) reportUsagePeriodically() {
-	timer := agent.clock.NewTicker(15 * time.Second)
+	timer := agent.clock.NewTicker(agent.reportUsageInterval)
 	defer timer.Stop()
 
 	for {
@@ -239,7 +245,7 @@ func (agent *Agent) reportUsagePeriodically() {
 					agent.logger.Debugf(context.Background(), "No data to report")
 					continue
 				}
-				agent.logger.Errorf(context.Background(), "MONEY STEALING. Could not send usage report: %v", err)
+				agent.logger.Errorf(context.Background(), "Could not send usage report: %v", err)
 			}
 
 		}

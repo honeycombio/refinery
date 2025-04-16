@@ -535,7 +535,6 @@ func writeYAMLToFile(data any, filename string) error {
 // will cause the program to exit.
 func NewConfig(opts *CmdEnv) (Config, error) {
 	cData, rData, err := newConfigAndRules(opts)
-	// TODO: do we exit here or keep going?
 	if err != nil {
 		return nil, err
 	}
