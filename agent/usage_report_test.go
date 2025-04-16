@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest/pmetrictest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func TestUsageTracker_Add(t *testing.T) {
@@ -71,7 +73,7 @@ func TestUsageTracker_NewReport(t *testing.T) {
 		name           string
 		setup          func(tracker *usageTracker)
 		expectedError  error
-		expectedReport func(now time.Time) string
+		expectedReport func(now time.Time) pmetric.Metrics
 	}{
 		{
 			name: "Generate usage report",
@@ -81,13 +83,12 @@ func TestUsageTracker_NewReport(t *testing.T) {
 				tracker.Add(signal_logs, 2)
 			},
 			expectedError: nil,
-			expectedReport: func(now time.Time) string {
+			expectedReport: func(now time.Time) pmetric.Metrics {
 				metrics := map[usageSignal]float64{
 					signal_traces: 2,
 					signal_logs:   2,
 				}
-				data := newOTLPResourceMetricsPayload(metrics, now)
-				return string(data)
+				return newOTLPResourceMetricsPayload(metrics, now)
 			},
 		},
 		{
@@ -95,8 +96,7 @@ func TestUsageTracker_NewReport(t *testing.T) {
 			setup: func(tracker *usageTracker) {
 				// No data added
 			},
-			expectedError:  errNoData,
-			expectedReport: nil,
+			expectedError: errNoData,
 		},
 	}
 
@@ -116,7 +116,10 @@ func TestUsageTracker_NewReport(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, report)
 				if tt.expectedReport != nil {
-					assert.JSONEq(t, tt.expectedReport(now), string(report))
+					unmarshaler := &pmetric.JSONUnmarshaler{}
+					m, err := unmarshaler.UnmarshalMetrics(report)
+					require.NoError(t, err)
+					require.NoError(t, pmetrictest.CompareMetrics(tt.expectedReport(now), m, pmetrictest.IgnoreMetricDataPointsOrder()))
 					assert.Empty(t, tracker.currentDataPoints)
 					assert.NotEmpty(t, tracker.lastDataPoints)
 				}
@@ -128,7 +131,7 @@ func TestUsageTracker_NewReport(t *testing.T) {
 	}
 }
 
-func newOTLPResourceMetricsPayload(metrics map[usageSignal]float64, now time.Time) []byte {
+func newOTLPResourceMetricsPayload(metrics map[usageSignal]float64, now time.Time) pmetric.Metrics {
 	var dataPoints []map[string]interface{}
 	for signal, value := range metrics {
 		dataPoints = append(dataPoints, map[string]interface{}{
@@ -166,5 +169,7 @@ func newOTLPResourceMetricsPayload(metrics map[usageSignal]float64, now time.Tim
 		},
 	}
 	bytes, _ := json.Marshal(payload)
-	return bytes
+	unmarshaler := &pmetric.JSONUnmarshaler{}
+	m, _ := unmarshaler.UnmarshalMetrics(bytes)
+	return m
 }
