@@ -27,6 +27,7 @@ The remainder of this document describes the sections within the file and the fi
 ## Table of Contents
 - [General Configuration](#general-configuration)
 - [Network Configuration](#network-configuration)
+- [OpAMP Configuration](#opamp-configuration)
 - [Access Key Configuration](#access-key-configuration)
 - [Refinery Telemetry](#refinery-telemetry)
 - [Traces](#traces)
@@ -149,6 +150,48 @@ This setting is the destination to which Refinery sends all events that it decid
 - Default: `https://api.honeycomb.io`
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
+
+## OpAMP Configuration
+
+`OpAMP` contains OpAMP configuration options.
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
+
+### `Enabled`
+
+Enabled controls whether to enable OpAMP support.
+
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
+
+- Not eligible for live reload.
+- Type: `bool`
+
+### `RecordUsage`
+
+RecordUsage controls whether to record usage metrics.
+
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
+
+- Eligible for live reload.
+- Type: `bool`
+- Default: `true`
+
+### `Endpoint`
+
+Endpoint is the URL of the OpAMP server for this client.
+
+OpAMP support is an experimental feature, subject to breaking changes at any time.
+Not intended or supported for customer use.
+**FOR INTERNAL USE ONLY**
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `wss://127.0.0.1:4320/v1/opamp`
 
 ## Access Key Configuration
 

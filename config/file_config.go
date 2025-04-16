@@ -31,15 +31,14 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type fileConfig struct {
-	mainConfig    *configContents
-	mainHash      string
-	rulesConfig   *V2SamplerConfig
-	rulesHash     string
-	opts          *CmdEnv
-	callbacks     []ConfigReloadCallback
-	errorCallback func(error)
-	mux           sync.RWMutex
-	lastLoadTime  time.Time
+	mainConfig   *configContents
+	mainHash     string
+	rulesConfig  *V2SamplerConfig
+	rulesHash    string
+	opts         *CmdEnv
+	callbacks    []ConfigReloadCallback
+	mux          sync.RWMutex
+	lastLoadTime time.Time
 }
 
 // ensure that fileConfig implements Config
@@ -48,6 +47,7 @@ var _ Config = (*fileConfig)(nil)
 type configContents struct {
 	General              GeneralConfig             `yaml:"General"`
 	Network              NetworkConfig             `yaml:"Network"`
+	OpAMP                OpAMPConfig               `yaml:"OpAMP"`
 	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
 	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
 	Traces               TracesConfig              `yaml:"Traces"`
@@ -75,6 +75,12 @@ type GeneralConfig struct {
 	MinRefineryVersion   string   `yaml:"MinRefineryVersion" default:"v2.0"`
 	DatasetPrefix        string   `yaml:"DatasetPrefix" `
 	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"15s"`
+}
+
+type OpAMPConfig struct {
+	Endpoint    string       `yaml:"Endpoint" cmdenv:"OpAMPEndpoint" default:"wss://127.0.0.1:4320/v1/opamp"`
+	Enabled     bool         `yaml:"Enabled" default:"false"`
+	RecordUsage *DefaultTrue `yaml:"RecordUsage" default:"true"`
 }
 
 type NetworkConfig struct {
@@ -447,24 +453,27 @@ func (e *FileConfigError) Error() string {
 	return msg.String()
 }
 
+func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
+	cData, err := getConfigDataForLocations(opts.ConfigLocations)
+	if err != nil {
+		return nil, nil, err
+	}
+	rulesData, err := getConfigDataForLocations(opts.RulesLocations)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cData, rulesData, err
+}
+
 // newFileConfig does the work of creating and loading the start of a config object
 // from the given arguments.
 // It's used by both the main init as well as the reload code.
 // In order to do proper validation, we actually process the data twice -- once as
 // a map, and once as the actual config object.
-func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
-	configData, err := getConfigDataForLocations(opts.ConfigLocations)
-	if err != nil {
-		return nil, err
-	}
-	rulesData, err := getConfigDataForLocations(opts.RulesLocations)
-	if err != nil {
-		return nil, err
-	}
-
+func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, error) {
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(configData, opts)
+		cfgFails, err := validateConfigs(cData, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -486,7 +495,7 @@ func newFileConfig(opts *CmdEnv) (*fileConfig, error) {
 
 	// Now load the files
 	mainconf := &configContents{}
-	mainhash, err := applyConfigInto(mainconf, configData, opts)
+	mainhash, err := applyConfigInto(mainconf, cData, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -524,8 +533,13 @@ func writeYAMLToFile(data any, filename string) error {
 // nil, it uses the command line arguments.
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
-func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
-	cfg, err := newFileConfig(opts)
+func NewConfig(opts *CmdEnv) (Config, error) {
+	cData, rData, err := newConfigAndRules(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := newFileConfig(opts, cData, rData)
 	// only exit if we have no config at all; if it fails validation, we'll
 	// do the rest and return it anyway
 	if err != nil && cfg == nil {
@@ -549,24 +563,36 @@ func NewConfig(opts *CmdEnv, errorCallback func(error)) (Config, error) {
 	}
 
 	cfg.callbacks = make([]ConfigReloadCallback, 0)
-	cfg.errorCallback = errorCallback
 
 	return cfg, err
 }
 
 // Reload attempts to reload the configuration; if it has changed, it stores the
 // new data and calls the reload callbacks.
-func (f *fileConfig) Reload() {
-	// reread the configs
-	cfg, err := newFileConfig(f.opts)
+func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
+	cData, rData, err := newConfigAndRules(f.opts)
 	if err != nil {
-		f.errorCallback(err)
-		return
+		return err
+	}
+
+	newData := &ReloadedConfigData{
+		configs: cData,
+		rules:   rData,
+	}
+
+	for _, opt := range opts {
+		opt(newData)
+	}
+
+	// reread the configs
+	cfg, err := newFileConfig(f.opts, newData.configs, newData.rules)
+	if err != nil {
+		return err
 	}
 
 	// if nothing's changed, we're fine
 	if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
-		return
+		return nil
 	}
 
 	// otherwise, update our state and call the callbacks
@@ -580,6 +606,7 @@ func (f *fileConfig) Reload() {
 	for _, cb := range f.callbacks {
 		cb(cfg.mainHash, cfg.rulesHash)
 	}
+	return nil
 }
 
 // GetHashes returns the current hash values for the main and rules configs.
@@ -923,6 +950,17 @@ func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	defer f.mux.RUnlock()
 
 	return time.Duration(f.mainConfig.Specialized.EnvironmentCacheTTL)
+}
+
+func (f *fileConfig) GetOpAMPConfig() OpAMPConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return OpAMPConfig{
+		Enabled:     f.mainConfig.OpAMP.Enabled,
+		Endpoint:    f.mainConfig.OpAMP.Endpoint,
+		RecordUsage: f.mainConfig.OpAMP.RecordUsage,
+	}
 }
 
 func (f *fileConfig) GetOTelTracingConfig() OTelTracingConfig {

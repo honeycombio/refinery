@@ -135,6 +135,8 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
 	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
 	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
+	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
+	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -162,7 +164,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 	}
 
 	for _, metric := range routerMetrics {
-		metric.Name = r.incomingOrPeer + metric.Name
+		if strings.HasPrefix(metric.Name, "_") {
+			metric.Name = r.incomingOrPeer + metric.Name
+		}
 		r.Metrics.Register(metric)
 	}
 
@@ -605,6 +609,15 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		Event:   *ev,
 		TraceID: traceID,
 		IsRoot:  isRootSpan(ev, r.Config),
+	}
+
+	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
+	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
+		if span.Data["meta.signal_type"] == "log" {
+			r.Metrics.Count("bytes_received_logs", span.GetDataSize())
+		} else {
+			r.Metrics.Count("bytes_received_traces", span.GetDataSize())
+		}
 	}
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;

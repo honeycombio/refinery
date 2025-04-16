@@ -142,6 +142,43 @@ groups:
         description: >
           This setting is the destination to which Refinery sends all events
           that it decides to keep.
+  - name: OpAMP
+    title: "OpAMP Configuration"
+    description: > 
+      contains OpAMP configuration options. OpAMP support is an experimental
+      feature, subject to breaking changes at any time. Not intended or
+      supported for customer use. **FOR INTERNAL USE ONLY**
+    fields:
+      - name: Enabled
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v2.9.4
+        summary: controls whether to enable OpAMP support.
+        description: >
+          OpAMP support is an experimental feature, subject to breaking changes at
+          any time. Not intended or supported for customer use. **FOR INTERNAL USE ONLY**
+      - name: RecordUsage
+        type: defaulttrue
+        valuetype: nondefault
+        default: true
+        reload: true
+        firstversion: v2.9.4
+        summary: controls whether to record usage metrics.
+        description: >
+          OpAMP support is an experimental feature, subject to breaking changes at
+          any time. Not intended or supported for customer use. **FOR INTERNAL USE ONLY**
+      - name: Endpoint
+        type: string
+        valuetype: assigndefault
+        default: "wss://127.0.0.1:4320/v1/opamp"
+        reload: false
+        firstversion: v2.9.4
+        summary: is the URL of the OpAMP server for this client.
+        description: >
+          OpAMP support is an experimental feature, subject to breaking changes at
+          any time. Not intended or supported for customer use. **FOR INTERNAL USE ONLY**
 
   - name: AccessKeys
     title: "Access Key Configuration"
@@ -745,6 +782,7 @@ groups:
         summary: is the interval between sending legacy metrics to Honeycomb.
         description: >
           Between 1 and 60 seconds is typical.
+
 
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"

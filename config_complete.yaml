@@ -128,6 +128,44 @@ Network:
     ## Eligible for live reload.
     # HoneycombAPI: "https://api.honeycomb.io"
 
+#########################
+## OpAMP Configuration ##
+#########################
+OpAMP:
+  ## OpAMP contains OpAMP configuration options. OpAMP support is an
+  ## experimental feature, subject to breaking changes at any time. Not
+  ## intended or supported for customer use. **FOR INTERNAL USE ONLY**
+  ##
+  ####
+    ## Enabled controls whether to enable OpAMP support.
+    ##
+    ## OpAMP support is an experimental feature, subject to breaking changes
+    ## at any time. Not intended or supported for customer use. **FOR
+    ## INTERNAL USE ONLY**
+    ##
+    ## Not eligible for live reload.
+    # Enabled: false
+
+    ## RecordUsage controls whether to record usage metrics.
+    ##
+    ## OpAMP support is an experimental feature, subject to breaking changes
+    ## at any time. Not intended or supported for customer use. **FOR
+    ## INTERNAL USE ONLY**
+    ##
+    ## default: true
+    ## Eligible for live reload.
+    # RecordUsage: true
+
+    ## Endpoint is the URL of the OpAMP server for this client.
+    ##
+    ## OpAMP support is an experimental feature, subject to breaking changes
+    ## at any time. Not intended or supported for customer use. **FOR
+    ## INTERNAL USE ONLY**
+    ##
+    ## default: wss://127.0.0.1:4320/v1/opamp
+    ## Not eligible for live reload.
+    Endpoint: wss://127.0.0.1:4320/v1/opamp
+
 ##############################
 ## Access Key Configuration ##
 ##############################

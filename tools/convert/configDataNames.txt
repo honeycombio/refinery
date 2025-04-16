@@ -21,6 +21,14 @@ Network:
   - HoneycombAPI
 
 
+OpAMP:
+  - Enabled
+
+  - RecordUsage
+
+  - Endpoint
+
+
 AccessKeys:
   - ReceiveKeys (originally APIKeys)
 
