@@ -2,7 +2,6 @@ package route
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -18,23 +17,26 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 	defer span.End()
 
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
+	apicfg := r.Config.GetAccessKeyConfig()
+	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
 
 	if err := ri.ValidateLogsHeaders(); err != nil {
-		if errors.Is(err, huskyotlp.ErrInvalidContentType) {
-			r.handlerReturnWithError(w, ErrInvalidContentType, err)
-		} else {
+		switch err {
+		case huskyotlp.ErrInvalidContentType:
+			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
+			return
+		case huskyotlp.ErrMissingAPIKeyHeader, huskyotlp.ErrMissingDatasetHeader:
+			if len(keyToUse) == 0 {
+				r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+				return
+			}
+		default:
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+			return
 		}
-		return
 	}
 
-	apicfg := r.Config.GetAccessKeyConfig()
-	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey)
-	if err != nil {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
-		return
-	}
-
+	ri.ApiKey = keyToUse
 	result, err := huskyotlp.TranslateLogsRequestFromReader(ctx, req.Body, ri)
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
@@ -64,19 +66,17 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	defer span.End()
 
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
-	if err := ri.ValidateLogsHeaders(); err != nil {
-		return nil, huskyotlp.AsGRPCError(err)
-	}
-
 	apicfg := l.router.Config.GetAccessKeyConfig()
 	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
-	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey)
+	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
 
-	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
+	if err := ri.ValidateLogsHeaders(); err != nil && err != huskyotlp.ErrMissingAPIKeyHeader {
+		return nil, huskyotlp.AsGRPCError(err)
 	}
+
+	ri.ApiKey = keyToUse
 
 	result, err := huskyotlp.TranslateLogsRequest(ctx, req, ri)
 	if err != nil {
