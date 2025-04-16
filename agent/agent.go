@@ -27,16 +27,16 @@ const (
 )
 
 type Agent struct {
-	clock              clockwork.Clock
-	agentType          string
-	agentVersion       string
-	instanceId         uuid.UUID
-	hostname           string
-	effectiveConfig    config.Config
-	agentDescription   *protobufs.AgentDescription
-	opampClient        client.OpAMPClient
-	remoteConfigStatus *protobufs.RemoteConfigStatus
-	remoteConfig       *protobufs.AgentRemoteConfig
+	clock                    clockwork.Clock
+	agentType                string
+	agentVersion             string
+	instanceId               uuid.UUID
+	hostname                 string
+	effectiveConfig          config.Config
+	agentDescription         *protobufs.AgentDescription
+	opampClient              client.OpAMPClient
+	remoteConfigStatus       *protobufs.RemoteConfigStatus
+	lastRemoteConfigReceived *protobufs.AgentRemoteConfig
 
 	//	opampClientCert     *tls.Certificate
 	//	caCertPath          string
@@ -330,7 +330,7 @@ func (agent *Agent) reportConfigStatus(status protobufs.RemoteConfigStatuses, er
 		agent.logger.Errorf(context.Background(), "Could not report OpAMP remote config status: %s", err)
 	}
 	remoteConfigstatus := &protobufs.RemoteConfigStatus{
-		LastRemoteConfigHash: agent.remoteConfig.GetConfigHash(),
+		LastRemoteConfigHash: agent.lastRemoteConfigReceived.GetConfigHash(),
 		Status:               status,
 		ErrorMessage:         errorMessage,
 	}
@@ -390,7 +390,7 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 			opts = append(opts, config.WithConfigData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://config")))
 		}
 
-		agent.remoteConfig = msg.RemoteConfig
+		agent.lastRemoteConfigReceived = msg.RemoteConfig
 		agent.logger.Debugf(ctx, "onMessage config opts: %v", opts)
 		if len(opts) > 0 {
 			agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLYING, "")
@@ -407,7 +407,7 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 }
 
 func (agent *Agent) isConfigChanged(newConfigHash []byte) bool {
-	if agent.remoteConfig == nil {
+	if agent.lastRemoteConfigReceived == nil {
 		return true
 	}
 	if !bytes.Equal(agent.remoteConfigStatus.GetLastRemoteConfigHash(), newConfigHash) {

@@ -112,8 +112,8 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 			require.Equal(t, tc.status, agent.remoteConfigStatus.GetStatus(), fmt.Sprintf("unexpected status %s", agent.remoteConfigStatus.GetStatus()))
 			if tc.status == protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED {
 				assert.Equal(t, tc.configHash, agent.remoteConfigStatus.GetLastRemoteConfigHash())
-				assert.Equal(t, tc.configHash, agent.remoteConfig.GetConfigHash())
-				assert.Equal(t, tc.configMap, agent.remoteConfig.GetConfig().GetConfigMap())
+				assert.Equal(t, tc.configHash, agent.lastRemoteConfigReceived.GetConfigHash())
+				assert.Equal(t, tc.configMap, agent.lastRemoteConfigReceived.GetConfig().GetConfigMap())
 			}
 		})
 	}
