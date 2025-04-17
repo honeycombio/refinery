@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-03-25 at 13:08:14 UTC.
+It was automatically generated on 2025-03-27 at 23:12:22 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -10,6 +10,8 @@ This table includes metrics with fully defined names.
 
 | Name | Type | Unit | Description |
 |------|------|------|-------------|
+| is_ready | Gauge | Dimensionless | Whether the system is ready to receive traffic |
+| is_alive | Gauge | Dimensionless | Whether the system is alive and reporting in |
 | collect_cache_entries | Histogram | Dimensionless | The number of traces currently stored in the cache |
 | cuckoo_current_capacity | Gauge | Dimensionless | current capacity of the cuckoo filter |
 | cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
@@ -18,8 +20,6 @@ This table includes metrics with fully defined names.
 | cuckoo_addqueue_locktime_uS | Histogram | Microseconds | the time spent holding the add queue lock |
 | cache_recent_dropped_traces | Gauge | Dimensionless | the current size of the most recent dropped trace cache |
 | collect_sent_reasons_cache_entries | Histogram | Dimensionless | Number of entries in the sent reasons cache |
-| is_ready | Gauge | Dimensionless | Whether the system is ready to receive traffic |
-| is_alive | Gauge | Dimensionless | Whether the system is alive and reporting in |
 | redis_pubsub_published | Counter | Dimensionless | Number of messages published to Redis PubSub |
 | redis_pubsub_received | Counter | Dimensionless | Number of messages received from Redis PubSub |
 | local_pubsub_published | Counter | Dimensionless | The total number of messages sent via the local pubsub implementation |
@@ -104,6 +104,8 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | _router_batch | Counter | Dimensionless | the number of batches of events received |
 | _router_otlp | Counter | Dimensionless | the number of batches of otlp requests received |
+| bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
+| bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
 | queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
 | queue_overflow | Counter | Dimensionless | number of events dropped due to queue overflow |
 | send_errors | Counter | Dimensionless | number of errors encountered while sending events to destination |

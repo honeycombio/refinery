@@ -33,6 +33,7 @@ type MockConfig struct {
 	GetGeneralConfigVal              GeneralConfig
 	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
+	GetOpAmpConfigVal                OpAMPConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
 	GetUpstreamBufferSizeVal         int
@@ -69,13 +70,15 @@ type MockConfig struct {
 // assert that MockConfig implements Config
 var _ Config = (*MockConfig)(nil)
 
-func (m *MockConfig) Reload() {
+func (m *MockConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
 	for _, callback := range m.Callbacks {
 		callback("", "")
 	}
+
+	return nil
 }
 
 func (m *MockConfig) RegisterReloadCallback(callback ConfigReloadCallback) {
@@ -446,4 +449,11 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalAttributes
+}
+
+func (f *MockConfig) GetOpAMPConfig() OpAMPConfig {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.GetOpAmpConfigVal
 }

@@ -548,10 +548,12 @@ All fields are checked as individual fields before any of them are checked as ne
 
 The comparison operator to use.
 String comparisons are case-sensitive.
-For most cases, use negative operators (`!=`, `does-not-contain`, `not-exists`, and `not-in`) in a rule with a scope of "span".
+For most cases, only use negative operators (`!=`, `does-not-contain`, `not-exists`, and `not-in`) in a rule with a scope of "span".
 WARNING: Rules can have `Scope: trace` or `Scope: span`.
 Using a negative operator with `Scope: trace` will cause the condition be true if **any** single span in the entire trace matches.
 Use `Scope: span` with negative operators.
+As a general rule, negative operators are more difficult to use correctly and should be used sparingly.
+It is usually more effective to use positive operators and be more explicit about rules applied.
 
 - Type: `string`
 - Options: `=`, `!=`, `>`, `<`, `>=`, `<=`, `starts-with`, `contains`, `does-not-contain`, `exists`, `not-exists`, `has-root-span`, `matches`, `in`, `not-in`

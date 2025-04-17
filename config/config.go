@@ -24,7 +24,7 @@ type Config interface {
 
 	// Reload forces the config to attempt to reload its values. If the config
 	// checksum has changed, the reload callbacks will be called.
-	Reload()
+	Reload(opts ...ReloadedConfigDataOption) error
 
 	// GetHashes returns the current config and rule hashes
 	GetHashes() (cfg string, rules string)
@@ -156,6 +156,8 @@ type Config interface {
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string
+
+	GetOpAMPConfig() OpAMPConfig
 }
 
 type ConfigReloadCallback func(configHash, ruleCfgHash string)
@@ -165,4 +167,25 @@ type ConfigMetadata struct {
 	ID       string `json:"id"`
 	Hash     string `json:"hash"`
 	LoadedAt string `json:"loaded_at"`
+}
+
+// ReloadedConfigData holds the new config data that will be applied to
+// the Config instance through `Reload` method.
+type ReloadedConfigData struct {
+	configs []configData
+	rules   []configData
+}
+
+// ReloadedConfigDataOption is a function that allows setting the new config data
+type ReloadedConfigDataOption func(*ReloadedConfigData)
+
+func WithConfigData(in configData) ReloadedConfigDataOption {
+	return func(c *ReloadedConfigData) {
+		c.configs = append(c.configs, in)
+	}
+}
+func WithRulesData(in configData) ReloadedConfigDataOption {
+	return func(c *ReloadedConfigData) {
+		c.rules = append(c.rules, in)
+	}
 }

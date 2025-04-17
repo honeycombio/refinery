@@ -10,6 +10,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/configwatcher"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func getConfig(args []string) (config.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return config.NewConfig(opts, func(err error) {})
+	return config.NewConfig(opts)
 }
 
 // creates two temporary yaml files from the strings passed in and returns their filenames
@@ -213,6 +214,7 @@ func TestReload(t *testing.T) {
 	watcher := &configwatcher.ConfigWatcher{
 		Config: c,
 		PubSub: pubsub,
+		Logger: &logger.NullLogger{},
 	}
 	watcher.Start()
 	defer watcher.Stop()
@@ -332,6 +334,10 @@ func TestReadDefaults(t *testing.T) {
 	}
 
 	if d := c.GetEnvironmentCacheTTL(); d != time.Hour {
+		t.Error("received", d, "expected", time.Hour)
+	}
+
+	if d := c.GetOpAMPConfig(); d.Enabled {
 		t.Error("received", d, "expected", time.Hour)
 	}
 
