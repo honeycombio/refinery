@@ -146,6 +146,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
+	{Name: "_router_stress_rejected", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of requests rejected due to uneven load across the cluster"},
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -1184,6 +1185,7 @@ func (r *Router) stressCheck(next http.Handler) http.Handler {
 
 		w.Header().Set("Retry-After", retryAfter)
 		http.Error(w, "Service temporarily overloaded", http.StatusServiceUnavailable)
+		r.Metrics.Increment(r.incomingOrPeer + "_router_stress_rejected")
 		r.iopLogger.Debug().
 			WithField("individual_stress", individualStress).
 			WithField("cluster_stress", clusterStress).
