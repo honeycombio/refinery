@@ -1,5 +1,25 @@
 # Refinery Changelog
 
+## 2.9.5 2025-04-17
+
+### Features
+
+- feat: Support arbitrary envvar replacement in config strings (#1517) | [Kent Quirk](https://github.com/kentquirk)
+- feat: add experimental support for opamp (#1528) | [Alex Boten](https://github.com/codeboten)
+
+### Fixes
+
+- fix: update trace_id field to meta.trace_id (#1520) | [Alex Boten](https://github.com/codeboten)
+- fix: ensure SendKeyMode priority (#1527) | [Alex Boten](https://github.com/codeboten)
+
+### Maintenance
+
+- docs: add missing metrics and extra details (#1515) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint(deps): bump the minor-patch group with 15 updates (#1518) | [dependabot[bot]](https://github.com/dependabot)
+- maint: Mark TraceLocalityMode as experimetnal (#1522) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- docs: some copyedits from docs (#1526) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint(deps): bump golang.org/x/net from 0.37.0 to 0.38.0 (#1529) | [dependabot[bot]](https://github.com/dependabot)
+
 ## 2.9.4 2025-03-25
 
 ### Features
@@ -340,7 +360,7 @@ The main feature is support of Honeycomb Classic ingest keys; there is also a pe
 
 - maint: add labels to release.yml for auto-generated grouping (#1042) | [Jamie Danielson](https://github.com/JamieDanielson)
 - maint(deps): bump the minor-patch group with 12 updates (#1030) | [dependabot[bot]](https://github.com/dependabot)
-- maint: group minor/patch dep updates (#1028) | [Alex Boten](https://github.com/Alex Boten)
+- maint: group minor/patch dep updates (#1028) | [Alex Boten](https://github.com/codeboten)
 
 
 ## 2.4.3 2024-03-01

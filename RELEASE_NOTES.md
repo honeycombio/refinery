@@ -2,6 +2,13 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.9.5
+
+This release includes a feature to support environment variable replacement in configuration files, dependency updates, and the following fixes:
+
+- Ensure `SendKeyMode` priority applies consistently
+- Update the field used record decision context from `trace_id` to `meta.trace_id`
+
 ## Version 2.9.4
 
 This is a maintenance release that adds the `incoming_router_event_bytes` and `peer_router_event_bytes` metrics, which use a histogram to record the number of bytes per received event.
