@@ -1885,7 +1885,6 @@ groups:
         summary: is a string indicating how to use Stress Relief.
         description: >
           This setting sets the Stress Relief mode.
-
           "never" means that Stress Relief will never activate.
 
           "monitor" is the recommended setting, and means that
@@ -1896,8 +1895,6 @@ groups:
           in an emergency situation.
 
       - name: ActivationLevel
-        v1group: StressRelief
-        v1name: ActivationLevel
         type: percentage
         valuetype: nondefault
         default: 90
@@ -1973,3 +1970,55 @@ groups:
           If this duration is `0`, then Refinery will not start in stressed
           mode, which will provide faster startup at the possible cost of
           startup instability.
+
+      - name: InboundRejectionServer
+        type: string
+        valuetype: enum
+        values: ["never", "all", "incoming", "peer"]
+        default: "never"
+        reload: true
+        summary: determines which server type should implement inbound request rejection during high stress.
+        description: >
+          Stress Relief mode must be set to `monitor` to use this ability.
+
+          Controls whether and where to implement stress-based request rejection.
+
+          When enabled, during routing inbound requests, it will check the current
+          stress levels and if the cluster is less stressed than the process, it
+          will reject the request with a 503 response and a Retry-After header.
+          This will tell the load balancer and clients to wait and try again later.
+
+          Do not use this if your clients will not perform retries. It will cause lost data.
+
+          'never' disables rejection, 'always' enables it on both incoming and peer servers,
+          'incoming' only on the incoming server, and 'peer' only on the peer server.
+
+      - name: InboundRejectionTolerance
+        type: int
+        valuetype: int
+        default: 5
+        validations:
+          - type: minimum
+            arg: 5
+          - type: maximum
+            arg: 100
+        reload: true
+        summary: The percentage above cluster average at which the node will reject requests
+        description: >
+          Inbound rejection will happen if the process's stress level is greater than
+          the cluster average plus this amount.
+
+          If the cluster average is 60% stressed and this is 5, the process will have to reach
+          65% stressed to reject requests.
+
+      - name: RetryAfterSeconds
+        type: int
+        valuetype: int
+        default: 5
+        reload: true
+        summary: the number of seconds clients should wait before retrying rejected requests.
+        description: >
+          If this is set to zero, it will use the TraceTimeout value.
+
+          When requests are rejected due to high stress, this value is sent in the
+          Retry-After header to indicate how long clients should wait before retrying.
