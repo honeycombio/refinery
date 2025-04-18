@@ -1172,6 +1172,10 @@ func (r *Router) stressCheck(next http.Handler) http.Handler {
 		if retryAfter == "0" {
 			retryAfter = strconv.Itoa(int(r.Config.GetTracesConfig().TraceTimeout))
 		}
+		statusCode := int(r.Config.GetStressReliefConfig().RejectionStatusCode)
+		if statusCode != http.StatusTooManyRequests && statusCode != http.StatusServiceUnavailable {
+			statusCode = http.StatusTooManyRequests
+		}
 
 		// Allow traffic if:
 		// 0. already stressed
@@ -1184,7 +1188,7 @@ func (r *Router) stressCheck(next http.Handler) http.Handler {
 		}
 
 		w.Header().Set("Retry-After", retryAfter)
-		http.Error(w, "Service temporarily overloaded", http.StatusServiceUnavailable)
+		http.Error(w, "Service temporarily overloaded", statusCode)
 		r.Metrics.Increment(r.incomingOrPeer + "_router_stress_rejected")
 		r.iopLogger.Debug().
 			WithField("individual_stress", individualStress).

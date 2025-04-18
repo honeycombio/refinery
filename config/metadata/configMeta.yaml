@@ -2016,9 +2016,29 @@ groups:
         valuetype: int
         default: 5
         reload: true
+        validations:
+          - type: minimum
+            arg: 0
+          - type: maximum
+            arg: 120
         summary: the number of seconds clients should wait before retrying rejected requests.
         description: >
           If this is set to zero, it will use the TraceTimeout value.
 
           When requests are rejected due to high stress, this value is sent in the
           Retry-After header to indicate how long clients should wait before retrying.
+      
+      - name: RejectionStatusCode
+        type: int
+        valuetype: int
+        default: 429
+        reload: true
+        summary: the status code to use when rejecting requests due to imbalanced load.
+        description: >
+          This is the status code that will be sent when rejecting requests due to imbalanced load.
+          It must be either 429 (Too Many Requests) or 503 (Service Unavailable).
+          
+          You would want to use 429 if your clients are all OTLP and will respect the 
+          Retry-After header. If your clients use Libhoney-go or custom exporters, 
+          you would want to use 503 since it will  tell the load balancer to route traffic 
+          elsewhere for that period of time.

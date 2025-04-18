@@ -420,6 +420,7 @@ type StressReliefConfig struct {
 	InboundRejectionServer    string   `yaml:"InboundRejectionServer" default:"none"`
 	InboundRejectionTolerance uint     `yaml:"InboundRejectionTolerance" default:"5"`
 	RetryAfterSeconds         uint     `yaml:"RetryAfterSeconds" default:"5"`
+	RejectionStatusCode       uint     `yaml:"RejectionStatusCode" default:"429"`
 }
 
 type FileConfigError struct {
