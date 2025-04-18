@@ -417,6 +417,10 @@ type StressReliefConfig struct {
 	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
 	SamplingRate              uint64   `yaml:"SamplingRate" default:"100"`
 	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
+	InboundRejectionServer    string   `yaml:"InboundRejectionServer" default:"none"`
+	InboundRejectionTolerance uint     `yaml:"InboundRejectionTolerance" default:"5"`
+	RetryAfterSeconds         uint     `yaml:"RetryAfterSeconds" default:"5"`
+	RejectionStatusCode       uint     `yaml:"RejectionStatusCode" default:"429"`
 }
 
 type FileConfigError struct {
