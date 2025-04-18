@@ -166,6 +166,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "kept_decisions_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "total number of kept decisions received"},
 	{Name: "collector_kept_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times kept trace decision queue is full"},
 	{Name: "collector_drop_decisions_queue_full", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times drop trace decision queue is full"},
+	{Name: "collector_cache_eviction", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times cache eviction has occurred"},
 }
 
 func (i *InMemCollector) Start() error {
@@ -270,6 +271,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
+	i.Metrics.Increment("collector_cache_eviction")
 
 	// Figure out what fraction of the total cache we should remove. We'd like it to be
 	// enough to get us below the max capacity, but not TOO much below.

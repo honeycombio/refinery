@@ -72,6 +72,7 @@ This table includes metrics with fully defined names.
 | kept_decisions_received | Counter | Dimensionless | total number of kept decisions received |
 | collector_kept_decisions_queue_full | Counter | Dimensionless | number of times kept trace decision queue is full |
 | collector_drop_decisions_queue_full | Counter | Dimensionless | number of times drop trace decision queue is full |
+| collector_cache_eviction | Counter | Dimensionless | number of times cache eviction has occurred |
 | cluster_stress_level | Gauge | Dimensionless | The overall stress level of the cluster |
 | individual_stress_level | Gauge | Dimensionless | The stress level of the individual node |
 | stress_level | Gauge | Dimensionless | The stress level that's being used to determine whether to activate stress relief |
