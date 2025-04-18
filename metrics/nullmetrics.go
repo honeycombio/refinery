@@ -7,6 +7,7 @@ type NullMetrics struct{}
 
 // Start initializes all metrics or resets all metrics to zero
 func (n *NullMetrics) Start() {}
+func (n *NullMetrics) Stop()  {}
 
 func (n *NullMetrics) Register(metadata Metadata)             {}
 func (n *NullMetrics) Increment(name string)                  {}

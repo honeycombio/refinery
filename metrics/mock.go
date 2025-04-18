@@ -27,6 +27,10 @@ func (m *MockMetrics) Start() {
 	m.Constants = make(map[string]float64)
 }
 
+func (m *MockMetrics) Stop() {
+	// no-op
+}
+
 func (m *MockMetrics) Register(metadata Metadata) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
