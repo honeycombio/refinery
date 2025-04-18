@@ -239,7 +239,7 @@ type LoggerConfig struct {
 }
 
 type HoneycombLoggerConfig struct {
-	APIHost           string       `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIHost           string       `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
 	APIKey            string       `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
 	Dataset           string       `yaml:"Dataset" default:"Refinery Logs"`
 	SamplerEnabled    *DefaultTrue `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
@@ -265,7 +265,7 @@ type PrometheusMetricsConfig struct {
 
 type LegacyMetricsConfig struct {
 	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
 	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
 	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
 	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
@@ -273,7 +273,7 @@ type LegacyMetricsConfig struct {
 
 type OTelMetricsConfig struct {
 	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
 	APIKey            string   `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
 	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
 	Compression       string   `yaml:"Compression" default:"gzip"`
@@ -282,7 +282,7 @@ type OTelMetricsConfig struct {
 
 type OTelTracingConfig struct {
 	Enabled    bool   `yaml:"Enabled" default:"false"`
-	APIHost    string `yaml:"APIHost" default:"https://api.honeycomb.io"`
+	APIHost    string `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
 	APIKey     string `yaml:"APIKey" cmdenv:"OTelTracesAPIKey,HoneycombAPIKey"`
 	Dataset    string `yaml:"Dataset" default:"Refinery Traces"`
 	SampleRate uint64 `yaml:"SampleRate" default:"100"`
