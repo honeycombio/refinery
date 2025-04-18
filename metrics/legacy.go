@@ -266,7 +266,9 @@ func (h *LegacyMetrics) reportToHoneycomb(ctx context.Context) {
 					ev.AddField(histogram.name+"_p99", histogram.vals[p99Index])
 					ev.AddField(histogram.name+"_min", histogram.vals[0])
 					ev.AddField(histogram.name+"_max", histogram.vals[len(histogram.vals)-1])
-					ev.AddField(histogram.name+"_avg", average(histogram.vals))
+					avg, sum := averageAndSum(histogram.vals)
+					ev.AddField(histogram.name+"_avg", avg)
+					ev.AddField(histogram.name+"_sum", sum)
 					histogram.vals = histogram.vals[:0]
 				}
 				histogram.lock.Unlock()
@@ -304,6 +306,14 @@ func average(vals []float64) float64 {
 		total += val
 	}
 	return total / float64(len(vals))
+}
+
+func averageAndSum(vals []float64) (float64, float64) {
+	var total float64
+	for _, val := range vals {
+		total += val
+	}
+	return total / float64(len(vals)), total
 }
 
 func (h *LegacyMetrics) Register(metadata Metadata) {
