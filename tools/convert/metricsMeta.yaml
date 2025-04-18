@@ -247,6 +247,10 @@ complete:
       type: Counter
       unit: Dimensionless
       description: number of times drop trace decision queue is full
+    - name: collector_cache_eviction
+      type: Counter
+      unit: Dimensionless
+      description: number of times cache eviction has occurred
     - name: cluster_stress_level
       type: Gauge
       unit: Dimensionless
