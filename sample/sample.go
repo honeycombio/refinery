@@ -111,7 +111,7 @@ var samplerMetrics = []metrics.Metadata{
 	{Name: "_num_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by configured sampler"},
 	{Name: "_num_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces kept by configured sampler"},
 	{Name: "_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Sample rate for traces"},
-	{Name: "_trace_key_length", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Number of unique trace keys"},
+	{Name: "_sampler_key_cardinality", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Number of unique keys being tracked by the sampler"},
 }
 
 func getMetricType(name string) metrics.MetricType {
@@ -161,6 +161,6 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	} else {
 		d.met.Increment(d.prefix + "_num_dropped")
 	}
-	d.met.Histogram(d.prefix+"_trace_key_length", float64(numTraceKey))
+	d.met.Histogram(d.prefix+"_sampler_key_cardinality", float64(numTraceKey))
 	d.met.Histogram(d.prefix+"_sample_rate", float64(rate))
 }
