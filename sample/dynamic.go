@@ -81,7 +81,7 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
-	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate)
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
 	return rate, shouldKeep, d.prefix, key
 }
 
