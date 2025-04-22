@@ -95,7 +95,7 @@ func (ps *GooglePubSub) Publish(ctx context.Context, key, message string) error 
 func (ps *GooglePubSub) Subscribe(ctx context.Context, key string, callback SubscriptionCallback) Subscription {
 	name := ps.Config.GetGooglePeerManagement().Topic
 	t := ps.getTopic(name)
-	sub, err := ps.client.CreateSubscription(ctx, ps.Config.GetRedisIdentifier(), g.SubscriptionConfig{
+	sub, err := ps.client.CreateSubscription(ctx, fmt.Sprintf("%s-%s", ps.Config.GetRedisIdentifier(), key), g.SubscriptionConfig{
 		Topic:  t,
 		Filter: fmt.Sprintf(`attributes.topic="%s"`, key),
 	})
