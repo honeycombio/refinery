@@ -296,6 +296,7 @@ type PeerManagementConfig struct {
 	IdentifierInterfaceName string   `yaml:"IdentifierInterfaceName"`
 	UseIPV6Identifier       bool     `yaml:"UseIPV6Identifier"`
 	Peers                   []string `yaml:"Peers"`
+	PeerTransmission        string   `yaml:"PeerTransmission"`
 }
 
 type RedisPeerManagementConfig struct {
@@ -797,6 +798,13 @@ func (f *fileConfig) GetGooglePeerManagement() GooglePeerManagementConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.GooglePeerManagement
+}
+
+func (f *fileConfig) GetPeerTransmission() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.PeerManagement.PeerTransmission
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() string {

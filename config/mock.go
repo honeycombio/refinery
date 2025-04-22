@@ -28,6 +28,7 @@ type MockConfig struct {
 	GetPeersVal                      []string
 	GetRedisPeerManagementVal        RedisPeerManagementConfig
 	GetGooglePeerManagementVal       GooglePeerManagementConfig
+	GetPeerTransmissionVal           string
 	GetSamplerTypeName               string
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeVal                string
@@ -218,6 +219,13 @@ func (m *MockConfig) GetGooglePeerManagement() GooglePeerManagementConfig {
 	defer m.Mux.RUnlock()
 
 	return m.GetGooglePeerManagementVal
+}
+
+func (m *MockConfig) GetPeerTransmission() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetPeerTransmissionVal
 }
 
 func (m *MockConfig) GetGeneralConfig() GeneralConfig {

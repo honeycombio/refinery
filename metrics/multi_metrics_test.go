@@ -33,7 +33,6 @@ func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
 	objects := []*inject.Object{
 		{Value: "version", Name: "version"},
 		{Value: &http.Transport{}, Name: "upstreamTransport"},
-		{Value: &http.Transport{}, Name: "peerTransport"},
 		{Value: &LegacyMetrics{}, Name: "legacyMetrics"},
 		{Value: &PromMetrics{}, Name: "promMetrics"},
 		{Value: &OTelMetrics{}, Name: "otelMetrics"},

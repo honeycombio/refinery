@@ -160,16 +160,6 @@ func main() {
 		ForceAttemptHTTP2:   true,
 	}
 
-	// peerTransport is the http transport used to send things to a local peer
-	peerTransport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		Dial: (&net.Dialer{
-			Timeout: 3 * time.Second,
-		}).Dial,
-		TLSHandshakeTimeout: 1200 * time.Millisecond,
-		ForceAttemptHTTP2:   true,
-	}
-
 	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
 	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
 	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
@@ -193,8 +183,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.Honeycomb{
+	var peerSender transmission.Sender
+	if c.GetPeerTransmission() == "google" {
+		peerSender = &transmit.GooglePeerTransmission{
+			EventHandler: a.PeerRouter.ProcessEventDirect,
+		}
+	} else {
+		// peerTransport is the http transport used to send things to a local peer
+		peerTransport := &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			Dial: (&net.Dialer{
+				Timeout: 3 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 1200 * time.Millisecond,
+			ForceAttemptHTTP2:   true,
+		}
+		peerSender = &transmission.Honeycomb{
 			MaxBatchSize:          c.GetTracesConfig().GetMaxBatchSize(),
 			BatchTimeout:          time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
@@ -204,7 +208,11 @@ func main() {
 			DisableCompression:    !c.GetCompressPeerCommunication(),
 			EnableMsgpackEncoding: true,
 			Metrics:               peerMetricsRecorder,
-		},
+		}
+	}
+
+	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
+		Transmission: peerSender,
 	})
 	if err != nil {
 		fmt.Printf("unable to initialize peer libhoney client")
@@ -271,7 +279,6 @@ func main() {
 		{Value: pubsubber},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
-		{Value: peerTransport, Name: "peerTransport"},
 		{Value: upstreamTransmission, Name: "upstreamTransmission"},
 		{Value: peerTransmission, Name: "peerTransmission"},
 		{Value: shrdr},

@@ -62,6 +62,8 @@ type Config interface {
 
 	GetPeerManagementType() string
 
+	GetPeerTransmission() string
+
 	GetRedisPeerManagement() RedisPeerManagementConfig
 
 	GetGooglePeerManagement() GooglePeerManagementConfig

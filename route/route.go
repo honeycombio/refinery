@@ -34,6 +34,7 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/libhoney-go/transmission"
 
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
@@ -574,6 +575,23 @@ func (router *Router) processOTLPRequest(
 	}
 
 	return nil
+}
+
+func (r *Router) ProcessEventDirect(ctx context.Context, ev transmission.Event, reqID any) error {
+	environment, err := r.getEnvironmentName(ev.APIKey)
+	if err != nil {
+		return err
+	}
+	return r.processEvent(&types.Event{
+		Context:     ctx,
+		APIHost:     ev.APIHost,
+		APIKey:      ev.APIKey,
+		Dataset:     ev.Dataset,
+		Environment: environment,
+		SampleRate:  ev.SampleRate,
+		Timestamp:   ev.Timestamp,
+		Data:        ev.Data,
+	}, reqID)
 }
 
 func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {

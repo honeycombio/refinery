@@ -838,6 +838,19 @@ The format is a list of strings of the form "scheme://host:port".
 - Type: `stringarray`
 - Example: `http://192.168.1.11:8081,http://192.168.1.12:8081`
 
+### `PeerTransmission`
+
+`PeerTransmission` is the mechanism to use to transmit data between peers.
+
+Whether to use standard libhoney, or google pub/sub transmission.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `libhoney`
+- Options: `google`, `libhoney`
+- Environment variable: `REFINERY_PEER_TRANSMISSION`
+- Command line switch: `--peer-transmission`
+
 ## Google Peer Management
 
 `GooglePeerManagement` controls how the Refinery cluster communicates between peers when using Google Pub/Sub.
