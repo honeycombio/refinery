@@ -288,6 +288,10 @@ hasprefix:
       type: Histogram
       unit: Dimensionless
       description: Sample rate for traces
+    - name: _sampler_key_cardinality
+      type: Histogram
+      unit: Dimensionless
+      description: Number of unique keys being tracked by the sampler
     - name: enqueue_errors
       type: Counter
       unit: Dimensionless

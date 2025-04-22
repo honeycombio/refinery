@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-03-27 at 23:12:21 UTC
+# automatically generated on 2025-04-22 at 04:33:13 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -86,6 +86,9 @@ PeerManagement:
     - "http://192.168.1.11:8081"
     - "http://192.168.1.12:8081"
 
+GooglePeerManagement:
+  Topic: <nil>
+  ProjectID: "crispy-badger-1234"
 RedisPeerManagement:
   Host: "localhost:6379"
   ClusterHosts: 

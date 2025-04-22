@@ -59,8 +59,9 @@ type configContents struct {
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
-	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
-	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
+	PeerManagement       PeerManagementConfig       `yaml:"PeerManagement"`
+	RedisPeerManagement  RedisPeerManagementConfig  `yaml:"RedisPeerManagement"`
+	GooglePeerManagement GooglePeerManagementConfig `yaml:"GooglePeerManagement"`
 	Collection           CollectionConfig          `yaml:"Collection"`
 	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
@@ -308,6 +309,11 @@ type RedisPeerManagementConfig struct {
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
+}
+
+type GooglePeerManagementConfig struct {
+  Topic     string `yaml:"Topic"`
+  ProjectID string `yaml:"ProjectID"`
 }
 
 type CollectionConfig struct {
@@ -784,6 +790,13 @@ func (f *fileConfig) GetUseTLSInsecure() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.UseTLSInsecure
+}
+
+func (f *fileConfig) GetGooglePeerManagement() GooglePeerManagementConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.GooglePeerManagement
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() string {
