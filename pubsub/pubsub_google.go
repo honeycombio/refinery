@@ -53,7 +53,7 @@ func (ps *GooglePubSub) Start() error {
 		}
 		project = credentials.ProjectID
 	}
-	client, err := g.NewClient(ctx, project)
+	client, err := g.NewClientWithConfig(ctx, project, &g.ClientConfig{EnableOpenTelemetryTracing: true})
 	if err != nil {
 		return fmt.Errorf("g.NewClient: %w", err)
 	}
@@ -85,7 +85,10 @@ func (ps *GooglePubSub) getTopic(name string) *g.Topic {
 func (ps *GooglePubSub) Publish(ctx context.Context, key, message string) error {
 	name := ps.Config.GetGooglePeerManagement().Topic
 	t := ps.getTopic(name)
-	t.Publish(ctx, &g.Message{Data: []byte(message)})
+	t.Publish(ctx, &g.Message{
+		Attributes: map[string]string{"topic": key},
+		Data:       []byte(message),
+	})
 	return nil
 }
 
@@ -94,7 +97,7 @@ func (ps *GooglePubSub) Subscribe(ctx context.Context, key string, callback Subs
 	t := ps.getTopic(name)
 	sub, err := ps.client.CreateSubscription(ctx, ps.Config.GetRedisIdentifier(), g.SubscriptionConfig{
 		Topic:  t,
-		Filter: `attributes.topic="unknown"`,
+		Filter: fmt.Sprintf(`attributes.topic="%s"`, key),
 	})
 
 	ps.mut.Lock()
