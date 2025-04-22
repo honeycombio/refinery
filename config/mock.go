@@ -23,6 +23,7 @@ type MockConfig struct {
 	GetGRPCServerParameters          GRPCServerParameters
 	GetLoggerTypeVal                 string
 	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
+	GetOTelLoggerConfigVal           OTelLoggerConfig
 	GetStdoutLoggerConfigVal         StdoutLoggerConfig
 	GetLoggerLevelVal                Level
 	GetPeersVal                      []string
@@ -184,6 +185,12 @@ func (m *MockConfig) GetHoneycombLoggerConfig() HoneycombLoggerConfig {
 	return m.GetHoneycombLoggerConfigVal
 }
 
+func (m *MockConfig) GetOTelLoggerConfig() OTelLoggerConfig {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetOTelLoggerConfigVal
+}
 func (m *MockConfig) GetStdoutLoggerConfig() StdoutLoggerConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()

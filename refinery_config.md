@@ -440,12 +440,13 @@ NOTE: This setting is not compatible with `TraceCache=distributed`, because drop
 The setting specifies where (and if) Refinery sends logs.
 `none` means that logs are discarded.
 `honeycomb` means that logs will be forwarded to Honeycomb as events according to the set Logging settings.
+`otel` means that logs will be forwarded to Honeycomb as otel logs according to the set Logging settings.
 `stdout` means that logs will be written to `stdout`.
 
 - Not eligible for live reload.
 - Type: `string`
 - Default: `stdout`
-- Options: `stdout`, `honeycomb`, `none`
+- Options: `stdout`, `honeycomb`, `otel`, `none`
 
 ### `Level`
 
@@ -697,6 +698,56 @@ Between `1` and `60` seconds is typical.
 ### `Compression`
 
 `Compression` is the compression algorithm to use when sending OpenTelemetry metrics to Honeycomb.
+
+`gzip` is the default and recommended value.
+In rare circumstances, compression costs may outweigh the benefits, in which case `none` may be used.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `gzip`
+- Options: `none`, `gzip`
+
+## OpenTelemetry Logs
+
+`OTelLogger` contains configuration for Refinery's OpenTelemetry (OTel) logs.
+This is the preferred way to send logs to Honeycomb.
+New installations should prefer `OTelLogger`.
+
+### `APIHost`
+
+`APIHost` is the URL of the OpenTelemetry API to which metrics will be sent.
+
+Refinery's internal metrics will be sent to the `/v1/metrics` endpoint on this host.
+
+- Not eligible for live reload.
+- Type: `url`
+- Default: `https://api.honeycomb.io`
+
+### `APIKey`
+
+`APIKey` is the API key used to send Refinery logs via OpenTelemetry. Setting this value via a command line flag may expose credentials - it is recommended to use the environment variable or a configuration file.
+
+It is recommended that you create a separate team and key for Refinery metrics.
+If this is blank, then Refinery will not set the Honeycomb-specific headers for OpenTelemetry, and your `APIHost` must be set to a valid OpenTelemetry endpoint.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `SetThisToAHoneycombKey`
+- Environment variable: `REFINERY_OTEL_LOGGER_API_KEY, REFINERY_HONEYCOMB_API_KEY`
+
+### `Dataset`
+
+`Dataset` is the Honeycomb dataset that Refinery sends its OpenTelemetry logs.
+
+Only used if `APIKey` is specified.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `Refinery Logs`
+
+### `Compression`
+
+`Compression` is the compression algorithm to use when sending OpenTelemetry logs to Honeycomb.
 
 `gzip` is the default and recommended value.
 In rare circumstances, compression costs may outweigh the benefits, in which case `none` may be used.
