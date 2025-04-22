@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-04-22 at 04:33:15 UTC from ../../config.yaml using a template generated on 2025-04-22 at 04:33:13 UTC
+# created on 2025-04-22 at 07:08:01 UTC from ../../config.yaml using a template generated on 2025-04-22 at 07:07:59 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -898,6 +898,16 @@ PeerManagement:
       # - http://192.168.1.11:8081
       # - http://192.168.1.12:8081
 
+    ## PeerTransmission is the mechanism to use to transmit data between
+    ## peers.
+    ##
+    ## Whether to use standard libhoney, or google pub/sub transmission.
+    ##
+    ## default: libhoney
+    ## Not eligible for live reload.
+    ## Options: google libhoney
+    # PeerTransmission: libhoney
+
 ############################
 ## Google Peer Management ##
 ############################
@@ -1284,8 +1294,8 @@ Specialized:
     ##
     ## Eligible for live reload.
     # AdditionalAttributes:
-      #  ClusterName: MyCluster
       #  environment: production
+      #  ClusterName: MyCluster
 
 ###############
 ## ID Fields ##

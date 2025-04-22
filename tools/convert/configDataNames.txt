@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-04-22 at 04:33:13 UTC.
+# Automatically generated on 2025-04-22 at 07:07:59 UTC.
 
 General:
   - ConfigurationVersion
@@ -157,6 +157,8 @@ PeerManagement:
   - UseIPV6Identifier (originally PeerManagement.UseIPV6Identifier)
 
   - Peers (originally PeerManagement.Peers)
+
+  - PeerTransmission (originally PeerManagement.PeerTransmission)
 
 
 GooglePeerManagement:

@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-04-22 at 04:33:16 UTC.
+It was automatically generated on 2025-04-22 at 07:08:01 UTC.
 
 ## The Config file
 
@@ -854,6 +854,19 @@ The format is a list of strings of the form "scheme://host:port".
 - Not eligible for live reload.
 - Type: `stringarray`
 - Example: `http://192.168.1.11:8081,http://192.168.1.12:8081`
+
+### `PeerTransmission`
+
+PeerTransmission is the mechanism to use to transmit data between peers.
+
+Whether to use standard libhoney, or google pub/sub transmission.
+
+- Not eligible for live reload.
+- Type: `string`
+- Default: `libhoney`
+- Options: `google`, `libhoney`
+- Environment variable: `REFINERY_PEER_TRANSMISSION`
+- Command line switch: `--peer-transmission`
 
 ## Google Peer Management
 

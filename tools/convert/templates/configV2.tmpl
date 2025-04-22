@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2025-04-22 at 04:33:13 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2025-04-22 at 07:07:59 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -893,6 +893,16 @@ PeerManagement:
     ##
     ## Not eligible for live reload.
     {{ renderStringarray .Data "Peers" "PeerManagement.Peers" "http://192.168.1.11:8081,http://192.168.1.12:8081" }}
+
+    ## PeerTransmission is the mechanism to use to transmit data between
+    ## peers.
+    ##
+    ## Whether to use standard libhoney, or google pub/sub transmission.
+    ##
+    ## default: libhoney
+    ## Not eligible for live reload.
+    ## Options: google libhoney
+    {{ choice .Data "PeerTransmission" "PeerManagement.PeerTransmission" (makeSlice "google" "libhoney") "libhoney" }}
 
 ############################
 ## Google Peer Management ##

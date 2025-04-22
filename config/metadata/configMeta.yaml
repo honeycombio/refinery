@@ -1052,6 +1052,22 @@ groups:
           This list is ignored when Type is "redis". The format is a list of
           strings of the form "scheme://host:port".
 
+      - name: PeerTransmission
+        v1group: PeerManagement
+        v1name: PeerTransmission
+        type: string
+        valuetype: choice
+        choices: ["google", "libhoney"]
+        default: "libhoney"
+        validations:
+          - type: choice
+        reload: false
+        envvar: REFINERY_PEER_TRANSMISSION
+        commandLine: peer-transmission
+        summary: is the mechanism to use to transmit data between peers.
+        description: >
+          Whether to use standard libhoney, or google pub/sub transmission.
+
   - name: GooglePeerManagement
     title: "Google Peer Management"
     description: >
