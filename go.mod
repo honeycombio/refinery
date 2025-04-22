@@ -3,6 +3,8 @@ module github.com/honeycombio/refinery
 go 1.24.0
 
 require (
+	cloud.google.com/go/pubsub v1.49.0
+	github.com/IBM/sarama v1.45.1
 	github.com/agnivade/levenshtein v1.2.1
 	github.com/creasty/defaults v1.8.0
 	github.com/davecgh/go-spew v1.1.1
@@ -26,7 +28,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.21.1
-	github.com/rcrowley/go-metrics v0.0.0-20200313005456-10cdbea86bc0
+	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/sourcegraph/conc v0.3.0
@@ -46,7 +48,9 @@ require (
 	go.opentelemetry.io/proto/otlp v1.5.0
 	go.uber.org/automaxprocs v1.6.0
 	golang.org/x/exp v0.0.0-20231127185646-65229373498e
+	golang.org/x/oauth2 v0.29.0
 	golang.org/x/sync v0.13.0
+	google.golang.org/api v0.229.0
 	google.golang.org/grpc v1.72.0
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0
@@ -59,7 +63,9 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
-	cloud.google.com/go/pubsub v1.49.0 // indirect
+	github.com/eapache/go-resiliency v1.7.0 // indirect
+	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
+	github.com/eapache/queue v1.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-licenses/v2 v2.0.0-alpha.1 // indirect
@@ -68,9 +74,18 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
+	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
+	github.com/jcmturner/gofork v1.7.6 // indirect
+	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
+	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.123.0 // indirect
 	github.com/otiai10/copy v1.10.0 // indirect
+	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -78,9 +93,7 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/oauth2 v0.29.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
-	google.golang.org/api v0.229.0 // indirect
 	google.golang.org/genproto v0.0.0-20250421163800-61c742ae3ef0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 )
