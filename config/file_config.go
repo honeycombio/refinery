@@ -45,30 +45,30 @@ type fileConfig struct {
 var _ Config = (*fileConfig)(nil)
 
 type configContents struct {
-	General              GeneralConfig             `yaml:"General"`
-	Network              NetworkConfig             `yaml:"Network"`
-	OpAMP                OpAMPConfig               `yaml:"OpAMP"`
-	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
-	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
-	Traces               TracesConfig              `yaml:"Traces"`
-	Debugging            DebuggingConfig           `yaml:"Debugging"`
-	Logger               LoggerConfig              `yaml:"Logger"`
-	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
-	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
-	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
-	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
-	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
+	General              GeneralConfig              `yaml:"General"`
+	Network              NetworkConfig              `yaml:"Network"`
+	OpAMP                OpAMPConfig                `yaml:"OpAMP"`
+	AccessKeys           AccessKeyConfig            `yaml:"AccessKeys"`
+	Telemetry            RefineryTelemetryConfig    `yaml:"RefineryTelemetry"`
+	Traces               TracesConfig               `yaml:"Traces"`
+	Debugging            DebuggingConfig            `yaml:"Debugging"`
+	Logger               LoggerConfig               `yaml:"Logger"`
+	HoneycombLogger      HoneycombLoggerConfig      `yaml:"HoneycombLogger"`
+	StdoutLogger         StdoutLoggerConfig         `yaml:"StdoutLogger"`
+	PrometheusMetrics    PrometheusMetricsConfig    `yaml:"PrometheusMetrics"`
+	LegacyMetrics        LegacyMetricsConfig        `yaml:"LegacyMetrics"`
+	OTelMetrics          OTelMetricsConfig          `yaml:"OTelMetrics"`
+	OTelTracing          OTelTracingConfig          `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig       `yaml:"PeerManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig  `yaml:"RedisPeerManagement"`
 	GooglePeerManagement GooglePeerManagementConfig `yaml:"GooglePeerManagement"`
-	Collection           CollectionConfig          `yaml:"Collection"`
-	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
-	Specialized          SpecializedConfig         `yaml:"Specialized"`
-	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
-	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
-	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
-	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
+	Collection           CollectionConfig           `yaml:"Collection"`
+	BufferSizes          BufferSizeConfig           `yaml:"BufferSizes"`
+	Specialized          SpecializedConfig          `yaml:"Specialized"`
+	IDFieldNames         IDFieldsConfig             `yaml:"IDFields"`
+	GRPCServerParameters GRPCServerParameters       `yaml:"GRPCServerParameters"`
+	SampleCache          SampleCacheConfig          `yaml:"SampleCache"`
+	StressRelief         StressReliefConfig         `yaml:"StressRelief"`
 }
 
 type GeneralConfig struct {
@@ -312,8 +312,8 @@ type RedisPeerManagementConfig struct {
 }
 
 type GooglePeerManagementConfig struct {
-  Topic     string `yaml:"Topic"`
-  ProjectID string `yaml:"ProjectID"`
+	Topic     string `yaml:"Topic"`
+	ProjectID string `yaml:"ProjectID"`
 }
 
 type CollectionConfig struct {
