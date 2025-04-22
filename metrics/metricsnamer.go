@@ -26,6 +26,10 @@ func (p *MetricsPrefixer) Start() error {
 	return nil
 }
 
+func (p *MetricsPrefixer) Stop() {
+	// no-op
+}
+
 func (p *MetricsPrefixer) Register(metadata Metadata) {
 	metadata.Name = p.prefix + metadata.Name
 	p.Metrics.Register(metadata)

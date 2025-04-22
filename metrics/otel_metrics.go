@@ -32,7 +32,8 @@ type OTelMetrics struct {
 	Logger  logger.Logger `inject:""`
 	Version string        `inject:"version"`
 
-	meter metric.Meter
+	meter        metric.Meter
+	shutdownFunc func(ctx context.Context) error
 
 	counters   map[string]metric.Int64Counter
 	gauges     map[string]metric.Float64ObservableGauge
@@ -141,6 +142,7 @@ func (o *OTelMetrics) Start() error {
 		sdkmetric.WithResource(res),
 	)
 	o.meter = provider.Meter("otelmetrics")
+	o.shutdownFunc = provider.Shutdown
 
 	// These metrics are dynamic fields that should always be collected
 	name := "num_goroutines"
@@ -182,6 +184,12 @@ func (o *OTelMetrics) Start() error {
 	o.gauges[name] = g
 
 	return nil
+}
+
+func (o *OTelMetrics) Stop() {
+	if o.shutdownFunc != nil {
+		o.shutdownFunc(context.Background())
+	}
 }
 
 // Register creates a new metric with the given metadata
