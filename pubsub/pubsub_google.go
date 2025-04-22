@@ -110,7 +110,7 @@ func (ps *GooglePubSub) Subscribe(ctx context.Context, key string, callback Subs
 	ps.mut.Unlock()
 
 	if err != nil {
-		log.Fatalf("CreateSubscription: %w", err)
+		log.Fatalf("CreateSubscription: %v", err)
 		return nil
 	}
 
