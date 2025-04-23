@@ -1475,7 +1475,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 
 	//otelutil.AddSpanFields(span, map[string]interface{}{
 	//	"trace_id": trace.ID(),
-	//	"root":     trace.RootSpan,
+	//	//"root":     trace.RootSpan,
 	//	"send_by": trace.SendBy,
 	//	"arrival": trace.ArrivalTime,
 	//})
@@ -1520,6 +1520,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	//	"send_reason": sendReason,
 	//	"hasRoot":     hasRoot,
 	//})
+
 	i.Logger.Debug().WithField("key", key).Logf("making decision for trace")
 	td := TraceDecision{
 		TraceID:         trace.ID(),
