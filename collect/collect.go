@@ -257,7 +257,7 @@ func (i *InMemCollector) reloadConfigs() {
 }
 
 func (i *InMemCollector) checkAlloc(ctx context.Context) {
-	_, span := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
+	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
 	defer span.End()
 
 	inMemConfig := i.Config.GetCollectionConfig()
@@ -288,9 +288,11 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	if timeout == 0 {
 		timeout = 60 * time.Second
 	} // Sort traces by CacheImpact, heaviest first
+	_, span2 := otelutil.StartSpan(ctx, i.Tracer, "sortAllTraces")
 	sort.Slice(allTraces, func(i, j int) bool {
 		return allTraces[i].CacheImpact(timeout) > allTraces[j].CacheImpact(timeout)
 	})
+	span2.End()
 
 	// Now start removing the biggest traces, by summing up DataSize for
 	// successive traces until we've crossed the totalToRemove threshold
@@ -303,6 +305,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
+	_, span3 := otelutil.StartSpan(ctx, i.Tracer, "tryEjectTraces")
 	for _, trace := range allTraces {
 		// only eject traces that belong to this peer or the trace is an orphan
 		if _, ok := i.IsMyTrace(trace.ID()); !ok && !trace.IsOrphan(traceTimeout, i.Clock.Now()) {
@@ -324,6 +327,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 		}
 	}
 	i.cache.RemoveTraces(tracesSent)
+	span3.End()
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
 	i.Logger.Warn().
@@ -336,7 +340,9 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 	// Manually GC here - without this we can easily end up evicting more than we
 	// need to, since total alloc won't be updated until after a GC pass.
+	_, span4 := otelutil.StartSpan(ctx, i.Tracer, "invokeGC")
 	runtime.GC()
+	span4.End()
 	return
 }
 
