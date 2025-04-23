@@ -83,6 +83,9 @@ func (d *DeterministicSharder) Start() error {
 	var self string
 	var err error
 	for j := 0; j < 5; j++ {
+		// go through peer list, resolve each address, see if any of them match any
+		// local interface. Note that this assumes only one instance of Refinery per
+		// host can run.
 		self, err = d.Peers.GetInstanceID()
 		if err == nil {
 			for _, peerShard := range d.peers {
