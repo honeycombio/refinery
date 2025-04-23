@@ -257,9 +257,6 @@ func (i *InMemCollector) reloadConfigs() {
 }
 
 func (i *InMemCollector) checkAlloc(ctx context.Context) {
-	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
-	defer span.End()
-
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
@@ -270,6 +267,9 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
+
+	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
+	defer span.End()
 
 	// Figure out what fraction of the total cache we should remove. We'd like it to be
 	// enough to get us below the max capacity, but not TOO much below.
