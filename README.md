@@ -184,9 +184,13 @@ When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for ea
 
 ## Scaling Up
 
-Refinery uses bounded queues and circular buffers to manage allocating traces, so even under high volume memory use shouldn't expand dramatically. However, given that traces are stored in a circular buffer, when the throughput of traces exceeds the size of the buffer, things will start to go wrong. If you have statistics configured, a counter named `collect_cache_buffer_overrun` will be incremented each time this happens. The symptoms of this will be that traces will stop getting accumulated together, and instead spans that should be part of the same trace will be treated as two separate traces. All traces will continue to be sent (and sampled), but some sampling decisions will be made on incomplete data. The size of the circular buffer is a configuration option named `CacheCapacity`. To choose a good value, you should consider the throughput of traces (for example, traces / second started) and multiply that by the maximum duration of a trace (such as 3 seconds), then multiply that by some large buffer (maybe 10x). This estimate will give a good headroom.
+As of the 2.9 release, Refinery now uses bounded queues and a priority queue to manage active traces, replacing the older circular buffer design. This new architecture allows the trace cache to dynamically scale with traffic load, improving flexibility and throughput during normal operation.
 
-Determining the number of machines necessary in the cluster is not an exact science, and is best influenced by watching for buffer overruns. But for a rough heuristic, count on a single machine using about 2GB of memory to handle 5,000 incoming events and tracking 500 sub-second traces per second (for each full trace lasting less than a second and an average size of 10 spans per trace).
+However, when traffic spikes beyond what a node can process in real time, the number of traces buffered in memory can increase rapidly, leading to high memory pressure. If statistics are enabled, you’ll see this reflected in a rising `collect_cache_entries` gauge, often accompanied by a spike in the `memory_inuse` gauge.
+
+Refinery mitigates memory pressure through the configured `MaxAlloc` limit, or alternatively, via the combination of `AvailableMemory` and `MaxMemoryPercentage`. When memory usage approaches the defined threshold, Refinery will automatically begin evicting older traces based on configured `TraceTimeout`. This proactive eviction helps shed load and prevents the system from exceeding its memory constraints.
+
+To reduce the risk of OOMKills, it’s important to allocate generous headroom in your `MaxAlloc`, `MaxMemoryPercentage`, or `AvailableMemory` setting. This ensures that Refinery has enough buffer to absorb sudden traffic bursts without compromising trace integrity or triggering aggressive eviction.
 
 ### Stress Relief
 
