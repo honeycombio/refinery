@@ -1475,9 +1475,9 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 
 	otelutil.AddSpanFields(span, map[string]interface{}{
 		"trace_id": trace.ID(),
-		"root":     trace.RootSpan,
-		"send_by":  trace.SendBy,
-		"arrival":  trace.ArrivalTime,
+		//"root":     trace.RootSpan,
+		"send_by": trace.SendBy,
+		"arrival": trace.ArrivalTime,
 	})
 
 	var sampler sample.Sampler
