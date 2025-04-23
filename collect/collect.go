@@ -1473,12 +1473,12 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	defer span.End()
 	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
 
-	otelutil.AddSpanFields(span, map[string]interface{}{
-		"trace_id": trace.ID(),
-		//"root":     trace.RootSpan,
-		"send_by": trace.SendBy,
-		"arrival": trace.ArrivalTime,
-	})
+	//otelutil.AddSpanFields(span, map[string]interface{}{
+	//	"trace_id": trace.ID(),
+	//	"root":     trace.RootSpan,
+	//	"send_by": trace.SendBy,
+	//	"arrival": trace.ArrivalTime,
+	//})
 
 	var sampler sample.Sampler
 	var found bool
@@ -1511,15 +1511,15 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 		i.Metrics.Increment("trace_send_no_root")
 	}
 
-	otelutil.AddSpanFields(span, map[string]interface{}{
-		"kept":        shouldSend,
-		"reason":      reason,
-		"sampler":     key,
-		"selector":    samplerSelector,
-		"rate":        rate,
-		"send_reason": sendReason,
-		"hasRoot":     hasRoot,
-	})
+	//otelutil.AddSpanFields(span, map[string]interface{}{
+	//	"kept":        shouldSend,
+	//	"reason":      reason,
+	//	"sampler":     key,
+	//	"selector":    samplerSelector,
+	//	"rate":        rate,
+	//	"send_reason": sendReason,
+	//	"hasRoot":     hasRoot,
+	//})
 	i.Logger.Debug().WithField("key", key).Logf("making decision for trace")
 	td := TraceDecision{
 		TraceID:         trace.ID(),
