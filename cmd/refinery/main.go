@@ -249,8 +249,8 @@ func main() {
 				span.SetAttributes(attribute.Int(key, v))
 			case float64:
 				span.SetAttributes(attribute.Float64(key, v))
-			default:
-				span.SetAttributes(attribute.String(key, fmt.Sprintf("%v", v)))
+				//default:
+				//	span.SetAttributes(attribute.String(key, fmt.Sprintf("%v", v)))
 			}
 		}
 	}

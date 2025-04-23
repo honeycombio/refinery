@@ -338,11 +338,11 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 		WithField("new_trace_count", i.cache.GetCacheEntryCount()).
 		Logf("Making some trace decisions early due to memory overrun.")
 
-	// Manually GC here - without this we can easily end up evicting more than we
-	// need to, since total alloc won't be updated until after a GC pass.
-	_, span4 := otelutil.StartSpan(ctx, i.Tracer, "invokeGC")
-	runtime.GC()
-	span4.End()
+	//// Manually GC here - without this we can easily end up evicting more than we
+	//// need to, since total alloc won't be updated until after a GC pass.
+	//_, span4 := otelutil.StartSpan(ctx, i.Tracer, "invokeGC")
+	//runtime.GC()
+	//span4.End()
 	return
 }
 
