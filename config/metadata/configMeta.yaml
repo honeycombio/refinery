@@ -1053,7 +1053,7 @@ groups:
         type: string
         valuetype: choice
         choices: ["highest_random_weight", "hash_ring"]
-        default: "file"
+        default: "highest_random_weight"
         reload: false
         validations:
           - type: choice
