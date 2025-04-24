@@ -1047,6 +1047,27 @@ groups:
           This list is ignored when Type is "redis". The format is a list of
           strings of the form "scheme://host:port".
 
+      - name: ShardingStrategy
+        v1group: PeerManagement
+        v1name: ShardingStrategy
+        type: string
+        valuetype: choice
+        choices: ["highest_random_weight", "hash_ring"]
+        default: "file"
+        reload: false
+        validations:
+          - type: choice
+        summary: specifies the sharding strategy to use for peer management.
+        description: >
+          The sharding strategy is used to determine how Refinery will
+          distribute the load of incoming events across the cluster. The
+          default is `highest_random_weight`, which uses the highest random weight
+          hashing algorithm to determine the shard for each event.
+
+          The `hash_ring` strategy uses a consistent hashing algorithm implemented
+          with a traditional hash ring.
+
+
   - name: RedisPeerManagement
     title: "Redis Peer Management"
     description: >

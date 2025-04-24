@@ -11,6 +11,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ConsistentHash interface {
+	New(peerList []string, newPeers []detShard) ConsistentHash
+	GetDestinationFor(traceID []byte) string
+}
+
+var _ Shard = detShard("")
+
 // detShard implements Shard
 type detShard string
 
@@ -55,7 +62,7 @@ type DeterministicSharder struct {
 
 	myShard detShard
 	peers   []detShard
-	ring    *hashRing
+	hashes  ConsistentHash
 
 	peerLock sync.RWMutex
 }
@@ -66,6 +73,8 @@ var _ Sharder = (*DeterministicSharder)(nil)
 func (d *DeterministicSharder) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSharder")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSharder") }()
+
+	d.hashes = d.getShardingStrategy()
 
 	d.Peers.RegisterUpdatedPeersCallback(func() {
 		d.Logger.Debug().Logf("reloading deterministic sharder config")
@@ -135,19 +144,12 @@ func (d *DeterministicSharder) loadPeerList() error {
 	if peersChanged {
 		d.Logger.Info().WithField("peers", newPeers).Logf("Peer list has changed, rebuilding hash ring")
 
-		// Build endpoint list for hash ring
-		endpoints := make([]string, len(newPeers))
-		for i, peer := range newPeers {
-			endpoints[i] = peer.GetAddress()
-		}
-
-		// Create new hash ring
-		newRing := newHashRing(endpoints)
+		newHashes := d.hashes.New(peerList, newPeers)
 
 		// Update the ring and peers atomically
 		d.peerLock.Lock()
 		d.peers = newPeers
-		d.ring = newRing
+		d.hashes = newHashes
 		d.peerLock.Unlock()
 	}
 
@@ -163,7 +165,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	d.peerLock.RLock()
 	defer d.peerLock.RUnlock()
 
-	if d.ring == nil || len(d.peers) == 0 {
+	if d.hashes == nil || len(d.peers) == 0 {
 		// If we don't have a ring yet, just use the first peer or return self
 		if len(d.peers) > 0 {
 			return d.peers[0]
@@ -172,7 +174,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	}
 
 	// Find the endpoint on the hash ring
-	endpoint := d.ring.endpointFor([]byte(traceID))
+	endpoint := d.hashes.GetDestinationFor([]byte(traceID))
 
 	// Map the endpoint back to a shard
 	for _, peer := range d.peers {
@@ -184,4 +186,15 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	// Should never happen if hash ring is properly initialized
 	d.Logger.Error().WithField("endpoint", endpoint).Logf("Could not find peer for endpoint")
 	return d.peers[0]
+}
+
+func (d *DeterministicSharder) getShardingStrategy() ConsistentHash {
+	if d.Config.GetPeerManagementShardingStrategy() == "hightest_random_weight" {
+		return &hashHRW{
+			shards: make([]hashShard, 0),
+		}
+	}
+	return &hashRing{
+		items: make([]ringItem, 0),
+	}
 }
