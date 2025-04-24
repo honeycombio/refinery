@@ -295,7 +295,7 @@ type PeerManagementConfig struct {
 	IdentifierInterfaceName string   `yaml:"IdentifierInterfaceName"`
 	UseIPV6Identifier       bool     `yaml:"UseIPV6Identifier"`
 	Peers                   []string `yaml:"Peers"`
-	ShardingStrategy        string   `yaml:"ShardingStrategy" default:"hash"`
+	ShardingStrategy        string   `yaml:"ShardingStrategy" default:"highest_random_weight"`
 }
 
 type RedisPeerManagementConfig struct {
