@@ -11,7 +11,7 @@ import (
 const (
 	maxPositions uint32 = 36000 // 360 degrees with two decimal places
 	// higher weights help minimize redistribution variance, though at the cost of slightly increased memory usage.
-	defaultWeight int = 150 // the number of points in the ring for each entry. For better results, it should be greater than 100.
+	defaultWeight int = 100 // the number of points in the ring for each entry. For better results, it should be greater than 100.
 )
 
 // position represents a specific angle in the ring.
