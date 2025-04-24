@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.9.5
 
-This release includes improvements to trace cache documentation, internal metric flushing on shutdown, and enhanced metric visibility such as sampler key cardinality. It also introduces environment variable substitution in config strings and experimental support for OpAMP. The OpAMP feature is intended for *internal use only* and is *not supported or recommended* for production use.
+This release includes improvements to trace cache documentation, internal metric flushing on shutdown, and enhanced metric visibility such as sampler key cardinality. It also introduces environment variable substitution in config strings and experimental support for OpAMP. The OpAMP feature is intended for *internal use only* and is *not supported or recommended* for production.
 
 ## Version 2.9.4
 

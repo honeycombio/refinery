@@ -2,6 +2,8 @@
 
 ## 2.9.5 2025-04-24
 
+This release brings a experimental feature for OpAMP. This feature is intended for internal use only and is not supported or recommended for production.
+
 ### Features
 
 - feat: add experimental support for opamp (#1528) | [Alex Boten](https://github.com/AlexBoten)
