@@ -17,11 +17,11 @@
 
 ### Maintenance
 
-- docs: some copyedits from docs (#1526) | [Jamie Danielson](https://github.com/Jamie Danielson)
-- docs: add missing metrics and extra details (#1515) | [Jamie Danielson](https://github.com/Jamie Danielson)
-- maint: Mark TraceLocalityMode as experimetnal (#1522) | [Mike Goldsmith](https://github.com/Mike Goldsmith)
+- docs: some copyedits from docs (#1526) | [Jamie Danielson](https://github.com/JamieDanielson)
+- docs: add missing metrics and extra details (#1515) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint: Mark TraceLocalityMode as experimetnal (#1522) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 - maint(deps): bump the minor-patch group with 15 updates (#1518) | [dependabot[bot]](https://github.com/dependabot[bot])
-- maint: record sampler key cardinality as metric (#1537) | [Yingrong Zhao](https://github.com/Yingrong Zhao)
+- maint: record sampler key cardinality as metric (#1537) | [Yingrong Zhao](https://github.com/vinozzz)
 - maint(deps): bump github.com/golang/snappy from 0.0.4 to 1.0.0 (#1519) | [dependabot[bot]](https://github.com/dependabot[bot])
 - maint(deps): bump golang.org/x/net from 0.37.0 to 0.38.0 (#1529) | [dependabot[bot]](https://github.com/dependabot[bot])
 
