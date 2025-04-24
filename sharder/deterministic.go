@@ -142,7 +142,8 @@ func (d *DeterministicSharder) loadPeerList() error {
 	d.peerLock.RUnlock()
 
 	if peersChanged {
-		d.Logger.Info().WithField("peers", newPeers).Logf("Peer list has changed, rebuilding hash ring")
+		sort.Strings(peerList)
+		d.Logger.Info().WithField("peers", peerList).Logf("Peer list has changed, rebuilding hash ring")
 
 		newHashes := d.hashes.New(peerList, newPeers)
 
