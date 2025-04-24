@@ -5,6 +5,8 @@ package sharder
 
 import (
 	"hash/crc32"
+	"net"
+	"net/url"
 	"sort"
 )
 
@@ -121,8 +123,16 @@ func positionsForEndpoints(endpoints []string, weight int) []ringItem {
 	var items []ringItem
 	positions := map[position]bool{} // tracking the used positions
 	for _, endpoint := range endpoints {
+		p, err := url.Parse(endpoint)
+		if err != nil {
+			panic(err)
+		}
+		h, _, err := net.SplitHostPort(p.Host)
+		if err != nil {
+			panic(err)
+		}
 		// for this initial implementation, we don't allow endpoints to have custom weights
-		for _, pos := range positionsFor(endpoint, weight) {
+		for _, pos := range positionsFor(h, weight) {
 			// if this position is occupied already, skip this item
 			if _, found := positions[pos]; found {
 				continue

@@ -56,8 +56,8 @@ func TestWhichShard(t *testing.T) {
 
 func TestWhichShardAtEdge(t *testing.T) {
 	const (
-		selfPeerAddr = "127.0.0.1:8081"
-		traceID      = "RCIVNUNA" // carefully chosen (by trying over a billion times) to hash in WhichShard to 0xFFFFFFFF
+		selfPeerAddr = "10.244.0.56:8081"
+		traceID      = "8c2e34915b74aae5faf6ea200e40b525" // carefully chosen (by trying over a billion times) to hash in WhichShard to 0xFFFFFFFF
 	)
 
 	// The algorithm in WhichShard works correctly for divisors of 2^32-1. The prime factorization of that includes
@@ -65,9 +65,9 @@ func TestWhichShardAtEdge(t *testing.T) {
 	// It was tested (and failed) without the additional conditional.
 	peers := []string{
 		"http://" + selfPeerAddr,
-		"http://2.2.2.2:8081",
-		"http://3.3.3.3:8081",
-		"http://4.4.4.4:8081",
+		"http://10.244.0.57:8081",
+		"http://10.244.0.58:8081",
+		"http://10.244.0.59:8081",
 	}
 
 	config := &config.MockConfig{
@@ -94,8 +94,9 @@ func TestWhichShardAtEdge(t *testing.T) {
 	shard := sharder.WhichShard(traceID)
 	assert.Contains(t, peers, shard.GetAddress(),
 		"should select a peer for a trace")
-	assert.Equal(t, "4.4.4.4:8081", shard.GetAddress())
 
+	d := detShard("http://10.244.0.59:8081")
+	assert.True(t, d.Equals(shard), shard.GetAddress())
 	config.GetPeersVal = []string{}
 	config.Reload()
 	assert.Equal(t, shard.GetAddress(), sharder.WhichShard(traceID).GetAddress(),
