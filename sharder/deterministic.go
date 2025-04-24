@@ -179,6 +179,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	// Map the endpoint back to a shard
 	for _, peer := range d.peers {
 		if peer.GetAddress() == endpoint {
+			d.Logger.Info().WithFields(map[string]interface{}{"endpoint": endpoint, "id": traceID}).Logf("Found peer for endpoint")
 			return peer
 		}
 	}

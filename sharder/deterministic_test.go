@@ -71,9 +71,10 @@ func TestWhichShardAtEdge(t *testing.T) {
 	}
 
 	config := &config.MockConfig{
-		GetPeerListenAddrVal: selfPeerAddr,
-		GetPeersVal:          peers,
-		PeerManagementType:   "file",
+		GetPeerListenAddrVal:                 selfPeerAddr,
+		GetPeersVal:                          peers,
+		PeerManagementType:                   "file",
+		GetPeerManagementShardingStrategyVal: "hash_ring",
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -93,6 +94,7 @@ func TestWhichShardAtEdge(t *testing.T) {
 	shard := sharder.WhichShard(traceID)
 	assert.Contains(t, peers, shard.GetAddress(),
 		"should select a peer for a trace")
+	assert.Equal(t, "4.4.4.4:8081", shard.GetAddress())
 
 	config.GetPeersVal = []string{}
 	config.Reload()
