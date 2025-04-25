@@ -1,5 +1,32 @@
 # Refinery Changelog
 
+## 2.9.5 2025-04-24
+
+This release brings a experimental feature for OpAMP. This feature is intended for internal use only and is not supported or recommended for production.
+
+### Features
+
+- feat: add experimental support for opamp (#1528) | [Alex Boten](https://github.com/AlexBoten)
+- feat: Support arbitrary envvar replacement in config strings (#1517) | [Kent Quirk](https://github.com/KentQuirk)
+
+### Fixes
+
+- fix: improve trace cache doc and metric (#1535) | [Yingrong Zhao](https://github.com/vinozzz)
+- fix: flush internal metrics on shutdown (#1534) | [Yingrong Zhao](https://github.com/vinozzz)
+- fix: add env var support for APIHost in telemetry cfg (#1536) | [Yingrong Zhao](https://github.com/vinozzz)
+- fix: ensure SendKeyMode priority (#1527) | [Alex Boten](https://github.com/AlexBoten)
+- fix: update trace_id field to meta.trace_id (#1520) | [Alex Boten](https://github.com/AlexBoten)
+
+### Maintenance
+
+- docs: some copyedits from docs (#1526) | [Jamie Danielson](https://github.com/JamieDanielson)
+- docs: add missing metrics and extra details (#1515) | [Jamie Danielson](https://github.com/JamieDanielson)
+- maint: Mark TraceLocalityMode as experimetnal (#1522) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- maint(deps): bump the minor-patch group with 15 updates (#1518) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint: record sampler key cardinality as metric (#1537) | [Yingrong Zhao](https://github.com/vinozzz)
+- maint(deps): bump github.com/golang/snappy from 0.0.4 to 1.0.0 (#1519) | [dependabot[bot]](https://github.com/dependabot[bot])
+- maint(deps): bump golang.org/x/net from 0.37.0 to 0.38.0 (#1529) | [dependabot[bot]](https://github.com/dependabot[bot])
+
 ## 2.9.4 2025-03-25
 
 ### Features
