@@ -1,6 +1,8 @@
 package sharder
 
 import (
+	"encoding/hex"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -174,13 +176,19 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 		return d.myShard
 	}
 
+	identifierAsBytes := []byte(traceID)
+	dest := make([]byte, 16)
+	hex.Decode(dest, identifierAsBytes)
+
+	d.Logger.Info().WithFields(map[string]interface{}{"id": traceID, "trace16ByteArray": fmt.Sprintf("%d", dest)}).Logf("Found peer for endpoint")
+
 	// Find the endpoint on the hash ring
 	endpoint := d.hashes.GetDestinationFor(traceID)
 
 	// Map the endpoint back to a shard
 	for _, peer := range d.peers {
 		if peer.GetAddress() == endpoint {
-			d.Logger.Info().WithFields(map[string]interface{}{"endpoint": endpoint, "id": traceID, "idAsBytes": []byte(traceID)}).Logf("Found peer for endpoint")
+			d.Logger.Info().WithFields(map[string]interface{}{"endpoint": endpoint, "id": traceID, "idAsBytes": []byte(traceID), "trace16ByteArray": fmt.Sprintf("%d", dest)}).Logf("Found peer for endpoint")
 			return peer
 		}
 	}
