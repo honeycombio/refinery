@@ -4,7 +4,6 @@
 package sharder
 
 import (
-	"encoding/hex"
 	"hash/crc32"
 	"net"
 	"net/url"
@@ -48,12 +47,9 @@ func (h *hashRing) GetDestinationFor(identifier string) string {
 		return ""
 	}
 
-	id, err := hex.DecodeString(identifier)
-	if err != nil {
-		return ""
-	}
+	identifierAsBytes := []byte(identifier)
 	hasher := crc32.NewIEEE()
-	hasher.Write(id)
+	hasher.Write(identifierAsBytes)
 	hash := hasher.Sum32()
 	pos := hash % maxPositions
 
