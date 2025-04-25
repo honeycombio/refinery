@@ -191,7 +191,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 }
 
 func (d *DeterministicSharder) getShardingStrategy() ConsistentHash {
-	if d.Config.GetPeerManagementShardingStrategy() == "hightest_random_weight" {
+	if d.Config.GetPeerManagementShardingStrategy() == "highest_random_weight" {
 		return &hashHRW{
 			shards: make([]hashShard, 0),
 		}
