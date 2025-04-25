@@ -60,11 +60,11 @@ func (h *hashHRW) New(peerList []string, newPeers []detShard) ConsistentHash {
 	}
 }
 
-func (h *hashHRW) GetDestinationFor(traceID []byte) string {
+func (h *hashHRW) GetDestinationFor(traceID string) string {
 	var endpoint string
 	var maxHash uint64
 	for _, hash := range h.shards {
-		h := wyhash.Hash(traceID, hash.uhash)
+		h := wyhash.Hash([]byte(traceID), hash.uhash)
 		if h > maxHash {
 			maxHash = h
 			endpoint = hash.endpoint

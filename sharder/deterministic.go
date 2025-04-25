@@ -13,7 +13,7 @@ import (
 
 type ConsistentHash interface {
 	New(peerList []string, newPeers []detShard) ConsistentHash
-	GetDestinationFor(traceID []byte) string
+	GetDestinationFor(traceID string) string
 }
 
 var _ Shard = detShard("")
@@ -175,7 +175,7 @@ func (d *DeterministicSharder) WhichShard(traceID string) Shard {
 	}
 
 	// Find the endpoint on the hash ring
-	endpoint := d.hashes.GetDestinationFor([]byte(traceID))
+	endpoint := d.hashes.GetDestinationFor(traceID)
 
 	// Map the endpoint back to a shard
 	for _, peer := range d.peers {

@@ -4,6 +4,7 @@
 package sharder
 
 import (
+	"encoding/hex"
 	"hash/crc32"
 	"net"
 	"net/url"
@@ -41,13 +42,18 @@ func (h *hashRing) New(peerList []string, peerShards []detShard) ConsistentHash 
 }
 
 // endpointFor calculates which backend is responsible for the given traceID
-func (h *hashRing) GetDestinationFor(identifier []byte) string {
+func (h *hashRing) GetDestinationFor(identifier string) string {
 	if h == nil {
 		// perhaps the ring itself couldn't get initialized yet?
 		return ""
 	}
+
+	id, err := hex.DecodeString(identifier)
+	if err != nil {
+		return ""
+	}
 	hasher := crc32.NewIEEE()
-	hasher.Write(identifier)
+	hasher.Write(id)
 	hash := hasher.Sum32()
 	pos := hash % maxPositions
 
