@@ -48,9 +48,11 @@ func (h *hashRing) GetDestinationFor(identifier string) string {
 		return ""
 	}
 
-	identifierAsBytes := []byte(identifier)
-	dest := make([]byte, 16)
-	hex.Decode(dest, identifierAsBytes)
+	dest, err := hex.DecodeString(identifier)
+	if err != nil {
+		return ""
+	}
+
 	hasher := crc32.NewIEEE()
 	hasher.Write(dest)
 	hash := hasher.Sum32()
