@@ -559,7 +559,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	})
 
 	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces))
-	if len(forwardedTraces) > 0 {
+	if len(forwardedTraces) > 0 && i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		i.cache.RemoveTraces(forwardedTraces)
 	}
 }
