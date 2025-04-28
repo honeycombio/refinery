@@ -530,10 +530,12 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 			if !i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
+				dc.Data["meta.refinery.send_by"] = trace.SendBy.Unix()
 				i.PeerTransmission.EnqueueEvent(dc)
 				continue
 			}
 
+			sp.Data["meta.refinery.send_by"] = trace.SendBy.Unix()
 			sp.APIHost = newTarget.GetAddress()
 
 			if sp.Data == nil {
@@ -559,6 +561,8 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	})
 
 	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces))
+
+	// only remove traces from the cache if we are in trace locality concentrated mode
 	if len(forwardedTraces) > 0 && i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		i.cache.RemoveTraces(forwardedTraces)
 	}
@@ -722,13 +726,24 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		}
 
 		now := i.Clock.Now()
+		sendBy := now.Add(timeout)
+
+		if value, ok := sp.Data["meta.refinery.send_by"]; ok {
+			switch v := value.(type) {
+			case int64:
+				sendBy = time.Unix(v, 0)
+			case uint64:
+				sendBy = time.Unix(int64(v), 0)
+			}
+		}
+
 		trace = &types.Trace{
 			APIHost:          sp.APIHost,
 			APIKey:           sp.APIKey,
 			Dataset:          sp.Dataset,
 			TraceID:          sp.TraceID,
 			ArrivalTime:      now,
-			SendBy:           now.Add(timeout),
+			SendBy:           sendBy,
 			DeciderShardAddr: targetShard.GetAddress(),
 		}
 		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
@@ -798,7 +813,24 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
 		trace.SendBy = i.Clock.Now().Add(timeout)
 		i.cache.Set(trace)
+	} else {
+		var sendBy time.Time
+		if value, ok := sp.Data["meta.refinery.send_by"]; ok {
+			switch v := value.(type) {
+			case int64:
+				sendBy = time.Unix(v, 0)
+			case uint64:
+				sendBy = time.Unix(int64(v), 0)
+			}
+		}
+
+		if !sendBy.IsZero() && sendBy.Before(trace.SendBy) {
+			// if the send_by time is earlier than the current send_by time, we should update it
+			trace.SendBy = sendBy
+			i.cache.Set(trace)
+		}
 	}
+
 }
 
 // ProcessSpanImmediately is an escape hatch used under stressful conditions --
@@ -1124,7 +1156,7 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 					return
 				}
 
-				i.distributeSpansOnShutdown(sentChan, forwardChan, sp)
+				i.distributeSpansOnShutdown(sentChan, forwardChan, nil, sp)
 			}
 		}
 	}()
@@ -1143,7 +1175,7 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 					return
 				}
 
-				i.distributeSpansOnShutdown(sentChan, forwardChan, sp)
+				i.distributeSpansOnShutdown(sentChan, forwardChan, nil, sp)
 			}
 		}
 	}()
@@ -1152,7 +1184,7 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 	if i.cache != nil {
 		traces := i.cache.GetAll()
 		for _, trace := range traces {
-			i.distributeSpansOnShutdown(sentChan, forwardChan, trace.GetSpans()...)
+			i.distributeSpansOnShutdown(sentChan, forwardChan, &trace.SendBy, trace.GetSpans()...)
 		}
 	}
 
@@ -1164,7 +1196,7 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 }
 
 // distributeSpansInCache takes a list of spans and sends them to the appropriate channel based on the state of the trace.
-func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord, forwardSpanChan chan *types.Span, spans ...*types.Span) {
+func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord, forwardSpanChan chan *types.Span, sendBy *time.Time, spans ...*types.Span) {
 	for _, sp := range spans {
 		// if the span is a decision span, we don't need to do anything with it
 		if sp != nil && !sp.IsDecisionSpan() {
@@ -1176,6 +1208,12 @@ func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord,
 				continue
 			}
 
+			if sendBy != nil {
+				if sp.Data == nil {
+					sp.Data = make(map[string]interface{})
+				}
+				sp.Data["meta.refinery.send_by"] = sendBy.Unix()
+			}
 			// if there's no trace decision, then we need to forward the trace to its new home
 			forwardSpanChan <- sp
 		}
