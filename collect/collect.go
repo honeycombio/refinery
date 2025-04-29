@@ -560,7 +560,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	})
 
 	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces))
-
+  
 	// only remove traces from the cache if we are in trace locality concentrated mode
 	if len(forwardedTraces) > 0 && i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		i.cache.RemoveTraces(forwardedTraces)
