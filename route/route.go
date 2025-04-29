@@ -625,18 +625,21 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// and either drop or send the trace without even trying to cache or forward it.
 	isProbe := false
 	if r.Collector.Stressed() {
-		processed, kept := r.Collector.ProcessSpanImmediately(span)
+		// only process spans that are not decision spans through stress relief
+		if !span.IsDecisionSpan() {
+			processed, kept := r.Collector.ProcessSpanImmediately(span)
 
-		if processed {
-			if !kept {
-				return nil
+			if processed {
+				if !kept {
+					return nil
 
+				}
+
+				// If the span was kept, we want to generate a probe that we'll forward
+				// to a peer IF this span would have been forwarded.
+				ev.Data["meta.refinery.probe"] = true
+				isProbe = true
 			}
-
-			// If the span was kept, we want to generate a probe that we'll forward
-			// to a peer IF this span would have been forwarded.
-			ev.Data["meta.refinery.probe"] = true
-			isProbe = true
 		}
 	}
 
