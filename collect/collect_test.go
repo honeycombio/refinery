@@ -475,6 +475,7 @@ func TestAddSpan(t *testing.T) {
 	}, time.Second*1, time.Millisecond)
 	assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 
+	sendBy := coll.Clock.Now().Add(10 * time.Second).Unix()
 	spanFromPeer := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
@@ -482,6 +483,7 @@ func TestAddSpan(t *testing.T) {
 			Data: map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
+				"meta.refinery.send_by":  sendBy,
 			},
 			APIKey: legacyAPIKey,
 		},
@@ -492,6 +494,7 @@ func TestAddSpan(t *testing.T) {
 	trace := coll.getFromCache(traceID)
 	require.NotNil(t, trace)
 	assert.Equal(t, int(trace.DescendantCount()), 2, "after adding a decision span, we should have 2 descendant in the trace")
+	assert.Equal(t, trace.SendBy.Unix(), sendBy, "send_by should be the same as the one set from its peer")
 	assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
 
@@ -1963,6 +1966,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 
 	sentTraceChan := make(chan sentRecord, 1)
 	forwardTraceChan := make(chan *types.Span, 1)
+	now := time.Now()
 
 	// Define test cases
 	tests := []struct {
@@ -1974,6 +1978,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		expectedForwarded    int
 		expectedTransmission *transmit.MockTransmission
 		expectedAPIHost      string
+		expectedTraceSendBy  int64
 	}{
 		{
 			name:                 "Trace already has decision, should be sent",
@@ -1993,6 +1998,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			expectedForwarded:    1,
 			expectedTransmission: peerTransmission,
 			expectedAPIHost:      "api2",
+			expectedTraceSendBy:  now.Unix(),
 		},
 		{
 			name:    "decision spans that already has decision should be ignored and discarded",
@@ -2028,7 +2034,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			}
 
 			// Call distributeSpansOnShutdown
-			coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, tt.span)
+			coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, &now, tt.span)
 			require.Len(t, sentTraceChan, tt.expectedSent)
 			require.Len(t, forwardTraceChan, tt.expectedForwarded)
 
@@ -2045,6 +2051,15 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			events := tt.expectedTransmission.GetBlock(1)
 			require.Len(t, events, 1)
 			require.Equal(t, tt.span.Dataset, events[0].Dataset)
+
+			sendBy, ok := events[0].Data["meta.refinery.send_by"]
+			if tt.expectedTraceSendBy != 0 {
+				require.True(t, ok)
+				require.Equal(t, tt.expectedTraceSendBy, sendBy.(int64))
+			} else {
+				require.False(t, ok)
+			}
+
 			if tt.expectedAPIHost != "" {
 				require.Equal(t, tt.expectedAPIHost, events[0].APIHost)
 			}

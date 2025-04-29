@@ -273,7 +273,32 @@ func (sp *Span) ExtractDecisionContext() *Event {
 		"meta.annotation_type":         sp.AnnotationType(),
 		"meta.refinery.span_data_size": dataSize,
 	}
+
+	if v, ok := sp.GetSendBy(); ok {
+		decisionCtx.Data["meta.refinery.send_by"] = v
+	}
 	return &decisionCtx
+}
+
+func (sp *Span) SetSendBy(sendBy time.Time) {
+	sp.Data["meta.refinery.send_by"] = sendBy.Unix()
+}
+
+func (sp *Span) GetSendBy() (time.Time, bool) {
+	if sp.Data == nil {
+		return time.Time{}, false
+	}
+
+	if value, ok := sp.Data["meta.refinery.send_by"]; ok {
+		switch v := value.(type) {
+		case int64:
+			return time.Unix(v, 0), true
+		case uint64:
+			return time.Unix(int64(v), 0), true
+		}
+	}
+
+	return time.Time{}, false
 }
 
 // GetDataSize computes the size of the Data element of the Span.
