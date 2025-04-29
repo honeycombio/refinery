@@ -310,7 +310,7 @@ func (agent *Agent) calculateHealth() *protobufs.ComponentHealth {
 }
 
 func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
-	configYAML, err := config.SerializeToYAML(agent.effectiveConfig)
+	configYAML, rulesYAML, err := config.SerializeToYAML(agent.effectiveConfig)
 	if err != nil {
 		agent.logger.Errorf(context.Background(), "Failed to marshal effective config: %v", err)
 		return nil
@@ -318,7 +318,8 @@ func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
 	return &protobufs.EffectiveConfig{
 		ConfigMap: &protobufs.AgentConfigMap{
 			ConfigMap: map[string]*protobufs.AgentConfigFile{
-				"": {Body: []byte(configYAML)},
+				"config": {Body: []byte(configYAML)},
+				"rules":  {Body: []byte(rulesYAML)},
 			},
 		},
 	}
@@ -384,6 +385,7 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 
 		var opts []config.ReloadedConfigDataOption
 		if c, ok := confMap["refinery_rules"]; ok {
+			agent.logger.Logger.Info().WithField("refinery_rules", string(confMap["refinery_rules"].Body)).Logf("new refinery rules")
 			opts = append(opts, config.WithRulesData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://rules")))
 		}
 		if c, ok := confMap["refinery_config"]; ok {
@@ -399,7 +401,7 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 				agent.logger.Errorf(ctx, "Failed to reload config: %v", err)
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_FAILED, err.Error())
 			} else {
-				agent.logger.Logger.Info().Logf("Successfully reloaded config")
+				agent.logger.Logger.Info().WithField("rules", agent.effectiveConfig.GetAllSamplerRules().Samplers).Logf("Successfully reloaded config")
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
 			}
 		}
