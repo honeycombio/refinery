@@ -385,7 +385,6 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 
 		var opts []config.ReloadedConfigDataOption
 		if c, ok := confMap["refinery_rules"]; ok {
-			agent.logger.Logger.Info().WithField("refinery_rules", string(confMap["refinery_rules"].Body)).Logf("new refinery rules")
 			opts = append(opts, config.WithRulesData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://rules")))
 		}
 		if c, ok := confMap["refinery_config"]; ok {
