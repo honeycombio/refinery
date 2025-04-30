@@ -403,6 +403,10 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 			} else {
 				agent.logger.Logger.Info().WithField("rules", agent.effectiveConfig.GetAllSamplerRules().Samplers).Logf("Successfully reloaded config")
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
+				err = agent.opampClient.UpdateEffectiveConfig(ctx)
+				if err != nil {
+					agent.logger.Errorf(ctx, "failed to update the effective config: %v", err)
+				}
 			}
 		}
 	}
