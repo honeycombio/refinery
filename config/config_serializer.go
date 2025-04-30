@@ -7,15 +7,22 @@ import (
 )
 
 // SerializeToYAML serializes the Config to a YAML string
-func SerializeToYAML(cfg Config) (string, error) {
+func SerializeToYAML(cfg Config) ([]byte, []byte, error) {
 	// Create a configContents struct and populate it from the Config interface
 	contents := populateConfigContents(cfg)
 
 	yamlBytes, err := yaml.Marshal(contents)
 	if err != nil {
-		return "", fmt.Errorf("error serializing config to YAML: %w", err)
+		return nil, nil, fmt.Errorf("error serializing config to YAML: %w", err)
 	}
-	return string(yamlBytes), nil
+
+	rules := cfg.GetAllSamplerRules()
+	rulesYamlBytes, err := yaml.Marshal(rules)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error serializing rules to YAML: %w", err)
+	}
+
+	return yamlBytes, rulesYamlBytes, nil
 }
 
 // populateConfigContents creates a configContents struct from a Config interface

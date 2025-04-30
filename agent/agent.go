@@ -310,7 +310,7 @@ func (agent *Agent) calculateHealth() *protobufs.ComponentHealth {
 }
 
 func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
-	configYAML, err := config.SerializeToYAML(agent.effectiveConfig)
+	configYAML, rulesYAML, err := config.SerializeToYAML(agent.effectiveConfig)
 	if err != nil {
 		agent.logger.Errorf(context.Background(), "Failed to marshal effective config: %v", err)
 		return nil
@@ -318,7 +318,8 @@ func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
 	return &protobufs.EffectiveConfig{
 		ConfigMap: &protobufs.AgentConfigMap{
 			ConfigMap: map[string]*protobufs.AgentConfigFile{
-				"": {Body: []byte(configYAML)},
+				"refinery_config": {Body: configYAML},
+				"refinery_rules":  {Body: rulesYAML},
 			},
 		},
 	}
@@ -399,8 +400,11 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 				agent.logger.Errorf(ctx, "Failed to reload config: %v", err)
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_FAILED, err.Error())
 			} else {
-				agent.logger.Logger.Info().Logf("Successfully reloaded config")
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
+				err = agent.opampClient.UpdateEffectiveConfig(ctx)
+				if err != nil {
+					agent.logger.Errorf(ctx, "failed to update the effective config: %v", err)
+				}
 			}
 		}
 	}
