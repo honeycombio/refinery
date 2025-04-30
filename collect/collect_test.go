@@ -1920,7 +1920,9 @@ func TestRedistributeTraces(t *testing.T) {
 	assert.Len(t, peerEvents, 1)
 	assert.Equal(t, s.Other.GetAddress(), peerEvents[0].APIHost)
 
+	coll.mutex.Lock()
 	result := coll.cache.Get(myTraceID)
+	coll.mutex.Unlock()
 	assert.Nil(t, result, "trace should be removed from cache after redistribution")
 
 	conf.Mux.Lock()
