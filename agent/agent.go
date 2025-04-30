@@ -401,7 +401,6 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 				agent.logger.Errorf(ctx, "Failed to reload config: %v", err)
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_FAILED, err.Error())
 			} else {
-				agent.logger.Logger.Info().WithField("rules", agent.effectiveConfig.GetAllSamplerRules().Samplers).Logf("Successfully reloaded config")
 				agent.reportConfigStatus(protobufs.RemoteConfigStatuses_RemoteConfigStatuses_APPLIED, "")
 				err = agent.opampClient.UpdateEffectiveConfig(ctx)
 				if err != nil {
