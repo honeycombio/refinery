@@ -318,8 +318,8 @@ func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
 	return &protobufs.EffectiveConfig{
 		ConfigMap: &protobufs.AgentConfigMap{
 			ConfigMap: map[string]*protobufs.AgentConfigFile{
-				"refinery_config": {Body: []byte(configYAML)},
-				"refinery_rules":  {Body: []byte(rulesYAML)},
+				"refinery_config": {Body: configYAML},
+				"refinery_rules":  {Body: rulesYAML},
 			},
 		},
 	}
