@@ -1919,6 +1919,59 @@ func TestRedistributeTraces(t *testing.T) {
 	peerEvents = peerTransmission.GetBlock(1)
 	assert.Len(t, peerEvents, 1)
 	assert.Equal(t, s.Other.GetAddress(), peerEvents[0].APIHost)
+
+	result := coll.cache.Get(myTraceID)
+	assert.Nil(t, result, "trace should be removed from cache after redistribution")
+
+	conf.GetCollectionConfigVal.TraceLocalityMode = "distributed"
+	myTrace2 := &types.Trace{
+		TraceID:          myTraceID,
+		Dataset:          dataset,
+		SendBy:           coll.Clock.Now().Add(5 * time.Second),
+		DeciderShardAddr: "api1",
+	}
+
+	myTrace2.AddSpan(span)
+	myTrace2.AddSpan(decisionSpan)
+
+	coll.mutex.Lock()
+	coll.cache.Set(myTrace2)
+	coll.mutex.Unlock()
+	coll.redistributeTimer.Reset()
+
+	peerEvents = peerTransmission.GetBlock(1)
+	assert.Len(t, peerEvents, 1)
+	assert.Equal(t, s.Other.GetAddress(), peerEvents[0].APIHost)
+
+	result = coll.cache.Get(myTraceID)
+	assert.NotNil(t, result, "only decision spans should be removed from cache after redistribution")
+	spans := result.GetSpans()
+	assert.Len(t, spans, 1, "trace should still be in cache after redistribution")
+	assert.False(t, spans[0].IsDecisionSpan())
+
+	// create a trace that only contains decision spans
+	//	if the trace previously belongs to us and now belongs to other peers
+	// redistribution should delete the trace from cache
+	s.Other = &sharder.TestShard{Addr: "api4", TraceIDs: []string{peerTraceID}}
+	emptyTrace := &types.Trace{
+		TraceID:          peerTraceID,
+		Dataset:          dataset,
+		SendBy:           coll.Clock.Now().Add(5 * time.Second),
+		DeciderShardAddr: "api1",
+	}
+
+	emptyTrace.AddSpan(decisionSpan)
+	coll.mutex.Lock()
+	coll.cache.Set(emptyTrace)
+	coll.mutex.Unlock()
+	coll.redistributeTimer.Reset()
+
+	peerEvents = peerTransmission.GetBlock(0)
+	assert.Len(t, peerEvents, 0)
+
+	coll.mutex.Lock()
+	assert.Nil(t, coll.cache.Get(emptyTrace.TraceID), "empty trace should be removed from cache after redistribution")
+	coll.mutex.Unlock()
 }
 
 func TestDrainTracesOnShutdown(t *testing.T) {
