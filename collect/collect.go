@@ -498,6 +498,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	traces := i.cache.GetAll()
 	span.SetAttributes(attribute.Int("num_traces_to_redistribute", len(traces)))
 	forwardedTraces := generics.NewSetWithCapacity[string](len(traces) / numOfPeers)
+	emptyTraces := generics.NewSet[string]()
 	for _, trace := range traces {
 		if trace == nil {
 			continue
@@ -525,6 +526,11 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		trace.DeciderShardAddr = newTarget.GetAddress()
 		// Remove decision spans from the trace that no longer belongs to the current node
 		trace.RemoveDecisionSpans()
+		spans := trace.GetSpans()
+		if len(spans) == 0 {
+			emptyTraces.Add(trace.TraceID)
+			continue
+		}
 
 		for _, sp := range trace.GetSpans() {
 
@@ -559,11 +565,17 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		"hostname":              i.hostname,
 	})
 
-	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces))
-  
-	// only remove traces from the cache if we are in trace locality concentrated mode
-	if len(forwardedTraces) > 0 && i.Config.GetCollectionConfig().TraceLocalityEnabled() {
+	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces)+len(emptyTraces))
+
+	// remove all redistributed traces from the cache if we are in traces locality concentrated mode
+	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
+		forwardedTraces.AddMembers(emptyTraces)
 		i.cache.RemoveTraces(forwardedTraces)
+		return
+	} else {
+		// only remove empty traces from the cache if we are not distributed mode
+		// this can happen if all spans in the trace are decision spans and the trace is forwarded
+		i.cache.RemoveTraces(emptyTraces)
 	}
 }
 
@@ -757,6 +769,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		// we will just use the default late span reason as the sent reason which is
 		// set inside the dealWithSentTrace function
 		i.dealWithSentTrace(ctx, cache.NewKeptTraceCacheEntry(trace), "", sp)
+		return
 	}
 
 	// if the span is sent for signaling expired traces,
@@ -1252,9 +1265,6 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 
 			otelutil.AddSpanField(span, "target_shard", url)
 
-			// TODO: we need to decorate the expired traces before forwarding them so that
-			// the downstream consumers can make decisions based on the metadata without having
-			// to restart the TraceTimeout or SendDelay
 			sp.APIHost = url
 
 			if sp.Data == nil {
