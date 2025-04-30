@@ -1923,7 +1923,9 @@ func TestRedistributeTraces(t *testing.T) {
 	result := coll.cache.Get(myTraceID)
 	assert.Nil(t, result, "trace should be removed from cache after redistribution")
 
+	conf.Mux.Lock()
 	conf.GetCollectionConfigVal.TraceLocalityMode = "distributed"
+	conf.Mux.Unlock()
 	myTrace2 := &types.Trace{
 		TraceID:          myTraceID,
 		Dataset:          dataset,
