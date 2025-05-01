@@ -241,9 +241,7 @@ func TestShardDrop(t *testing.T) {
 		npeers := i*10 + 5
 		t.Run(fmt.Sprintf("drop npeers=%d", npeers), func(t *testing.T) {
 			for retry := 0; retry < 2; retry++ {
-				peers := []string{
-					"http://" + selfPeerAddr,
-				}
+				peers := make([]string, 0, npeers)
 				for i := 1; i < npeers; i++ {
 					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
 				}
