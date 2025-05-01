@@ -93,6 +93,7 @@ type InMemCollector struct {
 	Peers            peer.Peers             `inject:""`
 
 	// For test use only
+	TestMode       bool
 	BlockOnAddSpan bool
 
 	// mutex must be held whenever non-channel internal fields are accessed.
@@ -444,11 +445,16 @@ func (i *InMemCollector) collect() {
 
 				// maybe only do this if in test mode?
 				// Briefly unlock the cache, to allow test access.
-				_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
-				i.mutex.Unlock()
-				runtime.Gosched()
-				i.mutex.Lock()
-				goSchedSpan.End()
+				if i.TestMode {
+					// This is a bit of a hack, but it allows us to test
+					// the collector without having to worry about the
+					// cache being locked.
+					_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
+					i.mutex.Unlock()
+					runtime.Gosched()
+					i.mutex.Lock()
+					goSchedSpan.End()
+				}
 			case sp, ok := <-i.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.

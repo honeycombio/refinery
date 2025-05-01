@@ -63,6 +63,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 	redistributeNotifier := newRedistributeNotifier(&logger.NullLogger{}, &metrics.NullMetrics{}, clock, redistributionDelay)
 
 	c := &InMemCollector{
+		TestMode:         true,
 		Config:           conf,
 		Clock:            clock,
 		Logger:           &logger.NullLogger{},
