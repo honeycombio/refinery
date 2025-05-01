@@ -3,10 +3,7 @@ package peer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
-	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -163,7 +160,7 @@ func (p *RedisPubsubPeers) Start() error {
 		p.Metrics.Register(metric)
 	}
 
-	myaddr, err := p.publicAddr()
+	myaddr, err := publicAddr(p.Logger, p.Config)
 	if err != nil {
 		return err
 	}
@@ -172,7 +169,7 @@ func (p *RedisPubsubPeers) Start() error {
 }
 
 func (p *RedisPubsubPeers) Ready() error {
-	myaddr, err := p.publicAddr()
+	myaddr, err := publicAddr(p.Logger, p.Config)
 	if err != nil {
 		return err
 	}
@@ -225,7 +222,7 @@ func (p *RedisPubsubPeers) Ready() error {
 // but it does not close the subscription.
 func (p *RedisPubsubPeers) stop() {
 	// unregister ourselves
-	myaddr, err := p.publicAddr()
+	myaddr, err := publicAddr(p.Logger, p.Config)
 	if err != nil {
 		p.Logger.Error().Logf("failed to get public address")
 		return
@@ -246,7 +243,7 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 	// This keeps the sharding logic happy.
 	peers := p.peers.SortedValues()
 	if len(peers) == 0 {
-		myaddr, err := p.publicAddr()
+		myaddr, err := publicAddr(p.Logger, p.Config)
 		if err != nil {
 			return nil, err
 		}
@@ -256,89 +253,11 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 }
 
 func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
-	return p.publicAddr()
+	return publicAddr(p.Logger, p.Config)
 }
 
 func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
 	p.callbacks = append(p.callbacks, callback)
-}
-
-func (p *RedisPubsubPeers) publicAddr() (string, error) {
-	// compute the public version of my peer listen address
-	listenAddr := p.Config.GetPeerListenAddr()
-	// first, extract the port
-	_, port, err := net.SplitHostPort(listenAddr)
-
-	if err != nil {
-		return "", err
-	}
-
-	var myIdentifier string
-
-	// If RedisIdentifier is set, use as identifier.
-	if redisIdentifier := p.Config.GetRedisIdentifier(); redisIdentifier != "" {
-		myIdentifier = redisIdentifier
-		p.Logger.Info().WithField("identifier", myIdentifier).Logf("using specified RedisIdentifier from config")
-	} else {
-		// Otherwise, determine identifier from network interface.
-		myIdentifier, err = p.getIdentifierFromInterface()
-		if err != nil {
-			return "", err
-		}
-	}
-
-	publicListenAddr := fmt.Sprintf("http://%s:%s", myIdentifier, port)
-
-	return publicListenAddr, nil
-}
-
-// getIdentifierFromInterface returns a string that uniquely identifies this
-// host in the network. If an interface is specified, it will scan it to
-// determine an identifier from the first IP address on that interface.
-// Otherwise, it will use the hostname.
-func (p *RedisPubsubPeers) getIdentifierFromInterface() (string, error) {
-	myIdentifier, _ := os.Hostname()
-	identifierInterfaceName := p.Config.GetIdentifierInterfaceName()
-
-	if identifierInterfaceName != "" {
-		ifc, err := net.InterfaceByName(identifierInterfaceName)
-		if err != nil {
-			p.Logger.Error().WithField("interface", identifierInterfaceName).
-				Logf("IdentifierInterfaceName set but couldn't find interface by that name")
-			return "", err
-		}
-		addrs, err := ifc.Addrs()
-		if err != nil {
-			p.Logger.Error().WithField("interface", identifierInterfaceName).
-				Logf("IdentifierInterfaceName set but couldn't list addresses")
-			return "", err
-		}
-		var ipStr string
-		for _, addr := range addrs {
-			// ParseIP doesn't know what to do with the suffix
-			ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
-			ipv6 := p.Config.GetUseIPV6Identifier()
-			if ipv6 && ip.To16() != nil {
-				ipStr = fmt.Sprintf("[%s]", ip.String())
-				break
-			}
-			if !ipv6 && ip.To4() != nil {
-				ipStr = ip.String()
-				break
-			}
-		}
-		if ipStr == "" {
-			err = errors.New("could not find a valid IP to use from interface")
-			p.Logger.Error().WithField("interface", ifc.Name).
-				Logf("IdentifierInterfaceName set but couldn't find a valid IP to use from interface")
-			return "", err
-		}
-		myIdentifier = ipStr
-		p.Logger.Info().WithField("identifier", myIdentifier).WithField("interface", ifc.Name).
-			Logf("using identifier from interface")
-	}
-
-	return myIdentifier, nil
 }
 
 // hashList hashes a list of strings into a single uint64

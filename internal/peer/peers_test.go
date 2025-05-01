@@ -29,6 +29,7 @@ func newPeers(c config.Config) (Peers, error) {
 	case "file":
 		peers = &FilePeers{
 			Cfg:     c,
+			Logger:  &logger.NullLogger{},
 			Metrics: &metrics.NullMetrics{},
 		}
 		// we know FilePeers doesn't need to be Started, so as long as we gave it a Cfg above,
@@ -60,6 +61,7 @@ func newPeers(c config.Config) (Peers, error) {
 		{Value: c},
 		{Value: peers},
 		{Value: pubsubber},
+		{Value: noop.Tracer{}, Name: "tracer"},
 		{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		{Value: &logger.NullLogger{}},
 		{Value: clockwork.NewFakeClock()},

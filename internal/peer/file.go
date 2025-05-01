@@ -1,10 +1,8 @@
 package peer
 
 import (
-	"fmt"
-	"net"
-
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 )
 
@@ -12,31 +10,27 @@ var _ Peers = (*FilePeers)(nil)
 
 type FilePeers struct {
 	Cfg     config.Config   `inject:""`
+	Logger  logger.Logger   `inject:""`
 	Metrics metrics.Metrics `inject:"metrics"`
 	Done    chan struct{}
 
-	id string
+	publicAddr string
 }
 
+// GetPeers returns the list of peers, including the host itself.
 func (p *FilePeers) GetPeers() ([]string, error) {
-	// we never want to return an empty list of peers, so if the config
-	// returns an empty list, return a single peer. This keeps the sharding
-	// logic happy.
-	peers := p.Cfg.GetPeers()
-	if len(peers) == 0 {
-		addr, err := p.publicAddr()
-		if err != nil {
-			return nil, err
-
-		}
-		peers = []string{addr}
+	addr, err := publicAddr(p.Logger, p.Cfg)
+	if err != nil {
+		return nil, err
 	}
+	peers := p.Cfg.GetPeers()
+	peers = append(peers, addr)
 	p.Metrics.Gauge("num_file_peers", float64(len(peers)))
 	return peers, nil
 }
 
 func (p *FilePeers) GetInstanceID() (string, error) {
-	return p.id, nil
+	return p.publicAddr, nil
 }
 
 func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
@@ -54,7 +48,7 @@ func (p *FilePeers) Start() (err error) {
 		p.Metrics.Register(metric)
 	}
 
-	p.id, err = p.publicAddr()
+	p.publicAddr, err = publicAddr(p.Logger, p.Cfg)
 	if err != nil {
 		return err
 	}
@@ -64,14 +58,4 @@ func (p *FilePeers) Start() (err error) {
 
 func (p *FilePeers) Ready() error {
 	return nil
-}
-
-func (p *FilePeers) publicAddr() (string, error) {
-	addr := p.Cfg.GetPeerListenAddr()
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("http://%s:%s", host, port), nil
 }
