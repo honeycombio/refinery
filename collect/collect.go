@@ -443,7 +443,6 @@ func (i *InMemCollector) collect() {
 				i.sendExpiredTracesInCache(ctx, i.Clock.Now())
 				i.checkAlloc(ctx)
 
-				// maybe only do this if in test mode?
 				// Briefly unlock the cache, to allow test access.
 				if i.TestMode {
 					// This is a bit of a hack, but it allows us to test
