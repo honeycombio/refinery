@@ -39,7 +39,7 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 		})
 	}
 	sampler.Start()
-	rate, _, reason, key := sampler.GetSampleRate(trace)
+	rate, _, summarize, reason, key := sampler.GetSampleRate(trace)
 
 	spans := trace.GetSpans()
 
@@ -47,5 +47,5 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 	assert.Equal(t, uint(10), rate, "sample rate should be 10")
 	assert.Equal(t, "emadynamic", reason)
 	assert.Equal(t, "4•,200•,true•,/{slug}/fun•,", key)
-
+	assert.False(t, summarize, "summarize should be false")
 }
