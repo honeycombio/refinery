@@ -391,7 +391,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 				Data:        make(map[string]interface{}, len(t.RootSpan.Data)+len(summaryFields)),
 			},
 			TraceID:     t.RootSpan.TraceID,
-			DataSize:    t.RootSpan.DataSize,
 			ArrivalTime: t.RootSpan.ArrivalTime,
 			IsRoot:      t.RootSpan.IsRoot,
 		}
@@ -422,7 +421,6 @@ func (t *Trace) SummarizeTrace(slowSpanDurationMs float64, decision TraceDecisio
 				Data:        make(map[string]interface{}, 3+len(summaryFields)),
 			},
 			TraceID:     firstSpan.TraceID,
-			DataSize:    firstSpan.DataSize,
 			ArrivalTime: firstSpan.ArrivalTime,
 			IsRoot:      firstSpan.IsRoot,
 		}
