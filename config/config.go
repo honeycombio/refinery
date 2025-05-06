@@ -80,6 +80,9 @@ type Config interface {
 	// GetHoneycombLoggerConfig returns the config specific to the HoneycombLogger
 	GetHoneycombLoggerConfig() HoneycombLoggerConfig
 
+	// GetOTelLoggerConfig returns the config specific to the OTelLogger
+	GetOTelLoggerConfig() OTelLoggerConfig
+
 	// GetStdoutLoggerConfig returns the config specific to the StdoutLogger
 	GetStdoutLoggerConfig() StdoutLoggerConfig
 

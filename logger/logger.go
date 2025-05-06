@@ -33,6 +33,8 @@ func GetLoggerImplementation(c config.Config) Logger {
 	switch loggerType {
 	case "honeycomb":
 		logger = &HoneycombLogger{}
+	case "otel":
+		logger = &OTelLogger{}
 	case "stdout":
 		logger = &StdoutLogger{}
 	case "none":
