@@ -97,6 +97,15 @@ type Router struct {
 
 	environmentCache *environmentCache
 	hsrv             *healthserver.Server
+
+	// Cache for stress levels
+	stressLevels struct {
+		individual float64
+		cluster    float64
+		activated  float64
+		lastUpdate time.Time
+	}
+	stressLevelsMutex sync.RWMutex
 }
 
 type BatchResponse struct {
@@ -137,6 +146,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
+	{Name: "_router_stress_rejected", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of requests rejected due to uneven load across the cluster"},
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -170,11 +180,20 @@ func (r *Router) LnS(incomingOrPeer string) {
 		r.Metrics.Register(metric)
 	}
 
+	// Initialize stress levels
+	r.updateStressLevels()
+
 	muxxer := mux.NewRouter()
 
 	muxxer.Use(r.setResponseHeaders)
 	muxxer.Use(r.requestLogger)
 	muxxer.Use(r.panicCatcher)
+
+	// Apply stress check based on config
+	rejectionServer := r.Config.GetStressReliefConfig().InboundRejectionServer
+	if rejectionServer == "always" || rejectionServer == r.incomingOrPeer {
+		muxxer.Use(r.stressCheck)
+	}
 
 	muxxer.HandleFunc("/alive", r.alive).Name("local health")
 	muxxer.HandleFunc("/ready", r.ready).Name("local readiness")
@@ -1105,4 +1124,81 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data["meta.refinery.incoming_user_agent"] == nil {
 		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
 	}
+}
+
+// updateStressLevels refreshes the cached stress level values
+func (r *Router) updateStressLevels() {
+	r.stressLevelsMutex.Lock()
+	defer r.stressLevelsMutex.Unlock()
+
+	individual, _ := r.Metrics.Get("individual_stress_level")
+	cluster, _ := r.Metrics.Get("cluster_stress_level")
+	activated, _ := r.Metrics.Get("stress_relief_activated")
+
+	r.stressLevels.individual = individual
+	r.stressLevels.cluster = cluster
+	r.stressLevels.activated = activated
+	r.stressLevels.lastUpdate = time.Now()
+}
+
+// getStressLevels returns the cached stress levels, updating them if they're older than 1 second
+func (r *Router) getStressLevels() (individual, cluster, activated float64) {
+	r.stressLevelsMutex.RLock()
+	if time.Since(r.stressLevels.lastUpdate) < time.Second {
+		individual = r.stressLevels.individual
+		cluster = r.stressLevels.cluster
+		activated = r.stressLevels.activated
+		r.stressLevelsMutex.RUnlock()
+		return
+	}
+	r.stressLevelsMutex.RUnlock()
+
+	r.updateStressLevels()
+	return r.stressLevels.individual, r.stressLevels.cluster, r.stressLevels.activated
+}
+
+// stressCheck is middleware that checks if this node's stress level is above average
+// and returns 503 Service Unavailable if it is
+func (r *Router) stressCheck(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		// Skip stress check for health endpoints
+		if req.URL.Path == "/alive" || req.URL.Path == "/ready" {
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		// Get cached stress levels
+		individualStress, clusterStress, stressReliefActivated := r.getStressLevels()
+		activationLevel := float64(r.Config.GetStressReliefConfig().ActivationLevel)
+		tolerance := float64(r.Config.GetStressReliefConfig().InboundRejectionTolerance)
+		retryAfter := strconv.Itoa(int(r.Config.GetStressReliefConfig().RetryAfterSeconds))
+		if retryAfter == "0" {
+			retryAfter = strconv.Itoa(int(r.Config.GetTracesConfig().TraceTimeout))
+		}
+		statusCode := int(r.Config.GetStressReliefConfig().RejectionStatusCode)
+		if statusCode != http.StatusTooManyRequests && statusCode != http.StatusServiceUnavailable {
+			statusCode = http.StatusTooManyRequests
+		}
+
+		// Allow traffic if:
+		// 0. already stressed
+		// 1. Individual stress is below 50, OR
+		// 2. Individual stress is not higher than cluster stress (plus tolerance), OR
+		// 3. Cluster stress is above stress relief activation threshold
+		if stressReliefActivated == 1 || individualStress < 50 || individualStress < clusterStress+tolerance || clusterStress >= activationLevel {
+			next.ServeHTTP(w, req)
+			return
+		}
+
+		w.Header().Set("Retry-After", retryAfter)
+		http.Error(w, "Service temporarily overloaded", statusCode)
+		r.Metrics.Increment(r.incomingOrPeer + "_router_stress_rejected")
+		r.iopLogger.Debug().
+			WithField("individual_stress", individualStress).
+			WithField("cluster_stress", clusterStress).
+			WithField("stress_relief_activated", stressReliefActivated).
+			WithField("activation_level", activationLevel).
+			WithField("tolerance", tolerance).
+			Logf("rejecting request due to high stress")
+	})
 }
