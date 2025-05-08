@@ -963,7 +963,7 @@ groups:
         v1name: Type
         type: string
         valuetype: choice
-        choices: ["redis", "file"]
+        choices: ["google", "redis", "file"]
         default: "file"
         reload: false
         validations:
@@ -978,6 +978,11 @@ groups:
 
           `redis` means that Refinery uses a Publish/Subscribe mechanism,
           implemented on Redis, to propagate peer lists, stress levels, and
+          notification of configuration changes much more quickly than the
+          legacy mechanism.
+
+          `google` means that Refinery uses a Publish/Subscribe mechanism,
+          implemented on Google Pub/Sub, to propagate peer lists, stress levels, and
           notification of configuration changes much more quickly than the
           legacy mechanism.
 
@@ -1047,11 +1052,44 @@ groups:
           This list is ignored when Type is "redis". The format is a list of
           strings of the form "scheme://host:port".
 
+  - name: GooglePeerManagement
+    title: "Google Peer Management"
+    description: >
+      controls how the Refinery cluster communicates between peers when using
+      Google Pub/Sub. Only applies when `PeerManagement.Type` is "google".
+
+    fields:
+      - name: Topic
+        v1group: PeerManagement
+        v1name: GoogleTopic
+        type: string
+        valuetype: nonemptystring
+        example: ""
+        reload: false
+        envvar: REFINERY_GOOGLE_TOPIC
+        commandline: google-topic
+        summary: is the Google Pub/Sub topic name to use for peer cluster membership management.
+        description: >
+          Specifies unique topic value for the Refinery cluster in Google Pub/Sub.
+      - name: ProjectID
+        v1group: PeerManagement
+        v1name: GoogleProjectID
+        type: string
+        valuetype: showexample
+        default: ""
+        example: "crispy-badger-1234"
+        reload: false
+        envvar: REFINERY_GOOGLE_PROJECT_ID
+        commandline: google-project-id
+        summary: is the Google Pub/Sub project ID to use for peer cluster membership management.
+        description: >
+          Specifies project ID to connect to for the Refinery cluster in Google Pub/Sub.
+
   - name: RedisPeerManagement
     title: "Redis Peer Management"
     description: >
       controls how the Refinery cluster communicates between peers when using
-      Redis. Does not apply when `PeerManagement.Type` is "file".
+      Redis. Only applies when `PeerManagement.Type` is "redis".
 
     fields:
       - name: Host

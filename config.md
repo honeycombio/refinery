@@ -1,7 +1,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-04-10 at 19:03:55 UTC.
+It was automatically generated on 2025-04-22 at 04:33:16 UTC.
 
 ## The Config file
 
@@ -40,6 +40,7 @@ The remainder of this document describes the sections within the file and the fi
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
 - [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
+- [Google Peer Management](#google-peer-management)
 - [Redis Peer Management](#redis-peer-management)
 - [Collection Settings](#collection-settings)
 - [Buffer Sizes](#buffer-sizes)
@@ -800,13 +801,14 @@ Peer management is the mechanism by which Refinery locates its peers.
 `file` means that Refinery gets its peer list from the Peers list in this config file.
 It also prevents Refinery from using a publish/subscribe mechanism to propagate peer lists, stress levels, and configuration changes.
 `redis` means that Refinery uses a Publish/Subscribe mechanism, implemented on Redis, to propagate peer lists, stress levels, and notification of configuration changes much more quickly than the legacy mechanism.
+`google` means that Refinery uses a Publish/Subscribe mechanism, implemented on Google Pub/Sub, to propagate peer lists, stress levels, and notification of configuration changes much more quickly than the legacy mechanism.
 The recommended setting is `redis`, especially for new installations.
 If `redis` is specified, fields in `RedisPeerManagement` must also be set.
 
 - Not eligible for live reload.
 - Type: `string`
 - Default: `file`
-- Options: `redis`, `file`
+- Options: `google`, `redis`, `file`
 
 ### `Identifier`
 
@@ -853,10 +855,36 @@ The format is a list of strings of the form "scheme://host:port".
 - Type: `stringarray`
 - Example: `http://192.168.1.11:8081,http://192.168.1.12:8081`
 
+## Google Peer Management
+
+`GooglePeerManagement` controls how the Refinery cluster communicates between peers when using Google Pub/Sub.
+Only applies when `PeerManagement.Type` is "google".
+
+### `Topic`
+
+Topic is the Google Pub/Sub topic name to use for peer cluster membership management.
+
+Specifies unique topic value for the Refinery cluster in Google Pub/Sub.
+
+- Not eligible for live reload.
+- Type: `string`
+- Environment variable: `REFINERY_GOOGLE_TOPIC`
+
+### `ProjectID`
+
+ProjectID is the Google Pub/Sub project ID to use for peer cluster membership management.
+
+Specifies project ID to connect to for the Refinery cluster in Google Pub/Sub.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `crispy-badger-1234`
+- Environment variable: `REFINERY_GOOGLE_PROJECT_ID`
+
 ## Redis Peer Management
 
 `RedisPeerManagement` controls how the Refinery cluster communicates between peers when using Redis.
-Does not apply when `PeerManagement.Type` is "file".
+Only applies when `PeerManagement.Type` is "redis".
 
 ### `Host`
 

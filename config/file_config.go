@@ -45,29 +45,30 @@ type fileConfig struct {
 var _ Config = (*fileConfig)(nil)
 
 type configContents struct {
-	General              GeneralConfig             `yaml:"General"`
-	Network              NetworkConfig             `yaml:"Network"`
-	OpAMP                OpAMPConfig               `yaml:"OpAMP"`
-	AccessKeys           AccessKeyConfig           `yaml:"AccessKeys"`
-	Telemetry            RefineryTelemetryConfig   `yaml:"RefineryTelemetry"`
-	Traces               TracesConfig              `yaml:"Traces"`
-	Debugging            DebuggingConfig           `yaml:"Debugging"`
-	Logger               LoggerConfig              `yaml:"Logger"`
-	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
-	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
-	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
-	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
-	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
-	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
-	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
-	Collection           CollectionConfig          `yaml:"Collection"`
-	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
-	Specialized          SpecializedConfig         `yaml:"Specialized"`
-	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
-	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
-	SampleCache          SampleCacheConfig         `yaml:"SampleCache"`
-	StressRelief         StressReliefConfig        `yaml:"StressRelief"`
+	General              GeneralConfig              `yaml:"General"`
+	Network              NetworkConfig              `yaml:"Network"`
+	OpAMP                OpAMPConfig                `yaml:"OpAMP"`
+	AccessKeys           AccessKeyConfig            `yaml:"AccessKeys"`
+	Telemetry            RefineryTelemetryConfig    `yaml:"RefineryTelemetry"`
+	Traces               TracesConfig               `yaml:"Traces"`
+	Debugging            DebuggingConfig            `yaml:"Debugging"`
+	Logger               LoggerConfig               `yaml:"Logger"`
+	HoneycombLogger      HoneycombLoggerConfig      `yaml:"HoneycombLogger"`
+	StdoutLogger         StdoutLoggerConfig         `yaml:"StdoutLogger"`
+	PrometheusMetrics    PrometheusMetricsConfig    `yaml:"PrometheusMetrics"`
+	LegacyMetrics        LegacyMetricsConfig        `yaml:"LegacyMetrics"`
+	OTelMetrics          OTelMetricsConfig          `yaml:"OTelMetrics"`
+	OTelTracing          OTelTracingConfig          `yaml:"OTelTracing"`
+	PeerManagement       PeerManagementConfig       `yaml:"PeerManagement"`
+	RedisPeerManagement  RedisPeerManagementConfig  `yaml:"RedisPeerManagement"`
+	GooglePeerManagement GooglePeerManagementConfig `yaml:"GooglePeerManagement"`
+	Collection           CollectionConfig           `yaml:"Collection"`
+	BufferSizes          BufferSizeConfig           `yaml:"BufferSizes"`
+	Specialized          SpecializedConfig          `yaml:"Specialized"`
+	IDFieldNames         IDFieldsConfig             `yaml:"IDFields"`
+	GRPCServerParameters GRPCServerParameters       `yaml:"GRPCServerParameters"`
+	SampleCache          SampleCacheConfig          `yaml:"SampleCache"`
+	StressRelief         StressReliefConfig         `yaml:"StressRelief"`
 }
 
 type GeneralConfig struct {
@@ -308,6 +309,11 @@ type RedisPeerManagementConfig struct {
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
+}
+
+type GooglePeerManagementConfig struct {
+	Topic     string `yaml:"Topic"`
+	ProjectID string `yaml:"ProjectID"`
 }
 
 type CollectionConfig struct {
@@ -784,6 +790,13 @@ func (f *fileConfig) GetUseTLSInsecure() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.RedisPeerManagement.UseTLSInsecure
+}
+
+func (f *fileConfig) GetGooglePeerManagement() GooglePeerManagementConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.GooglePeerManagement
 }
 
 func (f *fileConfig) GetIdentifierInterfaceName() string {

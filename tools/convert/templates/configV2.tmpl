@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2025-04-10 at 19:03:51 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2025-04-22 at 04:33:13 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -835,14 +835,18 @@ PeerManagement:
     ## implemented on Redis, to propagate peer lists, stress levels, and
     ## notification of configuration changes much more quickly than the
     ## legacy mechanism.
+    ## `google` means that Refinery uses a Publish/Subscribe mechanism,
+    ## implemented on Google Pub/Sub, to propagate peer lists, stress levels,
+    ## and notification of configuration changes much more quickly than the
+    ## legacy mechanism.
     ## The recommended setting is `redis`, especially for new installations.
     ## If `redis` is specified, fields in `RedisPeerManagement` must also be
     ## set.
     ##
     ## default: file
     ## Not eligible for live reload.
-    ## Options: redis file
-    {{ choice .Data "Type" "PeerManagement.Type" (makeSlice "redis" "file") "file" }}
+    ## Options: google redis file
+    {{ choice .Data "Type" "PeerManagement.Type" (makeSlice "google" "redis" "file") "file" }}
 
     ## Identifier specifies the identifier to use when registering itself
     ## with peers.
@@ -890,13 +894,40 @@ PeerManagement:
     ## Not eligible for live reload.
     {{ renderStringarray .Data "Peers" "PeerManagement.Peers" "http://192.168.1.11:8081,http://192.168.1.12:8081" }}
 
+############################
+## Google Peer Management ##
+############################
+GooglePeerManagement:
+  ## GooglePeerManagement controls how the Refinery cluster communicates
+  ## between peers when using Google Pub/Sub. Only applies when
+  ## `PeerManagement.Type` is "google".
+  ##
+  ####
+    ## Topic is the Google Pub/Sub topic name to use for peer cluster
+    ## membership management.
+    ##
+    ## Specifies unique topic value for the Refinery cluster in Google
+    ## Pub/Sub.
+    ##
+    ## Not eligible for live reload.
+    {{ nonEmptyString .Data "Topic" "PeerManagement.GoogleTopic" "" }}
+
+    ## ProjectID is the Google Pub/Sub project ID to use for peer cluster
+    ## membership management.
+    ##
+    ## Specifies project ID to connect to for the Refinery cluster in Google
+    ## Pub/Sub.
+    ##
+    ## Not eligible for live reload.
+    # ProjectID: crispy-badger-1234
+
 ###########################
 ## Redis Peer Management ##
 ###########################
 RedisPeerManagement:
   ## RedisPeerManagement controls how the Refinery cluster communicates
-  ## between peers when using Redis. Does not apply when
-  ## `PeerManagement.Type` is "file".
+  ## between peers when using Redis. Only applies when
+  ## `PeerManagement.Type` is "redis".
   ##
   ####
     ## Host is the host and port of the Redis instance to use for peer

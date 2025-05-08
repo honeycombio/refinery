@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-03-27 at 23:12:20 UTC.
+# Automatically generated on 2025-04-22 at 04:33:13 UTC.
 
 General:
   - ConfigurationVersion
@@ -157,6 +157,12 @@ PeerManagement:
   - UseIPV6Identifier (originally PeerManagement.UseIPV6Identifier)
 
   - Peers (originally PeerManagement.Peers)
+
+
+GooglePeerManagement:
+  - Topic (originally PeerManagement.GoogleTopic)
+
+  - ProjectID (originally PeerManagement.GoogleProjectID)
 
 
 RedisPeerManagement:
