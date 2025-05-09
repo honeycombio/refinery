@@ -28,7 +28,7 @@ func Test_publicAddr(t *testing.T) {
 				Config: tt.c,
 				Logger: &logger.NullLogger{},
 			}
-			got, err := peers.publicAddr()
+			got, err := publicAddr(peers.Logger, peers.Config)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("publicAddr() error = %v, wantErr %v", err, tt.wantErr)
 				return

@@ -19,7 +19,7 @@ func TestFilePeers(t *testing.T) {
 		t.Error(err)
 	}
 
-	if d, _ := p.GetPeers(); !(len(d) == 1 && d[0] == "peer") {
+	if d, _ := p.GetPeers(); !(len(d) == 2 && d[0] == "peer") {
 		t.Error("received", d, "expected", "[peer]")
 	}
 }
