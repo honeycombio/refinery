@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2025-04-10 at 19:03:51 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2025-04-22 at 18:19:53 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -482,12 +482,14 @@ Logger:
     ## `none` means that logs are discarded.
     ## `honeycomb` means that logs will be forwarded to Honeycomb as events
     ## according to the set Logging settings.
+    ## `otel` means that logs will be forwarded to Honeycomb as otel logs
+    ## according to the set Logging settings.
     ## `stdout` means that logs will be written to `stdout`.
     ##
     ## default: stdout
     ## Not eligible for live reload.
-    ## Options: stdout honeycomb none
-    {{ choice .Data "Type" "Type" (makeSlice "stdout" "honeycomb" "none") "stdout" }}
+    ## Options: stdout honeycomb otel none
+    {{ choice .Data "Type" "Type" (makeSlice "stdout" "honeycomb" "otel" "none") "stdout" }}
 
     ## Level is the logging level above which Refinery should send a log to
     ## the logger.
@@ -741,6 +743,60 @@ OTelMetrics:
 
     ## Compression is the compression algorithm to use when sending
     ## OpenTelemetry metrics to Honeycomb.
+    ##
+    ## `gzip` is the default and recommended value. In rare circumstances,
+    ## compression costs may outweigh the benefits, in which case `none` may
+    ## be used.
+    ##
+    ## default: gzip
+    ## Not eligible for live reload.
+    ## Options: none gzip
+    {{ choice .Data "Compression" "Compression" (makeSlice "none" "gzip") "gzip" }}
+
+########################
+## OpenTelemetry Logs ##
+########################
+OTelLogger:
+  ## OTelLogger contains configuration for Refinery's OpenTelemetry (OTel)
+  ## logs. This is the preferred way to send logs to Honeycomb. New
+  ## installations should prefer `OTelLogger`.
+  ##
+  ####
+    ## APIHost is the URL of the OpenTelemetry API to which metrics will be
+    ## sent.
+    ##
+    ## Refinery's internal metrics will be sent to the `/v1/metrics` endpoint
+    ## on this host.
+    ##
+    ## default: https://api.honeycomb.io
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "APIHost" "APIHost" "https://api.honeycomb.io" }}
+
+    ## APIKey is the API key used to send Refinery logs via OpenTelemetry.
+    ## Setting this value via a command line flag may expose credentials - it
+    ## is recommended to use the environment variable or a configuration
+    ## file.
+    ##
+    ## It is recommended that you create a separate team and key for Refinery
+    ## metrics.
+    ## If this is blank, then Refinery will not set the Honeycomb-specific
+    ## headers for OpenTelemetry, and your `APIHost` must be set to a valid
+    ## OpenTelemetry endpoint.
+    ##
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "APIKey" "APIKey" "" }}
+
+    ## Dataset is the Honeycomb dataset that Refinery sends its OpenTelemetry
+    ## logs.
+    ##
+    ## Only used if `APIKey` is specified.
+    ##
+    ## default: Refinery Logs
+    ## Not eligible for live reload.
+    {{ nonDefaultOnly .Data "Dataset" "Dataset" "Refinery Logs" }}
+
+    ## Compression is the compression algorithm to use when sending
+    ## OpenTelemetry logs to Honeycomb.
     ##
     ## `gzip` is the default and recommended value. In rare circumstances,
     ## compression costs may outweigh the benefits, in which case `none` may

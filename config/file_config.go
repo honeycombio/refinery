@@ -54,6 +54,7 @@ type configContents struct {
 	Debugging            DebuggingConfig           `yaml:"Debugging"`
 	Logger               LoggerConfig              `yaml:"Logger"`
 	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
+	OTelLogger           OTelLoggerConfig          `yaml:"OTelLogger"`
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
 	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
@@ -238,6 +239,12 @@ type LoggerConfig struct {
 	Level Level  `yaml:"Level" default:"warn"`
 }
 
+type OTelLoggerConfig struct {
+	APIHost     string `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
+	APIKey      string `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
+	Dataset     string `yaml:"Dataset" default:"Refinery Logs OTEL"`
+	Compression string `yaml:"Compression" default:"gzip"`
+}
 type HoneycombLoggerConfig struct {
 	APIHost           string       `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
 	APIKey            string       `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
@@ -833,6 +840,12 @@ func (f *fileConfig) GetHoneycombLoggerConfig() HoneycombLoggerConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.HoneycombLogger
+}
+func (f *fileConfig) GetOTelLoggerConfig() OTelLoggerConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.OTelLogger
 }
 
 func (f *fileConfig) GetStdoutLoggerConfig() StdoutLoggerConfig {
