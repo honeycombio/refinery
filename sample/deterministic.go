@@ -47,9 +47,14 @@ func (d *DeterministicSampler) Start() error {
 	return nil
 }
 
-func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, summarize bool, reason string, key string) {
+	summarize = false
+
 	if d.sampleRate <= 1 {
-		return 1, true, "deterministic/always", ""
+		if d.Config.SummarizeMode == "all" || d.Config.SummarizeMode == "kept" {
+			summarize = true
+		}
+		return 1, true, summarize, "deterministic/always", ""
 	}
 	sum := sha1.Sum([]byte(trace.TraceID + shardingSalt))
 	v := binary.BigEndian.Uint32(sum[:4])
@@ -60,7 +65,21 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		d.Metrics.Increment(d.prefix + "_num_dropped")
 	}
 
-	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""
+	// Handle summarization based on configuration
+	switch d.Config.SummarizeMode {
+	case "all":
+		summarize = true
+	case "dropped":
+		summarize = !shouldKeep
+	case "kept":
+		summarize = shouldKeep
+	}
+
+	if summarize {
+		d.Metrics.Increment(d.prefix + "_num_summarized")
+	}
+
+	return uint(d.sampleRate), shouldKeep, summarize, "deterministic/chance", ""
 }
 
 func (d *DeterministicSampler) GetKeyFields() []string {

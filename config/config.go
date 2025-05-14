@@ -5,7 +5,8 @@ import (
 )
 
 const (
-	DryRunFieldName = "meta.refinery.dryrun.kept"
+	DryRunFieldName    = "meta.refinery.dryrun.kept"
+	SummarySpanDataset = "Summary Spans"
 )
 
 // Config defines the interface the rest of the code uses to get items from the
@@ -158,6 +159,8 @@ type Config interface {
 	GetParentIdFieldNames() []string
 
 	GetOpAMPConfig() OpAMPConfig
+
+	GetSummarySpanDataset() string
 }
 
 type ConfigReloadCallback func(configHash, ruleCfgHash string)
