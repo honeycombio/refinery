@@ -1,7 +1,9 @@
+<!-- Do not edit manually. This is an AUTO-GENERATED file. -->
+
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-03-27 at 23:12:22 UTC.
+It was automatically generated on 2025-05-14 at 18:23:59 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
