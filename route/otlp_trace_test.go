@@ -15,6 +15,7 @@ import (
 
 	"github.com/gorilla/mux"
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
@@ -62,6 +63,7 @@ func TestOTLPHandler(t *testing.T) {
 			CacheCapacity: 100,
 			MaxAlloc:      100,
 		},
+		StressRelief: config.StressReliefConfig{},
 	}
 
 	router := &Router{
@@ -76,6 +78,7 @@ func TestOTLPHandler(t *testing.T) {
 		zstdDecoders:     decoders,
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Tracer:           noop.Tracer{},
+		Collector:        collect.NewMockCollector(),
 	}
 
 	t.Run("span with status", func(t *testing.T) {

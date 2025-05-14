@@ -417,6 +417,7 @@ type StressReliefConfig struct {
 	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
 	SamplingRate              uint64   `yaml:"SamplingRate" default:"100"`
 	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
+	DisableBackPressure       bool     `yaml:"DisableBackPressure" default:"false"`
 }
 
 type FileConfigError struct {

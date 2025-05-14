@@ -384,6 +384,11 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
+	if r.Collector.Stressed() && !r.Config.GetStressReliefConfig().DisableBackPressure {
+		r.handlerReturnWithError(w, ErrBackpressure, nil)
+		return
+	}
+
 	ctx := req.Context()
 	bodyReader, err := r.getMaybeCompressedBody(req)
 	if err != nil {
@@ -457,6 +462,11 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
+
+	if r.Collector.Stressed() && !r.Config.GetStressReliefConfig().DisableBackPressure {
+		r.handlerReturnWithError(w, ErrBackpressure, nil)
+		return
+	}
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
@@ -544,6 +554,10 @@ func (router *Router) processOTLPRequest(
 	incomingUserAgent string) error {
 
 	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
+
+	if router.Collector.Stressed() && !router.Config.GetStressReliefConfig().DisableBackPressure {
+		return ErrBackpressure
+	}
 
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()

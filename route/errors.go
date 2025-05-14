@@ -23,6 +23,13 @@ type handlerError struct {
 	friendly bool
 }
 
+func (he handlerError) Error() string {
+	if he.err != nil {
+		return he.err.Error()
+	}
+	return he.msg
+}
+
 var ErrGenericMessage = "unexpected error!"
 
 var (
@@ -38,6 +45,7 @@ var (
 	ErrReqToEvent          = handlerError{nil, "failed to parse event", http.StatusBadRequest, false, true}
 	ErrBatchToEvent        = handlerError{nil, "failed to parse event within batch", http.StatusBadRequest, false, true}
 	ErrInvalidContentType  = handlerError{nil, husky.ErrInvalidContentType.Message, husky.ErrInvalidContentType.HTTPStatusCode, false, true}
+	ErrBackpressure        = handlerError{nil, "backpressure", http.StatusTooManyRequests, false, true}
 )
 
 func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, err error) {

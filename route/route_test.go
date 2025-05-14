@@ -341,7 +341,9 @@ func TestOTLPRequest(t *testing.T) {
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
 	router := &Router{
-		Config:               &config.MockConfig{},
+		Config: &config.MockConfig{
+			StressRelief: config.StressReliefConfig{},
+		},
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
 		iopLogger: iopLogger{
@@ -351,6 +353,7 @@ func TestOTLPRequest(t *testing.T) {
 		Logger:           &logger.MockLogger{},
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Tracer:           noop.Tracer{},
+		Collector:        collect.NewMockCollector(),
 	}
 
 	muxxer := mux.NewRouter()
