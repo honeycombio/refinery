@@ -1,3 +1,5 @@
+<!-- Do not edit manually. This is an AUTO-GENERATED file. -->
+
 ## Refinery Rules file
 
 The Refinery `rules` file is a YAML file.
