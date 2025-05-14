@@ -8,61 +8,62 @@ import (
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	Callbacks                        []ConfigReloadCallback
-	GetAccessKeyConfigVal            AccessKeyConfig
-	GetCollectorTypeVal              string
-	GetCollectionConfigVal           CollectionConfig
-	GetTracesConfigVal               TracesConfig
-	GetHoneycombAPIVal               string
-	GetListenAddrVal                 string
-	GetPeerListenAddrVal             string
-	GetHTTPIdleTimeoutVal            time.Duration
-	GetCompressPeerCommunicationsVal bool
-	GetGRPCEnabledVal                bool
-	GetGRPCListenAddrVal             string
-	GetGRPCServerParameters          GRPCServerParameters
-	GetLoggerTypeVal                 string
-	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
-	GetStdoutLoggerConfigVal         StdoutLoggerConfig
-	GetLoggerLevelVal                Level
-	GetPeersVal                      []string
-	GetRedisPeerManagementVal        RedisPeerManagementConfig
-	GetSamplerTypeName               string
-	GetSamplerTypeVal                interface{}
-	GetMetricsTypeVal                string
-	GetGeneralConfigVal              GeneralConfig
-	GetLegacyMetricsConfigVal        LegacyMetricsConfig
-	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
-	GetOpAmpConfigVal                OpAMPConfig
-	GetOTelMetricsConfigVal          OTelMetricsConfig
-	GetOTelTracingConfigVal          OTelTracingConfig
-	GetUpstreamBufferSizeVal         int
-	GetPeerBufferSizeVal             int
-	IdentifierInterfaceName          string
-	UseIPV6Identifier                bool
-	RedisIdentifier                  string
-	PeerManagementType               string
-	DebugServiceAddr                 string
-	DryRun                           bool
-	DryRunFieldName                  string
-	AddHostMetadataToTrace           bool
-	AddRuleReasonToTrace             bool
-	EnvironmentCacheTTL              time.Duration
-	DatasetPrefix                    string
-	QueryAuthToken                   string
-	PeerTimeout                      time.Duration
-	AdditionalErrorFields            []string
-	AddSpanCountToRoot               bool
-	AddCountsToRoot                  bool
-	CacheOverrunStrategy             string
-	SampleCache                      SampleCacheConfig
-	StressRelief                     StressReliefConfig
-	AdditionalAttributes             map[string]string
-	TraceIdFieldNames                []string
-	ParentIdFieldNames               []string
-	CfgMetadata                      []ConfigMetadata
-	CfgHash                          string
-	RulesHash                        string
+	Callbacks                            []ConfigReloadCallback
+	GetAccessKeyConfigVal                AccessKeyConfig
+	GetCollectorTypeVal                  string
+	GetCollectionConfigVal               CollectionConfig
+	GetTracesConfigVal                   TracesConfig
+	GetHoneycombAPIVal                   string
+	GetListenAddrVal                     string
+	GetPeerListenAddrVal                 string
+	GetHTTPIdleTimeoutVal                time.Duration
+	GetCompressPeerCommunicationsVal     bool
+	GetGRPCEnabledVal                    bool
+	GetGRPCListenAddrVal                 string
+	GetGRPCServerParameters              GRPCServerParameters
+	GetLoggerTypeVal                     string
+	GetHoneycombLoggerConfigVal          HoneycombLoggerConfig
+	GetStdoutLoggerConfigVal             StdoutLoggerConfig
+	GetLoggerLevelVal                    Level
+	GetPeersVal                          []string
+	GetRedisPeerManagementVal            RedisPeerManagementConfig
+	GetSamplerTypeName                   string
+	GetSamplerTypeVal                    interface{}
+	GetMetricsTypeVal                    string
+	GetGeneralConfigVal                  GeneralConfig
+	GetLegacyMetricsConfigVal            LegacyMetricsConfig
+	GetPrometheusMetricsConfigVal        PrometheusMetricsConfig
+	GetOpAmpConfigVal                    OpAMPConfig
+	GetOTelMetricsConfigVal              OTelMetricsConfig
+	GetOTelTracingConfigVal              OTelTracingConfig
+	GetUpstreamBufferSizeVal             int
+	GetPeerBufferSizeVal                 int
+	IdentifierInterfaceName              string
+	UseIPV6Identifier                    bool
+	RedisIdentifier                      string
+	PeerManagementType                   string
+	GetPeerManagementShardingStrategyVal string
+	DebugServiceAddr                     string
+	DryRun                               bool
+	DryRunFieldName                      string
+	AddHostMetadataToTrace               bool
+	AddRuleReasonToTrace                 bool
+	EnvironmentCacheTTL                  time.Duration
+	DatasetPrefix                        string
+	QueryAuthToken                       string
+	PeerTimeout                          time.Duration
+	AdditionalErrorFields                []string
+	AddSpanCountToRoot                   bool
+	AddCountsToRoot                      bool
+	CacheOverrunStrategy                 string
+	SampleCache                          SampleCacheConfig
+	StressRelief                         StressReliefConfig
+	AdditionalAttributes                 map[string]string
+	TraceIdFieldNames                    []string
+	ParentIdFieldNames                   []string
+	CfgMetadata                          []ConfigMetadata
+	CfgHash                              string
+	RulesHash                            string
 
 	Mux sync.RWMutex
 }
@@ -324,6 +325,13 @@ func (m *MockConfig) GetPeerManagementType() string {
 	defer m.Mux.RUnlock()
 
 	return m.PeerManagementType
+}
+
+func (m *MockConfig) GetPeerManagementShardingStrategy() string {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetPeerManagementShardingStrategyVal
 }
 
 func (m *MockConfig) GetDebugServiceAddr() string {
