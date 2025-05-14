@@ -1,7 +1,9 @@
+<!-- Do not edit manually. This is an AUTO-GENERATED file. -->
+
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-04-10 at 19:03:55 UTC.
+It was automatically generated on 2025-05-14 at 16:44:26 UTC.
 
 ## The Config file
 
