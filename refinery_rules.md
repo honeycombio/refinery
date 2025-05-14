@@ -575,6 +575,7 @@ This is especially useful when a field like `http status code` may be rendered a
 The best practice is to always specify `Datatype`; this avoids ambiguity, allows for more accurate comparisons, and offers a minor performance improvement.
 
 - Type: `string`
+- Options: `string`, `int`, `float`, `bool`
 
 ## Total Throughput Sampler
 

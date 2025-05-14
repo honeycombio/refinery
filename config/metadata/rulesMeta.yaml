@@ -705,6 +705,7 @@ groups:
           which should all be of the same datatype.
       - name: Datatype
         type: string
+        valuetype: choice
         validations:
           - type: choice
         choices:

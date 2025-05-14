@@ -1,7 +1,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2025-04-10 at 19:03:56 UTC.
+It was automatically generated on 2025-05-14 at 13:50:49 UTC.
 
 ## The Rules file
 
@@ -615,6 +615,8 @@ This is especially useful when a field like `http status code` may be rendered a
 The best practice is to always specify `Datatype`; this avoids ambiguity, allows for more accurate comparisons, and offers a minor performance improvement.
 
 Type: `string`
+
+- Options: `string`, `int`, `float`, `bool`
 
 ---
 ## Total Throughput Sampler
