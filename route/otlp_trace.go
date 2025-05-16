@@ -2,7 +2,6 @@ package route
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -45,12 +44,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
-		var e *handlerError
-		if errors.As(err, &e) {
-			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: e.Error(), HTTPStatusCode: e.status})
-		} else {
-			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
-		}
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
 
@@ -91,10 +85,6 @@ func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTrac
 	}
 
 	if err := t.router.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
-		if errors.Is(err, ErrBackpressure) {
-			// grpc status code 8 (ResourceExhausted) is the closest to 429 (TooManyRequests)
-			return nil, status.Error(codes.ResourceExhausted, ErrBackpressure.Error())
-		}
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
