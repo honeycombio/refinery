@@ -173,7 +173,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer := mux.NewRouter()
 
 	if r.Config.GetStressReliefConfig().BackOffEnabled.Get() {
-		muxxer.Use(r.applyBackOff)
+		muxxer.Use(r.backOffHTTPMiddleware)
 	}
 	muxxer.Use(r.setResponseHeaders)
 	muxxer.Use(r.requestLogger)
@@ -247,6 +247,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 			// Add the OpenTelemetry interceptor to the gRPC server to enable tracing
 			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		}
+
+		if r.Config.GetStressReliefConfig().BackOffEnabled.Get() {
+			serverOpts = append(serverOpts, grpc.ChainUnaryInterceptor(r.backOffGRPCInterceptor))
+		}
+
 		r.grpcServer = grpc.NewServer(serverOpts...)
 
 		traceServer := NewTraceServer(r)

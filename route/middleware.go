@@ -10,6 +10,8 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 // for generating request IDs
@@ -108,7 +110,7 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 	})
 }
 
-func (r *Router) applyBackOff(next http.Handler) http.Handler {
+func (r *Router) backOffHTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if r.Collector.Stressed() {
 			// If a retry after value is set, add it to the response header
@@ -121,6 +123,17 @@ func (r *Router) applyBackOff(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, req)
 	})
+}
+
+func (r *Router) backOffGRPCInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	if r.Collector.Stressed() {
+		// If a retry after value is set, add it to the response header
+		retryAfter := time.Duration(r.Config.GetStressReliefConfig().BackOffRetryAfter)
+		if retryAfter > 0 {
+			return nil, status.Error(r.Config.GetStressReliefConfig().BackOffGRPCStatusCode, fmt.Sprintf("Retry-After: %d", int(retryAfter.Seconds())))
+		}
+	}
+	return handler(ctx, req)
 }
 
 func (r *Router) setResponseHeaders(next http.Handler) http.Handler {

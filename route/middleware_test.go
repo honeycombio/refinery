@@ -124,7 +124,7 @@ func TestBackOffMiddleware(t *testing.T) {
 			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			})
-			handler := router.applyBackOff(next)
+			handler := router.backOffHTTPMiddleware(next)
 
 			req, err := http.NewRequest("GET", "/test", nil)
 			if err != nil {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/slices"
+	"google.golang.org/grpc/codes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -419,6 +420,7 @@ type StressReliefConfig struct {
 	MinimumActivationDuration Duration     `yaml:"MinimumActivationDuration" default:"10s"`
 	BackOffEnabled            *DefaultTrue `yaml:"BackOffEnabled" default:"true"`
 	BackOffHTTPStatusCode     int          `yaml:"BackOffHTTPStatusCode" default:"429"`
+	BackOffGRPCStatusCode     codes.Code   `yaml:"BackOffGRPCStatusCode" default:"8"`
 	BackOffRetryAfter         Duration     `yaml:"BackOffRetryAfter" default:"1s"`
 }
 

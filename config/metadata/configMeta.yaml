@@ -2009,6 +2009,22 @@ groups:
           changed only if the upstream telemetry sender does not support this
           status code.
 
+      - name: BackOffGRPCStatusCode
+        v1group: StressRelief
+        v1name: BackOffGRPCStatusCode
+        type: int
+        valuetype: nondefault
+        default: 8
+        reload: true
+        summary: is the gRPC status code to use for back off.
+        description: >
+          This setting is used to set the gRPC status code to use for back off
+          when Refinery is under stress.
+
+          The default value is `8` (ResourceExhausted). This value should be
+          changed only if the upstream telemetry sender does not support this
+          status code.
+
       - name: BackOffRetryAfter
         v1group: StressRelief
         v1name: BackOffRetryAfter
