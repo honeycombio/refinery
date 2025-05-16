@@ -1974,21 +1974,52 @@ groups:
           mode, which will provide faster startup at the possible cost of
           startup instability.
       
-      - name: EnableBackPressure
+      - name: BackOffEnabled
         v1group: StressRelief
-        v1name: EnableBackPressure
+        v1name: BackOffEnabled
         type: bool
         valuetype: nondefault
         default: false
         reload: true
-        summary: enables back pressure on upstream telemtry senders.
+        summary: enables back off on upstream telemtry senders.
         description: >
-          This setting is used to enable back pressure on upstream telemetry senders
+          This setting is used to enable back off on upstream telemetry senders
           when Refinery is under stress.
 
-          When `true`, Refinery will apply back pressure to the upstream senders via sending
+          When `true`, Refinery will apply back off to the upstream senders via sending
           HTTP status code `429` (TooManyRequests) for HTTP traffic, and `8`
           (ResourceExhcaused) for gRPC traffic.
 
-          When `false`, Refinery will not apply back pressure to the upstream senders
+          When `false`, Refinery will not apply back off to the upstream senders
           when Refinery is under stress.
+
+      - name: BackOffHTTPStatusCode
+        v1group: StressRelief
+        v1name: BackOffHTTPStatusCode
+        type: int
+        valuetype: nondefault
+        default: 429
+        reload: true
+        summary: is the HTTP status code to use for back off.
+        description: >
+          This setting is used to set the HTTP status code to use for back off
+          when Refinery is under stress.
+
+          The default value is `429` (TooManyRequests). This value should be
+          changed only if the upstream telemetry sender does not support this
+          status code.
+
+      - name: BackOffRetryAfter
+        v1group: StressRelief
+        v1name: BackOffRetryAfter
+        type: duration
+        valuetype: nondefault
+        default: 5s
+        reload: true
+        summary: is the duration to use for back preoffsure retry after.
+        description: >
+          This setting is used to set the duration to use for back off retry after
+          when Refinery is under stress.
+
+          The default value is `5s`. This value should be changed only if the upstream telemetry sender does not support this value.
+          This value is used to set the `Retry-After` header in the HTTP response.

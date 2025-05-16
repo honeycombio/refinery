@@ -172,6 +172,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	muxxer := mux.NewRouter()
 
+	if r.Config.GetStressReliefConfig().BackOffEnabled.Get() {
+		muxxer.Use(r.applyBackOff)
+	}
 	muxxer.Use(r.setResponseHeaders)
 	muxxer.Use(r.requestLogger)
 	muxxer.Use(r.panicCatcher)
@@ -384,12 +387,6 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
-	err := r.shoulApplyBackPressure()
-	if err != nil {
-		r.handlerReturnWithError(w, ErrBackpressure, err)
-		return
-	}
-
 	ctx := req.Context()
 	bodyReader, err := r.getMaybeCompressedBody(req)
 	if err != nil {
@@ -463,12 +460,6 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
-
-	err := r.shoulApplyBackPressure()
-	if err != nil {
-		r.handlerReturnWithError(w, ErrBackpressure, err)
-		return
-	}
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
@@ -556,11 +547,6 @@ func (router *Router) processOTLPRequest(
 	incomingUserAgent string) error {
 
 	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
-
-	err := router.shoulApplyBackPressure()
-	if err != nil {
-		return err
-	}
 
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
@@ -1122,11 +1108,4 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data["meta.refinery.incoming_user_agent"] == nil {
 		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
 	}
-}
-
-func (r *Router) shoulApplyBackPressure() error {
-	if r.Collector.Stressed() && r.Config.GetStressReliefConfig().EnableBackPressure.Get() {
-		return ErrBackpressure
-	}
-	return nil
 }

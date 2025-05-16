@@ -3,12 +3,16 @@ package route
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/types"
+	"github.com/stretchr/testify/assert"
 )
 
 type dummyHandler struct{}
@@ -68,6 +72,72 @@ func TestRouter_queryTokenChecker(t *testing.T) {
 			if strings.Contains(rr.Body.String(), tt.mustnotcontain) {
 				t.Errorf("handler returned unexpected body: got %v should NOT have contained %v",
 					rr.Body.String(), tt.mustnotcontain)
+			}
+		})
+	}
+}
+
+func TestBackOffMiddleware(t *testing.T) {
+	tests := []struct {
+		name           string
+		stressed       bool
+		httpStatusCode int
+		retryAfter     time.Duration
+	}{
+		{
+			name:           "colelctor not stressed, 429, no retry after",
+			stressed:       false,
+			httpStatusCode: http.StatusOK,
+			retryAfter:     0,
+		},
+		{
+			name:           "collector stressed, 429, no retry after",
+			stressed:       true,
+			httpStatusCode: http.StatusTooManyRequests,
+			retryAfter:     0,
+		},
+		{
+			name:           "collector stressed, 429, retry after 1s",
+			stressed:       true,
+			httpStatusCode: http.StatusTooManyRequests,
+			retryAfter:     1 * time.Second,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			collector := &collect.MockCollector{}
+			collector.SetStressed(tt.stressed)
+
+			mockConfig := &config.MockConfig{
+				StressRelief: config.StressReliefConfig{
+					BackOffHTTPStatusCode: tt.httpStatusCode,
+					BackOffRetryAfter:     config.Duration(tt.retryAfter),
+				},
+			}
+
+			router := &Router{
+				Collector: collector,
+				Config:    mockConfig,
+			}
+
+			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			handler := router.applyBackOff(next)
+
+			req, err := http.NewRequest("GET", "/test", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+			assert.Equal(t, tt.httpStatusCode, rr.Code)
+
+			if tt.retryAfter > 0 {
+				retry := rr.Header().Get("Retry-After")
+				assert.Equal(t, strconv.Itoa(int(tt.retryAfter.Seconds())), retry)
 			}
 		})
 	}

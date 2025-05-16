@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -104,6 +105,21 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 
 		// log that we did so TODO better formatted http log line
 		r.Logger.Debug().Logf("handled %s request %s %s %s %s %f %d", route.GetName(), reqID, remoteIP, method, url, dur, wrapped.status)
+	})
+}
+
+func (r *Router) applyBackOff(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if r.Collector.Stressed() {
+			// If a retry after value is set, add it to the response header
+			retryAfter := time.Duration(r.Config.GetStressReliefConfig().BackOffRetryAfter)
+			if retryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
+			}
+			w.WriteHeader(r.Config.GetStressReliefConfig().BackOffHTTPStatusCode)
+			return
+		}
+		next.ServeHTTP(w, req)
 	})
 }
 
