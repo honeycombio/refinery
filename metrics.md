@@ -1,7 +1,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-05-14 at 13:20:54 UTC.
+It was automatically generated on 2025-03-27 at 23:12:22 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -91,7 +91,6 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
 | _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
 | _sample_rate | Histogram | Dimensionless | Sample rate for traces |
-| _sampler_key_cardinality | Histogram | Dimensionless | Number of unique keys being tracked by the sampler |
 | enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
 | response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
 | response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
