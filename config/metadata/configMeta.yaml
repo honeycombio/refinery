@@ -1974,21 +1974,21 @@ groups:
           mode, which will provide faster startup at the possible cost of
           startup instability.
       
-      - name: DisableBackPressure
+      - name: EnableBackPressure
         v1group: StressRelief
-        v1name: DisableBackPressure
+        v1name: EnableBackPressure
         type: bool
         valuetype: nondefault
         default: false
         reload: true
-        summary: disables back pressure on the upstream collector.
+        summary: enables back pressure on upstream telemtry senders.
         description: >
-          This setting is used to disable back pressure on the upstream senders
+          This setting is used to enable back pressure on upstream telemetry senders
           when Refinery is under stress.
 
-          When `false`, Refinery will apply back pressure to the upstream senders via sending
+          When `true`, Refinery will apply back pressure to the upstream senders via sending
           HTTP status code `429` (TooManyRequests) for HTTP traffic, and `8`
           (ResourceExhcaused) for gRPC traffic.
 
-          When `true`, Refinery will not apply back pressure to the upstream senders
+          When `false`, Refinery will not apply back pressure to the upstream senders
           when Refinery is under stress.

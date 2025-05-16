@@ -412,12 +412,12 @@ type SampleCacheConfig struct {
 }
 
 type StressReliefConfig struct {
-	Mode                      string   `yaml:"Mode" default:"never"`
-	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90"`
-	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
-	SamplingRate              uint64   `yaml:"SamplingRate" default:"100"`
-	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
-	DisableBackPressure       bool     `yaml:"DisableBackPressure" default:"false"`
+	Mode                      string       `yaml:"Mode" default:"never"`
+	ActivationLevel           uint         `yaml:"ActivationLevel" default:"90"`
+	DeactivationLevel         uint         `yaml:"DeactivationLevel" default:"75"`
+	SamplingRate              uint64       `yaml:"SamplingRate" default:"100"`
+	MinimumActivationDuration Duration     `yaml:"MinimumActivationDuration" default:"10s"`
+	EnableBackPressure        *DefaultTrue `yaml:"EnableBackPressure" default:"true"`
 }
 
 type FileConfigError struct {

@@ -384,8 +384,9 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
 	defer req.Body.Close()
 
-	if r.Collector.Stressed() && !r.Config.GetStressReliefConfig().DisableBackPressure {
-		r.handlerReturnWithError(w, ErrBackpressure, nil)
+	err := r.shoulApplyBackPressure()
+	if err != nil {
+		r.handlerReturnWithError(w, ErrBackpressure, err)
 		return
 	}
 
@@ -463,8 +464,9 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
 	defer req.Body.Close()
 
-	if r.Collector.Stressed() && !r.Config.GetStressReliefConfig().DisableBackPressure {
-		r.handlerReturnWithError(w, ErrBackpressure, nil)
+	err := r.shoulApplyBackPressure()
+	if err != nil {
+		r.handlerReturnWithError(w, ErrBackpressure, err)
 		return
 	}
 
@@ -555,8 +557,9 @@ func (router *Router) processOTLPRequest(
 
 	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
 
-	if router.Collector.Stressed() && !router.Config.GetStressReliefConfig().DisableBackPressure {
-		return ErrBackpressure
+	err := router.shoulApplyBackPressure()
+	if err != nil {
+		return err
 	}
 
 	var requestID types.RequestIDContextKey
@@ -1119,4 +1122,11 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data["meta.refinery.incoming_user_agent"] == nil {
 		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
 	}
+}
+
+func (r *Router) shoulApplyBackPressure() error {
+	if r.Collector.Stressed() && r.Config.GetStressReliefConfig().EnableBackPressure.Get() {
+		return ErrBackpressure
+	}
+	return nil
 }
