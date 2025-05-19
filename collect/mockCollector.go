@@ -8,10 +8,15 @@ type MockCollector struct {
 	Spans chan *types.Span
 
 	stressed bool
+	backoff  bool
 }
 
 func (m *MockCollector) SetStressed(stressed bool) {
 	m.stressed = stressed
+}
+
+func (m *MockCollector) SetBackoff(backoff bool) {
+	m.backoff = backoff
 }
 
 func NewMockCollector() *MockCollector {

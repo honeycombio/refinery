@@ -64,16 +64,17 @@ const (
 )
 
 type Router struct {
-	Config               config.Config         `inject:""`
-	Logger               logger.Logger         `inject:""`
-	Health               health.Reporter       `inject:""`
-	HTTPTransport        *http.Transport       `inject:"upstreamTransport"`
-	UpstreamTransmission transmit.Transmission `inject:"upstreamTransmission"`
-	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
-	Sharder              sharder.Sharder       `inject:""`
-	Collector            collect.Collector     `inject:""`
-	Metrics              metrics.Metrics       `inject:"genericMetrics"`
-	Tracer               trace.Tracer          `inject:"tracer"`
+	Config               config.Config          `inject:""`
+	Logger               logger.Logger          `inject:""`
+	Health               health.Reporter        `inject:""`
+	HTTPTransport        *http.Transport        `inject:"upstreamTransport"`
+	UpstreamTransmission transmit.Transmission  `inject:"upstreamTransmission"`
+	PeerTransmission     transmit.Transmission  `inject:"peerTransmission"`
+	Sharder              sharder.Sharder        `inject:""`
+	Collector            collect.Collector      `inject:""`
+	Metrics              metrics.Metrics        `inject:"genericMetrics"`
+	Tracer               trace.Tracer           `inject:"tracer"`
+	StressRelief         collect.StressReliever `inject:""`
 
 	// version is set on startup so that the router may answer HTTP requests for
 	// the version

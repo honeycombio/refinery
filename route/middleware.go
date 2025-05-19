@@ -112,7 +112,7 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 
 func (r *Router) backOffHTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if r.Collector.Stressed() {
+		if r.StressRelief.BackOffActivated() {
 			// If a retry after value is set, add it to the response header
 			retryAfter := time.Duration(r.Config.GetStressReliefConfig().BackOffRetryAfter)
 			if retryAfter > 0 {
@@ -126,12 +126,14 @@ func (r *Router) backOffHTTPMiddleware(next http.Handler) http.Handler {
 }
 
 func (r *Router) backOffGRPCInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	if r.Collector.Stressed() {
+	if r.StressRelief.BackOffActivated() {
 		// If a retry after value is set, add it to the response header
+		msg := ""
 		retryAfter := time.Duration(r.Config.GetStressReliefConfig().BackOffRetryAfter)
 		if retryAfter > 0 {
-			return nil, status.Error(r.Config.GetStressReliefConfig().BackOffGRPCStatusCode, fmt.Sprintf("Retry-After: %d", int(retryAfter.Seconds())))
+			msg = fmt.Sprintf("Retry-After: %d", int(retryAfter.Seconds()))
 		}
+		return nil, status.Error(r.Config.GetStressReliefConfig().BackOffGRPCStatusCode, msg)
 	}
 	return handler(ctx, req)
 }
