@@ -74,7 +74,7 @@ type Router struct {
 	Collector            collect.Collector      `inject:""`
 	Metrics              metrics.Metrics        `inject:"genericMetrics"`
 	Tracer               trace.Tracer           `inject:"tracer"`
-	StressRelief         collect.StressReliever `inject:""`
+	StressRelief         collect.StressReliever `inject:"stressRelief"`
 
 	// version is set on startup so that the router may answer HTTP requests for
 	// the version
