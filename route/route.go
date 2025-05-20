@@ -173,7 +173,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	muxxer := mux.NewRouter()
 
-	if incomingOrPeer == "incoming" && r.Config.GetStressReliefConfig().BackOffEnabled.Get() {
+	if incomingOrPeer == "incoming" && r.Config.GetStressReliefConfig().BackOffEnabled {
 		muxxer.Use(r.backOffHTTPMiddleware)
 	}
 	muxxer.Use(r.setResponseHeaders)
@@ -249,7 +249,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		}
 
-		if incomingOrPeer == "incoming" && r.Config.GetStressReliefConfig().BackOffEnabled.Get() {
+		if incomingOrPeer == "incoming" && r.Config.GetStressReliefConfig().BackOffEnabled {
 			serverOpts = append(serverOpts, grpc.ChainUnaryInterceptor(r.backOffGRPCInterceptor))
 		}
 
