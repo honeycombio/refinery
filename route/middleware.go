@@ -127,13 +127,7 @@ func (r *Router) backOffHTTPMiddleware(next http.Handler) http.Handler {
 
 func (r *Router) backOffGRPCInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	if r.StressRelief.BackOffActivated() {
-		// If a retry after value is set, add it to the response header
-		msg := ""
-		retryAfter := time.Duration(r.Config.GetStressReliefConfig().BackOffRetryAfter)
-		if retryAfter > 0 {
-			msg = fmt.Sprintf("Retry-After: %d", int(retryAfter.Seconds()))
-		}
-		return nil, status.Error(r.Config.GetStressReliefConfig().BackOffGRPCStatusCode, msg)
+		return nil, status.Error(r.Config.GetStressReliefConfig().BackOffGRPCStatusCode, "backoff")
 	}
 	return handler(ctx, req)
 }

@@ -174,11 +174,7 @@ func TestBackOffMiddleware(t *testing.T) {
 				grpcErr, ok := status.FromError(err)
 				assert.True(t, ok)
 				assert.Equal(t, grpcErr.Code(), tt.grpcStatusCode)
-
-				if tt.retryAfter > 0 {
-					retry := grpcErr.Message()
-					assert.Equal(t, "Retry-After: "+strconv.Itoa(int(tt.retryAfter.Seconds())), retry)
-				}
+				assert.Equal(t, "backoff", grpcErr.Message())
 			} else {
 				assert.Equal(t, testResponse{}, resp)
 				assert.NoError(t, err)
