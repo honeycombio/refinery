@@ -134,7 +134,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_nonspan", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of non-span events received"},
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
 	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
-	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
+	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
