@@ -134,7 +134,9 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_nonspan", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of non-span events received"},
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
 	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
-	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of otlp requests received"},
+	{Name: "_router_batch_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in batches"},
+	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received"},
+	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
@@ -481,6 +483,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
+	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", len(batchedEvents))
 
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
@@ -543,10 +546,10 @@ func (router *Router) processOTLPRequest(
 	apiKey string,
 	incomingUserAgent string) error {
 
-	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
-
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
+
+	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
@@ -554,7 +557,9 @@ func (router *Router) processOTLPRequest(
 		return nil
 	}
 
+	totalEvents := 0
 	for _, batch := range batches {
+		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
 			event := &types.Event{
 				Context:     ctx,
@@ -572,6 +577,7 @@ func (router *Router) processOTLPRequest(
 			}
 		}
 	}
+	router.Metrics.Count(router.incomingOrPeer+"_router_otlp_events", totalEvents)
 
 	return nil
 }
