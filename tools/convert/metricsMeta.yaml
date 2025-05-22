@@ -347,7 +347,7 @@ hasprefix:
     - name: _router_otlp
       type: Counter
       unit: Dimensionless
-      description: the number of batches of otlp requests received
+      description: the number of otlp requests received
     - name: bytes_received_traces
       type: Counter
       unit: Bytes
