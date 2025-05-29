@@ -2533,7 +2533,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	// get current send by time from the trace
 	var currentSendBy time.Time
 	assert.Eventually(t, func() bool {
-		currentTrace := coll.cache.Get(traceID)
+		currentTrace := coll.getFromCache(traceID)
 		if currentTrace == nil {
 			return false
 		}
@@ -2556,7 +2556,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	// get sendBy time after adding the late span
 	var newSendBy time.Time
 	assert.Eventually(t, func() bool {
-		currentTrace := coll.cache.Get(traceID)
+		currentTrace := coll.getFromCache(traceID)
 		if currentTrace == nil {
 			return false
 		}
