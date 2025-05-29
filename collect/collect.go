@@ -539,13 +539,14 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 		for _, sp := range trace.GetSpans() {
 
+			sp.SetSendBy(trace.SendBy)
+
 			if !i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
 				i.PeerTransmission.EnqueueEvent(dc)
 				continue
 			}
 
-			sp.SetSendBy(trace.SendBy)
 			sp.APIHost = newTarget.GetAddress()
 
 			if sp.Data == nil {
@@ -822,9 +823,13 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 	// we should only mark a trace for sending if we are the destination shard
 	if markTraceForSending && !spanForwarded {
-		span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
-		trace.SendBy = i.Clock.Now().Add(timeout)
-		i.cache.Set(trace)
+		updatedSendBy := i.Clock.Now().Add(timeout)
+		// if the trace has already timed out, we should not update the send_by time
+		if trace.SendBy.After(updatedSendBy) {
+			span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
+			trace.SendBy = updatedSendBy
+			i.cache.Set(trace)
+		}
 	} else {
 
 		sendBy, ok := sp.GetSendBy()
