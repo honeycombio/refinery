@@ -2499,71 +2499,56 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 
 	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
-	stc, err := newCache()
+	sampleTraceCache, err := newCache()
 	require.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 10)
-	coll.fromPeer = make(chan *types.Span, 10)
-	coll.outgoingTraces = make(chan sendableTrace, 10)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	go coll.collect()
-	go coll.sendTraces()
+	coll.sampleTraceCache = sampleTraceCache
+	coll.incoming = make(chan *types.Span, 5)
+	coll.fromPeer = make(chan *types.Span, 5)
+	coll.outgoingTraces = make(chan sendableTrace, 5)
 
 	defer coll.Stop()
 
+	clock := clockwork.NewFakeClock()
+	coll.Clock = clock
+
 	traceID := "span-limit-trace"
 
-	// Add spans up to the limit to trigger sending
-	for i := 0; i < spanLimit+1; i++ {
-		span := &types.Span{
+	// Pre-create the trace with a known SendBy time
+	now := coll.Clock.Now()
+	initialSendBy := now.Add(10 * time.Second)
+	trace := &types.Trace{
+		TraceID:     traceID,
+		Dataset:     "test-dataset",
+		APIKey:      "test-api-key",
+		SendBy:      initialSendBy,
+		ArrivalTime: now,
+	}
+	for i := 0; i <= spanLimit; i++ {
+		trace.AddSpan(&types.Span{
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "test-dataset",
-				APIKey:  "test-api-key",
 				Data: map[string]interface{}{
-					"index": i,
+					"trace.parent_id": "unused",
 				},
+				APIKey: legacyAPIKey,
 			},
-		}
-		coll.AddSpan(span)
+		})
 	}
+	coll.cache.Set(trace)
 
-	// get current send by time from the trace
-	var currentSendBy time.Time
-	assert.Eventually(t, func() bool {
-		currentTrace := coll.getFromCache(traceID)
-		if currentTrace == nil {
-			return false
-		}
-		if currentTrace.DescendantCount() < uint32(spanLimit) {
-			return false
-		}
-		currentSendBy = currentTrace.SendBy
-		return true
-	}, 100*time.Millisecond, 10*time.Millisecond)
-
-	// send a late span for the same trace
+	clock.Advance(5 * time.Second)
+	// process another span for the same trace that exceeds the span limit should not change the SendBy time
 	lateSpan := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "test-dataset",
-			APIKey:  "test-api-key",
+			APIKey:  legacyAPIKey,
 		},
 	}
-	coll.AddSpan(lateSpan)
-	// get sendBy time after adding the late span
-	var newSendBy time.Time
-	assert.Eventually(t, func() bool {
-		currentTrace := coll.getFromCache(traceID)
-		if currentTrace == nil {
-			return false
-		}
-		newSendBy = currentTrace.SendBy
-		return true
-	}, 100*time.Millisecond, 10*time.Millisecond)
+	coll.processSpan(context.Background(), lateSpan, "incoming")
 
-	require.Equal(t, currentSendBy.Unix(), newSendBy.Unix(), "Late arriving span should not change the SendBy time after hitting the span limit")
+	updatedTrace := coll.cache.Get(traceID)
+	require.Equal(t, trace.SendBy.Unix(), updatedTrace.SendBy.Unix())
 
 }
