@@ -14,25 +14,22 @@ import (
 )
 
 func TestWhichShard(t *testing.T) {
-	const (
-		selfPeerAddr = "127.0.0.1:8081"
-		traceID      = "test"
-	)
+	const traceID = "test"
 
 	peers := []string{
-		"http://" + selfPeerAddr,
 		"http://2.2.2.2:8081",
 		"http://3.3.3.3:8081",
 	}
 	config := &config.MockConfig{
-		GetPeerListenAddrVal: selfPeerAddr,
-		GetPeersVal:          peers,
-		PeerManagementType:   "file",
+		GetPeerListenAddrVal:    "127.0.0.1:8081",
+		GetPeersVal:             peers,
+		PeerManagementType:      "file",
+		IdentifierInterfaceName: "en0",
 	}
 	done := make(chan struct{})
 	defer close(done)
 
-	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}}
+	filePeers := &peer.FilePeers{Cfg: config, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
 	require.NoError(t, filePeers.Start())
 
 	sharder := DeterministicSharder{
