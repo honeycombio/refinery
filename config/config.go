@@ -44,6 +44,9 @@ type Config interface {
 	// data before forwarding it to a peer.
 	GetCompressPeerCommunication() bool
 
+	// GetNumOfZstdEncoder returns the number of zstd decoders to create
+	GetNumOfZstdDecoder() int
+
 	// GetGRPCEnabled returns or not the GRPC server is enabled.
 	GetGRPCEnabled() bool
 

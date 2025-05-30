@@ -44,7 +44,7 @@ func TestDecompression(t *testing.T) {
 	payload := "payload"
 	pReader := strings.NewReader(payload)
 
-	decoders, err := makeDecoders(numZstdDecoders)
+	decoders, err := makeDecoders(4)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}

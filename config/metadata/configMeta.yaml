@@ -1533,6 +1533,17 @@ groups:
           disable it is provided as an escape hatch for deployments that value
           lower CPU utilization over data transfer costs.
 
+      - name: NumOfZstdDecoder
+        type: int
+        default: 4
+        valuetype: nondefault
+        unpublished: true
+        reload: false
+        summary: determine the number of decoders to use to decompress zstd compression format data
+        description: >
+          This is the number of zstd decoders Refinery will create and maintain for decompressing zstd compressed data.
+          It is recommended to set this value to the multiples of the number of CPU cores available to Refinery.
+
       - name: Collector
         type: string
         v1name: Collector

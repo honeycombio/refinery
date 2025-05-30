@@ -18,6 +18,7 @@ type MockConfig struct {
 	GetPeerListenAddrVal             string
 	GetHTTPIdleTimeoutVal            time.Duration
 	GetCompressPeerCommunicationsVal bool
+	GetNumOfZstdDecoderVal           int
 	GetGRPCEnabledVal                bool
 	GetGRPCListenAddrVal             string
 	GetGRPCServerParameters          GRPCServerParameters
@@ -155,6 +156,13 @@ func (m *MockConfig) GetCompressPeerCommunication() bool {
 	defer m.Mux.RUnlock()
 
 	return m.GetCompressPeerCommunicationsVal
+}
+
+func (m *MockConfig) GetNumOfZstdDecoder() int {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetNumOfZstdDecoderVal
 }
 
 func (m *MockConfig) GetGRPCEnabled() bool {
