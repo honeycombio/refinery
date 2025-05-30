@@ -21,10 +21,9 @@ func TestWhichShard(t *testing.T) {
 		"http://3.3.3.3:8081",
 	}
 	config := &config.MockConfig{
-		GetPeerListenAddrVal:    "127.0.0.1:8081",
-		GetPeersVal:             peers,
-		PeerManagementType:      "file",
-		IdentifierInterfaceName: "en0",
+		GetPeerListenAddrVal: "127.0.0.1:8081",
+		GetPeersVal:          peers,
+		PeerManagementType:   "file",
 	}
 	done := make(chan struct{})
 	defer close(done)
