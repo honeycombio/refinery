@@ -50,11 +50,12 @@ func TestGetSampleRate(t *testing.T) {
 	ds.Start()
 
 	for i, tst := range tsts {
-		rate, keep, reason, key := ds.GetSampleRate(tst.trace)
+		rate, keep, summarize, reason, key := ds.GetSampleRate(tst.trace)
 		assert.Equal(t, uint(10), rate, "sample rate should be fixed")
 		assert.Equal(t, tst.sampled, keep, "%d: trace ID %s should be %v", i, tst.trace.TraceID, tst.sampled)
 		assert.Equal(t, "deterministic/chance", reason)
 		assert.Equal(t, "", key)
+		assert.False(t, summarize, "summarize should be false")
 	}
 
 }

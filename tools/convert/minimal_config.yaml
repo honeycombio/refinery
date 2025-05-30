@@ -34,6 +34,10 @@ Traces:
   MaxBatchSize: 500
   SendTicker: 100ms
   MaxExpiredTraces: 5_000
+  SummarySpanDataset: "Summary Spans"
+  SummaryFieldList: 
+    - "service.name"
+
 Debugging:
   DebugServiceAddr: "localhost:6060"
   QueryAuthToken: "some-private-value"

@@ -398,6 +398,17 @@ This will mean Refinery makes fewer sampling decision calculations each `SendTic
 - Type: `int`
 - Default: `5000`
 
+### `SummarySpanDataset`
+
+SummarySpanDataset is the dataset name for summary spans.
+
+When traces are summarized, the service.name of the spans isn't applicable since traces tend to cross service boundaries.
+The summary spans will be sent to the same environemnt as the trace was going to, since it uses the same API key.
+
+- Eligible for live reload.
+- Type: `string`
+- Default: `Summary Spans`
+
 ## Debugging
 
 `Debugging` contains configuration values used when setting up and debugging Refinery.

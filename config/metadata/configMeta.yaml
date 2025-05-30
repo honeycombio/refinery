@@ -441,8 +441,8 @@ groups:
         type: int
         valuetype: nondefault
         default: 5000
-        reload: true
         firstVersion: 2.9
+        reload: true
         validations:
           - type: minimum
             arg: 1000
@@ -458,6 +458,34 @@ groups:
           recommended to reduce this value and the `SendTicker` duration. This
           will mean Refinery makes fewer sampling decision calculations each
           `SendTicker` tick, but gets the chance to make decisions more often.
+
+      - name: SummarySpanDataset
+        type: string
+        valuetype: nondefault
+        default: "Summary Spans"
+        reload: true
+        summary: is the dataset name for summary spans.
+        description: >
+          When traces are summarized, the service.name of the spans isn't applicable
+          since traces tend to cross service boundaries. The summary spans will be
+          sent to the same environemnt as the trace was going to, since it uses the
+          same API key.
+      
+      - name: SummaryFieldList
+        type: stringarray
+        valuetype: stringarray
+        example: "service.name"
+        validations:
+          - type: elementType
+            arg: string
+        reload: true
+        summary: is a list of fields to include in the summary span.
+        description: >
+          The summarizing function will go through all the spans to pull in the values
+          of this field and concatenate them into a single comma-separated string.
+          There is a limit of 200 characters on the length of this string.
+          Suggested values here would be service.name, http.url, http.response.status_code,
+          k8s.node.name, and exception.type.
 
   - name: Debugging
     title: "Debugging"
@@ -1974,3 +2002,4 @@ groups:
           If this duration is `0`, then Refinery will not start in stressed
           mode, which will provide faster startup at the possible cost of
           startup instability.
+
