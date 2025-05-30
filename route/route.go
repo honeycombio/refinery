@@ -52,10 +52,6 @@ import (
 )
 
 const (
-	// numZstdDecoders is set statically here - we may make it into a config option
-	// A normal practice might be to use some multiple of the CPUs, but that goes south
-	// in kubernetes
-	numZstdDecoders        = 4
 	traceIDShortLength     = 8
 	traceIDLongLength      = 16
 	GRPCMessageSizeMax int = 5_000_000 // 5MB
@@ -157,7 +153,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironment)
 
 	var err error
-	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
+	r.zstdDecoders, err = makeDecoders(r.Config.GetNumOfZstdDecoder())
 	if err != nil {
 		r.iopLogger.Error().Logf("couldn't start zstd decoders: %s", err.Error())
 		return

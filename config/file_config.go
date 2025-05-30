@@ -382,6 +382,7 @@ type BufferSizeConfig struct {
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
 	CompressPeerCommunication *DefaultTrue      `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
+	NumOfZstdDecoder          int               `yaml:"NumOfZstdDecoder" default:"4"`
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
@@ -950,6 +951,13 @@ func (f *fileConfig) GetEnvironmentCacheTTL() time.Duration {
 	defer f.mux.RUnlock()
 
 	return time.Duration(f.mainConfig.Specialized.EnvironmentCacheTTL)
+}
+
+func (f *fileConfig) GetNumOfZstdDecoder() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Specialized.NumOfZstdDecoder
 }
 
 func (f *fileConfig) GetOpAMPConfig() OpAMPConfig {
