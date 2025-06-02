@@ -14,7 +14,6 @@ import (
 )
 
 func TestWhichShard(t *testing.T) {
-	const traceID = "test"
 
 	peers := []string{
 		"http://2.2.2.2:8081",
@@ -40,7 +39,11 @@ func TestWhichShard(t *testing.T) {
 	assert.NoError(t, sharder.Start(),
 		"starting deterministic sharder should not error")
 
+	const traceID = "test"
 	shard := sharder.WhichShard(traceID)
+	// The sharder should select one of the peers based on the traceID including itself.
+	peers = append(peers, config.GetPeerListenAddr())
+
 	assert.Contains(t, peers, shard.GetAddress(),
 		"should select a peer for a trace")
 
