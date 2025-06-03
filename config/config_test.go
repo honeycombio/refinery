@@ -313,8 +313,8 @@ func TestReadDefaults(t *testing.T) {
 		t.Error("received", d, "expected", 100*time.Millisecond)
 	}
 
-	if d := c.GetTracesConfig().GetMaxExpiredTraces(); d != 5000 {
-		t.Error("received", d, "expected", 5000)
+	if d := c.GetTracesConfig().GetMaxExpiredTraces(); d != 3000 {
+		t.Error("received", d, "expected", 3000)
 	}
 
 	if d := c.GetPeerManagementType(); d != "file" {
