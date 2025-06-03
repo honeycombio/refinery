@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-03-27 at 23:12:21 UTC
+# automatically generated on 2025-06-03 at 21:32:31 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -33,7 +33,7 @@ Traces:
   SpanLimit: 0
   MaxBatchSize: 500
   SendTicker: 100ms
-  MaxExpiredTraces: 5_000
+  MaxExpiredTraces: 3_000
 Debugging:
   DebugServiceAddr: "localhost:6060"
   QueryAuthToken: "some-private-value"
@@ -108,7 +108,7 @@ Collection:
   RedistributionDelay: 30s
   ShutdownDelay: 15s
   TraceLocalityMode: concentrated
-  HealthCheckTimeout: 3s
+  HealthCheckTimeout: 15s
 BufferSizes:
   UpstreamBufferSize: 10_000
   PeerBufferSize: 100_000

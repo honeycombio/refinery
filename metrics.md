@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-05-22 at 19:38:37 UTC.
+It was automatically generated on 2025-06-03 at 21:32:33 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -93,6 +93,7 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
 | _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
 | _sample_rate | Histogram | Dimensionless | Sample rate for traces |
+| _sampler_key_cardinality | Histogram | Dimensionless | Number of unique keys being tracked by the sampler |
 | enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
 | response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
 | response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
@@ -106,7 +107,9 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_nonspan | Counter | Dimensionless | the number of non-span events received |
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | _router_batch | Counter | Dimensionless | the number of batches of events received |
+| _router_batch_events | Counter | Dimensionless | the number of events received in batches |
 | _router_otlp | Counter | Dimensionless | the number of otlp requests received |
+| _router_otlp_events | Counter | Dimensionless | the number of events received in otlp requests |
 | bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
 | bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
 | queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |

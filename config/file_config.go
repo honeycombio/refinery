@@ -199,7 +199,7 @@ type TracesConfig struct {
 	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
 	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
 	SpanLimit        uint     `yaml:"SpanLimit"`
-	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"5000"`
+	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"3000"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {
@@ -316,7 +316,7 @@ type CollectionConfig struct {
 	PeerQueueSize       int        `yaml:"PeerQueueSize"`
 	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
-	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"3s"`
+	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"15s"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
@@ -869,6 +869,24 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string) 
 		cfg, name = sampler.Sampler()
 	}
 	return cfg, name
+}
+
+func (f *fileConfig) GetHealthCheckTimeout() time.Duration {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	configured := time.Duration(f.mainConfig.Collection.HealthCheckTimeout)
+	var timeout time.Duration
+	if f.mainConfig.Traces.MaxExpiredTraces != 0 {
+		// assume each traces take 5ms to process, so we can use that
+		// as a timeout for the health check.
+		timeout = time.Duration(f.mainConfig.Traces.MaxExpiredTraces) * time.Millisecond * 5
+	}
+
+	if configured < timeout {
+		return timeout
+	}
+	return configured
 }
 
 func (f *fileConfig) GetCollectionConfig() CollectionConfig {
