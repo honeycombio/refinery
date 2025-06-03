@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-05-14 at 18:23:59 UTC.
+It was automatically generated on 2025-05-22 at 19:38:37 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -106,7 +106,7 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_nonspan | Counter | Dimensionless | the number of non-span events received |
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | _router_batch | Counter | Dimensionless | the number of batches of events received |
-| _router_otlp | Counter | Dimensionless | the number of batches of otlp requests received |
+| _router_otlp | Counter | Dimensionless | the number of otlp requests received |
 | bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
 | bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
 | queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
