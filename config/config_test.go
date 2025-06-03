@@ -1137,3 +1137,68 @@ func TestMemorySizeMarshal(t *testing.T) {
 		})
 	}
 }
+func TestHealthCheckTimeout(t *testing.T) {
+	testCases := []struct {
+		name            string
+		healthTimeout   string
+		maxExpiredTrace uint
+		expected        time.Duration
+	}{
+		{
+			name:            "default values",
+			healthTimeout:   "",
+			maxExpiredTrace: 0,
+			expected:        15 * time.Second,
+		},
+		{
+			name:            "small MaxExpiredTraces (less than default)",
+			healthTimeout:   "",
+			maxExpiredTrace: 1000, // 1000 * 5ms = 5s, less than default 15s
+			expected:        15 * time.Second,
+		},
+		{
+			name:            "large MaxExpiredTraces (greater than default)",
+			healthTimeout:   "",
+			maxExpiredTrace: 5000, // 5000 * 5ms = 25s, greater than default 15s
+			expected:        25 * time.Second,
+		},
+		{
+			name:            "explicit HealthCheckTimeout greater than calculated",
+			healthTimeout:   "30s",
+			maxExpiredTrace: 5000, // 5000 * 5ms = 25s, less than configured 30s
+			expected:        30 * time.Second,
+		},
+		{
+			name:            "explicit HealthCheckTimeout less than calculated",
+			healthTimeout:   "10s",
+			maxExpiredTrace: 4000, // 4000 * 5ms = 20s, greater than configured 10s
+			expected:        20 * time.Second,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create config with specified values
+			configEntries := []interface{}{"General.ConfigurationVersion", 2}
+
+			if tc.healthTimeout != "" {
+				configEntries = append(configEntries, "Collection.HealthCheckTimeout", tc.healthTimeout)
+			}
+
+			if tc.maxExpiredTrace != 0 {
+				configEntries = append(configEntries, "Traces.MaxExpiredTraces", tc.maxExpiredTrace)
+			}
+
+			cm := makeYAML(configEntries...)
+			rm := makeYAML("ConfigVersion", 2)
+			cfg, rules := createTempConfigs(t, cm, rm)
+
+			c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+			assert.NoError(t, err)
+
+			timeout := c.GetHealthCheckTimeout()
+			assert.Equal(t, tc.expected, timeout)
+		})
+	}
+
+}

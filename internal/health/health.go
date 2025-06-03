@@ -136,7 +136,7 @@ func (h *Health) Register(subsystem string, timeout time.Duration) {
 		"source":  subsystem,
 		"timeout": timeout,
 	}
-	h.Logger.Debug().WithFields(fields).Logf("Registered Health ticker", subsystem, timeout)
+	h.Logger.Info().WithFields(fields).Logf("Registered Health ticker", subsystem, timeout)
 	if timeout < TickerTime {
 		h.Logger.Error().WithFields(fields).Logf("Registering a timeout less than the ticker time")
 	}
