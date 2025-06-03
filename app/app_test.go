@@ -112,6 +112,7 @@ func defaultConfig(basePort int, redisDB int) *config.MockConfig {
 			Timeout:  config.Duration(1 * time.Second),
 			Database: redisDB,
 		},
+		GetNumOfZstdDecoderVal:   4,
 		GetUpstreamBufferSizeVal: 10000,
 		GetPeerBufferSizeVal:     10000,
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
