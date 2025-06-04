@@ -86,6 +86,9 @@ type Config interface {
 	// GetCollectionConfig returns the config specific to the InMemCollector
 	GetCollectionConfig() CollectionConfig
 
+	// GetHealthCheckTimeout returns the timeout for Refinery's internal health checks used in the collector
+	GetHealthCheckTimeout() time.Duration
+
 	// GetSamplerConfigForDestName returns the sampler type and name to use for
 	// the given destination (environment, or dataset in classic)
 	GetSamplerConfigForDestName(string) (interface{}, string)
