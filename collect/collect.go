@@ -139,6 +139,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_send_has_root", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept traces that have a root span"},
 	{Name: "trace_send_no_root", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept traces that do not have a root span"},
 	{Name: "trace_forwarded_on_peer_change", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces forwarded due to peer membership change"},
+	{Name: "spans_forwarded_on_peer_change", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans forwarded due to peer membership change"},
 	{Name: "trace_redistribution_count", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces redistributed due to peer membership change"},
 	{Name: "trace_send_on_shutdown", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces sent during shutdown"},
 	{Name: "trace_forwarded_on_shutdown", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces forwarded during shutdown"},
@@ -503,6 +504,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	traces := i.cache.GetAll()
 	span.SetAttributes(attribute.Int("num_traces_to_redistribute", len(traces)))
 	forwardedTraces := generics.NewSetWithCapacity[string](len(traces) / numOfPeers)
+	forwardedSpanCount := 0
 	emptyTraces := generics.NewSet[string]()
 	for _, trace := range traces {
 		if trace == nil {
@@ -543,7 +545,12 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 			if !i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 				dc := i.createDecisionSpan(sp, trace, newTarget)
-				i.PeerTransmission.EnqueueEvent(dc)
+				// only forward spans that contain fields that can be used
+				// by a sampler to make a decision
+				if dc.GetDataSize() > 0 {
+					forwardedSpanCount += 1
+					i.PeerTransmission.EnqueueEvent(dc)
+				}
 				continue
 			}
 
@@ -558,6 +565,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 				sp.Data["meta.refinery.forwarded"] = i.hostname
 			}
 
+			forwardedSpanCount += 1
 			i.PeerTransmission.EnqueueSpan(sp)
 		}
 
@@ -572,6 +580,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	})
 
 	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces)+len(emptyTraces))
+	i.Metrics.Histogram("spans_forwarded_on_peer_change", float64(forwardedSpanCount))
 
 	// remove all redistributed traces from the cache if we are in traces locality concentrated mode
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
