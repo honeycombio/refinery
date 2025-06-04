@@ -9,160 +9,99 @@ import (
 )
 
 func TestKeyGeneration(t *testing.T) {
-	fields := []string{"http.status_code", "request.path", "app.team.id", "important_field"}
-	useTraceLength := true
-
-	generator := newTraceKey(fields, useTraceLength)
-
-	trace := &types.Trace{}
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 200,
-				"request.path":     "/{slug}/home",
-				"app.team.id":      float64(2),
-				"important_field":  true,
+	tests := []struct {
+		name           string
+		fields         []string
+		useTraceLength bool
+		spans          []testSpan
+		expectedKey    string
+		expectedCount  int
+	}{
+		{
+			name:           "all fields in single span",
+			fields:         []string{"http.status_code", "request.path", "app.team.id", "important_field"},
+			useTraceLength: true,
+			spans: []testSpan{
+				{
+					data: map[string]interface{}{
+						"http.status_code": 200,
+						"request.path":     "/{slug}/home",
+						"app.team.id":      float64(2),
+						"important_field":  true,
+					},
+				},
 			},
+			expectedKey:   "2•,200•,true•,/{slug}/home•,1",
+			expectedCount: 5,
 		},
-	})
-
-	expected := "2•,200•,true•,/{slug}/home•,1"
-
-	key, n := generator.build(trace)
-	assert.Equal(t, expected, key)
-	assert.Equal(t, 5, n)
-
-	fields = []string{"http.status_code", "request.path", "app.team.id", "important_field"}
-	useTraceLength = true
-
-	generator = newTraceKey(fields, useTraceLength)
-
-	trace = &types.Trace{}
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 200,
+		{
+			name:           "fields spread across spans",
+			fields:         []string{"http.status_code", "request.path", "app.team.id", "important_field"},
+			useTraceLength: true,
+			spans: []testSpan{
+				{data: map[string]interface{}{"http.status_code": 200}},
+				{data: map[string]interface{}{"request.path": "/{slug}/home"}},
+				{data: map[string]interface{}{"app.team.id": float64(2)}},
+				{data: map[string]interface{}{"important_field": true}},
 			},
+			expectedKey:   "2•,200•,true•,/{slug}/home•,4",
+			expectedCount: 5,
 		},
-	})
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"request.path": "/{slug}/home",
+		{
+			name:           "multiple identical field values across spans",
+			fields:         []string{"http.status_code"},
+			useTraceLength: true,
+			spans: []testSpan{
+				{data: map[string]interface{}{"http.status_code": 200}},
+				{data: map[string]interface{}{"http.status_code": 200}},
+				{data: map[string]interface{}{"http.status_code": 404}},
+				{data: map[string]interface{}{"http.status_code": 404}},
 			},
+			expectedKey:   "200•404•,4",
+			expectedCount: 3,
 		},
-	})
+		{
+			name:           "root prefixed fields",
+			fields:         []string{"http.status_code", "root.service_name", "root.another_field"},
+			useTraceLength: true,
+			spans: []testSpan{
+				{data: map[string]interface{}{"http.status_code": 404}},
+				{data: map[string]interface{}{
+					"http.status_code": 200,
+					"service_name":     "another",
+				}},
 
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"app.team.id": float64(2),
+				{data: map[string]interface{}{
+					"service_name": "test",
+				}, isRoot: true},
 			},
+			expectedKey:   "200•404•,test,2",
+			expectedCount: 4,
 		},
-	})
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"important_field": true,
+		{
+			name:   "no value for key fields found",
+			fields: []string{"http.status_code", "request.path"},
+			spans: []testSpan{
+				{data: map[string]interface{}{"app.team.id": 2}},
+				{data: map[string]interface{}{"important_field": true}, isRoot: true},
 			},
-		},
-	})
-
-	expected = "2•,200•,true•,/{slug}/home•,4"
-
-	key, n = generator.build(trace)
-	assert.Equal(t, expected, key)
-	assert.Equal(t, 5, n)
-
-	// now test that multiple values across spans are condensed correctly
-	fields = []string{"http.status_code"}
-	useTraceLength = true
-
-	generator = newTraceKey(fields, useTraceLength)
-
-	trace = &types.Trace{}
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 200,
-			},
-		},
-	})
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 200,
-			},
-		},
-	})
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 404,
-			},
-		},
-	})
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 404,
-			},
-		},
-	})
-
-	expected = "200•404•,4"
-
-	key, n = generator.build(trace)
-	assert.Equal(t, expected, key)
-	assert.Equal(t, 3, n)
-
-	// test field list with root prefix, only include the field from on the root span
-	// if it exists
-	fields = []string{"http.status_code", "root.service_name", "root.another_field"}
-	useTraceLength = true
-
-	generator = newTraceKey(fields, useTraceLength)
-
-	trace = &types.Trace{}
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 404,
-			},
-		},
-	})
-
-	trace.AddSpan(&types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"http.status_code": 200,
-				"service_name":     "another",
-			},
-		},
-	})
-
-	trace.RootSpan = &types.Span{
-		Event: types.Event{
-			Data: map[string]interface{}{
-				"service_name": "test",
-			},
+			useTraceLength: true,
+			expectedKey:    "",
+			expectedCount:  0,
 		},
 	}
 
-	expected = "200•404•,test,2"
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			generator := newTraceKey(tt.fields, tt.useTraceLength)
+			trace := createTestTrace(t, tt.spans)
 
-	key, n = generator.build(trace)
-	assert.Equal(t, expected, key)
-	assert.Equal(t, 4, n)
+			key, n := generator.build(trace)
+
+			assert.Equal(t, tt.expectedKey, key, "key should match expected value")
+			assert.Equal(t, tt.expectedCount, n, "count should match expected value")
+		})
+	}
 }
 
 func TestKeyLimits(t *testing.T) {
@@ -196,4 +135,35 @@ func TestKeyLimits(t *testing.T) {
 	_, n := generator.build(trace)
 	// we should have maxKeyLength unique values
 	assert.Equal(t, maxKeyLength, n)
+}
+
+type testSpan struct {
+	data   map[string]interface{}
+	isRoot bool
+}
+
+// Helper function to create test traces with specified data
+func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
+	trace := &types.Trace{}
+
+	for _, s := range spans {
+		if s.isRoot {
+			trace.RootSpan = &types.Span{
+				Event: types.Event{
+					Data: map[string]interface{}{
+						"service_name": "test",
+					},
+				},
+			}
+			continue
+		}
+
+		trace.AddSpan(&types.Span{
+			Event: types.Event{
+				Data: s.data,
+			},
+		})
+	}
+
+	return trace
 }

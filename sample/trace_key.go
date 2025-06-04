@@ -76,10 +76,15 @@ outer:
 
 	var key strings.Builder
 	for _, field := range d.fields {
+		// if there's no values for this field, skip it
+		values, ok := fieldCollector[field]
+		if !ok || len(values) == 0 {
+			continue
+		}
 		// sort and collapse list
-		sort.Strings(fieldCollector[field])
+		sort.Strings(values)
 		var prevStr string
-		for _, str := range fieldCollector[field] {
+		for _, str := range values {
 			if str != prevStr {
 				key.WriteString(str)
 				key.WriteRune('•')
@@ -100,7 +105,7 @@ outer:
 		}
 	}
 
-	if d.useTraceLength {
+	if d.useTraceLength && fieldCount > 0 {
 		key.WriteString(strconv.FormatInt(int64(len(spans)), 10))
 		fieldCount += 1
 	}
