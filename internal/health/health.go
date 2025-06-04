@@ -203,7 +203,7 @@ func (h *Health) checkAlive() bool {
 	for subsystem, a := range h.timeLeft {
 		if a == 0 {
 			if h.alives[subsystem] {
-				h.Logger.Error().WithField("subsystem", subsystem).Logf("IsAlive: subsystem dead due to timeout")
+				h.Logger.Error().WithFields(map[string]interface{}{"subsystem": subsystem, "timeout": h.timeouts[subsystem]}).Logf("IsAlive: subsystem dead due to timeout")
 				h.alives[subsystem] = false
 			}
 			return false
@@ -246,6 +246,7 @@ func (h *Health) checkReady() bool {
 			h.Logger.Info().WithFields(map[string]any{
 				"subsystem": subsystem,
 				"ready":     ready,
+				"timeout":   h.timeouts[subsystem],
 			}).Logf("Health.IsReady reporting subsystem not ready")
 		}
 		ready = ready && r
