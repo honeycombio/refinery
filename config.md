@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-06-03 at 21:32:34 UTC.
+It was automatically generated on 2025-06-04 at 22:30:00 UTC.
 
 ## The Config file
 
@@ -275,7 +275,6 @@ We recommend enabling this setting whenever a rules-based sampler is in use, as 
 AddSpanCountToRoot controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
 
 The added metadata field, `meta.span_count`, indicates the number of child elements on the trace at the time the sampling decision was made.
-This value is available to the rules-based sampler, making it possible to write rules that are dependent upon the number of spans, span events, and span links in the trace.
 If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.span_count` to the root span.
 
 - Eligible for live reload.
