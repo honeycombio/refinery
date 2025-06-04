@@ -75,7 +75,7 @@ func TestKeyGeneration(t *testing.T) {
 					"service_name": "test",
 				}, isRoot: true},
 			},
-			expectedKey:   "200•404•,test,2",
+			expectedKey:   "200•404•,test,3",
 			expectedCount: 4,
 		},
 		{
@@ -86,8 +86,8 @@ func TestKeyGeneration(t *testing.T) {
 				{data: map[string]interface{}{"important_field": true}, isRoot: true},
 			},
 			useTraceLength: true,
-			expectedKey:    "",
-			expectedCount:  0,
+			expectedKey:    "2",
+			expectedCount:  1,
 		},
 	}
 
@@ -147,22 +147,15 @@ func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
 	trace := &types.Trace{}
 
 	for _, s := range spans {
-		if s.isRoot {
-			trace.RootSpan = &types.Span{
-				Event: types.Event{
-					Data: map[string]interface{}{
-						"service_name": "test",
-					},
-				},
-			}
-			continue
-		}
-
-		trace.AddSpan(&types.Span{
+		span := &types.Span{
 			Event: types.Event{
 				Data: s.data,
 			},
-		})
+		}
+		if s.isRoot {
+			trace.RootSpan = span
+		}
+		trace.AddSpan(span)
 	}
 
 	return trace

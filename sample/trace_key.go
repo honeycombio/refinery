@@ -105,7 +105,7 @@ outer:
 		}
 	}
 
-	if d.useTraceLength && fieldCount > 0 {
+	if d.useTraceLength {
 		key.WriteString(strconv.FormatInt(int64(len(spans)), 10))
 		fieldCount += 1
 	}
