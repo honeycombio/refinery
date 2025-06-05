@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-05-23 at 20:21:03 UTC from ../../config.yaml using a template generated on 2025-05-23 at 20:20:07 UTC
+# created on 2025-06-04 at 22:30:00 UTC from ../../config.yaml using a template generated on 2025-06-04 at 22:29:50 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -266,11 +266,8 @@ RefineryTelemetry:
     ##
     ## The added metadata field, `meta.span_count`, indicates the number of
     ## child elements on the trace at the time the sampling decision was
-    ## made. This value is available to the rules-based sampler, making it
-    ## possible to write rules that are dependent upon the number of spans,
-    ## span events, and span links in the trace. If `true` and
-    ## `AddCountsToRoot` is set to false, then Refinery will add
-    ## `meta.span_count` to the root span.
+    ## made. If `true` and `AddCountsToRoot` is set to false, then Refinery
+    ## will add `meta.span_count` to the root span.
     ##
     ## default: true
     ## Eligible for live reload.
@@ -400,14 +397,18 @@ Traces:
     ## every `SendTicker` duration. If this number is too small it will mean
     ## Refinery is spending less time calculating sampling decisions,
     ## resulting in data arriving at Honeycomb slower.
+    ## Additionally, MaxExpiredTraces indirectly affects the system’s
+    ## health check behavior. The HealthCheckTimeout will be automatically
+    ## adjusted based on this value to ensure health checks remain accurate
+    ## relative to the configured processing load.
     ## If your `collector_collect_loop_duration_ms` is above 3 seconds it is
     ## recommended to reduce this value and the `SendTicker` duration. This
     ## will mean Refinery makes fewer sampling decision calculations each
     ## `SendTicker` tick, but gets the chance to make decisions more often.
     ##
-    ## default: 5000
+    ## default: 3000
     ## Eligible for live reload.
-    # MaxExpiredTraces: 5_000
+    # MaxExpiredTraces: 3_000
 
 ###############
 ## Debugging ##
@@ -1175,11 +1176,16 @@ Collection:
     ## carefully to ensure that transient delays do not lead to unnecessary
     ## failure detection while still allowing for timely identification of
     ## actual health issues.
+    ## This timeout should be configured to balance responsiveness and
+    ## stability — allowing for timely detection of real health issues
+    ## without being overly sensitive to brief or harmless delays. Refinery
+    ## will adjust the timeout based on the configured `MaxExpiredTraces`, so
+    ## that health checks remain effective under varying system conditions.
     ##
-    ## Accepts a duration string with units, like "3s".
-    ## default: 3s
+    ## Accepts a duration string with units, like "15s".
+    ## default: 15s
     ## Not eligible for live reload.
-    # HealthCheckTimeout: 3s
+    # HealthCheckTimeout: 15s
 
 ##################
 ## Buffer Sizes ##

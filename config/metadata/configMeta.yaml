@@ -144,7 +144,7 @@ groups:
           that it decides to keep.
   - name: OpAMP
     title: "OpAMP Configuration"
-    description: > 
+    description: >
       contains OpAMP configuration options. OpAMP support is an experimental
       feature, subject to breaking changes at any time. Not intended or
       supported for customer use. **FOR INTERNAL USE ONLY**
@@ -241,7 +241,8 @@ groups:
       - name: SendKeyMode
         type: string
         valuetype: choice
-        choices: ["none", "all", "nonblank", "listedonly", "unlisted", "missingonly"]
+        choices:
+          ["none", "all", "nonblank", "listedonly", "unlisted", "missingonly"]
         default: "none"
         reload: true
         summary: controls how SendKey is used to replace or augment API keys used in incoming telemetry.
@@ -296,11 +297,9 @@ groups:
         validations:
         summary: controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
         description: >
-          The added metadata field, `meta.span_count`, indicates
-          the number of child elements on the trace at the time the sampling
-          decision was made. This value is available to the rules-based sampler,
-          making it possible to write rules that are dependent upon the number
-          of spans, span events, and span links in the trace. If `true` and `AddCountsToRoot` is set to false, then Refinery
+          The added metadata field, `meta.span_count`, indicates the number of
+          child elements on the trace at the time the sampling decision was
+          made. If `true` and `AddCountsToRoot` is set to false, then Refinery
           will add `meta.span_count` to the root span.
 
       - name: AddCountsToRoot
@@ -440,7 +439,7 @@ groups:
       - name: MaxExpiredTraces
         type: int
         valuetype: nondefault
-        default: 5000
+        default: 3000
         reload: true
         firstVersion: 2.9
         validations:
@@ -453,6 +452,11 @@ groups:
           `SendTicker` duration. If this number is too small it will mean Refinery
           is spending less time calculating sampling decisions, resulting in data
           arriving at Honeycomb slower.
+
+          Additionally, MaxExpiredTraces indirectly affects the system’s health
+          check behavior. The HealthCheckTimeout will be automatically adjusted
+          based on this value to ensure health checks remain accurate relative to
+          the configured processing load.
 
           If your `collector_collect_loop_duration_ms` is above 3 seconds it is
           recommended to reduce this value and the `SendTicker` duration. This
@@ -782,7 +786,6 @@ groups:
         summary: is the interval between sending legacy metrics to Honeycomb.
         description: >
           Between 1 and 60 seconds is typical.
-
 
   - name: OTelMetrics
     title: "OpenTelemetry Metrics"
@@ -1414,11 +1417,17 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.8
-        default: 3s
+        default: 15s
         reload: false
         summary: controls the maximum duration allowed for collection health checks to complete.
         description: >
-          The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete. If a subsystem does not respond within this timeout period, it will be marked as unhealthy. This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+          The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete.
+          If a subsystem does not respond within this timeout period, it will be marked as unhealthy. This timeout value should be set carefully to
+          ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+
+          This timeout should be configured to balance responsiveness and stability — allowing for timely detection of real health issues without being
+          overly sensitive to brief or harmless delays. Refinery will adjust the timeout based on the configured `MaxExpiredTraces`, so that health checks
+          remain effective under varying system conditions.
 
       - name: MaxDropDecisionBatchSize
         type: int

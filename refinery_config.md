@@ -251,7 +251,6 @@ We recommend enabling this setting whenever a rules-based sampler is in use, as 
 `AddSpanCountToRoot` controls whether to add a metadata field to root spans that indicates the number of child elements in a trace.
 
 The added metadata field, `meta.span_count`, indicates the number of child elements on the trace at the time the sampling decision was made.
-This value is available to the rules-based sampler, making it possible to write rules that are dependent upon the number of spans, span events, and span links in the trace.
 If `true` and `AddCountsToRoot` is set to false, then Refinery will add `meta.span_count` to the root span.
 
 - Eligible for live reload.
@@ -368,12 +367,14 @@ Decreasing this will check the trace cache for timeouts more frequently.
 This setting controls how many traces are processed when it is time to make a sampling decision.
 Up to this many traces will be processed every `SendTicker` duration.
 If this number is too small it will mean Refinery is spending less time calculating sampling decisions, resulting in data arriving at Honeycomb slower.
+Additionally, MaxExpiredTraces indirectly affects the system’s health check behavior.
+The HealthCheckTimeout will be automatically adjusted based on this value to ensure health checks remain accurate relative to the configured processing load.
 If your `collector_collect_loop_duration_ms` is above 3 seconds it is recommended to reduce this value and the `SendTicker` duration.
 This will mean Refinery makes fewer sampling decision calculations each `SendTicker` tick, but gets the chance to make decisions more often.
 
 - Eligible for live reload.
 - Type: `int`
-- Default: `5000`
+- Default: `3000`
 
 ## Debugging
 
@@ -1085,10 +1086,12 @@ See `DryRun` for more information.
 The `HealthCheckTimeout` setting specifies the maximum duration allowed for the health checks of the collection subsystems to complete.
 If a subsystem does not respond within this timeout period, it will be marked as unhealthy.
 This timeout value should be set carefully to ensure that transient delays do not lead to unnecessary failure detection while still allowing for timely identification of actual health issues.
+This timeout should be configured to balance responsiveness and stability — allowing for timely detection of real health issues without being overly sensitive to brief or harmless delays.
+Refinery will adjust the timeout based on the configured `MaxExpiredTraces`, so that health checks remain effective under varying system conditions.
 
 - Not eligible for live reload.
 - Type: `duration`
-- Default: `3s`
+- Default: `15s`
 
 ## Buffer Sizes
 
