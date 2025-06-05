@@ -1,11 +1,14 @@
 # Release Process
 
+Note that it is not necessary to regenerate licenses or documentation as part of a standard PR for Refinery. They cause a lot of noise and should generally only be run immediately before a release.
+
 - Check that licenses are current with `make verify-licenses`
 - Regenerate documentation with `make all` from within the `tools/convert` folder.
   - If there have been changes to `rules.md`, you may need to manually modify the `rules_complete.yaml` to reflect the same change.
-- If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also open a [docs](https://github.com/honeycombio/docs) PR and update these files there under `layouts/shortcodes/subpages/refinery/`.
+- If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also open a [docs](https://github.com/honeycombio/docs) PR and update these files there under `content/_common/refinery/`.
   - Replace the underscores (`_`) in the filenames with a dash (`-`) or the docs linter will be upset.
   - Address any feedback from the the docs team and apply that feedback back into this repo.
+  - For added points, get the docs team to give feedback on docs changes in the original PR that changed them.
 - After addressing any docs changes, add release entry to [changelog](./CHANGELOG.md).
   - Use this command to get a list of all commits since last release:
 
@@ -29,7 +32,7 @@
          - <a-commit-with-maintenance-prefix>
     ```
 
-- Add a summary of release changes to [release notes](./RELEASE_NOTES.md)
+- Add a summary of release changes to [release notes](./RELEASE_NOTES.md).
 - Commit changes, push, and open a release preparation pull request for review.
 - Once the pull request is merged, fetch the updated `main` branch.
 - Apply a tag for the new version on the merged commit (e.g. `git tag -a v1.4.1 -m "v1.4.1"`)

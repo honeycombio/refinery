@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-06-03 at 21:32:34 UTC from ../../config.yaml using a template generated on 2025-06-03 at 21:32:28 UTC
+# created on 2025-06-04 at 22:30:00 UTC from ../../config.yaml using a template generated on 2025-06-04 at 22:29:50 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -266,11 +266,8 @@ RefineryTelemetry:
     ##
     ## The added metadata field, `meta.span_count`, indicates the number of
     ## child elements on the trace at the time the sampling decision was
-    ## made. This value is available to the rules-based sampler, making it
-    ## possible to write rules that are dependent upon the number of spans,
-    ## span events, and span links in the trace. If `true` and
-    ## `AddCountsToRoot` is set to false, then Refinery will add
-    ## `meta.span_count` to the root span.
+    ## made. If `true` and `AddCountsToRoot` is set to false, then Refinery
+    ## will add `meta.span_count` to the root span.
     ##
     ## default: true
     ## Eligible for live reload.
