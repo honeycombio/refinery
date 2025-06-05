@@ -37,7 +37,6 @@ type MockConfig struct {
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
 	GetUpstreamBufferSizeVal         int
-	GetHealthCheckTimeoutVal         time.Duration
 	GetPeerBufferSizeVal             int
 	IdentifierInterfaceName          string
 	UseIPV6Identifier                bool
@@ -120,7 +119,7 @@ func (m *MockConfig) GetHealthCheckTimeout() time.Duration {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
-	return m.GetHealthCheckTimeoutVal
+	return time.Duration(m.GetCollectionConfigVal.HealthCheckTimeout)
 }
 
 func (m *MockConfig) GetTracesConfig() TracesConfig {
