@@ -1034,30 +1034,25 @@ func TestRouterBatch(t *testing.T) {
 	router.batch(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Parse the response
 	var responses []*BatchResponse
 	err = json.Unmarshal(w.Body.Bytes(), &responses)
 	require.NoError(t, err)
-
-	// Verify we got responses for all events
-	assert.Len(t, responses, 3)
+	assert.Len(t, responses, len(batchEvents))
 
 	// Verify all responses are successful
 	for i, resp := range responses {
 		assert.Equal(t, http.StatusAccepted, resp.Status, "Response %d should be accepted", i)
 		assert.Empty(t, resp.Error, "Response %d should have no error", i)
 	}
-	// Access mocks via type assertion
-	mockMetrics := router.Metrics.(*metrics.MockMetrics)
-	mockCollector := router.Collector.(*collect.MockCollector)
 
+	mockMetrics := router.Metrics.(*metrics.MockMetrics)
 	assert.Equal(t, 1, mockMetrics.CounterIncrements["incoming_router_batch"])
 	assert.Equal(t, 3, mockMetrics.CounterIncrements["incoming_router_batch_events"])
 
 	var spans []*types.Span
 	for len(spans) < len(batchEvents) {
 		select {
-		case span := <-mockCollector.Spans:
+		case span := <-router.Collector.(*collect.MockCollector).Spans:
 			spans = append(spans, span)
 		default:
 			// All the spans should be in the channel before batch() returns.
