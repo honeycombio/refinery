@@ -164,6 +164,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 		for {
 			select {
 			case <-sub.done:
+				sub.pubsub.Close()
 				return
 			case msg := <-redisch:
 				if msg == nil {
