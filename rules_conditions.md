@@ -33,20 +33,13 @@ Conditions:
     Operator: =
     Value: /health-check
 ```
-### Leveraging Special Refinery Telemetry in Root Spans
+### Special Refinery Telemetry in Root Spans (`meta` fields)
 
-Some Refinery configuration options introduce special fields that are added to telemetry.
+Some Refinery configuration options introduce special fields that are added to telemetry to help with certain queries.
 
-For example, when `AddCountsToRoot` is enabled, `meta.span_count` is added to all root spans, and allows for the creation of rule conditions based on span counts.
-In this `meta.span_count` example, the Refinery rule applies to traces with more than 300 spans.
-
-```yaml
-Conditions:
-    Field: "meta.span_count"
-    Operator: ">"
-    Value: 300
-    Datatype: int
-```
+For example, when `AddCountsToRoot` is enabled, `meta.span_count` is added to all root spans.
+These `meta` fields are added only after a trace decision is made, and cannot be used in Refinery rules.
+To make decisions based on the number of spans in a trace, consider using the `?.NUM_DESCENDANTS` [virtual field](#virtual-fields).
 
 For details about all supported special fields, check out our [Refinery Telemetry documentation](https://docs.honeycomb.io/manage-data-volume/refinery/configuration/#refinery-telemetry).
 
@@ -66,6 +59,20 @@ Rules:
         Value: 1000
         Datatype: int
 
+```
+
+This example shows a rule to drop traces consisting of only a root span:
+
+```yaml
+    - Name: drop single-span traces
+      Drop: true
+      Conditions:
+        - Operator: has-root-span
+          Value: true
+        - Field: "?.NUM_DESCENDANTS"
+          Operator: =
+          Value: 1
+          Datatype: int
 ```
 
 #### Supported Virtual Fields
