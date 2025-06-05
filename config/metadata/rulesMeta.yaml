@@ -95,6 +95,11 @@ groups:
           of fields is not unique enough, then you will not be guaranteed
           samples of the most interesting traces.
 
+          If a trace does not contain any of the fields specified in the FieldList,
+          it will still be evaluated by the sampler. However, since it lacks all key fields,
+          it will be grouped under a single empty (blank) key. This means that all such traces
+          will share the same sample rate, determined by that one shared key.
+
           As an example, consider as a good set of fields: the combination of
           `HTTP endpoint` (high-frequency and boring), `HTTP method`, and
           `status code` (normally boring but can become interesting when
