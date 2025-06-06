@@ -517,7 +517,16 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		}
 
 		addIncomingUserAgent(ev, userAgent)
-		err = r.processEvent(ev, reqID)
+		if _, ok := ev.Data["meta.refinery.trace_summary"]; ok {
+			if spans, ok := ev.Data["meta.refinery.spans"].([]*types.Event); ok {
+				for _, s := range spans {
+					s.Data["meta.refinery.forwarded"] = ev.Data["meta.refinery.forwarded"]
+					err = r.processEvent(s, reqID)
+				}
+			}
+		} else {
+			err = r.processEvent(ev, reqID)
+		}
 
 		var resp BatchResponse
 		switch {

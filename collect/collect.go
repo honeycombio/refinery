@@ -139,6 +139,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_send_has_root", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept traces that have a root span"},
 	{Name: "trace_send_no_root", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of kept traces that do not have a root span"},
 	{Name: "trace_forwarded_on_peer_change", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces forwarded due to peer membership change"},
+	{Name: "spans_forwarded_on_peer_change", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans forwarded due to peer membership change"},
 	{Name: "trace_redistribution_count", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces redistributed due to peer membership change"},
 	{Name: "trace_send_on_shutdown", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces sent during shutdown"},
 	{Name: "trace_forwarded_on_shutdown", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of traces forwarded during shutdown"},
@@ -503,6 +504,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	traces := i.cache.GetAll()
 	span.SetAttributes(attribute.Int("num_traces_to_redistribute", len(traces)))
 	forwardedTraces := generics.NewSetWithCapacity[string](len(traces) / numOfPeers)
+	forwardedSpanCount := 0
 	emptyTraces := generics.NewSet[string]()
 	for _, trace := range traces {
 		if trace == nil {
@@ -537,29 +539,9 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 			continue
 		}
 
-		for _, sp := range trace.GetSpans() {
-
-			sp.SetSendBy(trace.SendBy)
-
-			if !i.Config.GetCollectionConfig().TraceLocalityEnabled() {
-				dc := i.createDecisionSpan(sp, trace, newTarget)
-				i.PeerTransmission.EnqueueEvent(dc)
-				continue
-			}
-
-			sp.APIHost = newTarget.GetAddress()
-
-			if sp.Data == nil {
-				sp.Data = make(map[string]interface{})
-			}
-			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
-			} else {
-				sp.Data["meta.refinery.forwarded"] = i.hostname
-			}
-
-			i.PeerTransmission.EnqueueSpan(sp)
-		}
+		summary, spanCount := i.createTraceSummaryForPeer(trace, spans, newTarget)
+		forwardedSpanCount += spanCount
+		i.PeerTransmission.EnqueueEvent(summary)
 
 		forwardedTraces.Add(trace.TraceID)
 		redistributeTraceSpan.End()
@@ -572,6 +554,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	})
 
 	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces)+len(emptyTraces))
+	i.Metrics.Histogram("spans_forwarded_on_peer_change", float64(forwardedSpanCount))
 
 	// remove all redistributed traces from the cache if we are in traces locality concentrated mode
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
@@ -1741,4 +1724,32 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 			send = false
 		}
 	}
+}
+
+func (i *InMemCollector) createTraceSummaryForPeer(trace *types.Trace, spans []*types.Span, newTarget sharder.Shard) (*types.Event, int) {
+	forwardedSpans := make([]*types.Event, 0, len(spans))
+	for _, span := range spans {
+		span.SetSendBy(trace.SendBy)
+		if i.Config.GetCollectionConfig().TraceLocalityEnabled() { // concentraded
+			span.APIHost = newTarget.GetAddress()
+			forwardedSpans = append(forwardedSpans, &span.Event)
+		} else { // distributed
+			forwardedSpans = append(forwardedSpans, i.createDecisionSpan(span, trace, newTarget))
+		}
+	}
+
+	summary := &types.Event{
+		APIKey:  trace.APIKey,
+		APIHost: newTarget.GetAddress(),
+		Dataset: trace.Dataset,
+		Data: map[string]any{
+			"meta.refinery.trace_summary": true,
+			"meta.refinery.forwarded_by":  i.hostname,
+			"meta.refinery.trace.id":      trace.TraceID,
+			"meta.refinery.trace.send_by": trace.SendBy,
+			"meta.refinery.spans":         forwardedSpans,
+			"meta.refinery.span_count":    len(spans),
+		},
+	}
+	return summary, len(forwardedSpans)
 }
