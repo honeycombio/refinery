@@ -539,35 +539,9 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 			continue
 		}
 
-		for _, sp := range trace.GetSpans() {
-
-			sp.SetSendBy(trace.SendBy)
-
-			if !i.Config.GetCollectionConfig().TraceLocalityEnabled() {
-				dc := i.createDecisionSpan(sp, trace, newTarget)
-				// only forward spans that contain fields that can be used
-				// by a sampler to make a decision
-				if dc.GetDataSize() > 0 {
-					forwardedSpanCount += 1
-					i.PeerTransmission.EnqueueEvent(dc)
-				}
-				continue
-			}
-
-			sp.APIHost = newTarget.GetAddress()
-
-			if sp.Data == nil {
-				sp.Data = make(map[string]interface{})
-			}
-			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
-			} else {
-				sp.Data["meta.refinery.forwarded"] = i.hostname
-			}
-
-			forwardedSpanCount += 1
-			i.PeerTransmission.EnqueueSpan(sp)
-		}
+		summary, spanCount := i.createTraceSummaryForPeer(trace, spans, newTarget)
+		forwardedSpanCount += spanCount
+		i.PeerTransmission.EnqueueEvent(summary)
 
 		forwardedTraces.Add(trace.TraceID)
 		redistributeTraceSpan.End()
@@ -1750,4 +1724,32 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 			send = false
 		}
 	}
+}
+
+func (i *InMemCollector) createTraceSummaryForPeer(trace *types.Trace, spans []*types.Span, newTarget sharder.Shard) (*types.Event, int) {
+	forwardedSpans := make([]*types.Event, 0, len(spans))
+	for _, span := range spans {
+		span.SetSendBy(trace.SendBy)
+		if i.Config.GetCollectionConfig().TraceLocalityEnabled() { // concentraded
+			span.APIHost = newTarget.GetAddress()
+			forwardedSpans = append(forwardedSpans, &span.Event)
+		} else { // distributed
+			forwardedSpans = append(forwardedSpans, i.createDecisionSpan(span, trace, newTarget))
+		}
+	}
+
+	summary := &types.Event{
+		APIKey:  trace.APIKey,
+		APIHost: newTarget.GetAddress(),
+		Dataset: trace.Dataset,
+		Data: map[string]any{
+			"meta.refinery.trace_summary": true,
+			"meta.refinery.forwarded_by":  i.hostname,
+			"meta.refinery.trace.id":      trace.TraceID,
+			"meta.refinery.trace.send_by": trace.SendBy,
+			"meta.refinery.spans":         forwardedSpans,
+			"meta.refinery.span_count":    len(spans),
+		},
+	}
+	return summary, len(forwardedSpans)
 }
