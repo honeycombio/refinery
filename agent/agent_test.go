@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	hpsf "github.com/honeycombio/hpsf/pkg/config"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
@@ -53,7 +54,7 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 		{
 			name: "new refinery config from remote config",
 			configMap: map[string]*protobufs.AgentConfigFile{
-				"refinery_config": {
+				string(hpsf.RefineryConfigType): {
 					Body:        []byte(`{"Logger":{"Level":"debug"}}`),
 					ContentType: "text/yaml",
 				},
@@ -65,11 +66,11 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 		{
 			name: "new refinery rules from remote config",
 			configMap: map[string]*protobufs.AgentConfigFile{
-				"refinery_config": {
+				string(hpsf.RefineryConfigType): {
 					Body:        []byte(`{"Logger":{"Level":"debug"}}`),
 					ContentType: "text/yaml",
 				},
-				"refinery_rules": {
+				string(hpsf.RefineryRulesType): {
 					Body: []byte(`{"rules":[{"name":"test","type":"fake"]}`),
 				},
 			},
@@ -80,11 +81,11 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 		{
 			name: "same remote config should not cause reload",
 			configMap: map[string]*protobufs.AgentConfigFile{
-				"refinery_config": {
+				string(hpsf.RefineryConfigType): {
 					Body:        []byte(`{"Logger":{"Level":"debug"}}`),
 					ContentType: "text/yaml",
 				},
-				"refinery_rules": {
+				string(hpsf.RefineryRulesType): {
 					Body: []byte(`{"rules":[{"name":"test","type":"fake"]}`),
 				},
 			},

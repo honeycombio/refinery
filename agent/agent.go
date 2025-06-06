@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	hpsf "github.com/honeycombio/hpsf/pkg/config"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
@@ -318,8 +319,8 @@ func (agent *Agent) composeEffectiveConfig() *protobufs.EffectiveConfig {
 	return &protobufs.EffectiveConfig{
 		ConfigMap: &protobufs.AgentConfigMap{
 			ConfigMap: map[string]*protobufs.AgentConfigFile{
-				"refinery_config": {Body: configYAML},
-				"refinery_rules":  {Body: rulesYAML},
+				string(hpsf.RefineryConfigType): {Body: configYAML},
+				string(hpsf.RefineryRulesType):  {Body: rulesYAML},
 			},
 		},
 	}
@@ -384,10 +385,10 @@ func (agent *Agent) updateRemoteConfig(ctx context.Context, msg *types.MessageDa
 		}
 
 		var opts []config.ReloadedConfigDataOption
-		if c, ok := confMap["refinery_rules"]; ok {
+		if c, ok := confMap[string(hpsf.RefineryRulesType)]; ok {
 			opts = append(opts, config.WithRulesData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://rules")))
 		}
-		if c, ok := confMap["refinery_config"]; ok {
+		if c, ok := confMap[string(hpsf.RefineryConfigType)]; ok {
 			opts = append(opts, config.WithConfigData(config.NewConfigData(c.GetBody(), config.FormatYAML, "opamp://config")))
 		}
 
