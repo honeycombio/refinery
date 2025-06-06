@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/agnivade/levenshtein v1.2.1
+	github.com/honeycombio/hpsf v0.5.1-0.20250605195630-9b072f9dbd61
 	github.com/creasty/defaults v1.8.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dgryski/go-wyhash v0.0.0-20191203203029-c4841ae36371
