@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -18,10 +19,12 @@ import (
 
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
+	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vmihailenco/msgpack/v5"
 	"go.opentelemetry.io/otel/trace/noop"
 	"gopkg.in/alexcesaro/statsd.v2"
 
@@ -41,6 +44,8 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 const nonLegacyAPIKey = "d245834089a1bd6cc9ad01e"
+
+var now = time.Now().UTC()
 
 type countingWriterSender struct {
 	transmission.WriterSender
@@ -247,6 +252,34 @@ func post(t testing.TB, req *http.Request) {
 	resp.Body.Close()
 }
 
+// getTestSpanJSON returns JSON for a test span (for non-benchmark tests)
+func getTestSpanJSON() string {
+	data, _ := json.Marshal(batchedEvent{
+		Timestamp:  now.Format(time.RFC3339Nano),
+		SampleRate: 2,
+		Data: map[string]interface{}{
+			"trace.trace_id":  "2",
+			"trace.span_id":   "10",
+			"trace.parent_id": "0000000000",
+			"key":             "value",
+			"field0":          0,
+			"field1":          1,
+			"field2":          2,
+			"field3":          3,
+			"field4":          4,
+			"field5":          5,
+			"field6":          6,
+			"field7":          7,
+			"field8":          8,
+			"field9":          9,
+			"field10":         10,
+			"long":            "this is a test of the emergency broadcast system",
+			"foo":             "bar",
+		},
+	})
+	return string(data)
+}
+
 func TestAppIntegration(t *testing.T) {
 	t.Parallel()
 	port := 10500
@@ -393,9 +426,9 @@ func TestPeerRouting(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	// this span index was chosen because it hashes to the appropriate shard for this
+	// this span data was chosen because it hashes to the appropriate shard for this
 	// test. You can't change it and expect the test to pass.
-	blob := `[` + string(spans[10]) + `]`
+	blob := `[` + getTestSpanJSON() + `]`
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
@@ -783,9 +816,9 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	// this span index was chosen because it hashes to the appropriate shard for this
+	// this span data was chosen because it hashes to the appropriate shard for this
 	// test. You can't change it and expect the test to pass.
-	blob := `[` + string(spans[10]) + `]`
+	blob := `[` + getTestSpanJSON() + `]`
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
@@ -853,33 +886,9 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 }
 
 var (
-	now        = time.Now().UTC()
-	nowString  = now.Format(time.RFC3339Nano)
-	spanFormat = `{"data":{` +
-		`"trace.trace_id":"%d",` +
-		`"trace.span_id":"%d",` +
-		`"trace.parent_id":"0000000000",` +
-		`"key":"value",` +
-		`"field0":0,` +
-		`"field1":1,` +
-		`"field2":2,` +
-		`"field3":3,` +
-		`"field4":4,` +
-		`"field5":5,` +
-		`"field6":6,` +
-		`"field7":7,` +
-		`"field8":8,` +
-		`"field9":9,` +
-		`"field10":10,` +
-		`"long":"this is a test of the emergency broadcast system",` +
-		`"foo":"bar"` +
-		`},"dataset":"dataset",` +
-		`"time":"` + nowString + `",` +
-		`"samplerate":2` +
-		`}`
-	spans [][]byte
-
-	httpClient = &http.Client{Transport: &http.Transport{
+	benchmarkMutex  sync.Mutex
+	benchmarkEvents []batchedEvent
+	httpClient      = &http.Client{Transport: &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   1 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -892,16 +901,84 @@ var (
 	}}
 )
 
-// Pre-build spans to send, none are root spans
-func init() {
-	var tid int
-	spans = make([][]byte, 100000)
-	for i := range spans {
-		if i%10 == 0 {
-			tid++
+// Pre-build benchmark events
+func createBenchmarkEvents(n int) {
+	benchmarkMutex.Lock()
+	defer benchmarkMutex.Unlock()
+
+	if len(benchmarkEvents) < n {
+		benchmarkEvents = make([]batchedEvent, n)
+		for i := range benchmarkEvents {
+			benchmarkEvents[i] = batchedEvent{
+				Timestamp:        now.Format(time.RFC3339Nano),
+				MsgPackTimestamp: &now,
+				SampleRate:       2,
+				Data: map[string]interface{}{
+					"trace.trace_id":  uuid.NewString(),
+					"trace.span_id":   uuid.NewString(),
+					"trace.parent_id": "0000000000",
+					"key":             "value",
+					"field0":          0,
+					"field1":          1,
+					"field2":          2,
+					"field3":          3,
+					"field4":          4,
+					"field5":          5,
+					"field6":          6,
+					"field7":          7,
+					"field8":          8,
+					"field9":          9,
+					"field10":         10,
+					"long":            "this is a test of the emergency broadcast system",
+					"foo":             "bar",
+				},
+			}
 		}
-		spans[i] = []byte(fmt.Sprintf(spanFormat, tid, i))
 	}
+}
+
+// encoding configurations
+var encodings = []struct {
+	name        string
+	contentType string
+	encoding    string
+}{
+	{"json-gzip", "application/json", "gzip"},
+	{"msgpack-zstd", "application/x-msgpack", "zstd"},
+}
+
+// batchedEvent represents the structure expected by the batch endpoint
+type batchedEvent struct {
+	Timestamp        string                 `json:"time"`
+	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
+	SampleRate       int64                  `json:"samplerate" msgpack:"samplerate"`
+	Data             map[string]interface{} `json:"data" msgpack:"data"`
+}
+
+func encodeAndCompress(events []batchedEvent, contentType, compression string) ([]byte, error) {
+	var data []byte
+	var err error
+	if contentType == "application/x-msgpack" {
+		data, err = msgpack.Marshal(events)
+	} else {
+		data, err = json.Marshal(events)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	switch compression {
+	case "gzip":
+		w := gzip.NewWriter(&buf)
+		w.Write(data)
+		w.Close()
+	case "zstd":
+		w, _ := zstd.NewWriter(&buf)
+		w.Write(data)
+		w.Close()
+	}
+	return buf.Bytes(), nil
 }
 
 func BenchmarkTraces(b *testing.B) {
@@ -915,80 +992,105 @@ func BenchmarkTraces(b *testing.B) {
 	redisDB := 1
 	cfg := defaultConfig(11000, redisDB)
 	_, graph := newStartedApp(b, sender, nil, nil, cfg)
+	defer func() {
+		err := startstop.Stop(graph.Objects(), nil)
+		assert.NoError(b, err)
+	}()
 
-	req, err := http.NewRequest(
-		"POST",
-		"http://localhost:11000/1/batch/dataset",
-		nil,
-	)
-	assert.NoError(b, err)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+	for _, encoding := range encodings {
+		b.Run(encoding.name, func(b *testing.B) {
+			req, err := http.NewRequest(
+				"POST",
+				"http://localhost:11000/1/batch/dataset",
+				nil,
+			)
+			assert.NoError(b, err)
+			req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+			req.Header.Set("Content-Type", encoding.contentType)
+			req.Header.Set("Content-Encoding", encoding.encoding)
 
-	b.Run("single", func(b *testing.B) {
-		sender.resetCount()
-		for n := 0; n < b.N; n++ {
-			blob := `[` + string(spans[n%len(spans)]) + `]`
-			req.Body = io.NopCloser(strings.NewReader(blob))
-			post(b, req)
-		}
-		sender.waitForCount(b, b.N)
-	})
-
-	b.Run("batch", func(b *testing.B) {
-		sender.resetCount()
-
-		// over-allocate blob for 50 spans
-		blob := make([]byte, 0, len(spanFormat)*100)
-		for n := 0; n < (b.N/50)+1; n++ {
-			blob = append(blob[:0], '[')
-			for i := 0; i < 50; i++ {
-				blob = append(blob, spans[((n*50)+i)%len(spans)]...)
-				blob = append(blob, ',')
-			}
-			blob[len(blob)-1] = ']'
-			req.Body = io.NopCloser(bytes.NewReader(blob))
-
-			post(b, req)
-		}
-		sender.waitForCount(b, b.N)
-	})
-
-	b.Run("multi", func(b *testing.B) {
-		sender.resetCount()
-		var wg sync.WaitGroup
-		for i := 0; i < 10; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				req := req.Clone(ctx)
-				blob := make([]byte, 0, len(spanFormat)*100)
-				for n := 0; n < (b.N/500)+1; n++ {
-					blob = append(blob[:0], '[')
-					for i := 0; i < 50; i++ {
-						blob = append(blob, spans[((n*50)+i)%len(spans)]...)
-						blob = append(blob, ',')
-					}
-					blob[len(blob)-1] = ']'
-					req.Body = io.NopCloser(bytes.NewReader(blob))
-
-					resp, err := httpClient.Do(req)
+			b.Run("single", func(b *testing.B) {
+				// Pre-compute blobs
+				createBenchmarkEvents(b.N)
+				blobs := make([][]byte, b.N)
+				for n := 0; n < b.N; n++ {
+					blobs[n], err = encodeAndCompress([]batchedEvent{benchmarkEvents[n%len(benchmarkEvents)]}, encoding.contentType, encoding.encoding)
 					assert.NoError(b, err)
-					if resp != nil {
-						assert.Equal(b, http.StatusOK, resp.StatusCode)
-						io.Copy(io.Discard, resp.Body)
-						resp.Body.Close()
-					}
 				}
-			}()
-		}
-		wg.Wait()
-		sender.waitForCount(b, b.N)
-	})
 
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(b, err)
+				sender.resetCount()
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
+					post(b, req)
+				}
+				sender.waitForCount(b, b.N)
+			})
+
+			b.Run("batch", func(b *testing.B) {
+				// Pre-compute blobs
+				createBenchmarkEvents(b.N)
+				numBatches := (b.N / 50) + 1
+				blobs := make([][]byte, numBatches)
+				for n := 0; n < numBatches; n++ {
+					events := make([]batchedEvent, 50)
+					for i := 0; i < 50; i++ {
+						events[i] = benchmarkEvents[((n*50)+i)%len(benchmarkEvents)]
+					}
+					blobs[n], err = encodeAndCompress(events, encoding.contentType, encoding.encoding)
+					assert.NoError(b, err)
+				}
+
+				sender.resetCount()
+				b.ResetTimer()
+				for n := 0; n < numBatches; n++ {
+					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
+					post(b, req)
+				}
+				sender.waitForCount(b, b.N)
+			})
+
+			b.Run("multi", func(b *testing.B) {
+				// Pre-compute blobs
+				createBenchmarkEvents(b.N)
+				numBatches := (b.N / 500) + 1
+				blobs := make([][]byte, numBatches)
+				for n := 0; n < numBatches; n++ {
+					events := make([]batchedEvent, 50)
+					for i := 0; i < 50; i++ {
+						events[i] = benchmarkEvents[((n*50)+i)%len(benchmarkEvents)]
+					}
+					blobs[n], err = encodeAndCompress(events, encoding.contentType, encoding.encoding)
+					assert.NoError(b, err)
+				}
+
+				sender.resetCount()
+				b.ResetTimer()
+				var wg sync.WaitGroup
+				for i := 0; i < 10; i++ {
+					wg.Add(1)
+					go func() {
+						defer wg.Done()
+
+						req := req.Clone(ctx)
+						for n := 0; n < numBatches; n++ {
+							req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
+
+							resp, err := httpClient.Do(req)
+							assert.NoError(b, err)
+							if resp != nil {
+								assert.Equal(b, http.StatusOK, resp.StatusCode)
+								io.Copy(io.Discard, resp.Body)
+								resp.Body.Close()
+							}
+						}
+					}()
+				}
+				wg.Wait()
+				sender.waitForCount(b, b.N)
+			})
+		})
+	}
 }
 
 func BenchmarkDistributedTraces(b *testing.B) {
@@ -1024,43 +1126,60 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
 	}
 
-	req, err := http.NewRequest(
-		"POST",
-		"http://localhost:12000/1/batch/dataset",
-		nil,
-	)
-	assert.NoError(b, err)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+	for _, encoding := range encodings {
+		b.Run(encoding.name, func(b *testing.B) {
+			req, err := http.NewRequest(
+				"POST",
+				"http://localhost:12000/1/batch/dataset",
+				nil,
+			)
+			assert.NoError(b, err)
+			req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+			req.Header.Set("Content-Type", encoding.contentType)
+			req.Header.Set("Content-Encoding", encoding.encoding)
 
-	b.Run("single", func(b *testing.B) {
-		sender.resetCount()
-		for n := 0; n < b.N; n++ {
-			blob := `[` + string(spans[n%len(spans)]) + `]`
-			req.Body = io.NopCloser(strings.NewReader(blob))
-			req.URL.Host = addrs[n%len(addrs)]
-			post(b, req)
-		}
-		sender.waitForCount(b, b.N)
-	})
+			b.Run("single", func(b *testing.B) {
+				// Pre-compute blobs
+				createBenchmarkEvents(b.N)
+				blobs := make([][]byte, b.N)
+				for n := 0; n < b.N; n++ {
+					blobs[n], err = encodeAndCompress([]batchedEvent{benchmarkEvents[n%len(benchmarkEvents)]}, encoding.contentType, encoding.encoding)
+					assert.NoError(b, err)
+				}
 
-	b.Run("batch", func(b *testing.B) {
-		sender.resetCount()
+				sender.resetCount()
+				b.ResetTimer()
+				for n := 0; n < b.N; n++ {
+					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
+					req.URL.Host = addrs[n%len(addrs)]
+					post(b, req)
+				}
+				sender.waitForCount(b, b.N)
+			})
 
-		// over-allocate blob for 50 spans
-		blob := make([]byte, 0, len(spanFormat)*100)
-		for n := 0; n < (b.N/50)+1; n++ {
-			blob = append(blob[:0], '[')
-			for i := 0; i < 50; i++ {
-				blob = append(blob, spans[((n*50)+i)%len(spans)]...)
-				blob = append(blob, ',')
-			}
-			blob[len(blob)-1] = ']'
-			req.Body = io.NopCloser(bytes.NewReader(blob))
-			req.URL.Host = addrs[n%len(addrs)]
+			b.Run("batch", func(b *testing.B) {
+				// Pre-compute blobs
+				createBenchmarkEvents(b.N)
+				numBatches := (b.N / 50) + 1
+				blobs := make([][]byte, numBatches)
+				for n := 0; n < numBatches; n++ {
+					events := make([]batchedEvent, 50)
+					for i := 0; i < 50; i++ {
+						events[i] = benchmarkEvents[((n*50)+i)%len(benchmarkEvents)]
+					}
+					blobs[n], err = encodeAndCompress(events, encoding.contentType, encoding.encoding)
+					assert.NoError(b, err)
+				}
 
-			post(b, req)
-		}
-		sender.waitForCount(b, b.N)
-	})
+				sender.resetCount()
+				b.ResetTimer()
+				for n := 0; n < numBatches; n++ {
+					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
+					req.URL.Host = addrs[n%len(addrs)]
+					post(b, req)
+				}
+				sender.waitForCount(b, b.N)
+			})
+		})
+	}
 }

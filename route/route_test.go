@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -921,5 +922,203 @@ func TestProcessEventMetrics(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedCount, mockMetrics.CounterIncrements[tt.metricName])
 		})
+	}
+}
+
+func newBatchRouter(t testing.TB) *Router {
+	// Set up mock collector and transmission
+	mockCollector := collect.NewMockCollector()
+	mockTransmission := &transmit.MockTransmission{}
+	mockTransmission.Start()
+
+	mockMetrics := metrics.MockMetrics{}
+	mockMetrics.Start()
+
+	t.Cleanup(func() {
+		err := mockTransmission.Stop()
+		assert.NoError(t, err)
+
+		mockMetrics.Stop()
+	})
+
+	// Set up config with required field names
+	mockConfig := &config.MockConfig{
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"trace.parent_id"},
+	}
+
+	// Set up a mock sharder
+	mockSharder := &sharder.MockSharder{
+		Self: &sharder.TestShard{Addr: "http://localhost:8080"},
+	}
+
+	return &Router{
+		Config:               mockConfig,
+		Metrics:              &mockMetrics,
+		UpstreamTransmission: mockTransmission,
+		Collector:            mockCollector,
+		Sharder:              mockSharder,
+		incomingOrPeer:       "incoming",
+		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: "incoming"},
+		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
+	}
+}
+
+func createBatchEvents() []batchedEvent {
+	now := time.Now().UTC()
+	batchEvents := []batchedEvent{
+		{
+			Timestamp:  now.Format(time.RFC3339Nano),
+			SampleRate: 2,
+			Data: map[string]interface{}{
+				"trace.trace_id":  "trace-1",
+				"trace.span_id":   "span-1",
+				"trace.parent_id": "",
+				"service.name":    "test-service",
+				"operation.name":  "test-operation-1",
+				"duration_ms":     100.0,
+				"int.field":       int64(1),
+				"bool.field":      true,
+			},
+		},
+		{
+			Timestamp:  now.Format(time.RFC3339Nano),
+			SampleRate: 2,
+			Data: map[string]interface{}{
+				"trace.trace_id":  "trace-1",
+				"trace.span_id":   "span-2",
+				"trace.parent_id": "span-1",
+				"service.name":    "test-service",
+				"operation.name":  "test-operation-2",
+				"duration_ms":     50.0,
+				"int.field":       int64(2),
+				"bool.field":      false,
+			},
+		},
+		{
+			Timestamp:  now.Format(time.RFC3339Nano),
+			SampleRate: 4,
+			Data: map[string]interface{}{
+				"trace.trace_id":  "trace-2",
+				"trace.span_id":   "span-3",
+				"trace.parent_id": "",
+				"service.name":    "another-service",
+				"operation.name":  "another-operation",
+				"duration_ms":     200.0,
+				"int.field":       int64(3),
+			},
+		},
+	}
+	return batchEvents
+}
+
+func TestRouterBatch(t *testing.T) {
+	t.Parallel()
+
+	router := newBatchRouter(t)
+	batchEvents := createBatchEvents()
+	batchMsgpack, err := msgpack.Marshal(batchEvents)
+	require.NoError(t, err)
+
+	// Create HTTP request directly without server
+	req, err := http.NewRequest("POST", "/1/batch/test-dataset", bytes.NewReader(batchMsgpack))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-msgpack")
+	req.Header.Set("X-Honeycomb-Team", "test-api-key")
+
+	// Set up mux variables for dataset extraction
+	req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+	// Call router.batch directly
+	w := httptest.NewRecorder()
+	router.batch(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var responses []*BatchResponse
+	err = json.Unmarshal(w.Body.Bytes(), &responses)
+	require.NoError(t, err)
+	assert.Len(t, responses, len(batchEvents))
+
+	// Verify all responses are successful
+	for i, resp := range responses {
+		assert.Equal(t, http.StatusAccepted, resp.Status, "Response %d should be accepted", i)
+		assert.Empty(t, resp.Error, "Response %d should have no error", i)
+	}
+
+	mockMetrics := router.Metrics.(*metrics.MockMetrics)
+	assert.Equal(t, 1, mockMetrics.CounterIncrements["incoming_router_batch"])
+	assert.Equal(t, 3, mockMetrics.CounterIncrements["incoming_router_batch_events"])
+
+	var spans []*types.Span
+	for len(spans) < len(batchEvents) {
+		select {
+		case span := <-router.Collector.(*collect.MockCollector).Spans:
+			spans = append(spans, span)
+		default:
+			// All the spans should be in the channel before batch() returns.
+			t.Fatal("didn't get enough spans")
+		}
+	}
+
+	assert.Len(t, spans, len(batchEvents))
+	for i, span := range spans {
+		assert.Equal(t, batchEvents[i].Data["trace.trace_id"], span.TraceID)
+		assert.Equal(t, uint(batchEvents[i].SampleRate), span.SampleRate)
+		assert.Equal(t, batchEvents[i].Data, span.Data)
+	}
+}
+
+// discardResponseWriter implements http.ResponseWriter that discards all writes
+type discardResponseWriter struct {
+	header http.Header
+}
+
+func (d *discardResponseWriter) Header() http.Header {
+	if d.header == nil {
+		d.header = make(http.Header)
+	}
+	return d.header
+}
+
+func (d *discardResponseWriter) Write(p []byte) (int, error) {
+	return len(p), nil // Discard all writes
+}
+
+func (d *discardResponseWriter) WriteHeader(statusCode int) {
+	// Discard status code
+}
+
+func BenchmarkRouterBatch(b *testing.B) {
+	router := newBatchRouter(b)
+	batchEvents := createBatchEvents()
+	batchMsgpack, err := msgpack.Marshal(batchEvents)
+	require.NoError(b, err)
+
+	mockCollector := router.Collector.(*collect.MockCollector)
+
+	// Create HTTP request directly without server
+	req, err := http.NewRequest("POST", "/1/batch/test-dataset", nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-msgpack")
+	req.Header.Set("X-Honeycomb-Team", "test-api-key")
+
+	// Set up mux variables for dataset extraction
+	req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+	// Create reusable discard response writer
+	w := &discardResponseWriter{}
+
+	b.ResetTimer()
+	for b.Loop() {
+		req.Body = io.NopCloser(bytes.NewReader(batchMsgpack))
+
+		router.batch(w, req)
+
+		// Drain spans to prevent channel from filling up
+		for len(mockCollector.Spans) > 0 {
+			<-mockCollector.Spans
+		}
 	}
 }
