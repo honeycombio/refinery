@@ -23,6 +23,7 @@ import (
 )
 
 // telemetry helpers
+var _, noopSpan = noop.NewTracerProvider().Tracer("").Start(context.Background(), "")
 
 func AddException(span trace.Span, err error) {
 	if !span.IsRecording() {
@@ -80,13 +81,16 @@ func Attributes(fields map[string]interface{}) []attribute.KeyValue {
 
 // Starts a span with no extra fields.
 func StartSpan(ctx context.Context, tracer trace.Tracer, name string) (context.Context, trace.Span) {
+	if isNoopTracer(tracer) {
+		return ctx, noopSpan
+	}
 	return tracer.Start(ctx, name)
 }
 
 // Starts a span with a single field.
 func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, field string, value interface{}) (context.Context, trace.Span) {
 	if isNoopTracer(tracer) {
-		return tracer.Start(ctx, name)
+		return ctx, noopSpan
 	}
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(map[string]interface{}{field: value})...))
 }
@@ -94,7 +98,7 @@ func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, field 
 // Starts a span with multiple fields.
 func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, fields map[string]interface{}) (context.Context, trace.Span) {
 	if isNoopTracer(tracer) {
-		return tracer.Start(ctx, name)
+		return ctx, noopSpan
 	}
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(fields)...))
 }
