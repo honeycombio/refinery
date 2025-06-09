@@ -612,9 +612,10 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	debugLog = debugLog.WithString("trace_id", traceID)
 
 	span := &types.Span{
-		Event:   *ev,
-		TraceID: traceID,
-		IsRoot:  isRootSpan(ev, r.Config),
+		Event:          *ev,
+		TraceID:        traceID,
+		IsRoot:         isRootSpan(ev, r.Config),
+		AnnotationType: -1,
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true

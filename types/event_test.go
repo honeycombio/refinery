@@ -117,11 +117,12 @@ func TestSpan_AnnotationType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sp := &Span{
+				AnnotationType: SpanAnnotationTypeUnSet,
 				Event: Event{
 					Data: tt.data,
 				},
 			}
-			if got := sp.AnnotationType(); got != tt.want {
+			if got := GetSpanAnnotationType(sp); got != tt.want {
 				t.Errorf("Span.AnnotationType() = %v, want %v", got, tt.want)
 			}
 		})
