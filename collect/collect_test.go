@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -2554,29 +2553,164 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 
 }
 
-// BenchmarkCollectorFullLoop benchmarks the complete collect() loop process
-func BenchmarkCollectorFullLoop(b *testing.B) {
+// BenchmarkCollectorWithSamplers runs benchmarks for different sampler configurations
+func BenchmarkCollectorWithSamplers(b *testing.B) {
+	// Common test scenarios to run for each sampler
+	scenarios := []struct {
+		name          string
+		traceCount    int
+		spansPerTrace int
+	}{
+		{"small_traces", 100, 100},
+		{"medium_traces", 50, 1000},
+		{"few_large_traces", 10, 5000},
+		{"single_large_trace", 1, 10000},
+	}
+
+	// Different sampler configurations to test
+	samplerConfigs := []struct {
+		name   string
+		config interface{}
+	}{
+		{
+			"deterministic_sampler",
+			&config.DeterministicSamplerConfig{SampleRate: 1},
+		},
+		{
+			"dynamic_sampler",
+			&config.DynamicSamplerConfig{
+				SampleRate: 1,
+				FieldList:  []string{"sampler-field-1", "sampler-field-2"},
+			},
+		},
+		{
+			"ema_dynamic_sampler",
+			&config.EMADynamicSamplerConfig{
+				GoalSampleRate: 1,
+				FieldList:      []string{"sampler-field-1", "sampler-field-2"},
+				// TODO: using 1 second interval would lock up the benchmark after a few iterations. Why is that?
+				AdjustmentInterval: config.Duration(5 * time.Second),
+			},
+		},
+		{
+			"rules_based_sampler",
+			&config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "greater than 10",
+						Scope:      "trace",
+						SampleRate: 1,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "sampler-field-1",
+								Operator: config.GT,
+								Value:    10,
+							},
+						},
+					},
+					{
+						Name:       "default",
+						Scope:      "trace",
+						SampleRate: 1,
+					},
+				},
+			},
+		},
+	}
+
+	// Run benchmarks for each sampler with each scenario
+	for _, sampler := range samplerConfigs {
+		for _, scenario := range scenarios {
+			benchName := fmt.Sprintf("%s/%s", sampler.name, scenario.name)
+			b.Run(benchName, func(b *testing.B) {
+				// Scale the number of spans to maintain consistent total span count
+				adjustedN := b.N / scenario.spansPerTrace / scenario.traceCount
+				if adjustedN < 1 {
+					adjustedN = 1
+				}
+
+				sender := &mockSender{
+					eventQueue: make(chan *types.Event, 10000),
+				}
+				collector := setupBenchmarkCollector(b, sampler.config, sender)
+				defer collector.Stop()
+
+				b.StopTimer()
+
+				totalSpans := adjustedN * scenario.traceCount * scenario.spansPerTrace
+
+				// Setup done channel that waits for all spans to be processed
+				done := make(chan struct{})
+				go func() {
+					sender.waitForCount(b, totalSpans)
+					close(done)
+				}()
+
+				spans := make([]*types.Span, totalSpans)
+				spanIdx := 0
+
+				for iter := 0; iter < adjustedN; iter++ {
+					// Create spans for each trace
+					for t := 0; t < scenario.traceCount; t++ {
+						traceID := fmt.Sprintf("trace-%d-%d", iter, t)
+
+						// Create spans for this trace
+						for s := 0; s < scenario.spansPerTrace; s++ {
+							isRoot := (s == scenario.spansPerTrace-1) // Last span is root
+
+							spans[spanIdx] = &types.Span{
+								TraceID: traceID,
+								IsRoot:  isRoot,
+								Event: types.Event{
+									Dataset: "benchmark-dataset",
+									APIKey:  "test-api-key",
+									Data: map[string]interface{}{
+										"sampler-field-1": rand.Intn(20), // Random value for sampler field
+										"sampler-field-2": rand.Intn(20), // Random value for sampler field
+										"index":           spanIdx,
+									},
+								},
+							}
+
+							// Add parent ID to non-root spans
+							if !isRoot {
+								spans[spanIdx].Data["trace.parent_id"] = fmt.Sprintf("parent-%s", traceID)
+							}
+
+							spanIdx++
+						}
+					}
+				}
+
+				b.StartTimer()
+				for i := 0; i < totalSpans; i++ {
+					collector.AddSpan(spans[i])
+				}
+
+				// Wait for all spans to be processed
+				<-done
+				b.StopTimer()
+			})
+		}
+	}
+}
+
+func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mockSender) *InMemCollector {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(5 * time.Millisecond),
-			SendDelay:    config.Duration(1 * time.Millisecond), // Short delay for benchmarking
+			SendDelay:    config.Duration(1 * time.Millisecond),
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		GetSamplerTypeVal:  samplerConfig,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
 	}
 
-	// Create a counting writer sender to track processed spans
-	countChan := make(chan int, 1)
-	countingSender := &countingWriterSender{
-		countChan: countChan,
-	}
-
-	coll := newTestCollector(conf, countingSender, countingSender)
+	coll := newTestCollector(conf, sender, sender)
 
 	c := cache.NewInMemCache(10000, &metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
@@ -2590,124 +2724,44 @@ func BenchmarkCollectorFullLoop(b *testing.B) {
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	coll.BlockOnAddSpan = true
 
-	// Now start the actual collect loop
+	// Start the collector's processing goroutines
 	go coll.collect()
 	go coll.sendTraces()
 
-	defer coll.Stop()
-
-	b.Run("CompleteLoop", func(b *testing.B) {
-		b.StopTimer()
-
-		const spansPerTrace = 100
-
-		totalSpans := b.N * spansPerTrace
-
-		spans := make([]*types.Span, totalSpans)
-
-		for i := 0; i < totalSpans; i++ {
-			traceID := fmt.Sprintf("trace-%d", i/spansPerTrace)
-			// last span in each trace is root
-			isRoot := (i % spansPerTrace) == (spansPerTrace - 1)
-
-			spans[i] = &types.Span{
-				TraceID: traceID,
-				IsRoot:  isRoot,
-				Event: types.Event{
-					Dataset: "benchmark-dataset",
-					APIKey:  "test-api-key",
-					Data: map[string]interface{}{
-						"service.name": "benchmark-service",
-						"duration_ms":  float64(i % 100),
-						"index":        i,
-					},
-				},
-			}
-
-			// Add parent ID to non-root spans
-			if !isRoot {
-				spans[i].Data["trace.parent_id"] = fmt.Sprintf("parent-%d", i/spansPerTrace)
-			}
-		}
-
-		countingSender.resetCount()
-
-		b.StartTimer()
-
-		for i := 0; i < totalSpans; i++ {
-			coll.AddSpan(spans[i])
-		}
-
-		// Wait for all spans to be processed
-		// Each trace should result in spansPerTrace spans being sent
-		countingSender.waitForCount(b, totalSpans)
-
-		b.StopTimer()
-	})
+	return coll
 }
 
-// countingWriterSender tracks how many spans are processed
-type countingWriterSender struct {
-	count     int
-	countChan chan int
-	mutex     sync.Mutex
+// mockSender is a mock implementation of the Transmission
+type mockSender struct {
+	eventQueue chan *types.Event
 }
 
-func (c *countingWriterSender) EnqueueEvent(event *types.Event) {
-	c.mutex.Lock()
-	c.count++
-	c.mutex.Unlock()
-	if c.countChan != nil {
-		select {
-		case c.countChan <- c.count:
-		default:
-		}
+func (c *mockSender) EnqueueEvent(event *types.Event) {
+	select {
+	case c.eventQueue <- event:
 	}
 }
 
-func (c *countingWriterSender) EnqueueSpan(span *types.Span) {
-	c.mutex.Lock()
-	c.count++
-	c.mutex.Unlock()
-	if c.countChan != nil {
-		select {
-		case c.countChan <- c.count:
-		default:
-		}
+func (c *mockSender) EnqueueSpan(span *types.Span) {
+	select {
+	case c.eventQueue <- &span.Event:
 	}
 }
 
-func (c *countingWriterSender) Flush() {
-	// No-op for counting sender
+func (c *mockSender) Flush() {
+	// No-op for mock sender
 }
 
-func (c *countingWriterSender) RegisterMetrics() {
-	// No-op for counting sender
+func (c *mockSender) RegisterMetrics() {
+	// No-op for mock sender
 }
-func (c *countingWriterSender) resetCount() {
-	c.mutex.Lock()
-	c.count = 0
-	c.mutex.Unlock()
-}
-
-func (c *countingWriterSender) getCount() int {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	return c.count
-}
-
-func (c *countingWriterSender) waitForCount(b *testing.B, target int) {
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
+func (c *mockSender) waitForCount(b *testing.B, target int) {
+	var count int
 	for {
 		select {
-		case count := <-c.countChan:
+		case <-c.eventQueue:
+			count += 1
 			if count >= target {
-				return
-			}
-		case <-ticker.C:
-			if c.getCount() >= target {
 				return
 			}
 		}
