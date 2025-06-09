@@ -2558,13 +2558,11 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 	// Common test scenarios to run for each sampler
 	scenarios := []struct {
 		name          string
-		traceCount    int
 		spansPerTrace int
 	}{
-		{"small_traces", 100, 100},
-		{"medium_traces", 50, 1000},
-		{"few_large_traces", 10, 5000},
-		{"single_large_trace", 1, 10000},
+		{"small_traces", 100},
+		{"medium_traces", 10000},
+		{"large_traces", 1000000},
 	}
 
 	// Different sampler configurations to test
@@ -2623,11 +2621,6 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 		for _, scenario := range scenarios {
 			benchName := fmt.Sprintf("%s/%s", sampler.name, scenario.name)
 			b.Run(benchName, func(b *testing.B) {
-				// Scale the number of spans to maintain consistent total span count
-				adjustedN := b.N / scenario.spansPerTrace / scenario.traceCount
-				if adjustedN < 1 {
-					adjustedN = 1
-				}
 
 				sender := &mockSender{
 					eventQueue: make(chan *types.Event, 10000),
@@ -2637,7 +2630,8 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 
 				b.StopTimer()
 
-				totalSpans := adjustedN * scenario.traceCount * scenario.spansPerTrace
+				// use b.N as the number of traces to create
+				totalSpans := b.N * scenario.spansPerTrace
 
 				// Setup done channel that waits for all spans to be processed
 				done := make(chan struct{})
@@ -2649,36 +2643,34 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 				spans := make([]*types.Span, totalSpans)
 				spanIdx := 0
 
-				for iter := 0; iter < adjustedN; iter++ {
-					// Create spans for each trace
-					for t := 0; t < scenario.traceCount; t++ {
-						traceID := fmt.Sprintf("trace-%d-%d", iter, t)
+				// Create spans for each trace
+				for t := 0; t < b.N; t++ {
+					traceID := fmt.Sprintf("trace-%d", t)
 
-						// Create spans for this trace
-						for s := 0; s < scenario.spansPerTrace; s++ {
-							isRoot := (s == scenario.spansPerTrace-1) // Last span is root
+					// Create spans for this trace
+					for s := 0; s < scenario.spansPerTrace; s++ {
+						isRoot := (s == scenario.spansPerTrace-1) // Last span is root
 
-							spans[spanIdx] = &types.Span{
-								TraceID: traceID,
-								IsRoot:  isRoot,
-								Event: types.Event{
-									Dataset: "benchmark-dataset",
-									APIKey:  "test-api-key",
-									Data: map[string]interface{}{
-										"sampler-field-1": rand.Intn(20), // Random value for sampler field
-										"sampler-field-2": rand.Intn(20), // Random value for sampler field
-										"index":           spanIdx,
-									},
+						spans[spanIdx] = &types.Span{
+							TraceID: traceID,
+							IsRoot:  isRoot,
+							Event: types.Event{
+								Dataset: "benchmark-dataset",
+								APIKey:  "test-api-key",
+								Data: map[string]interface{}{
+									"sampler-field-1": rand.Intn(20),
+									"sampler-field-2": "static-value",
+									"index":           spanIdx,
 								},
-							}
-
-							// Add parent ID to non-root spans
-							if !isRoot {
-								spans[spanIdx].Data["trace.parent_id"] = fmt.Sprintf("parent-%s", traceID)
-							}
-
-							spanIdx++
+							},
 						}
+
+						// Add parent ID to non-root spans
+						if !isRoot {
+							spans[spanIdx].Data["trace.parent_id"] = fmt.Sprintf("parent-%s", traceID)
+						}
+
+						spanIdx++
 					}
 				}
 
