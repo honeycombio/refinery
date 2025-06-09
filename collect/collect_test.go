@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2551,4 +2552,164 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	updatedTrace := coll.cache.Get(traceID)
 	require.Equal(t, trace.SendBy.Unix(), updatedTrace.SendBy.Unix())
 
+}
+
+// BenchmarkCollectorFullLoop benchmarks the complete collect() loop process
+func BenchmarkCollectorFullLoop(b *testing.B) {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(5 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond), // Short delay for benchmarking
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+
+	// Create a counting writer sender to track processed spans
+	countChan := make(chan int, 1)
+	countingSender := &countingWriterSender{
+		countChan: countChan,
+	}
+
+	coll := newTestCollector(conf, countingSender, countingSender)
+
+	c := cache.NewInMemCache(10000, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	require.NoError(b, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 100000)
+	coll.fromPeer = make(chan *types.Span, 100000)
+	coll.outgoingTraces = make(chan sendableTrace, 100000)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.BlockOnAddSpan = true
+
+	// Now start the actual collect loop
+	go coll.collect()
+	go coll.sendTraces()
+
+	defer coll.Stop()
+
+	b.Run("CompleteLoop", func(b *testing.B) {
+		b.StopTimer()
+
+		const spansPerTrace = 100
+
+		totalSpans := b.N * spansPerTrace
+
+		spans := make([]*types.Span, totalSpans)
+
+		for i := 0; i < totalSpans; i++ {
+			traceID := fmt.Sprintf("trace-%d", i/spansPerTrace)
+			// last span in each trace is root
+			isRoot := (i % spansPerTrace) == (spansPerTrace - 1)
+
+			spans[i] = &types.Span{
+				TraceID: traceID,
+				IsRoot:  isRoot,
+				Event: types.Event{
+					Dataset: "benchmark-dataset",
+					APIKey:  "test-api-key",
+					Data: map[string]interface{}{
+						"service.name": "benchmark-service",
+						"duration_ms":  float64(i % 100),
+						"index":        i,
+					},
+				},
+			}
+
+			// Add parent ID to non-root spans
+			if !isRoot {
+				spans[i].Data["trace.parent_id"] = fmt.Sprintf("parent-%d", i/spansPerTrace)
+			}
+		}
+
+		countingSender.resetCount()
+
+		b.StartTimer()
+
+		for i := 0; i < totalSpans; i++ {
+			coll.AddSpan(spans[i])
+		}
+
+		// Wait for all spans to be processed
+		// Each trace should result in spansPerTrace spans being sent
+		countingSender.waitForCount(b, totalSpans)
+
+		b.StopTimer()
+	})
+}
+
+// countingWriterSender tracks how many spans are processed
+type countingWriterSender struct {
+	count     int
+	countChan chan int
+	mutex     sync.Mutex
+}
+
+func (c *countingWriterSender) EnqueueEvent(event *types.Event) {
+	c.mutex.Lock()
+	c.count++
+	c.mutex.Unlock()
+	if c.countChan != nil {
+		select {
+		case c.countChan <- c.count:
+		default:
+		}
+	}
+}
+
+func (c *countingWriterSender) EnqueueSpan(span *types.Span) {
+	c.mutex.Lock()
+	c.count++
+	c.mutex.Unlock()
+	if c.countChan != nil {
+		select {
+		case c.countChan <- c.count:
+		default:
+		}
+	}
+}
+
+func (c *countingWriterSender) Flush() {
+	// No-op for counting sender
+}
+
+func (c *countingWriterSender) RegisterMetrics() {
+	// No-op for counting sender
+}
+func (c *countingWriterSender) resetCount() {
+	c.mutex.Lock()
+	c.count = 0
+	c.mutex.Unlock()
+}
+
+func (c *countingWriterSender) getCount() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return c.count
+}
+
+func (c *countingWriterSender) waitForCount(b *testing.B, target int) {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case count := <-c.countChan:
+			if count >= target {
+				return
+			}
+		case <-ticker.C:
+			if c.getCount() >= target {
+				return
+			}
+		}
+	}
 }
