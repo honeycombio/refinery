@@ -177,7 +177,7 @@ func (t *Trace) SetKeptReason(reason uint) {
 
 func (t *Trace) spanCounts() (spanCount, spanEventCount, spanLinkCount uint32) {
 	for _, s := range t.spans {
-		switch s.AnnotationType {
+		switch s.AnnotationType() {
 		case SpanAnnotationTypeSpanEvent:
 			// SpanEventCount gets the number of span events currently in this trace.
 			spanEventCount++
@@ -246,7 +246,7 @@ type Span struct {
 	TraceID        string
 	ArrivalTime    time.Time
 	IsRoot         bool
-	AnnotationType SpanAnnotationType
+	annotationType SpanAnnotationType
 }
 
 // IsDecicionSpan returns true if the span is a decision span based on
@@ -276,7 +276,7 @@ func (sp *Span) ExtractDecisionContext() *Event {
 		"meta.trace_id":                sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
 		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         sp.AnnotationType,
+		"meta.annotation_type":         sp.AnnotationType(),
 		"meta.refinery.span_data_size": dataSize,
 	}
 
@@ -331,9 +331,9 @@ type SpanAnnotationType int
 
 const (
 	// SpanAnnotationTypeUnSet is the default value for an unset annotation type.
-	SpanAnnotationTypeUnSet SpanAnnotationType = -1
+	SpanAnnotationTypeUnSet SpanAnnotationType = iota
 	// SpanAnnotationTypeUnknown is the value for an unknown annotation type.
-	SpanAnnotationTypeUnknown SpanAnnotationType = iota
+	SpanAnnotationTypeUnknown
 	// SpanAnnotationTypeSpanEvent is the type for a span event.
 	SpanAnnotationTypeSpanEvent
 	// SpanAnnotationTypeLink is the type for a span link.
@@ -341,21 +341,21 @@ const (
 )
 
 // GetSpanAnnotationType returns the type of annotation this span is.
-func GetSpanAnnotationType(sp *Span) SpanAnnotationType {
-	if sp.AnnotationType != SpanAnnotationTypeUnSet {
-		return sp.AnnotationType
+func (sp *Span) AnnotationType() SpanAnnotationType {
+	if sp.annotationType != SpanAnnotationTypeUnSet {
+		return sp.annotationType
 	}
 	t := sp.Data["meta.annotation_type"]
 	switch t {
 	case "span_event":
-		sp.AnnotationType = SpanAnnotationTypeSpanEvent
+		sp.annotationType = SpanAnnotationTypeSpanEvent
 	case "link":
-		sp.AnnotationType = SpanAnnotationTypeLink
+		sp.annotationType = SpanAnnotationTypeLink
 	default:
-		sp.AnnotationType = SpanAnnotationTypeUnknown
+		sp.annotationType = SpanAnnotationTypeUnknown
 	}
 
-	return sp.AnnotationType
+	return sp.annotationType
 }
 
 // cacheImpactFactor controls how much more we weigh older spans compared to newer ones;

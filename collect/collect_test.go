@@ -2275,7 +2275,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 		APIHost: peerShard.Addr,
 		APIKey:  legacyAPIKey,
 		Data: map[string]interface{}{
-			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
+			"meta.annotation_type":         types.SpanAnnotationTypeUnSet,
 			"meta.refinery.min_span":       true,
 			"meta.refinery.root":           false,
 			"meta.refinery.span_data_size": 87,
