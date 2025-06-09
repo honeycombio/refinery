@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2551,4 +2552,212 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	updatedTrace := coll.cache.Get(traceID)
 	require.Equal(t, trace.SendBy.Unix(), updatedTrace.SendBy.Unix())
 
+}
+
+// BenchmarkCollectorWithSamplers runs benchmarks for different sampler configurations
+func BenchmarkCollectorWithSamplers(b *testing.B) {
+	// Common test scenarios to run for each sampler
+	scenarios := []struct {
+		name          string
+		spansPerTrace int
+	}{
+		{"small_traces", 100},
+		{"medium_traces", 10000},
+		{"large_traces", 1_000_000},
+	}
+
+	// Different sampler configurations to test
+	samplerConfigs := []struct {
+		name   string
+		config interface{}
+	}{
+		{
+			"deterministic",
+			&config.DeterministicSamplerConfig{SampleRate: 1},
+		},
+		{
+			"dynamic",
+			&config.DynamicSamplerConfig{
+				SampleRate: 1,
+				FieldList:  []string{"sampler-field-1", "sampler-field-2"},
+			},
+		},
+		{
+			"emadynamic",
+			&config.EMADynamicSamplerConfig{
+				GoalSampleRate: 1,
+				FieldList:      []string{"sampler-field-1", "sampler-field-2"},
+				// TODO: using 1 second interval would lock up the benchmark after a few iterations. Why is that?
+				AdjustmentInterval: config.Duration(5 * time.Second),
+			},
+		},
+		{
+			"rulesbased",
+			&config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "greater than 10",
+						Scope:      "trace",
+						SampleRate: 1,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "sampler-field-1",
+								Operator: config.GT,
+								Value:    10,
+							},
+						},
+					},
+					{
+						Name:       "default",
+						Scope:      "trace",
+						SampleRate: 1,
+					},
+				},
+			},
+		},
+	}
+
+	// Run benchmarks for each sampler with each scenario
+	for _, sampler := range samplerConfigs {
+		for _, scenario := range scenarios {
+			benchName := fmt.Sprintf("%s/%s", sampler.name, scenario.name)
+			b.Run(benchName, func(b *testing.B) {
+				b.StopTimer()
+
+				sender := &mockSender{
+					eventQueue: make(chan *types.Event, 10000),
+				}
+				collector := setupBenchmarkCollector(b, sampler.config, sender)
+				defer collector.Stop()
+
+				// use b.N as the number of traces to create
+				totalSpans := b.N * scenario.spansPerTrace
+
+				// Setup done channel that waits for all spans to be processed
+				wg := &sync.WaitGroup{}
+				wg.Add(1)
+				go func() {
+					sender.waitForCount(b, totalSpans)
+					wg.Done()
+				}()
+
+				spans := make([]*types.Span, totalSpans)
+				spanIdx := 0
+
+				// Create spans for each trace
+				for t := 0; t < b.N; t++ {
+					traceID := fmt.Sprintf("trace-%d", t)
+
+					// Create spans for this trace
+					for s := 0; s < scenario.spansPerTrace; s++ {
+						isRoot := (s == scenario.spansPerTrace-1) // Last span is root
+
+						spans[spanIdx] = &types.Span{
+							TraceID: traceID,
+							IsRoot:  isRoot,
+							Event: types.Event{
+								Dataset: "benchmark-dataset",
+								APIKey:  "test-api-key",
+								Data: map[string]interface{}{
+									"sampler-field-1": rand.Intn(20),
+									"sampler-field-2": "static-value",
+									"index":           spanIdx,
+								},
+							},
+						}
+
+						// Add parent ID to non-root spans
+						if !isRoot {
+							spans[spanIdx].Data["trace.parent_id"] = fmt.Sprintf("parent-%s", traceID)
+						}
+
+						spanIdx++
+					}
+				}
+
+				b.StartTimer()
+				for i := 0; i < totalSpans; i++ {
+					collector.AddSpan(spans[i])
+				}
+
+				// Wait for all spans to be processed
+				wg.Wait()
+				b.StopTimer()
+			})
+		}
+	}
+}
+
+func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mockSender) *InMemCollector {
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(5 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		GetSamplerTypeVal:  samplerConfig,
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
+	}
+
+	coll := newTestCollector(conf, sender, sender)
+
+	c := cache.NewInMemCache(10000, &metrics.NullMetrics{}, &logger.NullLogger{})
+	coll.cache = c
+	stc, err := newCache()
+	require.NoError(b, err, "lru cache should start")
+	coll.sampleTraceCache = stc
+
+	coll.incoming = make(chan *types.Span, 100000)
+	coll.fromPeer = make(chan *types.Span, 100000)
+	coll.outgoingTraces = make(chan sendableTrace, 100000)
+	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.BlockOnAddSpan = true
+
+	// Start the collector's processing goroutines
+	go coll.collect()
+	go coll.sendTraces()
+
+	return coll
+}
+
+// mockSender is a mock implementation of the Transmission
+type mockSender struct {
+	eventQueue chan *types.Event
+}
+
+func (c *mockSender) EnqueueEvent(event *types.Event) {
+	select {
+	case c.eventQueue <- event:
+	}
+}
+
+func (c *mockSender) EnqueueSpan(span *types.Span) {
+	select {
+	case c.eventQueue <- &span.Event:
+	}
+}
+
+func (c *mockSender) Flush() {
+	// No-op for mock sender
+}
+
+func (c *mockSender) RegisterMetrics() {
+	// No-op for mock sender
+}
+
+func (c *mockSender) waitForCount(b *testing.B, target int) {
+	var count int
+	for {
+		select {
+		case <-c.eventQueue:
+			count += 1
+			if count >= target {
+				return
+			}
+		}
+	}
 }
