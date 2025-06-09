@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2562,7 +2563,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 	}{
 		{"small_traces", 100},
 		{"medium_traces", 10000},
-		{"large_traces", 1000000},
+		{"large_traces", 1_000_000},
 	}
 
 	// Different sampler configurations to test
@@ -2571,18 +2572,18 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 		config interface{}
 	}{
 		{
-			"deterministic_sampler",
+			"deterministic",
 			&config.DeterministicSamplerConfig{SampleRate: 1},
 		},
 		{
-			"dynamic_sampler",
+			"dynamic",
 			&config.DynamicSamplerConfig{
 				SampleRate: 1,
 				FieldList:  []string{"sampler-field-1", "sampler-field-2"},
 			},
 		},
 		{
-			"ema_dynamic_sampler",
+			"emadynamic",
 			&config.EMADynamicSamplerConfig{
 				GoalSampleRate: 1,
 				FieldList:      []string{"sampler-field-1", "sampler-field-2"},
@@ -2591,7 +2592,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 			},
 		},
 		{
-			"rules_based_sampler",
+			"rulesbased",
 			&config.RulesBasedSamplerConfig{
 				Rules: []*config.RulesBasedSamplerRule{
 					{
@@ -2621,6 +2622,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 		for _, scenario := range scenarios {
 			benchName := fmt.Sprintf("%s/%s", sampler.name, scenario.name)
 			b.Run(benchName, func(b *testing.B) {
+				b.StopTimer()
 
 				sender := &mockSender{
 					eventQueue: make(chan *types.Event, 10000),
@@ -2628,16 +2630,15 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 				collector := setupBenchmarkCollector(b, sampler.config, sender)
 				defer collector.Stop()
 
-				b.StopTimer()
-
 				// use b.N as the number of traces to create
 				totalSpans := b.N * scenario.spansPerTrace
 
 				// Setup done channel that waits for all spans to be processed
-				done := make(chan struct{})
+				wg := &sync.WaitGroup{}
+				wg.Add(1)
 				go func() {
 					sender.waitForCount(b, totalSpans)
-					close(done)
+					wg.Done()
 				}()
 
 				spans := make([]*types.Span, totalSpans)
@@ -2680,7 +2681,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 				}
 
 				// Wait for all spans to be processed
-				<-done
+				wg.Wait()
 				b.StopTimer()
 			})
 		}
@@ -2747,6 +2748,7 @@ func (c *mockSender) Flush() {
 func (c *mockSender) RegisterMetrics() {
 	// No-op for mock sender
 }
+
 func (c *mockSender) waitForCount(b *testing.B, target int) {
 	var count int
 	for {
