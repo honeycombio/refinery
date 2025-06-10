@@ -24,7 +24,7 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 		"small_int":      int64(-9223372036854775808), // min int64
 		"unicode_string": "café ñoño 🚀",
 		"nested_map":     map[string]any{"inner": "value"},
-		"array_field":    []any{int8(1), int8(2), int8(3)},
+		"array_field":    []any{int64(1), int64(2), int64(3)},
 		"nil_field":      nil,
 	}
 
@@ -38,7 +38,6 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 	// Test iteration
 	iter, err := payloadMap.Iterate()
 	require.NoError(t, err)
-	defer iter.Done()
 
 	gotData := make(map[string]any)
 	for {
@@ -71,7 +70,7 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 			assert.EqualValues(t, inputData[keyStr], val)
 			gotData[keyStr] = val
 		case FieldTypeOther:
-			val, err := iter.ValueOther()
+			val, err := iter.ValueAny()
 			require.NoError(t, err)
 			assert.EqualValues(t, inputData[keyStr], val)
 			gotData[keyStr] = val
@@ -81,14 +80,13 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 	}
 	assert.Len(t, gotData, len(inputData))
 
-	// Test skipping values
-	skipIter, err := payloadMap.Iterate()
+	// Test skipping all values
+	iter, err = payloadMap.Iterate()
 	require.NoError(t, err)
-	defer skipIter.Done()
 
 	skipCount := 0
 	for {
-		_, _, err := skipIter.NextKey()
+		_, _, err := iter.NextKey()
 		if err == io.EOF {
 			break
 		}
@@ -96,8 +94,31 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 		skipCount++
 		// Don't call any Value methods - test that skipping works
 	}
-
 	assert.Equal(t, len(inputData), skipCount)
+
+	// Test skipping some, but not all values
+	iter, err = payloadMap.Iterate()
+	require.NoError(t, err)
+
+	clear(gotData)
+	skipCount = 0
+	for {
+		key, typ, err := iter.NextKey()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+
+		if typ == FieldTypeInt64 {
+			val, err := iter.ValueInt64()
+			require.NoError(t, err)
+			assert.EqualValues(t, inputData[string(key)], val)
+			gotData[string(key)] = val
+		} else {
+			skipCount++
+		}
+	}
+	assert.Equal(t, len(inputData), skipCount+len(gotData))
 
 	// Test empty map
 	emptyData := map[string]any{}
@@ -107,7 +128,6 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 	emptyPayloadMap := NewMessagePackPayloadMap(emptyEncoded)
 	emptyIter, err := emptyPayloadMap.Iterate()
 	require.NoError(t, err)
-	defer emptyIter.Done()
 
 	_, _, err = emptyIter.NextKey()
 	assert.Equal(t, io.EOF, err)
@@ -191,8 +211,6 @@ func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 			_, err := iter.ValueFloat64()
 			assert.Error(t, err)
 		}
-
-		iter.Done()
 	}
 
 	// Test calling Value methods without NextKey
@@ -203,20 +221,9 @@ func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 	freshPayloadMap := NewMessagePackPayloadMap(simpleEncoded)
 	freshIter, err := freshPayloadMap.Iterate()
 	require.NoError(t, err)
-	defer freshIter.Done()
 
 	_, err = freshIter.ValueString()
 	assert.Error(t, err)
-
-	// Test calling Done() multiple times
-	testIter, err := freshPayloadMap.Iterate()
-	require.NoError(t, err)
-	testIter.Done()
-	testIter.Done() // Should not panic
-
-	// Test using iterator after Done()
-	_, _, err = testIter.NextKey()
-	assert.ErrorIs(t, err, io.EOF)
 }
 
 func BenchmarkMsgpPayloadMap(b *testing.B) {
@@ -269,11 +276,10 @@ func BenchmarkMsgpPayloadMap(b *testing.B) {
 				case FieldTypeBool:
 					_, _ = iter.ValueBool()
 				case FieldTypeOther:
-					_, _ = iter.ValueOther()
+					_, _ = iter.ValueAny()
 				}
 				fieldCount++
 			}
-			iter.Done()
 
 			if fieldCount != len(testData) {
 				b.Fatal("field count mismatch")
@@ -295,7 +301,6 @@ func BenchmarkMsgpPayloadMap(b *testing.B) {
 				fieldCount++
 				// Don't access values - just skip them
 			}
-			iter.Done()
 
 			if fieldCount != len(testData) {
 				b.Fatal("field count mismatch")

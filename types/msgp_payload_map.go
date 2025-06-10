@@ -1,13 +1,11 @@
 package types
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
 
-	"github.com/vmihailenco/msgpack/v5"
-	"github.com/vmihailenco/msgpack/v5/msgpcode"
+	"github.com/tinylib/msgp/msgp"
 )
 
 type FieldType int
@@ -29,22 +27,18 @@ const (
 // if you do too many iterations. It is recommended to retrieve values in batches
 // and memoize anything that will be used more than once.
 type MsgpPayloadMap struct {
-	rawData msgpack.RawMessage
+	rawData []byte
 }
 
-func NewMessagePackPayloadMap(raw msgpack.RawMessage) MsgpPayloadMap {
+func NewMessagePackPayloadMap(raw []byte) MsgpPayloadMap {
 	return MsgpPayloadMap{
 		rawData: raw,
 	}
 }
 
 func (m *MsgpPayloadMap) Iterate() (msgpPayloadMapIter, error) {
-	decoder := msgpack.GetDecoder()
-	decoder.Reset(bytes.NewReader(m.rawData))
-
-	n, err := decoder.DecodeMapLen()
+	n, remaining, err := msgp.ReadMapHeaderBytes(m.rawData)
 	if err != nil {
-		msgpack.PutDecoder(decoder)
 		return msgpPayloadMapIter{}, err
 	}
 	if n < 1 {
@@ -52,62 +46,39 @@ func (m *MsgpPayloadMap) Iterate() (msgpPayloadMapIter, error) {
 	}
 
 	return msgpPayloadMapIter{
-		decoder:   decoder,
-		remaining: n,
+		remaining: remaining,
 	}, nil
 }
 
 type msgpPayloadMapIter struct {
-	decoder      *msgpack.Decoder
-	remaining    int
+	remaining    []byte
 	pendingValue bool
 }
 
-// Call this when you're done with the iterator to return the decoder to the pool.
-func (m *msgpPayloadMapIter) Done() {
-	m.remaining = 0
-	if m.decoder != nil {
-		msgpack.PutDecoder(m.decoder)
-		m.decoder = nil
-	}
-}
-
 // Returns the key string as []byte and type of the next map value.
-// Note that the key slice will be invalidated by the next call to NextKey()
+// Note that the key slice may be invalidated by the next call to NextKey()
 // or completing iteration. It must not be stored.
-// Returns EOF when done.
-// After any error, the iterator is invalid and will always return EOF.
-// TODO make this a zero-copy operation, why may involve using a different
-// library, since vmihailenco doesn't seem to offer a way to do that.
+// Returns EOF when finished.
 func (m *msgpPayloadMapIter) NextKey() (key []byte, typ FieldType, err error) {
-	if m.remaining <= 0 {
-		return nil, FieldTypeUnknown, io.EOF
-	}
-
 	// The last value was never consumed, that's common. Skip it.
 	if m.pendingValue {
-		err = m.decoder.Skip()
+		m.remaining, err = msgp.Skip(m.remaining)
 		if err != nil {
-			m.Done()
 			return nil, FieldTypeUnknown, err
 		}
 	}
 
-	key, err = m.decoder.DecodeBytes()
+	if len(m.remaining) == 0 {
+		return nil, FieldTypeUnknown, io.EOF
+	}
+
+	key, m.remaining, err = msgp.ReadMapKeyZC(m.remaining)
 	if err != nil {
-		m.Done()
 		return nil, FieldTypeUnknown, err
 	}
 
-	code, err := m.decoder.PeekCode()
+	typ, err = msgpTypeToFieldType(msgp.NextType(m.remaining))
 	if err != nil {
-		m.Done()
-		return nil, FieldTypeUnknown, err
-	}
-
-	typ, err = msgPackCodeToFieldType(code)
-	if err != nil {
-		m.Done()
 		return nil, FieldTypeUnknown, err
 	}
 
@@ -116,13 +87,36 @@ func (m *msgpPayloadMapIter) NextKey() (key []byte, typ FieldType, err error) {
 }
 
 // The Value functions return the value corresponding to the previous call to
-// NextKey(), if any. If the value is not of the expected type, return an error.
+// NextKey(), if any. ValueAny() returns any type as any.
+func (m *msgpPayloadMapIter) ValueAny() (any, error) {
+	if !m.pendingValue {
+		return nil, errors.New("no pending value")
+	}
+	m.pendingValue = false
+	val, remaining, err := msgp.ReadIntfBytes(m.remaining)
+	if err == nil {
+		m.remaining = remaining
+	} else {
+		m.remaining, _ = msgp.Skip(m.remaining)
+	}
+	return val, err
+}
+
+// The typed values decode data as the requested type, if possible, but don't
+// attempt to coerce non-matching types. If the value is not of the expected
+// type, returns an error.
 func (m *msgpPayloadMapIter) ValueInt64() (int64, error) {
 	if !m.pendingValue {
 		return 0, errors.New("no pending value")
 	}
 	m.pendingValue = false
-	return m.decoder.DecodeInt64()
+	val, remaining, err := msgp.ReadInt64Bytes(m.remaining)
+	if err == nil {
+		m.remaining = remaining
+	} else {
+		m.remaining, _ = msgp.Skip(m.remaining)
+	}
+	return val, err
 }
 
 func (m *msgpPayloadMapIter) ValueFloat64() (float64, error) {
@@ -130,7 +124,13 @@ func (m *msgpPayloadMapIter) ValueFloat64() (float64, error) {
 		return 0, errors.New("no pending value")
 	}
 	m.pendingValue = false
-	return m.decoder.DecodeFloat64()
+	val, remaining, err := msgp.ReadFloat64Bytes(m.remaining)
+	if err == nil {
+		m.remaining = remaining
+	} else {
+		m.remaining, _ = msgp.Skip(m.remaining)
+	}
+	return val, err
 }
 
 func (m *msgpPayloadMapIter) ValueBool() (bool, error) {
@@ -138,7 +138,13 @@ func (m *msgpPayloadMapIter) ValueBool() (bool, error) {
 		return false, errors.New("no pending value")
 	}
 	m.pendingValue = false
-	return m.decoder.DecodeBool()
+	val, remaining, err := msgp.ReadBoolBytes(m.remaining)
+	if err == nil {
+		m.remaining = remaining
+	} else {
+		m.remaining, _ = msgp.Skip(m.remaining)
+	}
+	return val, err
 }
 
 func (m *msgpPayloadMapIter) ValueString() (string, error) {
@@ -146,50 +152,34 @@ func (m *msgpPayloadMapIter) ValueString() (string, error) {
 		return "", errors.New("no pending value")
 	}
 	m.pendingValue = false
-	return m.decoder.DecodeString()
+	val, remaining, err := msgp.ReadStringBytes(m.remaining)
+	if err == nil {
+		m.remaining = remaining
+	} else {
+		m.remaining, _ = msgp.Skip(m.remaining)
+	}
+	return val, err
 }
 
-func (m *msgpPayloadMapIter) ValueOther() (any, error) {
-	if !m.pendingValue {
-		return nil, errors.New("no pending value")
-	}
-	m.pendingValue = false
-	return m.decoder.DecodeInterfaceLoose()
-}
-
-func msgPackCodeToFieldType(c byte) (FieldType, error) {
-	if msgpcode.IsFixedNum(c) {
-		return FieldTypeInt64, nil
-	}
-	if msgpcode.IsFixedMap(c) {
-		return FieldTypeOther, nil
-	}
-	if msgpcode.IsFixedArray(c) {
-		return FieldTypeOther, nil
-	}
-	if msgpcode.IsFixedString(c) {
+func msgpTypeToFieldType(t msgp.Type) (FieldType, error) {
+	switch t {
+	case msgp.StrType, msgp.BinType:
 		return FieldTypeString, nil
-	}
 
-	switch c {
-	case msgpcode.Nil:
+	case msgp.MapType, msgp.ArrayType, msgp.NilType, msgp.DurationType,
+		msgp.ExtensionType, msgp.Complex64Type, msgp.Complex128Type, msgp.TimeType:
 		return FieldTypeOther, nil
-	case msgpcode.False, msgpcode.True:
-		return FieldTypeBool, nil
-	case msgpcode.Float, msgpcode.Double:
+
+	case msgp.Float64Type, msgp.Float32Type, msgp.NumberType:
 		return FieldTypeFloat64, nil
-	case msgpcode.Uint8, msgpcode.Uint16, msgpcode.Uint32, msgpcode.Uint64,
-		msgpcode.Int8, msgpcode.Int16, msgpcode.Int32, msgpcode.Int64:
+
+	case msgp.BoolType:
+		return FieldTypeBool, nil
+
+	case msgp.IntType, msgp.UintType:
 		return FieldTypeInt64, nil
-	case msgpcode.Str8, msgpcode.Str16, msgpcode.Str32,
-		msgpcode.Bin8, msgpcode.Bin16, msgpcode.Bin32:
-		return FieldTypeString, nil
-	case msgpcode.Array16, msgpcode.Array32,
-		msgpcode.Map16, msgpcode.Map32,
-		msgpcode.FixExt1, msgpcode.FixExt2, msgpcode.FixExt4, msgpcode.FixExt8, msgpcode.FixExt16,
-		msgpcode.Ext8, msgpcode.Ext16, msgpcode.Ext32:
-		return FieldTypeOther, nil
+
 	default:
-		return FieldTypeUnknown, fmt.Errorf("msgpack: unknown code %x decoding interface{}", c)
+		return FieldTypeUnknown, fmt.Errorf("msgpack: unknown msgp type %x", t)
 	}
 }
