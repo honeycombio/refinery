@@ -175,7 +175,7 @@ func (t *Trace) SetKeptReason(reason uint) {
 	t.keptReason = reason
 }
 
-func (t *Trace) spanCounts() (spanCount, spanEventCount, spanLinkCount uint32) {
+func (t *Trace) calculateSpanCounts() (spanCount, spanEventCount, spanLinkCount uint32) {
 	for _, s := range t.spans {
 		switch s.AnnotationType() {
 		case SpanAnnotationTypeSpanEvent:
@@ -200,21 +200,21 @@ func (t *Trace) DescendantCount() uint32 {
 
 func (t *Trace) SpanCount() uint32 {
 	if t.spanCount == 0 {
-		t.spanCount, t.spanEventCount, t.spanLinkCount = t.spanCounts()
+		t.spanCount, t.spanEventCount, t.spanLinkCount = t.calculateSpanCounts()
 	}
 	return t.spanCount
 }
 
 func (t *Trace) SpanLinkCount() uint32 {
 	if t.spanLinkCount == 0 {
-		t.spanCount, t.spanEventCount, t.spanLinkCount = t.spanCounts()
+		t.spanCount, t.spanEventCount, t.spanLinkCount = t.calculateSpanCounts()
 	}
 	return t.spanLinkCount
 }
 
 func (t *Trace) SpanEventCount() uint32 {
 	if t.spanEventCount == 0 {
-		t.spanCount, t.spanEventCount, t.spanLinkCount = t.spanCounts()
+		t.spanCount, t.spanEventCount, t.spanLinkCount = t.calculateSpanCounts()
 	}
 	return t.spanEventCount
 }
