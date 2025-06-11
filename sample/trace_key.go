@@ -74,8 +74,11 @@ outer:
 
 	var key strings.Builder
 	for i := range d.fields {
-		// if there's no values for this field, skip it
 		values := uniques.Values(i)
+		// if there's no values for this field, skip it
+		if len(values) == 0 {
+			continue
+		}
 		var prevStr string
 		for _, str := range values {
 			if str != prevStr {
