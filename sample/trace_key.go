@@ -1,12 +1,16 @@
 package sample
 
 import (
+	"encoding/binary"
 	"fmt"
+	"maps"
+	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/honeycombio/refinery/generics"
+	"github.com/dgryski/go-metro"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -47,27 +51,21 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 // returns the number of values used to build the key
 func (d *traceKey) build(trace *types.Trace) (string, int) {
 	fieldCount := 0
-	// fieldCollector gets all values from the fields listed in the config, even
-	// if they happen multiple times.
-	fieldCollector := make(map[string][]string)
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
-	uniques := generics.NewSetWithCapacity[string](maxKeyLength)
+	uniques := newDistinctValue(d.fields, maxKeyLength)
 outer:
-	for _, field := range d.fields {
+	for i, field := range d.fields {
 		for _, span := range spans {
 			if val, ok := span.Data[field]; ok {
-				u := fmt.Sprintf("%s/%v", field, val)
 				// don't bother to add it if we've already seen it
-				if uniques.Contains(u) {
-					continue
-				}
-				uniques.Add(u)
-				if len(uniques) >= maxKeyLength {
+				if uniques.totalUniqueCount >= maxKeyLength {
 					break outer
 				}
-				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
+				if uniques.AddAsString(val, i) {
+					continue
+				}
 			}
 		}
 	}
@@ -75,14 +73,9 @@ outer:
 	// (unless it was huge, in which case we have a bunch of them)
 
 	var key strings.Builder
-	for _, field := range d.fields {
+	for i := range d.fields {
 		// if there's no values for this field, skip it
-		values, ok := fieldCollector[field]
-		if !ok || len(values) == 0 {
-			continue
-		}
-		// sort and collapse list
-		sort.Strings(values)
+		values := uniques.Values(i)
 		var prevStr string
 		for _, str := range values {
 			if str != prevStr {
@@ -111,4 +104,93 @@ outer:
 	}
 
 	return key.String(), fieldCount
+}
+
+// distinctValue keeps track of distinct values for a set of fields.
+// It stores the unique values as strings.
+type distinctValue struct {
+	buf    []byte
+	fields []string
+	values []map[uint64]string
+
+	// totalUniqueCount keeps track of how many unique values we've seen so far
+	totalUniqueCount int
+	// maxDistinctValue is the maximum number of distinct values we will store
+	maxDistinctValue int
+}
+
+func newDistinctValue(fields []string, maxDistinctValue int) *distinctValue {
+	d := &distinctValue{
+		buf:              make([]byte, 0, 1024),
+		fields:           fields,
+		values:           make([]map[uint64]string, len(fields)),
+		maxDistinctValue: maxDistinctValue,
+	}
+
+	for i := range d.values {
+		d.values[i] = make(map[uint64]string, maxDistinctValue)
+	}
+
+	return d
+
+}
+
+// Values returns the distinct values for a given field index.
+// It returns a sorted slice of strings containing the unique values for that field.
+func (d *distinctValue) Values(fieldIdx int) []string {
+	if fieldIdx < 0 || fieldIdx >= len(d.values) {
+		return nil
+	}
+
+	// Get the map for the specified field index
+	valueMap := d.values[fieldIdx]
+	if len(valueMap) == 0 {
+		return nil
+	}
+
+	values := slices.Collect(maps.Values(valueMap))
+	sort.Strings(values)
+
+	return values
+}
+
+// AddAsString adds a value to the distinct values for a given field index.
+// It returns true if the value was added, false if it was already present or if the maxDistinctValue limit was reached.
+func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
+	if value == nil {
+		return false
+	}
+
+	d.buf = d.buf[:0] // reset the buffer for each new value
+
+	switch v := value.(type) {
+	case string:
+		d.buf = append(d.buf, []byte(v)...)
+	case int:
+		d.buf = binary.BigEndian.AppendUint64(d.buf, uint64(v))
+	case int64:
+		d.buf = binary.BigEndian.AppendUint64(d.buf, uint64(v))
+	case float64:
+		d.buf = binary.BigEndian.AppendUint64(d.buf, math.Float64bits(v))
+	case bool:
+		if v {
+			d.buf = append(d.buf, '1')
+		} else {
+			d.buf = append(d.buf, '0')
+		}
+	default:
+		d.buf = append(d.buf, fmt.Sprintf("%v", v)...)
+	}
+
+	hash := metro.Hash64(d.buf, 0)
+	if _, exists := d.values[fieldIdx][hash]; !exists {
+		d.totalUniqueCount++
+		if d.totalUniqueCount >= d.maxDistinctValue {
+			return false
+		}
+		d.values[fieldIdx][hash] = fmt.Sprintf("%v", value)
+		return true
+	}
+
+	return false
 }

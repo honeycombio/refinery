@@ -6,6 +6,7 @@ import (
 
 	"github.com/honeycombio/refinery/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestKeyGeneration(t *testing.T) {
@@ -159,4 +160,130 @@ func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
 	}
 
 	return trace
+}
+func TestDistinctValue_AddAsString(t *testing.T) {
+	fields := []string{"field1", "field2"}
+	dv := newDistinctValue(fields, 10)
+
+	tests := []struct {
+		name        string
+		value       any
+		fieldIdx    int
+		wantSuccess bool
+		wantCount   int
+	}{
+		{
+			name:        "Add string",
+			value:       "test-value",
+			fieldIdx:    0,
+			wantSuccess: true,
+			wantCount:   1,
+		},
+		{
+			name:        "Add integer",
+			value:       42,
+			fieldIdx:    0,
+			wantSuccess: true,
+			wantCount:   2,
+		},
+		{
+			name:        "Add float",
+			value:       3.14,
+			fieldIdx:    0,
+			wantSuccess: true,
+			wantCount:   3,
+		},
+		{
+			name:        "Add boolean",
+			value:       true,
+			fieldIdx:    0,
+			wantSuccess: true,
+			wantCount:   4,
+		},
+		{
+			name:        "Add to second field",
+			value:       "second-field",
+			fieldIdx:    1,
+			wantSuccess: true,
+			wantCount:   5,
+		},
+		{
+			name:        "Add duplicate string",
+			value:       "test-value",
+			fieldIdx:    0,
+			wantSuccess: false, // Already exists
+			wantCount:   5,     // Unchanged
+		},
+		{
+			name:        "Add nil",
+			value:       nil,
+			fieldIdx:    0,
+			wantSuccess: false,
+			wantCount:   5, // Unchanged
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dv.AddAsString(tt.value, tt.fieldIdx)
+			require.Equal(t, tt.wantSuccess, got)
+			require.Equal(t, tt.wantCount, dv.totalUniqueCount)
+		})
+	}
+}
+
+func TestDistinctValue_MaxLimit(t *testing.T) {
+	maxValues := 3
+	dv := newDistinctValue([]string{"field"}, maxValues)
+
+	// Add up to the limit
+	for i := 0; i < maxValues-1; i++ {
+		require.True(t, dv.AddAsString(i, 0), "Expected success adding value %d, got failure", i)
+	}
+
+	// This should fail as we've reached the limit
+	require.False(t, dv.AddAsString("one-too-many", 0), "Expected failure when adding beyond max limit, got success")
+
+	require.Equal(t, maxValues, dv.totalUniqueCount)
+}
+
+func TestDistinctValue_Values(t *testing.T) {
+	dv := newDistinctValue([]string{"field1", "field2"}, 10)
+
+	// Add some mixed values
+	dv.AddAsString("banana", 0)
+	dv.AddAsString("apple", 0)
+	dv.AddAsString("cherry", 0)
+	dv.AddAsString(42, 1)
+	dv.AddAsString(true, 1)
+
+	t.Run("Values sorted", func(t *testing.T) {
+		values := dv.Values(0)
+		expected := []string{"apple", "banana", "cherry"}
+		require.EqualValues(t, expected, values)
+	})
+
+	t.Run("Type conversion", func(t *testing.T) {
+		values := dv.Values(1)
+		require.Len(t, values, 2)
+		require.Contains(t, values, "42")
+		require.Contains(t, values, "true")
+	})
+
+	t.Run("Invalid index", func(t *testing.T) {
+		// Test with negative index
+		values := dv.Values(-1)
+		require.Nil(t, values)
+
+		// Test with out of bounds index
+		values = dv.Values(5)
+		require.Nil(t, values)
+	})
+
+	t.Run("Empty field", func(t *testing.T) {
+		// Field that has no values
+		dv := newDistinctValue([]string{"empty"}, 10)
+		values := dv.Values(0)
+		require.Nil(t, values)
+	})
 }
