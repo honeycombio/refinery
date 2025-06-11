@@ -149,12 +149,12 @@ func TestOTLPHandler(t *testing.T) {
 
 		spanEvent := events[0]
 		// assert.Equal(t, time.Unix(0, int64(12345)).UTC(), spanEvent.Timestamp)
-		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanEvent.Data["trace.trace_id"])
-		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data["trace.span_id"])
-		assert.Equal(t, "span_link", spanEvent.Data["span.name"])
-		assert.Equal(t, "span_with_event", spanEvent.Data["parent.name"])
-		assert.Equal(t, "span_event", spanEvent.Data["meta.annotation_type"])
-		assert.Equal(t, "event_attr_key", spanEvent.Data["event_attr_val"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanEvent.Data.Get("trace.trace_id"))
+		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data.Get("trace.span_id"))
+		assert.Equal(t, "span_link", spanEvent.Data.Get("span.name"))
+		assert.Equal(t, "span_with_event", spanEvent.Data.Get("parent.name"))
+		assert.Equal(t, "span_event", spanEvent.Data.Get("meta.annotation_type"))
+		assert.Equal(t, "event_attr_key", spanEvent.Data.Get("event_attr_val"))
 	})
 
 	t.Run("creates events for span links", func(t *testing.T) {
@@ -194,12 +194,12 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		spanLink := events[1]
-		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanLink.Data["trace.trace_id"])
-		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data["trace.span_id"])
-		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data["trace.link.trace_id"])
-		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data["trace.link.span_id"])
-		assert.Equal(t, "link", spanLink.Data["meta.annotation_type"])
-		assert.Equal(t, "link_attr_val", spanLink.Data["link_attr_key"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanLink.Data.Get("trace.trace_id"))
+		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data.Get("trace.span_id"))
+		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data.Get("trace.link.trace_id"))
+		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data.Get("trace.link.span_id"))
+		assert.Equal(t, "link", spanLink.Data.Get("meta.annotation_type"))
+		assert.Equal(t, "link_attr_val", spanLink.Data.Get("link_attr_key"))
 	})
 
 	t.Run("invalid headers", func(t *testing.T) {
@@ -552,7 +552,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
 	})
 
 	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
@@ -582,7 +582,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
 		mockTransmission.Flush()
 	})
 

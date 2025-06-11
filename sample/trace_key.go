@@ -57,7 +57,7 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 outer:
 	for _, field := range d.fields {
 		for _, span := range spans {
-			if val, ok := span.Data[field]; ok {
+			if val := span.Data.Get(field); val != nil {
 				u := fmt.Sprintf("%s/%v", field, val)
 				// don't bother to add it if we've already seen it
 				if uniques.Contains(u) {
@@ -98,7 +98,7 @@ outer:
 
 	if trace.RootSpan != nil {
 		for _, field := range d.rootOnlyFields {
-			if val, ok := trace.RootSpan.Data[field]; ok {
+			if val := trace.RootSpan.Data.Get(field); val != nil {
 				key.WriteString(fmt.Sprintf("%v,", val))
 				fieldCount += 1
 			}

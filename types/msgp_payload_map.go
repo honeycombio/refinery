@@ -36,7 +36,14 @@ func NewMessagePackPayloadMap(raw []byte) MsgpPayloadMap {
 	}
 }
 
+func (m *MsgpPayloadMap) Size() int {
+	return len(m.rawData)
+}
+
 func (m *MsgpPayloadMap) Iterate() (msgpPayloadMapIter, error) {
+	if m == nil {
+		return msgpPayloadMapIter{}, nil
+	}
 	n, remaining, err := msgp.ReadMapHeaderBytes(m.rawData)
 	if err != nil {
 		return msgpPayloadMapIter{}, err

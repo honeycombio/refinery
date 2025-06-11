@@ -97,7 +97,12 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset).
 		Logf("transmit sending event")
-	libhEv := d.builder.NewEventSized(len(ev.Data))
+	// Calculate approximate size for the libhoney event
+	dataSize := 0
+	for range ev.Data.All() {
+		dataSize++
+	}
+	libhEv := d.builder.NewEventSized(dataSize)
 	libhEv.APIHost = ev.APIHost
 	libhEv.WriteKey = ev.APIKey
 	libhEv.Dataset = ev.Dataset
@@ -112,13 +117,13 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	}
 
 	for _, k := range d.Config.GetAdditionalErrorFields() {
-		if v, ok := ev.Data[k]; ok {
+		if v := ev.Data.Get(k); v != nil {
 			metadata[k] = v
 		}
 	}
 	libhEv.Metadata = metadata
 
-	for k, v := range ev.Data {
+	for k, v := range ev.Data.All() {
 		libhEv.AddField(k, v)
 	}
 
