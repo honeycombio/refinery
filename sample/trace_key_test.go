@@ -2,6 +2,7 @@ package sample
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/honeycombio/refinery/types"
@@ -286,4 +287,125 @@ func TestDistinctValue_Values(t *testing.T) {
 		values := dv.Values(0)
 		require.Nil(t, values)
 	})
+}
+
+func BenchmarkTraceKeyBuild(b *testing.B) {
+	scenarios := []struct {
+		name           string
+		fields         []string
+		useTraceLength bool
+		spanCount      int
+		uniqueValues   int
+		rootFields     bool
+	}{
+		{
+			name:           "small_trace_fields",
+			fields:         []string{"http.status_code", "request.path"},
+			useTraceLength: true,
+			spanCount:      100,
+			uniqueValues:   10,
+			rootFields:     false,
+		},
+		{
+			name:           "large_trace_fields",
+			fields:         []string{"http.status_code", "request.path"},
+			useTraceLength: true,
+			spanCount:      1_000_000,
+			uniqueValues:   10,
+			rootFields:     false,
+		},
+		{
+			name:           "small_trace_many_fields",
+			fields:         []string{"http.status_code", "request.path", "service.name", "http.method", "user.id", "app.team"},
+			useTraceLength: true,
+			spanCount:      100,
+			uniqueValues:   10,
+			rootFields:     false,
+		},
+		{
+			name:           "with_root_fields",
+			fields:         []string{"http.status_code", "request.path", "root.service_name", "root.team_id"},
+			useTraceLength: true,
+			spanCount:      100,
+			uniqueValues:   10,
+			rootFields:     true,
+		},
+		{
+			name:           "high_cardinality",
+			fields:         []string{"user.id", "session.id", "trace.id"},
+			useTraceLength: true,
+			spanCount:      500,
+			uniqueValues:   200, // Will hit maxKeyLength
+			rootFields:     false,
+		},
+	}
+
+	for _, scenario := range scenarios {
+		b.Run(scenario.name, func(b *testing.B) {
+			generator := newTraceKey(scenario.fields, scenario.useTraceLength)
+
+			trace := &types.Trace{}
+
+			for i := 0; i < scenario.spanCount; i++ {
+				spanData := make(map[string]interface{})
+
+				for _, field := range scenario.fields {
+					if !strings.HasPrefix(field, "root.") {
+						// Use modulo to create repeating values
+						valueIdx := i % scenario.uniqueValues
+						switch field {
+						case "http.status_code":
+							codes := []int{200, 201, 400, 404, 500}
+							spanData[field] = codes[valueIdx%len(codes)]
+						case "request.path":
+							spanData[field] = fmt.Sprintf("/api/v1/resource/%d", valueIdx)
+						case "service.name":
+							services := []string{"auth-service", "user-service", "billing-service", "api-gateway", "data-processor"}
+							spanData[field] = services[valueIdx%len(services)]
+						case "http.method":
+							methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+							spanData[field] = methods[valueIdx%len(methods)]
+						case "user.id", "session.id", "trace.id":
+							// High cardinality fields
+							spanData[field] = fmt.Sprintf("id-%d", valueIdx)
+						default:
+							spanData[field] = fmt.Sprintf("value-%d", valueIdx)
+						}
+					}
+				}
+
+				span := &types.Span{
+					Event: types.Event{
+						Data: spanData,
+					},
+				}
+
+				// Set as root span if it's the first one and we need root fields
+				if i == 0 && scenario.rootFields {
+					span.IsRoot = true
+					trace.RootSpan = span
+
+					// Add root-specific fields
+					for _, field := range scenario.fields {
+						if strings.HasPrefix(field, "root.") {
+							actualField := field[len("root."):]
+							span.Data[actualField] = fmt.Sprintf("root-%s-value", actualField)
+						}
+					}
+				}
+
+				trace.AddSpan(span)
+			}
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				key, _ := generator.build(trace)
+				// Force evaluation to prevent the compiler from optimizing away the call
+				if len(key) == 0 {
+					b.Fatal("Empty key returned")
+				}
+			}
+		})
+	}
 }

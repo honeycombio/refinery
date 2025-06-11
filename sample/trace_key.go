@@ -116,9 +116,9 @@ type distinctValue struct {
 	fields []string
 	values []map[uint64]string
 
-	// totalUniqueCount keeps track of how many unique values we've seen so far
+	// totalUniqueCount keeps track of how many unique values we've seen so far for a trace key.
 	totalUniqueCount int
-	// maxDistinctValue is the maximum number of distinct values we will store
+	// maxDistinctValue is the maximum number of distinct values we will store for a trace key.
 	maxDistinctValue int
 }
 
