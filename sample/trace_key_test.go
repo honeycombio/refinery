@@ -162,9 +162,13 @@ func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
 
 	return trace
 }
+
 func TestDistinctValue_AddAsString(t *testing.T) {
 	fields := []string{"field1", "field2"}
-	dv := newDistinctValue(fields, 10)
+	dv := &distinctValue{
+		buf: make([]byte, 0, 1024),
+	}
+	dv.init(fields, 10)
 
 	tests := []struct {
 		name        string
@@ -235,7 +239,10 @@ func TestDistinctValue_AddAsString(t *testing.T) {
 
 func TestDistinctValue_MaxLimit(t *testing.T) {
 	maxValues := 3
-	dv := newDistinctValue([]string{"field"}, maxValues)
+	dv := &distinctValue{
+		buf: make([]byte, 0, 1024),
+	}
+	dv.init([]string{"field1"}, maxValues)
 
 	// Add up to the limit
 	for i := 0; i < maxValues-1; i++ {
@@ -249,7 +256,10 @@ func TestDistinctValue_MaxLimit(t *testing.T) {
 }
 
 func TestDistinctValue_Values(t *testing.T) {
-	dv := newDistinctValue([]string{"field1", "field2"}, 10)
+	dv := &distinctValue{
+		buf: make([]byte, 0, 1024),
+	}
+	dv.init([]string{"field1", "field2", "empty-field"}, 10)
 
 	// Add some mixed values
 	dv.AddAsString("banana", 0)
@@ -283,8 +293,7 @@ func TestDistinctValue_Values(t *testing.T) {
 
 	t.Run("Empty field", func(t *testing.T) {
 		// Field that has no values
-		dv := newDistinctValue([]string{"empty"}, 10)
-		values := dv.Values(0)
+		values := dv.Values(2)
 		require.Nil(t, values)
 	})
 }

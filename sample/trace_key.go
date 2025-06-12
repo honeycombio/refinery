@@ -3,12 +3,11 @@ package sample
 import (
 	"encoding/binary"
 	"fmt"
-	"maps"
 	"math"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/dgryski/go-metro"
 	"github.com/honeycombio/refinery/types"
@@ -54,7 +53,13 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
-	uniques := newDistinctValue(d.fields, maxKeyLength)
+	uniques := distinctValuePool.Get().(*distinctValue)
+	uniques.init(d.fields, maxKeyLength)
+	defer func() {
+		// reset the distinctValue for reuse
+		uniques.Reset()
+		distinctValuePool.Put(uniques)
+	}()
 outer:
 	for i, field := range d.fields {
 		for _, span := range spans {
@@ -109,12 +114,22 @@ outer:
 	return key.String(), fieldCount
 }
 
+// Pool for reusing distinctValue objects.
+var distinctValuePool = &sync.Pool{
+	New: func() any {
+		return &distinctValue{
+			buf: make([]byte, 0, 1024),
+		}
+	},
+}
+
 // distinctValue keeps track of distinct values for a set of fields.
 // It stores the unique values as strings.
 type distinctValue struct {
-	buf    []byte
-	fields []string
-	values []map[uint64]string
+	buf          []byte
+	fields       []string
+	values       []map[uint64]string
+	valuesBuffer []string
 
 	// totalUniqueCount keeps track of how many unique values we've seen so far for a trace key.
 	totalUniqueCount int
@@ -122,20 +137,48 @@ type distinctValue struct {
 	maxDistinctValue int
 }
 
-func newDistinctValue(fields []string, maxDistinctValue int) *distinctValue {
-	d := &distinctValue{
-		buf:              make([]byte, 0, 1024),
-		fields:           fields,
-		values:           make([]map[uint64]string, len(fields)),
-		maxDistinctValue: maxDistinctValue,
+func (d *distinctValue) init(fields []string, maxDistinctValue int) {
+	for i := range fields {
+		if i >= len(d.fields) {
+			// if we don't have enough fields, allocate more
+			d.fields = append(d.fields, fields[i])
+			continue
+		}
+		d.fields[i] = fields[i]
 	}
 
+	if len(d.values) < len(fields) {
+		// if we don't have enough values, allocate more
+		for i := len(d.values); i < len(fields); i++ {
+			d.values = append(d.values, make(map[uint64]string))
+		}
+	} else {
+		// if we have more values than fields, trim the excess
+		d.values = d.values[:len(fields)]
+	}
+
+	d.maxDistinctValue = maxDistinctValue
+}
+
+func (d *distinctValue) Reset() {
+	// Reset the fields and values but do not reallocate them
+	for i := range d.fields {
+		d.fields[i] = ""
+	}
 	for i := range d.values {
-		d.values[i] = make(map[uint64]string, maxDistinctValue)
+		if d.values[i] != nil {
+			for k := range d.values[i] {
+				delete(d.values[i], k)
+			}
+		}
 	}
 
-	return d
-
+	// Reset the total unique count
+	d.totalUniqueCount = 0
+	// Reset the buffer
+	d.buf = d.buf[:0]
+	// Reset the values buffer
+	d.valuesBuffer = d.valuesBuffer[:0]
 }
 
 // Values returns the distinct values for a given field index.
@@ -151,10 +194,14 @@ func (d *distinctValue) Values(fieldIdx int) []string {
 		return nil
 	}
 
-	values := slices.Collect(maps.Values(valueMap))
-	sort.Strings(values)
+	// use the valuesBuffer to avoid unnecessary allocations
+	d.valuesBuffer = d.valuesBuffer[:0]
+	for _, value := range valueMap {
+		d.valuesBuffer = append(d.valuesBuffer, value)
+	}
+	sort.Strings(d.valuesBuffer)
 
-	return values
+	return d.valuesBuffer
 }
 
 // AddAsString adds a value to the distinct values for a given field index.
