@@ -176,21 +176,29 @@ func (t *Trace) SetKeptReason(reason uint) {
 }
 
 func (t *Trace) calculateSpanCounts() {
+	var (
+		spanCount      uint32
+		spanEventCount uint32
+		spanLinkCount  uint32
+	)
 	for _, s := range t.spans {
 		switch s.AnnotationType() {
 		case SpanAnnotationTypeSpanEvent:
 			// SpanEventCount gets the number of span events currently in this trace.
-			t.spanEventCount++
+			spanEventCount++
 		case SpanAnnotationTypeLink:
 			// SpanLinkCount gets the number of span links currently in this trace.
-			t.spanLinkCount++
+			spanLinkCount++
 		default:
 			// SpanCount gets the number of spans currently in this trace.
 			// This is different from DescendantCount because it doesn't include span events or links.
-			t.spanCount++
+			spanCount++
 		}
 	}
 
+	t.spanCount = spanCount
+	t.spanEventCount = spanEventCount
+	t.spanLinkCount = spanLinkCount
 }
 
 // DescendantCount gets the number of descendants of all kinds currently in this trace
@@ -199,21 +207,27 @@ func (t *Trace) DescendantCount() uint32 {
 }
 
 func (t *Trace) SpanCount() uint32 {
-	if t.spanCount == 0 {
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
 		t.calculateSpanCounts()
 	}
 	return t.spanCount
 }
 
 func (t *Trace) SpanLinkCount() uint32 {
-	if t.spanLinkCount == 0 {
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
 		t.calculateSpanCounts()
 	}
 	return t.spanLinkCount
 }
 
 func (t *Trace) SpanEventCount() uint32 {
-	if t.spanEventCount == 0 {
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
 		t.calculateSpanCounts()
 	}
 	return t.spanEventCount
