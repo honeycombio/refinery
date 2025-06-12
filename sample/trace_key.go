@@ -1,13 +1,11 @@
 package sample
 
 import (
-	"encoding/binary"
+	"bytes"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/dgryski/go-metro"
 	"github.com/honeycombio/refinery/types"
@@ -23,6 +21,8 @@ type traceKey struct {
 	fields         []string
 	rootOnlyFields []string
 	useTraceLength bool
+	keyBuilder     *bytes.Buffer
+	distinctValue  *distinctValue
 }
 
 func newTraceKey(fields []string, useTraceLength bool) *traceKey {
@@ -43,6 +43,8 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 		fields:         nonRootFields,
 		rootOnlyFields: rootOnlyFields,
 		useTraceLength: useTraceLength,
+		distinctValue:  &distinctValue{buf: make([]byte, 0, 1024)},
+		keyBuilder:     &bytes.Buffer{},
 	}
 }
 
@@ -53,12 +55,12 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
-	uniques := distinctValuePool.Get().(*distinctValue)
+	uniques := d.distinctValue
 	uniques.init(d.fields, maxKeyLength)
 	defer func() {
 		// reset the distinctValue for reuse
 		uniques.Reset()
-		distinctValuePool.Put(uniques)
+		d.keyBuilder.Reset()
 	}()
 outer:
 	for i, field := range d.fields {
@@ -77,7 +79,8 @@ outer:
 	// ok, now we have a map of fields to a list of all unique values for that field.
 	// (unless it was huge, in which case we have a bunch of them)
 
-	var key strings.Builder
+	// please change this so that strings.Builder can be reused between calls
+
 	for i := range d.fields {
 		values := uniques.Values(i)
 		// if there's no values for this field, skip it
@@ -87,40 +90,31 @@ outer:
 		var prevStr string
 		for _, str := range values {
 			if str != prevStr {
-				key.WriteString(str)
-				key.WriteRune('•')
+				d.keyBuilder.WriteString(str)
+				d.keyBuilder.WriteRune('•')
 				fieldCount += 1
 			}
 			prevStr = str
 		}
 		// get ready for the next element
-		key.WriteRune(',')
+		d.keyBuilder.WriteRune(',')
 	}
 
 	if trace.RootSpan != nil {
 		for _, field := range d.rootOnlyFields {
 			if val, ok := trace.RootSpan.Data[field]; ok {
-				key.WriteString(fmt.Sprintf("%v,", val))
+				d.keyBuilder.WriteString(fmt.Sprintf("%v,", val))
 				fieldCount += 1
 			}
 		}
 	}
 
 	if d.useTraceLength {
-		key.WriteString(strconv.FormatInt(int64(len(spans)), 10))
+		d.keyBuilder.WriteString(strconv.FormatInt(int64(len(spans)), 10))
 		fieldCount += 1
 	}
 
-	return key.String(), fieldCount
-}
-
-// Pool for reusing distinctValue objects.
-var distinctValuePool = &sync.Pool{
-	New: func() any {
-		return &distinctValue{
-			buf: make([]byte, 0, 1024),
-		}
-	},
+	return d.keyBuilder.String(), fieldCount
 }
 
 // distinctValue keeps track of distinct values for a set of fields.
@@ -217,17 +211,13 @@ func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
 	case string:
 		d.buf = append(d.buf, []byte(v)...)
 	case int:
-		d.buf = binary.BigEndian.AppendUint64(d.buf, uint64(v))
+		d.buf = strconv.AppendInt(d.buf, int64(v), 10)
 	case int64:
-		d.buf = binary.BigEndian.AppendUint64(d.buf, uint64(v))
+		d.buf = strconv.AppendInt(d.buf, v, 10)
 	case float64:
-		d.buf = binary.BigEndian.AppendUint64(d.buf, math.Float64bits(v))
+		d.buf = strconv.AppendFloat(d.buf, v, 'f', -1, 64)
 	case bool:
-		if v {
-			d.buf = append(d.buf, '1')
-		} else {
-			d.buf = append(d.buf, '0')
-		}
+		d.buf = strconv.AppendBool(d.buf, v)
 	default:
 		d.buf = append(d.buf, fmt.Sprintf("%v", v)...)
 	}
@@ -238,7 +228,7 @@ func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
 		if d.totalUniqueCount >= d.maxDistinctValue {
 			return false
 		}
-		d.values[fieldIdx][hash] = fmt.Sprintf("%v", value)
+		d.values[fieldIdx][hash] = string(d.buf)
 		return true
 	}
 

@@ -418,3 +418,85 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 		})
 	}
 }
+
+func TestDistinctValue_ValueTypeConsistency(t *testing.T) {
+	tests := []struct {
+		name           string
+		equalValues    []interface{} // These should all be considered identical
+		differentValue interface{}   // This should be considered a new unique value
+		expectedStr    string        // The expected string representation in Values()
+	}{
+		{
+			name:           "integer_and_string_2",
+			equalValues:    []interface{}{2, "2", 2.0},
+			differentValue: "2a",
+			expectedStr:    "2",
+		},
+		{
+			name:           "boolean_true",
+			equalValues:    []interface{}{true, "true"},
+			differentValue: 1,
+			expectedStr:    "true",
+		},
+		{
+			name:           "boolean_false",
+			equalValues:    []interface{}{false, "false"},
+			differentValue: 0,
+			expectedStr:    "false",
+		},
+		{
+			name:           "floating_point",
+			equalValues:    []interface{}{3.14, "3.14"},
+			differentValue: 3,
+			expectedStr:    "3.14",
+		},
+		{
+			name:           "zero_values",
+			equalValues:    []interface{}{0, "0", 0.0},
+			differentValue: false,
+			expectedStr:    "0",
+		},
+		{
+			name:           "negative_numbers",
+			equalValues:    []interface{}{-42, "-42", -42.0},
+			differentValue: "-42.0",
+			expectedStr:    "-42",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dv := &distinctValue{
+				buf:              make([]byte, 0, 1024),
+				fields:           []string{"testField"},
+				values:           []map[uint64]string{make(map[uint64]string)},
+				maxDistinctValue: 100,
+			}
+
+			firstAdded := dv.AddAsString(tt.equalValues[0], 0)
+			require.True(t, firstAdded, "First value should be added successfully")
+			require.Equal(t, 1, dv.totalUniqueCount)
+
+			// All equal values should be considered duplicates
+			for i := 1; i < len(tt.equalValues); i++ {
+				added := dv.AddAsString(tt.equalValues[i], 0)
+				require.False(t, added,
+					"Value %v should be considered a duplicate of %v",
+					tt.equalValues[i], tt.equalValues[0])
+				require.Equal(t, 1, dv.totalUniqueCount,
+					"Count should remain 1 after adding duplicate %v", tt.equalValues[i])
+			}
+
+			differentAdded := dv.AddAsString(tt.differentValue, 0)
+			require.True(t, differentAdded,
+				"Value %v should NOT be considered a duplicate", tt.differentValue)
+			require.Equal(t, 2, dv.totalUniqueCount,
+				"Count should be 2 after adding different value %v", tt.differentValue)
+
+			values := dv.Values(0)
+			require.Len(t, values, 2)
+			require.Contains(t, values, tt.expectedStr,
+				"Values should contain expected string representation %q", tt.expectedStr)
+		})
+	}
+}
