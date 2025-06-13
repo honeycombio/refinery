@@ -56,10 +56,8 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
 	uniques := d.distinctValue
-	uniques.init(d.fields, maxKeyLength)
+	uniques.Reset(d.fields, maxKeyLength)
 	defer func() {
-		// reset the distinctValue for reuse
-		uniques.Reset()
 		d.keyBuilder.Reset()
 	}()
 outer:
@@ -121,7 +119,6 @@ outer:
 // It stores the unique values as strings.
 type distinctValue struct {
 	buf          []byte
-	fields       []string
 	values       []map[uint64]string
 	valuesBuffer []string
 
@@ -131,40 +128,17 @@ type distinctValue struct {
 	maxDistinctValue int
 }
 
-func (d *distinctValue) init(fields []string, maxDistinctValue int) {
-	for i := range fields {
-		if i >= len(d.fields) {
-			// if we don't have enough fields, allocate more
-			d.fields = append(d.fields, fields[i])
-			continue
-		}
-		d.fields[i] = fields[i]
-	}
-
-	if len(d.values) < len(fields) {
-		// if we don't have enough values, allocate more
-		for i := len(d.values); i < len(fields); i++ {
-			d.values = append(d.values, make(map[uint64]string))
-		}
-	} else {
-		// if we have more values than fields, trim the excess
-		d.values = d.values[:len(fields)]
-	}
-
-	d.maxDistinctValue = maxDistinctValue
-}
-
-func (d *distinctValue) Reset() {
+func (d *distinctValue) Reset(fields []string, maxDistinctValue int) {
 	// Reset the fields and values but do not reallocate them
-	for i := range d.fields {
-		d.fields[i] = ""
+	d.maxDistinctValue = maxDistinctValue
+
+	for len(d.values) < len(fields) {
+		d.values = append(d.values, make(map[uint64]string))
 	}
+
+	d.values = d.values[:len(fields)]
 	for i := range d.values {
-		if d.values[i] != nil {
-			for k := range d.values[i] {
-				delete(d.values[i], k)
-			}
-		}
+		clear(d.values[i])
 	}
 
 	// Reset the total unique count
@@ -201,10 +175,6 @@ func (d *distinctValue) Values(fieldIdx int) []string {
 // AddAsString adds a value to the distinct values for a given field index.
 // It returns true if the value was added, false if it was already present or if the maxDistinctValue limit was reached.
 func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
-	if value == nil {
-		return false
-	}
-
 	d.buf = d.buf[:0] // reset the buffer for each new value
 
 	switch v := value.(type) {

@@ -2,6 +2,7 @@ package sample
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -139,100 +140,148 @@ func TestKeyLimits(t *testing.T) {
 	assert.Equal(t, maxKeyLength, n)
 }
 
-type testSpan struct {
-	data   map[string]interface{}
-	isRoot bool
-}
-
-// Helper function to create test traces with specified data
-func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
-	trace := &types.Trace{}
-
-	for _, s := range spans {
-		span := &types.Span{
-			Event: types.Event{
-				Data: s.data,
-			},
-		}
-		if s.isRoot {
-			trace.RootSpan = span
-		}
-		trace.AddSpan(span)
-	}
-
-	return trace
-}
-
 func TestDistinctValue_AddAsString(t *testing.T) {
-	fields := []string{"field1", "field2"}
-	dv := &distinctValue{
-		buf: make([]byte, 0, 1024),
-	}
-	dv.init(fields, 10)
-
 	tests := []struct {
-		name        string
-		value       any
-		fieldIdx    int
-		wantSuccess bool
-		wantCount   int
+		name           string
+		valuesToAdd    [][]any
+		expectedCounts []int      // Expected unique counts for each field
+		expectedValues [][]string // Expected distinct values for each field
 	}{
 		{
-			name:        "Add string",
-			value:       "test-value",
-			fieldIdx:    0,
-			wantSuccess: true,
-			wantCount:   1,
+			name: "integer_and_string",
+			valuesToAdd: [][]any{
+				{"field1", 1},
+				{"field1", "1"},
+				{"field1", 1.0},
+				{"field1", "café ñoño 🚀"},
+			},
+			expectedCounts: []int{2},
+			expectedValues: [][]string{{"1", "café ñoño 🚀"}},
 		},
 		{
-			name:        "Add integer",
-			value:       42,
-			fieldIdx:    0,
-			wantSuccess: true,
-			wantCount:   2,
+			name: "boolean_true",
+			valuesToAdd: [][]any{
+				{"field1", true},
+				{"field1", "true"},
+				{"field1", 1},
+			},
+			expectedCounts: []int{2},
+			expectedValues: [][]string{{"true", "1"}},
 		},
 		{
-			name:        "Add float",
-			value:       3.14,
-			fieldIdx:    0,
-			wantSuccess: true,
-			wantCount:   3,
+			name: "boolean_false",
+			valuesToAdd: [][]any{
+				{"field1", false},
+				{"field1", "false"},
+				{"field1", 0},
+			},
+			expectedCounts: []int{2},
+			expectedValues: [][]string{{"false", "0"}},
 		},
 		{
-			name:        "Add boolean",
-			value:       true,
-			fieldIdx:    0,
-			wantSuccess: true,
-			wantCount:   4,
+			name: "floating_point",
+			valuesToAdd: [][]any{
+				{"field1", 3.14},
+				{"field1", "3.14"},
+				{"field1", 3},
+			},
+			expectedCounts: []int{2},
+			expectedValues: [][]string{{"3.14", "3"}},
 		},
 		{
-			name:        "Add to second field",
-			value:       "second-field",
-			fieldIdx:    1,
-			wantSuccess: true,
-			wantCount:   5,
+			name: "zero_values",
+			valuesToAdd: [][]any{
+				{"field1", 0},
+				{"field1", "0"},
+				{"field1", 0.0},
+				{"field1", nil},
+			},
+			expectedCounts: []int{2},
+			expectedValues: [][]string{{"0", "<nil>"}},
 		},
 		{
-			name:        "Add duplicate string",
-			value:       "test-value",
-			fieldIdx:    0,
-			wantSuccess: false, // Already exists
-			wantCount:   5,     // Unchanged
+			name: "negative_numbers",
+			valuesToAdd: [][]any{
+				{"field1", -42},
+				{"field1", "-42"},
+				{"field1", -42.0},
+			},
+			expectedCounts: []int{1},
+			expectedValues: [][]string{{"-42"}},
 		},
 		{
-			name:        "Add nil",
-			value:       nil,
-			fieldIdx:    0,
-			wantSuccess: false,
-			wantCount:   5, // Unchanged
+			name: "nested_map",
+			valuesToAdd: [][]any{
+				{"field1", map[string]interface{}{"inner": "value"}},
+				{"field1", map[string]interface{}{"inner": "value"}},
+				{"field1", `{"inner":"value"}`}, // JSON string representation
+			},
+			expectedCounts: []int{2},
+			expectedValues: [][]string{{"map[inner:value]", `{"inner":"value"}`}},
+		},
+		{
+			name: "array_field",
+			valuesToAdd: [][]any{
+				{"field1", []any{1, 2, 3}},
+				{"field1", []any{1, 2, 3}},
+				{"field1", []any{4, 5, 6}}, // Different array
+			},
+			expectedCounts: []int{2}, // Two distinct arrays
+			expectedValues: [][]string{{"[1 2 3]", "[4 5 6]"}},
+		},
+		{
+			name: "multiple_fields",
+			valuesToAdd: [][]any{
+				{"field1", "value1"},
+				{"field2", "value2"},
+				{"field1", "value1"},
+				{"field2", "value2"},
+				{"field1", "value1"},
+				{"field2", "value3"},
+				{"field1", "value4"},
+				{"field2", "value2"},
+			},
+			expectedCounts: []int{2, 2},
+			expectedValues: [][]string{
+				{"value1", "value4"},
+				{"value2", "value3"},
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := dv.AddAsString(tt.value, tt.fieldIdx)
-			require.Equal(t, tt.wantSuccess, got)
-			require.Equal(t, tt.wantCount, dv.totalUniqueCount)
+			dv := &distinctValue{
+				buf:    make([]byte, 0, 1024),
+				values: []map[uint64]string{make(map[uint64]string)},
+			}
+			fieldList := []string{"field1", "field2"}
+			dv.Reset(fieldList, 100)
+
+			// Add values to the distinctValue instance
+			for _, value := range tt.valuesToAdd {
+				var fieldIdx int
+				for i, v := range value {
+					if i == 0 {
+						fieldIdx = slices.Index(fieldList, value[0].(string))
+						continue
+					}
+					dv.AddAsString(v, fieldIdx)
+				}
+			}
+
+			// each field should have expected unique counts and values
+			expectedTotalCount := 0
+			for fieldIdx, expectedCount := range tt.expectedCounts {
+				require.Equal(t, expectedCount, len(dv.values[fieldIdx]), "Unexpected count for field index %d", fieldIdx)
+				expectedTotalCount += expectedCount
+			}
+
+			require.Equal(t, expectedTotalCount, dv.totalUniqueCount, "Unexpected unique count")
+			for fieldIdx, expectedValues := range tt.expectedValues {
+				values := dv.Values(fieldIdx)
+				require.ElementsMatch(t, expectedValues, values, "Unexpected distinct values")
+			}
 		})
 	}
 }
@@ -242,7 +291,7 @@ func TestDistinctValue_MaxLimit(t *testing.T) {
 	dv := &distinctValue{
 		buf: make([]byte, 0, 1024),
 	}
-	dv.init([]string{"field1"}, maxValues)
+	dv.Reset([]string{"field1"}, maxValues)
 
 	// Add up to the limit
 	for i := 0; i < maxValues-1; i++ {
@@ -259,7 +308,7 @@ func TestDistinctValue_Values(t *testing.T) {
 	dv := &distinctValue{
 		buf: make([]byte, 0, 1024),
 	}
-	dv.init([]string{"field1", "field2", "empty-field"}, 10)
+	dv.Reset([]string{"field1", "field2", "empty-field"}, 10)
 
 	// Add some mixed values
 	dv.AddAsString("banana", 0)
@@ -277,8 +326,7 @@ func TestDistinctValue_Values(t *testing.T) {
 	t.Run("Type conversion", func(t *testing.T) {
 		values := dv.Values(1)
 		require.Len(t, values, 2)
-		require.Contains(t, values, "42")
-		require.Contains(t, values, "true")
+		require.Equal(t, []string{"42", "true"}, values)
 	})
 
 	t.Run("Invalid index", func(t *testing.T) {
@@ -408,95 +456,33 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 
 			b.ResetTimer()
 
-			for i := 0; i < b.N; i++ {
-				key, _ := generator.build(trace)
-				// Force evaluation to prevent the compiler from optimizing away the call
-				if len(key) == 0 {
-					b.Fatal("Empty key returned")
-				}
+			for b.Loop() {
+				generator.build(trace)
 			}
 		})
 	}
 }
 
-func TestDistinctValue_ValueTypeConsistency(t *testing.T) {
-	tests := []struct {
-		name           string
-		equalValues    []interface{} // These should all be considered identical
-		differentValue interface{}   // This should be considered a new unique value
-		expectedStr    string        // The expected string representation in Values()
-	}{
-		{
-			name:           "integer_and_string_2",
-			equalValues:    []interface{}{2, "2", 2.0},
-			differentValue: "2a",
-			expectedStr:    "2",
-		},
-		{
-			name:           "boolean_true",
-			equalValues:    []interface{}{true, "true"},
-			differentValue: 1,
-			expectedStr:    "true",
-		},
-		{
-			name:           "boolean_false",
-			equalValues:    []interface{}{false, "false"},
-			differentValue: 0,
-			expectedStr:    "false",
-		},
-		{
-			name:           "floating_point",
-			equalValues:    []interface{}{3.14, "3.14"},
-			differentValue: 3,
-			expectedStr:    "3.14",
-		},
-		{
-			name:           "zero_values",
-			equalValues:    []interface{}{0, "0", 0.0},
-			differentValue: false,
-			expectedStr:    "0",
-		},
-		{
-			name:           "negative_numbers",
-			equalValues:    []interface{}{-42, "-42", -42.0},
-			differentValue: "-42.0",
-			expectedStr:    "-42",
-		},
+type testSpan struct {
+	data   map[string]interface{}
+	isRoot bool
+}
+
+// Helper function to create test traces with specified data
+func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
+	trace := &types.Trace{}
+
+	for _, s := range spans {
+		span := &types.Span{
+			Event: types.Event{
+				Data: s.data,
+			},
+		}
+		if s.isRoot {
+			trace.RootSpan = span
+		}
+		trace.AddSpan(span)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dv := &distinctValue{
-				buf:              make([]byte, 0, 1024),
-				fields:           []string{"testField"},
-				values:           []map[uint64]string{make(map[uint64]string)},
-				maxDistinctValue: 100,
-			}
-
-			firstAdded := dv.AddAsString(tt.equalValues[0], 0)
-			require.True(t, firstAdded, "First value should be added successfully")
-			require.Equal(t, 1, dv.totalUniqueCount)
-
-			// All equal values should be considered duplicates
-			for i := 1; i < len(tt.equalValues); i++ {
-				added := dv.AddAsString(tt.equalValues[i], 0)
-				require.False(t, added,
-					"Value %v should be considered a duplicate of %v",
-					tt.equalValues[i], tt.equalValues[0])
-				require.Equal(t, 1, dv.totalUniqueCount,
-					"Count should remain 1 after adding duplicate %v", tt.equalValues[i])
-			}
-
-			differentAdded := dv.AddAsString(tt.differentValue, 0)
-			require.True(t, differentAdded,
-				"Value %v should NOT be considered a duplicate", tt.differentValue)
-			require.Equal(t, 2, dv.totalUniqueCount,
-				"Count should be 2 after adding different value %v", tt.differentValue)
-
-			values := dv.Values(0)
-			require.Len(t, values, 2)
-			require.Contains(t, values, tt.expectedStr,
-				"Values should contain expected string representation %q", tt.expectedStr)
-		})
-	}
+	return trace
 }
