@@ -142,10 +142,13 @@ func TestKeyLimits(t *testing.T) {
 
 func TestDistinctValue_AddAsString(t *testing.T) {
 	tests := []struct {
-		name           string
-		valuesToAdd    [][]any
-		expectedCounts []int      // Expected unique counts for each field
-		expectedValues [][]string // Expected distinct values for each field
+		name string
+		// Values to add in the format {fieldName, value}. Using an array here instead of a map because we need deterministic order for testing
+		valuesToAdd [][]any
+		// Expected unique counts for each field
+		expectedCounts []int
+		// Expected distinct values for each field
+		expectedValues [][]string
 	}{
 		{
 			name: "integer_and_string",
