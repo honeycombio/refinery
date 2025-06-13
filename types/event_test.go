@@ -1,6 +1,7 @@
 package types
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,17 +26,18 @@ func TestSpan_GetDataSize(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			data := make(map[string]any)
+			for i := 0; i < tt.numInts; i++ {
+				data[tt.name+"int"+strconv.Itoa(i)] = i
+			}
+			for i := 0; i < tt.numStrings; i++ {
+				data[tt.name+"str"+strconv.Itoa(i)] = strings.Repeat("x", i)
+			}
 			sp := &Span{
 				TraceID: tt.name,
 				Event: Event{
-					Data: make(map[string]any),
+					Data: NewPayload(data),
 				},
-			}
-			for i := 0; i < tt.numInts; i++ {
-				sp.Data[tt.name+"int"+strconv.Itoa(i)] = i
-			}
-			for i := 0; i < tt.numStrings; i++ {
-				sp.Data[tt.name+"str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 			}
 			if got := sp.GetDataSize(); got != tt.want {
 				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
@@ -57,16 +59,15 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			sliceData := make([]any, tt.num)
+			for i := range tt.num {
+				sliceData[i] = i
+			}
 			sp := &Span{
 				Event: Event{
-					Data: make(map[string]any),
+					Data: NewPayload(map[string]any{"data": sliceData}),
 				},
 			}
-			data := make([]any, tt.num)
-			for i := range tt.num {
-				data[i] = i
-			}
-			sp.Data["data"] = data
 			if got := sp.GetDataSize(); got != tt.want {
 				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
 			}
@@ -87,16 +88,15 @@ func TestSpan_GetDataSizeMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mapData := make(map[string]any)
+			for i := range tt.num {
+				mapData[strconv.Itoa(i)] = i
+			}
 			sp := &Span{
 				Event: Event{
-					Data: make(map[string]any),
+					Data: NewPayload(map[string]any{"data": mapData}),
 				},
 			}
-			data := make(map[string]any)
-			for i := range tt.num {
-				data[strconv.Itoa(i)] = i
-			}
-			sp.Data["data"] = data
 			if got := sp.GetDataSize(); got != tt.want {
 				t.Errorf("Span.CalculateSize() = %v, want %v", got, tt.want)
 			}
@@ -118,7 +118,7 @@ func TestSpan_AnnotationType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sp := &Span{
 				Event: Event{
-					Data: tt.data,
+					Data: NewPayload(tt.data),
 				},
 			}
 			if got := sp.AnnotationType(); got != tt.want {
@@ -136,10 +136,10 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		Environment: "test-environment",
 		SampleRate:  5,
 		Timestamp:   time.Now(),
-		Data: map[string]interface{}{
+		Data: NewPayload(map[string]interface{}{
 			"test":                 "test",
 			"meta.annotation_type": "span_event",
-		},
+		}),
 	}
 	sp := &Span{
 		Event:       ev,
@@ -155,13 +155,15 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	assert.Equal(t, ev.Environment, got.Environment)
 	assert.Equal(t, ev.SampleRate, got.SampleRate)
 	assert.Equal(t, ev.Timestamp, got.Timestamp)
-	assert.Equal(t, map[string]interface{}{
+	expectedData := map[string]interface{}{
 		"meta.trace_id":                sp.TraceID,
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
 		"meta.annotation_type":         SpanAnnotationTypeSpanEvent,
 		"meta.refinery.span_data_size": 38,
-	}, got.Data)
+	}
+	actualData := maps.Collect(got.Data.All())
+	assert.Equal(t, expectedData, actualData)
 }
 
 func TestSpan_IsDecisionSpan(t *testing.T) {
@@ -182,7 +184,7 @@ func TestSpan_IsDecisionSpan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sp := &Span{
 				Event: Event{
-					Data: tt.data,
+					Data: NewPayload(tt.data),
 				},
 			}
 			got := sp.IsDecisionSpan()
@@ -197,16 +199,17 @@ func TestSpan_IsDecisionSpan(t *testing.T) {
 // ~10 microseconds. Since these happen once per span, when adding it to a trace,
 // we don't expect this to be a performance issue.
 func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
+	data := make(map[string]any)
+	for i := 0; i < 10; i++ {
+		data["int"+strconv.Itoa(i)] = i
+	}
+	for i := 0; i < 10; i++ {
+		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
+	}
 	sp := &Span{
 		Event: Event{
-			Data: make(map[string]any),
+			Data: NewPayload(data),
 		},
-	}
-	for i := 0; i < 10; i++ {
-		sp.Data["int"+strconv.Itoa(i)] = i
-	}
-	for i := 0; i < 10; i++ {
-		sp.Data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -215,16 +218,17 @@ func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
 }
 
 func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
+	data := make(map[string]any)
+	for i := 0; i < 500; i++ {
+		data["int"+strconv.Itoa(i)] = i
+	}
+	for i := 0; i < 500; i++ {
+		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
+	}
 	sp := &Span{
 		Event: Event{
-			Data: make(map[string]any),
+			Data: NewPayload(data),
 		},
-	}
-	for i := 0; i < 500; i++ {
-		sp.Data["int"+strconv.Itoa(i)] = i
-	}
-	for i := 0; i < 500; i++ {
-		sp.Data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

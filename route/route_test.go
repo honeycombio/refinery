@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -118,144 +119,162 @@ func TestDecompression(t *testing.T) {
 	}
 }
 
-func unmarshalRequest(w *httptest.ResponseRecorder, content string, body io.Reader) {
-	http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var data map[string]interface{}
-		err := unmarshal(r, r.Body, &data)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(err.Error()))
-			return
-		}
-
-		var traceID string
-		if trID, ok := data["trace.trace_id"]; ok {
-			traceID = trID.(string)
-		} else if trID, ok := data["traceId"]; ok {
-			traceID = trID.(string)
-		}
-
-		w.Write([]byte(traceID))
-	}).ServeHTTP(w, &http.Request{
-		Body: io.NopCloser(body),
-		Header: http.Header{
-			"Content-Type": []string{content},
-		},
-	})
-}
-
-func unmarshalBatchRequest(w *httptest.ResponseRecorder, content string, body io.Reader) {
-	http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var e batchedEvent
-		err := unmarshal(r, r.Body, &e)
-
-		if err != nil {
-			w.Write([]byte(err.Error()))
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.Write([]byte(e.getEventTime().Format(time.RFC3339Nano)))
-	}).ServeHTTP(w, &http.Request{
-		Body: io.NopCloser(body),
-		Header: http.Header{
-			"Content-Type": []string{content},
-		},
-	})
-}
-
 func TestUnmarshal(t *testing.T) {
-	var w *httptest.ResponseRecorder
-	var body io.Reader
 	now := time.Now().UTC()
 
-	w = httptest.NewRecorder()
-	body = bytes.NewBufferString("")
-	unmarshalRequest(w, "nope", body)
-
-	if w.Code != http.StatusBadRequest {
-		t.Error("Expecting", http.StatusBadRequest, "Received", w.Code)
+	// Common test data - using only floats to avoid JSON type conversion issues
+	testData := map[string]interface{}{
+		"trace.trace_id": "test-trace-id",
+		"trace.span_id":  "test-span-id",
+		"service.name":   "test-service",
+		"operation.name": "test-operation",
+		"duration_ms":    150.5,
+		"status_code":    200.0,
+		"user_id":        12345.0,
+		"is_error":       false,
 	}
 
-	w = httptest.NewRecorder()
-	body = bytes.NewBufferString(`{"trace.trace_id": "test"}`)
-	unmarshalRequest(w, "application/json", body)
+	t.Run("invalid content type defaults to JSON", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/test", bytes.NewBufferString("{}"))
+		req.Header.Set("Content-Type", "nope")
 
-	if b := w.Body.String(); b != "test" {
-		t.Error("Expecting test")
-	}
+		var data map[string]interface{}
+		err := unmarshal(req, req.Body, &data)
+		// Should succeed because invalid content type defaults to JSON
+		assert.NoError(t, err)
+	})
 
-	w = httptest.NewRecorder()
-	body = bytes.NewBufferString(`{"traceId": "test"}`)
-	unmarshalRequest(w, "application/json; charset=utf-8", body)
+	// Test map[string]interface{} unmarshaling (used in requestToEvent)
+	t.Run("map[string]interface{}", func(t *testing.T) {
+		t.Run("json", func(t *testing.T) {
+			jsonData, err := json.Marshal(testData)
+			require.NoError(t, err)
 
-	if b := w.Body.String(); b != "test" {
-		t.Error("Expecting test")
-	}
+			for _, contentType := range []string{"application/json", "application/json; charset=utf-8"} {
+				t.Run(contentType, func(t *testing.T) {
+					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
+					req.Header.Set("Content-Type", contentType)
 
-	w = httptest.NewRecorder()
-	body = bytes.NewBufferString(fmt.Sprintf(`{"time": "%s"}`, now.Format(time.RFC3339Nano)))
-	unmarshalBatchRequest(w, "application/json", body)
+					var result map[string]interface{}
+					err = unmarshal(req, req.Body, &result)
+					require.NoError(t, err)
 
-	if b := w.Body.String(); b != now.Format(time.RFC3339Nano) {
-		t.Error("Expecting", now, "Received", b)
-	}
+					// Compare directly to test data
+					assert.Equal(t, testData, result)
+				})
+			}
+		})
 
-	var buf *bytes.Buffer
-	var e *msgpack.Encoder
-	var in map[string]interface{}
-	var err error
+		t.Run("msgpack", func(t *testing.T) {
+			for _, contentType := range []string{"application/msgpack", "application/x-msgpack"} {
+				t.Run(contentType, func(t *testing.T) {
+					buf := &bytes.Buffer{}
+					encoder := msgpack.NewEncoder(buf)
+					err := encoder.Encode(testData)
+					require.NoError(t, err)
 
-	w = httptest.NewRecorder()
-	buf = &bytes.Buffer{}
-	e = msgpack.NewEncoder(buf)
-	in = map[string]interface{}{"trace.trace_id": "test"}
-	err = e.Encode(in)
+					req := httptest.NewRequest("POST", "/test", buf)
+					req.Header.Set("Content-Type", contentType)
 
-	if err != nil {
-		t.Error(err)
-	}
+					var result map[string]interface{}
+					err = unmarshal(req, req.Body, &result)
+					require.NoError(t, err)
 
-	body = buf
-	unmarshalRequest(w, "application/msgpack", body)
+					// Compare directly to test data
+					assert.Equal(t, testData, result)
+				})
+			}
+		})
+	})
 
-	if b := w.Body.String(); b != "test" {
-		t.Error("Expecting test")
-	}
+	// Test []batchedEvent unmarshaling (used in batch)
+	t.Run("[]batchedEvent", func(t *testing.T) {
+		t.Run("json", func(t *testing.T) {
+			batchEvents := []batchedEvent{
+				{
+					Timestamp:  now.Format(time.RFC3339Nano),
+					SampleRate: 2,
+					Data:       types.NewPayload(testData),
+				},
+				{
+					Timestamp:  now.Add(time.Second).Format(time.RFC3339Nano),
+					SampleRate: 4,
+					Data:       types.NewPayload(testData),
+				},
+			}
+			jsonData, err := json.Marshal(batchEvents)
+			require.NoError(t, err)
 
-	w = httptest.NewRecorder()
-	buf = &bytes.Buffer{}
-	e = msgpack.NewEncoder(buf)
-	in = map[string]interface{}{"traceId": "test"}
-	err = e.Encode(in)
+			for _, contentType := range []string{"application/json", "application/json; charset=utf-8"} {
+				t.Run(contentType, func(t *testing.T) {
+					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
+					req.Header.Set("Content-Type", contentType)
 
-	if err != nil {
-		t.Error(err)
-	}
+					var result []batchedEvent
+					err = unmarshal(req, req.Body, &result)
+					require.NoError(t, err)
+					require.Len(t, result, 2)
 
-	body = buf
-	unmarshalRequest(w, "application/msgpack", body)
+					assert.Equal(t, now.UTC(), result[0].getEventTime())
+					assert.Equal(t, uint(2), result[0].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result[0].Data.All()))
 
-	if b := w.Body.String(); b != "test" {
-		t.Error("Expecting test")
-	}
+					assert.Equal(t, now.Add(time.Second).UTC(), result[1].getEventTime())
+					assert.Equal(t, uint(4), result[1].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result[1].Data.All()))
+				})
+			}
+		})
 
-	w = httptest.NewRecorder()
-	buf = &bytes.Buffer{}
-	e = msgpack.NewEncoder(buf)
-	in = map[string]interface{}{"time": now}
-	err = e.Encode(in)
+		t.Run("msgpack", func(t *testing.T) {
+			// Create test data as a simple struct that can be marshaled/unmarshaled
+			type testBatchEvent struct {
+				MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
+				SampleRate       int64                  `msgpack:"samplerate"`
+				Data             map[string]interface{} `msgpack:"data"`
+			}
 
-	if err != nil {
-		t.Error(err)
-	}
+			later := now.Add(time.Second)
+			testEvents := []testBatchEvent{
+				{
+					MsgPackTimestamp: &now,
+					SampleRate:       3,
+					Data:             testData,
+				},
+				{
+					MsgPackTimestamp: &later,
+					SampleRate:       6,
+					Data:             testData,
+				},
+			}
 
-	body = buf
-	unmarshalBatchRequest(w, "application/msgpack", body)
+			for _, contentType := range []string{"application/msgpack", "application/x-msgpack"} {
+				t.Run(contentType, func(t *testing.T) {
+					buf := &bytes.Buffer{}
+					encoder := msgpack.NewEncoder(buf)
+					err := encoder.Encode(testEvents)
+					require.NoError(t, err)
 
-	if b := w.Body.String(); b != now.Format(time.RFC3339Nano) {
-		t.Error("Expecting", now, "Received", b)
-	}
+					req := httptest.NewRequest("POST", "/test", buf)
+					req.Header.Set("Content-Type", contentType)
+
+					var result []batchedEvent
+					err = unmarshal(req, req.Body, &result)
+					require.NoError(t, err)
+					require.Len(t, result, 2)
+
+					assert.Equal(t, now.UTC(), result[0].getEventTime())
+					assert.Equal(t, uint(3), result[0].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result[0].Data.All()))
+
+					assert.Equal(t, now.Add(time.Second).UTC(), result[1].getEventTime())
+					assert.Equal(t, uint(6), result[1].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result[1].Data.All()))
+
+				})
+			}
+		})
+	})
 }
 
 func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
@@ -736,34 +755,34 @@ func TestIsRootSpan(t *testing.T) {
 		{
 			name: "root span - no parent id",
 			event: types.Event{
-				Data: map[string]interface{}{},
+				Data: types.NewPayload(map[string]interface{}{}),
 			},
 			expected: true,
 		},
 		{
 			name: "root span - empty parent id",
 			event: types.Event{
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "",
-				},
+				}),
 			},
 			expected: true,
 		},
 		{
 			name: "non-root span - parent id",
 			event: types.Event{
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "some-id",
-				},
+				}),
 			},
 			expected: false,
 		},
 		{
 			name: "non-root span - no parent id but has signal_type of log",
 			event: types.Event{
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"meta.signal_type": "log",
-				},
+				}),
 			},
 			expected: false,
 		},
@@ -783,22 +802,22 @@ func TestIsRootSpan(t *testing.T) {
 func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("no incoming user agent", func(t *testing.T) {
 		event := &types.Event{
-			Data: map[string]interface{}{},
+			Data: types.NewPayload(map[string]interface{}{}),
 		}
 
 		addIncomingUserAgent(event, "test-agent")
-		require.Equal(t, "test-agent", event.Data["meta.refinery.incoming_user_agent"])
+		require.Equal(t, "test-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
 	})
 
 	t.Run("existing incoming user agent", func(t *testing.T) {
 		event := &types.Event{
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.incoming_user_agent": "test-agent",
-			},
+			}),
 		}
 
 		addIncomingUserAgent(event, "another-test-agent")
-		require.Equal(t, "test-agent", event.Data["meta.refinery.incoming_user_agent"])
+		require.Equal(t, "test-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
 	})
 }
 
@@ -900,12 +919,12 @@ func TestProcessEventMetrics(t *testing.T) {
 				APIHost:   "test.honeycomb.io",
 				Dataset:   "test-dataset",
 				Timestamp: time.Now(),
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.trace_id":    "trace-123",
 					"meta.signal_type":  tt.signalType,
 					"test_attribute":    "test_value",
 					"another_attribute": 123,
-				},
+				}),
 			}
 			span := &types.Span{
 				Event:   *event,
@@ -970,7 +989,7 @@ func createBatchEvents() []batchedEvent {
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.trace_id":  "trace-1",
 				"trace.span_id":   "span-1",
 				"trace.parent_id": "",
@@ -979,12 +998,12 @@ func createBatchEvents() []batchedEvent {
 				"duration_ms":     100.0,
 				"int.field":       int64(1),
 				"bool.field":      true,
-			},
+			}),
 		},
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.trace_id":  "trace-1",
 				"trace.span_id":   "span-2",
 				"trace.parent_id": "span-1",
@@ -993,12 +1012,12 @@ func createBatchEvents() []batchedEvent {
 				"duration_ms":     50.0,
 				"int.field":       int64(2),
 				"bool.field":      false,
-			},
+			}),
 		},
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 4,
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.trace_id":  "trace-2",
 				"trace.span_id":   "span-3",
 				"trace.parent_id": "",
@@ -1006,7 +1025,7 @@ func createBatchEvents() []batchedEvent {
 				"operation.name":  "another-operation",
 				"duration_ms":     200.0,
 				"int.field":       int64(3),
-			},
+			}),
 		},
 	}
 	return batchEvents
@@ -1062,9 +1081,12 @@ func TestRouterBatch(t *testing.T) {
 
 	assert.Len(t, spans, len(batchEvents))
 	for i, span := range spans {
-		assert.Equal(t, batchEvents[i].Data["trace.trace_id"], span.TraceID)
+		assert.Equal(t, batchEvents[i].Data.Get("trace.trace_id"), span.TraceID)
 		assert.Equal(t, uint(batchEvents[i].SampleRate), span.SampleRate)
-		assert.Equal(t, batchEvents[i].Data, span.Data)
+		// Compare data values
+		for k, v := range batchEvents[i].Data.All() {
+			assert.Equal(t, v, span.Data.Get(k), "Data field %s should match", k)
+		}
 	}
 }
 
