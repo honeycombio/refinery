@@ -57,9 +57,7 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 	spans := trace.GetSpans()
 	uniques := d.distinctValue
 	uniques.Reset(d.fields, maxKeyLength)
-	defer func() {
-		d.keyBuilder.Reset()
-	}()
+	d.keyBuilder.Reset()
 outer:
 	for i, field := range d.fields {
 		for _, span := range spans {
