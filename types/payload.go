@@ -158,6 +158,7 @@ func (p *Payload) IsEmpty() bool {
 // All() allows easily iterating all values in the Payload, but this is very
 // NOT EFFICIENT relative to getting a subset of values using Get. Don't use
 // this in non-test code unless you have to other choice.
+// We only expect this to happen when transmitting sampled events using Libhoney.
 func (p *Payload) All() iter.Seq2[string, any] {
 	return func(yield func(string, any) bool) {
 		// First yield memoized fields
