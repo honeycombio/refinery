@@ -114,6 +114,10 @@ type Trace struct {
 	// This is used to memoize the impact calculation so that it doesn't get
 	// calculated over and over during a sort.
 	totalImpact int
+
+	spanCount      uint32
+	spanEventCount uint32
+	spanLinkCount  uint32
 }
 
 // AddSpan adds a span to this trace
@@ -171,47 +175,62 @@ func (t *Trace) SetKeptReason(reason uint) {
 	t.keptReason = reason
 }
 
+func (t *Trace) calculateSpanCounts() {
+	var (
+		spanCount      uint32
+		spanEventCount uint32
+		spanLinkCount  uint32
+	)
+	for _, s := range t.spans {
+		switch s.AnnotationType() {
+		case SpanAnnotationTypeSpanEvent:
+			// SpanEventCount gets the number of span events currently in this trace.
+			spanEventCount++
+		case SpanAnnotationTypeLink:
+			// SpanLinkCount gets the number of span links currently in this trace.
+			spanLinkCount++
+		default:
+			// SpanCount gets the number of spans currently in this trace.
+			// This is different from DescendantCount because it doesn't include span events or links.
+			spanCount++
+		}
+	}
+
+	t.spanCount = spanCount
+	t.spanEventCount = spanEventCount
+	t.spanLinkCount = spanLinkCount
+}
+
 // DescendantCount gets the number of descendants of all kinds currently in this trace
 func (t *Trace) DescendantCount() uint32 {
 	return uint32(len(t.spans))
 }
 
-// SpanCount gets the number of spans currently in this trace.
-// This is different from DescendantCount because it doesn't include span events or links.
 func (t *Trace) SpanCount() uint32 {
-	var count uint32
-	for _, s := range t.spans {
-		switch s.AnnotationType() {
-		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
-			continue
-		default:
-			count++
-
-		}
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
+		t.calculateSpanCounts()
 	}
-	return count
+	return t.spanCount
 }
 
-// SpanLinkCount gets the number of span links currently in this trace.
 func (t *Trace) SpanLinkCount() uint32 {
-	var count uint32
-	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeLink {
-			count++
-		}
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
+		t.calculateSpanCounts()
 	}
-	return count
+	return t.spanLinkCount
 }
 
-// SpanEventCount gets the number of span events currently in this trace.
 func (t *Trace) SpanEventCount() uint32 {
-	var count uint32
-	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
-			count++
-		}
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
+		t.calculateSpanCounts()
 	}
-	return count
+	return t.spanEventCount
 }
 
 func (t *Trace) GetSamplerKey() (string, bool) {
@@ -236,11 +255,13 @@ func (t *Trace) IsOrphan(traceTimeout time.Duration, now time.Time) bool {
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace
+// This is not thread-safe; only one goroutine should be working with a span object at a time.
 type Span struct {
 	Event
-	TraceID     string
-	ArrivalTime time.Time
-	IsRoot      bool
+	TraceID        string
+	ArrivalTime    time.Time
+	IsRoot         bool
+	annotationType SpanAnnotationType
 }
 
 // IsDecicionSpan returns true if the span is a decision span based on
@@ -324,25 +345,32 @@ func (sp *Span) GetDataSize() int {
 type SpanAnnotationType int
 
 const (
-	// SpanAnnotationTypeUnknown is the default value for an unknown annotation type.
-	SpanAnnotationTypeUnknown SpanAnnotationType = iota
+	// SpanAnnotationTypeUnSet is the default value for an unset annotation type.
+	SpanAnnotationTypeUnSet SpanAnnotationType = iota
+	// SpanAnnotationTypeUnknown is the value for an unknown annotation type.
+	SpanAnnotationTypeUnknown
 	// SpanAnnotationTypeSpanEvent is the type for a span event.
 	SpanAnnotationTypeSpanEvent
 	// SpanAnnotationTypeLink is the type for a span link.
 	SpanAnnotationTypeLink
 )
 
-// AnnotationType returns the type of annotation this span is.
+// GetSpanAnnotationType returns the type of annotation this span is.
 func (sp *Span) AnnotationType() SpanAnnotationType {
+	if sp.annotationType != SpanAnnotationTypeUnSet {
+		return sp.annotationType
+	}
 	t := sp.Data["meta.annotation_type"]
 	switch t {
 	case "span_event":
-		return SpanAnnotationTypeSpanEvent
+		sp.annotationType = SpanAnnotationTypeSpanEvent
 	case "link":
-		return SpanAnnotationTypeLink
+		sp.annotationType = SpanAnnotationTypeLink
 	default:
-		return SpanAnnotationTypeUnknown
+		sp.annotationType = SpanAnnotationTypeUnknown
 	}
+
+	return sp.annotationType
 }
 
 // cacheImpactFactor controls how much more we weigh older spans compared to newer ones;
