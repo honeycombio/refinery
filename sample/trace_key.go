@@ -55,20 +55,16 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
-	uniques := d.distinctValue
-	uniques.Reset(d.fields, maxKeyLength)
+	d.distinctValue.Reset(d.fields, maxKeyLength)
 	d.keyBuilder.Reset()
 outer:
 	for i, field := range d.fields {
 		for _, span := range spans {
 			if val, ok := span.Data[field]; ok {
-				// don't bother to add it if we've already seen it
-				if uniques.totalUniqueCount >= maxKeyLength {
+				if d.distinctValue.totalUniqueCount >= maxKeyLength {
 					break outer
 				}
-				if uniques.AddAsString(val, i) {
-					continue
-				}
+				d.distinctValue.AddAsString(val, i)
 			}
 		}
 	}
@@ -78,7 +74,7 @@ outer:
 	// please change this so that strings.Builder can be reused between calls
 
 	for i := range d.fields {
-		values := uniques.Values(i)
+		values := d.distinctValue.Values(i)
 		// if there's no values for this field, skip it
 		if len(values) == 0 {
 			continue
@@ -139,11 +135,8 @@ func (d *distinctValue) Reset(fields []string, maxDistinctValue int) {
 		clear(d.values[i])
 	}
 
-	// Reset the total unique count
 	d.totalUniqueCount = 0
-	// Reset the buffer
 	d.buf = d.buf[:0]
-	// Reset the values buffer
 	d.valuesBuffer = d.valuesBuffer[:0]
 }
 
@@ -154,13 +147,12 @@ func (d *distinctValue) Values(fieldIdx int) []string {
 		return nil
 	}
 
-	// Get the map for the specified field index
 	valueMap := d.values[fieldIdx]
 	if len(valueMap) == 0 {
 		return nil
 	}
 
-	// use the valuesBuffer to avoid unnecessary allocations
+	// reuse the valuesBuffer to avoid allocations
 	d.valuesBuffer = d.valuesBuffer[:0]
 	for _, value := range valueMap {
 		d.valuesBuffer = append(d.valuesBuffer, value)

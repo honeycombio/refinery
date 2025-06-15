@@ -276,14 +276,22 @@ func TestDistinctValue_AddAsString(t *testing.T) {
 			// each field should have expected unique counts and values
 			expectedTotalCount := 0
 			for fieldIdx, expectedCount := range tt.expectedCounts {
-				require.Equal(t, expectedCount, len(dv.values[fieldIdx]), "Unexpected count for field index %d", fieldIdx)
+				assert.Equal(t, expectedCount, len(dv.values[fieldIdx]), "Unexpected count for field index %d", fieldIdx)
 				expectedTotalCount += expectedCount
 			}
 
-			require.Equal(t, expectedTotalCount, dv.totalUniqueCount, "Unexpected unique count")
+			assert.Equal(t, expectedTotalCount, dv.totalUniqueCount, "Unexpected unique count")
+
+			// run the dinstinct values through fmt.Sprintf("%v") to ensure it matches the expected string representation
+			// of the values
 			for fieldIdx, expectedValues := range tt.expectedValues {
 				values := dv.Values(fieldIdx)
-				require.ElementsMatch(t, expectedValues, values, "Unexpected distinct values")
+				assert.ElementsMatch(t, expectedValues, values, "Unexpected distinct values")
+				var expectedOutputs []string
+				for _, v := range dv.values[fieldIdx] {
+					expectedOutputs = append(expectedOutputs, fmt.Sprintf("%v", v))
+				}
+				assert.ElementsMatch(t, expectedOutputs, values, "field value doesn't match with fmt.Sprintf(\"%v\", fieldIdx)")
 			}
 		})
 	}
