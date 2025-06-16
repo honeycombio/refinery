@@ -616,6 +616,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		TraceID: traceID,
 		IsRoot:  isRootSpan(ev, r.Config),
 	}
+	span.IsDecisionSpan = isDecisionSpan(span)
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
 	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
@@ -632,7 +633,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	isProbe := false
 	if r.Collector.Stressed() {
 		// only process spans that are not decision spans through stress relief
-		if !span.IsDecisionSpan() {
+		if !span.IsDecisionSpan {
 			processed, kept := r.Collector.ProcessSpanImmediately(span)
 
 			if processed {
@@ -1111,4 +1112,22 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data["meta.refinery.incoming_user_agent"] == nil {
 		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
 	}
+}
+
+// isDecisionSpan returns true if the span is a decision span based on
+// a flag set in the span's metadata.
+func isDecisionSpan(sp *types.Span) bool {
+	if sp.Data == nil {
+		return false
+	}
+	v, ok := sp.Data["meta.refinery.min_span"]
+	if !ok {
+		return false
+	}
+	isDecisionSpan, ok := v.(bool)
+	if !ok {
+		return false
+	}
+
+	return isDecisionSpan
 }

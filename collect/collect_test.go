@@ -212,7 +212,8 @@ func TestAddRootSpan(t *testing.T) {
 				"meta.refinery.min_span": true,
 			},
 		},
-		IsRoot: true,
+		IsRoot:         true,
+		IsDecisionSpan: true,
 	}
 
 	coll.AddSpanFromPeer(span)
@@ -1015,6 +1016,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		case 0, 1:
 			span.Data["meta.annotation_type"] = "span_event"
 			span.Data["meta.refinery.min_span"] = true
+			span.IsDecisionSpan = true
 		case 2:
 			span.Data["meta.annotation_type"] = "link"
 		}
@@ -1111,6 +1113,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		case 2:
 			span.Data["meta.annotation_type"] = "link"
 			span.Data["meta.refinery.min_span"] = true
+			span.IsDecisionSpan = true
 		}
 		coll.AddSpanFromPeer(span)
 	}
@@ -1211,6 +1214,7 @@ func TestAddSpanCount(t *testing.T) {
 			},
 			APIKey: legacyAPIKey,
 		},
+		IsDecisionSpan: true,
 	}
 	coll.AddSpanFromPeer(span)
 	coll.AddSpanFromPeer(decisionSpan)
@@ -1887,6 +1891,7 @@ func TestRedistributeTraces(t *testing.T) {
 				"meta.refinery.min_span": true,
 			},
 		},
+		IsDecisionSpan: true,
 	}
 
 	myTrace := &types.Trace{
@@ -1953,7 +1958,7 @@ func TestRedistributeTraces(t *testing.T) {
 	assert.NotNil(t, result, "only decision spans should be removed from cache after redistribution")
 	spans := result.GetSpans()
 	assert.Len(t, spans, 1, "trace should still be in cache after redistribution")
-	assert.False(t, spans[0].IsDecisionSpan())
+	assert.False(t, spans[0].IsDecisionSpan)
 
 	// create a trace that only contains decision spans
 	//	if the trace previously belongs to us and now belongs to other peers
@@ -2064,7 +2069,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			traceID: "traceID3",
 			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}}},
+			}}, IsDecisionSpan: true},
 			preRecordTrace:       true,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2075,7 +2080,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			traceID: "traceID2",
 			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}}},
+			}}, IsDecisionSpan: true},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    0,

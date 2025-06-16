@@ -151,7 +151,7 @@ func (t *Trace) GetSpans() []*Span {
 
 func (t *Trace) RemoveDecisionSpans() {
 	t.spans = slices.DeleteFunc(t.spans, func(sp *Span) bool {
-		return sp.IsDecisionSpan()
+		return sp.IsDecisionSpan
 	})
 }
 
@@ -262,24 +262,7 @@ type Span struct {
 	ArrivalTime    time.Time
 	IsRoot         bool
 	annotationType SpanAnnotationType
-}
-
-// IsDecicionSpan returns true if the span is a decision span based on
-// a flag set in the span's metadata.
-func (sp *Span) IsDecisionSpan() bool {
-	if sp.Data == nil {
-		return false
-	}
-	v, ok := sp.Data["meta.refinery.min_span"]
-	if !ok {
-		return false
-	}
-	isDecisionSpan, ok := v.(bool)
-	if !ok {
-		return false
-	}
-
-	return isDecisionSpan
+	IsDecisionSpan bool
 }
 
 // ExtractDecisionContext returns a new Event that contains only the data that is
@@ -326,7 +309,7 @@ func (sp *Span) GetSendBy() (time.Time, bool) {
 // Note that it's not the full size of the span, but we're mainly using this for
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
-	if sp.IsDecisionSpan() {
+	if sp.IsDecisionSpan {
 		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
 			switch value := v.(type) {
 			case int64:

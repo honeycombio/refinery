@@ -705,7 +705,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	} else {
 		targetShard, isMyTrace = i.IsMyTrace(sp.TraceID)
 		// if the span is a decision span and the trace no longer belong to us, we should not forward it to the peer
-		if !isMyTrace && sp.IsDecisionSpan() {
+		if !isMyTrace && sp.IsDecisionSpan {
 			return
 		}
 
@@ -912,7 +912,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 
 	// if we receive a proxy span after a trace decision has been made,
 	// we should just broadcast the decision again
-	if sp.IsDecisionSpan() {
+	if sp.IsDecisionSpan {
 		//  late span in this case won't get HasRoot
 		td := TraceDecision{
 			TraceID:    sp.TraceID,
@@ -1207,7 +1207,7 @@ func (i *InMemCollector) sendTracesOnShutdown() {
 func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord, forwardSpanChan chan *types.Span, sendBy *time.Time, spans ...*types.Span) {
 	for _, sp := range spans {
 		// if the span is a decision span, we don't need to do anything with it
-		if sp != nil && !sp.IsDecisionSpan() {
+		if sp != nil && !sp.IsDecisionSpan {
 
 			// first check if there's a trace decision
 			record, reason, found := i.sampleTraceCache.CheckSpan(sp)
@@ -1351,7 +1351,7 @@ func (i *InMemCollector) sendTraces() {
 		}
 
 		for _, sp := range t.GetSpans() {
-			if sp.IsDecisionSpan() {
+			if sp.IsDecisionSpan {
 				continue
 			}
 

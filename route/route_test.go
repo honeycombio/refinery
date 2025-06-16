@@ -1122,3 +1122,30 @@ func BenchmarkRouterBatch(b *testing.B) {
 		}
 	}
 }
+
+func TestSpan_IsDecisionSpan(t *testing.T) {
+	tests := []struct {
+		name string
+		data map[string]any
+		want bool
+	}{
+		{"nil meta", nil, false},
+		{"no meta", map[string]any{}, false},
+		{"no meta.refinery.min_span", map[string]any{"meta.annotation_type": "span_event"}, false},
+		{"invalid min_span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.mi_span": true}, false},
+		{"is decision span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.min_span": true}, true},
+		{"is not decision span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.min_span": false}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := &types.Span{
+				Event: types.Event{
+					Data: tt.data,
+				},
+			}
+			got := isDecisionSpan(sp)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

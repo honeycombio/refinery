@@ -164,33 +164,6 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	}, got.Data)
 }
 
-func TestSpan_IsDecisionSpan(t *testing.T) {
-	tests := []struct {
-		name string
-		data map[string]any
-		want bool
-	}{
-		{"nil meta", nil, false},
-		{"no meta", map[string]any{}, false},
-		{"no meta.refinery.min_span", map[string]any{"meta.annotation_type": "span_event"}, false},
-		{"invalid min_span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.mi_span": true}, false},
-		{"is decision span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.min_span": true}, true},
-		{"is not decision span", map[string]any{"meta.annotation_type": "span_event", "meta.refinery.min_span": false}, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sp := &Span{
-				Event: Event{
-					Data: tt.data,
-				},
-			}
-			got := sp.IsDecisionSpan()
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 // These benchmarks were just to verify that the size calculation is acceptable
 // even on big spans. The P99 for normal (20-field) spans shows that it will take ~1
 // microsecond (on an m1 laptop) but a 1000-field span (extremely rare!) will take
