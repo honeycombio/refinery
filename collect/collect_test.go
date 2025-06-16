@@ -2699,7 +2699,8 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mo
 		GetSamplerTypeVal:  samplerConfig,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:      config.Duration(1 * time.Millisecond),
+			HealthCheckTimeout: config.Duration(100 * time.Millisecond),
 		},
 	}
 
@@ -2716,6 +2717,7 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mo
 	coll.outgoingTraces = make(chan sendableTrace, 100000)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 	coll.BlockOnAddSpan = true
+	coll.Health.Register(CollectorHealthKey, conf.GetHealthCheckTimeout())
 
 	// Start the collector's processing goroutines
 	go coll.collect()
