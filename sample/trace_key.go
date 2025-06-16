@@ -71,8 +71,6 @@ outer:
 	// ok, now we have a map of fields to a list of all unique values for that field.
 	// (unless it was huge, in which case we have a bunch of them)
 
-	// please change this so that strings.Builder can be reused between calls
-
 	for i := range d.fields {
 		values := d.distinctValue.Values(i)
 		// if there's no values for this field, skip it
