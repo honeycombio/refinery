@@ -60,11 +60,11 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 outer:
 	for i, field := range d.fields {
 		for _, span := range spans {
-			if val, ok := span.Data[field]; ok {
+			if span.Data.Exists(field) {
 				if d.distinctValue.totalUniqueCount >= maxKeyLength {
 					break outer
 				}
-				d.distinctValue.AddAsString(val, i)
+				d.distinctValue.AddAsString(span.Data.Get(field), i)
 			}
 		}
 	}
@@ -92,8 +92,8 @@ outer:
 
 	if trace.RootSpan != nil {
 		for _, field := range d.rootOnlyFields {
-			if val, ok := trace.RootSpan.Data[field]; ok {
-				d.keyBuilder.WriteString(fmt.Sprintf("%v,", val))
+			if trace.RootSpan.Data.Exists(field) {
+				d.keyBuilder.WriteString(fmt.Sprintf("%v,", trace.RootSpan.Data.Get(field)))
 				fieldCount += 1
 			}
 		}

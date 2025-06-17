@@ -30,48 +30,16 @@ type Event struct {
 	Environment string
 	SampleRate  uint
 	Timestamp   time.Time
-	Data        map[string]interface{}
+	Data        Payload
 	dataSize    int
 }
 
 // GetDataSize computes the size of the Data element of the Event.
 func (e *Event) GetDataSize() int {
 	if e.dataSize == 0 {
-		for k, v := range e.Data {
-			e.dataSize += len(k) + getByteSize(v)
-		}
+		e.dataSize = e.Data.GetDataSize()
 	}
 	return e.dataSize
-}
-
-// getByteSize returns the size of the given value in bytes.
-// This is a rough estimate, but it's good enough for our purposes.
-// Maps and slices are the most complex, so we'll just add up the sizes of their entries.
-func getByteSize(val any) int {
-	switch value := val.(type) {
-	case bool:
-		return 1
-	case float64, int64, int:
-		return 8
-	case string:
-		return len(value)
-	case []byte: // also catch []uint8
-		return len(value)
-	case []any:
-		total := 0
-		for _, v := range value {
-			total += getByteSize(v)
-		}
-		return total
-	case map[string]any:
-		total := 0
-		for k, v := range value {
-			total += len(k) + getByteSize(v)
-		}
-		return total
-	default:
-		return 8 // catchall
-	}
 }
 
 // Trace isn't something that shows up on the wire; it gets created within
@@ -267,14 +235,7 @@ type Span struct {
 // IsDecicionSpan returns true if the span is a decision span based on
 // a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
-	if sp.Data == nil {
-		return false
-	}
-	v, ok := sp.Data["meta.refinery.min_span"]
-	if !ok {
-		return false
-	}
-	isDecisionSpan, ok := v.(bool)
+	isDecisionSpan, ok := sp.Data.Get("meta.refinery.min_span").(bool)
 	if !ok {
 		return false
 	}
@@ -287,7 +248,7 @@ func (sp *Span) IsDecisionSpan() bool {
 func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx := sp.Event
 	dataSize := sp.Event.GetDataSize()
-	decisionCtx.Data = map[string]interface{}{
+	decisionData := map[string]interface{}{
 		"meta.trace_id":                sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
 		"meta.refinery.min_span":       true,
@@ -296,27 +257,23 @@ func (sp *Span) ExtractDecisionContext() *Event {
 	}
 
 	if v, ok := sp.GetSendBy(); ok {
-		decisionCtx.Data["meta.refinery.send_by"] = v
+		decisionData["meta.refinery.send_by"] = v
 	}
+	decisionCtx.Data = NewPayload(decisionData)
 	return &decisionCtx
 }
 
 func (sp *Span) SetSendBy(sendBy time.Time) {
-	sp.Data["meta.refinery.send_by"] = sendBy.Unix()
+	sp.Data.Set("meta.refinery.send_by", sendBy.Unix())
 }
 
 func (sp *Span) GetSendBy() (time.Time, bool) {
-	if sp.Data == nil {
-		return time.Time{}, false
-	}
-
-	if value, ok := sp.Data["meta.refinery.send_by"]; ok {
-		switch v := value.(type) {
-		case int64:
-			return time.Unix(v, 0), true
-		case uint64:
-			return time.Unix(int64(v), 0), true
-		}
+	value := sp.Data.Get("meta.refinery.send_by")
+	switch v := value.(type) {
+	case int64:
+		return time.Unix(v, 0), true
+	case uint64:
+		return time.Unix(int64(v), 0), true
 	}
 
 	return time.Time{}, false
@@ -327,13 +284,12 @@ func (sp *Span) GetSendBy() (time.Time, bool) {
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
 	if sp.IsDecisionSpan() {
-		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
-			switch value := v.(type) {
-			case int64:
-				return int(value)
-			case uint64:
-				return int(value)
-			}
+		v := sp.Data.Get("meta.refinery.span_data_size")
+		switch value := v.(type) {
+		case int64:
+			return int(value)
+		case uint64:
+			return int(value)
 		}
 		return 0
 	}
@@ -360,7 +316,7 @@ func (sp *Span) AnnotationType() SpanAnnotationType {
 	if sp.annotationType != SpanAnnotationTypeUnSet {
 		return sp.annotationType
 	}
-	t := sp.Data["meta.annotation_type"]
+	t := sp.Data.Get("meta.annotation_type")
 	switch t {
 	case "span_event":
 		sp.annotationType = SpanAnnotationTypeSpanEvent

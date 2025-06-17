@@ -549,13 +549,10 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 			sp.APIHost = newTarget.GetAddress()
 
-			if sp.Data == nil {
-				sp.Data = make(map[string]interface{})
-			}
-			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
+			if v := sp.Data.Get("meta.refinery.forwarded"); v != nil {
+				sp.Data.Set("meta.refinery.forwarded", fmt.Sprintf("%s,%s", v, i.hostname))
 			} else {
-				sp.Data["meta.refinery.forwarded"] = i.hostname
+				sp.Data.Set("meta.refinery.forwarded", i.hostname)
 			}
 
 			i.PeerTransmission.EnqueueSpan(sp)
@@ -673,7 +670,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				Dataset: trace.Dataset,
 			},
 		}, trace, i.Sharder.WhichShard(trace.ID()))
-		dc.Data["meta.refinery.expired_trace"] = true
+		dc.Data.Set("meta.refinery.expired_trace", true)
 		i.PeerTransmission.EnqueueEvent(dc)
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
@@ -727,7 +724,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 		// if the span is sent for signaling expired traces,
 		// we should not add it to the cache
-		if sp.Data["meta.refinery.expired_trace"] != nil {
+		if sp.Data.Exists("meta.refinery.expired_trace") {
 			return
 		}
 
@@ -777,7 +774,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 	// if the span is sent for signaling expired traces,
 	// we should not add it to the cache
-	if sp.Data["meta.refinery.expired_trace"] != nil {
+	if sp.Data.Exists("meta.refinery.expired_trace") {
 		return
 	}
 
@@ -884,12 +881,12 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	i.Metrics.Increment("kept_from_stress")
 	// ok, we're sending it, so decorate it first
-	sp.Data["meta.stressed"] = true
+	sp.Data.Set("meta.stressed", true)
 	if i.Config.GetAddRuleReasonToTrace() {
-		sp.Data["meta.refinery.reason"] = reason
+		sp.Data.Set("meta.refinery.reason", reason)
 	}
 	if i.hostname != "" {
-		sp.Data["meta.refinery.local_hostname"] = i.hostname
+		sp.Data.Set("meta.refinery.local_hostname", i.hostname)
 	}
 
 	i.addAdditionalAttributes(sp)
@@ -935,12 +932,12 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		} else {
 			metaReason = "late arriving span"
 		}
-		sp.Data["meta.refinery.reason"] = metaReason
-		sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
+		sp.Data.Set("meta.refinery.reason", metaReason)
+		sp.Data.Set("meta.refinery.send_reason", TraceSendLateSpan)
 
 	}
 	if i.hostname != "" {
-		sp.Data["meta.refinery.local_hostname"] = i.hostname
+		sp.Data.Set("meta.refinery.local_hostname", i.hostname)
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	keep := tr.Kept()
@@ -951,7 +948,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 
 	if isDryRun {
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
-		sp.Data[config.DryRunFieldName] = keep
+		sp.Data.Set(config.DryRunFieldName, keep)
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
 			i.Metrics.Increment(TraceSendLateSpan)
@@ -966,12 +963,12 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		// if this span is a late root span, possibly update it with our current span count
 		if sp.IsRoot {
 			if i.Config.GetAddCountsToRoot() {
-				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
-				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
-				sp.Data["meta.span_count"] = int64(tr.SpanCount())
-				sp.Data["meta.event_count"] = int64(tr.DescendantCount())
+				sp.Data.Set("meta.span_event_count", int64(tr.SpanEventCount()))
+				sp.Data.Set("meta.span_link_count", int64(tr.SpanLinkCount()))
+				sp.Data.Set("meta.span_count", int64(tr.SpanCount()))
+				sp.Data.Set("meta.event_count", int64(tr.DescendantCount()))
 			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data["meta.span_count"] = int64(tr.DescendantCount())
+				sp.Data.Set("meta.span_count", int64(tr.DescendantCount()))
 			}
 		}
 		otelutil.AddSpanField(span, "is_root_span", sp.IsRoot)
@@ -988,7 +985,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	if sp.SampleRate != 0 {
 		// Write down the original sample rate so that that information
 		// is more easily recovered
-		sp.Data["meta.refinery.original_sample_rate"] = sp.SampleRate
+		sp.Data.Set("meta.refinery.original_sample_rate", sp.SampleRate)
 	}
 
 	if tempSampleRate < 1 {
@@ -1003,7 +1000,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	// if spans are already sampled, take that into account when computing
 	// the final rate
 	if dryRunMode {
-		sp.Data["meta.dryrun.sample_rate"] = tempSampleRate * traceSampleRate
+		sp.Data.Set("meta.dryrun.sample_rate", tempSampleRate*traceSampleRate)
 		sp.SampleRate = tempSampleRate
 	} else {
 		sp.SampleRate = tempSampleRate * traceSampleRate
@@ -1041,12 +1038,12 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 		rs := trace.RootSpan
 		if rs != nil {
 			if i.Config.GetAddCountsToRoot() {
-				rs.Data["meta.span_event_count"] = int64(td.EventCount)
-				rs.Data["meta.span_link_count"] = int64(td.LinkCount)
-				rs.Data["meta.span_count"] = int64(td.Count)
-				rs.Data["meta.event_count"] = int64(td.DescendantCount())
+				rs.Data.Set("meta.span_event_count", int64(td.EventCount))
+				rs.Data.Set("meta.span_link_count", int64(td.LinkCount))
+				rs.Data.Set("meta.span_count", int64(td.Count))
+				rs.Data.Set("meta.event_count", int64(td.DescendantCount()))
 			} else if i.Config.GetAddSpanCountToRoot() {
-				rs.Data["meta.span_count"] = int64(td.DescendantCount())
+				rs.Data.Set("meta.span_count", int64(td.DescendantCount()))
 			}
 		}
 	}
@@ -1217,9 +1214,6 @@ func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord,
 			}
 
 			if sendBy != nil {
-				if sp.Data == nil {
-					sp.Data = make(map[string]interface{})
-				}
 				sp.SetSendBy(*sendBy)
 			}
 			// if there's no trace decision, then we need to forward the trace to its new home
@@ -1246,7 +1240,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 			}
 
 			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_span", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
-			r.span.Data["meta.refinery.shutdown.send"] = true
+			r.span.Data.Set("meta.refinery.shutdown.send", true)
 
 			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
 			_, exist := sentTraces[r.span.TraceID]
@@ -1272,13 +1266,10 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 
 			sp.APIHost = url
 
-			if sp.Data == nil {
-				sp.Data = make(map[string]interface{})
-			}
-			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
+			if v := sp.Data.Get("meta.refinery.forwarded"); v != nil {
+				sp.Data.Set("meta.refinery.forwarded", fmt.Sprintf("%s,%s", v, i.hostname))
 			} else {
-				sp.Data["meta.refinery.forwarded"] = i.hostname
+				sp.Data.Set("meta.refinery.forwarded", i.hostname)
 			}
 
 			i.PeerTransmission.EnqueueSpan(sp)
@@ -1304,7 +1295,7 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 
 func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	for k, v := range i.Config.GetAdditionalAttributes() {
-		sp.Data[k] = v
+		sp.Data.Set(k, v)
 	}
 }
 
@@ -1323,9 +1314,12 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 	dc := sp.ExtractDecisionContext()
 	// extract all key fields from the span
 	keyFields := sampler.GetKeyFields()
+	sp.Data.MemoizeFields(keyFields...)
 	for _, keyField := range keyFields {
-		if val, ok := sp.Data[keyField]; ok {
-			dc.Data[keyField] = val
+		// Less efficient than a two-return version of Get(), so consider adding
+		// that to the Payload interface if these becomes a hotspot.
+		if sp.Data.Exists(keyField) {
+			dc.Data.Set(keyField, sp.Data.Get(keyField))
 		}
 	}
 
@@ -1356,10 +1350,10 @@ func (i *InMemCollector) sendTraces() {
 			}
 
 			if i.Config.GetAddRuleReasonToTrace() {
-				sp.Data["meta.refinery.reason"] = t.reason
-				sp.Data["meta.refinery.send_reason"] = t.sendReason
+				sp.Data.Set("meta.refinery.reason", t.reason)
+				sp.Data.Set("meta.refinery.send_reason", t.sendReason)
 				if t.sampleKey != "" {
-					sp.Data["meta.refinery.sample_key"] = t.sampleKey
+					sp.Data.Set("meta.refinery.sample_key", t.sampleKey)
 				}
 			}
 
@@ -1367,21 +1361,21 @@ func (i *InMemCollector) sendTraces() {
 			// with the final total as of our send time
 			if sp.IsRoot {
 				if i.Config.GetAddCountsToRoot() {
-					sp.Data["meta.span_event_count"] = int64(t.SpanEventCount())
-					sp.Data["meta.span_link_count"] = int64(t.SpanLinkCount())
-					sp.Data["meta.span_count"] = int64(t.SpanCount())
-					sp.Data["meta.event_count"] = int64(t.DescendantCount())
+					sp.Data.Set("meta.span_event_count", int64(t.SpanEventCount()))
+					sp.Data.Set("meta.span_link_count", int64(t.SpanLinkCount()))
+					sp.Data.Set("meta.span_count", int64(t.SpanCount()))
+					sp.Data.Set("meta.event_count", int64(t.DescendantCount()))
 				} else if i.Config.GetAddSpanCountToRoot() {
-					sp.Data["meta.span_count"] = int64(t.DescendantCount())
+					sp.Data.Set("meta.span_count", int64(t.DescendantCount()))
 				}
 			}
 
 			isDryRun := i.Config.GetIsDryRun()
 			if isDryRun {
-				sp.Data[config.DryRunFieldName] = t.shouldSend
+				sp.Data.Set(config.DryRunFieldName, t.shouldSend)
 			}
 			if i.hostname != "" {
-				sp.Data["meta.refinery.local_hostname"] = i.hostname
+				sp.Data.Set("meta.refinery.local_hostname", i.hostname)
 			}
 			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
 			i.addAdditionalAttributes(sp)

@@ -119,19 +119,19 @@ func TestKeyLimits(t *testing.T) {
 	for i := 0; i < 160; i++ {
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"fieldA": fmt.Sprintf("value%d", i),
 					"fieldB": i,
-				},
+				}),
 			},
 		})
 	}
 
 	trace.RootSpan = &types.Span{
 		Event: types.Event{
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"service_name": "test",
-			},
+			}),
 		},
 	}
 
@@ -444,7 +444,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 
 				span := &types.Span{
 					Event: types.Event{
-						Data: spanData,
+						Data: types.NewPayload(spanData),
 					},
 				}
 
@@ -457,7 +457,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 					for _, field := range scenario.fields {
 						if strings.HasPrefix(field, "root.") {
 							actualField := field[len("root."):]
-							span.Data[actualField] = fmt.Sprintf("root-%s-value", actualField)
+							span.Data.Set(actualField, fmt.Sprintf("root-%s-value", actualField))
 						}
 					}
 				}
@@ -486,7 +486,7 @@ func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
 	for _, s := range spans {
 		span := &types.Span{
 			Event: types.Event{
-				Data: s.data,
+				Data: types.NewPayload(s.data),
 			},
 		}
 		if s.isRoot {

@@ -29,9 +29,9 @@ func TestTotalThroughputAddSampleRateKeyToTrace(t *testing.T) {
 	for i := 0; i < spanCount; i++ {
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"http.status_code": "200",
-				},
+				}),
 			},
 		})
 	}

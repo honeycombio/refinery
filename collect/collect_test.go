@@ -208,9 +208,9 @@ func TestAddRootSpan(t *testing.T) {
 		Event: types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			},
+			}),
 		},
 		IsRoot: true,
 	}
@@ -305,7 +305,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				Dataset:    "aoeu",
 				APIKey:     legacyAPIKey,
 				SampleRate: originalSampleRate,
-				Data:       make(map[string]interface{}),
+				Data:       types.NewPayload(make(map[string]interface{})),
 			},
 			IsRoot: true,
 		}
@@ -319,7 +319,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	upstreamSampledEvent := events[0]
 
 	assert.NotNil(t, upstreamSampledEvent)
-	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data["meta.refinery.original_sample_rate"],
+	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data.Get("meta.refinery.original_sample_rate"),
 		"metadata should be populated with original sample rate")
 	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
 		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
@@ -331,7 +331,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			Dataset:    "no-upstream-sampling",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // no upstream sampling
-			Data:       make(map[string]interface{}),
+			Data:       types.NewPayload(make(map[string]interface{})),
 		},
 		IsRoot: true,
 	})
@@ -351,7 +351,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	require.NotNil(t, noUpstreamSampleRateEvent)
 	assert.Equal(t, "no-upstream-sampling", noUpstreamSampleRateEvent.Dataset)
-	assert.Nil(t, noUpstreamSampleRateEvent.Data["meta.refinery.original_sample_rate"],
+	assert.Nil(t, noUpstreamSampleRateEvent.Data.Get("meta.refinery.original_sample_rate"),
 		"original sample rate should not be set in metadata when original sample rate is zero")
 }
 
@@ -404,7 +404,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 			Dataset:    "aoeu",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // This should get lifted to 1
-			Data:       make(map[string]interface{}),
+			Data:       types.NewPayload(make(map[string]interface{})),
 		},
 		IsRoot: true,
 	}
@@ -462,9 +462,9 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -482,11 +482,11 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
 				"meta.refinery.send_by":  sendBy,
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -505,7 +505,7 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -585,7 +585,7 @@ func TestDryRunMode(t *testing.T) {
 	span := &types.Span{
 		TraceID: traceID1,
 		Event: types.Event{
-			Data:   map[string]interface{}{},
+			Data:   types.NewPayload(map[string]interface{}{}),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -598,7 +598,7 @@ func TestDryRunMode(t *testing.T) {
 	// * remove the trace from the cache
 	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding a root span should send the span")
-	assert.Equal(t, keepTraceID1, events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID1, events[0].Data.Get(config.DryRunFieldName), "config.DryRunFieldName should match sampling decision for its trace ID")
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
 
 	// add a non-root span, create the trace in the cache
@@ -606,9 +606,9 @@ func TestDryRunMode(t *testing.T) {
 		TraceID: traceID2,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -621,7 +621,7 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Data:   map[string]interface{}{},
+			Data:   types.NewPayload(map[string]interface{}{}),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -632,18 +632,18 @@ func TestDryRunMode(t *testing.T) {
 	events = transmission.GetBlock(2)
 	require.Equal(t, 2, len(events), "adding another root span should send the span")
 	// both spanscollectshould be marked with the sampling decision
-	assert.Equal(t, keepTraceID2, events[0].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
-	assert.Equal(t, keepTraceID2, events[1].Data[config.DryRunFieldName], "config.DryRunFieldName should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID2, events[0].Data.Get(config.DryRunFieldName), "config.DryRunFieldName should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID2, events[1].Data.Get(config.DryRunFieldName), "config.DryRunFieldName should match sampling decision for its trace ID")
 	// check that meta value associated with dry run mode is properly applied
-	assert.Equal(t, uint(10), events[0].Data["meta.dryrun.sample_rate"])
+	assert.Equal(t, uint(10), events[0].Data.Get("meta.dryrun.sample_rate"))
 	// check expected sampleRate against span data
-	assert.Equal(t, sampleRate1, events[0].Data["meta.dryrun.sample_rate"])
-	assert.Equal(t, sampleRate2, events[1].Data["meta.dryrun.sample_rate"])
+	assert.Equal(t, sampleRate1, events[0].Data.Get("meta.dryrun.sample_rate"))
+	assert.Equal(t, sampleRate2, events[1].Data.Get("meta.dryrun.sample_rate"))
 
 	span = &types.Span{
 		TraceID: traceID3,
 		Event: types.Event{
-			Data:   map[string]interface{}{},
+			Data:   types.NewPayload(map[string]interface{}{}),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -656,7 +656,7 @@ func TestDryRunMode(t *testing.T) {
 	// * remove the trace from the cache
 	events = transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding a root span should send the span")
-	assert.Equal(t, keepTraceID3, events[0].Data[config.DryRunFieldName], "field should match sampling decision for its trace ID")
+	assert.Equal(t, keepTraceID3, events[0].Data.Get(config.DryRunFieldName), "field should match sampling decision for its trace ID")
 	assert.Nil(t, coll.getFromCache(traceID3), "after sending the span, it should be removed from the cache")
 
 }
@@ -798,7 +798,7 @@ func TestStableMaxAlloc(t *testing.T) {
 			TraceID: strconv.Itoa(i),
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data:    spandata[i],
+				Data:    types.NewPayload(spandata[i]),
 				APIKey:  legacyAPIKey,
 			},
 		}
@@ -1005,18 +1005,18 @@ func TestAddCountsToRoot(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
-				},
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
 		switch i {
 		case 0, 1:
-			span.Data["meta.annotation_type"] = "span_event"
-			span.Data["meta.refinery.min_span"] = true
+			span.Data.Set("meta.annotation_type", "span_event")
+			span.Data.Set("meta.refinery.min_span", true)
 		case 2:
-			span.Data["meta.annotation_type"] = "link"
+			span.Data.Set("meta.annotation_type", "link")
 		}
 		coll.AddSpanFromPeer(span)
 	}
@@ -1028,7 +1028,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1037,15 +1037,15 @@ func TestAddCountsToRoot(t *testing.T) {
 
 	events := transmission.GetBlock(3)
 	assert.Equal(t, 3, len(events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, events[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, events[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
-	assert.Equal(t, nil, events[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
-	assert.Equal(t, nil, events[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
-	assert.Equal(t, int64(2), events[2].Data["meta.span_count"], "root span metadata should be populated with span count")
-	assert.Equal(t, int64(2), events[2].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
-	assert.Equal(t, int64(1), events[2].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
-	assert.Equal(t, int64(5), events[2].Data["meta.event_count"], "root span metadata should be populated with event count")
+	assert.Equal(t, nil, events[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, events[1].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, events[1].Data.Get("meta.span_event_count"), "child span metadata should NOT be populated with span event count")
+	assert.Equal(t, nil, events[1].Data.Get("meta.span_link_count"), "child span metadata should NOT be populated with span link count")
+	assert.Equal(t, nil, events[1].Data.Get("meta.event_count"), "child span metadata should NOT be populated with event count")
+	assert.Equal(t, int64(2), events[2].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
+	assert.Equal(t, int64(2), events[2].Data.Get("meta.span_event_count"), "root span metadata should be populated with span event count")
+	assert.Equal(t, int64(1), events[2].Data.Get("meta.span_link_count"), "root span metadata should be populated with span link count")
+	assert.Equal(t, int64(5), events[2].Data.Get("meta.event_count"), "root span metadata should be populated with event count")
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
@@ -1099,29 +1099,29 @@ func TestLateRootGetsCounts(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
-				},
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
 		switch i {
 		case 0, 1:
-			span.Data["meta.annotation_type"] = "span_event"
+			span.Data.Set("meta.annotation_type", "span_event")
 		case 2:
-			span.Data["meta.annotation_type"] = "link"
-			span.Data["meta.refinery.min_span"] = true
+			span.Data.Set("meta.annotation_type", "link")
+			span.Data.Set("meta.refinery.min_span", true)
 		}
 		coll.AddSpanFromPeer(span)
 	}
 
 	childSpans := transmission.GetBlock(3)
 	assert.Equal(t, 3, len(childSpans), "adding a non-root span and waiting should send the span")
-	assert.Equal(t, nil, childSpans[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, childSpans[1].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, childSpans[1].Data["meta.span_event_count"], "child span metadata should NOT be populated with span event count")
-	assert.Equal(t, nil, childSpans[1].Data["meta.span_link_count"], "child span metadata should NOT be populated with span link count")
-	assert.Equal(t, nil, childSpans[1].Data["meta.event_count"], "child span metadata should NOT be populated with event count")
+	assert.Equal(t, nil, childSpans[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, childSpans[1].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, childSpans[1].Data.Get("meta.span_event_count"), "child span metadata should NOT be populated with span event count")
+	assert.Equal(t, nil, childSpans[1].Data.Get("meta.span_link_count"), "child span metadata should NOT be populated with span link count")
+	assert.Equal(t, nil, childSpans[1].Data.Get("meta.event_count"), "child span metadata should NOT be populated with event count")
 	trace := coll.getFromCache(traceID)
 	assert.Nil(t, trace, "trace should have been sent although the root span hasn't arrived")
 
@@ -1130,7 +1130,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1139,11 +1139,11 @@ func TestLateRootGetsCounts(t *testing.T) {
 
 	event := transmission.GetBlock(1)
 	assert.Equal(t, 1, len(event), "adding a root span should send all spans in the trace")
-	assert.Equal(t, int64(2), event[0].Data["meta.span_count"], "root span metadata should be populated with span count")
-	assert.Equal(t, int64(2), event[0].Data["meta.span_event_count"], "root span metadata should be populated with span event count")
-	assert.Equal(t, int64(1), event[0].Data["meta.span_link_count"], "root span metadata should be populated with span link count")
-	assert.Equal(t, int64(5), event[0].Data["meta.event_count"], "root span metadata should be populated with event count")
-	assert.Equal(t, "deterministic/always - late arriving span", event[0].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to rules + late arriving span.")
+	assert.Equal(t, int64(2), event[0].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
+	assert.Equal(t, int64(2), event[0].Data.Get("meta.span_event_count"), "root span metadata should be populated with span event count")
+	assert.Equal(t, int64(1), event[0].Data.Get("meta.span_link_count"), "root span metadata should be populated with span link count")
+	assert.Equal(t, int64(5), event[0].Data.Get("meta.event_count"), "root span metadata should be populated with event count")
+	assert.Equal(t, "deterministic/always - late arriving span", event[0].Data.Get("meta.refinery.reason"), "late spans should have meta.refinery.reason set to rules + late arriving span.")
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
@@ -1195,9 +1195,9 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1205,10 +1205,10 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1225,7 +1225,7 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1234,8 +1234,8 @@ func TestAddSpanCount(t *testing.T) {
 
 	events := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, events[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, int64(3), events[1].Data["meta.span_count"], "root span metadata should be populated with span count")
+	assert.Equal(t, nil, events[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+	assert.Equal(t, int64(3), events[1].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
@@ -1287,9 +1287,9 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1297,14 +1297,14 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 
 	childSpans := transmission.GetBlock(1)
 	assert.Equal(t, 1, len(childSpans), "adding a non-root span and waiting should send the span")
-	assert.Equal(t, nil, childSpans[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
+	assert.Equal(t, nil, childSpans[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
 
 	// now we add the root span and verify that both got sent and that the root span had the span count
 	rootSpan := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1313,8 +1313,8 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 
 	events := transmission.GetBlock(1)
 	assert.Equal(t, 1, len(events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, int64(2), events[0].Data["meta.span_count"], "root span metadata should be populated with span count")
-	assert.Equal(t, "deterministic/always - late arriving span", events[0].Data["meta.refinery.reason"], "late spans should have meta.refinery.reason set to late.")
+	assert.Equal(t, int64(2), events[0].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
+	assert.Equal(t, "deterministic/always - late arriving span", events[0].Data.Get("meta.refinery.reason"), "late spans should have meta.refinery.reason set to late.")
 
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
@@ -1366,9 +1366,9 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1378,7 +1378,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1388,7 +1388,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	events := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
 	if len(events) == 2 {
-		assert.Equal(t, nil, events[1].Data["meta.refinery.reason"], "late span should not have meta.refinery.reason set to late")
+		assert.Equal(t, nil, events[1].Data.Get("meta.refinery.reason"), "late span should not have meta.refinery.reason set to late")
 	}
 }
 
@@ -1439,9 +1439,9 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1452,7 +1452,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1461,8 +1461,8 @@ func TestAddAdditionalAttributes(t *testing.T) {
 
 	events := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(events), "should be some events transmitted")
-	assert.Equal(t, "foo", events[0].Data["name"], "new attribute should appear in data")
-	assert.Equal(t, "bar", events[0].Data["other"], "new attribute should appear in data")
+	assert.Equal(t, "foo", events[0].Data.Get("name"), "new attribute should appear in data")
+	assert.Equal(t, "bar", events[0].Data.Get("other"), "new attribute should appear in data")
 }
 
 func TestStressReliefSampleRate(t *testing.T) {
@@ -1498,9 +1498,9 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1527,7 +1527,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset:    "aoeu",
-			Data:       map[string]interface{}{},
+			Data:       types.NewPayload(map[string]interface{}{}),
 			APIKey:     legacyAPIKey,
 			SampleRate: 10,
 		},
@@ -1601,9 +1601,9 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1613,7 +1613,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1622,7 +1622,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 	events := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, "host123", events[1].Data["meta.refinery.local_hostname"])
+	assert.Equal(t, "host123", events[1].Data.Get("meta.refinery.local_hostname"))
 
 }
 
@@ -1709,20 +1709,20 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		span := &types.Span{
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id":  "unused",
 					"http.status_code": 200,
-				},
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
 		switch i {
 		case 0, 1:
 			span.TraceID = traceIDs[0]
-			span.Data["test"] = int64(1)
+			span.Data.Set("test", int64(1))
 		case 2, 3:
 			span.TraceID = traceIDs[1]
-			span.Data["test"] = int64(2)
+			span.Data.Set("test", int64(2))
 		}
 		coll.AddSpanFromPeer(span)
 	}
@@ -1730,8 +1730,8 @@ func TestSpanWithRuleReasons(t *testing.T) {
 	eventsWithoutRoot := transmission.GetBlock(4)
 	assert.Equal(t, 4, len(eventsWithoutRoot), "traces should have been sent due to trace timeout")
 	for _, event := range eventsWithoutRoot {
-		reason := event.Data["meta.refinery.reason"]
-		if event.Data["test"] == int64(1) {
+		reason := event.Data.Get("meta.refinery.reason")
+		if event.Data.Get("test") == int64(1) {
 			assert.Equal(t, "rules/trace/rule 1:dynamic", reason, event.Data)
 		} else {
 			assert.Equal(t, "rules/span/rule 2:emadynamic", reason, event.Data)
@@ -1744,17 +1744,17 @@ func TestSpanWithRuleReasons(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"http.status_code": 200,
-				},
+				}),
 				APIKey: legacyAPIKey,
 			},
 			IsRoot: true,
 		}
 		if i == 0 {
-			rootSpan.Data["test"] = int64(1)
+			rootSpan.Data.Set("test", int64(1))
 		} else {
-			rootSpan.Data["test"] = int64(2)
+			rootSpan.Data.Set("test", int64(2))
 		}
 
 		coll.AddSpan(rootSpan)
@@ -1764,8 +1764,8 @@ func TestSpanWithRuleReasons(t *testing.T) {
 	roots := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(roots), "root span should be sent immediately")
 	for _, event := range roots {
-		reason := event.Data["meta.refinery.reason"]
-		if event.Data["test"] == int64(1) {
+		reason := event.Data.Get("meta.refinery.reason")
+		if event.Data.Get("test") == int64(1) {
 			assert.Equal(t, "rules/trace/rule 1:dynamic - late arriving span", reason, event.Data)
 		} else {
 			assert.Equal(t, "rules/span/rule 2:emadynamic - late arriving span", reason, event.Data)
@@ -1834,7 +1834,7 @@ func TestRedistributeTraces(t *testing.T) {
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
-			Data:    make(map[string]interface{}),
+			Data:    types.NewPayload(make(map[string]interface{})),
 		},
 	}
 
@@ -1873,7 +1873,7 @@ func TestRedistributeTraces(t *testing.T) {
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			APIHost: "api1",
-			Data:    make(map[string]interface{}),
+			Data:    types.NewPayload(make(map[string]interface{})),
 		},
 		IsRoot: true,
 	}
@@ -1882,10 +1882,9 @@ func TestRedistributeTraces(t *testing.T) {
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
-			Data: map[string]interface {
-			}{
+			Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			},
+			}),
 		},
 	}
 
@@ -2042,7 +2041,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace already has decision, should be sent",
 			traceID:              "traceID1",
-			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: make(map[string]interface{})}},
+			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: types.NewPayload(make(map[string]interface{}))}},
 			preRecordTrace:       true,
 			expectedSent:         1,
 			expectedForwarded:    0,
@@ -2051,7 +2050,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace cannot be decided yet, should be forwarded",
 			traceID:              "traceID2",
-			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: make(map[string]interface{})}},
+			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: types.NewPayload(make(map[string]interface{}))}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    1,
@@ -2062,9 +2061,9 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:    "decision spans that already has decision should be ignored and discarded",
 			traceID: "traceID3",
-			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: map[string]interface{}{
+			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}}},
+			})}},
 			preRecordTrace:       true,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2073,9 +2072,9 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:    "decision spans that belongs to other peers should be ignored and discarded",
 			traceID: "traceID2",
-			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: map[string]interface{}{
+			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}}},
+			})}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2111,12 +2110,12 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			require.Len(t, events, 1)
 			require.Equal(t, tt.span.Dataset, events[0].Dataset)
 
-			sendBy, ok := events[0].Data["meta.refinery.send_by"]
+			sendBy := events[0].Data.Get("meta.refinery.send_by")
 			if tt.expectedTraceSendBy != 0 {
-				require.True(t, ok)
+				require.NotNil(t, sendBy)
 				require.Equal(t, tt.expectedTraceSendBy, sendBy.(int64))
 			} else {
-				require.False(t, ok)
+				require.Nil(t, sendBy)
 			}
 
 			if tt.expectedAPIHost != "" {
@@ -2178,10 +2177,10 @@ func TestBigTracesGoEarly(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
 					"index":           i,
-				},
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -2197,7 +2196,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    map[string]interface{}{},
+			Data:    types.NewPayload(map[string]interface{}{}),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -2206,13 +2205,13 @@ func TestBigTracesGoEarly(t *testing.T) {
 
 	rootEvents := transmission.GetBlock(1)
 	assert.Equal(t, 1, len(rootEvents), "hitting the spanlimit should send the trace")
-	assert.Equal(t, nil, childEvents[0].Data["meta.span_count"], "child span metadata should NOT be populated with span count")
-	assert.Equal(t, "trace_send_span_limit", childEvents[0].Data["meta.refinery.send_reason"], "child span metadata should set to trace_send_span_limit")
-	assert.EqualValues(t, spanlimit+1, rootEvents[0].Data["meta.span_count"], "root span metadata should be populated with span count")
-	assert.EqualValues(t, spanlimit+1, rootEvents[0].Data["meta.event_count"], "root span metadata should be populated with event count")
-	assert.Equal(t, "deterministic/chance - late arriving span", rootEvents[0].Data["meta.refinery.reason"], "the late root span should have meta.refinery.reason set to rules + late arriving span.")
+	assert.Equal(t, nil, childEvents[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+	assert.Equal(t, "trace_send_span_limit", childEvents[0].Data.Get("meta.refinery.send_reason"), "child span metadata should set to trace_send_span_limit")
+	assert.EqualValues(t, spanlimit+1, rootEvents[0].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
+	assert.EqualValues(t, spanlimit+1, rootEvents[0].Data.Get("meta.event_count"), "root span metadata should be populated with event count")
+	assert.Equal(t, "deterministic/chance - late arriving span", rootEvents[0].Data.Get("meta.refinery.reason"), "the late root span should have meta.refinery.reason set to rules + late arriving span.")
 	assert.EqualValues(t, 2, rootEvents[0].SampleRate, "the late root span should sample rate set")
-	assert.Equal(t, "trace_send_late_span", rootEvents[0].Data["meta.refinery.send_reason"], "send reason should indicate span count exceeded")
+	assert.Equal(t, "trace_send_late_span", rootEvents[0].Data.Get("meta.refinery.send_reason"), "send reason should indicate span count exceeded")
 
 }
 
@@ -2253,12 +2252,12 @@ func TestCreateDecisionSpan(t *testing.T) {
 		TraceID: traceID1,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: map[string]interface{}{
+			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"http.status_code":       200,
 				"test":                   1,
 				"should-not-be-included": 123,
-			},
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -2274,7 +2273,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 		Dataset: "aoeu",
 		APIHost: peerShard.Addr,
 		APIKey:  legacyAPIKey,
-		Data: map[string]interface{}{
+		Data: types.NewPayload(map[string]interface{}{
 			"meta.annotation_type":         types.SpanAnnotationTypeUnknown,
 			"meta.refinery.min_span":       true,
 			"meta.refinery.root":           false,
@@ -2282,7 +2281,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 			"meta.trace_id":                traceID1,
 			"http.status_code":             200,
 			"test":                         1,
-		},
+		}),
 	}
 
 	assert.Equal(t, expected.APIHost, ds.APIHost)
@@ -2297,7 +2296,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 	rootSpan.IsRoot = true
 
 	ds = coll.createDecisionSpan(rootSpan, trace, peerShard)
-	expected.Data["meta.refinery.root"] = true
+	expected.Data.Set("meta.refinery.root", true)
 
 	assert.Equal(t, expected.APIHost, ds.APIHost)
 	assert.Equal(t, expected.APIKey, ds.APIKey)
@@ -2457,7 +2456,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 
 	events := peerTransmission.GetBlock(3)
 	assert.Len(t, events, 3)
-	assert.NotEmpty(t, events[0].Data["meta.refinery.expired_trace"])
+	assert.NotEmpty(t, events[0].Data.Get("meta.refinery.expired_trace"))
 
 	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(5*traceTimeout))
 
@@ -2529,9 +2528,9 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "test-dataset",
-				Data: map[string]interface{}{
+				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
-				},
+				}),
 				APIKey: legacyAPIKey,
 			},
 		})
@@ -2658,17 +2657,17 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 							Event: types.Event{
 								Dataset: "benchmark-dataset",
 								APIKey:  "test-api-key",
-								Data: map[string]interface{}{
+								Data: types.NewPayload(map[string]interface{}{
 									"sampler-field-1": rand.Intn(20),
 									"sampler-field-2": "static-value",
 									"index":           spanIdx,
-								},
+								}),
 							},
 						}
 
 						// Add parent ID to non-root spans
 						if !isRoot {
-							spans[spanIdx].Data["trace.parent_id"] = fmt.Sprintf("parent-%s", traceID)
+							spans[spanIdx].Data.Set("trace.parent_id", fmt.Sprintf("parent-%s", traceID))
 						}
 
 						spanIdx++
