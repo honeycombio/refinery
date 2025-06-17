@@ -293,7 +293,7 @@ func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /alive check")
 
 	alive := r.Health.IsAlive()
-	r.Metrics.Gauge("is_alive", alive)
+	r.Metrics.Gauge("is_alive", metrics.ConvertBoolToFloat(alive))
 	if !alive {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "no"}, "json")
@@ -306,7 +306,7 @@ func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /ready check")
 
 	ready := r.Health.IsReady()
-	r.Metrics.Gauge("is_ready", ready)
+	r.Metrics.Gauge("is_ready", metrics.ConvertBoolToFloat(ready))
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "no"}, "json")
@@ -483,7 +483,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
-	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", len(batchedEvents))
+	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", int64(len(batchedEvents)))
 
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
@@ -577,7 +577,7 @@ func (router *Router) processOTLPRequest(
 			}
 		}
 	}
-	router.Metrics.Count(router.incomingOrPeer+"_router_otlp_events", totalEvents)
+	router.Metrics.Count(router.incomingOrPeer+"_router_otlp_events", int64(totalEvents))
 
 	return nil
 }
@@ -620,9 +620,9 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
 	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data["meta.signal_type"] == "log" {
-			r.Metrics.Count("bytes_received_logs", span.GetDataSize())
+			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
-			r.Metrics.Count("bytes_received_traces", span.GetDataSize())
+			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
 		}
 	}
 

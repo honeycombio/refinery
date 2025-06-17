@@ -39,15 +39,15 @@ func (p *MetricsPrefixer) Increment(name string) {
 	p.Metrics.Increment(p.prefix + name)
 }
 
-func (p *MetricsPrefixer) Gauge(name string, val interface{}) {
+func (p *MetricsPrefixer) Gauge(name string, val float64) {
 	p.Metrics.Gauge(p.prefix+name, val)
 }
 
-func (p *MetricsPrefixer) Count(name string, val interface{}) {
+func (p *MetricsPrefixer) Count(name string, val int64) {
 	p.Metrics.Count(p.prefix+name, val)
 }
 
-func (p *MetricsPrefixer) Histogram(name string, obs interface{}) {
+func (p *MetricsPrefixer) Histogram(name string, obs float64) {
 	p.Metrics.Histogram(p.prefix+name, obs)
 }
 

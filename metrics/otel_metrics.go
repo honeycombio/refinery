@@ -248,7 +248,7 @@ func (o *OTelMetrics) Increment(name string) {
 	o.values[name]++
 }
 
-func (o *OTelMetrics) Gauge(name string, val interface{}) {
+func (o *OTelMetrics) Gauge(name string, val float64) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
@@ -261,10 +261,10 @@ func (o *OTelMetrics) Gauge(name string, val interface{}) {
 			return
 		}
 	}
-	o.values[name] = ConvertNumeric(val)
+	o.values[name] = val
 }
 
-func (o *OTelMetrics) Count(name string, val interface{}) {
+func (o *OTelMetrics) Count(name string, val int64) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
@@ -276,12 +276,11 @@ func (o *OTelMetrics) Count(name string, val interface{}) {
 			return
 		}
 	}
-	f := ConvertNumeric(val)
-	ctr.Add(context.Background(), int64(f))
-	o.values[name] += f
+	ctr.Add(context.Background(), val)
+	o.values[name] += float64(val)
 }
 
-func (o *OTelMetrics) Histogram(name string, val interface{}) {
+func (o *OTelMetrics) Histogram(name string, val float64) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
@@ -293,9 +292,8 @@ func (o *OTelMetrics) Histogram(name string, val interface{}) {
 			return
 		}
 	}
-	f := ConvertNumeric(val)
-	h.Record(context.Background(), f)
-	o.values[name] += f
+	h.Record(context.Background(), val)
+	o.values[name] += val
 }
 
 func (o *OTelMetrics) Up(name string) {

@@ -76,7 +76,7 @@ func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error
 	ps.mut.Lock()
 	ps.ensureTopic(topic)
 	ps.Metrics.Count("local_pubsub_published", 1)
-	ps.Metrics.Count("local_pubsub_received", len(ps.topics[topic]))
+	ps.Metrics.Count("local_pubsub_received", int64(len(ps.topics[topic])))
 	// make a copy of our subs so we don't hold the lock while calling them
 	subs := make([]*LocalSubscription, 0, len(ps.topics[topic]))
 	subs = append(subs, ps.topics[topic]...)

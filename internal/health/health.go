@@ -185,8 +185,8 @@ func (h *Health) Ready(subsystem string, ready bool) {
 		h.alives[subsystem] = true
 		h.Logger.Info().WithField("subsystem", subsystem).Logf("Health.Ready reporting subsystem alive")
 	}
-	h.Metrics.Gauge("is_ready", h.checkReady())
-	h.Metrics.Gauge("is_alive", h.checkAlive())
+	h.Metrics.Gauge("is_ready", metrics.ConvertBoolToFloat(h.checkReady()))
+	h.Metrics.Gauge("is_alive", metrics.ConvertBoolToFloat(h.checkAlive()))
 }
 
 // IsAlive returns true if all registered subsystems are alive

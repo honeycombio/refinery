@@ -152,7 +152,7 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 			d.met.Count(name, delta)
 			d.lastMetrics[name] = val
 		case metrics.Gauge:
-			d.met.Gauge(name, val)
+			d.met.Gauge(name, float64(val))
 		}
 	}
 

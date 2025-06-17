@@ -81,25 +81,25 @@ func (m *MultiMetrics) Increment(name string) { // for counters
 	m.values[name]++
 }
 
-func (m *MultiMetrics) Gauge(name string, val interface{}) { // for gauges
+func (m *MultiMetrics) Gauge(name string, val float64) { // for gauges
 	for _, ch := range m.children {
 		ch.Gauge(name, val)
 	}
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.values[name] = ConvertNumeric(val)
+	m.values[name] = val
 }
 
-func (m *MultiMetrics) Count(name string, n interface{}) { // for counters
+func (m *MultiMetrics) Count(name string, n int64) { // for counters
 	for _, ch := range m.children {
 		ch.Count(name, n)
 	}
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.values[name] += ConvertNumeric(n)
+	m.values[name] += float64(n)
 }
 
-func (m *MultiMetrics) Histogram(name string, obs interface{}) { // for histogram
+func (m *MultiMetrics) Histogram(name string, obs float64) { // for histogram
 	for _, ch := range m.children {
 		ch.Histogram(name, obs)
 	}

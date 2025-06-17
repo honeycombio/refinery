@@ -208,7 +208,7 @@ func (d *DefaultTransmission) processResponses(
 				d.Metrics.Increment(counterResponse20x)
 			}
 			d.Metrics.Down(updownQueuedItems)
-			d.Metrics.Histogram(histogramQueueTime, dequeuedAt-enqueuedAt)
+			d.Metrics.Histogram(histogramQueueTime, float64(dequeuedAt-enqueuedAt))
 		case <-ctx.Done():
 			return
 		}

@@ -810,7 +810,7 @@ func TestProcessEventMetrics(t *testing.T) {
 		opampEnabled   bool
 		recordUsage    config.DefaultTrue
 		signalType     string
-		expectedCount  int
+		expectedCount  int64
 		metricName     string
 	}{
 		{
@@ -914,7 +914,7 @@ func TestProcessEventMetrics(t *testing.T) {
 			}
 			size := span.GetDataSize()
 			if tt.expectedCount > 0 {
-				assert.Equal(t, tt.expectedCount, size)
+				assert.Equal(t, tt.expectedCount, int64(size))
 			}
 
 			// Call processEvent
@@ -1046,8 +1046,8 @@ func TestRouterBatch(t *testing.T) {
 	}
 
 	mockMetrics := router.Metrics.(*metrics.MockMetrics)
-	assert.Equal(t, 1, mockMetrics.CounterIncrements["incoming_router_batch"])
-	assert.Equal(t, 3, mockMetrics.CounterIncrements["incoming_router_batch_events"])
+	assert.Equal(t, int64(1), mockMetrics.CounterIncrements["incoming_router_batch"])
+	assert.Equal(t, int64(3), mockMetrics.CounterIncrements["incoming_router_batch_events"])
 
 	var spans []*types.Span
 	for len(spans) < len(batchEvents) {

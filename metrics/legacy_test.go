@@ -35,7 +35,7 @@ func Test_getOrAdd_counter(t *testing.T) {
 	wg.Wait()
 
 	var ctr *counter = getOrAdd(lock, "foo", metrics, createCounter)
-	assert.Equal(t, nthreads*1000, ctr.val)
+	assert.Equal(t, int64(nthreads*1000), ctr.val)
 }
 
 func Test_getOrAdd_gauge(t *testing.T) {

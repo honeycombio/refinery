@@ -105,37 +105,35 @@ func (p *PromMetrics) Increment(name string) {
 		}
 	}
 }
-func (p *PromMetrics) Count(name string, n interface{}) {
+func (p *PromMetrics) Count(name string, n int64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	if counterIface, ok := p.metrics[name]; ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
-			f := ConvertNumeric(n)
-			counter.Add(f)
-			p.values[name] += f
+			counter.Add(float64(n))
+			p.values[name] += float64(n)
 		}
 	}
 }
-func (p *PromMetrics) Gauge(name string, val interface{}) {
+func (p *PromMetrics) Gauge(name string, val float64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	if gaugeIface, ok := p.metrics[name]; ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
-			f := ConvertNumeric(val)
-			gauge.Set(f)
-			p.values[name] = f
+			gauge.Set(val)
+			p.values[name] = val
 		}
 	}
 }
-func (p *PromMetrics) Histogram(name string, obs interface{}) {
+func (p *PromMetrics) Histogram(name string, obs float64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	if histIface, ok := p.metrics[name]; ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
-			hist.Observe(ConvertNumeric(obs))
+			hist.Observe(obs)
 		}
 	}
 }

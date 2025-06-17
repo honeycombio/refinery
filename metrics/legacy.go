@@ -45,7 +45,7 @@ type LegacyMetrics struct {
 type counter struct {
 	lock sync.Mutex
 	name string
-	val  int
+	val  int64
 }
 
 type gauge struct {
@@ -383,12 +383,12 @@ func createUpdown(name string) *updown {
 	}
 }
 
-func (h *LegacyMetrics) Count(name string, n interface{}) {
+func (h *LegacyMetrics) Count(name string, n int64) {
 	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
 
 	// update value, using counter's lock
 	counter.lock.Lock()
-	counter.val = counter.val + int(ConvertNumeric(n))
+	counter.val = counter.val + n
 	counter.lock.Unlock()
 }
 
@@ -396,21 +396,21 @@ func (h *LegacyMetrics) Increment(name string) {
 	h.Count(name, 1)
 }
 
-func (h *LegacyMetrics) Gauge(name string, val interface{}) {
+func (h *LegacyMetrics) Gauge(name string, val float64) {
 	gauge := getOrAdd(&h.lock, name, h.gauges, createGauge)
 
 	// update value, using gauge's lock
 	gauge.lock.Lock()
-	gauge.val = ConvertNumeric(val)
+	gauge.val = val
 	gauge.lock.Unlock()
 }
 
-func (h *LegacyMetrics) Histogram(name string, obs interface{}) {
+func (h *LegacyMetrics) Histogram(name string, obs float64) {
 	histogram := getOrAdd(&h.lock, name, h.histograms, createHistogram)
 
 	// update value, using histogram's lock
 	histogram.lock.Lock()
-	histogram.vals = append(histogram.vals, ConvertNumeric(obs))
+	histogram.vals = append(histogram.vals, obs)
 	histogram.lock.Unlock()
 }
 
@@ -437,6 +437,6 @@ func (h *LegacyMetrics) Store(name string, val float64) {
 
 	// update value, using constant's lock
 	constant.lock.Lock()
-	constant.val = ConvertNumeric(val)
+	constant.val = val
 	constant.lock.Unlock()
 }
