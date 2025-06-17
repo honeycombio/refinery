@@ -281,7 +281,8 @@ func extractValueFromSpan(
 	trace *types.Trace,
 	span *types.Span,
 	condition *config.RulesBasedSamplerCondition,
-	checkNestedFields bool) (value interface{}, exists bool, checkedOnlyRoot bool) {
+	checkNestedFields bool,
+) (value interface{}, exists bool, checkedOnlyRoot bool) {
 	// start with the assumption that we only checked the root span
 	checkedOnlyRoot = true
 
@@ -317,12 +318,11 @@ func extractValueFromSpan(
 			checkedOnlyRoot = false
 		}
 
-		value, exists = span.Data[field]
-		if exists {
-			return value, exists, checkedOnlyRoot
+		if span.Data.Exists(field) {
+			return span.Data.Get(field), true, checkedOnlyRoot
 		}
 	}
-	if !exists && checkNestedFields {
+	if checkNestedFields {
 		jsonStr, err := json.Marshal(span.Data)
 		if err == nil {
 			for _, field := range condition.Fields {
