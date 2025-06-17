@@ -211,7 +211,7 @@ func (c *cuckooSentCache) monitor() {
 			// Length() returns the number of items in the cache and it will
 			// clean up any expired items.
 			numOfDroppedIDs := c.recentDroppedIDs.Length()
-			c.met.Gauge("cache_recent_dropped_traces", numOfDroppedIDs)
+			c.met.Gauge("cache_recent_dropped_traces", float64(numOfDroppedIDs))
 		case <-c.done:
 			return
 		}

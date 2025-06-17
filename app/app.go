@@ -44,8 +44,8 @@ func (a *App) Start() error {
 		}
 		cfgMetric := config.ConfigHashMetrics(cfgHash)
 		ruleMetric := config.ConfigHashMetrics(rulesHash)
-		a.Metrics.Gauge("config_hash", cfgMetric)
-		a.Metrics.Gauge("rule_config_hash", ruleMetric)
+		a.Metrics.Gauge("config_hash", float64(cfgMetric))
+		a.Metrics.Gauge("rule_config_hash", float64(ruleMetric))
 	}
 
 	a.Logger.Debug().Logf("Starting up App...")

@@ -419,7 +419,7 @@ func (s *StressRelief) Recalc() uint {
 	localLevel := uint(maximumLevel)
 
 	clusterStressLevel := s.clusterStressLevel(localLevel)
-	s.RefineryMetrics.Gauge("cluster_stress_level", clusterStressLevel)
+	s.RefineryMetrics.Gauge("cluster_stress_level", float64(clusterStressLevel))
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -432,7 +432,7 @@ func (s *StressRelief) Recalc() uint {
 		overallStressLevel = clusterStressLevel
 	}
 	s.overallStressLevel = overallStressLevel
-	s.RefineryMetrics.Gauge("stress_level", s.overallStressLevel)
+	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 
 	s.reason = reason
 	s.formula = formula

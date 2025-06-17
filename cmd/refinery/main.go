@@ -169,6 +169,8 @@ func main() {
 	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
 	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
 	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
+	upstreamMetricsWrapper := &metrics.LibhoneyMetricsWrapper{MetricsPrefixer: upstreamMetricsRecorder}
+	peerMetricsWrapper := &metrics.LibhoneyMetricsWrapper{MetricsPrefixer: peerMetricsRecorder}
 
 	userAgentAddition := "refinery/" + version
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
@@ -181,7 +183,7 @@ func main() {
 			Transport:             upstreamTransport,
 			BlockOnSend:           true,
 			EnableMsgpackEncoding: true,
-			Metrics:               upstreamMetricsRecorder,
+			Metrics:               upstreamMetricsWrapper,
 		},
 	})
 	if err != nil {
@@ -199,7 +201,7 @@ func main() {
 			Transport:             peerTransport,
 			DisableCompression:    !c.GetCompressPeerCommunication(),
 			EnableMsgpackEncoding: true,
-			Metrics:               peerMetricsRecorder,
+			Metrics:               peerMetricsWrapper,
 		},
 	})
 	if err != nil {
@@ -209,7 +211,7 @@ func main() {
 
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
-	peerTransmission := transmit.NewDefaultTransmission(peerClient, peerMetricsRecorder, "peer")
+	peerTransmission := transmit.NewDefaultTransmission(peerClient, upstreamMetricsRecorder, "peer")
 
 	// we need to include all the metrics types so we can inject them in case they're needed
 	// but we only want to instantiate the ones that are enabled with non-null values
@@ -331,8 +333,8 @@ func main() {
 	// these have to be done after the injection (of metrics)
 	// these are the metrics that libhoney will emit; we preregister them so that they always appear
 	for _, metric := range libhoneyMetrics {
-		upstreamMetricsRecorder.Register(metric)
-		peerMetricsRecorder.Register(metric)
+		upstreamMetricsWrapper.Register(metric)
+		peerMetricsWrapper.Register(metric)
 	}
 
 	// Register metrics after the metrics object has been created

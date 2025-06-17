@@ -105,6 +105,7 @@ type InMemCollector struct {
 
 	sampleTraceCache cache.TraceSentCache
 
+	shutdownWG        sync.WaitGroup
 	incoming          chan *types.Span
 	fromPeer          chan *types.Span
 	outgoingTraces    chan sendableTrace
@@ -225,10 +226,16 @@ func (i *InMemCollector) Start() error {
 	}
 
 	// spin up one collector because this is a single threaded collector
+	i.shutdownWG.Add(1)
 	go i.collect()
+
+	i.shutdownWG.Add(1)
 	go i.sendTraces()
+
+	i.shutdownWG.Add(1)
 	// spin up a drop decision batch sender
 	go i.sendDropDecisions()
+	i.shutdownWG.Add(1)
 	go i.sendKeptDecisions()
 
 	return nil
@@ -268,7 +275,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
+	i.Metrics.Gauge("memory_heap_allocation", float64(mem.Alloc))
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
@@ -300,7 +307,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// or just run out of traces to delete.
 
 	cacheSize := len(allTraces)
-	i.Metrics.Gauge("collector_cache_size", cacheSize)
+	i.Metrics.Gauge("collector_cache_size", float64(cacheSize))
 
 	totalDataSizeSent := 0
 	tracesSent := generics.NewSet[string]()
@@ -386,6 +393,8 @@ func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 // block is the only place we are allowed to modify any running data
 // structures.
 func (i *InMemCollector) collect() {
+	defer i.shutdownWG.Done()
+
 	tickerDuration := i.Config.GetTracesConfig().GetSendTickerValue()
 	ticker := time.NewTicker(tickerDuration)
 	defer ticker.Stop()
@@ -480,10 +489,10 @@ func (i *InMemCollector) collect() {
 
 func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "redistributeTraces")
-	redistrubutionStartTime := i.Clock.Now()
+	redistributionStartTime := i.Clock.Now()
 
 	defer func() {
-		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", i.Clock.Now().Sub(redistrubutionStartTime).Milliseconds())
+		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", float64(i.Clock.Now().Sub(redistributionStartTime).Milliseconds()))
 		span.End()
 	}()
 
@@ -568,7 +577,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		"hostname":              i.hostname,
 	})
 
-	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces)+len(emptyTraces))
+	i.Metrics.Gauge("trace_forwarded_on_peer_change", float64(len(forwardedTraces)+len(emptyTraces)))
 
 	// remove all redistributed traces from the cache if we are in traces locality concentrated mode
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
@@ -586,7 +595,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
 	startTime := time.Now()
 	defer func() {
-		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", time.Since(startTime).Milliseconds())
+		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", float64(time.Since(startTime).Milliseconds()))
 		span.End()
 	}()
 
@@ -619,8 +628,8 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	})
 
 	dur := time.Now().Sub(startTime)
-	i.Metrics.Gauge("collector_expired_traces_missing_decisions", len(expiredTraces))
-	i.Metrics.Gauge("collector_expired_traces_orphans", orphanTraceCount)
+	i.Metrics.Gauge("collector_expired_traces_missing_decisions", float64(len(expiredTraces)))
+	i.Metrics.Gauge("collector_expired_traces_orphans", float64(orphanTraceCount))
 
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
 
@@ -1114,6 +1123,7 @@ func (i *InMemCollector) Stop() error {
 		close(i.dropDecisionBuffer)
 		close(i.keptDecisionBuffer)
 	}
+	i.shutdownWG.Wait()
 
 	return nil
 }
@@ -1328,6 +1338,8 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 }
 
 func (i *InMemCollector) sendTraces() {
+	defer i.shutdownWG.Done()
+
 	for t := range i.outgoingTraces {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
 		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
@@ -1467,7 +1479,7 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 		return
 	}
 
-	i.Metrics.Count(fmt.Sprintf("%s_decisions_received", decisionType.String()), len(decisions))
+	i.Metrics.Count(fmt.Sprintf("%s_decisions_received", decisionType.String()), int64(len(decisions)))
 
 	if len(decisions) == 0 {
 		return
@@ -1591,7 +1603,7 @@ func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
 	start := time.Now()
 	defer func() {
-		i.Metrics.Histogram("collector_publish_trace_decision_dur_ms", time.Since(start).Milliseconds())
+		i.Metrics.Histogram("collector_publish_trace_decision_dur_ms", float64(time.Since(start).Milliseconds()))
 	}()
 
 	_, span := otelutil.StartSpanWith(ctx, i.Tracer, "publishTraceDecision", "decision", td.Kept)
@@ -1619,6 +1631,8 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 }
 
 func (i *InMemCollector) sendKeptDecisions() {
+	defer i.shutdownWG.Done()
+
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		return
 	}
@@ -1630,6 +1644,8 @@ func (i *InMemCollector) sendKeptDecisions() {
 }
 
 func (i *InMemCollector) sendDropDecisions() {
+	defer i.shutdownWG.Done()
+
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		return
 	}
@@ -1690,7 +1706,7 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 
 		// Send the batch if ready
 		if send && len(decisions) > 0 {
-			i.Metrics.Histogram(metricName, len(decisions))
+			i.Metrics.Histogram(metricName, float64(len(decisions)))
 
 			// Copy current batch to process
 			decisionsToProcess := make([]TraceDecision, len(decisions))
