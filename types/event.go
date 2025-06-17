@@ -214,11 +214,7 @@ type Span struct {
 // IsDecicionSpan returns true if the span is a decision span based on
 // a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
-	v := sp.Data.Get("meta.refinery.min_span")
-	if v == nil {
-		return false
-	}
-	isDecisionSpan, ok := v.(bool)
+	isDecisionSpan, ok := sp.Data.Get("meta.refinery.min_span").(bool)
 	if !ok {
 		return false
 	}
@@ -252,13 +248,11 @@ func (sp *Span) SetSendBy(sendBy time.Time) {
 
 func (sp *Span) GetSendBy() (time.Time, bool) {
 	value := sp.Data.Get("meta.refinery.send_by")
-	if value != nil {
-		switch v := value.(type) {
-		case int64:
-			return time.Unix(v, 0), true
-		case uint64:
-			return time.Unix(int64(v), 0), true
-		}
+	switch v := value.(type) {
+	case int64:
+		return time.Unix(v, 0), true
+	case uint64:
+		return time.Unix(int64(v), 0), true
 	}
 
 	return time.Time{}, false
@@ -270,13 +264,11 @@ func (sp *Span) GetSendBy() (time.Time, bool) {
 func (sp *Span) GetDataSize() int {
 	if sp.IsDecisionSpan() {
 		v := sp.Data.Get("meta.refinery.span_data_size")
-		if v != nil {
-			switch value := v.(type) {
-			case int64:
-				return int(value)
-			case uint64:
-				return int(value)
-			}
+		switch value := v.(type) {
+		case int64:
+			return int(value)
+		case uint64:
+			return int(value)
 		}
 		return 0
 	}

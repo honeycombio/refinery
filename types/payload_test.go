@@ -13,33 +13,37 @@ import (
 
 func TestPayload(t *testing.T) {
 	data := map[string]any{
-		"key1": "value1",
-		"key2": int64(42),
-		"key3": 3.14,
-		"key4": true,
+		"key1":   "value1",
+		"key2":   int64(42),
+		"key3":   3.14,
+		"key4":   true,
+		"keyNil": nil,
 	}
 
 	var ph Payload
 	doTest := func(t *testing.T) {
+		assert.True(t, ph.Exists("key1"))
 		assert.Equal(t, "value1", ph.Get("key1"))
+		assert.True(t, ph.Exists("key2"))
 		assert.Equal(t, int64(42), ph.Get("key2"))
+		assert.True(t, ph.Exists("keyNil"))
+		assert.Nil(t, ph.Get("keyNil"))
+		assert.False(t, ph.Exists("nonexistent"))
 		assert.Nil(t, ph.Get("nonexistent"))
 
 		ph.Set("key5", "newvalue")
+		assert.True(t, ph.Exists("key5"))
 		assert.Equal(t, "newvalue", ph.Get("key5"))
 
 		// Overwrite an existing value
 		ph.Set("key3", 4.13)
+		assert.True(t, ph.Exists("key3"))
 		assert.Equal(t, 4.13, ph.Get("key3"))
-
-		found := make(map[string]any)
-		for k, v := range ph.All() {
-			found[k] = v
-		}
 
 		expected := maps.Clone(data)
 		expected["key3"] = 4.13
 		expected["key5"] = "newvalue"
+		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
 		asJSON, err := json.Marshal(ph)

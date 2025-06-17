@@ -318,9 +318,8 @@ func extractValueFromSpan(
 			checkedOnlyRoot = false
 		}
 
-		value = span.Data.Get(field)
-		if value != nil {
-			return value, true, checkedOnlyRoot
+		if span.Data.Exists(field) {
+			return span.Data.Get(field), true, checkedOnlyRoot
 		}
 	}
 	if checkNestedFields {

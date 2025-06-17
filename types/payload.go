@@ -87,6 +87,32 @@ func (p *Payload) MemoizeFields(keys ...string) {
 	}
 }
 
+func (p *Payload) Exists(key string) bool {
+	if p.memoizedFields != nil {
+		if _, ok := p.memoizedFields[key]; ok {
+			return true
+		}
+	}
+
+	iter, err := p.msgpMap.Iterate()
+	if err != nil {
+		return false
+	}
+
+	for {
+		keyBytes, _, err := iter.NextKey()
+		if err != nil {
+			break
+		}
+
+		if string(keyBytes) == key {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (p *Payload) Get(key string) any {
 	if p.memoizedFields != nil {
 		if value, ok := p.memoizedFields[key]; ok {

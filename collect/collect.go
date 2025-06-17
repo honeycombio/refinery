@@ -725,7 +725,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 		// if the span is sent for signaling expired traces,
 		// we should not add it to the cache
-		if sp.Data.Get("meta.refinery.expired_trace") != nil {
+		if sp.Data.Exists("meta.refinery.expired_trace") {
 			return
 		}
 
@@ -777,7 +777,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 	// if the span is sent for signaling expired traces,
 	// we should not add it to the cache
-	if sp.Data.Get("meta.refinery.expired_trace") != nil {
+	if sp.Data.Exists("meta.refinery.expired_trace") {
 		return
 	}
 
@@ -1319,9 +1319,12 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 	dc := sp.ExtractDecisionContext()
 	// extract all key fields from the span
 	keyFields := sampler.GetKeyFields()
+	sp.Data.MemoizeFields(keyFields...)
 	for _, keyField := range keyFields {
-		if val := sp.Data.Get(keyField); val != nil {
-			dc.Data.Set(keyField, val)
+		// Less efficient than a two-return version of Get(), so consider adding
+		// that to the Payload interface if these becomes a hotspot.
+		if sp.Data.Exists(keyField) {
+			dc.Data.Set(keyField, sp.Data.Get(keyField))
 		}
 	}
 

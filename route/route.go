@@ -1070,19 +1070,13 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 	}
 
 	// check if the event has a root flag
-	if isRoot := ev.Data.Get("meta.refinery.root"); isRoot != nil {
-		v, ok := isRoot.(bool)
-		if !ok {
-			return false
-		}
-
-		return v
+	if isRoot, ok := ev.Data.Get("meta.refinery.root").(bool); ok {
+		return isRoot
 	}
 
 	// check if the event has a parent id using the configured parent id field names
 	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
-		parentId := ev.Data.Get(parentIdFieldName)
-		if _, ok := parentId.(string); ok && parentId != "" {
+		if parentId, ok := ev.Data.Get(parentIdFieldName).(string); ok && parentId != "" {
 			return false
 		}
 	}
@@ -1090,13 +1084,13 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 }
 
 func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
-	if trID := ev.Data.Get("meta.trace_id"); trID != nil {
-		return trID.(string)
+	if trID, ok := ev.Data.Get("meta.trace_id").(string); ok {
+		return trID
 	}
 
 	for _, traceIdFieldName := range traceIdFieldNames {
-		if trID := ev.Data.Get(traceIdFieldName); trID != nil {
-			return trID.(string)
+		if trID, ok := ev.Data.Get(traceIdFieldName).(string); ok {
+			return trID
 		}
 	}
 
