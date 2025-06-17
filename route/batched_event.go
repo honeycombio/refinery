@@ -32,7 +32,7 @@ func (b *batchedEvent) getSampleRate() uint {
 
 // UnmarshalMsg implements msgp.Unmarshaler
 // Based on generated code from the msgp tool, but modified for clarity and to
-// the unnecessary unsafe string conversion.
+// avoid the unnecessary unsafe string conversion.
 // For instructions on how to generate this sort of code, see
 // https://pkg.go.dev/github.com/tinylib/msgp#section-readme
 func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
