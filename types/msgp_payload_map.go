@@ -41,7 +41,7 @@ func (m *MsgpPayloadMap) Size() int {
 }
 
 func (m *MsgpPayloadMap) Iterate() (msgpPayloadMapIter, error) {
-	if m == nil {
+	if m == nil || len(m.rawData) == 0 {
 		return msgpPayloadMapIter{}, nil
 	}
 	n, remaining, err := msgp.ReadMapHeaderBytes(m.rawData)

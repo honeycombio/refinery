@@ -12,7 +12,7 @@ import (
 
 type Payload struct {
 	// A serialized messagepack map used to source fields.
-	msgpMap *MsgpPayloadMap
+	msgpMap MsgpPayloadMap
 
 	// Deserialized fields, either from the internal msgpMap, or set externally.
 	memoizedFields map[string]any
@@ -27,7 +27,7 @@ func NewPayload(data map[string]any) Payload {
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal. Instead it
 // keep a reference to serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
-	p.msgpMap = &MsgpPayloadMap{rawData: data}
+	p.msgpMap = MsgpPayloadMap{rawData: data}
 	return nil
 }
 
@@ -41,7 +41,7 @@ func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		return nil, err
 	}
 	ourData := bts[:len(bts)-len(remainder)]
-	p.msgpMap = &MsgpPayloadMap{rawData: ourData}
+	p.msgpMap = MsgpPayloadMap{rawData: ourData}
 	return remainder, err
 }
 
@@ -57,10 +57,6 @@ func (p *Payload) UnmarshalJSON(data []byte) error {
 // Extracts all of the listed fields from the internal msgp buffer in a single
 // pass, for efficient random access later.
 func (p *Payload) MemoizeFields(keys ...string) {
-	if p.msgpMap == nil {
-		return
-	}
-
 	if p.memoizedFields == nil {
 		p.memoizedFields = make(map[string]any, len(keys))
 	}
@@ -168,7 +164,7 @@ func (p *Payload) Set(key string, value any) {
 }
 
 func (p *Payload) IsEmpty() bool {
-	return len(p.memoizedFields) == 0 && p.msgpMap == nil
+	return len(p.memoizedFields) == 0 && p.msgpMap.Size() == 0
 }
 
 // All() allows easily iterating all values in the Payload, but this is very
@@ -219,10 +215,7 @@ func (p *Payload) All() iter.Seq2[string, any] {
 
 // Estimates data size, not very accurately, but it's fast.
 func (p *Payload) GetDataSize() int {
-	var total int
-	if p.msgpMap != nil {
-		total += p.msgpMap.Size()
-	}
+	total := p.msgpMap.Size()
 	for k, v := range p.memoizedFields {
 		total += len(k) + getByteSize(v)
 	}

@@ -150,9 +150,11 @@ func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 	_, err = arrayPayloadMap.Iterate()
 	assert.Error(t, err)
 
-	// Test empty data
+	// Test empty data - iterating is ok, but EOFs immediately.
 	emptyPayloadMap := NewMessagePackPayloadMap(nil)
-	_, err = emptyPayloadMap.Iterate()
+	iter, err := emptyPayloadMap.Iterate()
+	assert.NoError(t, err)
+	_, _, err = iter.NextKey()
 	assert.Error(t, err)
 
 	// Test truncated data, should fail on the second value.
@@ -182,7 +184,7 @@ func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 
 	payloadMap := NewMessagePackPayloadMap(encoded)
-	iter, err := payloadMap.Iterate()
+	iter, err = payloadMap.Iterate()
 	require.NoError(t, err)
 
 	for {
