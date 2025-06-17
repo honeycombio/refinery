@@ -790,7 +790,8 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	coll.reloadConfigs()
+	conf.SetMaxAlloc(config.MemorySize(mem.Alloc * 99 / 100))
 
 	// TODO: enable this once we want to turn on DisableTraceLocality
 	//	orphanPeerTrace := coll.cache.Get(peerTraceIDs[0])
