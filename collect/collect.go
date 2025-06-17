@@ -105,7 +105,7 @@ type InMemCollector struct {
 
 	sampleTraceCache cache.TraceSentCache
 
-	wg                sync.WaitGroup
+	shutdownWG        sync.WaitGroup
 	incoming          chan *types.Span
 	fromPeer          chan *types.Span
 	outgoingTraces    chan sendableTrace
@@ -226,16 +226,16 @@ func (i *InMemCollector) Start() error {
 	}
 
 	// spin up one collector because this is a single threaded collector
-	i.wg.Add(1)
+	i.shutdownWG.Add(1)
 	go i.collect()
 
-	i.wg.Add(1)
+	i.shutdownWG.Add(1)
 	go i.sendTraces()
 
-	i.wg.Add(1)
+	i.shutdownWG.Add(1)
 	// spin up a drop decision batch sender
 	go i.sendDropDecisions()
-	i.wg.Add(1)
+	i.shutdownWG.Add(1)
 	go i.sendKeptDecisions()
 
 	return nil
@@ -393,7 +393,7 @@ func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
 // block is the only place we are allowed to modify any running data
 // structures.
 func (i *InMemCollector) collect() {
-	defer i.wg.Done()
+	defer i.shutdownWG.Done()
 
 	tickerDuration := i.Config.GetTracesConfig().GetSendTickerValue()
 	ticker := time.NewTicker(tickerDuration)
@@ -1131,7 +1131,7 @@ func (i *InMemCollector) Stop() error {
 		close(i.dropDecisionBuffer)
 		close(i.keptDecisionBuffer)
 	}
-	i.wg.Wait()
+	i.shutdownWG.Wait()
 
 	return nil
 }
@@ -1349,7 +1349,7 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 }
 
 func (i *InMemCollector) sendTraces() {
-	defer i.wg.Done()
+	defer i.shutdownWG.Done()
 
 	for t := range i.outgoingTraces {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
@@ -1642,7 +1642,7 @@ func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecis
 }
 
 func (i *InMemCollector) sendKeptDecisions() {
-	defer i.wg.Done()
+	defer i.shutdownWG.Done()
 
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		return
@@ -1655,7 +1655,7 @@ func (i *InMemCollector) sendKeptDecisions() {
 }
 
 func (i *InMemCollector) sendDropDecisions() {
-	defer i.wg.Done()
+	defer i.shutdownWG.Done()
 
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		return
