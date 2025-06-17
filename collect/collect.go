@@ -480,10 +480,10 @@ func (i *InMemCollector) collect() {
 
 func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "redistributeTraces")
-	redistrubutionStartTime := i.Clock.Now()
+	redistributionStartTime := i.Clock.Now()
 
 	defer func() {
-		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", float64(i.Clock.Now().Sub(redistrubutionStartTime).Milliseconds()))
+		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", float64(i.Clock.Now().Sub(redistributionStartTime).Milliseconds()))
 		span.End()
 	}()
 
