@@ -34,7 +34,7 @@ func (p *Payload) UnmarshalMsgpack(data []byte) error {
 // UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
 // part of a larger message.
 func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	// Oddly the msgp library doesn't export the interal size method it uses
+	// Oddly the msgp library doesn't export the internal size method it uses
 	// to skip data. So we will derived it from the returned slice.
 	remainder, err := msgp.Skip(bts)
 	if err != nil {
