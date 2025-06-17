@@ -3,7 +3,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2025-05-14 at 16:44:26 UTC.
+It was automatically generated on 2025-06-17 at 14:29:18 UTC.
 
 ## The Rules file
 
@@ -119,6 +119,9 @@ Including an error field, or something like `HTTP status code`, is an excellent 
 Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
+If a trace does not contain any of the fields specified in the FieldList, it will still be evaluated by the sampler.
+However, since it lacks all key fields, it will be grouped under a single empty (blank) key.
+This means that all such traces will share the same sample rate, determined by that one shared key.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
 As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
 For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
@@ -227,6 +230,9 @@ Including an error field, or something like `HTTP status code`, is an excellent 
 Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
+If a trace does not contain any of the fields specified in the FieldList, it will still be evaluated by the sampler.
+However, since it lacks all key fields, it will be grouped under a single empty (blank) key.
+This means that all such traces will share the same sample rate, determined by that one shared key.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
 As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
 For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
@@ -347,6 +353,9 @@ Including an error field, or something like `HTTP status code`, is an excellent 
 Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
+If a trace does not contain any of the fields specified in the FieldList, it will still be evaluated by the sampler.
+However, since it lacks all key fields, it will be grouped under a single empty (blank) key.
+This means that all such traces will share the same sample rate, determined by that one shared key.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
 As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
 For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
@@ -438,6 +447,9 @@ Including an error field, or something like `HTTP status code`, is an excellent 
 Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
+If a trace does not contain any of the fields specified in the FieldList, it will still be evaluated by the sampler.
+However, since it lacks all key fields, it will be grouped under a single empty (blank) key.
+This means that all such traces will share the same sample rate, determined by that one shared key.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
 As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
 For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
@@ -668,6 +680,9 @@ Including an error field, or something like `HTTP status code`, is an excellent 
 Using fields with very high cardinality, like `k8s.pod.id`, is a bad choice.
 If the combination of fields essentially makes each trace unique, then the Dynamic Sampler will sample everything.
 If the combination of fields is not unique enough, then you will not be guaranteed samples of the most interesting traces.
+If a trace does not contain any of the fields specified in the FieldList, it will still be evaluated by the sampler.
+However, since it lacks all key fields, it will be grouped under a single empty (blank) key.
+This means that all such traces will share the same sample rate, determined by that one shared key.
 As an example, consider as a good set of fields: the combination of `HTTP endpoint` (high-frequency and boring), `HTTP method`, and `status code` (normally boring but can become interesting when indicating an error) since it will allowing proper sampling of all endpoints under normal traffic and call out when there is failing traffic to any endpoint.
 As of Refinery 2.8.0, the `root.` prefix can be used to limit the field value to that of the root span.
 For example, `root.http.response.status_code` will only consider the `http.response.status_code` field from the root span rather than a combination of all the spans in the trace.
