@@ -6,6 +6,7 @@ import (
 	"maps"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
@@ -23,10 +24,25 @@ func NewPayload(data map[string]any) Payload {
 	}
 }
 
+// UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal. Instead it
+// keep a reference to serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
 	p.msgpMap = &MsgpPayloadMap{rawData: data}
-	p.memoizedFields = make(map[string]any)
 	return nil
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
+// part of a larger message.
+func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	// Oddly the msgp library doesn't export the interal size method it uses
+	// to skip data. So we will derived it from the returned slice.
+	remainder, err := msgp.Skip(bts)
+	if err != nil {
+		return nil, err
+	}
+	ourData := bts[:len(bts)-len(remainder)]
+	p.msgpMap = &MsgpPayloadMap{rawData: ourData}
+	return remainder, err
 }
 
 func (p *Payload) UnmarshalJSON(data []byte) error {
