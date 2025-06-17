@@ -714,7 +714,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
 		if sr, keptReason, found := i.sampleTraceCache.CheckSpan(sp); found {
-			span.SetAttributes(attribute.String("disposition", "already_sent"))
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -731,7 +730,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
-		span.SetAttributes(attribute.Bool("create_new_trace", true))
 		i.Metrics.Increment("trace_accepted")
 
 		timeout := tcfg.GetTraceTimeout()
@@ -763,7 +761,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	// span.
 	if trace.Sent {
 		if sr, reason, found := i.sampleTraceCache.CheckSpan(sp); found {
-			span.SetAttributes(attribute.String("disposition", "already_sent"))
 			i.Metrics.Increment("trace_sent_cache_hit")
 			i.dealWithSentTrace(ctx, sr, reason, sp)
 			return
@@ -783,7 +780,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
-	span.SetAttributes(attribute.String("disposition", "live_trace"))
 
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
@@ -823,7 +819,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		updatedSendBy := i.Clock.Now().Add(timeout)
 		// if the trace has already timed out, we should not update the send_by time
 		if trace.SendBy.After(updatedSendBy) {
-			span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
 			trace.SendBy = updatedSendBy
 			i.cache.Set(trace)
 		}
