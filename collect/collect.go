@@ -232,11 +232,13 @@ func (i *InMemCollector) Start() error {
 	i.shutdownWG.Add(1)
 	go i.sendTraces()
 
-	i.shutdownWG.Add(1)
 	// spin up a drop decision batch sender
+	i.shutdownWG.Add(1)
 	go i.sendDropDecisions()
 	i.shutdownWG.Add(1)
 	go i.sendKeptDecisions()
+	i.shutdownWG.Add(1)
+	go i.recordQueueMetrics()
 
 	return nil
 }
@@ -409,12 +411,6 @@ func (i *InMemCollector) collect() {
 		startTime := time.Now()
 
 		i.Health.Ready(CollectorHealthKey, true)
-		// record channel lengths as histogram but also as gauges
-		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
-		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
-		i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
-		i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
-
 		// Always drain peer channel before doing anything else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
 		// deadlocks because peers are waiting to get their events handed off to each
@@ -1744,6 +1740,24 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 			}
 			timer.Reset(interval)
 			send = false
+		}
+	}
+}
+
+func (i *InMemCollector) recordQueueMetrics() {
+	defer i.shutdownWG.Done()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
+			i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
+			i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
+			i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
+		case <-i.done:
+			ticker.Stop()
+			return
 		}
 	}
 }

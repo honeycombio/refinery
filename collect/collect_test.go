@@ -2660,6 +2660,8 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 					eventQueue: make(chan *types.Event, 10000),
 				}
 				collector := setupBenchmarkCollector(b, sampler.config, sender)
+				collector.Start()
+
 				defer collector.Stop()
 
 				// use b.N as the number of traces to create
@@ -2728,32 +2730,24 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mo
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100000,
+			DroppedSize:       1000,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  samplerConfig,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:      config.Duration(1 * time.Millisecond),
 			HealthCheckTimeout: config.Duration(100 * time.Millisecond),
+			IncomingQueueSize:  100000,
+			PeerQueueSize:      100000,
 		},
 	}
 
 	coll := newTestCollector(conf, sender, sender)
 
-	c := cache.NewInMemCache(10000, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	require.NoError(b, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 100000)
-	coll.fromPeer = make(chan *types.Span, 100000)
-	coll.outgoingTraces = make(chan sendableTrace, 100000)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
 	coll.BlockOnAddSpan = true
-	coll.Health.Register(CollectorHealthKey, conf.GetHealthCheckTimeout())
-
-	// Start the collector's processing goroutines
-	go coll.collect()
-	go coll.sendTraces()
 
 	return coll
 }
