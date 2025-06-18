@@ -145,7 +145,9 @@ func TestAddRootSpan(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -288,8 +290,11 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendDropDecisions()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -392,7 +397,9 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -450,7 +457,9 @@ func TestAddSpan(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -560,7 +569,9 @@ func TestDryRunMode(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -787,7 +798,9 @@ func TestStableMaxAlloc(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 500)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 500)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -993,7 +1006,9 @@ func TestAddCountsToRoot(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -1087,7 +1102,9 @@ func TestLateRootGetsCounts(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 	defer coll.Stop()
 
@@ -1183,7 +1200,9 @@ func TestAddSpanCount(t *testing.T) {
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
 
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -1275,7 +1294,9 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -1354,7 +1375,9 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -1427,7 +1450,9 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -1589,7 +1614,9 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -1697,7 +1724,9 @@ func TestSpanWithRuleReasons(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 5)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -2164,7 +2193,9 @@ func TestBigTracesGoEarly(t *testing.T) {
 	coll.outgoingTraces = make(chan sendableTrace, 500)
 	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
 	coll.datasetSamplers = make(map[string]sample.Sampler)
+	coll.shutdownWG.Add(1)
 	go coll.collect()
+	coll.shutdownWG.Add(1)
 	go coll.sendTraces()
 
 	defer coll.Stop()
@@ -2343,6 +2374,7 @@ func TestSendDropDecisions(t *testing.T) {
 	conf.GetCollectionConfigVal = collectionCfg
 
 	closed := make(chan struct{})
+	coll.shutdownWG.Add(1)
 	go func() {
 		coll.sendDropDecisions()
 		close(closed)
@@ -2371,6 +2403,7 @@ func TestSendDropDecisions(t *testing.T) {
 	coll.dropDecisionBuffer = make(chan TraceDecision, 5)
 
 	closed = make(chan struct{})
+	coll.shutdownWG.Add(1)
 	go func() {
 		coll.sendDropDecisions()
 		close(closed)
