@@ -2,6 +2,32 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.9.6
+
+This release focuses on improving observability and making Refinery easier to operate with better default values and new metrics. It also includes several important bug fixes for edge cases and configuration handling.
+
+### Enhanced Observability
+
+Two new metrics have been added to help monitor OTLP traffic patterns:
+- `incoming_router_otlp_events` - tracks the number of events received via OTLP endpoints
+- `incoming_router_batch_events` - tracks the number of events received via /batch endpoints
+
+These metrics complement existing router metrics and provide better visibility into how your telemetry data is flowing through Refinery.
+
+### Improved Default Configuration
+
+Several default values have been updated to be more practical for real-world deployments:
+- `HealthCheckTimeout` now defaults to a more reasonable value instead of requiring manual configuration
+- `MaxExpiredTraces` has a sensible default to prevent collect loop issues out of the box
+
+### Key Bug Fixes
+
+This release addresses several important edge cases:
+- **Redis connection cleanup**: Fixed a bug where Refinery would not properly clean up Redis connections, potentially leading to Redis connection errors during shutdown.
+- **Dynamic sampler key generation**: Use an empty string for the sampler key when no fields are present, clarifying the behavior when no key fields are found in a trace.
+- **Peer management**: Fixed a bug where Refinery would not properly handle peer management when using file-based peer management.
+- **Trace timeout during redistribution**: Propagate the trace timeout to the new owner during redistribution, ensuring that traces are handled correctly even when ownership changes.
+
 ## Version 2.9.5
 
 This release includes improvements to trace cache documentation, internal metric flushing on shutdown, and enhanced metric visibility such as sampler key cardinality. It also introduces environment variable substitution in config strings and experimental support for OpAMP. The OpAMP feature is intended for *internal use only* and is *not supported or recommended* for production.
