@@ -35,6 +35,9 @@ type CuckooTraceChecker struct {
 	capacity uint
 	met      metrics.Metrics
 	addch    chan string
+
+	done       chan struct{}
+	shutdownWG sync.WaitGroup
 }
 
 const (
@@ -59,6 +62,7 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 		future:   nil,
 		met:      m,
 		addch:    make(chan string, AddQueueDepth),
+		done:     make(chan struct{}),
 	}
 	for _, metric := range cuckooTraceCheckerMetrics {
 		m.Register(metric)
@@ -66,17 +70,36 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 
 	// To try to avoid blocking on Add, we have a goroutine that pulls from a
 	// channel and adds to the filter.
+	c.shutdownWG.Add(1)
 	go func() {
+		defer c.shutdownWG.Done()
+
 		ticker := time.NewTicker(AddQueueSleepTime)
-		for range ticker.C {
-			// as long as there's anything still in the channel, keep trying to drain it
-			for len(c.addch) > 0 {
-				c.drain()
+		for {
+			select {
+			case <-ticker.C:
+				for len(c.addch) > 0 {
+					c.drain()
+				}
+			case <-c.done:
+				return
+
 			}
 		}
 	}()
 
 	return c
+}
+
+func (c *CuckooTraceChecker) Stop() {
+	// stop the goroutine that drains the add channel
+	close(c.done)
+	c.shutdownWG.Wait()
+
+	// make sure we drain the channel one last time
+	for len(c.addch) > 0 {
+		c.drain()
+	}
 }
 
 // This function records all the traces that were in the channel at the start of

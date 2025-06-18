@@ -53,15 +53,16 @@ var TickerTime = 500 * time.Millisecond
 // subsystems are registered, they will be expected to report in at least once
 // every timeout interval. If they don't, they will be marked as not alive.
 type Health struct {
-	Clock    clockwork.Clock `inject:""`
-	Metrics  metrics.Metrics `inject:"genericMetrics"`
-	Logger   logger.Logger   `inject:""`
-	timeouts map[string]time.Duration
-	timeLeft map[string]time.Duration
-	readies  map[string]bool
-	alives   map[string]bool
-	mut      sync.RWMutex
-	done     chan struct{}
+	Clock      clockwork.Clock `inject:""`
+	Metrics    metrics.Metrics `inject:"genericMetrics"`
+	Logger     logger.Logger   `inject:""`
+	timeouts   map[string]time.Duration
+	timeLeft   map[string]time.Duration
+	readies    map[string]bool
+	alives     map[string]bool
+	mut        sync.RWMutex
+	done       chan struct{}
+	shutdownWG sync.WaitGroup
 	startstop.Starter
 	startstop.Stopper
 	Recorder
@@ -89,16 +90,21 @@ func (h *Health) Start() error {
 	h.readies = make(map[string]bool)
 	h.alives = make(map[string]bool)
 	h.done = make(chan struct{})
+
+	h.shutdownWG.Add(1)
 	go h.ticker()
 	return nil
 }
 
 func (h *Health) Stop() error {
 	close(h.done)
+	h.shutdownWG.Wait()
 	return nil
 }
 
 func (h *Health) ticker() {
+	defer h.shutdownWG.Done()
+
 	tick := h.Clock.NewTicker(TickerTime)
 	for {
 		select {

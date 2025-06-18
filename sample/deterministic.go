@@ -66,3 +66,5 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 func (d *DeterministicSampler) GetKeyFields() []string {
 	return d.Config.GetSamplingFields()
 }
+
+func (d *DeterministicSampler) Stop() {}
