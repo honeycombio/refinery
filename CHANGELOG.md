@@ -11,6 +11,7 @@ It also includes several bug fixes and maintenance updates.
 
 ### Fixes
 
+- fix: wait for all goroutines inside collector to finish during shutdown (#1589) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: close redis pubsub connection on shutdown (#1578) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: use value from GetCollectionConfigVal for HealthCheckTimeout in mock config (#1577) | [Yingrong Zhao](https://github.com/vinozzZ)
 - fix: TraceKey used in dynamic sampler should not create a new key if no key fields are found (#1575) | [Yingrong Zhao](https://github.com/vinozzZ)
