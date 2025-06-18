@@ -152,6 +152,7 @@ groups:
       - name: Enabled
         type: bool
         valuetype: nondefault
+        unpublished: true
         default: false
         reload: false
         firstversion: v2.9.4
@@ -162,6 +163,7 @@ groups:
       - name: RecordUsage
         type: defaulttrue
         valuetype: nondefault
+        unpublished: true
         default: true
         reload: true
         firstversion: v2.9.4
@@ -172,6 +174,7 @@ groups:
       - name: Endpoint
         type: string
         valuetype: assigndefault
+        unpublished: true
         default: "wss://127.0.0.1:4320/v1/opamp"
         reload: false
         firstversion: v2.9.4

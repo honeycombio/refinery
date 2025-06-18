@@ -135,41 +135,6 @@ OpAMP support is an experimental feature, subject to breaking changes at any tim
 Not intended or supported for customer use.
 **FOR INTERNAL USE ONLY**
 
-### `Enabled`
-
-`Enabled` controls whether to enable OpAMP support.
-
-OpAMP support is an experimental feature, subject to breaking changes at any time.
-Not intended or supported for customer use.
-**FOR INTERNAL USE ONLY**
-
-- Not eligible for live reload.
-- Type: `bool`
-
-### `RecordUsage`
-
-`RecordUsage` controls whether to record usage metrics.
-
-OpAMP support is an experimental feature, subject to breaking changes at any time.
-Not intended or supported for customer use.
-**FOR INTERNAL USE ONLY**
-
-- Eligible for live reload.
-- Type: `defaulttrue`
-- Default: `true`
-
-### `Endpoint`
-
-`Endpoint` is the URL of the OpAMP server for this client.
-
-OpAMP support is an experimental feature, subject to breaking changes at any time.
-Not intended or supported for customer use.
-**FOR INTERNAL USE ONLY**
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `wss://127.0.0.1:4320/v1/opamp`
-
 ## Access Key Configuration
 
 `AccessKeys` contains access keys -- API keys that the proxy will treat specially, and other flags that control how the proxy handles API keys.
