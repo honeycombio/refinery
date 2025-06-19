@@ -51,4 +51,19 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 		assert.Equal(t, events[i].SampleRate, deserialized[i].SampleRate)
 		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserialized[i].Data.All()))
 	}
+
+	// Test overwriting with another unmarshal, with swapped events order.
+	events[0], events[1] = events[1], events[0]
+	serialized, err = msgpack.Marshal(events)
+	require.NoError(t, err)
+
+	deserialized = deserialized[:0]
+	_, err = deserialized.UnmarshalMsg(serialized)
+	require.NoError(t, err)
+	require.Len(t, deserialized, 2)
+	for i := range deserialized {
+		assert.WithinDuration(t, timestamp, *deserialized[i].MsgPackTimestamp, 0)
+		assert.Equal(t, events[i].SampleRate, deserialized[i].SampleRate)
+		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserialized[i].Data.All()))
+	}
 }
