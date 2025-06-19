@@ -7,7 +7,6 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
-	"github.com/vmihailenco/msgpack/v5"
 )
 
 type Payload struct {
@@ -259,10 +258,68 @@ func (p Payload) MarshalJSON() ([]byte, error) {
 	return json.Marshal(maps.Collect(p.All()))
 }
 
+// Implements msgpack.Marshaler.
 // Inefficient, only here for test cases where we serialize a Payload field.
 func (p Payload) MarshalMsgpack() ([]byte, error) {
-	return msgpack.Marshal(maps.Collect(p.All()))
+	return p.MarshalMsg(nil)
 }
+
+// Implements msgp.Marshaler.
+// Appends marshaled payload to supplied buffer.
+func (p Payload) MarshalMsg(buf []byte) ([]byte, error) {
+	uniqueKeyCount := uint32(len(p.memoizedFields))
+	iter, err := p.msgpMap.Iterate()
+	if err != nil {
+		return buf, err
+	}
+	for {
+		keyBytes, _, err := iter.NextKey()
+		if err != nil {
+			break
+		}
+		if _, ok := p.memoizedFields[string(keyBytes)]; !ok {
+			uniqueKeyCount++
+		}
+	}
+
+	// Write map header with total count
+	buf = msgp.AppendMapHeader(buf, uniqueKeyCount)
+
+	for key, value := range p.memoizedFields {
+		buf = msgp.AppendString(buf, key)
+		buf, err = msgp.AppendIntf(buf, value)
+		if err != nil {
+			return buf, err
+		}
+	}
+
+	// Serialize msgpMap fields, skipping duplicates
+	iter, err = p.msgpMap.Iterate()
+	if err == nil {
+		for {
+			keyBytes, _, err := iter.NextKey()
+			if err != nil {
+				break
+			}
+
+			// Skip if already serialized from memoizedFields
+			if _, ok := p.memoizedFields[string(keyBytes)]; ok {
+				continue
+			}
+
+			raw, err := iter.valueSerializedBytesZC()
+			if err != nil {
+				return buf, err
+			}
+			buf = msgp.AppendBytes(buf, keyBytes)
+			buf = append(buf, raw...)
+		}
+	}
+
+	return buf, nil
+}
+
+// TODO implement Sizer so buffer can be correctly presized
 
 // For debugging purposes
 func (p Payload) String() string {

@@ -77,6 +77,14 @@ func TestPayload(t *testing.T) {
 	assert.Equal(t, msgpData, remainder)
 	t.Run("from_msgp", doTest)
 
+	// Test our own marshaler
+	msgpData, err = ph.MarshalMsg(nil)
+	require.NoError(t, err)
+	ph = Payload{}
+	remainder, err = ph.UnmarshalMsg(msgpData)
+	require.NoError(t, err)
+	assert.Empty(t, remainder)
+	t.Run("from_marshal", doTest)
 }
 
 func BenchmarkPayload(b *testing.B) {
@@ -175,6 +183,13 @@ func BenchmarkPayload(b *testing.B) {
 				_ = k
 				_ = v
 			}
+		}
+	})
+
+	b.Run("marshal_msg", func(b *testing.B) {
+		var buf []byte
+		for b.Loop() {
+			buf, _ = phMsgp.MarshalMsg(buf[:0])
 		}
 	})
 }

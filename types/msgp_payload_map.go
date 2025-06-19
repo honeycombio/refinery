@@ -168,6 +168,22 @@ func (m *msgpPayloadMapIter) ValueString() (string, error) {
 	return val, err
 }
 
+// Return the raw serialized bytes for the next value, without copying.
+func (m *msgpPayloadMapIter) valueSerializedBytesZC() ([]byte, error) {
+	if !m.pendingValue {
+		return nil, errors.New("no pending value")
+	}
+	m.pendingValue = false
+
+	var raw []byte
+	remainder, err := msgp.Skip(m.remaining)
+	if err == nil {
+		raw = m.remaining[:len(m.remaining)-len(remainder)]
+	}
+	m.remaining = remainder
+	return raw, err
+}
+
 func msgpTypeToFieldType(t msgp.Type) (FieldType, error) {
 	switch t {
 	case msgp.StrType, msgp.BinType:
