@@ -94,6 +94,7 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 func (c *CuckooTraceChecker) Stop() {
 	// stop the goroutine that drains the add channel
 	close(c.done)
+	close(c.addch)
 	c.shutdownWG.Wait()
 
 	// make sure we drain the channel one last time
@@ -120,7 +121,11 @@ func (c *CuckooTraceChecker) drain() {
 outer:
 	for i := 0; i < n; i++ {
 		select {
-		case t := <-c.addch:
+		case t, ok := <-c.addch:
+			// if the channel is closed, we will stop processing
+			if !ok {
+				break outer
+			}
 			s := []byte(t)
 			c.current.Insert(s)
 			// don't add anything to future if it doesn't exist yet
