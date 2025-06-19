@@ -583,7 +583,6 @@ func TestOTLPHandler(t *testing.T) {
 
 		event := events[0]
 		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
-		mockTransmission.Flush()
 	})
 
 	t.Run("use SendKeyMode override", func(t *testing.T) {

@@ -1,0 +1,502 @@
+package transmit
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/klauspost/compress/zstd"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/types"
+)
+
+type testDirectAPIServer struct {
+	server *httptest.Server
+	events []receivedEvent
+	mutex  sync.RWMutex
+	t      testing.TB
+}
+
+type receivedEvent struct {
+	APIKey     string         `msgpack:"-"`
+	Dataset    string         `msgpack:"-"`
+	Time       time.Time      `msgpack:"time"`
+	SampleRate int64          `msgpack:"samplerate"`
+	Data       map[string]any `msgpack:"data"`
+}
+
+func newTestDirectAPIServer(t testing.TB) *testDirectAPIServer {
+	server := &testDirectAPIServer{t: t}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/1/batch/", server.handleBatch)
+
+	server.server = httptest.NewServer(mux)
+	t.Cleanup(server.server.Close)
+	return server
+}
+
+func (t *testDirectAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
+	var reader io.Reader = r.Body
+
+	// Handle zstd compression (even though we don't expect it, keep for completeness)
+	if encoding := r.Header.Get("Content-Encoding"); encoding == "zstd" {
+		zr, err := zstd.NewReader(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			assert.NoError(t.t, err)
+			return
+		}
+		defer zr.Close()
+		reader = zr
+	}
+
+	var events []receivedEvent
+	contentType := r.Header.Get("Content-Type")
+	assert.Equal(t.t, "application/msgpack", contentType)
+	decoder := msgpack.NewDecoder(reader)
+	decoder.UseLooseInterfaceDecoding(true)
+	if err := decoder.Decode(&events); err != nil {
+		http.Error(w, fmt.Sprintf("Msgpack decode error: %v", err), http.StatusBadRequest)
+		assert.NoError(t.t, err)
+		return
+	}
+
+	dataset := strings.TrimPrefix(r.URL.Path, "/1/batch/")
+	apiKey := r.Header.Get("X-Honeycomb-Team")
+
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	responses := make([]map[string]any, 0, len(events))
+	for i := range events {
+		events[i].APIKey = apiKey
+		events[i].Dataset = dataset
+
+		t.events = append(t.events, events[i])
+		responses = append(responses, map[string]any{"status": http.StatusAccepted})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	// Send back proper responses for each event
+	responseBytes, err := json.Marshal(responses)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Write(responseBytes)
+}
+
+func (t *testDirectAPIServer) getEvents() []receivedEvent {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+
+	return slices.Clone(t.events)
+}
+
+// setupDirectTransmissionTest creates a configured DirectTransmission with mocks for testing
+func setupDirectTransmissionTest(t *testing.T) (*DirectTransmission, *metrics.MockMetrics, *logger.MockLogger) {
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+
+	mockLogger := &logger.MockLogger{}
+
+	dt := NewDirectTransmission(mockMetrics, "test", 10, 20*time.Millisecond)
+	dt.Logger = mockLogger
+	dt.Version = "test-version"
+	dt.Transport = http.DefaultTransport.(*http.Transport)
+
+	err := dt.Start()
+	require.NoError(t, err)
+	t.Cleanup(func() { dt.Stop() })
+
+	return dt, mockMetrics, mockLogger
+}
+
+// sendTestEvents sends n events to the DirectTransmission with the given server URL
+func sendTestEvents(dt *DirectTransmission, serverURL string, count int, apiKey string) {
+	now := time.Now().UTC()
+	for i := range count {
+		eventData := types.NewPayload(map[string]any{
+			"event_id": i,
+		})
+
+		event := &types.Event{
+			Context:     context.Background(),
+			APIHost:     serverURL,
+			APIKey:      apiKey,
+			Dataset:     "test-dataset",
+			Environment: "test",
+			SampleRate:  10,
+			Timestamp:   now.Add(time.Duration(i) * time.Millisecond),
+			Data:        eventData,
+		}
+		dt.EnqueueEvent(event)
+	}
+}
+
+// getErrorEvents filters MockLogger events for error entries
+func getErrorEvents(mockLogger *logger.MockLogger) []*logger.MockLoggerEvent {
+	var errorEvents []*logger.MockLoggerEvent
+	for _, event := range mockLogger.Events {
+		if event.Fields["error"] != nil {
+			errorEvents = append(errorEvents, event)
+		}
+	}
+	return errorEvents
+}
+
+func TestDirectTransmissionErrorHandling(t *testing.T) {
+	t.Run("individual event errors", func(t *testing.T) {
+		// Create a test server that returns individual errors in batch format
+		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			// First event succeeds, second fails
+			w.Write([]byte(`[{"status": 202}, {"status": 400}]`))
+		}))
+		defer errorServer.Close()
+
+		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+		sendTestEvents(dt, errorServer.URL, 2, "test-api-key")
+
+		// Wait for events to be processed
+		assert.Eventually(t, func() bool {
+			success, _ := mockMetrics.Get(counterResponse20x)
+			errors, _ := mockMetrics.Get(counterResponseErrors)
+			return success == 1 && errors == 1
+		}, 100*time.Millisecond, 10*time.Millisecond)
+
+		// Verify metrics: One success (202) and one error (400)
+		success, _ := mockMetrics.Get(counterResponse20x)
+		errors, _ := mockMetrics.Get(counterResponseErrors)
+		assert.Equal(t, float64(1), success)
+		assert.Equal(t, float64(1), errors)
+
+		// Verify error log message
+		errorEvents := getErrorEvents(mockLogger)
+		require.Len(t, errorEvents, 1, "Expected exactly one error log for the failed event")
+
+		errorEvent := errorEvents[0]
+		assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
+		assert.Equal(t, http.StatusBadRequest, errorEvent.Fields["status_code"])
+		assert.Equal(t, errorServer.URL, errorEvent.Fields["api_host"])
+		assert.Equal(t, "test-dataset", errorEvent.Fields["dataset"])
+		assert.Equal(t, "test", errorEvent.Fields["environment"])
+		assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+	})
+
+	t.Run("http status error affects all events", func(t *testing.T) {
+		// Create a test server that returns HTTP 500 error
+		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error": "internal server error"}`))
+		}))
+		defer errorServer.Close()
+
+		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+		sendTestEvents(dt, errorServer.URL, 2, "test-api-key")
+
+		// Wait for events to be processed
+		assert.Eventually(t, func() bool {
+			errors, _ := mockMetrics.Get(counterResponseErrors)
+			return errors == 2
+		}, 100*time.Millisecond, 10*time.Millisecond)
+
+		// Both events should be errors, no successes
+		success, _ := mockMetrics.Get(counterResponse20x)
+		errors, _ := mockMetrics.Get(counterResponseErrors)
+		assert.Equal(t, float64(0), success)
+		assert.Equal(t, float64(2), errors)
+
+		// Should have 2 error log messages
+		errorEvents := getErrorEvents(mockLogger)
+		require.Len(t, errorEvents, 2, "Expected error logs for both events")
+
+		for _, errorEvent := range errorEvents {
+			assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
+			assert.Equal(t, http.StatusInternalServerError, errorEvent.Fields["status_code"])
+			assert.Contains(t, errorEvent.Fields, "response_body")
+		}
+	})
+
+	t.Run("unauthorized status special handling", func(t *testing.T) {
+		// Create a test server that returns HTTP 401 Unauthorized
+		unauthorizedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error": "unauthorized"}`))
+		}))
+		defer unauthorizedServer.Close()
+
+		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+		sendTestEvents(dt, unauthorizedServer.URL, 1, "invalid-key")
+
+		// Wait for events to be processed
+		assert.Eventually(t, func() bool {
+			errors, _ := mockMetrics.Get(counterResponseErrors)
+			return errors == 1
+		}, 100*time.Millisecond, 10*time.Millisecond)
+
+		// Should be an error
+		success, _ := mockMetrics.Get(counterResponse20x)
+		errors, _ := mockMetrics.Get(counterResponseErrors)
+		assert.Equal(t, float64(0), success)
+		assert.Equal(t, float64(1), errors)
+
+		// Look for the special unauthorized log message
+		var unauthorizedFound bool
+		for _, event := range mockLogger.Events {
+			if errorMsg, ok := event.Fields["error"].(string); ok && strings.Contains(errorMsg, "APIKey was rejected") {
+				unauthorizedFound = true
+				assert.Equal(t, "invalid-key", event.Fields["api_key"])
+				break
+			}
+		}
+		require.True(t, unauthorizedFound, "Expected special unauthorized log message")
+	})
+
+	t.Run("msgpack response handling", func(t *testing.T) {
+		// Create a test server that returns msgpack responses
+		msgpackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/msgpack")
+			w.WriteHeader(http.StatusOK)
+
+			// Create msgpack response for 2 events
+			responses := []batchResponse{
+				{Status: http.StatusAccepted},
+				{Status: http.StatusBadRequest},
+			}
+
+			packed, err := msgpack.Marshal(responses)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Write(packed)
+		}))
+		defer msgpackServer.Close()
+
+		dt, mockMetrics, _ := setupDirectTransmissionTest(t)
+		sendTestEvents(dt, msgpackServer.URL, 2, "test-api-key")
+
+		// Wait for events to be processed
+		assert.Eventually(t, func() bool {
+			success, _ := mockMetrics.Get(counterResponse20x)
+			errors, _ := mockMetrics.Get(counterResponseErrors)
+			return success == 1 && errors == 1
+		}, 100*time.Millisecond, 10*time.Millisecond)
+
+		// One success (202) and one error (400)
+		success, _ := mockMetrics.Get(counterResponse20x)
+		errors, _ := mockMetrics.Get(counterResponseErrors)
+		assert.Equal(t, float64(1), success)
+		assert.Equal(t, float64(1), errors)
+	})
+
+	t.Run("insufficient responses from server", func(t *testing.T) {
+		// Create a test server that returns fewer responses than events sent
+		insufficientServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			// Send only 1 response for 2 events
+			w.Write([]byte(`[{"status": 202}]`))
+		}))
+		defer insufficientServer.Close()
+
+		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+		sendTestEvents(dt, insufficientServer.URL, 2, "test-api-key")
+
+		// Wait for events to be processed
+		assert.Eventually(t, func() bool {
+			success, _ := mockMetrics.Get(counterResponse20x)
+			errors, _ := mockMetrics.Get(counterResponseErrors)
+			return success == 1 && errors == 1
+		}, 100*time.Millisecond, 10*time.Millisecond)
+
+		// One success and one error (for missing response)
+		success, _ := mockMetrics.Get(counterResponse20x)
+		errors, _ := mockMetrics.Get(counterResponseErrors)
+		assert.Equal(t, float64(1), success)
+		assert.Equal(t, float64(1), errors)
+
+		// Verify error log message mentions insufficient responses
+		errorEvents := getErrorEvents(mockLogger)
+		require.Len(t, errorEvents, 1, "Expected exactly one error log for the missing response")
+
+		errorEvent := errorEvents[0]
+		assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
+		assert.Equal(t, http.StatusInternalServerError, errorEvent.Fields["status_code"])
+		assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+	})
+}
+
+func TestDirectTransmission(t *testing.T) {
+	testServer := newTestDirectAPIServer(t)
+
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+
+	// Use max batch size of 3 for testing
+	dt := NewDirectTransmission(mockMetrics, "test", 3, 50*time.Millisecond)
+	dt.Logger = &logger.NullLogger{}
+	dt.Version = "test-version"
+	dt.Transport = http.DefaultTransport.(*http.Transport)
+
+	err := dt.Start()
+	require.NoError(t, err)
+	defer dt.Stop()
+
+	now := time.Now().UTC()
+
+	// Create events for multiple datasets and scenarios
+	var allEvents []*types.Event
+
+	// Dataset A: 5 events (should create 2 batches: 3 + 2)
+	for i := range 5 {
+		eventData := types.NewPayload(map[string]any{
+			"trace.trace_id": fmt.Sprintf("trace-a-%d", i),
+			"dataset":        "A",
+			"event_id":       i,
+		})
+
+		event := &types.Event{
+			Context:     context.Background(),
+			APIHost:     testServer.server.URL,
+			APIKey:      "api-key-a",
+			Dataset:     "dataset-a",
+			Environment: "test",
+			SampleRate:  10,
+			Timestamp:   now.Add(time.Duration(i) * time.Millisecond),
+			Data:        eventData,
+		}
+		allEvents = append(allEvents, event)
+	}
+
+	// Dataset B: 4 events (should create 2 batches: 3 + 1)
+	for i := range 4 {
+		eventData := types.NewPayload(map[string]any{
+			"trace.trace_id": fmt.Sprintf("trace-b-%d", i),
+			"dataset":        "B",
+			"event_id":       i,
+		})
+
+		event := &types.Event{
+			Context:     context.Background(),
+			APIHost:     testServer.server.URL,
+			APIKey:      "api-key-b",
+			Dataset:     "dataset-b",
+			Environment: "test",
+			SampleRate:  20,
+			Timestamp:   now.Add(time.Duration(i+100) * time.Millisecond),
+			Data:        eventData,
+		}
+		allEvents = append(allEvents, event)
+	}
+
+	// Dataset C: 2 events (should create 1 batch via timeout)
+	for i := range 2 {
+		eventData := types.NewPayload(map[string]any{
+			"trace.trace_id": fmt.Sprintf("trace-c-%d", i),
+			"dataset":        "C",
+			"event_id":       i,
+		})
+
+		event := &types.Event{
+			Context:     context.Background(),
+			APIHost:     testServer.server.URL,
+			APIKey:      "api-key-c",
+			Dataset:     "dataset-c",
+			Environment: "test",
+			SampleRate:  30,
+			Timestamp:   now.Add(time.Duration(i+200) * time.Millisecond),
+			Data:        eventData,
+		}
+		allEvents = append(allEvents, event)
+	}
+
+	// Send all events
+	for _, event := range allEvents {
+		dt.EnqueueEvent(event)
+	}
+
+	// Wait for all events to be processed (11 total)
+	require.Eventually(t, func() bool {
+		receivedEvents := testServer.getEvents()
+		return len(receivedEvents) == 11
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	// Verify all events were received
+	receivedEvents := testServer.getEvents()
+	require.Len(t, receivedEvents, 11)
+
+	// Group events by dataset
+	eventsByDataset := make(map[string][]receivedEvent)
+	for _, event := range receivedEvents {
+		eventsByDataset[event.Dataset] = append(eventsByDataset[event.Dataset], event)
+	}
+
+	datasetA := eventsByDataset["dataset-a"]
+	require.Len(t, datasetA, 5)
+	for i, event := range datasetA {
+		assert.Equal(t, "api-key-a", event.APIKey)
+		assert.Equal(t, "dataset-a", event.Dataset)
+		assert.Equal(t, int64(10), event.SampleRate)
+		assert.Equal(t, "A", event.Data["dataset"])
+		assert.Equal(t, fmt.Sprintf("trace-a-%d", i), event.Data["trace.trace_id"])
+		assert.Equal(t, int64(i), event.Data["event_id"])
+	}
+
+	datasetB := eventsByDataset["dataset-b"]
+	require.Len(t, datasetB, 4)
+	for i, event := range datasetB {
+		assert.Equal(t, "api-key-b", event.APIKey)
+		assert.Equal(t, "dataset-b", event.Dataset)
+		assert.Equal(t, int64(20), event.SampleRate)
+		assert.Equal(t, "B", event.Data["dataset"])
+		assert.Equal(t, fmt.Sprintf("trace-b-%d", i), event.Data["trace.trace_id"])
+		assert.Equal(t, int64(i), event.Data["event_id"])
+	}
+
+	datasetC := eventsByDataset["dataset-c"]
+	require.Len(t, datasetC, 2)
+	for i, event := range datasetC {
+		assert.Equal(t, "api-key-c", event.APIKey)
+		assert.Equal(t, "dataset-c", event.Dataset)
+		assert.Equal(t, int64(30), event.SampleRate)
+		assert.Equal(t, "C", event.Data["dataset"])
+		assert.Equal(t, fmt.Sprintf("trace-c-%d", i), event.Data["trace.trace_id"])
+		assert.Equal(t, int64(i), event.Data["event_id"])
+	}
+
+	// Verify metrics for all 11 events
+	success, _ := mockMetrics.Get(counterResponse20x)
+	errors, _ := mockMetrics.Get(counterResponseErrors)
+	enqueueErrors, _ := mockMetrics.Get(counterEnqueueErrors)
+	queuedItems, _ := mockMetrics.Get(updownQueuedItems)
+
+	assert.Equal(t, float64(11), success)
+	assert.Equal(t, float64(0), errors)
+	assert.Equal(t, float64(0), enqueueErrors)
+	// Verify all events were queued (+11) and dequeued (-11), net = 0
+	assert.Equal(t, float64(0), queuedItems)
+	// Verify queue time histogram was updated for all events
+	assert.Equal(t, 11, mockMetrics.GetHistogramCount(histogramQueueTime))
+}

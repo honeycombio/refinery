@@ -18,8 +18,6 @@ type Transmission interface {
 	// Enqueue accepts a single event and schedules it for transmission to Honeycomb
 	EnqueueEvent(ev *types.Event)
 	EnqueueSpan(ev *types.Span)
-	// Flush flushes the in-flight queue of all events and spans
-	Flush()
 
 	RegisterMetrics()
 }
@@ -139,10 +137,6 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
 	// we don't need the trace ID anymore, but it's convenient to accept spans.
 	d.EnqueueEvent(&sp.Event)
-}
-
-func (d *DefaultTransmission) Flush() {
-	d.LibhClient.Flush()
 }
 
 // RegisterMetrics registers the metrics used by the DefaultTransmission.
