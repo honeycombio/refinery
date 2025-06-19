@@ -27,6 +27,7 @@ type StressReliever interface {
 	Recalc() uint
 	Stressed() bool
 	GetSampleRate(traceID string) (rate uint, keep bool, reason string)
+	BackOffActivated() bool
 
 	startstop.Starter
 }
@@ -38,6 +39,7 @@ type MockStressReliever struct {
 	SampleDeterministically bool
 	ShouldKeep              bool
 	SampleRate              uint
+	IsBackOffActivated      bool
 }
 
 func (m *MockStressReliever) Start() error      { return nil }
@@ -50,6 +52,7 @@ func (m *MockStressReliever) GetSampleRate(traceID string) (rate uint, keep bool
 func (m *MockStressReliever) ShouldSampleDeterministically(traceID string) bool {
 	return m.SampleDeterministically
 }
+func (m *MockStressReliever) BackOffActivated() bool { return m.IsBackOffActivated }
 
 // hashSeed is a random value to seed the hash generator for the sampler.
 // We want it to be a constant that's the same across all nodes so that they
@@ -95,6 +98,7 @@ type StressRelief struct {
 	stressed           bool
 	stayOnUntil        time.Time
 	minDuration        time.Duration
+	backoff            bool
 
 	algorithms map[string]func(string, string) float64
 	calcs      []StressReliefCalculation
@@ -454,6 +458,17 @@ func (s *StressRelief) Recalc() uint {
 				"reason":                  s.reason,
 			}).Logf("StressRelief has been activated")
 		}
+		// If backoff is off, should we activate backoff?
+		if !s.backoff && s.overallStressLevel >= s.deactivateLevel {
+			s.backoff = true
+			s.Logger.Warn().WithFields(map[string]interface{}{
+				"individual_stress_level": localLevel,
+				"cluster_stress_level":    clusterStressLevel,
+				"stress_level":            s.overallStressLevel,
+				"stress_formula":          s.formula,
+				"reason":                  s.reason,
+			}).Logf("Backoff has been activated")
+		}
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
@@ -468,6 +483,15 @@ func (s *StressRelief) Recalc() uint {
 				"cluster_stress_level":    clusterStressLevel,
 				"stress_level":            s.overallStressLevel,
 			}).Logf("StressRelief has been deactivated")
+		}
+		// If backoff is on, should we deactivate backoff?
+		if s.backoff && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
+			s.backoff = false
+			s.Logger.Warn().WithFields(map[string]interface{}{
+				"individual_stress_level": localLevel,
+				"cluster_stress_level":    clusterStressLevel,
+				"stress_level":            s.overallStressLevel,
+			}).Logf("Backoff has been deactivated")
 		}
 	}
 
@@ -535,4 +559,13 @@ func (s *StressRelief) GetSampleRate(traceID string) (rate uint, keep bool, reas
 	}
 	hash := wyhash.Hash([]byte(traceID), hashSeed)
 	return uint(s.sampleRate), hash <= s.upperBound, "stress_relief/deterministic/" + s.reason
+}
+
+// BackOffActivated indicates whether the system should return backoff errors
+// to clients. This is used to indicate that the system is approaching it's limits
+// and should not be overloaded with more requests.
+func (s *StressRelief) BackOffActivated() bool {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return s.backoff
 }

@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/honeycombio/refinery/types"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 // for generating request IDs
@@ -105,6 +108,28 @@ func (r *Router) requestLogger(next http.Handler) http.Handler {
 		// log that we did so TODO better formatted http log line
 		r.Logger.Debug().Logf("handled %s request %s %s %s %s %f %d", route.GetName(), reqID, remoteIP, method, url, dur, wrapped.status)
 	})
+}
+
+func (r *Router) backOffHTTPMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if r.StressRelief.BackOffActivated() {
+			// If a retry after value is set, add it to the response header
+			retryAfter := time.Duration(r.Config.GetStressReliefConfig().BackOffRetryAfter)
+			if retryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())))
+			}
+			w.WriteHeader(r.Config.GetStressReliefConfig().BackOffHTTPStatusCode)
+			return
+		}
+		next.ServeHTTP(w, req)
+	})
+}
+
+func (r *Router) backOffGRPCInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	if r.StressRelief.BackOffActivated() {
+		return nil, status.Error(r.Config.GetStressReliefConfig().BackOffGRPCStatusCode, "backoff")
+	}
+	return handler(ctx, req)
 }
 
 func (r *Router) setResponseHeaders(next http.Handler) http.Handler {
