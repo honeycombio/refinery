@@ -61,6 +61,7 @@ type Config interface {
 	GetPeers() []string
 
 	GetPeerManagementType() string
+	GetPeerManagementShardingStrategy() string
 
 	GetRedisPeerManagement() RedisPeerManagementConfig
 
