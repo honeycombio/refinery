@@ -139,7 +139,7 @@ func TestUnmarshal(t *testing.T) {
 		req.Header.Set("Content-Type", "nope")
 
 		var data map[string]interface{}
-		err := unmarshal(req, req.Body, &data)
+		err := unmarshal(req, readAll(t, req.Body), &data)
 		// Should succeed because invalid content type defaults to JSON
 		assert.NoError(t, err)
 	})
@@ -156,7 +156,7 @@ func TestUnmarshal(t *testing.T) {
 					req.Header.Set("Content-Type", contentType)
 
 					var result map[string]interface{}
-					err = unmarshal(req, req.Body, &result)
+					err = unmarshal(req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 
 					// Compare directly to test data
@@ -177,7 +177,7 @@ func TestUnmarshal(t *testing.T) {
 					req.Header.Set("Content-Type", contentType)
 
 					var result map[string]interface{}
-					err = unmarshal(req, req.Body, &result)
+					err = unmarshal(req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 
 					// Compare directly to test data
@@ -187,10 +187,10 @@ func TestUnmarshal(t *testing.T) {
 		})
 	})
 
-	// Test []batchedEvent unmarshaling (used in batch)
-	t.Run("[]batchedEvent", func(t *testing.T) {
+	// Test batchedEvents unmarshaling (used in batch)
+	t.Run("batchedEvents", func(t *testing.T) {
 		t.Run("json", func(t *testing.T) {
-			batchEvents := []batchedEvent{
+			batchEvents := batchedEvents{
 				{
 					Timestamp:  now.Format(time.RFC3339Nano),
 					SampleRate: 2,
@@ -210,8 +210,8 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
-					var result []batchedEvent
-					err = unmarshal(req, req.Body, &result)
+					var result batchedEvents
+					err = unmarshal(req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 					require.Len(t, result, 2)
 
@@ -258,8 +258,8 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", buf)
 					req.Header.Set("Content-Type", contentType)
 
-					var result []batchedEvent
-					err = unmarshal(req, req.Body, &result)
+					var result batchedEvents
+					err = unmarshal(req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 					require.Len(t, result, 2)
 
@@ -983,9 +983,9 @@ func newBatchRouter(t testing.TB) *Router {
 	}
 }
 
-func createBatchEvents() []batchedEvent {
+func createBatchEvents() batchedEvents {
 	now := time.Now().UTC()
-	batchEvents := []batchedEvent{
+	batchEvents := batchedEvents{
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
@@ -1143,4 +1143,10 @@ func BenchmarkRouterBatch(b *testing.B) {
 			<-mockCollector.Spans
 		}
 	}
+}
+
+func readAll(t testing.TB, r io.Reader) []byte {
+	got, err := io.ReadAll(r)
+	require.NoError(t, err)
+	return got
 }

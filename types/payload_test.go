@@ -62,11 +62,21 @@ func TestPayload(t *testing.T) {
 	ph = NewPayload(data)
 	t.Run("from_map", doTest)
 
+	ph = Payload{}
 	msgpData, err := msgpack.Marshal(data)
 	require.NoError(t, err)
 	err = msgpack.Unmarshal(msgpData, &ph)
 	require.NoError(t, err)
+	t.Run("from_msgpack", doTest)
+
+	// Test payload with other stuff (another payload) following.
+	ph = Payload{}
+	extendedMsgpData := append(msgpData, msgpData...)
+	remainder, err := ph.UnmarshalMsg(extendedMsgpData)
+	require.NoError(t, err)
+	assert.Equal(t, msgpData, remainder)
 	t.Run("from_msgp", doTest)
+
 }
 
 func BenchmarkPayload(b *testing.B) {
@@ -99,10 +109,17 @@ func BenchmarkPayload(b *testing.B) {
 		}
 	})
 
-	b.Run("create_msgp", func(b *testing.B) {
+	b.Run("create_msgpack", func(b *testing.B) {
 		for b.Loop() {
 			var phMsgp Payload
 			_ = phMsgp.UnmarshalMsgpack(msgpData)
+		}
+	})
+
+	b.Run("create_msgp", func(b *testing.B) {
+		for b.Loop() {
+			var phMsgp Payload
+			_, _ = phMsgp.UnmarshalMsg(msgpData)
 		}
 	})
 

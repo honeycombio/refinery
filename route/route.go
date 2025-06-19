@@ -22,6 +22,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
 	healthserver "google.golang.org/grpc/health"
@@ -439,7 +440,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 	}
 
 	data := map[string]interface{}{}
-	err = unmarshal(req, bytes.NewReader(reqBod), &data)
+	err = unmarshal(req, reqBod, &data)
 	if err != nil {
 		return nil, err
 	}
@@ -476,8 +477,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	batchedEvents := make([]batchedEvent, 0)
-	err = unmarshal(req, bytes.NewReader(reqBod), &batchedEvents)
+	batchedEvents := make(batchedEvents, 0)
+	err = unmarshal(req, reqBod, &batchedEvents)
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -732,28 +733,6 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 	return reader, nil
 }
 
-type batchedEvent struct {
-	Timestamp        string        `json:"time"`
-	MsgPackTimestamp *time.Time    `msgpack:"time,omitempty"`
-	SampleRate       int64         `json:"samplerate" msgpack:"samplerate"`
-	Data             types.Payload `json:"data" msgpack:"data"`
-}
-
-func (b *batchedEvent) getEventTime() time.Time {
-	if b.MsgPackTimestamp != nil {
-		return b.MsgPackTimestamp.UTC()
-	}
-
-	return getEventTime(b.Timestamp)
-}
-
-func (b *batchedEvent) getSampleRate() uint {
-	if b.SampleRate == 0 {
-		return defaultSampleRate
-	}
-	return uint(b.SampleRate)
-}
-
 // getEventTime tries to guess the time format in our time header!
 // Allowable options are
 // * RFC3339Nano
@@ -815,14 +794,18 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 	return zstdDecoders, nil
 }
 
-func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
+func unmarshal(r *http.Request, data []byte, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
-		decoder := msgpack.NewDecoder(data)
+		if unmarshaler, ok := v.(msgp.Unmarshaler); ok {
+			_, err := unmarshaler.UnmarshalMsg(data)
+			return err
+		}
+		decoder := msgpack.NewDecoder(bytes.NewReader(data))
 		decoder.UseLooseInterfaceDecoding(true)
 		return decoder.Decode(v)
 	default:
-		return jsoniter.NewDecoder(data).Decode(v)
+		return jsoniter.Unmarshal(data, v)
 	}
 }
 
