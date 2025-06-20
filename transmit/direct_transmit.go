@@ -108,8 +108,8 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 			d.mutex.Unlock()
 
 			// TODO one goroutine per dataset/peer will lead to 1M+ goroutines
-			// in degenerate cases. This is not a viable production strategry,
-			// and needs to be evolved to more bounded system.
+			// in degenerate cases. This is not a viable production strategy,
+			// and needs to be evolved to a more bounded system.
 			d.shutdownWG.Add(1)
 			go d.batchEvents(ch)
 			q = ch
@@ -316,7 +316,7 @@ func (d *DirectTransmission) sendBatch(batch []*types.Event) {
 
 // TODO this needs to be modified to not exceed maximum event and batch sizes,
 // which is rather a hassle. See libhoney's encodeBatchMsgp method.
-// TODO we'll need a benchmark which send very wide distributions of dataset/host,
+// TODO we'll need a benchmark which sends very wide distributions of dataset/host,
 // and one which just spams a single one, to identify the unique bottlenecks of
 // both cases.
 func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
