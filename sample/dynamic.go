@@ -63,6 +63,10 @@ func (d *DynamicSampler) Start() error {
 	return nil
 }
 
+func (d *DynamicSampler) Stop() {
+	d.dynsampler.Stop()
+}
+
 func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	key, n := d.key.build(trace)
 	if n == maxKeyLength {
