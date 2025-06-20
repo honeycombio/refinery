@@ -68,6 +68,10 @@ func (d *WindowedThroughputSampler) Start() error {
 	return nil
 }
 
+func (d *WindowedThroughputSampler) Stop() {
+	d.dynsampler.Stop()
+}
+
 func (d *WindowedThroughputSampler) SetClusterSize(size int) {
 	if d.useClusterSize {
 		d.clusterSize = size

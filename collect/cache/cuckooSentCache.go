@@ -151,7 +151,8 @@ type cuckooSentCache struct {
 	// when terminating the system, call Stop() to close the channel.
 	// Either one causes the goroutine to shut down, and in resizing
 	// we then start a new monitor.
-	done chan struct{}
+	done       chan struct{}
+	shutdownWG sync.WaitGroup
 
 	// This mutex is for managing kept traces
 	keptMut     sync.Mutex
@@ -197,12 +198,15 @@ func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (Trac
 		keptReasons:      NewKeptReasonsCache(met),
 		done:             make(chan struct{}),
 	}
+	cache.shutdownWG.Add(1)
 	go cache.monitor()
 	return cache, nil
 }
 
 // goroutine to monitor the cache and cycle the size check periodically
 func (c *cuckooSentCache) monitor() {
+	defer c.shutdownWG.Done()
+
 	ticker := time.NewTicker(time.Duration(c.cfg.SizeCheckInterval))
 	for {
 		select {
@@ -221,6 +225,7 @@ func (c *cuckooSentCache) monitor() {
 // Stop halts the monitor goroutine
 func (c *cuckooSentCache) Stop() {
 	close(c.done)
+	c.dropped.Stop()
 }
 
 func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
@@ -295,6 +300,8 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 
 	// shut down the old monitor and create a new one
 	c.done <- struct{}{}
+	c.shutdownWG.Wait() // wait for the old monitor to finish
+	c.shutdownWG.Add(1)
 	go c.monitor()
 	return nil
 }
