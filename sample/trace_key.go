@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dgryski/go-metro"
+	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -180,7 +180,7 @@ func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
 		d.buf = append(d.buf, fmt.Sprintf("%v", v)...)
 	}
 
-	hash := metro.Hash64(d.buf, 0)
+	hash := wyhash.Hash(d.buf, 0)
 	if _, exists := d.values[fieldIdx][hash]; !exists {
 		d.totalUniqueCount++
 		if d.totalUniqueCount >= d.maxDistinctValue {
