@@ -99,16 +99,21 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 	if !ok {
 		d.mutex.Lock()
 		q, ok = d.transmitQueues[key]
-		if !ok {
+		if ok {
+			d.mutex.Unlock()
+		} else {
 			// TODO buffer size - use larger buffer to avoid blocking
 			ch := make(chan *types.Event, 100)
 			d.transmitQueues[key] = ch
+			d.mutex.Unlock()
 
+			// TODO one goroutine per dataset/peer will lead to 1M+ goroutines
+			// in degenerate cases. This is not a viable production strategry,
+			// and needs to be evolved to more bounded system.
 			d.shutdownWG.Add(1)
 			go d.batchEvents(ch)
 			q = ch
 		}
-		d.mutex.Unlock()
 	}
 
 	q <- ev
@@ -311,6 +316,9 @@ func (d *DirectTransmission) sendBatch(batch []*types.Event) {
 
 // TODO this needs to be modified to not exceed maximum event and batch sizes,
 // which is rather a hassle. See libhoney's encodeBatchMsgp method.
+// TODO we'll need a benchmark which send very wide distributions of dataset/host,
+// and one which just spams a single one, to identify the unique bottlenecks of
+// both cases.
 func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
 	defer d.shutdownWG.Done()
 
@@ -338,6 +346,8 @@ func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
 				break eventLoop
 			}
 		}
+
+		// TODO sending batches in-line here is not viable for production.
 		d.sendBatch(batch)
 	}
 }
@@ -359,8 +369,7 @@ type batchResponse struct {
 // unreadable timestamps.
 func (z *batchedEvent) MarshalMsg(b []byte) (o []byte, err error) {
 	o = b
-	// map header, size 3
-	// string "time"
+	// map header (size 3), followed by string "time"
 	o = append(o, 0x83, 0xa4, 0x74, 0x69, 0x6d, 0x65)
 	o = msgp.AppendTimeExt(o, z.time)
 	// string "samplerate"

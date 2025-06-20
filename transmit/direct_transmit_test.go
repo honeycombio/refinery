@@ -24,7 +24,9 @@ import (
 )
 
 type testDirectAPIServer struct {
-	server *httptest.Server
+	server       *httptest.Server
+	maxBatchSize int
+
 	events []receivedEvent
 	mutex  sync.RWMutex
 	t      testing.TB
@@ -38,8 +40,11 @@ type receivedEvent struct {
 	Data       map[string]any `msgpack:"data"`
 }
 
-func newTestDirectAPIServer(t testing.TB) *testDirectAPIServer {
-	server := &testDirectAPIServer{t: t}
+func newTestDirectAPIServer(t testing.TB, maxBatchSize int) *testDirectAPIServer {
+	server := &testDirectAPIServer{
+		maxBatchSize: maxBatchSize,
+		t:            t,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/1/batch/", server.handleBatch)
@@ -74,6 +79,7 @@ func (t *testDirectAPIServer) handleBatch(w http.ResponseWriter, r *http.Request
 		assert.NoError(t.t, err)
 		return
 	}
+	assert.LessOrEqual(t.t, len(events), t.maxBatchSize)
 
 	dataset := strings.TrimPrefix(r.URL.Path, "/1/batch/")
 	apiKey := r.Header.Get("X-Honeycomb-Team")
@@ -349,12 +355,11 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 }
 
 func TestDirectTransmission(t *testing.T) {
-	testServer := newTestDirectAPIServer(t)
-
 	mockMetrics := &metrics.MockMetrics{}
 	mockMetrics.Start()
 
 	// Use max batch size of 3 for testing
+	testServer := newTestDirectAPIServer(t, 3)
 	dt := NewDirectTransmission(mockMetrics, "test", 3, 50*time.Millisecond)
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -443,11 +448,8 @@ func TestDirectTransmission(t *testing.T) {
 		return len(receivedEvents) == 11
 	}, 200*time.Millisecond, 10*time.Millisecond)
 
-	// Verify all events were received
-	receivedEvents := testServer.getEvents()
-	require.Len(t, receivedEvents, 11)
-
 	// Group events by dataset
+	receivedEvents := testServer.getEvents()
 	eventsByDataset := make(map[string][]receivedEvent)
 	for _, event := range receivedEvents {
 		eventsByDataset[event.Dataset] = append(eventsByDataset[event.Dataset], event)
