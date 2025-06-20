@@ -81,6 +81,10 @@ func (d *EMAThroughputSampler) Start() error {
 	return nil
 }
 
+func (d *EMAThroughputSampler) Stop() {
+	d.dynsampler.Stop()
+}
+
 func (d *EMAThroughputSampler) SetClusterSize(size int) {
 	if d.useClusterSize {
 		d.clusterSize = size

@@ -84,6 +84,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 		keptDecisionMessages: make(chan string, 50),
 		dropDecisionMessages: make(chan string, 50),
 		dropDecisionBuffer:   make(chan TraceDecision, 5),
+		keptDecisionBuffer:   make(chan TraceDecision, 5),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
 			ID:    "api1",
@@ -117,10 +118,17 @@ func TestAddRootSpan(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 		GetAccessKeyConfigVal: config.AccessKeyConfig{
 			SendKey:     "another-key",
@@ -135,21 +143,7 @@ func TestAddRootSpan(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
+	coll.Start()
 
 	defer coll.Stop()
 
@@ -264,10 +258,17 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -278,26 +279,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.dropDecisionBuffer = make(chan TraceDecision, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendDropDecisions()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	// Generate events until one is sampled and appears on the transmission queue for sending.
@@ -330,7 +312,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
 
 	// Generate one more event with no upstream sampling applied.
-	err = coll.AddSpan(&types.Span{
+	err := coll.AddSpan(&types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1000),
 		Event: types.Event{
 			Dataset:    "no-upstream-sampling",
@@ -371,10 +353,17 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -385,24 +374,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	span := &types.Span{
@@ -433,10 +405,17 @@ func TestAddSpan(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -447,22 +426,7 @@ func TestAddSpan(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -535,6 +499,11 @@ func TestDryRunMode(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{
 			SampleRate: 10,
 		},
@@ -543,6 +512,8 @@ func TestDryRunMode(t *testing.T) {
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			TraceLocalityMode: "distributed",
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -559,22 +530,8 @@ func TestDryRunMode(t *testing.T) {
 	}
 	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
 	coll.SamplerFactory = samplerFactory
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID1 = "abc123"
@@ -759,10 +716,17 @@ func TestStableMaxAlloc(t *testing.T) {
 			TraceTimeout: config.Duration(10 * time.Minute),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          1000,
+			DroppedSize:       1000,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 1000,
+			PeerQueueSize:     5,
 		},
 	}
 
@@ -788,22 +752,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		}
 	}
 
-	c := cache.NewInMemCache(1000, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 1000)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 500)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 500)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	for i := 0; i < 500; i++ {
@@ -842,7 +791,8 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 	// Set MaxAlloc, which should cause cache evictions.
-	conf.GetCollectionConfigVal.MaxAlloc = config.MemorySize(mem.Alloc * 99 / 100)
+	conf.SetMaxAlloc(config.MemorySize(mem.Alloc * 995 / 1000))
+	coll.reloadConfigs()
 
 	// TODO: enable this once we want to turn on DisableTraceLocality
 	//	orphanPeerTrace := coll.cache.Get(peerTraceIDs[0])
@@ -978,6 +928,11 @@ func TestAddCountsToRoot(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot: true,
 		AddCountsToRoot:    true,
@@ -996,22 +951,7 @@ func TestAddCountsToRoot(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1074,13 +1014,20 @@ func TestLateRootGetsCounts(t *testing.T) {
 			TraceTimeout: config.Duration(5 * time.Millisecond),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
 		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 
@@ -1092,21 +1039,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1174,11 +1107,18 @@ func TestAddSpanCount(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot: true,
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -1189,23 +1129,7 @@ func TestAddSpanCount(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1268,12 +1192,19 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 			TraceTimeout: config.Duration(5 * time.Millisecond),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -1284,22 +1215,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID = "mytrace"
@@ -1350,10 +1266,17 @@ func TestLateSpanNotDecorated(t *testing.T) {
 			TraceTimeout: config.Duration(5 * time.Minute),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 
@@ -1365,22 +1288,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	coll.Start()
 	defer coll.Stop()
 
 	var traceID = "traceABC"
@@ -1423,13 +1331,20 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
 		AdditionalAttributes: map[string]string{
 			"name":  "foo",
 			"other": "bar",
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -1440,22 +1355,8 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	defer transmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	err := coll.Start()
+	assert.NoError(t, err, "collector should start")
 	defer coll.Stop()
 
 	var traceID = "trace123"
@@ -1582,6 +1483,11 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			TraceTimeout: config.Duration(5 * time.Minute),
 			MaxBatchSize: 500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		StressRelief: config.StressReliefConfig{
@@ -1591,7 +1497,9 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			SamplingRate:      100,
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 
@@ -1604,22 +1512,9 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
 	coll.hostname = "host123"
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
 
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	err := coll.Start()
+	require.NoError(t, err, "collector should start")
 	defer coll.Stop()
 
 	var traceID = "traceABC"
@@ -1655,6 +1550,11 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 func TestSpanWithRuleReasons(t *testing.T) {
 	conf := &config.MockConfig{
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(2 * time.Millisecond),
 			SendDelay:    config.Duration(1 * time.Millisecond),
@@ -1702,7 +1602,9 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 
@@ -1714,22 +1616,8 @@ func TestSpanWithRuleReasons(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	err := coll.Start()
+	require.NoError(t, err, "collector should start")
 	defer coll.Stop()
 
 	traceIDs := []string{"trace1", "trace2"}
@@ -1833,19 +1721,9 @@ func TestRedistributeTraces(t *testing.T) {
 	}
 
 	coll.Sharder = s
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.Start()
+	err := coll.Start()
+	require.NoError(t, err, "collector should start")
 
 	defer coll.Stop()
 
@@ -2167,11 +2045,20 @@ func TestBigTracesGoEarly(t *testing.T) {
 			SpanLimit:    uint(spanlimit - 1),
 			MaxBatchSize: 1500,
 		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 2},
 		AddSpanCountToRoot:   true,
 		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 500,
+			PeerQueueSize:     500,
+		},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -2182,22 +2069,8 @@ func TestBigTracesGoEarly(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 500)
-	coll.fromPeer = make(chan *types.Span, 500)
-	coll.outgoingTraces = make(chan sendableTrace, 500)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-	coll.shutdownWG.Add(1)
-	go coll.collect()
-	coll.shutdownWG.Add(1)
-	go coll.sendTraces()
-
+	err := coll.Start()
+	require.NoError(t, err, "collector should start")
 	defer coll.Stop()
 
 	// this name was chosen to be Kept with the deterministic/2 sampler
@@ -2724,6 +2597,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 
 func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mockSender) *InMemCollector {
 	conf := &config.MockConfig{
+		DryRun: true,
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(5 * time.Millisecond),
 			SendDelay:    config.Duration(1 * time.Millisecond),

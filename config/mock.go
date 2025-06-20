@@ -464,3 +464,10 @@ func (f *MockConfig) GetOpAMPConfig() OpAMPConfig {
 
 	return f.GetOpAmpConfigVal
 }
+
+func (f *MockConfig) SetMaxAlloc(v MemorySize) {
+	f.Mux.Lock()
+	defer f.Mux.Unlock()
+
+	f.GetCollectionConfigVal.MaxAlloc = v
+}

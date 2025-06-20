@@ -72,6 +72,10 @@ func (d *TotalThroughputSampler) Start() error {
 	return nil
 }
 
+func (d *TotalThroughputSampler) Stop() {
+	d.dynsampler.Stop()
+}
+
 func (d *TotalThroughputSampler) SetClusterSize(size int) {
 	if d.useClusterSize {
 		d.clusterSize = size

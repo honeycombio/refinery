@@ -1091,8 +1091,11 @@ func (i *InMemCollector) Stop() error {
 	// stop liveness check
 	// so that no new traces are accepted
 	i.Health.Unregister(CollectorHealthKey)
-
 	i.mutex.Lock()
+
+	for _, sampler := range i.datasetSamplers {
+		sampler.Stop()
+	}
 
 	if !i.Config.GetCollectionConfig().DisableRedistribution {
 		peers, err := i.Peers.GetPeers()
