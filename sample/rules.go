@@ -88,6 +88,14 @@ func (s *RulesBasedSampler) Start() error {
 	return nil
 }
 
+func (s *RulesBasedSampler) Stop() {
+	for _, sampler := range s.samplers {
+		if sampler != nil {
+			sampler.Stop()
+		}
+	}
+}
+
 func (s *RulesBasedSampler) SetClusterSize(size int) {
 	for _, sampler := range s.samplers {
 		if sampler, ok := sampler.(ClusterSizer); ok {
