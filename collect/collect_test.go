@@ -2724,6 +2724,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 
 func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mockSender) *InMemCollector {
 	conf := &config.MockConfig{
+		DryRun: true,
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(5 * time.Millisecond),
 			SendDelay:    config.Duration(1 * time.Millisecond),
