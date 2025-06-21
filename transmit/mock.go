@@ -83,6 +83,5 @@ func (m *MockTransmission) EnqueueEvent(ev *types.Event) {
 func (m *MockTransmission) EnqueueSpan(ev *types.Span) {
 	m.Events <- &ev.Event
 }
-func (m *MockTransmission) Flush() {}
 
 func (m *MockTransmission) RegisterMetrics() {}

@@ -31,7 +31,12 @@ type Event struct {
 	SampleRate  uint
 	Timestamp   time.Time
 	Data        Payload
-	dataSize    int
+
+	// EnqueuedUnixMicro is the time when the event was enqueued for transmission
+	// used for usec-resolution metrics.
+	EnqueuedUnixMicro int64
+
+	dataSize int
 }
 
 // GetDataSize computes the size of the Data element of the Event.

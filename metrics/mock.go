@@ -100,3 +100,14 @@ func (m *MockMetrics) Store(name string, val float64) {
 
 	m.Constants[name] = val
 }
+
+// GetHistogramCount returns the number of values recorded for a histogram
+func (m *MockMetrics) GetHistogramCount(name string) int {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if hist, ok := m.Histograms[name]; ok {
+		return len(hist)
+	}
+	return 0
+}

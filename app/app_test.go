@@ -47,6 +47,118 @@ const nonLegacyAPIKey = "d245834089a1bd6cc9ad01e"
 
 var now = time.Now().UTC()
 
+type testAPIServer struct {
+	server *httptest.Server
+	events []*transmission.Event
+	mutex  sync.RWMutex
+}
+
+func newTestAPIServer(t testing.TB) *testAPIServer {
+	server := &testAPIServer{}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/1/batch/", server.handleBatch)
+
+	server.server = httptest.NewServer(mux)
+	t.Cleanup(server.server.Close)
+	return server
+}
+
+func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
+	var reader io.Reader = r.Body
+
+	// Handle compression
+	if encoding := r.Header.Get("Content-Encoding"); encoding != "" {
+		switch encoding {
+		case "gzip":
+			gr, err := gzip.NewReader(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer gr.Close()
+			reader = gr
+		case "zstd":
+			zr, err := zstd.NewReader(r.Body)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			defer zr.Close()
+			reader = zr
+		}
+	}
+
+	var events []map[string]interface{}
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "application/x-msgpack" || contentType == "application/msgpack" {
+		decoder := msgpack.NewDecoder(reader)
+		decoder.UseLooseInterfaceDecoding(true)
+		if err := decoder.Decode(&events); err != nil {
+			http.Error(w, fmt.Sprintf("Msgpack decode error: %v", err), http.StatusBadRequest)
+			return
+		}
+	} else {
+		if err := json.NewDecoder(reader).Decode(&events); err != nil {
+			http.Error(w, fmt.Sprintf("JSON decode error: %v", err), http.StatusBadRequest)
+			return
+		}
+	}
+
+	dataset := strings.TrimPrefix(r.URL.Path, "/1/batch/")
+	apiKey := r.Header.Get("X-Honeycomb-Team")
+
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	responses := make([]map[string]interface{}, 0, len(events))
+	for _, eventData := range events {
+		sampleRate := 1
+		if sr, ok := eventData["samplerate"]; ok {
+			if srf, ok := sr.(float64); ok {
+				sampleRate = int(srf)
+			}
+		}
+
+		timestamp := time.Now()
+		if ts, ok := eventData["time"]; ok {
+			if tss, ok := ts.(string); ok {
+				if parsed, err := time.Parse(time.RFC3339Nano, tss); err == nil {
+					timestamp = parsed
+				}
+			}
+		}
+
+		event := &transmission.Event{
+			APIKey:     apiKey,
+			Dataset:    dataset,
+			SampleRate: uint(sampleRate),
+			APIHost:    t.server.URL,
+			Timestamp:  timestamp,
+		}
+		if dataMap, ok := eventData["data"].(map[string]interface{}); ok {
+			event.Data = dataMap
+		}
+
+		t.events = append(t.events, event)
+		responses = append(responses, map[string]interface{}{"status": 202})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	responseBody, _ := json.Marshal(responses)
+	w.Write(responseBody)
+}
+
+func (t *testAPIServer) getEvents() []*transmission.Event {
+	t.mutex.RLock()
+	defer t.mutex.RUnlock()
+
+	events := make([]*transmission.Event, len(t.events))
+	copy(events, t.events)
+	return events
+}
+
 type countingWriterSender struct {
 	transmission.WriterSender
 
@@ -99,9 +211,12 @@ func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
 // each test gets a unique port and redisDB.
 //
 // by default, every Redis instance supports 16 databases, we use redisDB as a way to separate test data
-func defaultConfig(basePort int, redisDB int) *config.MockConfig {
+func defaultConfig(basePort int, redisDB int, apiURL string) *config.MockConfig {
 	if redisDB >= 16 {
 		panic("redisDB must be less than 16")
+	}
+	if apiURL == "" {
+		apiURL = "http://api.honeycomb.io"
 	}
 	return &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -121,7 +236,7 @@ func defaultConfig(basePort int, redisDB int) *config.MockConfig {
 		GetPeerBufferSizeVal:     10000,
 		GetListenAddrVal:         "127.0.0.1:" + strconv.Itoa(basePort),
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
-		GetHoneycombAPIVal:       "http://api.honeycomb.io",
+		GetHoneycombAPIVal:       apiURL,
 		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity:      10000,
 			ShutdownDelay:      config.Duration(1 * time.Second),
@@ -140,7 +255,6 @@ func defaultConfig(basePort int, redisDB int) *config.MockConfig {
 func newStartedApp(
 	t testing.TB,
 	libhoneyT transmission.Sender,
-	peerTransmission transmission.Sender,
 	peers peer.Peers,
 	cfg *config.MockConfig,
 ) (*App, inject.Graph) {
@@ -178,29 +292,39 @@ func newStartedApp(
 
 	samplerFactory := &sample.SamplerFactory{}
 
+	// Create default transmission.Honeycomb if none provided
+	if libhoneyT == nil {
+		libhoneyT = &transmission.Honeycomb{
+			MaxBatchSize:         500,
+			BatchTimeout:         100 * time.Millisecond,
+			MaxConcurrentBatches: 10,
+			PendingWorkCapacity:  10000,
+			BlockOnSend:          true,
+			EnableMsgpackEncoding: true,
+		}
+	}
+
 	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: libhoneyT,
 	})
 	assert.NoError(t, err)
 
-	if peerTransmission == nil {
-		sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
-		peerTransmission = &transmission.Honeycomb{
-			MaxBatchSize:         cfg.GetTracesConfigVal.MaxBatchSize,
-			BatchTimeout:         libhoney.DefaultBatchTimeout,
-			MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:  uint(cfg.GetPeerBufferSize()),
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				Dial: (&net.Dialer{
-					Timeout: 3 * time.Second,
-				}).Dial,
-			},
-			BlockOnSend:            true,
-			DisableGzipCompression: true,
-			EnableMsgpackEncoding:  true,
-			Metrics:                sdPeer,
-		}
+	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
+	peerTransmission := &transmission.Honeycomb{
+		MaxBatchSize:         cfg.GetTracesConfigVal.MaxBatchSize,
+		BatchTimeout:         libhoney.DefaultBatchTimeout,
+		MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
+		PendingWorkCapacity:  uint(cfg.GetPeerBufferSize()),
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			Dial: (&net.Dialer{
+				Timeout: 3 * time.Second,
+			}).Dial,
+		},
+		BlockOnSend:            true,
+		DisableGzipCompression: true,
+		EnableMsgpackEncoding:  true,
+		Metrics:                sdPeer,
 	}
 	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
 		Transmission: peerTransmission,
@@ -285,9 +409,9 @@ func TestAppIntegration(t *testing.T) {
 	port := 10500
 	redisDB := 2
 
-	sender := &transmission.MockSender{}
-	cfg := defaultConfig(port, redisDB)
-	app, graph := newStartedApp(t, sender, nil, nil, cfg)
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfig(port, redisDB, testServer.server.URL)
+	app, graph := newStartedApp(t, nil, nil, cfg)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -306,12 +430,12 @@ func TestAppIntegration(t *testing.T) {
 	time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
 
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
-		events := sender.Events()
+		events := testServer.getEvents()
 		require.Len(collect, events, 1)
 		assert.Equal(collect, "dataset", events[0].Dataset)
 		assert.Equal(collect, "bar", events[0].Data["foo"])
 		assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
-		assert.Equal(collect, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+		assert.Equal(collect, int64(1), events[0].Data["meta.refinery.original_sample_rate"])
 	}, 2*time.Second, 10*time.Millisecond)
 
 	err = startstop.Stop(graph.Objects(), nil)
@@ -324,9 +448,9 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	port := 10600
 	redisDB := 3
 
-	sender := &transmission.MockSender{}
-	cfg := defaultConfig(port, redisDB)
-	a, graph := newStartedApp(t, sender, nil, nil, cfg)
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfig(port, redisDB, testServer.server.URL)
+	a, graph := newStartedApp(t, nil, nil, cfg)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
@@ -347,14 +471,14 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	// Wait for span to be sent.
 	var events []*transmission.Event
 	require.Eventually(t, func() bool {
-		events = sender.Events()
+		events = testServer.getEvents()
 		return len(events) == 1
 	}, 2*time.Second, 2*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])
 	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	assert.Equal(t, int64(1), events[0].Data["meta.refinery.original_sample_rate"])
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -366,9 +490,9 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	port := 10700
 	redisDB := 4
 
-	sender := &transmission.MockSender{}
-	cfg := defaultConfig(port, redisDB)
-	a, graph := newStartedApp(t, sender, nil, nil, cfg)
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfig(port, redisDB, testServer.server.URL)
+	a, graph := newStartedApp(t, nil, nil, cfg)
 	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 
@@ -410,9 +534,9 @@ func TestPeerRouting(t *testing.T) {
 			ID:    peerList[i],
 		}
 		redisDB := 5 + i
-		cfg := defaultConfig(basePort, redisDB)
+		cfg := defaultConfig(basePort, redisDB, "")
 
-		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
+		apps[i], graph = newStartedApp(t, senders[i], peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
 	}
 
@@ -500,10 +624,10 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	port := 14000
 	redisDB := 7
 
-	sender := &transmission.MockSender{}
-	cfg := defaultConfig(port, redisDB)
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfig(port, redisDB, testServer.server.URL)
 	cfg.AddHostMetadataToTrace = true
-	app, graph := newStartedApp(t, sender, nil, nil, cfg)
+	app, graph := newStartedApp(t, nil, nil, cfg)
 
 	// Send a root span, it should be sent in short order.
 	req := httptest.NewRequest(
@@ -523,14 +647,14 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 
 	var events []*transmission.Event
 	require.Eventually(t, func() bool {
-		events = sender.Events()
+		events = testServer.getEvents()
 		return len(events) == 1
 	}, 2*time.Second, 10*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data["foo"])
 	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, uint(1), events[0].Data["meta.refinery.original_sample_rate"])
+	assert.Equal(t, int64(1), events[0].Data["meta.refinery.original_sample_rate"])
 	hostname, _ := os.Hostname()
 	assert.Equal(t, hostname, events[0].Data["meta.refinery.local_hostname"])
 
@@ -558,8 +682,8 @@ func TestEventsEndpoint(t *testing.T) {
 		}
 		redisDB := 8 + i
 
-		cfg := defaultConfig(basePort, redisDB)
-		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
+		cfg := defaultConfig(basePort, redisDB, "")
+		apps[i], graph = newStartedApp(t, senders[i], peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
 	}
 
@@ -676,9 +800,9 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		}
 
 		redisDB := 10 + i
-		cfg := defaultConfig(basePort, redisDB)
+		cfg := defaultConfig(basePort, redisDB, "")
 
-		app, graph := newStartedApp(t, senders[i], nil, peers, cfg)
+		app, graph := newStartedApp(t, senders[i], peers, cfg)
 		app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
 		apps[i] = app
@@ -797,12 +921,12 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 			ID:    peerList[i],
 		}
 		redisDB := 12 + i
-		cfg := defaultConfig(basePort, redisDB)
+		cfg := defaultConfig(basePort, redisDB, "")
 		collectionCfg := cfg.GetCollectionConfig()
 		collectionCfg.TraceLocalityMode = "distributed"
 		cfg.GetCollectionConfigVal = collectionCfg
 
-		apps[i], graph = newStartedApp(t, senders[i], nil, peers, cfg)
+		apps[i], graph = newStartedApp(t, senders[i], peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
 	}
 
@@ -990,8 +1114,8 @@ func BenchmarkTraces(b *testing.B) {
 		},
 	}
 	redisDB := 1
-	cfg := defaultConfig(11000, redisDB)
-	_, graph := newStartedApp(b, sender, nil, nil, cfg)
+	cfg := defaultConfig(11000, redisDB, "")
+	_, graph := newStartedApp(b, sender, nil, cfg)
 	defer func() {
 		err := startstop.Stop(graph.Objects(), nil)
 		assert.NoError(b, err)
@@ -1119,8 +1243,8 @@ func BenchmarkDistributedTraces(b *testing.B) {
 		}
 
 		redisDB := 2 + i
-		cfg := defaultConfig(basePort, redisDB)
-		apps[i], graph = newStartedApp(b, sender, nil, peers, cfg)
+		cfg := defaultConfig(basePort, redisDB, "")
+		apps[i], graph = newStartedApp(b, sender, peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)

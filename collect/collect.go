@@ -1107,10 +1107,6 @@ func (i *InMemCollector) Stop() error {
 		}
 	}
 
-	if i.Transmission != nil {
-		i.Transmission.Flush()
-	}
-
 	i.sampleTraceCache.Stop()
 	i.mutex.Unlock()
 
