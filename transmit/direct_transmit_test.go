@@ -10,14 +10,19 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 
+	libhoney "github.com/honeycombio/libhoney-go"
+	"github.com/honeycombio/libhoney-go/transmission"
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -501,4 +506,317 @@ func TestDirectTransmission(t *testing.T) {
 	assert.Equal(t, float64(0), queuedItems)
 	// Verify queue time histogram was updated for all events
 	assert.Equal(t, 11, mockMetrics.GetHistogramCount(histogramQueueTime))
+}
+
+// Lightweight benchmark HTTP server
+type benchmarkAPIServer struct {
+	server     *httptest.Server
+	eventCount atomic.Int64
+	t          testing.TB
+	bufferPool sync.Pool
+}
+
+func newBenchmarkAPIServer(t testing.TB) *benchmarkAPIServer {
+	server := &benchmarkAPIServer{
+		t: t,
+		bufferPool: sync.Pool{
+			New: func() interface{} {
+				buf := make([]byte, 0, 1024) // Pre-allocate capacity
+				return &buf
+			},
+		},
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/1/batch/", server.handleBatch)
+
+	server.server = httptest.NewServer(mux)
+	t.Cleanup(server.server.Close)
+
+	return server
+}
+
+func (s *benchmarkAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
+	// Accept both msgpack content types for compatibility
+	contentType := r.Header.Get("Content-Type")
+	encoding := r.Header.Get("Content-Encoding")
+
+	// Support both msgpack content types (libhoney uses x-msgpack)
+	if contentType != "application/msgpack" && contentType != "application/x-msgpack" {
+		s.t.Errorf("unsupported content type: %s", contentType)
+		http.Error(w, "unsupported content type", http.StatusBadRequest)
+		return
+	}
+
+	if encoding != "" {
+		s.t.Errorf("unsupported compression: %s", encoding)
+		http.Error(w, "unsupported compression", http.StatusBadRequest)
+		return
+	}
+
+	// Read the entire request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.t.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Use msgp to efficiently count array elements without full decoding
+	var arraySize uint32
+	arraySize, _, err = msgp.ReadArrayHeaderBytes(body)
+	if err != nil {
+		s.t.Error(err.Error())
+		http.Error(w, fmt.Sprintf("Expected msgpack array: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	// Update total event count atomically
+	s.eventCount.Add(int64(arraySize))
+
+	// Return appropriate number of 202 responses
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	// Optimized JSON construction using pooled []byte slice to avoid allocations
+	bufPtr := s.bufferPool.Get().(*[]byte)
+	buf := (*bufPtr)[:0] // Reset slice to zero length but keep capacity
+	defer s.bufferPool.Put(bufPtr)
+
+	buf = append(buf, '[')
+	for i := range arraySize {
+		if i > 0 {
+			buf = append(buf, ',')
+		}
+		buf = append(buf, `{"status":202}`...)
+	}
+	buf = append(buf, ']')
+	w.Write(buf)
+}
+
+func (s *benchmarkAPIServer) GetEventCount() int64 {
+	return s.eventCount.Load()
+}
+
+func (s *benchmarkAPIServer) ResetEventCount() {
+	s.eventCount.Store(0)
+}
+
+// createBenchmarkEvents creates a shared pool of events for benchmarking
+func createBenchmarkEvents(t testing.TB, serverURL string, numEvents, datasets, apiHosts int) []*types.Event {
+	events := make([]*types.Event, numEvents)
+
+	// Pre-create static strings for commonly used values
+	traceIDs := []string{"trace-1", "trace-2", "trace-3", "trace-4", "trace-5"}
+	spanIDs := []string{"span-1", "span-2", "span-3", "span-4", "span-5"}
+	parentIDs := []string{"parent-1", "parent-2", "parent-3", "parent-4", "parent-5"}
+	serviceNames := []string{"service-auth", "service-api", "service-db", "service-cache", "service-queue"}
+	operationNames := []string{"GET /users", "POST /login", "SELECT users", "cache.get", "queue.publish"}
+	urls := []string{"https://example.com/users", "https://example.com/login", "https://example.com/products", "https://example.com/orders", "https://example.com/api"}
+	userIDs := []string{"user-12345", "user-67890", "user-11111", "user-22222", "user-33333"}
+	emails := []string{"alice@example.com", "bob@example.com", "charlie@example.com", "david@example.com", "eve@example.com"}
+	versions := []string{"v1.2.0", "v1.2.1", "v1.2.2", "v1.2.3", "v1.2.4"}
+	customValues := []string{"value-alpha", "value-beta", "value-gamma", "value-delta", "value-epsilon"}
+
+	// Pre-create msgpack payloads and unmarshal them to simulate real event processing
+	msgpackPayloads := make([][]byte, 5) // Create 5 different payloads to cycle through
+	for j := range 5 {
+		payload := map[string]any{
+			"trace.trace_id":   traceIDs[j%len(traceIDs)],
+			"trace.span_id":    spanIDs[j%len(spanIDs)],
+			"trace.parent_id":  parentIDs[j%len(parentIDs)],
+			"service.name":     serviceNames[j%len(serviceNames)],
+			"name":             operationNames[j%len(operationNames)],
+			"duration_ms":      float64(j*200) + 0.123,
+			"http.status_code": 200 + (j % 5),
+			"http.method":      []string{"GET", "POST", "PUT", "DELETE"}[j%4],
+			"http.url":         urls[j%len(urls)],
+			"user.id":          userIDs[j%len(userIDs)],
+			"user.email":       emails[j%len(emails)],
+			"error":            j%5 == 0,
+			"error.message":    []string{"", "timeout", "connection refused", "internal error"}[j%4],
+			"db.statement":     "SELECT * FROM users WHERE id = ?",
+			"db.rows_affected": j * 20,
+			"region":           []string{"us-east-1", "us-west-2", "eu-west-1", "ap-southeast-1"}[j%4],
+			"environment":      []string{"production", "staging", "development"}[j%3],
+			"version":          versions[j%len(versions)],
+			"custom.field1":    customValues[j%len(customValues)],
+			"custom.field2":    float64(j) * 3.14159,
+		}
+
+		packed, err := msgpack.Marshal(payload)
+		if err != nil {
+			t.Fatalf("failed to marshal payload: %v", err)
+		}
+		msgpackPayloads[j] = packed
+	}
+
+	for i := range numEvents {
+		datasetNum := i % datasets
+		apiHostNum := i % apiHosts
+
+		events[i] = &types.Event{
+			Context:           context.Background(),
+			APIHost:           serverURL,
+			APIKey:            fmt.Sprintf("api-key-%d", apiHostNum),
+			Dataset:           fmt.Sprintf("dataset-%d", datasetNum),
+			Environment:       "benchmark",
+			SampleRate:        uint(1 + (i % 100)),
+			Timestamp:         time.Now().Add(time.Duration(i) * time.Microsecond),
+			EnqueuedUnixMicro: time.Now().UnixMicro(),
+		}
+		err := events[i].Data.UnmarshalMsgpack(msgpackPayloads[i%len(msgpackPayloads)])
+		if err != nil {
+			t.Fatalf("failed to unmarshal payload: %v", err)
+		}
+	}
+
+	return events
+}
+
+func BenchmarkTransmissionComparison(b *testing.B) {
+	server := newBenchmarkAPIServer(b)
+
+	// Benchmark scenarios
+	scenarios := []struct {
+		name     string
+		datasets int
+		apiHosts int
+	}{
+		{"high_card", 1000, 100},
+		{"low_card", 1, 1},
+	}
+
+	// Pre-create shared event pools for each scenario
+	eventPools := make(map[string][]*types.Event)
+	const poolSize = 100000
+
+	for _, scenario := range scenarios {
+		eventPools[scenario.name] = createBenchmarkEvents(b, server.server.URL, poolSize, scenario.datasets, scenario.apiHosts)
+	}
+
+	// This benchmark can create too many simultaneous socket connections,
+	// causing them to fail. To avoid this, limit the number of concurrent
+	// connections. This value seems to give optimal performance.
+	httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+	httpTransport.MaxConnsPerHost = 25
+
+	for _, scenario := range scenarios {
+		b.Run(scenario.name, func(b *testing.B) {
+			// Get the pre-created event pool for this scenario
+			eventPool := eventPools[scenario.name]
+
+			b.Run("direct", func(b *testing.B) {
+				mockMetrics := &metrics.MockMetrics{}
+				mockMetrics.Start()
+
+				dt := NewDirectTransmission(
+					mockMetrics,
+					"benchmark",
+					libhoney.DefaultMaxBatchSize,
+					libhoney.DefaultBatchTimeout,
+				)
+				dt.Logger = &logger.NullLogger{}
+				dt.Version = "benchmark"
+				dt.Transport = httpTransport
+				dt.RegisterMetrics()
+
+				err := dt.Start()
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				// Reset server event count before test
+				server.ResetEventCount()
+
+				b.ResetTimer()
+				for n := range b.N {
+					// Replay events from the shared pool
+					dt.EnqueueEvent(eventPool[n%poolSize])
+				}
+				err = dt.Stop()
+				if err != nil {
+					b.Fatal(err.Error())
+				}
+
+				// Wait for all events to be processed
+				expectedCount := int64(b.N)
+				if !assert.Eventually(b, func() bool {
+					return server.GetEventCount() == expectedCount
+				}, 2*time.Second, 10*time.Millisecond) {
+					receivedCount := server.GetEventCount()
+					b.Errorf("Expected %d events, but server received %d", expectedCount, receivedCount)
+				}
+				b.StopTimer()
+			})
+
+			b.Run("default", func(b *testing.B) {
+				mockMetrics := &metrics.MockMetrics{}
+				mockMetrics.Start()
+
+				// Create a real HTTP transmission that sends to the test server
+				libhoneyTransmission := &transmission.Honeycomb{
+					MaxBatchSize:          libhoney.DefaultMaxBatchSize,
+					BatchTimeout:          libhoney.DefaultBatchTimeout,
+					MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
+					Transport:             httpTransport,
+					PendingWorkCapacity:   10000,
+					BlockOnSend:           true,
+					EnableMsgpackEncoding: true,
+					DisableCompression:    true,
+				}
+
+				client, err := libhoney.NewClient(libhoney.ClientConfig{
+					Transmission: libhoneyTransmission,
+				})
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				// Create a simple mock config
+				mockConfig := &config.MockConfig{
+					GetHoneycombAPIVal: server.server.URL,
+				}
+
+				dt := NewDefaultTransmission(client, mockMetrics, "benchmark")
+				dt.Logger = &logger.NullLogger{}
+				dt.Version = "benchmark"
+				dt.Config = mockConfig
+				dt.RegisterMetrics()
+
+				err = dt.Start()
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				// Reset server event count before test
+				server.ResetEventCount()
+
+				b.ResetTimer()
+				for n := range b.N {
+					// Replay events from the shared pool
+					dt.EnqueueEvent(eventPool[n%poolSize])
+				}
+				err = dt.Stop()
+				if err != nil {
+					b.Fatal(err.Error())
+				}
+				err = libhoneyTransmission.Flush()
+				if err != nil {
+					b.Fatal(err.Error())
+				}
+				client.Close()
+
+				// Wait for all events to be processed
+				expectedCount := int64(b.N)
+				if !assert.Eventually(b, func() bool {
+					return server.GetEventCount() == expectedCount
+				}, 2*time.Second, 10*time.Millisecond) {
+					receivedCount := server.GetEventCount()
+					b.Errorf("Expected %d events, but server received %d", expectedCount, receivedCount)
+				}
+				b.StopTimer()
+			})
+		})
+	}
 }

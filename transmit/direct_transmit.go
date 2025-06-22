@@ -239,6 +239,8 @@ func (d *DirectTransmission) sendBatch(batch []*types.Event) {
 	dequeuedAt := time.Now()
 
 	if err != nil {
+		d.Logger.Error().WithField("error", err.Error()).Logf("http POST failed")
+
 		// Network/connection error - affects all events in batch
 		for _, ev := range batch {
 			queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
@@ -311,7 +313,6 @@ func (d *DirectTransmission) sendBatch(batch []*types.Event) {
 			d.handleEventError(ev, resp.StatusCode, queueTime, "", bodyBytes)
 		}
 	}
-
 }
 
 // TODO this needs to be modified to not exceed maximum event and batch sizes,
