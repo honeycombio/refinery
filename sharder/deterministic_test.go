@@ -56,8 +56,8 @@ func TestWhichShard(t *testing.T) {
 
 func TestWhichShardAtEdge(t *testing.T) {
 	const (
-		selfPeerAddr = "127.0.0.1:8081"
-		traceID      = "RCIVNUNA" // carefully chosen (by trying over a billion times) to hash in WhichShard to 0xFFFFFFFF
+		selfPeerAddr = "10.244.0.56:8081"
+		traceID      = "8c2e34915b74aae5faf6ea200e40b525" // data that hashes to a specific peer
 	)
 
 	// The algorithm in WhichShard works correctly for divisors of 2^32-1. The prime factorization of that includes
@@ -65,15 +65,16 @@ func TestWhichShardAtEdge(t *testing.T) {
 	// It was tested (and failed) without the additional conditional.
 	peers := []string{
 		"http://" + selfPeerAddr,
-		"http://2.2.2.2:8081",
-		"http://3.3.3.3:8081",
-		"http://4.4.4.4:8081",
+		"http://10.244.0.57:8081",
+		"http://10.244.0.58:8081",
+		"http://10.244.0.59:8081",
 	}
 
 	config := &config.MockConfig{
-		GetPeerListenAddrVal: selfPeerAddr,
-		GetPeersVal:          peers,
-		PeerManagementType:   "file",
+		GetPeerListenAddrVal:                 selfPeerAddr,
+		GetPeersVal:                          peers,
+		PeerManagementType:                   "file",
+		GetPeerManagementShardingStrategyVal: "hash_ring",
 	}
 	done := make(chan struct{})
 	defer close(done)
@@ -94,6 +95,8 @@ func TestWhichShardAtEdge(t *testing.T) {
 	assert.Contains(t, peers, shard.GetAddress(),
 		"should select a peer for a trace")
 
+	d := detShard("http://10.244.0.57:8081")
+	assert.True(t, d.Equals(shard), shard.GetAddress())
 	config.GetPeersVal = []string{}
 	config.Reload()
 	assert.Equal(t, shard.GetAddress(), sharder.WhichShard(traceID).GetAddress(),
@@ -170,7 +173,7 @@ func TestShardBulk(t *testing.T) {
 					"http://" + selfPeerAddr,
 				}
 				for i := 1; i < npeers; i++ {
-					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
+					peers = append(peers, fmt.Sprintf("http://2.2.2.%d:8081", i))
 				}
 
 				config := &config.MockConfig{
@@ -243,7 +246,7 @@ func TestShardDrop(t *testing.T) {
 			for retry := 0; retry < 2; retry++ {
 				peers := make([]string, 0, npeers)
 				for i := 1; i < npeers; i++ {
-					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
+					peers = append(peers, fmt.Sprintf("http://2.2.2.%d:8081", i))
 				}
 
 				config := &config.MockConfig{
@@ -329,7 +332,7 @@ func TestShardAddHash(t *testing.T) {
 					"http://" + selfPeerAddr,
 				}
 				for i := 1; i < npeers; i++ {
-					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
+					peers = append(peers, fmt.Sprintf("http://2.2.2.%d:8081", i))
 				}
 
 				config := &config.MockConfig{
@@ -370,7 +373,7 @@ func TestShardAddHash(t *testing.T) {
 				}
 
 				// reach in and add a peer, then reshard
-				config.GetPeersVal = append(config.GetPeersVal, "http://2.2.2.255/:8081")
+				config.GetPeersVal = append(config.GetPeersVal, "http://2.2.2.255:8081")
 				sharder.loadPeerList()
 
 				results = make(map[string]int)
@@ -415,7 +418,7 @@ func BenchmarkDeterministicShard(b *testing.B) {
 				"http://" + selfPeerAddr,
 			}
 			for i := 1; i < npeers; i++ {
-				peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
+				peers = append(peers, fmt.Sprintf("http://2.2.2.%d:8081", i))
 			}
 			config := &config.MockConfig{
 				GetPeerListenAddrVal: selfPeerAddr,
