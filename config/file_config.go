@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/slices"
+	"google.golang.org/grpc/codes"
 	"gopkg.in/yaml.v3"
 )
 
@@ -412,11 +413,15 @@ type SampleCacheConfig struct {
 }
 
 type StressReliefConfig struct {
-	Mode                      string   `yaml:"Mode" default:"never"`
-	ActivationLevel           uint     `yaml:"ActivationLevel" default:"90"`
-	DeactivationLevel         uint     `yaml:"DeactivationLevel" default:"75"`
-	SamplingRate              uint64   `yaml:"SamplingRate" default:"100"`
-	MinimumActivationDuration Duration `yaml:"MinimumActivationDuration" default:"10s"`
+	Mode                      string     `yaml:"Mode" default:"never"`
+	ActivationLevel           uint       `yaml:"ActivationLevel" default:"90"`
+	DeactivationLevel         uint       `yaml:"DeactivationLevel" default:"75"`
+	SamplingRate              uint64     `yaml:"SamplingRate" default:"100"`
+	MinimumActivationDuration Duration   `yaml:"MinimumActivationDuration" default:"10s"`
+	BackOffEnabled            bool       `yaml:"BackOffEnabled" default:"false"`
+	BackOffHTTPStatusCode     int        `yaml:"BackOffHTTPStatusCode" default:"429"`
+	BackOffGRPCStatusCode     codes.Code `yaml:"BackOffGRPCStatusCode" default:"8"`
+	BackOffRetryAfter         Duration   `yaml:"BackOffRetryAfter" default:"1s"`
 }
 
 type FileConfigError struct {

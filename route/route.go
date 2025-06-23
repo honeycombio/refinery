@@ -64,16 +64,17 @@ const (
 )
 
 type Router struct {
-	Config               config.Config         `inject:""`
-	Logger               logger.Logger         `inject:""`
-	Health               health.Reporter       `inject:""`
-	HTTPTransport        *http.Transport       `inject:"upstreamTransport"`
-	UpstreamTransmission transmit.Transmission `inject:"upstreamTransmission"`
-	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
-	Sharder              sharder.Sharder       `inject:""`
-	Collector            collect.Collector     `inject:""`
-	Metrics              metrics.Metrics       `inject:"genericMetrics"`
-	Tracer               trace.Tracer          `inject:"tracer"`
+	Config               config.Config          `inject:""`
+	Logger               logger.Logger          `inject:""`
+	Health               health.Reporter        `inject:""`
+	HTTPTransport        *http.Transport        `inject:"upstreamTransport"`
+	UpstreamTransmission transmit.Transmission  `inject:"upstreamTransmission"`
+	PeerTransmission     transmit.Transmission  `inject:"peerTransmission"`
+	Sharder              sharder.Sharder        `inject:""`
+	Collector            collect.Collector      `inject:""`
+	Metrics              metrics.Metrics        `inject:"genericMetrics"`
+	Tracer               trace.Tracer           `inject:"tracer"`
+	StressRelief         collect.StressReliever `inject:"stressRelief"`
 
 	// version is set on startup so that the router may answer HTTP requests for
 	// the version
@@ -174,6 +175,9 @@ func (r *Router) LnS(incomingOrPeer string) {
 
 	muxxer := mux.NewRouter()
 
+	if incomingOrPeer == "incoming" && r.Config.GetStressReliefConfig().BackOffEnabled {
+		muxxer.Use(r.backOffHTTPMiddleware)
+	}
 	muxxer.Use(r.setResponseHeaders)
 	muxxer.Use(r.requestLogger)
 	muxxer.Use(r.panicCatcher)
@@ -246,6 +250,11 @@ func (r *Router) LnS(incomingOrPeer string) {
 			// Add the OpenTelemetry interceptor to the gRPC server to enable tracing
 			grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		}
+
+		if incomingOrPeer == "incoming" && r.Config.GetStressReliefConfig().BackOffEnabled {
+			serverOpts = append(serverOpts, grpc.ChainUnaryInterceptor(r.backOffGRPCInterceptor))
+		}
+
 		r.grpcServer = grpc.NewServer(serverOpts...)
 
 		traceServer := NewTraceServer(r)
