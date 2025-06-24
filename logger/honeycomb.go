@@ -81,6 +81,7 @@ func (h *HoneycombLogger) Start() error {
 	}
 	h.libhClient = libhClient
 
+	h.addResourceAttributes()
 	h.libhClient.AddField("refinery_version", h.Version)
 	if hostname, err := os.Hostname(); err == nil {
 		h.libhClient.AddField("hostname", hostname)
@@ -89,7 +90,6 @@ func (h *HoneycombLogger) Start() error {
 	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
 		return time.Since(startTime) / time.Second
 	})
-	h.addResourceAttributes()
 
 	h.builder = h.libhClient.NewBuilder()
 
