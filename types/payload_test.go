@@ -192,4 +192,19 @@ func BenchmarkPayload(b *testing.B) {
 			buf, _ = phMsgp.MarshalMsg(buf[:0])
 		}
 	})
+
+	b.Run("get_unknown", func(b *testing.B) {
+		_ = phMap.Get("get-unknown")
+		// subsequent calls to unknown fields are fast, since they are memoized
+		for b.Loop() {
+			_ = phMsgp.Get("get-unknown")
+		}
+	})
+	b.Run("exist_unknown", func(b *testing.B) {
+		_ = phMap.Exists("exist-unknown")
+		// subsequent calls to unknown fields are fast, since they are memoized
+		for b.Loop() {
+			_ = phMsgp.Exists("exist-unknown")
+		}
+	})
 }
