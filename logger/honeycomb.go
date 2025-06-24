@@ -3,13 +3,14 @@ package logger
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/honeycombio/dynsampler-go"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-
 	"github.com/honeycombio/refinery/config"
 )
 
@@ -88,6 +89,7 @@ func (h *HoneycombLogger) Start() error {
 	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
 		return time.Since(startTime) / time.Second
 	})
+	h.addResourceAttributes()
 
 	h.builder = h.libhClient.NewBuilder()
 
@@ -101,6 +103,29 @@ func (h *HoneycombLogger) Start() error {
 	fmt.Printf("Starting Honeycomb Logger - see Honeycomb %s dataset for service logs\n", h.loggerConfig.Dataset)
 
 	return nil
+}
+
+// Add support for the OTEL_RESOURCE_ATTRIBUTES env var.
+// Credit to https://github.com/open-telemetry/opentelemetry-go/blob/553779c161e9bb7bbc1670b3a92a1bf3ceefb859/sdk/resource/env.go#L67-L95
+// for OTEL_RESOURCE_ATTRIBUTES spec-compliant implementation.
+func (h *HoneycombLogger) addResourceAttributes() {
+	attrs := strings.TrimSpace(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"))
+	if attrs == "" {
+		return
+	}
+	pairs := strings.Split(attrs, ",")
+	for _, p := range pairs {
+		k, v, found := strings.Cut(p, "=")
+		if !found {
+			continue
+		}
+		key := strings.TrimSpace(k)
+		val, err := url.PathUnescape(strings.TrimSpace(v))
+		if err != nil {
+			val = v
+		}
+		h.libhClient.AddField(key, val)
+	}
 }
 
 func (h *HoneycombLogger) readResponses() {
