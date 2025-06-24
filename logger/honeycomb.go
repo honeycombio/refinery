@@ -122,6 +122,8 @@ func (h *HoneycombLogger) addResourceAttributes() {
 		key := strings.TrimSpace(k)
 		val, err := url.PathUnescape(strings.TrimSpace(v))
 		if err != nil {
+			// Retain original value if decoding fails, otherwise it will be
+			// an empty string.
 			val = v
 		}
 		h.libhClient.AddField(key, val)
