@@ -257,7 +257,7 @@ func (sp *Span) ExtractDecisionContext() *Event {
 		"meta.trace_id":                sp.TraceID,
 		"meta.refinery.root":           sp.IsRoot,
 		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         sp.AnnotationType(),
+		"meta.annotation_type":         int(sp.AnnotationType()),
 		"meta.refinery.span_data_size": dataSize,
 	}
 

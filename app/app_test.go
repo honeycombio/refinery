@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,10 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"
 	"go.opentelemetry.io/otel/trace/noop"
-	"gopkg.in/alexcesaro/statsd.v2"
 
-	"github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
@@ -160,51 +158,30 @@ func (t *testAPIServer) getEvents() []*types.Event {
 	return events
 }
 
-type countingMockTransmission struct {
-	*transmit.MockTransmission
-
-	count  int
-	target int
-	ch     chan struct{}
-	mutex  sync.Mutex
+// Drops everything sent into it.
+type countingTransmission struct {
+	count atomic.Int64
 }
 
-func (w *countingMockTransmission) EnqueueEvent(ev *types.Event) {
-	w.MockTransmission.EnqueueEvent(ev)
-
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	w.count++
-	if w.ch != nil && w.count >= w.target {
-		close(w.ch)
-		w.ch = nil
-	}
+func (d *countingTransmission) EnqueueEvent(ev *types.Event) {
+	d.count.Add(1)
 }
 
-func (w *countingMockTransmission) resetCount() {
-	w.mutex.Lock()
-	w.count = 0
-	w.mutex.Unlock()
+func (d *countingTransmission) EnqueueSpan(ev *types.Span) {
+	d.count.Add(1)
 }
 
-func (w *countingMockTransmission) waitForCount(t testing.TB, target int) {
-	w.mutex.Lock()
-	if w.count >= target {
-		w.mutex.Unlock()
-		return
-	}
+func (d *countingTransmission) RegisterMetrics() {
+}
 
-	ch := make(chan struct{})
-	w.ch = ch
-	w.target = target
-	w.mutex.Unlock()
+func (w *countingTransmission) resetCount() {
+	w.count.Store(0)
+}
 
-	select {
-	case <-ch:
-	case <-time.After(10 * time.Second):
-		t.Errorf("timed out waiting for %d events", target)
-	}
+func (w *countingTransmission) waitForCount(t testing.TB, n int) {
+	require.Eventually(t, func() bool {
+		return w.count.Load() >= int64(n)
+	}, 5*time.Second, time.Millisecond)
 }
 
 // defaultConfig returns a config with the given basePort and redisDB.
@@ -255,12 +232,11 @@ func defaultConfig(basePort int, redisDB int, apiURL string) *config.MockConfig 
 
 func newStartedApp(
 	t testing.TB,
-	mockTransmission *transmit.MockTransmission,
+	mockTransmission transmit.Transmission,
 	peers peer.Peers,
 	cfg *config.MockConfig,
 ) (*App, inject.Graph) {
 	c := cfg
-	var err error
 	if peers == nil {
 		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
 	}
@@ -298,46 +274,12 @@ func newStartedApp(
 	if mockTransmission != nil {
 		upstreamTransmission = mockTransmission
 	} else {
-		// Create default transmission.Honeycomb if none provided
-		libhoneyT := &transmission.Honeycomb{
-			MaxBatchSize:          500,
-			BatchTimeout:          100 * time.Millisecond,
-			MaxConcurrentBatches:  10,
-			PendingWorkCapacity:   10000,
-			BlockOnSend:           true,
-			EnableMsgpackEncoding: true,
-		}
-
-		upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
-			Transmission: libhoneyT,
-		})
-		assert.NoError(t, err)
-		upstreamTransmission = transmit.NewDefaultTransmission(upstreamClient, metricsr, "upstream")
+		// Create DirectTransmission instead of DefaultTransmission
+		upstreamTransmission = transmit.NewDirectTransmission(metricsr, "upstream", 500, 100*time.Millisecond)
 	}
 
-	// Always create real peer transmission with specific configuration
-	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
-	peerTransmission := &transmission.Honeycomb{
-		MaxBatchSize:         cfg.GetTracesConfigVal.MaxBatchSize,
-		BatchTimeout:         libhoney.DefaultBatchTimeout,
-		MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
-		PendingWorkCapacity:  uint(cfg.GetPeerBufferSize()),
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			Dial: (&net.Dialer{
-				Timeout: 3 * time.Second,
-			}).Dial,
-		},
-		BlockOnSend:            true,
-		DisableGzipCompression: true,
-		EnableMsgpackEncoding:  true,
-		Metrics:                sdPeer,
-	}
-	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: peerTransmission,
-	})
-	assert.NoError(t, err)
-	peerTransmissionWrapper := transmit.NewDefaultTransmission(peerClient, metricsr, "peer")
+	// Always create real peer transmission using DirectTransmission
+	peerTransmissionWrapper := transmit.NewDirectTransmission(metricsr, "peer", int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond)
 
 	var g inject.Graph
 	err = g.Provide(
@@ -931,7 +873,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
-	
+
 	// Wait for the second event to arrive, but don't consume any events yet
 	require.Eventually(t, func() bool {
 		// Check the channel length without consuming
@@ -1047,13 +989,10 @@ func encodeAndCompress(events []batchedEvent, contentType, compression string) (
 func BenchmarkTraces(b *testing.B) {
 	ctx := context.Background()
 
-	sender := &countingMockTransmission{
-		MockTransmission: &transmit.MockTransmission{},
-	}
-	sender.Start()
+	sender := &countingTransmission{}
 	redisDB := 1
 	cfg := defaultConfig(11000, redisDB, "")
-	_, graph := newStartedApp(b, sender.MockTransmission, nil, cfg)
+	_, graph := newStartedApp(b, sender, nil, cfg)
 	defer func() {
 		err := startstop.Stop(graph.Objects(), nil)
 		assert.NoError(b, err)
@@ -1156,10 +1095,7 @@ func BenchmarkTraces(b *testing.B) {
 }
 
 func BenchmarkDistributedTraces(b *testing.B) {
-	sender := &countingMockTransmission{
-		MockTransmission: &transmit.MockTransmission{},
-	}
-	sender.Start()
+	sender := &countingTransmission{}
 
 	peerList := []string{
 		"http://localhost:12001",
@@ -1181,7 +1117,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 
 		redisDB := 2 + i
 		cfg := defaultConfig(basePort, redisDB, "")
-		apps[i], graph = newStartedApp(b, sender.MockTransmission, peers, cfg)
+		apps[i], graph = newStartedApp(b, sender, peers, cfg)
 		defer startstop.Stop(graph.Objects(), nil)
 
 		addrs[i] = "localhost:" + strconv.Itoa(basePort)
