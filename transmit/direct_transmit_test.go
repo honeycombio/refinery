@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/facebookgo/inject"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -170,6 +171,24 @@ func getErrorEvents(mockLogger *logger.MockLogger) []*logger.MockLoggerEvent {
 		}
 	}
 	return errorEvents
+}
+
+func TestDirectTransmitDependencyInjection(t *testing.T) {
+	var g inject.Graph
+	err := g.Provide(
+		&inject.Object{Value: &DirectTransmission{}},
+
+		&inject.Object{Value: &config.MockConfig{}},
+		&inject.Object{Value: &logger.NullLogger{}},
+		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
+		&inject.Object{Value: "test", Name: "version"},
+	)
+	if err != nil {
+		t.Error(err)
+	}
+	if err := g.Populate(); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestDirectTransmissionErrorHandling(t *testing.T) {
