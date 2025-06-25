@@ -341,7 +341,12 @@ func (p Payload) MarshalMsg(buf []byte) ([]byte, error) {
 			if err != nil {
 				return buf, err
 			}
-			buf = msgp.AppendBytes(buf, keyBytes)
+
+			// Why AppendStringFromBytes? Because maps keys _can_ be a binary
+			// type, but msgp expects them to be a string type. The fallback to
+			// the binary read in ReadMapKeyZC which we use to read these
+			// allocates garbage memory.
+			buf = msgp.AppendStringFromBytes(buf, keyBytes)
 			buf = append(buf, raw...)
 		}
 	}
