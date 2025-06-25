@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
@@ -59,6 +60,7 @@ type DirectTransmission struct {
 	// constructed, not injected
 	Metrics   metrics.Metrics
 	Transport *http.Transport
+	Clock     clockwork.Clock
 
 	// Type is peer or upstream, and used only for naming metrics
 	Name string
@@ -67,12 +69,13 @@ type DirectTransmission struct {
 	MaxBatchSize int
 	BatchTimeout time.Duration
 
-	// Slice-based batching
-	eventBatches map[transmitKey]*eventBatch
-	batchMutex   sync.RWMutex
-	batchPool    *pool.Pool
-	ticker       *time.Ticker
-	done         chan struct{}
+	// Double-buffer slice-based batching
+	batches    [2]map[transmitKey]*eventBatch
+	hotIndex   int // 0 or 1, indicates which map is currently hot
+	batchMutex sync.RWMutex
+	batchPool  *pool.Pool
+	done       chan struct{}
+	shutdownWG sync.WaitGroup
 
 	httpClient *http.Client
 	userAgent  string
@@ -80,13 +83,17 @@ type DirectTransmission struct {
 
 func NewDirectTransmission(m metrics.Metrics, name string, maxBatchSize int, batchTimeout time.Duration, transport *http.Transport) *DirectTransmission {
 	return &DirectTransmission{
-		Metrics:        m,
-		Name:           name,
-		MaxBatchSize:   maxBatchSize,
-		BatchTimeout:   batchTimeout,
-		Transport:      transport,
-		eventBatches:   make(map[transmitKey]*eventBatch),
-		done:           make(chan struct{}),
+		Metrics:      m,
+		Name:         name,
+		MaxBatchSize: maxBatchSize,
+		BatchTimeout: batchTimeout,
+		Transport:    transport,
+		Clock:        clockwork.NewRealClock(),
+		batches: [2]map[transmitKey]*eventBatch{
+			make(map[transmitKey]*eventBatch),
+			make(map[transmitKey]*eventBatch),
+		},
+		done: make(chan struct{}),
 	}
 }
 
@@ -101,9 +108,8 @@ func (d *DirectTransmission) Start() error {
 	// Create a pool for concurrent batch sending
 	d.batchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
 
-	// Start the ticker for periodic batch dispatch
-	d.ticker = time.NewTicker(d.BatchTimeout)
-	go d.periodicBatchDispatch()
+	d.shutdownWG.Add(1)
+	go d.dispatchOldBatches()
 
 	return nil
 }
@@ -116,7 +122,7 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 		Logf("transmit sending event")
 
 	// Store enqueue time for queue time metrics
-	ev.EnqueuedUnixMicro = time.Now().UnixMicro()
+	ev.EnqueuedUnixMicro = d.Clock.Now().UnixMicro()
 
 	key := transmitKey{
 		apiHost: ev.APIHost,
@@ -124,21 +130,23 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 		dataset: ev.Dataset,
 	}
 
-	// First check if batch exists without write lock
+	// First check if batch exists in hot map without write lock
 	d.batchMutex.RLock()
-	batch, exists := d.eventBatches[key]
+	hotMap := d.batches[d.hotIndex]
+	batch, exists := hotMap[key]
 	d.batchMutex.RUnlock()
 
 	if !exists {
 		// Need to create new batch
 		d.batchMutex.Lock()
 		// Double-check after acquiring write lock
-		batch, exists = d.eventBatches[key]
+		hotMap = d.batches[d.hotIndex]
+		batch, exists = hotMap[key]
 		if !exists {
 			batch = &eventBatch{
 				events: make([]*types.Event, 0, d.MaxBatchSize),
 			}
-			d.eventBatches[key] = batch
+			hotMap[key] = batch
 		}
 		d.batchMutex.Unlock()
 	}
@@ -178,11 +186,6 @@ func (d *DirectTransmission) RegisterMetrics() {
 }
 
 func (d *DirectTransmission) Stop() error {
-	// Stop the ticker
-	if d.ticker != nil {
-		d.ticker.Stop()
-	}
-	
 	// Only close done if it was initialized
 	if d.done != nil {
 		select {
@@ -193,9 +196,11 @@ func (d *DirectTransmission) Stop() error {
 		}
 	}
 
+	// Wait for the periodic dispatch goroutine to exit
+	d.shutdownWG.Wait()
+
 	// Dispatch all remaining batches
 	d.dispatchAllBatches()
-
 
 	// Wait for all batch sends to complete
 	if d.batchPool != nil {
@@ -332,7 +337,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		req.Header.Set("User-Agent", d.userAgent)
 
 		resp, err := d.httpClient.Do(req)
-		dequeuedAt := time.Now()
+		dequeuedAt := d.Clock.Now()
 
 		if err != nil {
 			d.Logger.Error().WithField("err", err.Error()).Logf("http POST failed")
@@ -412,48 +417,45 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 	}
 }
 
-// periodicBatchDispatch runs on a ticker and dispatches all pending batches
-func (d *DirectTransmission) periodicBatchDispatch() {
+// dispatchOldBatches runs on a ticker and dispatches all pending batches
+func (d *DirectTransmission) dispatchOldBatches() {
+	defer d.shutdownWG.Done()
+
+	ticker := d.Clock.NewTicker(d.BatchTimeout)
+	defer ticker.Stop()
+
 	for {
 		select {
-		case <-d.ticker.C:
-			d.dispatchAllBatches()
+		case <-ticker.Chan():
+			// Swap hot and cold by switching the index
+			d.batchMutex.Lock()
+			coldIndex := d.hotIndex
+			d.hotIndex = 1 - d.hotIndex // Toggle between 0 and 1
+			// Clear the new hot map
+			d.batches[d.hotIndex] = make(map[transmitKey]*eventBatch)
+			d.batchMutex.Unlock()
+
+			// Dispatch all batches from the cold map
+			d.dispatchBatchesFromMap(d.batches[coldIndex])
 		case <-d.done:
 			return
 		}
 	}
 }
 
-// dispatchAllBatches sends all pending batches
-func (d *DirectTransmission) dispatchAllBatches() {
-	// Get snapshot of all keys
-	d.batchMutex.RLock()
-	keys := make([]transmitKey, 0, len(d.eventBatches))
-	for k := range d.eventBatches {
-		keys = append(keys, k)
-	}
-	d.batchMutex.RUnlock()
-
-	// Dispatch each batch
-	for _, key := range keys {
-		d.batchMutex.RLock()
-		batch, exists := d.eventBatches[key]
-		d.batchMutex.RUnlock()
-
-		if !exists {
-			continue
-		}
-
+// dispatchBatchesFromMap sends all batches from the given map
+func (d *DirectTransmission) dispatchBatchesFromMap(batchMap map[transmitKey]*eventBatch) {
+	// No need to lock the map since we own it, but we need to lock each batch
+	for _, batch := range batchMap {
 		batch.mutex.Lock()
 		if len(batch.events) > 0 {
-			// Copy events and reset batch
-			eventsCopy := make([]*types.Event, len(batch.events))
-			copy(eventsCopy, batch.events)
-			batch.events = batch.events[:0]
+			// Copy events to avoid closure capture issues
+			events := make([]*types.Event, len(batch.events))
+			copy(events, batch.events)
 			batch.mutex.Unlock()
 
 			d.batchPool.Go(func() {
-				d.sendBatch(eventsCopy)
+				d.sendBatch(events)
 			})
 		} else {
 			batch.mutex.Unlock()
@@ -461,6 +463,19 @@ func (d *DirectTransmission) dispatchAllBatches() {
 	}
 }
 
+// dispatchAllBatches sends all pending batches from both maps
+func (d *DirectTransmission) dispatchAllBatches() {
+	// Swap hot and cold by switching the index
+	d.batchMutex.Lock()
+	coldIndex := d.hotIndex
+	d.hotIndex = 1 - d.hotIndex
+	// Clear the new hot map
+	d.batches[d.hotIndex] = make(map[transmitKey]*eventBatch)
+	d.batchMutex.Unlock()
+
+	// Dispatch the cold batches
+	d.dispatchBatchesFromMap(d.batches[coldIndex])
+}
 
 type batchedEvent struct {
 	time       time.Time     `msg:"time"`

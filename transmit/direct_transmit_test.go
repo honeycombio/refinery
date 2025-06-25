@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/facebookgo/inject"
+	"github.com/jonboulle/clockwork"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -997,4 +998,78 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 			})
 		})
 	}
+}
+
+func TestDirectTransmissionDoubleBuffer(t *testing.T) {
+	testServer := newTestDirectAPIServer(t, 100)
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+
+	// Create a fake clock
+	fakeClock := clockwork.NewFakeClock()
+
+	// Use a longer batch timeout to ensure we can control timing
+	dt := NewDirectTransmission(metrics, "test", 100, 500*time.Millisecond, http.DefaultTransport.(*http.Transport))
+	dt.Config = &config.MockConfig{}
+	dt.Logger = &logger.NullLogger{}
+	dt.Version = "test-version"
+	dt.Clock = fakeClock // Use the fake clock
+
+	err := dt.Start()
+	require.NoError(t, err)
+
+	// Send first event
+	event1 := &types.Event{
+		Context:     context.Background(),
+		APIHost:     testServer.server.URL,
+		APIKey:      "test-key",
+		Dataset:     "test-dataset",
+		SampleRate:  1,
+		Timestamp:   fakeClock.Now(),
+		Data:        types.NewPayload(map[string]any{"event": "first"}),
+	}
+	dt.EnqueueEvent(event1)
+
+	// Advance time a bit but less than batch timeout
+	fakeClock.Advance(100 * time.Millisecond)
+
+	// Send second event - with double buffering, this should go into
+	// the same batch as the first event, not be sent immediately
+	event2 := &types.Event{
+		Context:     context.Background(),
+		APIHost:     testServer.server.URL,
+		APIKey:      "test-key",
+		Dataset:     "test-dataset",
+		SampleRate:  1,
+		Timestamp:   fakeClock.Now(),
+		Data:        types.NewPayload(map[string]any{"event": "second"}),
+	}
+	dt.EnqueueEvent(event2)
+
+	// At this point, no events should have been sent yet
+	receivedEvents := testServer.getEvents()
+	assert.Len(t, receivedEvents, 0, "No events should be sent yet")
+
+	// Advance time to trigger the batch timeout
+	fakeClock.Advance(400 * time.Millisecond)
+
+	// Give the goroutine a moment to process
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 2
+	}, 100*time.Millisecond, 10*time.Millisecond, "Both events should be sent together")
+
+	// Now both events should have been sent together
+	receivedEvents = testServer.getEvents()
+	assert.Len(t, receivedEvents, 2, "Both events should be sent together")
+
+	// Verify both events were received
+	eventData := make([]string, 0)
+	for _, e := range receivedEvents {
+		eventData = append(eventData, e.Data["event"].(string))
+	}
+	assert.Contains(t, eventData, "first")
+	assert.Contains(t, eventData, "second")
+
+	err = dt.Stop()
+	require.NoError(t, err)
 }
