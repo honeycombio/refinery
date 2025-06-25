@@ -135,10 +135,7 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 		batch, exists = d.eventBatches[key]
 		if !exists {
 			// Need to create new batch
-			batch = &eventBatch{
-				events:    make([]*types.Event, 0, d.MaxBatchSize),
-				startTime: d.Clock.Now(),
-			}
+			batch = &eventBatch{}
 			d.eventBatches[key] = batch
 		}
 		d.batchMutex.Unlock()
