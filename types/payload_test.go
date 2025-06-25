@@ -46,6 +46,13 @@ func TestPayload(t *testing.T) {
 		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
+		// test memoization
+		ph.MemoizeFields("key1", "key2", "key3", "missingkey")
+		assert.True(t, ph.Exists("key1"))
+		assert.True(t, ph.Exists("key2"))
+		assert.True(t, ph.Exists("key3"))
+		assert.False(t, ph.Exists("missingkey"))
+
 		asJSON, err := json.Marshal(ph)
 		require.NoError(t, err)
 

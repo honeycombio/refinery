@@ -149,6 +149,9 @@ func (p *Payload) Exists(key string) bool {
 	return false
 }
 
+// Get retrieves a value from the Payload by key.
+// Use Get if the field is expected to only be accessed once.
+// If the field is expected to be accessed multiple times, use MemoizeFields
 func (p *Payload) Get(key string) any {
 	if p.memoizedFields != nil {
 		if value, ok := p.memoizedFields[key]; ok {
@@ -181,11 +184,6 @@ func (p *Payload) Get(key string) any {
 			break
 		}
 	}
-
-	if p.missingFields == nil {
-		p.missingFields = make(map[string]struct{})
-	}
-	p.missingFields[key] = struct{}{}
 
 	return nil
 }
