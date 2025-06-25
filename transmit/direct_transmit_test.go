@@ -62,25 +62,28 @@ func newTestDirectAPIServer(t testing.TB, maxBatchSize int) *testDirectAPIServer
 	return server
 }
 
+// Not suitable for use in benchmarks
+func readHTTPBody(t testing.TB, r *http.Request) []byte {
+	t.Helper()
+
+	var reader io.Reader
+	if r.Header.Get("Content-Encoding") == "zstd" {
+		zr, err := zstd.NewReader(r.Body)
+		assert.NoError(t, err)
+		reader = zr
+	} else {
+		reader = r.Body
+	}
+	body, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+	return body
+}
+
 func (t *testDirectAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
+	t.t.Helper()
 	defer r.Body.Close()
 
-	var reader io.Reader = r.Body
-
-	// Handle zstd compression (even though we don't expect it, keep for completeness)
-	if encoding := r.Header.Get("Content-Encoding"); encoding == "zstd" {
-		zr, err := zstd.NewReader(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			assert.NoError(t.t, err)
-			return
-		}
-		defer zr.Close()
-		reader = zr
-	}
-
-	body, err := io.ReadAll(reader)
-	assert.NoError(t.t, err)
+	body := readHTTPBody(t.t, r)
 	assert.Less(t.t, len(body), apiMaxBatchSize)
 
 	var events []receivedEvent
@@ -131,20 +134,7 @@ func (t *testDirectAPIServer) getEvents() []receivedEvent {
 
 // setupDirectTransmissionTest creates a configured DirectTransmission with mocks for testing
 func setupDirectTransmissionTest(t *testing.T) (*DirectTransmission, *metrics.MockMetrics, *logger.MockLogger) {
-	mockMetrics := &metrics.MockMetrics{}
-	mockMetrics.Start()
-
-	mockLogger := &logger.MockLogger{}
-
-	dt := NewDirectTransmission(mockMetrics, "test", 10, 20*time.Millisecond, http.DefaultTransport.(*http.Transport))
-	dt.Logger = mockLogger
-	dt.Version = "test-version"
-
-	err := dt.Start()
-	require.NoError(t, err)
-	t.Cleanup(func() { dt.Stop() })
-
-	return dt, mockMetrics, mockLogger
+	return setupDirectTransmissionTestWithBatchSize(t, 10, 20*time.Millisecond)
 }
 
 // setupDirectTransmissionTestWithBatchSize creates a configured DirectTransmission with specific batch size
@@ -154,7 +144,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(mockMetrics, "test", batchSize, batchTimeout, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", batchSize, batchTimeout, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -222,7 +212,7 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// Create a test server that returns individual errors in batch format
 		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Read the request to determine how many events were sent
-			body, _ := io.ReadAll(r.Body)
+			body := readHTTPBody(t, r)
 			// DirectTransmission only sends msgpack
 			eventCount, _, _ := msgp.ReadArrayHeaderBytes(body)
 
@@ -456,7 +446,7 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(mockMetrics, "test", 3, 50*time.Millisecond, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 3, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -651,7 +641,7 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(mockMetrics, "test", 50, 50*time.Millisecond, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 50, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -721,7 +711,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	fakeClock := clockwork.NewFakeClock()
 
 	// Use a 400ms batch timeout for testing
-	dt := NewDirectTransmission(metrics, "test", 100, 400*time.Millisecond, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(metrics, http.DefaultTransport.(*http.Transport), "test", 100, 400*time.Millisecond, true)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -860,19 +850,31 @@ func (s *benchmarkAPIServer) handleBatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	var reader io.Reader = r.Body
 	if encoding != "" {
-		s.t.Errorf("unsupported compression: %s", encoding)
-		http.Error(w, "unsupported compression", http.StatusBadRequest)
-		return
+		if encoding != "zstd" {
+			s.t.Errorf("unsupported compression: %s", encoding)
+			http.Error(w, "unsupported compression", http.StatusBadRequest)
+			return
+		}
+		zr, err := zstd.NewReader(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			assert.NoError(s.t, err)
+			return
+		}
+		defer zr.Close()
+		reader = zr
 	}
 
 	// Read the entire request body
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		s.t.Error(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	r.Body.Close()
 
 	// Use msgp to efficiently count array elements without full decoding
 	var arraySize uint32
@@ -1024,10 +1026,11 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 
 				dt := NewDirectTransmission(
 					mockMetrics,
+					httpTransport,
 					"benchmark",
 					libhoney.DefaultMaxBatchSize,
 					libhoney.DefaultBatchTimeout,
-					httpTransport,
+					false,
 				)
 				dt.Logger = &logger.NullLogger{}
 				dt.Version = "benchmark"

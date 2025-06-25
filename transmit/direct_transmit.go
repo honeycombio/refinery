@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/klauspost/compress/zstd"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
@@ -34,6 +35,25 @@ const (
 	// more. Under ideal conditions this limit is never approached.
 	maxConcurrentBatches = 500
 )
+
+// Instantiating a new encoder is expensive, so use a global one.
+// EncodeAll() is concurrency-safe.
+var zstdEncoder *zstd.Encoder
+
+func init() {
+	var err error
+	zstdEncoder, err = zstd.NewWriter(
+		nil,
+		// Compression level 2 gives a good balance of speed and compression.
+		zstd.WithEncoderLevel(zstd.EncoderLevelFromZstd(2)),
+		// zstd allocates 2 * GOMAXPROCS * window size, so use a small window.
+		// Most honeycomb messages are smaller than this.
+		zstd.WithWindowSize(1<<16),
+	)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type transmitKey struct {
 	apiHost string
@@ -64,11 +84,13 @@ type DirectTransmission struct {
 	Clock     clockwork.Clock
 
 	// Type is peer or upstream, and used only for naming metrics
-	Name string
+	name string
+
+	enableCompression bool
 
 	// Batching configuration
-	MaxBatchSize int
-	BatchTimeout time.Duration
+	maxBatchSize int
+	batchTimeout time.Duration
 
 	eventBatches map[transmitKey]*eventBatch
 	batchMutex   sync.RWMutex
@@ -80,21 +102,29 @@ type DirectTransmission struct {
 	userAgent  string
 }
 
-func NewDirectTransmission(m metrics.Metrics, name string, maxBatchSize int, batchTimeout time.Duration, transport *http.Transport) *DirectTransmission {
+func NewDirectTransmission(
+	m metrics.Metrics,
+	transport *http.Transport,
+	name string,
+	maxBatchSize int,
+	batchTimeout time.Duration,
+	enableCompression bool,
+) *DirectTransmission {
 	return &DirectTransmission{
-		Metrics:      m,
-		Name:         name,
-		MaxBatchSize: maxBatchSize,
-		BatchTimeout: batchTimeout,
-		Transport:    transport,
-		Clock:        clockwork.NewRealClock(),
-		eventBatches: make(map[transmitKey]*eventBatch),
-		stop:         make(chan struct{}),
+		Metrics:           m,
+		Transport:         transport,
+		Clock:             clockwork.NewRealClock(),
+		name:              name,
+		enableCompression: enableCompression,
+		maxBatchSize:      maxBatchSize,
+		batchTimeout:      batchTimeout,
+		eventBatches:      make(map[transmitKey]*eventBatch),
+		stop:              make(chan struct{}),
 	}
 }
 
 func (d *DirectTransmission) Start() error {
-	d.Logger.Debug().Logf("Starting DirectTransmission: %s type", d.Name)
+	d.Logger.Debug().Logf("Starting DirectTransmission: %s type", d.name)
 	d.userAgent = fmt.Sprintf("refinery/%s %s (%s/%s)", d.Version, strings.Replace(runtime.Version(), "go", "go/", 1), runtime.GOOS, runtime.GOARCH)
 	d.httpClient = &http.Client{
 		Transport: d.Transport,
@@ -144,11 +174,11 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 	// Add event to batch
 	batch.mutex.Lock()
 	if batch.events == nil {
-		batch.events = make([]*types.Event, 0, d.MaxBatchSize)
+		batch.events = make([]*types.Event, 0, d.maxBatchSize)
 		batch.startTime = d.Clock.Now()
 	}
 	batch.events = append(batch.events, ev)
-	shouldDispatch := len(batch.events) >= d.MaxBatchSize
+	shouldDispatch := len(batch.events) >= d.maxBatchSize
 	if shouldDispatch {
 		events := batch.events
 		batch.events = nil
@@ -331,7 +361,20 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			d.handleBatchFailure(subBatch)
 			continue
 		}
-		req, err := http.NewRequest("POST", apiURL.String(), bytes.NewReader(packed))
+
+		var reader io.Reader
+		if d.enableCompression {
+			zBufPtr := batchBufferPool.Get().(*[]byte)
+			zBuf := zstdEncoder.EncodeAll(packed, *zBufPtr)
+			reader = bytes.NewReader(zBuf)
+
+			*zBufPtr = zBuf[:0]
+			defer batchBufferPool.Put(zBufPtr)
+		} else {
+			reader = bytes.NewReader(packed)
+		}
+
+		req, err := http.NewRequest("POST", apiURL.String(), reader)
 		if err != nil {
 			d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request")
 			d.handleBatchFailure(subBatch)
@@ -341,6 +384,9 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		req.Header.Set("Content-Type", "application/msgpack")
 		req.Header.Set("X-Honeycomb-Team", apiKey)
 		req.Header.Set("User-Agent", d.userAgent)
+		if d.enableCompression {
+			req.Header.Set("Content-Encoding", "zstd")
+		}
 
 		resp, err := d.httpClient.Do(req)
 		dequeuedAt := d.Clock.Now()
@@ -427,7 +473,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 func (d *DirectTransmission) dispatchStaleBatches() {
 	defer d.stopWG.Done()
 
-	ticker := d.Clock.NewTicker(d.BatchTimeout / 4)
+	ticker := d.Clock.NewTicker(d.batchTimeout / 4)
 	defer ticker.Stop()
 
 	var keys []transmitKey
@@ -459,7 +505,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 				}
 
 				batch.mutex.Lock()
-				if len(batch.events) > 0 && now.Sub(batch.startTime) >= d.BatchTimeout {
+				if len(batch.events) > 0 && now.Sub(batch.startTime) >= d.batchTimeout {
 					events := batch.events
 					batch.events = nil
 					batch.mutex.Unlock()
