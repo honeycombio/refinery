@@ -247,8 +247,19 @@ func (d *DirectTransmission) handleEventError(ev *types.Event, statusCode int, q
 	d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
 }
 
+// Stores *[]byte instead of []byte to avoid having the slice headers themselves
+// moved onto the heap on every Put().
+var batchBufferPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 0, 16*1024)
+		return &buf
+	},
+}
+
 // Sends one message or, if the batch is larger than what is allowed, several.
 func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
+	subBatch := make([]*types.Event, 0, len(wholeBatch))
+
 	for len(wholeBatch) > 0 {
 		// All events in batch should have same destination
 		apiHost := wholeBatch[0].APIHost
@@ -261,12 +272,9 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		// array length, so we'll need to do some []byte shenanigans at the end of
 		// this to properly prepend the header.
 
-		// TODO keep a pool of buffers, being sure to keep original start point
-		// Start with a buffer pre-pended with 5 spare bytes, the max size of an
-		// array header.
-		var packed []byte
-		packed = append(packed, 0, 0, 0, 0, 0)
-		var subBatch []*types.Event
+		bufPtr := batchBufferPool.Get().(*[]byte)
+		packed := append(*bufPtr, 0, 0, 0, 0, 0)
+		subBatch = subBatch[:0]
 		var i int
 		for i = 0; i < len(wholeBatch); i++ {
 			packEvent := batchedEvent{
@@ -302,6 +310,10 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		if len(subBatch) == 0 {
 			continue
 		}
+
+		// packed is now at its full size, we'll put that back in the pool.
+		*bufPtr = packed[:0]
+		defer batchBufferPool.Put(bufPtr)
 
 		// Now we know how many events were encoded, so we can do shenanigans
 		// to pre-pend the array header, which is variable-width.
