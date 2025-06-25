@@ -21,6 +21,14 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+const (
+	// Size limit for a serialized request body sent for a batch.
+	apiMaxBatchSize int = 5_000_000
+
+	// Size limit for a single serialized event within a batch.
+	apiMaxEventSize int = 1_000_000
+)
+
 type transmitKey struct {
 	apiHost string
 	apiKey  string
@@ -181,145 +189,173 @@ func (d *DirectTransmission) handleEventError(ev *types.Event, statusCode int, q
 	d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
 }
 
-func (d *DirectTransmission) sendBatch(batch []*types.Event) {
-	if len(batch) == 0 {
-		return
-	}
+// Sends one message or, if the batch is larger than what is allowed, several.
+func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
+	for len(wholeBatch) > 0 {
+		// All events in batch should have same destination
+		apiHost := wholeBatch[0].APIHost
+		apiKey := wholeBatch[0].APIKey
+		dataset := wholeBatch[0].Dataset
 
-	// All events in batch should have same destination
-	firstEvent := batch[0]
-	apiHost := firstEvent.APIHost
-	apiKey := firstEvent.APIKey
-	dataset := firstEvent.Dataset
+		// Msgpack arrays need to be prefixed with the number of elements, but we
+		// don't know in advance how many we'll encode, because size estimation is
+		// quite expensive. Also, the array header is of variable size based on
+		// array length, so we'll need to do some []byte shenanigans at the end of
+		// this to properly prepend the header.
 
-	// Create batch of events
-	var packed []byte
-	packed = msgp.AppendArrayHeader(packed, uint32(len(batch)))
+		// TODO keep a pool of buffers, being sure to keep original start point
+		// Start with a buffer pre-pended with 5 spare bytes, the max size of an
+		// array header.
+		var packed []byte
+		packed = append(packed, 0, 0, 0, 0, 0)
+		var subBatch []*types.Event
+		var i int
+		for i = 0; i < len(wholeBatch); i++ {
+			packEvent := batchedEvent{
+				time:       wholeBatch[i].Timestamp,
+				sampleRate: int64(wholeBatch[i].SampleRate),
+				data:       wholeBatch[i].Data,
+			}
 
-	for _, ev := range batch {
-		packEvent := batchedEvent{
-			time:       ev.Timestamp,
-			sampleRate: int64(ev.SampleRate),
-			data:       ev.Data,
-		}
-
-		var err error
-		packed, err = packEvent.MarshalMsg(packed)
-		if err != nil {
-			d.Logger.Error().WithField("error", err.Error()).Logf("failed to marshal event")
-			d.Metrics.Down(updownQueuedItems)
-			continue
-		}
-	}
-
-	apiURL, err := url.Parse(apiHost)
-	if err != nil {
-		d.Logger.Error().WithField("error", err.Error()).WithString("api_host", apiHost).Logf("failed to parse API host")
-		d.handleBatchFailure(batch)
-		return
-	}
-	apiURL.Path, err = url.JoinPath("/1/batch", url.PathEscape(dataset))
-	if err != nil {
-		d.Logger.Error().WithField("error", err.Error()).Logf("failed to create request URL")
-		d.handleBatchFailure(batch)
-		return
-	}
-	req, err := http.NewRequest("POST", apiURL.String(), bytes.NewReader(packed))
-	if err != nil {
-		d.Logger.Error().WithField("error", err.Error()).Logf("failed to create request")
-		d.handleBatchFailure(batch)
-		return
-	}
-
-	req.Header.Set("Content-Type", "application/msgpack")
-	req.Header.Set("X-Honeycomb-Team", apiKey)
-	req.Header.Set("User-Agent", d.userAgent)
-
-	resp, err := d.httpClient.Do(req)
-	dequeuedAt := time.Now()
-
-	if err != nil {
-		d.Logger.Error().WithField("error", err.Error()).Logf("http POST failed")
-
-		// Network/connection error - affects all events in batch
-		for _, ev := range batch {
-			queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
-			d.handleEventError(ev, 0, queueTime, err.Error(), nil)
-		}
-		return
-	}
-
-	defer resp.Body.Close()
-
-	// Parse batch response - following libhoney pattern where any status != 200 is an error for all events
-	if resp.StatusCode == http.StatusOK {
-		// Parse individual responses from batch - handle msgpack or JSON
-		var batchResponses []batchResponse
-		if resp.Header.Get("Content-Type") == "application/msgpack" {
-			err := msgpack.NewDecoder(resp.Body).Decode(&batchResponses)
+			var err error
+			newPacked, err := packEvent.MarshalMsg(packed)
+			if err == nil && len(newPacked)-len(packed) > apiMaxEventSize {
+				err = fmt.Errorf("event exceeds max event size of %d bytes, API will not accept this event.", apiMaxEventSize)
+			}
 			if err != nil {
-				d.Logger.Error().WithField("error", err.Error()).Logf("failed to decode msgpack batch response")
-			}
-		} else {
-			bodyBytes, err := io.ReadAll(resp.Body)
-			if err == nil {
-				json.Unmarshal(bodyBytes, &batchResponses)
-			}
-		}
-
-		// Process each event response
-		for i, ev := range batch {
-			queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
-
-			// Check if we have a response for this event
-			if i >= len(batchResponses) {
-				// Missing response - treat as server error
-				d.handleEventError(ev, http.StatusInternalServerError, queueTime, "insufficient responses from server", nil)
+				// Skip this message and remove it from the list, so we don't
+				// try to account for it again.
+				d.Logger.Error().WithField("err", err.Error()).Logf("failed to marshal event")
+				d.Metrics.Down(updownQueuedItems)
+				d.Metrics.Increment(counterResponseErrors)
 				continue
 			}
-
-			if batchResponses[i].Status != http.StatusAccepted {
-				d.handleEventError(ev, batchResponses[i].Status, queueTime, "", nil)
-			} else {
-				// Success
-				d.Metrics.Increment(counterResponse20x)
-				d.Metrics.Down(updownQueuedItems)
-				d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
+			if len(newPacked) > apiMaxBatchSize {
+				// Not an error, but we can't send this event in this batch.
+				// Dispatch with what we have.
+				break
 			}
+			packed = newPacked
+			subBatch = append(subBatch, wholeBatch[i])
 		}
-	} else {
-		// HTTP error - affects all events in batch
-		var bodyBytes []byte
+		// Any leftover events will be sent in the next iteration.
+		wholeBatch = wholeBatch[i:]
 
-		// Handle msgpack or JSON response body
-		if resp.Header.Get("Content-Type") == "application/msgpack" {
-			var errorBody interface{}
-			decoder := msgpack.NewDecoder(resp.Body)
-			err = decoder.Decode(&errorBody)
-			if err == nil {
-				bodyBytes, _ = json.Marshal(&errorBody)
+		if len(subBatch) == 0 {
+			continue
+		}
+
+		// Now we know how many events were encoded, so we can do shenanigans
+		// to pre-pend the array header, which is variable-width.
+		var headerBuf [5]byte
+		header := msgp.AppendArrayHeader(headerBuf[:0], uint32(len(subBatch)))
+		packed = packed[5-len(header):]
+		copy(packed, header)
+
+		apiURL, err := url.Parse(apiHost)
+		if err != nil {
+			d.Logger.Error().WithField("err", err.Error()).WithString("api_host", apiHost).Logf("failed to parse API host")
+			d.handleBatchFailure(subBatch)
+			continue
+		}
+		apiURL.Path, err = url.JoinPath("/1/batch", url.PathEscape(dataset))
+		if err != nil {
+			d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request URL")
+			d.handleBatchFailure(subBatch)
+			continue
+		}
+		req, err := http.NewRequest("POST", apiURL.String(), bytes.NewReader(packed))
+		if err != nil {
+			d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request")
+			d.handleBatchFailure(subBatch)
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/msgpack")
+		req.Header.Set("X-Honeycomb-Team", apiKey)
+		req.Header.Set("User-Agent", d.userAgent)
+
+		resp, err := d.httpClient.Do(req)
+		dequeuedAt := time.Now()
+
+		if err != nil {
+			d.Logger.Error().WithField("err", err.Error()).Logf("http POST failed")
+
+			// Network/connection error - affects all events in batch
+			for _, ev := range subBatch {
+				queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
+				d.handleEventError(ev, 0, queueTime, err.Error(), nil)
+			}
+			continue
+		}
+
+		// Parse batch response - following libhoney pattern where any status != 200 is an error for all events
+		if resp.StatusCode == http.StatusOK {
+			// Parse individual responses from batch - handle msgpack or JSON
+			var batchResponses []batchResponse
+			if resp.Header.Get("Content-Type") == "application/msgpack" {
+				err := msgpack.NewDecoder(resp.Body).Decode(&batchResponses)
+				if err != nil {
+					d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode msgpack batch response")
+				}
+			} else {
+				bodyBytes, err := io.ReadAll(resp.Body)
+				if err == nil {
+					json.Unmarshal(bodyBytes, &batchResponses)
+				}
+			}
+			resp.Body.Close()
+
+			// Process each event response
+			for i, ev := range subBatch {
+				queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
+
+				// Check if we have a response for this event
+				if i >= len(batchResponses) {
+					// Missing response - treat as server error
+					d.handleEventError(ev, http.StatusInternalServerError, queueTime, "insufficient responses from server", nil)
+					continue
+				}
+
+				if batchResponses[i].Status != http.StatusAccepted {
+					d.handleEventError(ev, batchResponses[i].Status, queueTime, "", nil)
+				} else {
+					// Success
+					d.Metrics.Increment(counterResponse20x)
+					d.Metrics.Down(updownQueuedItems)
+					d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
+				}
 			}
 		} else {
-			bodyBytes, _ = io.ReadAll(resp.Body)
-		}
+			// HTTP error - affects all events in batch
+			var bodyBytes []byte
 
-		// Special handling for unauthorized responses
-		if resp.StatusCode == http.StatusUnauthorized {
-			d.Logger.Error().WithString("api_key", apiKey).Logf("APIKey was rejected. Please verify APIKey is correct.")
-		}
+			// Handle msgpack or JSON response body
+			if resp.Header.Get("Content-Type") == "application/msgpack" {
+				var errorBody interface{}
+				decoder := msgpack.NewDecoder(resp.Body)
+				err = decoder.Decode(&errorBody)
+				if err == nil {
+					bodyBytes, _ = json.Marshal(&errorBody)
+				}
+			} else {
+				bodyBytes, _ = io.ReadAll(resp.Body)
+			}
+			resp.Body.Close()
 
-		for _, ev := range batch {
-			queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
-			d.handleEventError(ev, resp.StatusCode, queueTime, "", bodyBytes)
+			// Special handling for unauthorized responses
+			if resp.StatusCode == http.StatusUnauthorized {
+				d.Logger.Error().WithString("api_key", apiKey).Logf("APIKey was rejected. Please verify APIKey is correct.")
+			}
+
+			for _, ev := range subBatch {
+				queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
+				d.handleEventError(ev, resp.StatusCode, queueTime, "", bodyBytes)
+			}
 		}
 	}
 }
 
-// TODO this needs to be modified to not exceed maximum event and batch sizes,
-// which is rather a hassle. See libhoney's encodeBatchMsgp method.
-// TODO we'll need a benchmark which sends very wide distributions of dataset/host,
-// and one which just spams a single one, to identify the unique bottlenecks of
-// both cases.
 func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
 	defer d.shutdownWG.Done()
 
