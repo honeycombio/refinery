@@ -105,11 +105,12 @@ func (h *HoneycombLogger) Start() error {
 	return nil
 }
 
-// Add support for the OTEL_RESOURCE_ATTRIBUTES env var.
+// Add support for the REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_FIELDS env var which allows
+// specifying comma-separated key-value pairs to be added to outgoing logs as fields.
+// The key value pairs must be separated by `=`.
 // Credit to https://github.com/open-telemetry/opentelemetry-go/blob/553779c161e9bb7bbc1670b3a92a1bf3ceefb859/sdk/resource/env.go#L67-L95
-// for OTEL_RESOURCE_ATTRIBUTES spec-compliant implementation.
 func (h *HoneycombLogger) addResourceAttributes() {
-	attrs := strings.TrimSpace(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"))
+	attrs := strings.TrimSpace(os.Getenv("REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_FIELDS"))
 	if attrs == "" {
 		return
 	}
