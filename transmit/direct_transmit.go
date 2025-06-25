@@ -40,6 +40,12 @@ type transmitKey struct {
 	dataset string
 }
 
+// eventBatch holds a slice of events and a mutex for thread-safe access
+type eventBatch struct {
+	mutex  sync.Mutex
+	events []*types.Event
+}
+
 // Transmission to the hny API (peer refinery or honeycomb) via messagepack,
 // without involving libhoney. This is designed to be lightweight and sheds
 // some of the ergonomics of libhoney in favor of simplicity and performance.
@@ -61,10 +67,12 @@ type DirectTransmission struct {
 	MaxBatchSize int
 	BatchTimeout time.Duration
 
-	transmitQueues map[transmitKey]chan<- *types.Event
-	mutex          sync.RWMutex
-	shutdownWG     sync.WaitGroup
-	batchPool      *pool.Pool
+	// Slice-based batching
+	eventBatches map[transmitKey]*eventBatch
+	batchMutex   sync.RWMutex
+	batchPool    *pool.Pool
+	ticker       *time.Ticker
+	done         chan struct{}
 
 	httpClient *http.Client
 	userAgent  string
@@ -77,7 +85,8 @@ func NewDirectTransmission(m metrics.Metrics, name string, maxBatchSize int, bat
 		MaxBatchSize:   maxBatchSize,
 		BatchTimeout:   batchTimeout,
 		Transport:      transport,
-		transmitQueues: make(map[transmitKey]chan<- *types.Event),
+		eventBatches:   make(map[transmitKey]*eventBatch),
+		done:           make(chan struct{}),
 	}
 }
 
@@ -92,6 +101,10 @@ func (d *DirectTransmission) Start() error {
 	// Create a pool for concurrent batch sending
 	d.batchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
 
+	// Start the ticker for periodic batch dispatch
+	d.ticker = time.NewTicker(d.BatchTimeout)
+	go d.periodicBatchDispatch()
+
 	return nil
 }
 
@@ -105,39 +118,49 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 	// Store enqueue time for queue time metrics
 	ev.EnqueuedUnixMicro = time.Now().UnixMicro()
 
-	// TODO this may end up on the heap, if so, either construct it inline, or make it
-	// a sub-struct of Event (which is already on the heap).
 	key := transmitKey{
 		apiHost: ev.APIHost,
 		apiKey:  ev.APIKey,
 		dataset: ev.Dataset,
 	}
 
-	d.mutex.RLock()
-	q, ok := d.transmitQueues[key]
-	d.mutex.RUnlock()
+	// First check if batch exists without write lock
+	d.batchMutex.RLock()
+	batch, exists := d.eventBatches[key]
+	d.batchMutex.RUnlock()
 
-	if !ok {
-		d.mutex.Lock()
-		q, ok = d.transmitQueues[key]
-		if ok {
-			d.mutex.Unlock()
-		} else {
-			// TODO buffer size - use larger buffer to avoid blocking
-			ch := make(chan *types.Event, 100)
-			d.transmitQueues[key] = ch
-			d.mutex.Unlock()
-
-			// TODO one goroutine per dataset/peer will lead to 1M+ goroutines
-			// in degenerate cases. This is not a viable production strategy,
-			// and needs to be evolved to a more bounded system.
-			d.shutdownWG.Add(1)
-			go d.batchEvents(ch)
-			q = ch
+	if !exists {
+		// Need to create new batch
+		d.batchMutex.Lock()
+		// Double-check after acquiring write lock
+		batch, exists = d.eventBatches[key]
+		if !exists {
+			batch = &eventBatch{
+				events: make([]*types.Event, 0, d.MaxBatchSize),
+			}
+			d.eventBatches[key] = batch
 		}
+		d.batchMutex.Unlock()
 	}
 
-	q <- ev
+	// Add event to batch
+	batch.mutex.Lock()
+	batch.events = append(batch.events, ev)
+	shouldDispatch := len(batch.events) >= d.MaxBatchSize
+	if shouldDispatch {
+		// Dispatch this batch
+		eventsCopy := make([]*types.Event, len(batch.events))
+		copy(eventsCopy, batch.events)
+		batch.events = batch.events[:0] // Reset slice but keep capacity
+		batch.mutex.Unlock()
+
+		d.batchPool.Go(func() {
+			d.sendBatch(eventsCopy)
+		})
+	} else {
+		batch.mutex.Unlock()
+	}
+
 	d.Metrics.Up(updownQueuedItems)
 }
 
@@ -155,12 +178,26 @@ func (d *DirectTransmission) RegisterMetrics() {
 }
 
 func (d *DirectTransmission) Stop() error {
-	for _, q := range d.transmitQueues {
-		close(q)
+	// Stop the ticker
+	if d.ticker != nil {
+		d.ticker.Stop()
 	}
-	d.transmitQueues = nil
-	d.shutdownWG.Wait()
+	
+	// Only close done if it was initialized
+	if d.done != nil {
+		select {
+		case <-d.done:
+			// Already closed
+		default:
+			close(d.done)
+		}
+	}
 
+	// Dispatch all remaining batches
+	d.dispatchAllBatches()
+
+
+	// Wait for all batch sends to complete
 	if d.batchPool != nil {
 		d.batchPool.Wait()
 	}
@@ -375,39 +412,55 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 	}
 }
 
-func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
-	defer d.shutdownWG.Done()
-
-	for ev := range in {
-		// Start a new batch, and wait for the first event.
-		batch := make([]*types.Event, 1, d.MaxBatchSize)
-		batch[0] = ev
-
-		timer := time.NewTimer(d.BatchTimeout)
-
-		// Accumulate until the batch is full, or the timer expires
-	eventLoop:
-		for len(batch) < d.MaxBatchSize {
-			select {
-			case ev, ok := <-in:
-				if !ok {
-					break eventLoop
-				}
-
-				// Add event to batch (all events on this channel have same destination)
-				batch = append(batch, ev)
-			case <-timer.C:
-				// Timer expired, send batch
-				break eventLoop
-			}
+// periodicBatchDispatch runs on a ticker and dispatches all pending batches
+func (d *DirectTransmission) periodicBatchDispatch() {
+	for {
+		select {
+		case <-d.ticker.C:
+			d.dispatchAllBatches()
+		case <-d.done:
+			return
 		}
-		timer.Stop()
-
-		d.batchPool.Go(func() {
-			d.sendBatch(batch)
-		})
 	}
 }
+
+// dispatchAllBatches sends all pending batches
+func (d *DirectTransmission) dispatchAllBatches() {
+	// Get snapshot of all keys
+	d.batchMutex.RLock()
+	keys := make([]transmitKey, 0, len(d.eventBatches))
+	for k := range d.eventBatches {
+		keys = append(keys, k)
+	}
+	d.batchMutex.RUnlock()
+
+	// Dispatch each batch
+	for _, key := range keys {
+		d.batchMutex.RLock()
+		batch, exists := d.eventBatches[key]
+		d.batchMutex.RUnlock()
+
+		if !exists {
+			continue
+		}
+
+		batch.mutex.Lock()
+		if len(batch.events) > 0 {
+			// Copy events and reset batch
+			eventsCopy := make([]*types.Event, len(batch.events))
+			copy(eventsCopy, batch.events)
+			batch.events = batch.events[:0]
+			batch.mutex.Unlock()
+
+			d.batchPool.Go(func() {
+				d.sendBatch(eventsCopy)
+			})
+		} else {
+			batch.mutex.Unlock()
+		}
+	}
+}
+
 
 type batchedEvent struct {
 	time       time.Time     `msg:"time"`
