@@ -46,6 +46,13 @@ func TestPayload(t *testing.T) {
 		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
+		// test memoization
+		ph.MemoizeFields("key1", "key2", "key3", "missingkey")
+		assert.True(t, ph.Exists("key1"))
+		assert.True(t, ph.Exists("key2"))
+		assert.True(t, ph.Exists("key3"))
+		assert.False(t, ph.Exists("missingkey"))
+
 		asJSON, err := json.Marshal(ph)
 		require.NoError(t, err)
 
@@ -190,6 +197,21 @@ func BenchmarkPayload(b *testing.B) {
 		var buf []byte
 		for b.Loop() {
 			buf, _ = phMsgp.MarshalMsg(buf[:0])
+		}
+	})
+
+	b.Run("get_unknown", func(b *testing.B) {
+		_ = phMap.Get("get-unknown")
+		// subsequent calls to unknown fields are fast, since they are memoized
+		for b.Loop() {
+			_ = phMsgp.Get("get-unknown")
+		}
+	})
+	b.Run("exist_unknown", func(b *testing.B) {
+		_ = phMap.Exists("exist-unknown")
+		// subsequent calls to unknown fields are fast, since they are memoized
+		for b.Loop() {
+			_ = phMsgp.Exists("exist-unknown")
 		}
 	})
 }

@@ -15,6 +15,9 @@ type Payload struct {
 
 	// Deserialized fields, either from the internal msgpMap, or set externally.
 	memoizedFields map[string]any
+	// missingFields is a set of fields that were not found in the payload.
+	// this is used to avoid repeatedly deserializing fields that are not present.
+	missingFields map[string]struct{}
 }
 
 func NewPayload(data map[string]any) Payload {
@@ -59,9 +62,15 @@ func (p *Payload) MemoizeFields(keys ...string) {
 	if p.memoizedFields == nil {
 		p.memoizedFields = make(map[string]any, len(keys))
 	}
+	if p.missingFields == nil {
+		p.missingFields = make(map[string]struct{}, len(keys))
+	}
 
 	keysToFind := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
+		if _, ok := p.missingFields[key]; ok {
+			continue
+		}
 		if _, ok := p.memoizedFields[key]; !ok {
 			keysToFind[key] = struct{}{}
 		}
@@ -96,12 +105,24 @@ func (p *Payload) MemoizeFields(keys ...string) {
 			keysFound++
 		}
 	}
+
+	for key := range keysToFind {
+		if _, ok := p.memoizedFields[key]; !ok {
+			p.missingFields[key] = struct{}{}
+		}
+	}
 }
 
 func (p *Payload) Exists(key string) bool {
 	if p.memoizedFields != nil {
 		if _, ok := p.memoizedFields[key]; ok {
 			return true
+		}
+	}
+
+	if p.missingFields != nil {
+		if _, ok := p.missingFields[key]; ok {
+			return false
 		}
 	}
 
@@ -124,10 +145,19 @@ func (p *Payload) Exists(key string) bool {
 	return false
 }
 
+// Get retrieves a value from the Payload by key.
+// Use Get if the field is expected to only be accessed once.
+// If the field is expected to be accessed multiple times, use MemoizeFields
 func (p *Payload) Get(key string) any {
 	if p.memoizedFields != nil {
 		if value, ok := p.memoizedFields[key]; ok {
 			return value
+		}
+	}
+
+	if p.missingFields != nil {
+		if _, ok := p.missingFields[key]; ok {
+			return nil
 		}
 	}
 
