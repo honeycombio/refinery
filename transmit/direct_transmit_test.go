@@ -545,7 +545,6 @@ func TestDirectTransmission(t *testing.T) {
 	}
 
 	// At this point, time hasn't advanced so we should't get any incomplete batches.
-	time.Sleep(time.Millisecond)
 	require.Eventually(t, func() bool {
 		return len(testServer.getEvents()) == len(allEvents)-6
 	}, 100*time.Millisecond, time.Millisecond)
