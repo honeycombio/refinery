@@ -546,6 +546,9 @@ func TestDirectTransmission(t *testing.T) {
 
 	// At this point, time hasn't advanced so we should't get any incomplete batches.
 	require.Eventually(t, func() bool {
+		// 4 events waiting for timeout
+		// 1 event yet to be enqueued
+		// 1 event is too large to send
 		return len(testServer.getEvents()) == len(allEvents)-6
 	}, 100*time.Millisecond, time.Millisecond)
 
@@ -554,6 +557,8 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Now the ticker should fire and we should send old events.
 	require.Eventually(t, func() bool {
+		// 1 event yet to be enqueued
+		// 1 event is too large to send
 		return len(testServer.getEvents()) == len(allEvents)-2
 	}, 100*time.Millisecond, time.Millisecond)
 
@@ -563,6 +568,7 @@ func TestDirectTransmission(t *testing.T) {
 	require.NoError(t, err)
 
 	// Group events by dataset
+	// 1 event is too large to send
 	expectedEvents := len(allEvents) - 1
 	receivedEvents := testServer.getEvents()
 	require.Len(t, receivedEvents, expectedEvents)
