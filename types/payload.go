@@ -142,10 +142,6 @@ func (p *Payload) Exists(key string) bool {
 		}
 	}
 
-	if p.missingFields == nil {
-		p.missingFields = make(map[string]struct{})
-	}
-	p.missingFields[key] = struct{}{}
 	return false
 }
 
