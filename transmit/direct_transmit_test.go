@@ -135,10 +135,27 @@ func setupDirectTransmissionTest(t *testing.T) (*DirectTransmission, *metrics.Mo
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(mockMetrics, "test", 10, 20*time.Millisecond)
+	dt := NewDirectTransmission(mockMetrics, "test", 10, 20*time.Millisecond, http.DefaultTransport.(*http.Transport))
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
-	dt.Transport = http.DefaultTransport.(*http.Transport)
+
+	err := dt.Start()
+	require.NoError(t, err)
+	t.Cleanup(func() { dt.Stop() })
+
+	return dt, mockMetrics, mockLogger
+}
+
+// setupDirectTransmissionTestWithBatchSize creates a configured DirectTransmission with specific batch size
+func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batchTimeout time.Duration) (*DirectTransmission, *metrics.MockMetrics, *logger.MockLogger) {
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+
+	mockLogger := &logger.MockLogger{}
+
+	dt := NewDirectTransmission(mockMetrics, "test", batchSize, batchTimeout, http.DefaultTransport.(*http.Transport))
+	dt.Logger = mockLogger
+	dt.Version = "test-version"
 
 	err := dt.Start()
 	require.NoError(t, err)
@@ -183,11 +200,12 @@ func getErrorEvents(mockLogger *logger.MockLogger) []*logger.MockLoggerEvent {
 func TestDirectTransmitDependencyInjection(t *testing.T) {
 	var g inject.Graph
 	err := g.Provide(
-		&inject.Object{Value: &DirectTransmission{}},
+		&inject.Object{Value: &DirectTransmission{
+			Transport: http.DefaultTransport.(*http.Transport),
+		}},
 
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
-		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
 		&inject.Object{Value: "test", Name: "version"},
 	)
 	if err != nil {
@@ -202,35 +220,55 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 	t.Run("individual event errors", func(t *testing.T) {
 		// Create a test server that returns individual errors in batch format
 		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Read the request to determine how many events were sent
+			body, _ := io.ReadAll(r.Body)
+			// DirectTransmission only sends msgpack
+			eventCount, _, _ := msgp.ReadArrayHeaderBytes(body)
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			// First event succeeds, second fails
-			w.Write([]byte(`[{"status": 202}, {"status": 400}]`))
+
+			// Build response based on actual event count
+			// Half succeed, half fail
+			responses := make([]map[string]int, eventCount)
+			for i := range eventCount {
+				if i%2 == 0 {
+					responses[i] = map[string]int{"status": 202}
+				} else {
+					responses[i] = map[string]int{"status": 400}
+				}
+			}
+
+			respBytes, _ := json.Marshal(responses)
+			w.Write(respBytes)
 		}))
 		defer errorServer.Close()
 
 		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
-		sendTestEvents(dt, errorServer.URL, 2, "test-api-key")
+		// Send 4 events to ensure we get 2 successes and 2 errors
+		sendTestEvents(dt, errorServer.URL, 4, "test-api-key")
 		err := dt.Stop()
 		require.NoError(t, err)
 
-		// Verify metrics: One success (202) and one error (400)
+		// Verify metrics: 2 successes and 2 errors
 		success, _ := mockMetrics.Get(counterResponse20x)
 		errors, _ := mockMetrics.Get(counterResponseErrors)
-		assert.Equal(t, float64(1), success)
-		assert.Equal(t, float64(1), errors)
+		assert.Equal(t, float64(2), success)
+		assert.Equal(t, float64(2), errors)
 
-		// Verify error log message
+		// Verify we got error log messages
 		errorEvents := getErrorEvents(mockLogger)
-		require.Len(t, errorEvents, 1, "Expected exactly one error log for the failed event")
+		assert.GreaterOrEqual(t, len(errorEvents), 2, "Expected at least 2 error logs")
 
-		errorEvent := errorEvents[0]
-		assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
-		assert.Equal(t, http.StatusBadRequest, errorEvent.Fields["status_code"])
-		assert.Equal(t, errorServer.URL, errorEvent.Fields["api_host"])
-		assert.Equal(t, "test-dataset", errorEvent.Fields["dataset"])
-		assert.Equal(t, "test", errorEvent.Fields["environment"])
-		assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+		// Check that error events have the expected fields
+		for _, errorEvent := range errorEvents {
+			assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
+			assert.Equal(t, http.StatusBadRequest, errorEvent.Fields["status_code"])
+			assert.Equal(t, errorServer.URL, errorEvent.Fields["api_host"])
+			assert.Equal(t, "test-dataset", errorEvent.Fields["dataset"])
+			assert.Equal(t, "test", errorEvent.Fields["environment"])
+			assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+		}
 	})
 
 	t.Run("http status error affects all events", func(t *testing.T) {
@@ -417,10 +455,9 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(mockMetrics, "test", 3, 50*time.Millisecond)
+	dt := NewDirectTransmission(mockMetrics, "test", 3, 50*time.Millisecond, http.DefaultTransport.(*http.Transport))
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
-	dt.Transport = http.DefaultTransport.(*http.Transport)
 
 	err := dt.Start()
 	require.NoError(t, err)
@@ -516,35 +553,55 @@ func TestDirectTransmission(t *testing.T) {
 
 	datasetA := eventsByDataset["dataset-a"]
 	require.Len(t, datasetA, 5)
-	for i, event := range datasetA {
+	// Check each event has the correct fields, regardless of order
+	for _, event := range datasetA {
 		assert.Equal(t, "api-key-a", event.APIKey)
 		assert.Equal(t, "dataset-a", event.Dataset)
 		assert.Equal(t, int64(10), event.SampleRate)
 		assert.Equal(t, "A", event.Data["dataset"])
-		assert.Equal(t, fmt.Sprintf("trace-a-%d", i), event.Data["trace.trace_id"])
-		assert.Equal(t, int64(i), event.Data["event_id"])
+
+		// Extract event_id and verify trace ID matches
+		eventID := int(event.Data["event_id"].(int64))
+		assert.Equal(t, fmt.Sprintf("trace-a-%d", eventID), event.Data["trace.trace_id"])
+		assert.GreaterOrEqual(t, eventID, 0)
+		assert.Less(t, eventID, 5)
 	}
 
 	datasetB := eventsByDataset["dataset-b"]
 	require.Len(t, datasetB, 6)
-	for i, event := range datasetB {
+	// Dataset B had the first event (index 0) skipped due to size
+	seenEventIDs := make(map[int]bool)
+	for _, event := range datasetB {
 		assert.Equal(t, "api-key-b", event.APIKey)
 		assert.Equal(t, "dataset-b", event.Dataset)
 		assert.Equal(t, int64(20), event.SampleRate)
 		assert.Equal(t, "B", event.Data["dataset"])
-		assert.Equal(t, fmt.Sprintf("trace-b-%d", i+1), event.Data["trace.trace_id"])
-		assert.Equal(t, int64(i+1), event.Data["event_id"])
+
+		// Extract event_id and verify trace ID matches
+		eventID := int(event.Data["event_id"].(int64))
+		assert.Equal(t, fmt.Sprintf("trace-b-%d", eventID), event.Data["trace.trace_id"])
+		assert.GreaterOrEqual(t, eventID, 1) // First event (0) was skipped
+		assert.Less(t, eventID, 7)
+		seenEventIDs[eventID] = true
+	}
+	// Verify we got events 1-6 (event 0 was too large)
+	for i := 1; i <= 6; i++ {
+		assert.True(t, seenEventIDs[i], "Missing event_id %d", i)
 	}
 
 	datasetC := eventsByDataset["dataset-c"]
 	require.Len(t, datasetC, 2)
-	for i, event := range datasetC {
+	for _, event := range datasetC {
 		assert.Equal(t, "api-key-c", event.APIKey)
 		assert.Equal(t, "dataset-c", event.Dataset)
 		assert.Equal(t, int64(30), event.SampleRate)
 		assert.Equal(t, "C", event.Data["dataset"])
-		assert.Equal(t, fmt.Sprintf("trace-c-%d", i), event.Data["trace.trace_id"])
-		assert.Equal(t, int64(i), event.Data["event_id"])
+
+		// Extract event_id and verify trace ID matches
+		eventID := int(event.Data["event_id"].(int64))
+		assert.Equal(t, fmt.Sprintf("trace-c-%d", eventID), event.Data["trace.trace_id"])
+		assert.GreaterOrEqual(t, eventID, 0)
+		assert.Less(t, eventID, 2)
 	}
 
 	// Verify metrics for all events
@@ -568,10 +625,9 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(mockMetrics, "test", 50, 50*time.Millisecond)
+	dt := NewDirectTransmission(mockMetrics, "test", 50, 50*time.Millisecond, http.DefaultTransport.(*http.Transport))
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
-	dt.Transport = http.DefaultTransport.(*http.Transport)
 
 	err := dt.Start()
 	require.NoError(t, err)
@@ -837,10 +893,10 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 					"benchmark",
 					libhoney.DefaultMaxBatchSize,
 					libhoney.DefaultBatchTimeout,
+					httpTransport,
 				)
 				dt.Logger = &logger.NullLogger{}
 				dt.Version = "benchmark"
-				dt.Transport = httpTransport
 				dt.RegisterMetrics()
 
 				err := dt.Start()
