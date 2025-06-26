@@ -22,8 +22,6 @@ import (
 	"github.com/facebookgo/startstop"
 	"github.com/google/uuid"
 	"github.com/honeycombio/husky"
-	libhoney "github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/jonboulle/clockwork"
 	"github.com/sirupsen/logrus"
 
@@ -172,46 +170,23 @@ func main() {
 	upstreamMetricsWrapper := &metrics.LibhoneyMetricsWrapper{MetricsPrefixer: upstreamMetricsRecorder}
 	peerMetricsWrapper := &metrics.LibhoneyMetricsWrapper{MetricsPrefixer: peerMetricsRecorder}
 
-	userAgentAddition := "refinery/" + version
-	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          c.GetTracesConfig().GetMaxBatchSize(),
-			BatchTimeout:          time.Duration(c.GetTracesConfig().GetBatchTimeout()),
-			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:   uint(c.GetUpstreamBufferSize()),
-			UserAgentAddition:     userAgentAddition,
-			Transport:             upstreamTransport,
-			BlockOnSend:           true,
-			EnableMsgpackEncoding: true,
-			Metrics:               upstreamMetricsWrapper,
-		},
-	})
-	if err != nil {
-		fmt.Printf("unable to initialize upstream libhoney client")
-		os.Exit(1)
-	}
-
-	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: &transmission.Honeycomb{
-			MaxBatchSize:          c.GetTracesConfig().GetMaxBatchSize(),
-			BatchTimeout:          time.Duration(c.GetTracesConfig().GetBatchTimeout()),
-			MaxConcurrentBatches:  libhoney.DefaultMaxConcurrentBatches,
-			PendingWorkCapacity:   uint(c.GetPeerBufferSize()),
-			UserAgentAddition:     userAgentAddition,
-			Transport:             peerTransport,
-			DisableCompression:    !c.GetCompressPeerCommunication(),
-			EnableMsgpackEncoding: true,
-			Metrics:               peerMetricsWrapper,
-		},
-	})
-	if err != nil {
-		fmt.Printf("unable to initialize peer libhoney client")
-		os.Exit(1)
-	}
-
 	stressRelief := &collect.StressRelief{Done: done}
-	upstreamTransmission := transmit.NewDefaultTransmission(upstreamClient, upstreamMetricsRecorder, "upstream")
-	peerTransmission := transmit.NewDefaultTransmission(peerClient, upstreamMetricsRecorder, "peer")
+	upstreamTransmission := transmit.NewDirectTransmission(
+		upstreamMetricsRecorder,
+		upstreamTransport,
+		"upstream",
+		int(c.GetTracesConfig().GetMaxBatchSize()),
+		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
+		true,
+	)
+	peerTransmission := transmit.NewDirectTransmission(
+		peerMetricsRecorder,
+		peerTransport,
+		"peer",
+		int(c.GetTracesConfig().GetMaxBatchSize()),
+		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
+		c.GetCompressPeerCommunication(),
+	)
 
 	// we need to include all the metrics types so we can inject them in case they're needed
 	// but we only want to instantiate the ones that are enabled with non-null values
