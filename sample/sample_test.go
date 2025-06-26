@@ -257,10 +257,7 @@ func TestGetKeyFields(t *testing.T) {
 
 			assert.Equal(t, tt.expectedAll, allFields, "All fields should match input exactly")
 			assert.Equal(t, tt.expectedNonRootFields, nonrootFields, "Non-root fields should match expected non-root fields")
-
-			if tt.input != nil {
-				assert.Equal(t, len(tt.input), len(allFields), "All fields length should match input length")
-			}
+			assert.Equal(t, len(tt.input), len(allFields), "All fields length should match input length")
 		})
 	}
 }
