@@ -217,3 +217,50 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 	defer impl.dynsampler.Stop()
 	assert.Equal(t, 5.0, impl.dynsampler.GoalThroughputPerSec)
 }
+
+func TestGetKeyFields(t *testing.T) {
+	tests := []struct {
+		name                  string
+		input                 []string
+		expectedAll           []string
+		expectedNonRootFields []string
+	}{
+		{
+			name:                  "empty slice",
+			input:                 []string{},
+			expectedAll:           nil,
+			expectedNonRootFields: nil,
+		},
+		{
+			name:                  "no root fields",
+			input:                 []string{"service.name", "operation.name", "duration_ms"},
+			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
+			expectedNonRootFields: []string{"service.name", "operation.name", "duration_ms"},
+		},
+		{
+			name:                  "only root fields",
+			input:                 []string{"root.service.name", "root.operation.name", "root.duration_ms"},
+			expectedAll:           []string{"root.service.name", "root.operation.name", "root.duration_ms"},
+			expectedNonRootFields: nil,
+		},
+		{
+			name:                  "mixed root and non-root fields",
+			input:                 []string{"service.name", "root.operation.name", "duration_ms", "root.user.id"},
+			expectedAll:           []string{"service.name", "root.operation.name", "duration_ms", "root.user.id"},
+			expectedNonRootFields: []string{"service.name", "duration_ms"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allFields, nonrootFields := getKeyFields(tt.input)
+
+			assert.Equal(t, tt.expectedAll, allFields, "All fields should match input exactly")
+			assert.Equal(t, tt.expectedNonRootFields, nonrootFields, "Non-root fields should match expected non-root fields")
+
+			if tt.input != nil {
+				assert.Equal(t, len(tt.input), len(allFields), "All fields length should match input length")
+			}
+		})
+	}
+}

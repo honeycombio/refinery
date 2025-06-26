@@ -15,12 +15,13 @@ import (
 var _ ClusterSizer = (*RulesBasedSampler)(nil)
 
 type RulesBasedSampler struct {
-	Config    *config.RulesBasedSamplerConfig
-	Logger    logger.Logger
-	Metrics   metrics.Metrics
-	samplers  map[string]Sampler
-	prefix    string
-	keyFields []string
+	Config        *config.RulesBasedSamplerConfig
+	Logger        logger.Logger
+	Metrics       metrics.Metrics
+	samplers      map[string]Sampler
+	prefix        string
+	keyFields     []string
+	nonRootFields []string
 }
 
 const RootPrefix = "root."
@@ -41,7 +42,7 @@ func (s *RulesBasedSampler) Start() error {
 	}
 
 	s.samplers = make(map[string]Sampler)
-	s.keyFields = s.Config.GetSamplingFields()
+	s.keyFields, s.nonRootFields = getKeyFields(s.Config.GetSamplingFields())
 
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
@@ -174,8 +175,8 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	return 1, true, "no rule matched", ""
 }
 
-func (s *RulesBasedSampler) GetKeyFields() []string {
-	return s.keyFields
+func (s *RulesBasedSampler) GetKeyFields() ([]string, []string) {
+	return s.keyFields, s.nonRootFields
 }
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {

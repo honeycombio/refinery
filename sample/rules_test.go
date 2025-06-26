@@ -957,9 +957,10 @@ func TestRules(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "", key)
 
-		keyFields := sampler.GetKeyFields()
-		slices.Sort(keyFields)
-		assert.Equal(t, d.ExpectedKeyFields, keyFields)
+		nonRootFields, rootFields := sampler.GetKeyFields()
+		allFields := append(nonRootFields, rootFields...)
+		slices.Sort(allFields)
+		assert.Equal(t, d.ExpectedKeyFields, allFields)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -1162,7 +1163,8 @@ func TestRulesWithNestedFields(t *testing.T) {
 			assert.Contains(t, reason, name)
 			assert.Equal(t, "", key)
 
-			keyFields := sampler.GetKeyFields()
+			nonRootFields, rootFields := sampler.GetKeyFields()
+			keyFields := append(nonRootFields, rootFields...)
 			slices.Sort(keyFields)
 			assert.Equal(t, d.ExpectedKeyFields, keyFields)
 			// we can only test when we don't expect to keep the trace
@@ -1250,7 +1252,8 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "200•,", key)
 
-		keyFields := sampler.GetKeyFields()
+		nonRootFields, rootFields := sampler.GetKeyFields()
+		keyFields := append(nonRootFields, rootFields...)
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
 
@@ -1341,7 +1344,8 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "200•,", key)
 
-		keyFields := sampler.GetKeyFields()
+		nonRootFields, rootFields := sampler.GetKeyFields()
+		keyFields := append(nonRootFields, rootFields...)
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
 		// we can only test when we don't expect to keep the trace

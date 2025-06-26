@@ -1318,8 +1318,12 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 
 	dc := sp.ExtractDecisionContext()
 	// extract all key fields from the span
-	keyFields := sampler.GetKeyFields()
-	sp.Data.MemoizeFields(keyFields...)
+	keyFields, nonRootFields := sampler.GetKeyFields()
+	if sp.IsRoot {
+		sp.Data.MemoizeFields(keyFields...)
+	} else {
+		sp.Data.MemoizeFields(nonRootFields...)
+	}
 	for _, keyField := range keyFields {
 		// Less efficient than a two-return version of Get(), so consider adding
 		// that to the Payload interface if these becomes a hotspot.
@@ -1529,6 +1533,17 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, isLegacyKey)
 		i.datasetSamplers[samplerSelector] = sampler
+	}
+
+	// prepopulate spans with key fields
+	nonRootFields, rootFields := sampler.GetKeyFields()
+	allFields := append(nonRootFields, rootFields...)
+	for _, sp := range trace.GetSpans() {
+		if sp.IsRoot {
+			sp.Data.MemoizeFields(allFields...)
+		} else {
+			sp.Data.MemoizeFields(nonRootFields...)
+		}
 	}
 
 	startGetSampleRate := i.Clock.Now()
