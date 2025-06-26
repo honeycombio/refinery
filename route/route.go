@@ -595,7 +595,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
 
 	// check if this is a probe from another refinery; if so, we should drop it
-	if ev.Data.Get("meta.refinery.probe") != nil {
+	if ev.Data.Get(types.MetaRefineryProbe) != nil {
 		debugLog.Logf("dropping probe")
 		return nil
 	}
@@ -620,7 +620,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
 	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
-		if span.Data.Get("meta.signal_type") == "log" {
+		if span.Data.Get(types.MetaSignalType) == "log" {
 			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
 			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
@@ -1048,12 +1048,12 @@ func getDatasetFromRequest(req *http.Request) (string, error) {
 
 func isRootSpan(ev *types.Event, cfg config.Config) bool {
 	// log event should never be considered a root span, check for that first
-	if signalType := ev.Data.Get("meta.signal_type"); signalType == "log" {
+	if signalType := ev.Data.Get(types.MetaSignalType); signalType == "log" {
 		return false
 	}
 
 	// check if the event has a root flag
-	if isRoot, ok := ev.Data.Get("meta.refinery.root").(bool); ok {
+	if isRoot, ok := ev.Data.Get(types.MetaRefineryRoot).(bool); ok {
 		return isRoot
 	}
 
@@ -1067,7 +1067,7 @@ func isRootSpan(ev *types.Event, cfg config.Config) bool {
 }
 
 func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
-	if trID, ok := ev.Data.Get("meta.trace_id").(string); ok {
+	if trID, ok := ev.Data.Get(types.MetaTraceID).(string); ok {
 		return trID
 	}
 
@@ -1085,7 +1085,7 @@ func getUserAgentFromRequest(req *http.Request) string {
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
-	if userAgent != "" && ev.Data.Get("meta.refinery.incoming_user_agent") == nil {
-		ev.Data.Set("meta.refinery.incoming_user_agent", userAgent)
+	if userAgent != "" && ev.Data.Get(types.MetaRefineryIncomingUserAgent) == nil {
+		ev.Data.Set(types.MetaRefineryIncomingUserAgent, userAgent)
 	}
 }
