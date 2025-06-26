@@ -517,9 +517,6 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			Data:        bev.Data,
 		}
 
-		// prefetch known metadata for the event
-		ev.Warmup(append(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames()...))
-
 		addIncomingUserAgent(ev, userAgent)
 		err = r.processEvent(ev, reqID)
 
@@ -548,7 +545,8 @@ func (router *Router) processOTLPRequest(
 	ctx context.Context,
 	batches []huskyotlp.Batch,
 	apiKey string,
-	incomingUserAgent string) error {
+	incomingUserAgent string,
+) error {
 
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
@@ -597,14 +595,15 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// we do this early so can include all event types (span, event, log, etc)
 	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
 
+	ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
+
 	// check if this is a probe from another refinery; if so, we should drop it
-	if ev.Data.Get(types.MetaRefineryProbe) != nil {
+	if ev.Data.MetaRefineryProbe.HasValue && ev.Data.MetaRefineryProbe.Value {
 		debugLog.Logf("dropping probe")
 		return nil
 	}
 
-	traceID := extractTraceID(r.Config.GetTraceIdFieldNames(), ev)
-	if traceID == "" {
+	if ev.Data.MetaTraceID == "" {
 		// not part of a trace. send along upstream
 		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
 		debugLog.WithString("api_host", ev.APIHost).
@@ -613,17 +612,17 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		r.UpstreamTransmission.EnqueueEvent(ev)
 		return nil
 	}
-	debugLog = debugLog.WithString("trace_id", traceID)
+	debugLog = debugLog.WithString("trace_id", ev.Data.MetaTraceID)
 
 	span := &types.Span{
 		Event:   *ev,
-		TraceID: traceID,
-		IsRoot:  isRootSpan(ev, r.Config),
+		TraceID: ev.Data.MetaTraceID,
+		IsRoot:  ev.Data.MetaRefineryRoot.HasValue && ev.Data.MetaRefineryRoot.Value,
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
 	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
-		if span.Data.Get(types.MetaSignalType) == "log" {
+		if span.Data.MetaSignalType == "log" {
 			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
 			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
@@ -647,7 +646,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 				// If the span was kept, we want to generate a probe that we'll forward
 				// to a peer IF this span would have been forwarded.
-				ev.Data.Set("meta.refinery.probe", true)
+				ev.Data.MetaRefineryProbe.Set(true)
 				isProbe = true
 			}
 		}
@@ -655,7 +654,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	if r.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		// Figure out if we should handle this span locally or pass on to a peer
-		targetShard := r.Sharder.WhichShard(traceID)
+		targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {
 			r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
 			debugLog.
@@ -1049,46 +1048,12 @@ func getDatasetFromRequest(req *http.Request) (string, error) {
 	return dataset, nil
 }
 
-func isRootSpan(ev *types.Event, cfg config.Config) bool {
-	// log event should never be considered a root span, check for that first
-	if signalType := ev.Data.Get(types.MetaSignalType); signalType == "log" {
-		return false
-	}
-
-	// check if the event has a root flag
-	if isRoot, ok := ev.Data.Get(types.MetaRefineryRoot).(bool); ok {
-		return isRoot
-	}
-
-	// check if the event has a parent id using the configured parent id field names
-	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
-		if parentId, ok := ev.Data.Get(parentIdFieldName).(string); ok && parentId != "" {
-			return false
-		}
-	}
-	return true
-}
-
-func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
-	if trID, ok := ev.Data.Get(types.MetaTraceID).(string); ok {
-		return trID
-	}
-
-	for _, traceIdFieldName := range traceIdFieldNames {
-		if trID, ok := ev.Data.Get(traceIdFieldName).(string); ok {
-			return trID
-		}
-	}
-
-	return ""
-}
-
 func getUserAgentFromRequest(req *http.Request) string {
 	return req.Header.Get("User-Agent")
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
-	if userAgent != "" && ev.Data.Get(types.MetaRefineryIncomingUserAgent) == nil {
-		ev.Data.Set(types.MetaRefineryIncomingUserAgent, userAgent)
+	if userAgent != "" && ev.Data.MetaRefineryIncomingUserAgent == "" {
+		ev.Data.MetaRefineryIncomingUserAgent = userAgent
 	}
 }

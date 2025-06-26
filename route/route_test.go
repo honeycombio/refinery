@@ -746,8 +746,70 @@ func TestGetDatasetFromRequest(t *testing.T) {
 		})
 	}
 }
-func TestIsRootSpan(t *testing.T) {
-	tesCases := []struct {
+func TestExtractMetadataTraceID(t *testing.T) {
+	testCases := []struct {
+		name     string
+		event    types.Event
+		expected string
+	}{
+		{
+			name: "trace id from meta.trace_id",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"meta.trace_id": "trace123",
+				}),
+			},
+			expected: "trace123",
+		},
+		{
+			name: "trace id from trace.trace_id field",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"trace.trace_id": "trace456",
+				}),
+			},
+			expected: "trace456",
+		},
+		{
+			name: "trace id from traceId field",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"traceId": "trace789",
+				}),
+			},
+			expected: "trace789",
+		},
+		{
+			name: "no trace id",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{}),
+			},
+			expected: "",
+		},
+		{
+			name: "prefer meta.trace_id over other fields",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"meta.trace_id":  "meta-trace",
+					"trace.trace_id": "field-trace",
+				}),
+			},
+			expected: "meta-trace",
+		},
+	}
+
+	traceIdFieldNames := []string{"trace.trace_id", "traceId"}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.event.Data.ExtractMetadata(traceIdFieldNames, nil)
+			assert.Equal(t, tc.expected, tc.event.Data.MetaTraceID)
+		})
+	}
+}
+
+func TestExtractMetadataRootSpan(t *testing.T) {
+	testCases := []struct {
 		name     string
 		event    types.Event
 		expected bool
@@ -788,36 +850,39 @@ func TestIsRootSpan(t *testing.T) {
 		},
 	}
 
-	cfg := &config.MockConfig{
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-	}
+	parentIdFieldNames := []string{"trace.parent_id", "parentId"}
 
-	for _, tc := range tesCases {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, isRootSpan(&tc.event, cfg))
+			tc.event.Data.ExtractMetadata(nil, parentIdFieldNames)
+			assert.True(t, tc.event.Data.MetaRefineryRoot.HasValue)
+			assert.Equal(t, tc.expected, tc.event.Data.MetaRefineryRoot.Value)
 		})
 	}
 }
 
 func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("no incoming user agent", func(t *testing.T) {
+		payload := types.NewPayload(map[string]interface{}{})
 		event := &types.Event{
-			Data: types.NewPayload(map[string]interface{}{}),
+			Data: payload,
 		}
 
 		addIncomingUserAgent(event, "test-agent")
-		require.Equal(t, "test-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		require.Equal(t, "test-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("existing incoming user agent", func(t *testing.T) {
+		payload := types.NewPayload(map[string]interface{}{
+			"meta.refinery.incoming_user_agent": "test-agent",
+		})
+		payload.ExtractMetadata(nil, nil)
 		event := &types.Event{
-			Data: types.NewPayload(map[string]interface{}{
-				"meta.refinery.incoming_user_agent": "test-agent",
-			}),
+			Data: payload,
 		}
 
 		addIncomingUserAgent(event, "another-test-agent")
-		require.Equal(t, "test-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		require.Equal(t, "test-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 }
 

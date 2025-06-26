@@ -18,6 +18,11 @@ func TestPayload(t *testing.T) {
 		"key3":   3.14,
 		"key4":   true,
 		"keyNil": nil,
+		// Add some metadata fields to test
+		"meta.trace_id":          "test-trace-123",
+		"meta.refinery.root":     true,
+		"meta.refinery.min_span": false,
+		"meta.annotation_type":   "span_event",
 	}
 
 	var ph Payload
@@ -31,9 +36,43 @@ func TestPayload(t *testing.T) {
 		assert.False(t, ph.Exists("nonexistent"))
 		assert.Nil(t, ph.Get("nonexistent"))
 
+		// Test metadata fields through Get()
+		assert.True(t, ph.Exists("meta.trace_id"))
+		assert.Equal(t, "test-trace-123", ph.Get("meta.trace_id"))
+
+		assert.True(t, ph.Exists("meta.refinery.root"))
+		assert.Equal(t, true, ph.Get("meta.refinery.root"))
+
+		assert.True(t, ph.Exists("meta.refinery.min_span"))
+		assert.Equal(t, false, ph.Get("meta.refinery.min_span"))
+
+		assert.True(t, ph.Exists("meta.annotation_type"))
+		assert.Equal(t, "span_event", ph.Get("meta.annotation_type"))
+
+		// Test dedicated fields - should be populated from initial data or unmarshal
+		assert.Equal(t, "test-trace-123", ph.MetaTraceID, "MetaTraceID should be populated")
+		assert.True(t, ph.MetaRefineryRoot.HasValue, "MetaRefineryRoot should be set")
+		assert.Equal(t, true, ph.MetaRefineryRoot.Value, "MetaRefineryRoot should be populated")
+		assert.True(t, ph.MetaRefineryMinSpan.HasValue, "MetaRefineryMinSpan should be set")
+		assert.Equal(t, false, ph.MetaRefineryMinSpan.Value, "MetaRefineryMinSpan should be populated")
+		assert.Equal(t, "span_event", ph.MetaAnnotationType, "MetaAnnotationType should be populated")
+
 		ph.Set("key5", "newvalue")
 		assert.True(t, ph.Exists("key5"))
 		assert.Equal(t, "newvalue", ph.Get("key5"))
+
+		// Test setting metadata fields through Set()
+		// Verify that Set() DOES update dedicated fields to keep them in sync
+
+		ph.Set("meta.refinery.span_data_size", int64(1234))
+		assert.Equal(t, int64(1234), ph.Get("meta.refinery.span_data_size"))
+		// Verify dedicated field WAS updated by Set()
+		assert.Equal(t, int64(1234), ph.MetaRefinerySpanDataSize, "Set() should update dedicated field")
+
+		ph.Set("meta.refinery.incoming_user_agent", "test-agent/1.0")
+		assert.Equal(t, "test-agent/1.0", ph.Get("meta.refinery.incoming_user_agent"))
+		// Verify dedicated field WAS updated by Set()
+		assert.Equal(t, "test-agent/1.0", ph.MetaRefineryIncomingUserAgent, "Set() should update dedicated field")
 
 		// Overwrite an existing value
 		ph.Set("key3", 4.13)
@@ -43,6 +82,8 @@ func TestPayload(t *testing.T) {
 		expected := maps.Clone(data)
 		expected["key3"] = 4.13
 		expected["key5"] = "newvalue"
+		expected["meta.refinery.span_data_size"] = int64(1234)
+		expected["meta.refinery.incoming_user_agent"] = "test-agent/1.0"
 		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
@@ -59,14 +100,17 @@ func TestPayload(t *testing.T) {
 		var fromJSON Payload
 		err = json.Unmarshal(asJSON, &fromJSON)
 		require.NoError(t, err)
+		fromJSON.ExtractMetadata(nil, nil)
 
 		// round-tripping through JSON turns our ints into floats
 		expectedFromJSON := maps.Collect(ph.All())
 		expectedFromJSON["key2"] = 42.0
+		expectedFromJSON["meta.refinery.span_data_size"] = 1234.0
 		assert.EqualValues(t, expectedFromJSON, maps.Collect(fromJSON.All()))
 	}
 
 	ph = NewPayload(data)
+	ph.ExtractMetadata(nil, nil)
 	t.Run("from_map", doTest)
 
 	ph = Payload{}
@@ -74,6 +118,7 @@ func TestPayload(t *testing.T) {
 	require.NoError(t, err)
 	err = msgpack.Unmarshal(msgpData, &ph)
 	require.NoError(t, err)
+	ph.ExtractMetadata(nil, nil)
 	t.Run("from_msgpack", doTest)
 
 	// Test payload with other stuff (another payload) following.
@@ -82,6 +127,7 @@ func TestPayload(t *testing.T) {
 	remainder, err := ph.UnmarshalMsg(extendedMsgpData)
 	require.NoError(t, err)
 	assert.Equal(t, msgpData, remainder)
+	ph.ExtractMetadata(nil, nil)
 	t.Run("from_msgp", doTest)
 
 	// Test our own marshaler
@@ -91,7 +137,125 @@ func TestPayload(t *testing.T) {
 	remainder, err = ph.UnmarshalMsg(msgpData)
 	require.NoError(t, err)
 	assert.Empty(t, remainder)
+	ph.ExtractMetadata(nil, nil)
 	t.Run("from_marshal", doTest)
+}
+
+func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
+	t.Run("extract trace ID from custom field", func(t *testing.T) {
+		data := map[string]any{
+			"trace.trace_id": "custom-trace-123",
+			"service.name":   "test-service",
+		}
+		ph := NewPayload(data)
+		ph.ExtractMetadata([]string{"trace.trace_id", "traceId"}, nil)
+
+		assert.Equal(t, "custom-trace-123", ph.MetaTraceID, "Should extract trace ID from custom field")
+		assert.Equal(t, "custom-trace-123", ph.Get("trace.trace_id"))
+	})
+
+	t.Run("root span detection with parent ID", func(t *testing.T) {
+		// No parent ID - should be root
+		data := map[string]any{
+			"trace.trace_id": "trace-123",
+			"span.id":        "span-456",
+		}
+		ph := NewPayload(data)
+		ph.ExtractMetadata([]string{"trace.trace_id"}, []string{"trace.parent_id", "parentId"})
+
+		assert.Equal(t, "trace-123", ph.MetaTraceID)
+		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
+		assert.True(t, ph.MetaRefineryRoot.Value, "Should be root span when no parent ID")
+
+		// With parent ID - should not be root
+		data = map[string]any{
+			"trace.trace_id":  "trace-789",
+			"trace.parent_id": "parent-123",
+			"span.id":         "span-789",
+		}
+		ph = NewPayload(data)
+		ph.ExtractMetadata([]string{"trace.trace_id"}, []string{"trace.parent_id", "parentId"})
+
+		assert.Equal(t, "trace-789", ph.MetaTraceID)
+		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
+		assert.False(t, ph.MetaRefineryRoot.Value, "Should not be root span when parent ID exists")
+	})
+
+	t.Run("log events are never root", func(t *testing.T) {
+		data := map[string]any{
+			"meta.signal_type": "log",
+			"trace.trace_id":   "trace-123",
+		}
+		ph := NewPayload(data)
+		ph.ExtractMetadata([]string{"trace.trace_id"}, []string{"trace.parent_id"})
+
+		assert.Equal(t, "log", ph.MetaSignalType)
+		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
+		assert.False(t, ph.MetaRefineryRoot.Value, "Log events should never be root")
+	})
+}
+
+func TestPayloadGetSetMetadataSync(t *testing.T) {
+	t.Run("Set updates metadata fields", func(t *testing.T) {
+		ph := NewPayload(map[string]any{})
+
+		// Test string fields
+		ph.Set("meta.signal_type", "trace")
+		assert.Equal(t, "trace", ph.MetaSignalType)
+		assert.Equal(t, "trace", ph.Get("meta.signal_type"))
+
+		ph.Set("meta.trace_id", "test-trace-456")
+		assert.Equal(t, "test-trace-456", ph.MetaTraceID)
+		assert.Equal(t, "test-trace-456", ph.Get("meta.trace_id"))
+
+		// Test boolean fields
+		ph.Set("meta.refinery.probe", true)
+		assert.True(t, ph.MetaRefineryProbe.HasValue)
+		assert.True(t, ph.MetaRefineryProbe.Value)
+		assert.Equal(t, true, ph.Get("meta.refinery.probe"))
+
+		ph.Set("meta.refinery.root", false)
+		assert.True(t, ph.MetaRefineryRoot.HasValue)
+		assert.False(t, ph.MetaRefineryRoot.Value)
+		assert.Equal(t, false, ph.Get("meta.refinery.root"))
+
+		// Test int64 fields
+		ph.Set("meta.refinery.send_by", int64(12345))
+		assert.Equal(t, int64(12345), ph.MetaRefinerySendBy)
+		assert.Equal(t, int64(12345), ph.Get("meta.refinery.send_by"))
+
+		ph.Set("meta.refinery.span_data_size", int64(67890))
+		assert.Equal(t, int64(67890), ph.MetaRefinerySpanDataSize)
+		assert.Equal(t, int64(67890), ph.Get("meta.refinery.span_data_size"))
+	})
+
+	t.Run("Get returns from dedicated fields", func(t *testing.T) {
+		ph := NewPayload(map[string]any{})
+
+		// Set fields directly
+		ph.MetaSignalType = "log"
+		ph.MetaTraceID = "direct-trace-123"
+		ph.MetaRefineryProbe.Set(true)
+		ph.MetaRefineryRoot.Set(false)
+		ph.MetaRefinerySendBy = 54321
+
+		// Get should return from dedicated fields
+		assert.Equal(t, "log", ph.Get("meta.signal_type"))
+		assert.Equal(t, "direct-trace-123", ph.Get("meta.trace_id"))
+		assert.Equal(t, true, ph.Get("meta.refinery.probe"))
+		assert.Equal(t, false, ph.Get("meta.refinery.root"))
+		assert.Equal(t, int64(54321), ph.Get("meta.refinery.send_by"))
+	})
+
+	t.Run("Get returns nil for unset boolean fields", func(t *testing.T) {
+		ph := NewPayload(map[string]any{})
+
+		// Boolean fields without values should return nil
+		assert.Nil(t, ph.Get("meta.refinery.probe"))
+		assert.Nil(t, ph.Get("meta.refinery.root"))
+		assert.Nil(t, ph.Get("meta.refinery.min_span"))
+		assert.Nil(t, ph.Get("meta.refinery.expired_trace"))
+	})
 }
 
 func BenchmarkPayload(b *testing.B) {
@@ -112,9 +276,11 @@ func BenchmarkPayload(b *testing.B) {
 	require.NoError(b, err)
 
 	phMap := NewPayload(data)
+	phMap.ExtractMetadata(nil, nil)
 	var phMsgp Payload
 	err = msgpack.Unmarshal(msgpData, &phMsgp)
 	require.NoError(b, err)
+	phMsgp.ExtractMetadata(nil, nil)
 
 	b.Run("create_map", func(b *testing.B) {
 		for b.Loop() {

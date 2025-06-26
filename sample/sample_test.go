@@ -2,6 +2,8 @@ package sample
 
 import (
 	"os"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -232,6 +234,12 @@ func TestGetKeyFields(t *testing.T) {
 			expectedNonRootFields: nil,
 		},
 		{
+			name:                  "nil input",
+			input:                 nil,
+			expectedAll:           nil,
+			expectedNonRootFields: nil,
+		},
+		{
 			name:                  "no root fields",
 			input:                 []string{"service.name", "operation.name", "duration_ms"},
 			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
@@ -240,14 +248,38 @@ func TestGetKeyFields(t *testing.T) {
 		{
 			name:                  "only root fields",
 			input:                 []string{"root.service.name", "root.operation.name", "root.duration_ms"},
-			expectedAll:           []string{"root.service.name", "root.operation.name", "root.duration_ms"},
-			expectedNonRootFields: nil,
+			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
+			expectedNonRootFields: []string{},
 		},
 		{
 			name:                  "mixed root and non-root fields",
 			input:                 []string{"service.name", "root.operation.name", "duration_ms", "root.user.id"},
-			expectedAll:           []string{"service.name", "root.operation.name", "duration_ms", "root.user.id"},
+			expectedAll:           []string{"operation.name", "user.id", "service.name", "duration_ms"},
 			expectedNonRootFields: []string{"service.name", "duration_ms"},
+		},
+		{
+			name:                  "duplicate fields with and without root prefix",
+			input:                 []string{"service.name", "root.service.name", "operation.name"},
+			expectedAll:           []string{"service.name", "service.name", "operation.name"},
+			expectedNonRootFields: []string{"service.name", "operation.name"},
+		},
+		{
+			name:                  "fields with dots in names",
+			input:                 []string{"root.http.request.method", "http.response.status", "root.db.query.time"},
+			expectedAll:           []string{"http.request.method", "db.query.time", "http.response.status"},
+			expectedNonRootFields: []string{"http.response.status"},
+		},
+		{
+			name:                  "single non-root field",
+			input:                 []string{"test"},
+			expectedAll:           []string{"test"},
+			expectedNonRootFields: []string{"test"},
+		},
+		{
+			name:                  "single root field",
+			input:                 []string{"root.test"},
+			expectedAll:           []string{"test"},
+			expectedNonRootFields: []string{},
 		},
 	}
 
@@ -255,9 +287,80 @@ func TestGetKeyFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			allFields, nonrootFields := getKeyFields(tt.input)
 
-			assert.Equal(t, tt.expectedAll, allFields, "All fields should match input exactly")
+			assert.Equal(t, tt.expectedAll, allFields, "All fields should have root prefix stripped and be combined")
 			assert.Equal(t, tt.expectedNonRootFields, nonrootFields, "Non-root fields should match expected non-root fields")
-			assert.Equal(t, len(tt.input), len(allFields), "All fields length should match input length")
+		})
+	}
+}
+
+func TestRulesBasedSamplerGetKeyFields(t *testing.T) {
+	// Test that RulesBasedSampler correctly aggregates fields from conditions and samplers
+	tests := []struct {
+		name                  string
+		rules                 *config.RulesBasedSamplerConfig
+		expectedAll           []string
+		expectedNonRootFields []string
+	}{
+		{
+			name: "fields from multiple rules",
+			rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{Field: "service.name"},
+							{Field: "root.operation.name"},
+						},
+					},
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{Field: "http.status_code"},
+							{Field: "root.user.id"},
+						},
+					},
+				},
+			},
+			expectedAll:           []string{"http.status_code", "operation.name", "service.name", "user.id"},
+			expectedNonRootFields: []string{"http.status_code", "service.name"},
+		},
+		{
+			name: "fields from dynamic sampler",
+			rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{Field: "test"},
+						},
+						Sampler: &config.RulesBasedDownstreamSampler{
+							DynamicSampler: &config.DynamicSamplerConfig{
+								FieldList: []string{"service.name", "root.operation.name"},
+							},
+						},
+					},
+				},
+			},
+			expectedAll:           []string{"operation.name", "service.name", "test"},
+			expectedNonRootFields: []string{"service.name", "test"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sampler := &RulesBasedSampler{
+				Config:  tt.rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
+			sampler.Start()
+
+			allFields, nonRootFields := sampler.GetKeyFields()
+			// Sort for comparison since order may vary
+			sortedFields := slices.Clone(allFields)
+			sort.Strings(sortedFields)
+			assert.Equal(t, tt.expectedAll, sortedFields, "all fields should match expected")
+
+			sortedFields = slices.Clone(nonRootFields)
+			sort.Strings(sortedFields)
+			assert.Equal(t, tt.expectedNonRootFields, sortedFields, "non-root fields should match expected")
 		})
 	}
 }

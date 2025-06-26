@@ -8,20 +8,6 @@ import (
 	"github.com/tinylib/msgp/msgp"
 )
 
-type FieldType int
-
-const (
-	FieldTypeUnknown = iota
-	FieldTypeInt64
-	FieldTypeFloat64
-	FieldTypeString
-	FieldTypeBool
-
-	// Arrays, maps, other stuff supported by the wire protocols but not
-	// expected to be very common.
-	FieldTypeOther
-)
-
 // A wrapper for a serialized messagepack map. Reading its values can be far
 // cheaper than deserializing into a real map, but the gains disappear quickly
 // if you do too many iterations. It is recommended to retrieve values in batches
@@ -189,9 +175,8 @@ func msgpTypeToFieldType(t msgp.Type) (FieldType, error) {
 	case msgp.StrType, msgp.BinType:
 		return FieldTypeString, nil
 
-	case msgp.MapType, msgp.ArrayType, msgp.NilType, msgp.DurationType,
-		msgp.ExtensionType, msgp.Complex64Type, msgp.Complex128Type, msgp.TimeType:
-		return FieldTypeOther, nil
+	case msgp.IntType, msgp.UintType:
+		return FieldTypeInt64, nil
 
 	case msgp.Float64Type, msgp.Float32Type, msgp.NumberType:
 		return FieldTypeFloat64, nil
@@ -199,8 +184,9 @@ func msgpTypeToFieldType(t msgp.Type) (FieldType, error) {
 	case msgp.BoolType:
 		return FieldTypeBool, nil
 
-	case msgp.IntType, msgp.UintType:
-		return FieldTypeInt64, nil
+	case msgp.NilType, msgp.MapType, msgp.ArrayType, msgp.DurationType,
+		msgp.ExtensionType, msgp.Complex64Type, msgp.Complex128Type, msgp.TimeType:
+		return FieldTypeOther, nil
 
 	default:
 		return FieldTypeUnknown, fmt.Errorf("msgpack: unknown msgp type %x", t)

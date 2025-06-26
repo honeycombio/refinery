@@ -210,6 +210,7 @@ func TestAddRootSpan(t *testing.T) {
 		},
 		IsRoot: true,
 	}
+	span.Event.Data.ExtractMetadata(nil, nil)
 
 	coll.AddSpanFromPeer(span)
 	// adding one root decision span with no parent ID should:
@@ -441,6 +442,7 @@ func TestAddSpan(t *testing.T) {
 			APIKey: legacyAPIKey,
 		},
 	}
+	span.Event.Data.ExtractMetadata(nil, nil)
 	coll.AddSpanFromPeer(span)
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -463,6 +465,8 @@ func TestAddSpan(t *testing.T) {
 			APIKey: legacyAPIKey,
 		},
 	}
+	spanFromPeer.Event.Data.ExtractMetadata(nil, nil)
+
 	coll.AddSpanFromPeer(spanFromPeer)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
 
@@ -483,6 +487,7 @@ func TestAddSpan(t *testing.T) {
 		},
 		IsRoot: true,
 	}
+	rootSpan.Event.Data.ExtractMetadata(nil, nil)
 	coll.AddSpan(rootSpan)
 
 	assert.Equal(t, 2, len(transmission.GetBlock(2)), "adding a root span should send all spans in the trace")
@@ -968,11 +973,12 @@ func TestAddCountsToRoot(t *testing.T) {
 		}
 		switch i {
 		case 0, 1:
-			span.Data.Set("meta.annotation_type", "span_event")
-			span.Data.Set("meta.refinery.min_span", true)
+			span.Data.MetaAnnotationType = "span_event"
+			span.Data.MetaRefineryMinSpan.Set(true)
 		case 2:
-			span.Data.Set("meta.annotation_type", "link")
+			span.Data.MetaAnnotationType = "link"
 		}
+
 		coll.AddSpanFromPeer(span)
 	}
 
@@ -990,17 +996,47 @@ func TestAddCountsToRoot(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 
-	events := transmission.GetBlock(3)
-	assert.Equal(t, 3, len(events), "adding a root span should send all spans in the trace")
-	assert.Equal(t, nil, events[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, events[1].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
-	assert.Equal(t, nil, events[1].Data.Get("meta.span_event_count"), "child span metadata should NOT be populated with span event count")
-	assert.Equal(t, nil, events[1].Data.Get("meta.span_link_count"), "child span metadata should NOT be populated with span link count")
-	assert.Equal(t, nil, events[1].Data.Get("meta.event_count"), "child span metadata should NOT be populated with event count")
-	assert.Equal(t, int64(2), events[2].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
-	assert.Equal(t, int64(2), events[2].Data.Get("meta.span_event_count"), "root span metadata should be populated with span event count")
-	assert.Equal(t, int64(1), events[2].Data.Get("meta.span_link_count"), "root span metadata should be populated with span link count")
-	assert.Equal(t, int64(5), events[2].Data.Get("meta.event_count"), "root span metadata should be populated with event count")
+	// Wait for the trace to be processed
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
+	// Try to get all available events
+	events := transmission.GetBlock(0) // 0 means get all available
+	t.Logf("Got %d events", len(events))
+
+	// Debug: check what we got
+	for i, ev := range events {
+		parentID := ev.Data.Get("trace.parent_id")
+		spanCount := ev.Data.Get("meta.span_count")
+		t.Logf("Event %d: parent_id=%v, span_count=%v", i, parentID, spanCount)
+	}
+
+	// Find the root span - it's the one without trace.parent_id
+	var rootEvent *types.Event
+	var childEvents []*types.Event
+	for _, ev := range events {
+		if ev.Data.Get("trace.parent_id") == nil {
+			rootEvent = ev
+		} else {
+			childEvents = append(childEvents, ev)
+		}
+	}
+
+	assert.NotNil(t, rootEvent, "should have found a root span")
+	assert.Equal(t, 2, len(childEvents), "should have found 2 child spans")
+
+	// Check child spans don't have counts
+	for _, child := range childEvents {
+		assert.Equal(t, nil, child.Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
+		assert.Equal(t, nil, child.Data.Get("meta.span_event_count"), "child span metadata should NOT be populated with span event count")
+		assert.Equal(t, nil, child.Data.Get("meta.span_link_count"), "child span metadata should NOT be populated with span link count")
+		assert.Equal(t, nil, child.Data.Get("meta.event_count"), "child span metadata should NOT be populated with event count")
+	}
+
+	// Check root span has counts
+	assert.Equal(t, int64(2), rootEvent.Data.Get("meta.span_count"), "root span metadata should be populated with span count")
+	assert.Equal(t, int64(2), rootEvent.Data.Get("meta.span_event_count"), "root span metadata should be populated with span event count")
+	assert.Equal(t, int64(1), rootEvent.Data.Get("meta.span_link_count"), "root span metadata should be populated with span link count")
+	assert.Equal(t, int64(5), rootEvent.Data.Get("meta.event_count"), "root span metadata should be populated with event count")
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
@@ -1057,11 +1093,12 @@ func TestLateRootGetsCounts(t *testing.T) {
 		}
 		switch i {
 		case 0, 1:
-			span.Data.Set("meta.annotation_type", "span_event")
+			span.Data.MetaAnnotationType = "span_event"
 		case 2:
-			span.Data.Set("meta.annotation_type", "link")
-			span.Data.Set("meta.refinery.min_span", true)
+			span.Data.MetaAnnotationType = "link"
+			span.Data.MetaRefineryMinSpan.Set(true)
 		}
+
 		coll.AddSpanFromPeer(span)
 	}
 
@@ -1144,6 +1181,7 @@ func TestAddSpanCount(t *testing.T) {
 			APIKey: legacyAPIKey,
 		},
 	}
+	span.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
 	decisionSpan := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
@@ -1155,6 +1193,8 @@ func TestAddSpanCount(t *testing.T) {
 			APIKey: legacyAPIKey,
 		},
 	}
+	decisionSpan.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+
 	coll.AddSpanFromPeer(span)
 	coll.AddSpanFromPeer(decisionSpan)
 
@@ -1173,6 +1213,7 @@ func TestAddSpanCount(t *testing.T) {
 		},
 		IsRoot: true,
 	}
+	rootSpan.Data.ExtractMetadata(nil, nil)
 	coll.AddSpan(rootSpan)
 
 	events := transmission.GetBlock(2)
@@ -1784,6 +1825,7 @@ func TestRedistributeTraces(t *testing.T) {
 		},
 		IsRoot: true,
 	}
+	span.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
 	decisionSpan := &types.Span{
 		TraceID: myTraceID,
 		Event: types.Event{
@@ -1794,6 +1836,7 @@ func TestRedistributeTraces(t *testing.T) {
 			}),
 		},
 	}
+	decisionSpan.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
 
 	myTrace := &types.Trace{
 		TraceID:          myTraceID,
@@ -1992,6 +2035,8 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.span.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+
 			// Optionally record the trace decision beforehand
 			if tt.preRecordTrace {
 				trace := &types.Trace{TraceID: tt.traceID}
@@ -1999,6 +2044,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			}
 
 			// Call distributeSpansOnShutdown
+
 			coll.distributeSpansOnShutdown(sentTraceChan, forwardTraceChan, &now, tt.span)
 			require.Len(t, sentTraceChan, tt.expectedSent)
 			require.Len(t, forwardTraceChan, tt.expectedForwarded)
@@ -2017,12 +2063,12 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			require.Len(t, events, 1)
 			require.Equal(t, tt.span.Dataset, events[0].Dataset)
 
-			sendBy := events[0].Data.Get("meta.refinery.send_by")
+			sendBy := events[0].Data.MetaRefinerySendBy
 			if tt.expectedTraceSendBy != 0 {
-				require.NotNil(t, sendBy)
-				require.Equal(t, tt.expectedTraceSendBy, sendBy.(int64))
+				require.NotEqual(t, int64(0), sendBy)
+				require.Equal(t, tt.expectedTraceSendBy, sendBy)
 			} else {
-				require.Nil(t, sendBy)
+				require.Equal(t, int64(0), sendBy)
 			}
 
 			if tt.expectedAPIHost != "" {
@@ -2178,15 +2224,16 @@ func TestCreateDecisionSpan(t *testing.T) {
 		APIHost: peerShard.Addr,
 		APIKey:  legacyAPIKey,
 		Data: types.NewPayload(map[string]interface{}{
-			"meta.annotation_type":         int(types.SpanAnnotationTypeUnknown),
-			"meta.refinery.min_span":       true,
-			"meta.refinery.root":           false,
-			"meta.refinery.span_data_size": 87,
-			"meta.trace_id":                traceID1,
-			"http.status_code":             200,
-			"test":                         1,
+			"http.status_code": 200,
+			"test":             1,
 		}),
 	}
+	// Set metadata fields directly
+	expected.Data.MetaAnnotationType = strconv.Itoa(int(types.SpanAnnotationTypeUnknown))
+	expected.Data.MetaRefineryMinSpan.Set(true)
+	expected.Data.MetaRefineryRoot.Set(false)
+	expected.Data.MetaRefinerySpanDataSize = 87
+	expected.Data.MetaTraceID = traceID1
 
 	assert.Equal(t, expected.APIHost, ds.APIHost)
 	assert.Equal(t, expected.APIKey, ds.APIKey)
@@ -2200,7 +2247,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 	rootSpan.IsRoot = true
 
 	ds = coll.createDecisionSpan(rootSpan, trace, peerShard)
-	expected.Data.Set("meta.refinery.root", true)
+	expected.Data.MetaRefineryRoot.Set(true)
 
 	assert.Equal(t, expected.APIHost, ds.APIHost)
 	assert.Equal(t, expected.APIKey, ds.APIKey)
@@ -2362,7 +2409,8 @@ func TestExpiredTracesCleanup(t *testing.T) {
 
 	events := peerTransmission.GetBlock(3)
 	assert.Len(t, events, 3)
-	assert.NotEmpty(t, events[0].Data.Get("meta.refinery.expired_trace"))
+	assert.True(t, events[0].Data.MetaRefineryExpiredTrace.HasValue)
+	assert.True(t, events[0].Data.MetaRefineryExpiredTrace.Value)
 
 	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(5*traceTimeout))
 

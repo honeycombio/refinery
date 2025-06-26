@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"slices"
+	"strconv"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -37,40 +38,6 @@ type Event struct {
 	EnqueuedUnixMicro int64
 
 	dataSize int
-}
-
-// Metadata field constants
-const (
-	MetaSignalType                = "meta.signal_type"
-	MetaTraceID                   = "meta.trace_id"
-	MetaAnnotationType            = "meta.annotation_type"
-	MetaRefineryProbe             = "meta.refinery.probe"
-	MetaRefineryRoot              = "meta.refinery.root"
-	MetaRefineryIncomingUserAgent = "meta.refinery.incoming_user_agent"
-	MetaRefinerySendBy            = "meta.refinery.send_by"
-	MetaRefinerySpanDataSize      = "meta.refinery.span_data_size"
-	MetaRefineryMinSpan           = "meta.refinery.min_span"
-)
-
-// metadataFields is a list of fields that are needed during ingestion and routing.
-var metadataFields = []string{
-	MetaSignalType,
-	MetaTraceID,
-	MetaAnnotationType,
-	MetaRefineryProbe,
-	MetaRefineryRoot,
-	MetaRefineryIncomingUserAgent,
-	MetaRefinerySendBy,
-}
-
-// prefetch known metadata for the event
-func (e *Event) Warmup(keys []string) {
-	if e.Data.IsEmpty() {
-		return
-	}
-
-	keys = append(keys, metadataFields...)
-	e.Data.MemoizeFields(keys...)
 }
 
 // GetDataSize computes the size of the Data element of the Event.
@@ -274,12 +241,7 @@ type Span struct {
 // IsDecicionSpan returns true if the span is a decision span based on
 // a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
-	isDecisionSpan, ok := sp.Data.Get("meta.refinery.min_span").(bool)
-	if !ok {
-		return false
-	}
-
-	return isDecisionSpan
+	return sp.Data.MetaRefineryMinSpan.HasValue && sp.Data.MetaRefineryMinSpan.Value
 }
 
 // ExtractDecisionContext returns a new Event that contains only the data that is
@@ -287,35 +249,31 @@ func (sp *Span) IsDecisionSpan() bool {
 func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx := sp.Event
 	dataSize := sp.Event.GetDataSize()
-	decisionData := map[string]interface{}{
-		MetaTraceID:              sp.TraceID,
-		MetaRefineryRoot:         sp.IsRoot,
-		MetaRefineryMinSpan:      true,
-		MetaAnnotationType:       int(sp.AnnotationType()),
-		MetaRefinerySpanDataSize: dataSize,
+
+	// Create a new empty payload and set metadata fields directly
+	decisionCtx.Data = NewPayload(map[string]interface{}{})
+	decisionCtx.Data.MetaTraceID = sp.TraceID
+	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
+	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
+	decisionCtx.Data.MetaAnnotationType = strconv.Itoa(int(sp.AnnotationType()))
+	decisionCtx.Data.MetaRefinerySpanDataSize = int64(dataSize)
+
+	if sp.Data.MetaRefinerySendBy > 0 {
+		decisionCtx.Data.MetaRefinerySendBy = sp.Data.MetaRefinerySendBy
 	}
 
-	if v, ok := sp.GetSendBy(); ok {
-		decisionData[MetaRefinerySendBy] = v
-	}
-	decisionCtx.Data = NewPayload(decisionData)
 	return &decisionCtx
 }
 
 func (sp *Span) SetSendBy(sendBy time.Time) {
-	sp.Data.Set(MetaRefinerySendBy, sendBy.Unix())
+	sp.Data.MetaRefinerySendBy = sendBy.Unix()
 }
 
 func (sp *Span) GetSendBy() (time.Time, bool) {
-	value := sp.Data.Get(MetaRefinerySendBy)
-	switch v := value.(type) {
-	case int64:
-		return time.Unix(v, 0), true
-	case uint64:
-		return time.Unix(int64(v), 0), true
+	if sp.Data.MetaRefinerySendBy == 0 {
+		return time.Time{}, false
 	}
-
-	return time.Time{}, false
+	return time.Unix(sp.Data.MetaRefinerySendBy, 0), true
 }
 
 // GetDataSize computes the size of the Data element of the Span.
@@ -323,14 +281,7 @@ func (sp *Span) GetSendBy() (time.Time, bool) {
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
 	if sp.IsDecisionSpan() {
-		v := sp.Data.Get(MetaRefinerySpanDataSize)
-		switch value := v.(type) {
-		case int64:
-			return int(value)
-		case uint64:
-			return int(value)
-		}
-		return 0
+		return int(sp.Data.MetaRefinerySpanDataSize)
 	}
 
 	return sp.Event.GetDataSize()
@@ -355,8 +306,7 @@ func (sp *Span) AnnotationType() SpanAnnotationType {
 	if sp.annotationType != SpanAnnotationTypeUnSet {
 		return sp.annotationType
 	}
-	t := sp.Data.Get(MetaAnnotationType)
-	switch t {
+	switch sp.Data.MetaAnnotationType {
 	case "span_event":
 		sp.annotationType = SpanAnnotationTypeSpanEvent
 	case "link":
