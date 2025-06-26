@@ -1110,9 +1110,290 @@ func (d *discardResponseWriter) WriteHeader(statusCode int) {
 	// Discard status code
 }
 
+func createBatchEventsWithLargeAttributes() batchedEvents {
+	now := time.Now().UTC()
+
+	// Large text values for testing
+	largeDescription := strings.Repeat("This is a very detailed operation description that contains a lot of information about what the service is doing. ", 10)
+	largeErrorMessage := strings.Repeat("Error occurred during processing: connection timeout, retry attempts failed, network unreachable, service unavailable. ", 8)
+	largeUserAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Custom-Agent/1.2.3"
+
+	// Large structured data
+	largeRequestBody := `{"user":{"id":12345,"email":"user@test.com","profile":{"name":"John Doe","age":30,"preferences":{"theme":"dark","language":"en","notifications":{"email":true,"push":false,"sms":true}}}},"request":{"method":"POST","url":"https://api.example.com/v2/users/12345/profile","headers":{"authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...","content-type":"application/json","user-agent":"` + largeUserAgent + `"},"body":{"operation":"update_profile","data":{"preferences":{"notifications":{"email":true,"push":false}}}}}`
+
+	batchEvents := batchedEvents{
+		{
+			Timestamp:  now.Format(time.RFC3339Nano),
+			SampleRate: 2,
+			Data: types.NewPayload(map[string]interface{}{
+				// Metadata fields from metadataFields list
+				"meta.signal_type":                  "trace",
+				"meta.annotation_type":              "span",
+				"meta.refinery.incoming_user_agent": "refinery/v2.4.1",
+
+				// Core tracing fields
+				"trace.trace_id":      "trace-abcdef123456789012345678901234567890",
+				"trace.span_id":       "span-1234567890123456",
+				"trace.parent_id":     "",
+				"service.name":        "user-authentication-service",
+				"service.version":     "v2.4.1",
+				"service.environment": "production",
+				"operation.name":      "authenticate_user_with_multi_factor",
+				"span.kind":           "server",
+
+				// Timing and performance
+				"duration_ms":       1250.75,
+				"duration_ns":       1250750000,
+				"start_time":        now.UnixNano(),
+				"end_time":          now.Add(1250 * time.Millisecond).UnixNano(),
+				"cpu_time_ms":       890.25,
+				"memory_used_bytes": int64(52428800), // 50MB
+				"gc_pause_ms":       12.5,
+
+				// HTTP details
+				"http.method":          "POST",
+				"http.url":             "https://api.example.com/v2/auth/login",
+				"http.status_code":     int64(200),
+				"http.request_size":    int64(2048),
+				"http.response_size":   int64(1024),
+				"http.user_agent":      largeUserAgent,
+				"http.remote_addr":     "192.168.1.100:45678",
+				"http.x_forwarded_for": "203.0.113.45, 192.168.1.1",
+
+				// Database operations
+				"db.system":        "postgresql",
+				"db.name":          "user_accounts",
+				"db.operation":     "SELECT",
+				"db.table":         "users, user_sessions, user_preferences",
+				"db.rows_affected": int64(3),
+				"db.duration_ms":   145.8,
+				"db.query":         "SELECT u.id, u.email, us.session_token, up.preferences FROM users u JOIN user_sessions us ON u.id = us.user_id JOIN user_preferences up ON u.id = up.user_id WHERE u.email = $1 AND us.expires_at > NOW()",
+
+				// User and business context
+				"user.id":           int64(1234567890),
+				"user.email":        "john.doe@enterprise-corp.com",
+				"user.role":         "admin",
+				"user.organization": "Enterprise Corp - Technology Division",
+				"session.id":        "sess_abcdef1234567890abcdef1234567890",
+				"request.id":        "req_9876543210abcdef9876543210abcdef",
+				"correlation.id":    "corr_fedcba0987654321fedcba0987654321",
+
+				// Custom business metrics
+				"business.feature":     "multi_factor_authentication",
+				"business.tier":        "enterprise",
+				"business.cost_center": "engineering-auth-team",
+				"auth.method":          "password_and_totp",
+				"auth.attempts":        int64(1),
+				"auth.success":         true,
+				"mfa.provider":         "google_authenticator",
+				"mfa.verified":         true,
+
+				// Large text fields
+				"operation.description": largeDescription,
+				"request.body":          largeRequestBody,
+				"debug.stack_trace":     "at UserService.authenticate (user-service.js:145:12)\n  at AuthController.login (auth-controller.js:67:23)\n  at Router.handle (express-router.js:234:15)\n  at next (express-router.js:208:7)\n  at AuthMiddleware.verify (auth-middleware.js:89:5)",
+
+				// Arrays and complex data
+				"tags": []string{"authentication", "security", "user-management", "enterprise", "production"},
+				"custom.metadata": map[string]interface{}{
+					"client_info": map[string]interface{}{
+						"platform": "web",
+						"version":  "3.2.1",
+						"build":    "20240115-1234",
+					},
+					"feature_flags": map[string]interface{}{
+						"enhanced_security": true,
+						"rate_limiting":     true,
+						"audit_logging":     true,
+					},
+				},
+
+				// Numeric fields with various types
+				"int.field":          int64(1),
+				"float.field":        3.14159265359,
+				"bool.field":         true,
+				"counter.requests":   int64(15678),
+				"gauge.active_users": int64(8924),
+				"histogram.latency":  []float64{12.5, 45.8, 89.2, 156.7, 234.1},
+			}),
+		},
+		{
+			Timestamp:  now.Format(time.RFC3339Nano),
+			SampleRate: 2,
+			Data: types.NewPayload(map[string]interface{}{
+				// Metadata fields from metadataFields list
+				"meta.signal_type":                  "trace",
+				"meta.trace_id":                     "trace-abcdef123456789012345678901234567890",
+				"meta.annotation_type":              "span",
+				"meta.refinery.incoming_user_agent": "refinery/v2.4.1",
+
+				// Core tracing fields
+				"trace.trace_id":      "trace-abcdef123456789012345678901234567890",
+				"trace.span_id":       "span-2345678901234567",
+				"trace.parent_id":     "span-1234567890123456",
+				"service.name":        "user-profile-service",
+				"service.version":     "v1.8.3",
+				"service.environment": "production",
+				"operation.name":      "fetch_user_profile_with_preferences",
+				"span.kind":           "internal",
+
+				// Timing and performance
+				"duration_ms":       345.25,
+				"duration_ns":       345250000,
+				"start_time":        now.Add(50 * time.Millisecond).UnixNano(),
+				"end_time":          now.Add(395 * time.Millisecond).UnixNano(),
+				"cpu_time_ms":       287.5,
+				"memory_used_bytes": int64(31457280), // 30MB
+				"gc_pause_ms":       8.2,
+
+				// Cache operations
+				"cache.system":      "redis",
+				"cache.operation":   "GET",
+				"cache.key":         "user_profile:1234567890:v2",
+				"cache.hit":         false,
+				"cache.ttl_seconds": int64(3600),
+				"cache.size_bytes":  int64(4096),
+
+				// Database operations
+				"db.system":        "postgresql",
+				"db.name":          "user_profiles",
+				"db.operation":     "SELECT",
+				"db.table":         "user_profiles, user_settings",
+				"db.rows_affected": int64(1),
+				"db.duration_ms":   89.5,
+				"db.query":         "SELECT up.*, us.theme, us.language, us.timezone FROM user_profiles up LEFT JOIN user_settings us ON up.user_id = us.user_id WHERE up.user_id = $1",
+
+				// Error information
+				"error.type":      "CacheConnectionError",
+				"error.message":   largeErrorMessage,
+				"error.code":      "CACHE_TIMEOUT_001",
+				"error.stack":     "CacheConnectionError: Connection timeout after 5000ms\n  at RedisClient.connect (redis-client.js:234:15)\n  at CacheService.get (cache-service.js:89:12)\n  at ProfileService.getUserProfile (profile-service.js:156:8)",
+				"error.recovered": true,
+				"error.fallback":  "database_direct_query",
+
+				// User context
+				"user.id":        int64(1234567890),
+				"user.segment":   "enterprise_premium",
+				"request.id":     "req_9876543210abcdef9876543210abcdef",
+				"correlation.id": "corr_fedcba0987654321fedcba0987654321",
+
+				// Large text fields
+				"operation.description": largeDescription,
+				"response.body":         `{"user_id":1234567890,"profile":{"display_name":"John Doe","avatar_url":"https://cdn.example.com/avatars/large/1234567890.jpg","bio":"` + strings.Repeat("Software engineering manager with 15+ years of experience. ", 20) + `","location":"San Francisco, CA","website":"https://johndoe.tech"}}`,
+
+				// Arrays and metadata
+				"tags": []string{"profile", "user-data", "cache-miss", "database", "performance"},
+				"metrics.custom": map[string]interface{}{
+					"profile_completeness": 0.85,
+					"last_updated_days":    int64(7),
+					"view_count":           int64(1247),
+				},
+
+				// Numeric fields
+				"int.field":            int64(2),
+				"float.field":          2.71828182846,
+				"bool.field":           false,
+				"counter.cache_misses": int64(23),
+				"gauge.db_connections": int64(12),
+				"timer.response_time":  345.25,
+			}),
+		},
+		{
+			Timestamp:  now.Format(time.RFC3339Nano),
+			SampleRate: 4,
+			Data: types.NewPayload(map[string]interface{}{
+				// Metadata fields from metadataFields list
+				"meta.signal_type":                  "trace",
+				"meta.trace_id":                     "trace-fedcba098765432109876543210987654321",
+				"meta.annotation_type":              "span",
+				"meta.refinery.incoming_user_agent": "refinery/v2.4.1",
+				"meta.refinery.send_by":             now.Add(45 * time.Second).Unix(),
+
+				// Core tracing fields
+				"trace.trace_id":      "trace-fedcba098765432109876543210987654321",
+				"trace.span_id":       "span-3456789012345678",
+				"trace.parent_id":     "",
+				"service.name":        "payment-processing-service",
+				"service.version":     "v3.1.2",
+				"service.environment": "production",
+				"operation.name":      "process_high_value_payment_with_fraud_detection",
+				"span.kind":           "server",
+
+				// Timing and performance
+				"duration_ms":       2847.89,
+				"duration_ns":       2847890000,
+				"start_time":        now.Add(100 * time.Millisecond).UnixNano(),
+				"end_time":          now.Add(2947 * time.Millisecond).UnixNano(),
+				"cpu_time_ms":       1956.7,
+				"memory_used_bytes": int64(104857600), // 100MB
+				"gc_pause_ms":       45.8,
+
+				// Payment specific
+				"payment.id":         "pay_abcdef1234567890abcdef1234567890",
+				"payment.amount":     float64(15999.99),
+				"payment.currency":   "USD",
+				"payment.method":     "credit_card",
+				"payment.provider":   "stripe",
+				"payment.merchant":   "enterprise-corp-payments",
+				"payment.country":    "US",
+				"payment.risk_score": float64(0.23),
+
+				// Fraud detection
+				"fraud.score":           float64(0.15),
+				"fraud.rules_triggered": []string{"velocity_check", "geo_location", "device_fingerprint"},
+				"fraud.decision":        "approved",
+				"fraud.model_version":   "v2.4.1",
+				"fraud.features": map[string]interface{}{
+					"transaction_frequency": int64(3),
+					"geo_distance_km":       float64(12.7),
+					"device_trusted":        true,
+					"merchant_history":      "good",
+				},
+
+				// External service calls
+				"external.stripe.duration_ms":       456.7,
+				"external.fraud_api.duration_ms":    789.2,
+				"external.bank_api.duration_ms":     1234.5,
+				"external.notification.duration_ms": 123.4,
+
+				// Business context
+				"merchant.id":          int64(9876543210),
+				"merchant.tier":        "enterprise",
+				"customer.id":          int64(5678901234),
+				"customer.segment":     "high_value",
+				"transaction.type":     "purchase",
+				"transaction.category": "electronics",
+
+				// Large structured data
+				"request.body":   `{"payment":{"amount":15999.99,"currency":"USD","payment_method":"card_1234567890abcdef","description":"` + strings.Repeat("High-value electronics purchase from premium merchant. ", 15) + `"},"customer":{"id":"cust_5678901234","email":"customer@enterprise.com","billing_address":{"line1":"123 Enterprise Way","city":"San Francisco","state":"CA","postal_code":"94105","country":"US"}},"metadata":{"order_id":"order_abcdef1234567890","source":"web_checkout","campaign":"summer_sale_2024"}}`,
+				"fraud.analysis": largeDescription + " Additional fraud analysis details: " + strings.Repeat("Machine learning model analyzed 247 features including transaction history, device fingerprinting, geolocation data, and behavioral patterns. ", 5),
+
+				// Arrays and complex data
+				"tags": []string{"payment", "high-value", "fraud-detection", "stripe", "enterprise", "electronics"},
+				"custom.business_metrics": map[string]interface{}{
+					"profit_margin":   0.23,
+					"processing_fee":  47.99,
+					"conversion_rate": 0.0847,
+					"customer_ltv":    float64(45890.50),
+				},
+
+				// Numeric fields
+				"int.field":              int64(3),
+				"float.field":            1.41421356237,
+				"bool.field":             true,
+				"counter.transactions":   int64(8924),
+				"gauge.fraud_queue":      int64(156),
+				"histogram.amounts":      []float64{99.99, 299.99, 599.99, 1299.99, 15999.99},
+				"timer.total_processing": 2847.89,
+			}),
+		},
+	}
+	return batchEvents
+}
+
 func BenchmarkRouterBatch(b *testing.B) {
 	router := newBatchRouter(b)
-	batchEvents := createBatchEvents()
+	batchEvents := createBatchEventsWithLargeAttributes()
 	batchMsgpack, err := msgpack.Marshal(batchEvents)
 	require.NoError(b, err)
 

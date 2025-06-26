@@ -3,6 +3,7 @@ package sample
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +21,7 @@ const maxKeyLength = 100
 type traceKey struct {
 	fields         []string
 	rootOnlyFields []string
+	allFields      []string // all fields, including root-only fields
 	useTraceLength bool
 	keyBuilder     *bytes.Buffer
 	distinctValue  *distinctValue
@@ -42,6 +44,7 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 	return &traceKey{
 		fields:         nonRootFields,
 		rootOnlyFields: rootOnlyFields,
+		allFields:      slices.Concat(nonRootFields, rootOnlyFields),
 		useTraceLength: useTraceLength,
 		distinctValue:  &distinctValue{buf: make([]byte, 0, 1024)},
 		keyBuilder:     &bytes.Buffer{},
@@ -55,6 +58,14 @@ func (d *traceKey) build(trace *types.Trace) (string, int) {
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
+	for _, s := range spans {
+		if s.IsRoot {
+			s.Data.MemoizeFields(d.allFields...)
+			continue
+		}
+		s.Data.MemoizeFields(d.fields...)
+	}
+
 	d.distinctValue.Reset(d.fields, maxKeyLength)
 	d.keyBuilder.Reset()
 outer:

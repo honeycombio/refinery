@@ -517,6 +517,9 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			Data:        bev.Data,
 		}
 
+		// prefetch known metadata for the event
+		ev.Warmup(append(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames()...))
+
 		addIncomingUserAgent(ev, userAgent)
 		err = r.processEvent(ev, reqID)
 
