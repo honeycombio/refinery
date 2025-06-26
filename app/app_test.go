@@ -485,7 +485,6 @@ func TestPeerRouting(t *testing.T) {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		senders[i].Start()
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -617,7 +616,6 @@ func TestEventsEndpoint(t *testing.T) {
 		var graph inject.Graph
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		senders[i].Start()
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -700,6 +698,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
 	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 }
+
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 
@@ -716,7 +715,6 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	for i := range apps {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		senders[i].Start()
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -817,7 +815,6 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 		var graph inject.Graph
 		basePort := 17000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		senders[i].Start()
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
