@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
@@ -40,6 +41,13 @@ type transmitKey struct {
 	dataset string
 }
 
+// eventBatch holds a slice of events and a mutex for thread-safe access
+type eventBatch struct {
+	mutex     sync.Mutex
+	events    []*types.Event
+	startTime time.Time // Time when the batch was created
+}
+
 // Transmission to the hny API (peer refinery or honeycomb) via messagepack,
 // without involving libhoney. This is designed to be lightweight and sheds
 // some of the ergonomics of libhoney in favor of simplicity and performance.
@@ -53,6 +61,7 @@ type DirectTransmission struct {
 	// constructed, not injected
 	Metrics   metrics.Metrics
 	Transport *http.Transport
+	Clock     clockwork.Clock
 
 	// Type is peer or upstream, and used only for naming metrics
 	Name string
@@ -61,10 +70,11 @@ type DirectTransmission struct {
 	MaxBatchSize int
 	BatchTimeout time.Duration
 
-	transmitQueues map[transmitKey]chan<- *types.Event
-	mutex          sync.RWMutex
-	shutdownWG     sync.WaitGroup
-	batchPool      *pool.Pool
+	eventBatches map[transmitKey]*eventBatch
+	batchMutex   sync.RWMutex
+	dispatchPool *pool.Pool
+	stop         chan struct{}
+	stopWG       sync.WaitGroup
 
 	httpClient *http.Client
 	userAgent  string
@@ -72,12 +82,14 @@ type DirectTransmission struct {
 
 func NewDirectTransmission(m metrics.Metrics, name string, maxBatchSize int, batchTimeout time.Duration, transport *http.Transport) *DirectTransmission {
 	return &DirectTransmission{
-		Metrics:        m,
-		Name:           name,
-		MaxBatchSize:   maxBatchSize,
-		BatchTimeout:   batchTimeout,
-		Transport:      transport,
-		transmitQueues: make(map[transmitKey]chan<- *types.Event),
+		Metrics:      m,
+		Name:         name,
+		MaxBatchSize: maxBatchSize,
+		BatchTimeout: batchTimeout,
+		Transport:    transport,
+		Clock:        clockwork.NewRealClock(),
+		eventBatches: make(map[transmitKey]*eventBatch),
+		stop:         make(chan struct{}),
 	}
 }
 
@@ -90,7 +102,10 @@ func (d *DirectTransmission) Start() error {
 	}
 
 	// Create a pool for concurrent batch sending
-	d.batchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
+	d.dispatchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
+
+	d.stopWG.Add(1)
+	go d.dispatchStaleBatches()
 
 	return nil
 }
@@ -103,41 +118,49 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 		Logf("transmit sending event")
 
 	// Store enqueue time for queue time metrics
-	ev.EnqueuedUnixMicro = time.Now().UnixMicro()
+	ev.EnqueuedUnixMicro = d.Clock.Now().UnixMicro()
 
-	// TODO this may end up on the heap, if so, either construct it inline, or make it
-	// a sub-struct of Event (which is already on the heap).
 	key := transmitKey{
 		apiHost: ev.APIHost,
 		apiKey:  ev.APIKey,
 		dataset: ev.Dataset,
 	}
 
-	d.mutex.RLock()
-	q, ok := d.transmitQueues[key]
-	d.mutex.RUnlock()
+	d.batchMutex.RLock()
+	batch, exists := d.eventBatches[key]
+	d.batchMutex.RUnlock()
 
-	if !ok {
-		d.mutex.Lock()
-		q, ok = d.transmitQueues[key]
-		if ok {
-			d.mutex.Unlock()
-		} else {
-			// TODO buffer size - use larger buffer to avoid blocking
-			ch := make(chan *types.Event, 100)
-			d.transmitQueues[key] = ch
-			d.mutex.Unlock()
-
-			// TODO one goroutine per dataset/peer will lead to 1M+ goroutines
-			// in degenerate cases. This is not a viable production strategy,
-			// and needs to be evolved to a more bounded system.
-			d.shutdownWG.Add(1)
-			go d.batchEvents(ch)
-			q = ch
+	if !exists {
+		d.batchMutex.Lock()
+		batch, exists = d.eventBatches[key]
+		if !exists {
+			// Need to create new batch
+			batch = &eventBatch{}
+			d.eventBatches[key] = batch
 		}
+		d.batchMutex.Unlock()
 	}
 
-	q <- ev
+	// Add event to batch
+	batch.mutex.Lock()
+	if batch.events == nil {
+		batch.events = make([]*types.Event, 0, d.MaxBatchSize)
+		batch.startTime = d.Clock.Now()
+	}
+	batch.events = append(batch.events, ev)
+	shouldDispatch := len(batch.events) >= d.MaxBatchSize
+	if shouldDispatch {
+		events := batch.events
+		batch.events = nil
+		batch.mutex.Unlock()
+
+		d.dispatchPool.Go(func() {
+			d.sendBatch(events)
+		})
+	} else {
+		batch.mutex.Unlock()
+	}
+
 	d.Metrics.Up(updownQueuedItems)
 }
 
@@ -155,16 +178,29 @@ func (d *DirectTransmission) RegisterMetrics() {
 }
 
 func (d *DirectTransmission) Stop() error {
-	for _, q := range d.transmitQueues {
-		close(q)
+	if d.stop != nil {
+		close(d.stop)
 	}
-	d.transmitQueues = nil
-	d.shutdownWG.Wait()
+	d.stopWG.Wait()
 
-	if d.batchPool != nil {
-		d.batchPool.Wait()
+	// Dispatch all remaining batches; we don't need locks here since no
+	// further enqueues are possible.
+	eventBatches := d.eventBatches
+	d.eventBatches = nil
+	for _, batch := range eventBatches {
+		if len(batch.events) > 0 {
+			d.dispatchPool.Go(func() {
+				d.sendBatch(batch.events)
+			})
+		}
 	}
-	d.batchPool = nil
+
+	// Wait for all batch sends to complete
+	if d.dispatchPool != nil {
+		d.dispatchPool.Wait()
+	}
+	d.dispatchPool = nil
+	d.stop = nil
 
 	return nil
 }
@@ -208,8 +244,19 @@ func (d *DirectTransmission) handleEventError(ev *types.Event, statusCode int, q
 	d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
 }
 
+// Stores *[]byte instead of []byte to avoid having the slice headers themselves
+// moved onto the heap on every Put().
+var batchBufferPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 0, 16*1024)
+		return &buf
+	},
+}
+
 // Sends one message or, if the batch is larger than what is allowed, several.
 func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
+	subBatch := make([]*types.Event, 0, len(wholeBatch))
+
 	for len(wholeBatch) > 0 {
 		// All events in batch should have same destination
 		apiHost := wholeBatch[0].APIHost
@@ -222,12 +269,9 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		// array length, so we'll need to do some []byte shenanigans at the end of
 		// this to properly prepend the header.
 
-		// TODO keep a pool of buffers, being sure to keep original start point
-		// Start with a buffer pre-pended with 5 spare bytes, the max size of an
-		// array header.
-		var packed []byte
-		packed = append(packed, 0, 0, 0, 0, 0)
-		var subBatch []*types.Event
+		bufPtr := batchBufferPool.Get().(*[]byte)
+		packed := append(*bufPtr, 0, 0, 0, 0, 0)
+		subBatch = subBatch[:0]
 		var i int
 		for i = 0; i < len(wholeBatch); i++ {
 			packEvent := batchedEvent{
@@ -264,6 +308,10 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			continue
 		}
 
+		// packed is now at its full size, we'll put that back in the pool.
+		*bufPtr = packed[:0]
+		defer batchBufferPool.Put(bufPtr)
+
 		// Now we know how many events were encoded, so we can do shenanigans
 		// to pre-pend the array header, which is variable-width.
 		var headerBuf [5]byte
@@ -295,7 +343,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		req.Header.Set("User-Agent", d.userAgent)
 
 		resp, err := d.httpClient.Do(req)
-		dequeuedAt := time.Now()
+		dequeuedAt := d.Clock.Now()
 
 		if err != nil {
 			d.Logger.Error().WithField("err", err.Error()).Logf("http POST failed")
@@ -375,37 +423,57 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 	}
 }
 
-func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
-	defer d.shutdownWG.Done()
+// dispatchStaleBatches runs on a ticker and dispatches all pending batches
+func (d *DirectTransmission) dispatchStaleBatches() {
+	defer d.stopWG.Done()
 
-	for ev := range in {
-		// Start a new batch, and wait for the first event.
-		batch := make([]*types.Event, 1, d.MaxBatchSize)
-		batch[0] = ev
+	ticker := d.Clock.NewTicker(d.BatchTimeout / 4)
+	defer ticker.Stop()
 
-		timer := time.NewTimer(d.BatchTimeout)
+	var keys []transmitKey
 
-		// Accumulate until the batch is full, or the timer expires
-	eventLoop:
-		for len(batch) < d.MaxBatchSize {
-			select {
-			case ev, ok := <-in:
-				if !ok {
-					break eventLoop
+	for {
+		select {
+		case <-ticker.Chan():
+			// Hey the ticker channel returns a time, why not use that?
+			// Because that time isn't the time RIGHT NOW, and can be really off
+			// when using a fake clock for testing. So just get the current time.
+			now := d.Clock.Now()
+
+			// Get a snapshot of all keys
+			keys = keys[:0]
+			d.batchMutex.RLock()
+			for k := range d.eventBatches {
+				keys = append(keys, k)
+			}
+			d.batchMutex.RUnlock()
+
+			// Dispatch batches that are old enough
+			for _, key := range keys {
+				d.batchMutex.RLock()
+				batch, exists := d.eventBatches[key]
+				d.batchMutex.RUnlock()
+
+				if !exists {
+					continue
 				}
 
-				// Add event to batch (all events on this channel have same destination)
-				batch = append(batch, ev)
-			case <-timer.C:
-				// Timer expired, send batch
-				break eventLoop
-			}
-		}
-		timer.Stop()
+				batch.mutex.Lock()
+				if len(batch.events) > 0 && now.Sub(batch.startTime) >= d.BatchTimeout {
+					events := batch.events
+					batch.events = nil
+					batch.mutex.Unlock()
 
-		d.batchPool.Go(func() {
-			d.sendBatch(batch)
-		})
+					d.dispatchPool.Go(func() {
+						d.sendBatch(events)
+					})
+				} else {
+					batch.mutex.Unlock()
+				}
+			}
+		case <-d.stop:
+			return
+		}
 	}
 }
 
