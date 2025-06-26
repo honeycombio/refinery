@@ -180,7 +180,7 @@ func main() {
 		true,
 	)
 	peerTransmission := transmit.NewDirectTransmission(
-		upstreamMetricsRecorder,
+		peerMetricsRecorder,
 		peerTransport,
 		"peer",
 		int(c.GetTracesConfig().GetMaxBatchSize()),
