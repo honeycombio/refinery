@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sourcegraph/conc/pool"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 
@@ -27,6 +28,10 @@ const (
 
 	// Size limit for a single serialized event within a batch.
 	apiMaxEventSize int = 1_000_000
+
+	// Libhoney uses 80 for this, but in a high-volume environment we may need
+	// more. Under ideal conditions this limit is never approached.
+	maxConcurrentBatches = 500
 )
 
 type transmitKey struct {
@@ -41,11 +46,13 @@ type transmitKey struct {
 // Sending data directly also gives us the flexibility to use custom
 // serialization and potentially send additional metadata to peers.
 type DirectTransmission struct {
-	Config    config.Config   `inject:""`
-	Logger    logger.Logger   `inject:""`
-	Metrics   metrics.Metrics // constructed, not injected
-	Version   string          `inject:"version"`
-	Transport *http.Transport `inject:"upstreamTransport"`
+	Config  config.Config `inject:""`
+	Logger  logger.Logger `inject:""`
+	Version string        `inject:"version"`
+
+	// constructed, not injected
+	Metrics   metrics.Metrics
+	Transport *http.Transport
 
 	// Type is peer or upstream, and used only for naming metrics
 	Name string
@@ -57,17 +64,19 @@ type DirectTransmission struct {
 	transmitQueues map[transmitKey]chan<- *types.Event
 	mutex          sync.RWMutex
 	shutdownWG     sync.WaitGroup
+	batchPool      *pool.Pool
 
 	httpClient *http.Client
 	userAgent  string
 }
 
-func NewDirectTransmission(m metrics.Metrics, name string, maxBatchSize int, batchTimeout time.Duration) *DirectTransmission {
+func NewDirectTransmission(m metrics.Metrics, name string, maxBatchSize int, batchTimeout time.Duration, transport *http.Transport) *DirectTransmission {
 	return &DirectTransmission{
 		Metrics:        m,
 		Name:           name,
 		MaxBatchSize:   maxBatchSize,
 		BatchTimeout:   batchTimeout,
+		Transport:      transport,
 		transmitQueues: make(map[transmitKey]chan<- *types.Event),
 	}
 }
@@ -79,6 +88,10 @@ func (d *DirectTransmission) Start() error {
 		Transport: d.Transport,
 		Timeout:   10 * time.Second,
 	}
+
+	// Create a pool for concurrent batch sending
+	d.batchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
+
 	return nil
 }
 
@@ -147,6 +160,12 @@ func (d *DirectTransmission) Stop() error {
 	}
 	d.transmitQueues = nil
 	d.shutdownWG.Wait()
+
+	if d.batchPool != nil {
+		d.batchPool.Wait()
+	}
+	d.batchPool = nil
+
 	return nil
 }
 
@@ -359,11 +378,10 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
 	defer d.shutdownWG.Done()
 
-	var batch []*types.Event
 	for ev := range in {
 		// Start a new batch, and wait for the first event.
-		batch = batch[:0]
-		batch = append(batch, ev)
+		batch := make([]*types.Event, 1, d.MaxBatchSize)
+		batch[0] = ev
 
 		timer := time.NewTimer(d.BatchTimeout)
 
@@ -383,9 +401,11 @@ func (d *DirectTransmission) batchEvents(in <-chan *types.Event) {
 				break eventLoop
 			}
 		}
+		timer.Stop()
 
-		// TODO sending batches in-line here is not viable for production.
-		d.sendBatch(batch)
+		d.batchPool.Go(func() {
+			d.sendBatch(batch)
+		})
 	}
 }
 

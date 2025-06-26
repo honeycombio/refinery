@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,10 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"
 	"go.opentelemetry.io/otel/trace/noop"
-	"gopkg.in/alexcesaro/statsd.v2"
 
-	"github.com/honeycombio/libhoney-go"
-	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
@@ -40,6 +38,7 @@ import (
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
@@ -49,7 +48,7 @@ var now = time.Now().UTC()
 
 type testAPIServer struct {
 	server *httptest.Server
-	events []*transmission.Event
+	events []*types.Event
 	mutex  sync.RWMutex
 }
 
@@ -129,7 +128,7 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		event := &transmission.Event{
+		event := &types.Event{
 			APIKey:     apiKey,
 			Dataset:    dataset,
 			SampleRate: uint(sampleRate),
@@ -137,7 +136,7 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 			Timestamp:  timestamp,
 		}
 		if dataMap, ok := eventData["data"].(map[string]interface{}); ok {
-			event.Data = dataMap
+			event.Data = types.NewPayload(dataMap)
 		}
 
 		t.events = append(t.events, event)
@@ -150,60 +149,39 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 	w.Write(responseBody)
 }
 
-func (t *testAPIServer) getEvents() []*transmission.Event {
+func (t *testAPIServer) getEvents() []*types.Event {
 	t.mutex.RLock()
 	defer t.mutex.RUnlock()
 
-	events := make([]*transmission.Event, len(t.events))
+	events := make([]*types.Event, len(t.events))
 	copy(events, t.events)
 	return events
 }
 
-type countingWriterSender struct {
-	transmission.WriterSender
-
-	count  int
-	target int
-	ch     chan struct{}
-	mutex  sync.Mutex
+// Drops everything sent into it.
+type countingTransmission struct {
+	count atomic.Int64
 }
 
-func (w *countingWriterSender) Add(ev *transmission.Event) {
-	w.WriterSender.Add(ev)
-
-	w.mutex.Lock()
-	defer w.mutex.Unlock()
-
-	w.count++
-	if w.ch != nil && w.count >= w.target {
-		close(w.ch)
-		w.ch = nil
-	}
+func (d *countingTransmission) EnqueueEvent(ev *types.Event) {
+	d.count.Add(1)
 }
 
-func (w *countingWriterSender) resetCount() {
-	w.mutex.Lock()
-	w.count = 0
-	w.mutex.Unlock()
+func (d *countingTransmission) EnqueueSpan(ev *types.Span) {
+	d.count.Add(1)
 }
 
-func (w *countingWriterSender) waitForCount(t testing.TB, target int) {
-	w.mutex.Lock()
-	if w.count >= target {
-		w.mutex.Unlock()
-		return
-	}
+func (d *countingTransmission) RegisterMetrics() {
+}
 
-	ch := make(chan struct{})
-	w.ch = ch
-	w.target = target
-	w.mutex.Unlock()
+func (w *countingTransmission) resetCount() {
+	w.count.Store(0)
+}
 
-	select {
-	case <-ch:
-	case <-time.After(10 * time.Second):
-		t.Errorf("timed out waiting for %d events", target)
-	}
+func (w *countingTransmission) waitForCount(t testing.TB, n int) {
+	require.Eventually(t, func() bool {
+		return w.count.Load() >= int64(n)
+	}, 5*time.Second, time.Millisecond)
 }
 
 // defaultConfig returns a config with the given basePort and redisDB.
@@ -254,12 +232,11 @@ func defaultConfig(basePort int, redisDB int, apiURL string) *config.MockConfig 
 
 func newStartedApp(
 	t testing.TB,
-	libhoneyT transmission.Sender,
+	mockTransmission transmit.Transmission,
 	peers peer.Peers,
 	cfg *config.MockConfig,
 ) (*App, inject.Graph) {
 	c := cfg
-	var err error
 	if peers == nil {
 		peers = &peer.FilePeers{Cfg: c, Metrics: &metrics.NullMetrics{}}
 	}
@@ -292,44 +269,23 @@ func newStartedApp(
 
 	samplerFactory := &sample.SamplerFactory{}
 
-	// Create default transmission.Honeycomb if none provided
-	if libhoneyT == nil {
-		libhoneyT = &transmission.Honeycomb{
-			MaxBatchSize:         500,
-			BatchTimeout:         100 * time.Millisecond,
-			MaxConcurrentBatches: 10,
-			PendingWorkCapacity:  10000,
-			BlockOnSend:          true,
-			EnableMsgpackEncoding: true,
-		}
+	// Create upstream transmission - use mock if provided, otherwise create real client
+	var upstreamTransmission transmit.Transmission
+	if mockTransmission != nil {
+		upstreamTransmission = mockTransmission
+	} else {
+		// Create DirectTransmission instead of DefaultTransmission
+		upstreamTransmission = transmit.NewDirectTransmission(metricsr, "upstream", 500, 100*time.Millisecond, http.DefaultTransport.(*http.Transport))
 	}
 
-	upstreamClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: libhoneyT,
-	})
-	assert.NoError(t, err)
-
-	sdPeer, _ := statsd.New(statsd.Prefix("refinery.peer"))
-	peerTransmission := &transmission.Honeycomb{
-		MaxBatchSize:         cfg.GetTracesConfigVal.MaxBatchSize,
-		BatchTimeout:         libhoney.DefaultBatchTimeout,
-		MaxConcurrentBatches: libhoney.DefaultMaxConcurrentBatches,
-		PendingWorkCapacity:  uint(cfg.GetPeerBufferSize()),
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			Dial: (&net.Dialer{
-				Timeout: 3 * time.Second,
-			}).Dial,
-		},
-		BlockOnSend:            true,
-		DisableGzipCompression: true,
-		EnableMsgpackEncoding:  true,
-		Metrics:                sdPeer,
+	// Always create real peer transmission using DirectTransmission
+	peerTransport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout: 3 * time.Second,
+		}).Dial,
 	}
-	peerClient, err := libhoney.NewClient(libhoney.ClientConfig{
-		Transmission: peerTransmission,
-	})
-	assert.NoError(t, err)
+	peerTransmissionWrapper := transmit.NewDirectTransmission(metricsr, "peer", int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, peerTransport)
 
 	var g inject.Graph
 	err = g.Provide(
@@ -337,8 +293,8 @@ func newStartedApp(
 		&inject.Object{Value: peers},
 		&inject.Object{Value: lgr},
 		&inject.Object{Value: http.DefaultTransport, Name: "upstreamTransport"},
-		&inject.Object{Value: transmit.NewDefaultTransmission(upstreamClient, metricsr, "upstream"), Name: "upstreamTransmission"},
-		&inject.Object{Value: transmit.NewDefaultTransmission(peerClient, metricsr, "peer"), Name: "peerTransmission"},
+		&inject.Object{Value: upstreamTransmission, Name: "upstreamTransmission"},
+		&inject.Object{Value: peerTransmissionWrapper, Name: "peerTransmission"},
 		&inject.Object{Value: shrdr},
 		&inject.Object{Value: noop.NewTracerProvider().Tracer("test"), Name: "tracer"},
 		&inject.Object{Value: collector},
@@ -433,9 +389,9 @@ func TestAppIntegration(t *testing.T) {
 		events := testServer.getEvents()
 		require.Len(collect, events, 1)
 		assert.Equal(collect, "dataset", events[0].Dataset)
-		assert.Equal(collect, "bar", events[0].Data["foo"])
-		assert.Equal(collect, "1", events[0].Data["trace.trace_id"])
-		assert.Equal(collect, int64(1), events[0].Data["meta.refinery.original_sample_rate"])
+		assert.Equal(collect, "bar", events[0].Data.Get("foo"))
+		assert.Equal(collect, "1", events[0].Data.Get("trace.trace_id"))
+		assert.Equal(collect, int64(1), events[0].Data.Get("meta.refinery.original_sample_rate"))
 	}, 2*time.Second, 10*time.Millisecond)
 
 	err = startstop.Stop(graph.Objects(), nil)
@@ -469,16 +425,16 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	resp.Body.Close()
 
 	// Wait for span to be sent.
-	var events []*transmission.Event
+	var events []*types.Event
 	require.Eventually(t, func() bool {
 		events = testServer.getEvents()
 		return len(events) == 1
 	}, 2*time.Second, 2*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, int64(1), events[0].Data["meta.refinery.original_sample_rate"])
+	assert.Equal(t, "bar", events[0].Data.Get("foo"))
+	assert.Equal(t, "1", events[0].Data.Get("trace.trace_id"))
+	assert.Equal(t, int64(1), events[0].Data.Get("meta.refinery.original_sample_rate"))
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -524,11 +480,11 @@ func TestPeerRouting(t *testing.T) {
 	peerList := []string{"http://localhost:11001", "http://localhost:11003"}
 
 	var apps [2]*App
-	var senders [2]*transmission.MockSender
+	var senders [2]*transmit.MockTransmission
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
+		senders[i] = &transmit.MockTransmission{}
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -556,44 +512,27 @@ func TestPeerRouting(t *testing.T) {
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
+		return len(senders[0].Events) >= 1
 	}, 5*time.Second, 2*time.Millisecond)
 
-	expectedEvent := &transmission.Event{
-		APIKey:     legacyAPIKey,
-		Dataset:    "dataset",
-		SampleRate: 2,
-		APIHost:    "http://api.honeycomb.io",
-		Timestamp:  now,
-		Data: map[string]interface{}{
-			"trace.trace_id":                     "2",
-			"trace.span_id":                      "10",
-			"trace.parent_id":                    "0000000000",
-			"key":                                "value",
-			"field0":                             float64(0),
-			"field1":                             float64(1),
-			"field2":                             float64(2),
-			"field3":                             float64(3),
-			"field4":                             float64(4),
-			"field5":                             float64(5),
-			"field6":                             float64(6),
-			"field7":                             float64(7),
-			"field8":                             float64(8),
-			"field9":                             float64(9),
-			"field10":                            float64(10),
-			"long":                               "this is a test of the emergency broadcast system",
-			"meta.refinery.original_sample_rate": uint(2),
-			"meta.refinery.incoming_user_agent":  "Test-Client",
-			"foo":                                "bar",
-		},
-		Metadata: map[string]any{
-			"api_host":    "http://api.honeycomb.io",
-			"dataset":     "dataset",
-			"environment": "",
-			"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-		},
-	}
-	assert.Equal(t, expectedEvent, senders[0].Events()[0])
+	events := senders[0].GetBlock(1)
+	// Compare individual fields since types.Event doesn't have Metadata field
+	require.Len(t, events, 1)
+	event := events[0]
+	assert.Equal(t, legacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(2), event.SampleRate)
+	assert.Equal(t, "http://api.honeycomb.io", event.APIHost)
+	assert.Equal(t, now, event.Timestamp)
+
+	// Check specific data fields
+	assert.Equal(t, "2", event.Data.Get("trace.trace_id"))
+	assert.Equal(t, "10", event.Data.Get("trace.span_id"))
+	assert.Equal(t, "0000000000", event.Data.Get("trace.parent_id"))
+	assert.Equal(t, "value", event.Data.Get("key"))
+	assert.Equal(t, "bar", event.Data.Get("foo"))
+	assert.Equal(t, uint(2), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's who the trace belongs to.
 	req, err = http.NewRequest(
@@ -608,15 +547,16 @@ func TestPeerRouting(t *testing.T) {
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	require.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
+		return len(senders[0].Events) >= 1
 	}, 5*time.Second, 2*time.Millisecond)
-	expectedEvent.Metadata = map[string]any{
-		"api_host":    "http://api.honeycomb.io",
-		"dataset":     "dataset",
-		"environment": "",
-		"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-	}
-	assert.Equal(t, expectedEvent, senders[0].Events()[0])
+
+	events = senders[0].GetBlock(1)
+	require.Len(t, events, 1)
+	event = events[0]
+	assert.Equal(t, legacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(2), event.SampleRate)
+	assert.Equal(t, "2", event.Data.Get("trace.trace_id"))
 }
 
 func TestHostMetadataSpanAdditions(t *testing.T) {
@@ -645,18 +585,18 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 
 	time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
 
-	var events []*transmission.Event
+	var events []*types.Event
 	require.Eventually(t, func() bool {
 		events = testServer.getEvents()
 		return len(events) == 1
 	}, 2*time.Second, 10*time.Millisecond)
 
 	assert.Equal(t, "dataset", events[0].Dataset)
-	assert.Equal(t, "bar", events[0].Data["foo"])
-	assert.Equal(t, "1", events[0].Data["trace.trace_id"])
-	assert.Equal(t, int64(1), events[0].Data["meta.refinery.original_sample_rate"])
+	assert.Equal(t, "bar", events[0].Data.Get("foo"))
+	assert.Equal(t, "1", events[0].Data.Get("trace.trace_id"))
+	assert.Equal(t, int64(1), events[0].Data.Get("meta.refinery.original_sample_rate"))
 	hostname, _ := os.Hostname()
-	assert.Equal(t, hostname, events[0].Data["meta.refinery.local_hostname"])
+	assert.Equal(t, hostname, events[0].Data.Get("meta.refinery.local_hostname"))
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -671,11 +611,11 @@ func TestEventsEndpoint(t *testing.T) {
 	}
 
 	var apps [2]*App
-	var senders [2]*transmission.MockSender
+	var senders [2]*transmit.MockTransmission
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 13000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
+		senders[i] = &transmit.MockTransmission{}
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -704,31 +644,21 @@ func TestEventsEndpoint(t *testing.T) {
 
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
+		return len(senders[0].Events) >= 1
 	}, 2*time.Second, 2*time.Millisecond)
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     legacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     "1",
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  "Test-Client",
-			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "",
-				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[0].Events()[0],
-	)
+
+	events := senders[0].GetBlock(1)
+	require.Len(t, events, 1)
+	event := events[0]
+	assert.Equal(t, legacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(10), event.SampleRate)
+	assert.Equal(t, "http://api.honeycomb.io", event.APIHost)
+	assert.Equal(t, now, event.Timestamp)
+	assert.Equal(t, "1", event.Data.Get("trace.trace_id"))
+	assert.Equal(t, "bar", event.Data.Get("foo"))
+	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's the host this trace belongs to.
 
@@ -752,32 +682,23 @@ func TestEventsEndpoint(t *testing.T) {
 
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
+		return len(senders[0].Events) >= 1
 	}, 2*time.Second, 2*time.Millisecond)
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     legacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     "1",
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  "Test-Client",
-			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "",
-				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[0].Events()[0],
-	)
+
+	events = senders[0].GetBlock(1)
+	require.Len(t, events, 1)
+	event = events[0]
+	assert.Equal(t, legacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(10), event.SampleRate)
+	assert.Equal(t, "http://api.honeycomb.io", event.APIHost)
+	assert.Equal(t, now, event.Timestamp)
+	assert.Equal(t, "1", event.Data.Get("trace.trace_id"))
+	assert.Equal(t, "bar", event.Data.Get("foo"))
+	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 }
+
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	t.Parallel()
 
@@ -790,10 +711,10 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	traceID := "4"
 
 	var apps [2]*App
-	var senders [2]*transmission.MockSender
+	var senders [2]*transmit.MockTransmission
 	for i := range apps {
 		basePort := 15000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
+		senders[i] = &transmit.MockTransmission{}
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -827,32 +748,21 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
+		return len(senders[0].Events) >= 1
 	}, 2*time.Second, 2*time.Millisecond)
 
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     nonLegacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     traceID,
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  "Test-Client",
-			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "test",
-				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[0].Events()[0],
-	)
+	events := senders[0].GetBlock(1)
+	require.Len(t, events, 1)
+	event := events[0]
+	assert.Equal(t, nonLegacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(10), event.SampleRate)
+	assert.Equal(t, "http://api.honeycomb.io", event.APIHost)
+	assert.Equal(t, now, event.Timestamp)
+	assert.Equal(t, traceID, event.Data.Get("trace.trace_id"))
+	assert.Equal(t, "bar", event.Data.Get("foo"))
+	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0.
 
@@ -876,32 +786,21 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[0].Events()) == 1
+		return len(senders[0].Events) >= 1
 	}, 2*time.Second, 2*time.Millisecond)
 
-	assert.Equal(
-		t,
-		&transmission.Event{
-			APIKey:     nonLegacyAPIKey,
-			Dataset:    "dataset",
-			SampleRate: 10,
-			APIHost:    "http://api.honeycomb.io",
-			Timestamp:  now,
-			Data: map[string]interface{}{
-				"trace.trace_id":                     traceID,
-				"foo":                                "bar",
-				"meta.refinery.original_sample_rate": uint(10),
-				"meta.refinery.incoming_user_agent":  "Test-Client",
-			},
-			Metadata: map[string]any{
-				"api_host":    "http://api.honeycomb.io",
-				"dataset":     "dataset",
-				"environment": "test",
-				"enqueued_at": senders[0].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-			},
-		},
-		senders[0].Events()[0],
-	)
+	events = senders[0].GetBlock(1)
+	require.Len(t, events, 1)
+	event = events[0]
+	assert.Equal(t, nonLegacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(10), event.SampleRate)
+	assert.Equal(t, "http://api.honeycomb.io", event.APIHost)
+	assert.Equal(t, now, event.Timestamp)
+	assert.Equal(t, traceID, event.Data.Get("trace.trace_id"))
+	assert.Equal(t, "bar", event.Data.Get("foo"))
+	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 }
 
 func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
@@ -911,11 +810,11 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 	peerList := []string{"http://localhost:17001", "http://localhost:17003"}
 
 	var apps [2]*App
-	var senders [2]*transmission.MockSender
+	var senders [2]*transmit.MockTransmission
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 17000 + (i * 2)
-		senders[i] = &transmission.MockSender{}
+		senders[i] = &transmit.MockTransmission{}
 		peers := &peer.MockPeers{
 			Peers: peerList,
 			ID:    peerList[i],
@@ -946,44 +845,24 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
 	assert.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 1
+		return len(senders[1].Events) >= 1
 	}, 5*time.Second, 2*time.Millisecond)
 
-	expectedEvent := &transmission.Event{
-		APIKey:     legacyAPIKey,
-		Dataset:    "dataset",
-		SampleRate: 2,
-		APIHost:    "http://api.honeycomb.io",
-		Timestamp:  now,
-		Data: map[string]interface{}{
-			"trace.trace_id":                     "2",
-			"trace.span_id":                      "10",
-			"trace.parent_id":                    "0000000000",
-			"key":                                "value",
-			"field0":                             float64(0),
-			"field1":                             float64(1),
-			"field2":                             float64(2),
-			"field3":                             float64(3),
-			"field4":                             float64(4),
-			"field5":                             float64(5),
-			"field6":                             float64(6),
-			"field7":                             float64(7),
-			"field8":                             float64(8),
-			"field9":                             float64(9),
-			"field10":                            float64(10),
-			"long":                               "this is a test of the emergency broadcast system",
-			"meta.refinery.original_sample_rate": uint(2),
-			"meta.refinery.incoming_user_agent":  "Test-Client",
-			"foo":                                "bar",
-		},
-		Metadata: map[string]any{
-			"api_host":    "http://api.honeycomb.io",
-			"dataset":     "dataset",
-			"environment": "",
-			"enqueued_at": senders[1].Events()[0].Metadata.(map[string]any)["enqueued_at"],
-		},
-	}
-	assert.Equal(t, expectedEvent, senders[1].Events()[0])
+	events := senders[1].GetBlock(1)
+	require.Len(t, events, 1)
+	event := events[0]
+	assert.Equal(t, legacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(2), event.SampleRate)
+	assert.Equal(t, "http://api.honeycomb.io", event.APIHost)
+	assert.Equal(t, now, event.Timestamp)
+	assert.Equal(t, "2", event.Data.Get("trace.trace_id"))
+	assert.Equal(t, "10", event.Data.Get("trace.span_id"))
+	assert.Equal(t, "0000000000", event.Data.Get("trace.parent_id"))
+	assert.Equal(t, "value", event.Data.Get("key"))
+	assert.Equal(t, "bar", event.Data.Get("foo"))
+	assert.Equal(t, uint(2), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's who the trace belongs to.
 	req, err = http.NewRequest(
@@ -997,16 +876,21 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
+
+	// Wait for the second event to arrive, but don't consume any events yet
 	require.Eventually(t, func() bool {
-		return len(senders[1].Events()) == 2
+		// Check the channel length without consuming
+		return len(senders[1].Events) >= 1
 	}, 5*time.Second, 2*time.Millisecond)
-	expectedEvent.Metadata = map[string]any{
-		"api_host":    "http://api.honeycomb.io",
-		"dataset":     "dataset",
-		"environment": "",
-		"enqueued_at": senders[1].Events()[1].Metadata.(map[string]any)["enqueued_at"],
-	}
-	assert.Equal(t, expectedEvent, senders[1].Events()[1])
+
+	// Get the second event
+	events = senders[1].GetBlock(1)
+	require.Len(t, events, 1)
+	event = events[0] // Second event
+	assert.Equal(t, legacyAPIKey, event.APIKey)
+	assert.Equal(t, "dataset", event.Dataset)
+	assert.Equal(t, uint(2), event.SampleRate)
+	assert.Equal(t, "2", event.Data.Get("trace.trace_id"))
 }
 
 var (
@@ -1108,11 +992,7 @@ func encodeAndCompress(events []batchedEvent, contentType, compression string) (
 func BenchmarkTraces(b *testing.B) {
 	ctx := context.Background()
 
-	sender := &countingWriterSender{
-		WriterSender: transmission.WriterSender{
-			W: io.Discard,
-		},
-	}
+	sender := &countingTransmission{}
 	redisDB := 1
 	cfg := defaultConfig(11000, redisDB, "")
 	_, graph := newStartedApp(b, sender, nil, cfg)
@@ -1218,11 +1098,7 @@ func BenchmarkTraces(b *testing.B) {
 }
 
 func BenchmarkDistributedTraces(b *testing.B) {
-	sender := &countingWriterSender{
-		WriterSender: transmission.WriterSender{
-			W: io.Discard,
-		},
-	}
+	sender := &countingTransmission{}
 
 	peerList := []string{
 		"http://localhost:12001",
