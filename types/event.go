@@ -241,7 +241,7 @@ type Span struct {
 // IsDecicionSpan returns true if the span is a decision span based on
 // a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
-	return sp.Data.MetaRefineryMinSpan.HasValue && sp.Data.MetaRefineryMinSpan.Value
+	return sp.Data.MetaRefineryMinSpan.Value
 }
 
 // ExtractDecisionContext returns a new Event that contains only the data that is

@@ -1001,14 +1001,6 @@ func TestAddCountsToRoot(t *testing.T) {
 
 	// Try to get all available events
 	events := transmission.GetBlock(0) // 0 means get all available
-	t.Logf("Got %d events", len(events))
-
-	// Debug: check what we got
-	for i, ev := range events {
-		parentID := ev.Data.Get("trace.parent_id")
-		spanCount := ev.Data.Get("meta.span_count")
-		t.Logf("Event %d: parent_id=%v, span_count=%v", i, parentID, spanCount)
-	}
 
 	// Find the root span - it's the one without trace.parent_id
 	var rootEvent *types.Event

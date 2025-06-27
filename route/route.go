@@ -598,7 +598,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
 
 	// check if this is a probe from another refinery; if so, we should drop it
-	if ev.Data.MetaRefineryProbe.HasValue && ev.Data.MetaRefineryProbe.Value {
+	if ev.Data.MetaRefineryProbe.Value {
 		debugLog.Logf("dropping probe")
 		return nil
 	}
@@ -617,7 +617,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	span := &types.Span{
 		Event:   *ev,
 		TraceID: ev.Data.MetaTraceID,
-		IsRoot:  ev.Data.MetaRefineryRoot.HasValue && ev.Data.MetaRefineryRoot.Value,
+		IsRoot:  ev.Data.MetaRefineryRoot.Value,
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
