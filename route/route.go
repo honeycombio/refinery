@@ -478,7 +478,17 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	batchedEvents := make(batchedEvents, 0)
-	err = unmarshal(req, reqBod, &batchedEvents)
+
+	// Use optimized unmarshal for msgpack that extracts metadata in one pass
+	contentType := req.Header.Get("Content-Type")
+	if contentType == "application/x-msgpack" || contentType == "application/msgpack" {
+		traceIdFieldNames := r.Config.GetTraceIdFieldNames()
+		parentIdFieldNames := r.Config.GetParentIdFieldNames()
+		_, err = batchedEvents.UnmarshalMsgWithMetadata(reqBod, traceIdFieldNames, parentIdFieldNames)
+	} else {
+		err = unmarshal(req, reqBod, &batchedEvents)
+	}
+
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
@@ -595,10 +605,14 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// we do this early so can include all event types (span, event, log, etc)
 	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
 
-	// An error here is effectively a parsing error, so return it up the stack.
-	err := ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
-	if err != nil {
-		return err
+	// Extract metadata if not already done (e.g., for non-msgpack requests or individual events)
+	// For msgpack batch requests, metadata is extracted during unmarshaling for efficiency
+	if !ev.Data.HasExtractedMetadata() {
+		// An error here is effectively a parsing error, so return it up the stack.
+		err := ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
+		if err != nil {
+			return err
+		}
 	}
 
 	// check if this is a probe from another refinery; if so, we should drop it
@@ -683,6 +697,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// we're supposed to handle it normally
+	var err error
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)
 	} else {

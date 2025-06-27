@@ -3,9 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"iter"
 	"maps"
 
@@ -81,14 +79,169 @@ type Payload struct {
 	MetaRefineryExpiredTrace      nullableBool // meta.refinery.expired_trace
 }
 
+// HasExtractedMetadata returns true if metadata has already been extracted
+func (p *Payload) HasExtractedMetadata() bool {
+	// We consider metadata extracted if:
+	// 1. We have a trace ID (for trace events)
+	// 2. We have a signal type set (for any event type)
+	// 3. Both msgpMap and memoizedFields are empty (empty payload)
+	// Note: We can't just check msgpMap.Size() == 0 because JSON payloads won't have msgpMap data
+	return p.MetaTraceID != "" || p.MetaSignalType != "" || (p.msgpMap.Size() == 0 && len(p.memoizedFields) == 0)
+}
+
+// metadataExtractor is a helper type to track parent ID information during extraction
+type metadataExtractor struct {
+	parentIdFound bool
+	parentIdValue string
+}
+
+// extractMetadataFromBytes extracts metadata from msgpack data.
+// If consumed is non-nil, it will be set to the number of bytes consumed from the data.
+// The parentIdInfo is used to track parent ID state across calls.
+func (p *Payload) extractMetadataFromBytes(data []byte, traceIdFieldNames, parentIdFieldNames []string, consumed *int, parentIdInfo *metadataExtractor) error {
+	if parentIdInfo == nil {
+		parentIdInfo = &metadataExtractor{}
+	}
+
+	// Read the map header
+	mapSize, remaining, err := msgp.ReadMapHeaderBytes(data)
+	if err != nil {
+		return fmt.Errorf("failed to read msgpack map header: %w", err)
+	}
+
+	if consumed != nil {
+		*consumed = len(data) - len(remaining)
+	}
+
+	// Process all map entries
+	for i := uint32(0); i < mapSize; i++ {
+		// Read the key
+		var keyBytes []byte
+		keyBytes, remaining, err = msgp.ReadMapKeyZC(remaining)
+		if err != nil {
+			return fmt.Errorf("failed to read msgpack key: %w", err)
+		}
+
+		// Determine the value type
+		valueType := msgp.NextType(remaining)
+
+		// Check if this is a metadata field we care about
+		handled := false
+
+		// Handle string metadata fields
+		if valueType == msgp.StrType {
+			if bytes.HasPrefix(keyBytes, []byte("meta.")) {
+				switch {
+				case bytes.Equal(keyBytes, []byte(MetaSignalType)):
+					p.MetaSignalType, remaining, err = msgp.ReadStringBytes(remaining)
+					handled = true
+				case bytes.Equal(keyBytes, []byte(MetaTraceID)):
+					p.MetaTraceID, remaining, err = msgp.ReadStringBytes(remaining)
+					handled = true
+				case bytes.Equal(keyBytes, []byte(MetaAnnotationType)):
+					p.MetaAnnotationType, remaining, err = msgp.ReadStringBytes(remaining)
+					handled = true
+				case bytes.Equal(keyBytes, []byte(MetaRefineryIncomingUserAgent)):
+					p.MetaRefineryIncomingUserAgent, remaining, err = msgp.ReadStringBytes(remaining)
+					handled = true
+				case bytes.Equal(keyBytes, []byte(MetaRefineryForwarded)):
+					p.MetaRefineryForwarded, remaining, err = msgp.ReadStringBytes(remaining)
+					handled = true
+				}
+			} else if p.MetaTraceID == "" && sliceContains(traceIdFieldNames, keyBytes) {
+				p.MetaTraceID, remaining, err = msgp.ReadStringBytes(remaining)
+				handled = true
+			} else if !parentIdInfo.parentIdFound && sliceContains(parentIdFieldNames, keyBytes) {
+				var parentId string
+				parentId, remaining, err = msgp.ReadStringBytes(remaining)
+				if err == nil && parentId != "" {
+					parentIdInfo.parentIdFound = true
+					parentIdInfo.parentIdValue = parentId
+				}
+				handled = true
+			}
+		} else if valueType == msgp.BoolType {
+			// Handle boolean metadata fields
+			switch {
+			case bytes.Equal(keyBytes, []byte(MetaRefineryMinSpan)):
+				var val bool
+				val, remaining, err = msgp.ReadBoolBytes(remaining)
+				if err == nil {
+					p.MetaRefineryMinSpan.Set(val)
+				}
+				handled = true
+			case bytes.Equal(keyBytes, []byte(MetaRefineryExpiredTrace)):
+				var val bool
+				val, remaining, err = msgp.ReadBoolBytes(remaining)
+				if err == nil {
+					p.MetaRefineryExpiredTrace.Set(val)
+				}
+				handled = true
+			case bytes.Equal(keyBytes, []byte(MetaRefineryProbe)):
+				var val bool
+				val, remaining, err = msgp.ReadBoolBytes(remaining)
+				if err == nil {
+					p.MetaRefineryProbe.Set(val)
+				}
+				handled = true
+			case bytes.Equal(keyBytes, []byte(MetaRefineryRoot)):
+				var val bool
+				val, remaining, err = msgp.ReadBoolBytes(remaining)
+				if err == nil {
+					p.MetaRefineryRoot.Set(val)
+				}
+				handled = true
+			}
+		} else if valueType == msgp.IntType || valueType == msgp.UintType {
+			// Handle int64 metadata fields
+			switch {
+			case bytes.Equal(keyBytes, []byte(MetaAnnotationType)):
+				p.MetaAnnotationType, remaining, err = msgp.ReadInt64Bytes(remaining)
+				handled = true
+			case bytes.Equal(keyBytes, []byte(MetaRefinerySendBy)):
+				p.MetaRefinerySendBy, remaining, err = msgp.ReadInt64Bytes(remaining)
+				handled = true
+			case bytes.Equal(keyBytes, []byte(MetaRefinerySpanDataSize)):
+				p.MetaRefinerySpanDataSize, remaining, err = msgp.ReadInt64Bytes(remaining)
+				handled = true
+			}
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
+		}
+
+		// If we didn't handle this field as metadata, skip it
+		if !handled {
+			remaining, err = msgp.Skip(remaining)
+			if err != nil {
+				return fmt.Errorf("failed to skip value: %w", err)
+			}
+		}
+
+		if consumed != nil {
+			*consumed = len(data) - len(remaining)
+		}
+	}
+
+	// Determine if this is a root span
+	switch {
+	case p.MetaSignalType == "log":
+		p.MetaRefineryRoot.Set(false)
+	case len(parentIdFieldNames) > 0 && !p.MetaRefineryRoot.HasValue:
+		// If we found a parent ID, it's not a root span
+		p.MetaRefineryRoot.Set(!parentIdInfo.parentIdFound || parentIdInfo.parentIdValue == "")
+	}
+
+	return nil
+}
+
 // ExtractMetadata populates the cached metadata fields from the payload data.
 // This MUST be called manually after creating or unmarshaling a non-empty Payload
 // to populate the metadata fields. The traceIdFieldNames and parentIdFieldNames parameters
 // are optional and used to extract trace ID and determine if the span is a root span.
 func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string) error {
-	// Track if we found parent ID for root span determination
-	var parentIdFound bool
-	var parentIdValue string
+	parentIdInfo := &metadataExtractor{}
 
 	// For memoized fields, directly access the map
 	if p.memoizedFields != nil {
@@ -150,12 +303,12 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 				}
 
 				// Check if this is a parent ID field
-				if !parentIdFound {
+				if !parentIdInfo.parentIdFound {
 					for _, field := range parentIdFieldNames {
 						if key == field {
 							if v, ok := value.(string); ok && v != "" {
-								parentIdFound = true
-								parentIdValue = v
+								parentIdInfo.parentIdFound = true
+								parentIdInfo.parentIdValue = v
 							}
 							break
 						}
@@ -165,143 +318,18 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 		}
 	}
 
-	// For msgpMap fields, use the iterator
+	// For msgpMap fields, extract from the raw bytes
 	if p.msgpMap.Size() > 0 {
-		iter, err := p.msgpMap.Iterate()
-		if err != nil {
-			return fmt.Errorf("failed to create msgpack iterator: %w", err)
-		}
-
-		// Iterate through all fields looking for metadata
-		for {
-			key, fieldType, err := iter.NextKey()
-			if err != nil {
-				// EOF is expected when we've read all fields
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				return fmt.Errorf("failed to read msgpack key: %w", err)
-			}
-
-			// Use bytes comparison for known metadata fields to avoid string allocation
-			switch fieldType {
-			case FieldTypeString:
-				if bytes.HasPrefix(key, []byte("meta.")) {
-					switch {
-					case bytes.Equal(key, []byte(MetaSignalType)):
-						value, err := iter.ValueString()
-						if err != nil {
-							return fmt.Errorf("failed to read meta.signal_type value: %w", err)
-						}
-						p.MetaSignalType = value
-					case bytes.Equal(key, []byte(MetaTraceID)):
-						value, err := iter.ValueString()
-						if err != nil {
-							return fmt.Errorf("failed to read meta.trace_id value: %w", err)
-						}
-						p.MetaTraceID = value
-					case bytes.Equal(key, []byte(MetaAnnotationType)):
-						value, err := iter.ValueString()
-						if err != nil {
-							return fmt.Errorf("failed to read meta.annotation_type value: %w", err)
-						}
-						p.MetaAnnotationType = value
-					case bytes.Equal(key, []byte(MetaRefineryIncomingUserAgent)):
-						value, err := iter.ValueString()
-						if err != nil {
-							return fmt.Errorf("failed to read meta.refinery.incoming_user_agent value: %w", err)
-						}
-						p.MetaRefineryIncomingUserAgent = value
-					case bytes.Equal(key, []byte(MetaRefineryForwarded)):
-						value, err := iter.ValueString()
-						if err != nil {
-							return fmt.Errorf("failed to read meta.refinery.forwarded value: %w", err)
-						}
-						p.MetaRefineryForwarded = value
-					}
-				}
-				// Check if this is a trace ID field
-				if p.MetaTraceID == "" && sliceContains(traceIdFieldNames, key) {
-					value, err := iter.ValueString()
-					if err != nil {
-						return fmt.Errorf("failed to read trace ID field: %w", err)
-					}
-					p.MetaTraceID = value
-					break
-				}
-
-				// Check if this is a parent ID field
-				if !parentIdFound && sliceContains(parentIdFieldNames, key) {
-					value, err := iter.ValueString()
-					if err != nil {
-						return fmt.Errorf("failed to read parent ID field: %w", err)
-					}
-					if value != "" {
-						parentIdFound = true
-						parentIdValue = value
-					}
-					break
-				}
-			case FieldTypeBool:
-				switch {
-				case bytes.Equal(key, []byte(MetaRefineryMinSpan)):
-					value, err := iter.ValueBool()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.refinery.min_span value: %w", err)
-					}
-					p.MetaRefineryMinSpan.Set(value)
-				case bytes.Equal(key, []byte(MetaRefineryExpiredTrace)):
-					value, err := iter.ValueBool()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.refinery.expired_trace value: %w", err)
-					}
-					p.MetaRefineryExpiredTrace.Set(value)
-				case bytes.Equal(key, []byte(MetaRefineryProbe)):
-					value, err := iter.ValueBool()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.refinery.probe value: %w", err)
-					}
-					p.MetaRefineryProbe.Set(value)
-				case bytes.Equal(key, []byte(MetaRefineryRoot)):
-					value, err := iter.ValueBool()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.refinery.root value: %w", err)
-					}
-					p.MetaRefineryRoot.Set(value)
-				}
-			case FieldTypeInt64:
-				switch {
-				case bytes.Equal(key, []byte(MetaAnnotationType)):
-					value, err := iter.ValueInt64()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.annotation_type value: %w", err)
-					}
-					p.MetaAnnotationType = value
-				case bytes.Equal(key, []byte(MetaRefinerySendBy)):
-					value, err := iter.ValueInt64()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.refinery.send_by value: %w", err)
-					}
-					p.MetaRefinerySendBy = value
-				case bytes.Equal(key, []byte(MetaRefinerySpanDataSize)):
-					value, err := iter.ValueInt64()
-					if err != nil {
-						return fmt.Errorf("failed to read meta.refinery.span_data_size value: %w", err)
-					}
-					p.MetaRefinerySpanDataSize = value
-				}
-			}
-		}
+		return p.extractMetadataFromBytes(p.msgpMap.rawData, traceIdFieldNames, parentIdFieldNames, nil, parentIdInfo)
 	}
 
-	// Determine if this is a root span
-	// Log events are never root spans
+	// Handle root span detection for memoized-only payloads
 	switch {
 	case p.MetaSignalType == "log":
 		p.MetaRefineryRoot.Set(false)
 	case len(parentIdFieldNames) > 0 && !p.MetaRefineryRoot.HasValue:
 		// If we found a parent ID, it's not a root span
-		p.MetaRefineryRoot.Set(!parentIdFound || parentIdValue == "")
+		p.MetaRefineryRoot.Set(!parentIdInfo.parentIdFound || parentIdInfo.parentIdValue == "")
 	}
 
 	return nil
@@ -335,6 +363,25 @@ func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	ourData := bts[:len(bts)-len(remainder)]
 	p.msgpMap = MsgpPayloadMap{rawData: ourData}
 	return remainder, err
+}
+
+// UnmarshalMsgWithMetadata unmarshals the payload and extracts metadata in a single pass.
+// This is more efficient than calling UnmarshalMsg followed by ExtractMetadata separately.
+// It returns the remaining bytes after unmarshaling.
+func (p *Payload) UnmarshalMsgWithMetadata(bts []byte, traceIdFieldNames, parentIdFieldNames []string) (o []byte, err error) {
+	// Extract metadata and get consumed bytes
+	var consumed int
+	err = p.extractMetadataFromBytes(bts, traceIdFieldNames, parentIdFieldNames, &consumed, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the raw data
+	ourData := bts[:consumed]
+	p.msgpMap = MsgpPayloadMap{rawData: ourData}
+
+	// Return remainder
+	return bts[consumed:], nil
 }
 
 func (p *Payload) UnmarshalJSON(data []byte) error {

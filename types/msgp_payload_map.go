@@ -40,12 +40,14 @@ func (m *MsgpPayloadMap) Iterate() (msgpPayloadMapIter, error) {
 
 	return msgpPayloadMapIter{
 		remaining: remaining,
+		startLen:  len(remaining),
 	}, nil
 }
 
 type msgpPayloadMapIter struct {
 	remaining    []byte
 	pendingValue bool
+	startLen     int // track the starting length to calculate consumed bytes
 }
 
 // Returns the key string as []byte and type of the next map value.
@@ -168,6 +170,11 @@ func (m *msgpPayloadMapIter) valueSerializedBytesZC() ([]byte, error) {
 	}
 	m.remaining = remainder
 	return raw, err
+}
+
+// ConsumedBytes returns the number of bytes consumed so far by the iterator
+func (m *msgpPayloadMapIter) ConsumedBytes() int {
+	return m.startLen - len(m.remaining)
 }
 
 func msgpTypeToFieldType(t msgp.Type) (FieldType, error) {
