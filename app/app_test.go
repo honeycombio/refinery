@@ -274,8 +274,7 @@ func newStartedApp(
 	if mockTransmission != nil {
 		upstreamTransmission = mockTransmission
 	} else {
-		// Create DirectTransmission instead of DefaultTransmission
-		upstreamTransmission = transmit.NewDirectTransmission(metricsr, "upstream", 500, 100*time.Millisecond, http.DefaultTransport.(*http.Transport))
+		upstreamTransmission = transmit.NewDirectTransmission(metricsr, http.DefaultTransport.(*http.Transport), "upstream", 500, 100*time.Millisecond, true)
 	}
 
 	// Always create real peer transmission using DirectTransmission
@@ -285,7 +284,7 @@ func newStartedApp(
 			Timeout: 3 * time.Second,
 		}).Dial,
 	}
-	peerTransmissionWrapper := transmit.NewDirectTransmission(metricsr, "peer", int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, peerTransport)
+	peerTransmissionWrapper := transmit.NewDirectTransmission(metricsr, peerTransport, "peer", int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, false)
 
 	var g inject.Graph
 	err = g.Provide(

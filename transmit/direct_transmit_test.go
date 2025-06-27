@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/facebookgo/inject"
+	"github.com/jonboulle/clockwork"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -61,25 +62,28 @@ func newTestDirectAPIServer(t testing.TB, maxBatchSize int) *testDirectAPIServer
 	return server
 }
 
+// Not suitable for use in benchmarks
+func readHTTPBody(t testing.TB, r *http.Request) []byte {
+	t.Helper()
+
+	var reader io.Reader
+	if r.Header.Get("Content-Encoding") == "zstd" {
+		zr, err := zstd.NewReader(r.Body)
+		assert.NoError(t, err)
+		reader = zr
+	} else {
+		reader = r.Body
+	}
+	body, err := io.ReadAll(reader)
+	assert.NoError(t, err)
+	return body
+}
+
 func (t *testDirectAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
+	t.t.Helper()
 	defer r.Body.Close()
 
-	var reader io.Reader = r.Body
-
-	// Handle zstd compression (even though we don't expect it, keep for completeness)
-	if encoding := r.Header.Get("Content-Encoding"); encoding == "zstd" {
-		zr, err := zstd.NewReader(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			assert.NoError(t.t, err)
-			return
-		}
-		defer zr.Close()
-		reader = zr
-	}
-
-	body, err := io.ReadAll(reader)
-	assert.NoError(t.t, err)
+	body := readHTTPBody(t.t, r)
 	assert.Less(t.t, len(body), apiMaxBatchSize)
 
 	var events []receivedEvent
@@ -130,20 +134,7 @@ func (t *testDirectAPIServer) getEvents() []receivedEvent {
 
 // setupDirectTransmissionTest creates a configured DirectTransmission with mocks for testing
 func setupDirectTransmissionTest(t *testing.T) (*DirectTransmission, *metrics.MockMetrics, *logger.MockLogger) {
-	mockMetrics := &metrics.MockMetrics{}
-	mockMetrics.Start()
-
-	mockLogger := &logger.MockLogger{}
-
-	dt := NewDirectTransmission(mockMetrics, "test", 10, 20*time.Millisecond, http.DefaultTransport.(*http.Transport))
-	dt.Logger = mockLogger
-	dt.Version = "test-version"
-
-	err := dt.Start()
-	require.NoError(t, err)
-	t.Cleanup(func() { dt.Stop() })
-
-	return dt, mockMetrics, mockLogger
+	return setupDirectTransmissionTestWithBatchSize(t, 10, 20*time.Millisecond)
 }
 
 // setupDirectTransmissionTestWithBatchSize creates a configured DirectTransmission with specific batch size
@@ -153,7 +144,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(mockMetrics, "test", batchSize, batchTimeout, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", batchSize, batchTimeout, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -222,7 +213,7 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// Create a test server that returns individual errors in batch format
 		errorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Read the request to determine how many events were sent
-			body, _ := io.ReadAll(r.Body)
+			body := readHTTPBody(t, r)
 			// DirectTransmission only sends msgpack
 			eventCount, _, _ := msgp.ReadArrayHeaderBytes(body)
 
@@ -457,9 +448,12 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(mockMetrics, "test", 3, 50*time.Millisecond, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 3, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
+
+	clock := clockwork.NewFakeClock()
+	dt.Clock = clock
 
 	err := dt.Start()
 	require.NoError(t, err)
@@ -532,7 +526,7 @@ func TestDirectTransmission(t *testing.T) {
 		allEvents = append(allEvents, event)
 	}
 
-	// Dataset C: 2 events (should create 1 batch via timeout)
+	// Dataset C: 2 events (1 batch via timeout, 1 via stop)
 	for i := range 2 {
 		eventData := types.NewPayload(map[string]any{
 			"trace.trace_id": fmt.Sprintf("trace-c-%d", i),
@@ -554,14 +548,36 @@ func TestDirectTransmission(t *testing.T) {
 		allEvents = append(allEvents, event)
 	}
 
-	// Send all events, the stop to make sure everything is fully flushed.
-	for _, event := range allEvents {
+	// Send all but one of our events.
+	for _, event := range allEvents[:len(allEvents)-1] {
 		dt.EnqueueEvent(event)
 	}
+
+	// At this point, time hasn't advanced so we should't get any incomplete batches.
+	require.Eventually(t, func() bool {
+		// 4 events waiting for timeout
+		// 1 event yet to be enqueued
+		// 1 event is too large to send
+		return len(testServer.getEvents()) == len(allEvents)-6
+	}, 100*time.Millisecond, time.Millisecond)
+
+	// Now everything should dispatch.
+	clock.Advance(50 * time.Millisecond)
+
+	// Now the ticker should fire and we should send old events.
+	require.Eventually(t, func() bool {
+		// 1 event yet to be enqueued
+		// 1 event is too large to send
+		return len(testServer.getEvents()) == len(allEvents)-2
+	}, 100*time.Millisecond, time.Millisecond)
+
+	// Send the last event - should get dispatched during Stop()
+	dt.EnqueueEvent(allEvents[len(allEvents)-1])
 	err = dt.Stop()
 	require.NoError(t, err)
 
 	// Group events by dataset
+	// 1 event is too large to send
 	expectedEvents := len(allEvents) - 1
 	receivedEvents := testServer.getEvents()
 	require.Len(t, receivedEvents, expectedEvents)
@@ -657,7 +673,7 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(mockMetrics, "test", 50, 50*time.Millisecond, http.DefaultTransport.(*http.Transport))
+	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 50, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -719,6 +735,114 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(histogramQueueTime))
 }
 
+func TestDirectTransmissionBatchTiming(t *testing.T) {
+	testServer := newTestDirectAPIServer(t, 100)
+	metrics := &metrics.MockMetrics{}
+	metrics.Start()
+
+	// Create a fake clock
+	fakeClock := clockwork.NewFakeClock()
+
+	// Use a 400ms batch timeout for testing
+	dt := NewDirectTransmission(metrics, http.DefaultTransport.(*http.Transport), "test", 100, 400*time.Millisecond, true)
+	dt.Config = &config.MockConfig{}
+	dt.Logger = &logger.NullLogger{}
+	dt.Version = "test-version"
+	dt.Clock = fakeClock // Use the fake clock
+
+	err := dt.Start()
+	require.NoError(t, err)
+
+	// Send first event at time 0
+	event1 := &types.Event{
+		Context:    context.Background(),
+		APIHost:    testServer.server.URL,
+		APIKey:     "test-key",
+		Dataset:    "test-dataset",
+		SampleRate: 1,
+		Timestamp:  fakeClock.Now(),
+		Data:       types.NewPayload(map[string]any{"event": "first", "time": 0}),
+	}
+	dt.EnqueueEvent(event1)
+
+	// Advance time by 100ms (1/4 of batch timeout) - ticker should fire but batch should not be sent
+	fakeClock.Advance(100 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 0
+	}, 100*time.Millisecond, time.Millisecond, "Batch should not be sent yet (only 100ms old)")
+
+	// Send second event at 100ms
+	event2 := &types.Event{
+		Context:    context.Background(),
+		APIHost:    testServer.server.URL,
+		APIKey:     "test-key",
+		Dataset:    "test-dataset",
+		SampleRate: 1,
+		Timestamp:  fakeClock.Now(),
+		Data:       types.NewPayload(map[string]any{"event": "second", "time": 100}),
+	}
+	dt.EnqueueEvent(event2)
+
+	// Advance time by another 100ms (200ms total) - ticker fires again, batch still not old enough
+	fakeClock.Advance(100 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 0
+	}, 100*time.Millisecond, time.Millisecond, "Batch should not be sent yet (only 200ms old)")
+
+	// Advance time by another 100ms (300ms total) - ticker fires, still not old enough
+	fakeClock.Advance(100 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 0
+	}, 100*time.Millisecond, time.Millisecond, "Batch should not be sent yet (only 300ms old)")
+
+	// Advance time by another 100ms (400ms total) - ticker fires, batch is now old enough
+	fakeClock.Advance(100 * time.Millisecond)
+
+	// Wait for batch to be sent
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 2
+	}, 100*time.Millisecond, time.Millisecond, "Batch should be sent after 400ms")
+
+	receivedEvents := testServer.getEvents()
+	assert.Len(t, receivedEvents, 2, "Both events should be sent together")
+
+	// Verify both events were received
+	eventData := make([]string, 0)
+	for _, e := range receivedEvents {
+		eventData = append(eventData, e.Data["event"].(string))
+	}
+	assert.Contains(t, eventData, "first")
+	assert.Contains(t, eventData, "second")
+
+	// Send a third event - this should start a new batch
+	event3 := &types.Event{
+		Context:    context.Background(),
+		APIHost:    testServer.server.URL,
+		APIKey:     "test-key",
+		Dataset:    "test-dataset",
+		SampleRate: 1,
+		Timestamp:  fakeClock.Now(),
+		Data:       types.NewPayload(map[string]any{"event": "third", "time": 400}),
+	}
+	dt.EnqueueEvent(event3)
+
+	// Advance time by 300ms - not enough for the new batch to be sent
+	fakeClock.Advance(300 * time.Millisecond)
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 2
+	}, 100*time.Millisecond, time.Millisecond, "Third event should not be sent yet")
+
+	// Advance time by another 100ms (400ms since third event) - now it should be sent
+	fakeClock.Advance(100 * time.Millisecond)
+
+	assert.Eventually(t, func() bool {
+		return len(testServer.getEvents()) == 3
+	}, 100*time.Millisecond, time.Millisecond, "Third event should be sent after its batch timeout")
+
+	err = dt.Stop()
+	require.NoError(t, err)
+}
+
 // Lightweight benchmark HTTP server
 type benchmarkAPIServer struct {
 	server     *httptest.Server
@@ -759,19 +883,31 @@ func (s *benchmarkAPIServer) handleBatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	var reader io.Reader = r.Body
 	if encoding != "" {
-		s.t.Errorf("unsupported compression: %s", encoding)
-		http.Error(w, "unsupported compression", http.StatusBadRequest)
-		return
+		if encoding != "zstd" {
+			s.t.Errorf("unsupported compression: %s", encoding)
+			http.Error(w, "unsupported compression", http.StatusBadRequest)
+			return
+		}
+		zr, err := zstd.NewReader(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			assert.NoError(s.t, err)
+			return
+		}
+		defer zr.Close()
+		reader = zr
 	}
 
 	// Read the entire request body
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(reader)
 	if err != nil {
 		s.t.Error(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	r.Body.Close()
 
 	// Use msgp to efficiently count array elements without full decoding
 	var arraySize uint32
@@ -924,10 +1060,11 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 
 				dt := NewDirectTransmission(
 					mockMetrics,
+					httpTransport,
 					"benchmark",
 					libhoney.DefaultMaxBatchSize,
 					libhoney.DefaultBatchTimeout,
-					httpTransport,
+					false,
 				)
 				dt.Logger = &logger.NullLogger{}
 				dt.Version = "benchmark"
@@ -955,7 +1092,7 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 				expectedCount := int64(b.N)
 				if !assert.Eventually(b, func() bool {
 					return server.GetEventCount() == expectedCount
-				}, 2*time.Second, 10*time.Millisecond) {
+				}, 2*time.Second, time.Millisecond) {
 					receivedCount := server.GetEventCount()
 					b.Errorf("Expected %d events, but server received %d", expectedCount, receivedCount)
 				}
@@ -1023,7 +1160,7 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 				expectedCount := int64(b.N)
 				if !assert.Eventually(b, func() bool {
 					return server.GetEventCount() == expectedCount
-				}, 2*time.Second, 10*time.Millisecond) {
+				}, 2*time.Second, time.Millisecond) {
 					receivedCount := server.GetEventCount()
 					b.Errorf("Expected %d events, but server received %d", expectedCount, receivedCount)
 				}
