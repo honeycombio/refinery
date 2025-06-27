@@ -100,7 +100,8 @@ func TestPayload(t *testing.T) {
 		var fromJSON Payload
 		err = json.Unmarshal(asJSON, &fromJSON)
 		require.NoError(t, err)
-		fromJSON.ExtractMetadata(nil, nil)
+		err = fromJSON.ExtractMetadata(nil, nil)
+		require.NoError(t, err)
 
 		// round-tripping through JSON turns our ints into floats
 		expectedFromJSON := maps.Collect(ph.All())
@@ -110,7 +111,8 @@ func TestPayload(t *testing.T) {
 	}
 
 	ph = NewPayload(data)
-	ph.ExtractMetadata(nil, nil)
+	err := ph.ExtractMetadata(nil, nil)
+	require.NoError(t, err)
 	t.Run("from_map", doTest)
 
 	ph = Payload{}
@@ -192,6 +194,21 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 		assert.Equal(t, "log", ph.MetaSignalType)
 		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
 		assert.False(t, ph.MetaRefineryRoot.Value, "Log events should never be root")
+	})
+}
+
+func TestPayloadExtractMetadataError(t *testing.T) {
+	t.Run("invalid msgpack data", func(t *testing.T) {
+		// Create a payload with invalid msgpack data
+		p := Payload{
+			msgpMap: MsgpPayloadMap{
+				rawData: []byte{0xFF, 0xFF, 0xFF}, // Invalid msgpack
+			},
+		}
+
+		err := p.ExtractMetadata(nil, nil)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create msgpack iterator")
 	})
 }
 

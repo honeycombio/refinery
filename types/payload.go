@@ -3,7 +3,9 @@ package types
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"iter"
 	"maps"
 
@@ -83,7 +85,7 @@ type Payload struct {
 // This MUST be called manually after creating or unmarshaling a non-empty Payload
 // to populate the metadata fields. The traceIdFieldNames and parentIdFieldNames parameters
 // are optional and used to extract trace ID and determine if the span is a root span.
-func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string) {
+func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string) error {
 	// Track if we found parent ID for root span determination
 	var parentIdFound bool
 	var parentIdValue string
@@ -181,14 +183,18 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 	if p.msgpMap.Size() > 0 {
 		iter, err := p.msgpMap.Iterate()
 		if err != nil {
-			return
+			return fmt.Errorf("failed to create msgpack iterator: %w", err)
 		}
 
 		// Iterate through all fields looking for metadata
 		for {
 			key, fieldType, err := iter.NextKey()
 			if err != nil {
-				break
+				// EOF is expected when we've read all fields
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				return fmt.Errorf("failed to read msgpack key: %w", err)
 			}
 
 			// Use bytes comparison for known metadata fields to avoid string allocation
@@ -197,38 +203,54 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 				if bytes.HasPrefix(key, []byte("meta.")) {
 					switch {
 					case bytes.Equal(key, []byte(MetaSignalType)):
-						if value, err := iter.ValueString(); err == nil {
-							p.MetaSignalType = value
+						value, err := iter.ValueString()
+						if err != nil {
+							return fmt.Errorf("failed to read meta.signal_type value: %w", err)
 						}
+						p.MetaSignalType = value
 					case bytes.Equal(key, []byte(MetaTraceID)):
-						if value, err := iter.ValueString(); err == nil {
-							p.MetaTraceID = value
+						value, err := iter.ValueString()
+						if err != nil {
+							return fmt.Errorf("failed to read meta.trace_id value: %w", err)
 						}
+						p.MetaTraceID = value
 					case bytes.Equal(key, []byte(MetaAnnotationType)):
-						if value, err := iter.ValueString(); err == nil {
-							p.MetaAnnotationType = value
+						value, err := iter.ValueString()
+						if err != nil {
+							return fmt.Errorf("failed to read meta.annotation_type value: %w", err)
 						}
+						p.MetaAnnotationType = value
 					case bytes.Equal(key, []byte(MetaRefineryIncomingUserAgent)):
-						if value, err := iter.ValueString(); err == nil {
-							p.MetaRefineryIncomingUserAgent = value
+						value, err := iter.ValueString()
+						if err != nil {
+							return fmt.Errorf("failed to read meta.refinery.incoming_user_agent value: %w", err)
 						}
+						p.MetaRefineryIncomingUserAgent = value
 					case bytes.Equal(key, []byte(MetaRefineryForwarded)):
-						if value, err := iter.ValueString(); err == nil {
-							p.MetaRefineryForwarded = value
+						value, err := iter.ValueString()
+						if err != nil {
+							return fmt.Errorf("failed to read meta.refinery.forwarded value: %w", err)
 						}
+						p.MetaRefineryForwarded = value
 					}
 				}
 				// Check if this is a trace ID field
 				if p.MetaTraceID == "" && sliceContains(traceIdFieldNames, key) {
-					if value, err := iter.ValueString(); err == nil {
-						p.MetaTraceID = value
+					value, err := iter.ValueString()
+					if err != nil {
+						return fmt.Errorf("failed to read trace ID field: %w", err)
 					}
+					p.MetaTraceID = value
 					break
 				}
 
 				// Check if this is a parent ID field
 				if !parentIdFound && sliceContains(parentIdFieldNames, key) {
-					if value, err := iter.ValueString(); err == nil && value != "" {
+					value, err := iter.ValueString()
+					if err != nil {
+						return fmt.Errorf("failed to read parent ID field: %w", err)
+					}
+					if value != "" {
 						parentIdFound = true
 						parentIdValue = value
 					}
@@ -237,32 +259,44 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 			case FieldTypeBool:
 				switch {
 				case bytes.Equal(key, []byte(MetaRefineryMinSpan)):
-					if value, err := iter.ValueBool(); err == nil {
-						p.MetaRefineryMinSpan.Set(value)
+					value, err := iter.ValueBool()
+					if err != nil {
+						return fmt.Errorf("failed to read meta.refinery.min_span value: %w", err)
 					}
+					p.MetaRefineryMinSpan.Set(value)
 				case bytes.Equal(key, []byte(MetaRefineryExpiredTrace)):
-					if value, err := iter.ValueBool(); err == nil {
-						p.MetaRefineryExpiredTrace.Set(value)
+					value, err := iter.ValueBool()
+					if err != nil {
+						return fmt.Errorf("failed to read meta.refinery.expired_trace value: %w", err)
 					}
+					p.MetaRefineryExpiredTrace.Set(value)
 				case bytes.Equal(key, []byte(MetaRefineryProbe)):
-					if value, err := iter.ValueBool(); err == nil {
-						p.MetaRefineryProbe.Set(value)
+					value, err := iter.ValueBool()
+					if err != nil {
+						return fmt.Errorf("failed to read meta.refinery.probe value: %w", err)
 					}
+					p.MetaRefineryProbe.Set(value)
 				case bytes.Equal(key, []byte(MetaRefineryRoot)):
-					if value, err := iter.ValueBool(); err == nil {
-						p.MetaRefineryRoot.Set(value)
+					value, err := iter.ValueBool()
+					if err != nil {
+						return fmt.Errorf("failed to read meta.refinery.root value: %w", err)
 					}
+					p.MetaRefineryRoot.Set(value)
 				}
 			case FieldTypeInt64:
 				switch {
 				case bytes.Equal(key, []byte(MetaRefinerySendBy)):
-					if value, err := iter.ValueInt64(); err == nil {
-						p.MetaRefinerySendBy = value
+					value, err := iter.ValueInt64()
+					if err != nil {
+						return fmt.Errorf("failed to read meta.refinery.send_by value: %w", err)
 					}
+					p.MetaRefinerySendBy = value
 				case bytes.Equal(key, []byte(MetaRefinerySpanDataSize)):
-					if value, err := iter.ValueInt64(); err == nil {
-						p.MetaRefinerySpanDataSize = value
+					value, err := iter.ValueInt64()
+					if err != nil {
+						return fmt.Errorf("failed to read meta.refinery.span_data_size value: %w", err)
 					}
+					p.MetaRefinerySpanDataSize = value
 				}
 			}
 		}
@@ -277,6 +311,8 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 		// If we found a parent ID, it's not a root span
 		p.MetaRefineryRoot.Set(!parentIdFound || parentIdValue == "")
 	}
+
+	return nil
 }
 
 // NewPayload creates a new Payload from a map of fields. This is not populate

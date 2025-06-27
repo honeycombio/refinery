@@ -595,7 +595,11 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// we do this early so can include all event types (span, event, log, etc)
 	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
 
-	ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
+	// An error here is effectively a parsing error, so return it up the stack.
+	err := ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
+	if err != nil {
+		return err
+	}
 
 	// check if this is a probe from another refinery; if so, we should drop it
 	if ev.Data.MetaRefineryProbe.Value {
@@ -679,7 +683,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// we're supposed to handle it normally
-	var err error
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)
 	} else {
