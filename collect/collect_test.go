@@ -2221,7 +2221,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 		}),
 	}
 	// Set metadata fields directly
-	expected.Data.MetaAnnotationType = strconv.Itoa(int(types.SpanAnnotationTypeUnknown))
+	expected.Data.MetaAnnotationType = int64(types.SpanAnnotationTypeUnknown)
 	expected.Data.MetaRefineryMinSpan.Set(true)
 	expected.Data.MetaRefineryRoot.Set(false)
 	expected.Data.MetaRefinerySpanDataSize = 87

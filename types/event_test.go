@@ -166,7 +166,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		"meta.trace_id":                sp.TraceID,
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         strconv.Itoa(int(SpanAnnotationTypeSpanEvent)),
+		"meta.annotation_type":         int64(SpanAnnotationTypeSpanEvent),
 		"meta.refinery.span_data_size": int64(38),
 	}
 	actualData := maps.Collect(got.Data.All())

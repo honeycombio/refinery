@@ -3,7 +3,6 @@ package types
 import (
 	"context"
 	"slices"
-	"strconv"
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -255,7 +254,7 @@ func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx.Data.MetaTraceID = sp.TraceID
 	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
 	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
-	decisionCtx.Data.MetaAnnotationType = strconv.Itoa(int(sp.AnnotationType()))
+	decisionCtx.Data.MetaAnnotationType = int64(sp.AnnotationType())
 	decisionCtx.Data.MetaRefinerySpanDataSize = int64(dataSize)
 
 	if sp.Data.MetaRefinerySendBy > 0 {
@@ -306,11 +305,20 @@ func (sp *Span) AnnotationType() SpanAnnotationType {
 	if sp.annotationType != SpanAnnotationTypeUnSet {
 		return sp.annotationType
 	}
-	switch sp.Data.MetaAnnotationType {
-	case "span_event":
-		sp.annotationType = SpanAnnotationTypeSpanEvent
-	case "link":
-		sp.annotationType = SpanAnnotationTypeLink
+	switch v := sp.Data.MetaAnnotationType.(type) {
+	case string:
+		switch v {
+		case "span_event":
+			sp.annotationType = SpanAnnotationTypeSpanEvent
+		case "link":
+			sp.annotationType = SpanAnnotationTypeLink
+		default:
+			sp.annotationType = SpanAnnotationTypeUnknown
+		}
+	case int64:
+		sp.annotationType = SpanAnnotationType(v)
+	case int:
+		sp.annotationType = SpanAnnotationType(v)
 	default:
 		sp.annotationType = SpanAnnotationTypeUnknown
 	}
