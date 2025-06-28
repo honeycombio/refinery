@@ -25,8 +25,8 @@ type WindowedThroughputSampler struct {
 	maxKeys              int
 	prefix               string
 
-	key       *traceKey
-	keyFields []string
+	key                      *traceKey
+	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.WindowedThroughput
 	metricsRecorder *dynsamplerMetricsRecorder
@@ -48,7 +48,7 @@ func (d *WindowedThroughputSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "windowedthroughput"
-	d.keyFields = d.Config.GetSamplingFields()
+	d.keyFields, d.nonRootFields = getKeyFields(d.Config.GetSamplingFields())
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.WindowedThroughput{
@@ -101,6 +101,7 @@ func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint
 
 	return rate, shouldKeep, d.prefix, key
 }
-func (d *WindowedThroughputSampler) GetKeyFields() []string {
-	return d.keyFields
+
+func (d *WindowedThroughputSampler) GetKeyFields() ([]string, []string) {
+	return d.keyFields, d.nonRootFields
 }

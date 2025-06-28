@@ -746,8 +746,70 @@ func TestGetDatasetFromRequest(t *testing.T) {
 		})
 	}
 }
-func TestIsRootSpan(t *testing.T) {
-	tesCases := []struct {
+func TestExtractMetadataTraceID(t *testing.T) {
+	testCases := []struct {
+		name     string
+		event    types.Event
+		expected string
+	}{
+		{
+			name: "trace id from meta.trace_id",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"meta.trace_id": "trace123",
+				}),
+			},
+			expected: "trace123",
+		},
+		{
+			name: "trace id from trace.trace_id field",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"trace.trace_id": "trace456",
+				}),
+			},
+			expected: "trace456",
+		},
+		{
+			name: "trace id from traceId field",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"traceId": "trace789",
+				}),
+			},
+			expected: "trace789",
+		},
+		{
+			name: "no trace id",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{}),
+			},
+			expected: "",
+		},
+		{
+			name: "prefer meta.trace_id over other fields",
+			event: types.Event{
+				Data: types.NewPayload(map[string]interface{}{
+					"meta.trace_id":  "meta-trace",
+					"trace.trace_id": "field-trace",
+				}),
+			},
+			expected: "meta-trace",
+		},
+	}
+
+	traceIdFieldNames := []string{"trace.trace_id", "traceId"}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.event.Data.ExtractMetadata(traceIdFieldNames, nil)
+			assert.Equal(t, tc.expected, tc.event.Data.MetaTraceID)
+		})
+	}
+}
+
+func TestExtractMetadataRootSpan(t *testing.T) {
+	testCases := []struct {
 		name     string
 		event    types.Event
 		expected bool
@@ -788,36 +850,39 @@ func TestIsRootSpan(t *testing.T) {
 		},
 	}
 
-	cfg := &config.MockConfig{
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-	}
+	parentIdFieldNames := []string{"trace.parent_id", "parentId"}
 
-	for _, tc := range tesCases {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, isRootSpan(&tc.event, cfg))
+			tc.event.Data.ExtractMetadata(nil, parentIdFieldNames)
+			assert.True(t, tc.event.Data.MetaRefineryRoot.HasValue)
+			assert.Equal(t, tc.expected, tc.event.Data.MetaRefineryRoot.Value)
 		})
 	}
 }
 
 func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("no incoming user agent", func(t *testing.T) {
+		payload := types.NewPayload(map[string]interface{}{})
 		event := &types.Event{
-			Data: types.NewPayload(map[string]interface{}{}),
+			Data: payload,
 		}
 
 		addIncomingUserAgent(event, "test-agent")
-		require.Equal(t, "test-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		require.Equal(t, "test-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("existing incoming user agent", func(t *testing.T) {
+		payload := types.NewPayload(map[string]interface{}{
+			"meta.refinery.incoming_user_agent": "test-agent",
+		})
+		payload.ExtractMetadata(nil, nil)
 		event := &types.Event{
-			Data: types.NewPayload(map[string]interface{}{
-				"meta.refinery.incoming_user_agent": "test-agent",
-			}),
+			Data: payload,
 		}
 
 		addIncomingUserAgent(event, "another-test-agent")
-		require.Equal(t, "test-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		require.Equal(t, "test-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 }
 
@@ -1110,9 +1175,85 @@ func (d *discardResponseWriter) WriteHeader(statusCode int) {
 	// Discard status code
 }
 
+func createBatchEventsWithLargeAttributes(numEvents int) batchedEvents {
+	now := time.Now().UTC()
+
+	// Large text values for testing
+	largeText := strings.Repeat("x", 1000)
+	mediumText := strings.Repeat("y", 500)
+	smallText := strings.Repeat("z", 100)
+
+	batchEvents := make(batchedEvents, numEvents)
+
+	for i := 0; i < numEvents; i++ {
+		data := make(map[string]interface{})
+
+		// Core tracing fields (always present)
+		traceID := fmt.Sprintf("trace-%040d", i)
+		spanID := fmt.Sprintf("span-%018d", i)
+		parentID := ""
+		if i%3 != 0 { // 2/3 of spans have parents
+			parentID = fmt.Sprintf("span-%018d", i-1)
+		}
+
+		data["trace.trace_id"] = traceID
+		data["trace.span_id"] = spanID
+		data["trace.parent_id"] = parentID
+		data["service.name"] = fmt.Sprintf("service-%d", i%3)
+		data["duration_ms"] = 100.0
+
+		data["meta.signal_type"] = "trace"
+		data["meta.annotation_type"] = "span"
+		data["meta.refinery.incoming_user_agent"] = "refinery/v2.4.1"
+
+		// Large text fields (3 large fields)
+		data["large_field_1"] = largeText
+		data["large_field_2"] = mediumText
+		data["large_field_3"] = smallText
+
+		// many string, float, int, and bool fields
+		for j := 0; j < 25; j++ {
+			data[fmt.Sprintf("string.field_%d", j)] = fmt.Sprintf("string_value_%d", j)
+			data[fmt.Sprintf("int.field_%d", j)] = int64(j)
+			data[fmt.Sprintf("float.field_%d", j)] = float64(j)
+			data[fmt.Sprintf("bool.field_%d", j)] = (i+j)%2 == 0
+		}
+
+		// Array field
+		data["tags"] = []string{
+			fmt.Sprintf("tag_%d", i),
+			fmt.Sprintf("tag_%d", i+1),
+			fmt.Sprintf("tag_%d", i+2),
+		}
+
+		// Nested map field
+		data["custom.metadata"] = map[string]interface{}{
+			"nested_field_1": map[string]interface{}{
+				"key1": fmt.Sprintf("value_%d", i),
+				"key2": i * 10,
+				"key3": i%2 == 0,
+			},
+			"nested_field_2": map[string]interface{}{
+				"key1": true,
+				"key2": false,
+				"key3": i + 100,
+			},
+		}
+
+		ts := now.Add(time.Duration(i*100) * time.Millisecond)
+		batchEvents[i] = batchedEvent{
+			MsgPackTimestamp: &ts,
+			SampleRate:       2,
+			Data:             types.NewPayload(data),
+		}
+	}
+
+	return batchEvents
+}
+
 func BenchmarkRouterBatch(b *testing.B) {
 	router := newBatchRouter(b)
-	batchEvents := createBatchEvents()
+	batchEvents := createBatchEventsWithLargeAttributes(3)
 	batchMsgpack, err := msgpack.Marshal(batchEvents)
 	require.NoError(b, err)
 

@@ -531,7 +531,7 @@ func TestPeerRouting(t *testing.T) {
 	assert.Equal(t, "value", event.Data.Get("key"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
 	assert.Equal(t, uint(2), event.Data.Get("meta.refinery.original_sample_rate"))
-	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
+	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's who the trace belongs to.
 	req, err = http.NewRequest(
@@ -657,7 +657,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(t, "1", event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
 	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
-	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
+	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's the host this trace belongs to.
 
@@ -695,7 +695,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(t, "1", event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
 	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
-	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
+	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 }
 
 func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
@@ -761,7 +761,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, traceID, event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
 	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
-	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
+	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0.
 
@@ -799,7 +799,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, traceID, event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
 	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
-	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
+	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 }
 
 func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
@@ -861,7 +861,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 	assert.Equal(t, "value", event.Data.Get("key"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
 	assert.Equal(t, uint(2), event.Data.Get("meta.refinery.original_sample_rate"))
-	assert.Equal(t, "Test-Client", event.Data.Get("meta.refinery.incoming_user_agent"))
+	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's who the trace belongs to.
 	req, err = http.NewRequest(
