@@ -496,7 +496,7 @@ func TestUnmarshalMsgWithMetadata(t *testing.T) {
 	assert.False(t, p.MetaRefineryExpiredTrace.Value)
 
 	// Verify HasExtractedMetadata returns true
-	assert.True(t, p.HasExtractedMetadata())
+	assert.True(t, p.hasExtractedMetadata)
 
 	// Verify we can still access regular fields
 	assert.Equal(t, "value", p.Get("regular_field"))
