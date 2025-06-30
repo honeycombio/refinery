@@ -225,44 +225,6 @@ func TestPayloadMetaAnnotationType(t *testing.T) {
 		assert.Equal(t, "span_event", ph.Get("meta.annotation_type"))
 	})
 
-	t.Run("handles int64 values", func(t *testing.T) {
-		ph := NewPayload(map[string]any{
-			"meta.annotation_type": int64(1),
-		})
-		err := ph.ExtractMetadata(nil, nil)
-		require.NoError(t, err)
-
-		assert.Equal(t, int64(1), ph.MetaAnnotationType)
-		assert.Equal(t, int64(1), ph.Get("meta.annotation_type"))
-	})
-
-	t.Run("handles int values", func(t *testing.T) {
-		ph := NewPayload(map[string]any{
-			"meta.annotation_type": int64(2),
-		})
-		err := ph.ExtractMetadata(nil, nil)
-		require.NoError(t, err)
-
-		assert.Equal(t, int64(2), ph.MetaAnnotationType)
-		assert.Equal(t, int64(2), ph.Get("meta.annotation_type"))
-	})
-
-	t.Run("Set method handles both types", func(t *testing.T) {
-		ph := NewPayload(map[string]any{})
-
-		// Set as string
-		ph.Set("meta.annotation_type", "link")
-		assert.Equal(t, "link", ph.MetaAnnotationType)
-
-		// Set as int64
-		ph.Set("meta.annotation_type", int64(1))
-		assert.Equal(t, int64(1), ph.MetaAnnotationType)
-
-		// Set as int
-		ph.Set("meta.annotation_type", 2)
-		assert.Equal(t, 2, ph.MetaAnnotationType)
-	})
-
 	t.Run("marshaling preserves type", func(t *testing.T) {
 		// Test string marshaling
 		ph1 := NewPayload(map[string]any{})
@@ -278,21 +240,6 @@ func TestPayloadMetaAnnotationType(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "span_event", ph2.MetaAnnotationType)
-
-		// Test int64 marshaling
-		ph3 := NewPayload(map[string]any{})
-		ph3.MetaAnnotationType = int64(1)
-
-		msgpData, err = ph3.MarshalMsg(nil)
-		require.NoError(t, err)
-
-		ph4 := Payload{}
-		_, err = ph4.UnmarshalMsg(msgpData)
-		require.NoError(t, err)
-		err = ph4.ExtractMetadata(nil, nil)
-		require.NoError(t, err)
-
-		assert.Equal(t, int64(1), ph4.MetaAnnotationType)
 	})
 }
 
@@ -330,21 +277,6 @@ func TestPayloadUnmarshalMsgWithMetadata(t *testing.T) {
 
 		// Verify regular fields are still accessible
 		assert.Equal(t, "value1", p.Get("regular_field"))
-	})
-
-	t.Run("handles int64 annotation type", func(t *testing.T) {
-		data := map[string]any{
-			"meta.annotation_type": int64(2),
-		}
-
-		msgpData, err := msgpack.Marshal(data)
-		require.NoError(t, err)
-
-		var p Payload
-		_, err = p.UnmarshalMsgWithMetadata(msgpData, nil, nil)
-		require.NoError(t, err)
-
-		assert.Equal(t, int64(2), p.MetaAnnotationType)
 	})
 
 	t.Run("handles remainder correctly", func(t *testing.T) {

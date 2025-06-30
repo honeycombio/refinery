@@ -254,7 +254,7 @@ func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx.Data.MetaTraceID = sp.TraceID
 	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
 	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
-	decisionCtx.Data.MetaAnnotationType = int64(sp.AnnotationType())
+	decisionCtx.Data.MetaAnnotationType = sp.AnnotationType().String()
 	decisionCtx.Data.MetaRefinerySpanDataSize = int64(dataSize)
 
 	if sp.Data.MetaRefinerySendBy > 0 {
@@ -300,25 +300,32 @@ const (
 	SpanAnnotationTypeLink
 )
 
+func (sat SpanAnnotationType) String() string {
+	switch sat {
+	case SpanAnnotationTypeUnSet:
+		return ""
+	case SpanAnnotationTypeUnknown:
+		return "unknown"
+	case SpanAnnotationTypeSpanEvent:
+		return "span_event"
+	case SpanAnnotationTypeLink:
+		return "link"
+	default:
+		return ""
+	}
+}
+
 // GetSpanAnnotationType returns the type of annotation this span is.
 func (sp *Span) AnnotationType() SpanAnnotationType {
 	if sp.annotationType != SpanAnnotationTypeUnSet {
 		return sp.annotationType
 	}
-	switch v := sp.Data.MetaAnnotationType.(type) {
-	case string:
-		switch v {
-		case "span_event":
-			sp.annotationType = SpanAnnotationTypeSpanEvent
-		case "link":
-			sp.annotationType = SpanAnnotationTypeLink
-		default:
-			sp.annotationType = SpanAnnotationTypeUnknown
-		}
-	case int64:
-		sp.annotationType = SpanAnnotationType(v)
-	case int:
-		sp.annotationType = SpanAnnotationType(v)
+
+	switch sp.Data.MetaAnnotationType {
+	case "span_event":
+		sp.annotationType = SpanAnnotationTypeSpanEvent
+	case "link":
+		sp.annotationType = SpanAnnotationTypeLink
 	default:
 		sp.annotationType = SpanAnnotationTypeUnknown
 	}

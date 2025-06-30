@@ -71,7 +71,7 @@ type Payload struct {
 	// Cached metadata fields for efficient access
 	MetaSignalType                string       // meta.signal_type
 	MetaTraceID                   string       // meta.trace_id
-	MetaAnnotationType            any          // meta.annotation_type (can be string or int64)
+	MetaAnnotationType            string       // meta.annotation_type
 	MetaRefineryProbe             nullableBool // meta.refinery.probe
 	MetaRefineryRoot              nullableBool // meta.refinery.root
 	MetaRefineryIncomingUserAgent string       // meta.refinery.incoming_user_agent
@@ -181,9 +181,6 @@ func (p *Payload) extractMetadataFromBytes(data []byte, traceIdFieldNames, paren
 		case msgp.IntType, msgp.UintType:
 			// Handle int64 metadata fields
 			switch {
-			case bytes.Equal(keyBytes, []byte(MetaAnnotationType)):
-				p.MetaAnnotationType, remaining, err = msgp.ReadInt64Bytes(remaining)
-				handled = true
 			case bytes.Equal(keyBytes, []byte(MetaRefinerySendBy)):
 				p.MetaRefinerySendBy, remaining, err = msgp.ReadInt64Bytes(remaining)
 				handled = true
@@ -244,7 +241,9 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 					p.MetaTraceID = v
 				}
 			case MetaAnnotationType:
-				p.MetaAnnotationType = value
+				if v, ok := value.(string); ok {
+					p.MetaAnnotationType = v
+				}
 			case MetaRefineryProbe:
 				if v, ok := value.(bool); ok {
 					p.MetaRefineryProbe.Set(v)
@@ -547,7 +546,9 @@ func (p *Payload) Set(key string, value any) {
 			p.MetaTraceID = v
 		}
 	case MetaAnnotationType:
-		p.MetaAnnotationType = value
+		if v, ok := value.(string); ok {
+			p.MetaAnnotationType = v
+		}
 	case MetaRefineryProbe:
 		if v, ok := value.(bool); ok {
 			p.MetaRefineryProbe.Set(v)
@@ -609,7 +610,7 @@ func (p *Payload) All() iter.Seq2[string, any] {
 				return
 			}
 		}
-		if p.MetaAnnotationType != nil {
+		if p.MetaAnnotationType != "" {
 			if !yield(MetaAnnotationType, p.MetaAnnotationType) {
 				return
 			}
@@ -782,17 +783,9 @@ func (p Payload) MarshalMsg(buf []byte) ([]byte, error) {
 		buf = msgp.AppendString(buf, p.MetaTraceID)
 		actualCount++
 	}
-	if p.MetaAnnotationType != nil {
+	if p.MetaAnnotationType != "" {
 		buf = msgp.AppendString(buf, MetaAnnotationType)
-		switch v := p.MetaAnnotationType.(type) {
-		case string:
-			buf = msgp.AppendString(buf, v)
-		case int64:
-			buf = msgp.AppendInt64(buf, v)
-		default:
-			// This shouldn't happen, but handle it gracefully
-			buf = msgp.AppendString(buf, fmt.Sprintf("%v", v))
-		}
+		buf = msgp.AppendString(buf, p.MetaAnnotationType)
 		actualCount++
 	}
 	// Only serialize boolean fields if they were explicitly set
