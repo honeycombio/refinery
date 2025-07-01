@@ -41,6 +41,8 @@ const (
 	MetaRefineryForwarded         = "meta.refinery.forwarded"
 	MetaRefineryExpiredTrace      = "meta.refinery.expired_trace"
 
+	//	These fields are not used by the refinery itself for sampling decisions.
+	// They are used to pass information from refinery to honeycomb.
 	MetaRefineryLocalHostname      = "meta.refinery.local_hostname"
 	MetaStressed                   = "meta.stressed"
 	MetaRefineryReason             = "meta.refinery.reason"
@@ -382,6 +384,311 @@ var metadataFields = []metadataField{
 			if err == nil {
 				p.MetaRefineryExpiredTrace.Set(val)
 			}
+			return out, err
+		},
+	},
+	{
+		key:          MetaRefineryLocalHostname,
+		expectedType: FieldTypeString,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaRefineryLocalHostname != "" {
+				return p.MetaRefineryLocalHostname, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(string); ok {
+				p.MetaRefineryLocalHostname = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaRefineryLocalHostname != "" {
+				out = msgp.AppendString(in, MetaRefineryLocalHostname)
+				out = msgp.AppendString(out, p.MetaRefineryLocalHostname)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaRefineryLocalHostname, out, err = msgp.ReadStringBytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaStressed,
+		expectedType: FieldTypeBool,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaStressed.HasValue {
+				return p.MetaStressed.Value, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(bool); ok {
+				p.MetaStressed.Set(v)
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaStressed.HasValue {
+				out = msgp.AppendString(in, MetaStressed)
+				out = msgp.AppendBool(out, p.MetaStressed.Value)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			var val bool
+			val, out, err = msgp.ReadBoolBytes(in)
+			if err == nil {
+				p.MetaStressed.Set(val)
+			}
+			return out, err
+		},
+	},
+	{
+		key:          MetaRefineryReason,
+		expectedType: FieldTypeString,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaRefineryReason != "" {
+				return p.MetaRefineryReason, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(string); ok {
+				p.MetaRefineryReason = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaRefineryReason != "" {
+				out = msgp.AppendString(in, MetaRefineryReason)
+				out = msgp.AppendString(out, p.MetaRefineryReason)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaRefineryReason, out, err = msgp.ReadStringBytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaRefinerySendReason,
+		expectedType: FieldTypeString,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaRefinerySendReason != "" {
+				return p.MetaRefinerySendReason, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(string); ok {
+				p.MetaRefinerySendReason = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaRefinerySendReason != "" {
+				out = msgp.AppendString(in, MetaRefinerySendReason)
+				out = msgp.AppendString(out, p.MetaRefinerySendReason)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaRefinerySendReason, out, err = msgp.ReadStringBytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaSpanEventCount,
+		expectedType: FieldTypeInt64,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaSpanEventCount != 0 {
+				return p.MetaSpanEventCount, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(int64); ok {
+				p.MetaSpanEventCount = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaSpanEventCount != 0 {
+				out = msgp.AppendString(in, MetaSpanEventCount)
+				out = msgp.AppendInt64(out, p.MetaSpanEventCount)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaSpanEventCount, out, err = msgp.ReadInt64Bytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaSpanLinkCount,
+		expectedType: FieldTypeInt64,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaSpanLinkCount != 0 {
+				return p.MetaSpanLinkCount, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(int64); ok {
+				p.MetaSpanLinkCount = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaSpanLinkCount != 0 {
+				out = msgp.AppendString(in, MetaSpanLinkCount)
+				out = msgp.AppendInt64(out, p.MetaSpanLinkCount)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaSpanLinkCount, out, err = msgp.ReadInt64Bytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaSpanCount,
+		expectedType: FieldTypeInt64,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaSpanCount != 0 {
+				return p.MetaSpanCount, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(int64); ok {
+				p.MetaSpanCount = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaSpanCount != 0 {
+				out = msgp.AppendString(in, MetaSpanCount)
+				out = msgp.AppendInt64(out, p.MetaSpanCount)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaSpanCount, out, err = msgp.ReadInt64Bytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaEventCount,
+		expectedType: FieldTypeInt64,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaEventCount != 0 {
+				return p.MetaEventCount, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(int64); ok {
+				p.MetaEventCount = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaEventCount != 0 {
+				out = msgp.AppendString(in, MetaEventCount)
+				out = msgp.AppendInt64(out, p.MetaEventCount)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaEventCount, out, err = msgp.ReadInt64Bytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaRefineryOriginalSampleRate,
+		expectedType: FieldTypeInt64,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaRefineryOriginalSampleRate != 0 {
+				return p.MetaRefineryOriginalSampleRate, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(int64); ok {
+				p.MetaRefineryOriginalSampleRate = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaRefineryOriginalSampleRate != 0 {
+				out = msgp.AppendString(in, MetaRefineryOriginalSampleRate)
+				out = msgp.AppendInt64(out, p.MetaRefineryOriginalSampleRate)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaRefineryOriginalSampleRate, out, err = msgp.ReadInt64Bytes(in)
+			return out, err
+		},
+	},
+	{
+		key:          MetaRefineryShutdownSend,
+		expectedType: FieldTypeBool,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaRefineryShutdownSend.HasValue {
+				return p.MetaRefineryShutdownSend.Value, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(bool); ok {
+				p.MetaRefineryShutdownSend.Set(v)
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaRefineryShutdownSend.HasValue {
+				out = msgp.AppendString(in, MetaRefineryShutdownSend)
+				out = msgp.AppendBool(out, p.MetaRefineryShutdownSend.Value)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			var val bool
+			val, out, err = msgp.ReadBoolBytes(in)
+			if err == nil {
+				p.MetaRefineryShutdownSend.Set(val)
+			}
+			return out, err
+		},
+	},
+	{
+		key:          MetaRefinerySampleKey,
+		expectedType: FieldTypeString,
+		get: func(p *Payload) (value any, ok bool) {
+			if p.MetaRefinerySampleKey != "" {
+				return p.MetaRefinerySampleKey, true
+			}
+			return nil, false
+		},
+		set: func(p *Payload, value any) {
+			if v, ok := value.(string); ok {
+				p.MetaRefinerySampleKey = v
+			}
+		},
+		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
+			if p.MetaRefinerySampleKey != "" {
+				out = msgp.AppendString(in, MetaRefinerySampleKey)
+				out = msgp.AppendString(out, p.MetaRefinerySampleKey)
+				return out, true
+			}
+			return in, false
+		},
+		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
+			p.MetaRefinerySampleKey, out, err = msgp.ReadStringBytes(in)
 			return out, err
 		},
 	},

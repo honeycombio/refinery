@@ -308,7 +308,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	upstreamSampledEvent := events[0]
 
 	assert.NotNil(t, upstreamSampledEvent)
-	assert.Equal(t, originalSampleRate, upstreamSampledEvent.Data.Get("meta.refinery.original_sample_rate"),
+	assert.Equal(t, int64(originalSampleRate), upstreamSampledEvent.Data.Get(types.MetaRefineryOriginalSampleRate),
 		"metadata should be populated with original sample rate")
 	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
 		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
@@ -340,7 +340,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	require.NotNil(t, noUpstreamSampleRateEvent)
 	assert.Equal(t, "no-upstream-sampling", noUpstreamSampleRateEvent.Dataset)
-	assert.Nil(t, noUpstreamSampleRateEvent.Data.Get("meta.refinery.original_sample_rate"),
+	assert.Nil(t, noUpstreamSampleRateEvent.Data.Get(types.MetaRefineryOriginalSampleRate),
 		"original sample rate should not be set in metadata when original sample rate is zero")
 }
 

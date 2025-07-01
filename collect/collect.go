@@ -886,12 +886,12 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	i.Metrics.Increment("kept_from_stress")
 	// ok, we're sending it, so decorate it first
-	sp.Data.Set("meta.stressed", true)
+	sp.Data.Set(types.MetaStressed, true)
 	if i.Config.GetAddRuleReasonToTrace() {
-		sp.Data.Set("meta.refinery.reason", reason)
+		sp.Data.Set(types.MetaRefineryReason, reason)
 	}
 	if i.hostname != "" {
-		sp.Data.Set("meta.refinery.local_hostname", i.hostname)
+		sp.Data.Set(types.MetaRefineryLocalHostname, i.hostname)
 	}
 
 	i.addAdditionalAttributes(sp)
@@ -937,12 +937,12 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		} else {
 			metaReason = "late arriving span"
 		}
-		sp.Data.Set("meta.refinery.reason", metaReason)
-		sp.Data.Set("meta.refinery.send_reason", TraceSendLateSpan)
+		sp.Data.Set(types.MetaRefineryReason, metaReason)
+		sp.Data.Set(types.MetaRefinerySendReason, TraceSendLateSpan)
 
 	}
 	if i.hostname != "" {
-		sp.Data.Set("meta.refinery.local_hostname", i.hostname)
+		sp.Data.Set(types.MetaRefineryLocalHostname, i.hostname)
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	keep := tr.Kept()
@@ -968,12 +968,12 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		// if this span is a late root span, possibly update it with our current span count
 		if sp.IsRoot {
 			if i.Config.GetAddCountsToRoot() {
-				sp.Data.Set("meta.span_event_count", int64(tr.SpanEventCount()))
-				sp.Data.Set("meta.span_link_count", int64(tr.SpanLinkCount()))
-				sp.Data.Set("meta.span_count", int64(tr.SpanCount()))
-				sp.Data.Set("meta.event_count", int64(tr.DescendantCount()))
+				sp.Data.Set(types.MetaSpanEventCount, int64(tr.SpanEventCount()))
+				sp.Data.Set(types.MetaSpanLinkCount, int64(tr.SpanLinkCount()))
+				sp.Data.Set(types.MetaSpanCount, int64(tr.SpanCount()))
+				sp.Data.Set(types.MetaEventCount, int64(tr.DescendantCount()))
 			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data.Set("meta.span_count", int64(tr.DescendantCount()))
+				sp.Data.Set(types.MetaSpanCount, int64(tr.DescendantCount()))
 			}
 		}
 		otelutil.AddSpanField(span, "is_root_span", sp.IsRoot)
@@ -990,7 +990,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	if sp.SampleRate != 0 {
 		// Write down the original sample rate so that that information
 		// is more easily recovered
-		sp.Data.Set("meta.refinery.original_sample_rate", sp.SampleRate)
+		sp.Data.Set(types.MetaRefineryOriginalSampleRate, int64(sp.SampleRate))
 	}
 
 	if tempSampleRate < 1 {
@@ -1043,12 +1043,12 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 		rs := trace.RootSpan
 		if rs != nil {
 			if i.Config.GetAddCountsToRoot() {
-				rs.Data.Set("meta.span_event_count", int64(td.EventCount))
-				rs.Data.Set("meta.span_link_count", int64(td.LinkCount))
-				rs.Data.Set("meta.span_count", int64(td.Count))
-				rs.Data.Set("meta.event_count", int64(td.DescendantCount()))
+				rs.Data.Set(types.MetaSpanEventCount, int64(td.EventCount))
+				rs.Data.Set(types.MetaSpanLinkCount, int64(td.LinkCount))
+				rs.Data.Set(types.MetaSpanCount, int64(td.Count))
+				rs.Data.Set(types.MetaEventCount, int64(td.DescendantCount()))
 			} else if i.Config.GetAddSpanCountToRoot() {
-				rs.Data.Set("meta.span_count", int64(td.DescendantCount()))
+				rs.Data.Set(types.MetaSpanCount, int64(td.DescendantCount()))
 			}
 		}
 	}
@@ -1245,7 +1245,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 			}
 
 			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_span", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
-			r.span.Data.Set("meta.refinery.shutdown.send", true)
+			r.span.Data.Set(types.MetaRefineryShutdownSend, true)
 
 			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
 			_, exist := sentTraces[r.span.TraceID]
@@ -1361,10 +1361,10 @@ func (i *InMemCollector) sendTraces() {
 			}
 
 			if i.Config.GetAddRuleReasonToTrace() {
-				sp.Data.Set("meta.refinery.reason", t.reason)
-				sp.Data.Set("meta.refinery.send_reason", t.sendReason)
+				sp.Data.Set(types.MetaRefineryReason, t.reason)
+				sp.Data.Set(types.MetaRefinerySendReason, t.sendReason)
 				if t.sampleKey != "" {
-					sp.Data.Set("meta.refinery.sample_key", t.sampleKey)
+					sp.Data.Set(types.MetaRefinerySampleKey, t.sampleKey)
 				}
 			}
 
@@ -1372,12 +1372,12 @@ func (i *InMemCollector) sendTraces() {
 			// with the final total as of our send time
 			if sp.IsRoot {
 				if i.Config.GetAddCountsToRoot() {
-					sp.Data.Set("meta.span_event_count", int64(t.SpanEventCount()))
-					sp.Data.Set("meta.span_link_count", int64(t.SpanLinkCount()))
-					sp.Data.Set("meta.span_count", int64(t.SpanCount()))
-					sp.Data.Set("meta.event_count", int64(t.DescendantCount()))
+					sp.Data.Set(types.MetaSpanEventCount, int64(t.SpanEventCount()))
+					sp.Data.Set(types.MetaSpanLinkCount, int64(t.SpanLinkCount()))
+					sp.Data.Set(types.MetaSpanCount, int64(t.SpanCount()))
+					sp.Data.Set(types.MetaEventCount, int64(t.DescendantCount()))
 				} else if i.Config.GetAddSpanCountToRoot() {
-					sp.Data.Set("meta.span_count", int64(t.DescendantCount()))
+					sp.Data.Set(types.MetaSpanCount, int64(t.DescendantCount()))
 				}
 			}
 
@@ -1386,7 +1386,7 @@ func (i *InMemCollector) sendTraces() {
 				sp.Data.Set(config.DryRunFieldName, t.shouldSend)
 			}
 			if i.hostname != "" {
-				sp.Data.Set("meta.refinery.local_hostname", i.hostname)
+				sp.Data.Set(types.MetaRefineryLocalHostname, i.hostname)
 			}
 			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
 			i.addAdditionalAttributes(sp)
