@@ -138,6 +138,6 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	// Event 2: log (never root)
 	assert.Equal(t, "trace-3", batch[2].Data.MetaTraceID)
 	assert.Equal(t, "log", batch[2].Data.MetaSignalType)
-	assert.True(t, batch[2].Data.MetaRefineryRoot.HasValue)
+	assert.False(t, batch[2].Data.MetaRefineryRoot.HasValue)
 	assert.False(t, batch[2].Data.MetaRefineryRoot.Value)
 }

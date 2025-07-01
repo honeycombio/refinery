@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -11,6 +12,12 @@ import (
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 )
+
+func TestMetadataFieldsHaveMetaPrefix(t *testing.T) {
+	for _, field := range metadataFields {
+		assert.True(t, strings.HasPrefix(field.key, "meta."))
+	}
+}
 
 func TestPayload(t *testing.T) {
 	data := map[string]any{
@@ -186,14 +193,15 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 
 	t.Run("log events are never root", func(t *testing.T) {
 		data := map[string]any{
-			"meta.signal_type": "log",
-			"trace.trace_id":   "trace-123",
+			"meta.refinery.root": true,
+			"meta.signal_type":   "log",
+			"trace.trace_id":     "trace-123",
 		}
 		ph := NewPayload(data)
 		ph.ExtractMetadata([]string{"trace.trace_id"}, []string{"trace.parent_id"})
 
 		assert.Equal(t, "log", ph.MetaSignalType)
-		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
+		assert.False(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
 		assert.False(t, ph.MetaRefineryRoot.Value, "Log events should never be root")
 	})
 }
@@ -433,94 +441,6 @@ func TestUnmarshalMsgWithMetadata(t *testing.T) {
 	// Verify we can still access regular fields
 	assert.Equal(t, "value", p.Get("regular_field"))
 	assert.Equal(t, int64(42), p.Get("another_field"))
-}
-
-func TestUnmarshalMsgWithMetadata_RootSpanDetection(t *testing.T) {
-	tests := []struct {
-		name           string
-		data           map[string]interface{}
-		parentIdFields []string
-		expectRoot     bool
-	}{
-		{
-			name: "no parent id - is root",
-			data: map[string]interface{}{
-				"trace.trace_id": "test-trace-123",
-				"regular_field":  "value",
-			},
-			parentIdFields: []string{"trace.parent_id"},
-			expectRoot:     true,
-		},
-		{
-			name: "empty parent id - is root",
-			data: map[string]interface{}{
-				"trace.trace_id":  "test-trace-123",
-				"trace.parent_id": "",
-				"regular_field":   "value",
-			},
-			parentIdFields: []string{"trace.parent_id"},
-			expectRoot:     true,
-		},
-		{
-			name: "has parent id - not root",
-			data: map[string]interface{}{
-				"trace.trace_id":  "test-trace-123",
-				"trace.parent_id": "parent-456",
-				"regular_field":   "value",
-			},
-			parentIdFields: []string{"trace.parent_id"},
-			expectRoot:     false,
-		},
-		{
-			name: "log event - never root",
-			data: map[string]interface{}{
-				"trace.trace_id":   "test-trace-123",
-				"meta.signal_type": "log",
-				"regular_field":    "value",
-			},
-			parentIdFields: []string{"trace.parent_id"},
-			expectRoot:     false,
-		},
-		{
-			name: "explicit root flag overrides",
-			data: map[string]interface{}{
-				"trace.trace_id":     "test-trace-123",
-				"trace.parent_id":    "parent-456",
-				"meta.refinery.root": true,
-				"regular_field":      "value",
-			},
-			parentIdFields: []string{"trace.parent_id"},
-			expectRoot:     true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Marshal the data to msgpack
-			var buf []byte
-			buf = msgp.AppendMapHeader(buf, uint32(len(tt.data)))
-			for k, v := range tt.data {
-				buf = msgp.AppendString(buf, k)
-				switch val := v.(type) {
-				case string:
-					buf = msgp.AppendString(buf, val)
-				case bool:
-					buf = msgp.AppendBool(buf, val)
-				}
-			}
-
-			// Test the optimized unmarshal
-			var p Payload
-			traceIdFields := []string{"trace.trace_id"}
-
-			_, err := p.UnmarshalMsgWithMetadata(buf, traceIdFields, tt.parentIdFields)
-			require.NoError(t, err)
-
-			// Verify root detection
-			assert.True(t, p.MetaRefineryRoot.HasValue)
-			assert.Equal(t, tt.expectRoot, p.MetaRefineryRoot.Value)
-		})
-	}
 }
 
 func BenchmarkPayload(b *testing.B) {

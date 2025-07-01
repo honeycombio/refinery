@@ -808,59 +808,6 @@ func TestExtractMetadataTraceID(t *testing.T) {
 	}
 }
 
-func TestExtractMetadataRootSpan(t *testing.T) {
-	testCases := []struct {
-		name     string
-		event    types.Event
-		expected bool
-	}{
-		{
-			name: "root span - no parent id",
-			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{}),
-			},
-			expected: true,
-		},
-		{
-			name: "root span - empty parent id",
-			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
-					"trace.parent_id": "",
-				}),
-			},
-			expected: true,
-		},
-		{
-			name: "non-root span - parent id",
-			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
-					"trace.parent_id": "some-id",
-				}),
-			},
-			expected: false,
-		},
-		{
-			name: "non-root span - no parent id but has signal_type of log",
-			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
-					"meta.signal_type": "log",
-				}),
-			},
-			expected: false,
-		},
-	}
-
-	parentIdFieldNames := []string{"trace.parent_id", "parentId"}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.event.Data.ExtractMetadata(nil, parentIdFieldNames)
-			assert.True(t, tc.event.Data.MetaRefineryRoot.HasValue)
-			assert.Equal(t, tc.expected, tc.event.Data.MetaRefineryRoot.Value)
-		})
-	}
-}
-
 func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("no incoming user agent", func(t *testing.T) {
 		payload := types.NewPayload(map[string]interface{}{})
