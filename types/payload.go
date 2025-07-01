@@ -40,6 +40,18 @@ const (
 	MetaRefineryMinSpan           = "meta.refinery.min_span"
 	MetaRefineryForwarded         = "meta.refinery.forwarded"
 	MetaRefineryExpiredTrace      = "meta.refinery.expired_trace"
+
+	MetaRefineryLocalHostname      = "meta.refinery.local_hostname"
+	MetaStressed                   = "meta.stressed"
+	MetaRefineryReason             = "meta.refinery.reason"
+	MetaRefinerySendReason         = "meta.refinery.send_reason"
+	MetaSpanEventCount             = "meta.span_event_count"
+	MetaSpanLinkCount              = "meta.span_link_count"
+	MetaSpanCount                  = "meta.span_count"
+	MetaEventCount                 = "meta.event_count"
+	MetaRefineryOriginalSampleRate = "meta.refinery.original_sample_rate"
+	MetaRefineryShutdownSend       = "meta.refinery.shutdown_send"
+	MetaRefinerySampleKey          = "meta.refinery.sample_key"
 )
 
 // Contains an entry for each of the specialized metadata fields.
@@ -429,6 +441,19 @@ type Payload struct {
 	MetaRefineryMinSpan           nullableBool // meta.refinery.min_span
 	MetaRefineryForwarded         string       // meta.refinery.forwarded
 	MetaRefineryExpiredTrace      nullableBool // meta.refinery.expired_trace
+
+	// metadata fields that are written by the refinery itself
+	MetaRefineryLocalHostname      string       // meta.refinery.local_hostname
+	MetaStressed                   nullableBool // meta.stressed
+	MetaRefineryReason             string       // meta.refinery.reason
+	MetaRefinerySendReason         string       // meta.refinery.send_reason
+	MetaSpanEventCount             int64        // meta.span_event_count
+	MetaSpanLinkCount              int64        // meta.span_link_count
+	MetaSpanCount                  int64        // meta.span_count
+	MetaEventCount                 int64        // meta.event_count
+	MetaRefineryOriginalSampleRate int64        // meta.refinery.original_sample_rate
+	MetaRefineryShutdownSend       nullableBool // meta.refinery.shutdown_send
+	MetaRefinerySampleKey          string       // meta.refinery.sample_key
 }
 
 // extractMetadataFromBytes extracts metadata from msgpack data.

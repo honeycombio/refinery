@@ -15,6 +15,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vmihailenco/msgpack/v5"
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -2605,11 +2606,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 							Event: types.Event{
 								Dataset: "benchmark-dataset",
 								APIKey:  "test-api-key",
-								Data: types.NewPayload(map[string]interface{}{
-									"sampler-field-1": rand.Intn(20),
-									"sampler-field-2": "static-value",
-									"index":           spanIdx,
-								}),
+								Data:    createBenchmarkSpansWithLargeAttributes(traceID, spanIdx),
 							},
 						}
 
@@ -2635,6 +2632,81 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 	}
 }
 
+func createBenchmarkSpansWithLargeAttributes(traceID string, spanIdx int) types.Payload {
+	// Large text values for testing
+	largeText := strings.Repeat("x", 1000)
+	mediumText := strings.Repeat("y", 500)
+	smallText := strings.Repeat("z", 100)
+
+	data := make(map[string]interface{})
+
+	// Core tracing fields (always present)
+	data["trace.trace_id"] = traceID
+	spanID := fmt.Sprintf("span-%018d", spanIdx)
+	parentID := ""
+	if spanIdx%3 != 0 { // 2/3 of spans have parents
+		parentID = fmt.Sprintf("span-%018d", spanIdx-1)
+	}
+
+	// fields used for sampling
+	data["sampler-field-1"] = rand.Intn(20)
+	data["sampler-field-2"] = "static-value"
+
+	data["trace.trace_id"] = traceID
+	data["trace.span_id"] = spanID
+	data["trace.parent_id"] = parentID
+	data["service.name"] = fmt.Sprintf("service-%d", spanIdx%3)
+	data["duration_ms"] = 100.0
+
+	data["meta.signal_type"] = "trace"
+	data["meta.annotation_type"] = "span"
+	data["meta.refinery.incoming_user_agent"] = "refinery/v2.4.1"
+
+	// Large text fields (3 large fields)
+	data["large_field_1"] = largeText
+	data["large_field_2"] = mediumText
+	data["large_field_3"] = smallText
+
+	// many string, float, int, and bool fields
+	for j := 0; j < 25; j++ {
+		data[fmt.Sprintf("string.field_%d", j)] = fmt.Sprintf("string_value_%d", j)
+		data[fmt.Sprintf("int.field_%d", j)] = int64(j)
+		data[fmt.Sprintf("float.field_%d", j)] = float64(j)
+		data[fmt.Sprintf("bool.field_%d", j)] = (spanIdx+j)%2 == 0
+	}
+
+	// Array field
+	data["tags"] = []string{
+		fmt.Sprintf("tag_%d", spanIdx),
+		fmt.Sprintf("tag_%d", spanIdx+1),
+		fmt.Sprintf("tag_%d", spanIdx+2),
+	}
+
+	// Nested map field
+	data["custom.metadata"] = map[string]interface{}{
+		"nested_field_1": map[string]interface{}{
+			"key1": fmt.Sprintf("value_%d", spanIdx),
+			"key2": spanIdx * 10,
+			"key3": spanIdx%2 == 0,
+		},
+		"nested_field_2": map[string]interface{}{
+			"key1": true,
+			"key2": false,
+			"key3": spanIdx + 100,
+		},
+	}
+	dataMsgpack, err := msgpack.Marshal(data)
+	if err != nil {
+		panic(err)
+	}
+	payload := types.Payload{}
+	_, err = payload.UnmarshalMsgWithMetadata(dataMsgpack, []string{"trace.trace_id"}, []string{"trace.parent_id"})
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
 func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mockSender) *InMemCollector {
 	conf := &config.MockConfig{
 		DryRun: true,
@@ -2657,6 +2729,10 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mo
 			IncomingQueueSize:  100000,
 			PeerQueueSize:      100000,
 		},
+		AddCountsToRoot:        true,
+		AddSpanCountToRoot:     true,
+		AddRuleReasonToTrace:   true,
+		AddHostMetadataToTrace: true,
 	}
 
 	coll := newTestCollector(conf, sender, sender)
