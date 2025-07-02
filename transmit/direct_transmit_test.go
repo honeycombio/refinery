@@ -62,20 +62,19 @@ func newTestDirectAPIServer(t testing.TB, maxBatchSize int) *testDirectAPIServer
 	return server
 }
 
-// Not suitable for use in benchmarks
 func readHTTPBody(t testing.TB, r *http.Request) []byte {
 	t.Helper()
 
-	var reader io.Reader
-	if r.Header.Get("Content-Encoding") == "zstd" {
-		zr, err := zstd.NewReader(r.Body)
-		assert.NoError(t, err)
-		reader = zr
-	} else {
-		reader = r.Body
-	}
-	body, err := io.ReadAll(reader)
+	body, err := io.ReadAll(r.Body)
 	assert.NoError(t, err)
+	assert.Len(t, body, int(r.ContentLength))
+
+	if r.Header.Get("Content-Encoding") == "zstd" {
+		zr, err := zstd.NewReader(bytes.NewReader(body))
+		assert.NoError(t, err)
+		body, err = io.ReadAll(zr)
+		assert.NoError(t, err)
+	}
 	return body
 }
 

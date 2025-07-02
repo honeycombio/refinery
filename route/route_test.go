@@ -56,7 +56,7 @@ func TestDecompression(t *testing.T) {
 		Body:   io.NopCloser(pReader),
 		Header: http.Header{},
 	}
-	reader, err := router.getMaybeCompressedBody(req)
+	reader, err := router.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
@@ -79,7 +79,7 @@ func TestDecompression(t *testing.T) {
 
 	req.Body = io.NopCloser(buf)
 	req.Header.Set("Content-Encoding", "gzip")
-	reader, err = router.getMaybeCompressedBody(req)
+	reader, err = router.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
@@ -105,7 +105,7 @@ func TestDecompression(t *testing.T) {
 
 	req.Body = io.NopCloser(buf)
 	req.Header.Set("Content-Encoding", "zstd")
-	reader, err = router.getMaybeCompressedBody(req)
+	reader, err = router.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
