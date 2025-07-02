@@ -692,7 +692,7 @@ var httpBodyBufferPool = sync.Pool{
 	},
 }
 
-// When finished with the returned buffer, callers should return it to bufferPool.
+// When finished with the returned buffer, callers should return it to httpBodyBufferPool.
 // Reads the body and immediately closes it, releasing resources as soon as possible.
 func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buffer, error) {
 	defer req.Body.Close()
