@@ -934,10 +934,9 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 // NewPayload creates a new Payload from a map of fields. This is not populate
 // metadata fields; to do this, you MUST call ExtractMetadata.
 func NewPayload(data map[string]any) Payload {
-	p := Payload{
+	return Payload{
 		memoizedFields: data,
 	}
-	return p
 }
 
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal. Instead it
