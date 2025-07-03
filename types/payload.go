@@ -1014,16 +1014,16 @@ func NewPayload(config config.Config, data map[string]any) Payload {
 	return p
 }
 
-// UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal. Instead it
-// keep a reference to serialized data.
+// UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal.
+// Instead it keeps a copy of the serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
-	p.msgpMap = MsgpPayloadMap{rawData: data}
+	p.msgpMap = MsgpPayloadMap{rawData: slices.Clone(data)}
 	p.ExtractMetadata()
 	return nil
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
-// part of a larger message.
+// part of a larger message. Makes a local copy of the bytes it's hanging onto.
 func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	// Extract metadata and get consumed bytes
 	consumed, err := p.extractMetadataFromBytes(bts)
@@ -1032,7 +1032,7 @@ func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 
 	// Store the raw data
-	ourData := bts[:consumed]
+	ourData := slices.Clone(bts[:consumed])
 	p.msgpMap = MsgpPayloadMap{rawData: ourData}
 
 	// Return remainder

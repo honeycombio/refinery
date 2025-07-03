@@ -385,22 +385,16 @@ func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
-	defer req.Body.Close()
 
 	ctx := req.Context()
-	bodyReader, err := r.getMaybeCompressedBody(req)
+	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
+	defer recycleHTTPBodyBuffer(bodyBuffer)
 
-	reqBod, err := io.ReadAll(bodyReader)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrPostBody, err)
-		return
-	}
-
-	ev, err := r.requestToEvent(ctx, req, reqBod)
+	ev, err := r.requestToEvent(ctx, req, bodyBuffer.Bytes())
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
@@ -459,30 +453,22 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
-	defer req.Body.Close()
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
 	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
 
-	bodyReader, err := r.getMaybeCompressedBody(req)
+	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
-
-	reqBod, err := io.ReadAll(bodyReader)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrPostBody, err)
-		return
-	}
+	defer recycleHTTPBodyBuffer(bodyBuffer)
 
 	batchedEvents := newBatchedEvents(r.Config)
-
-	err = unmarshal(req, reqBod, batchedEvents)
-
+	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
 	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
+		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
@@ -702,7 +688,28 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	return nil
 }
 
-func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
+// A pool of buffers for HTTP bodies; there's no sorting by size here, since
+// the assumption is that over time these will converge on the largest typical
+// body size used in this environment.
+var httpBodyBufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
+func recycleHTTPBodyBuffer(b *bytes.Buffer) {
+	if b != nil {
+		b.Reset()
+		httpBodyBufferPool.Put(b)
+	}
+}
+
+// When finished with the returned buffer, callers should return it to the pool
+// by calling recycleHTTPBodyBuffer.
+// Reads the body and immediately closes it, releasing resources as soon as possible.
+func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buffer, error) {
+	defer req.Body.Close()
+
 	var reader io.Reader
 	switch req.Header.Get("Content-Encoding") {
 	case "gzip":
@@ -711,12 +718,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 			return nil, err
 		}
 		defer gzipReader.Close()
-
-		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, io.LimitReader(gzipReader, HTTPMessageSizeMax)); err != nil {
-			return nil, err
-		}
-		reader = buf
+		reader = gzipReader
 	case "zstd":
 		zReader := <-r.zstdDecoders
 		defer func(zReader *zstd.Decoder) {
@@ -728,16 +730,18 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, io.LimitReader(zReader, HTTPMessageSizeMax)); err != nil {
-			return nil, err
-		}
-
-		reader = buf
+		reader = zReader
 	default:
 		reader = req.Body
 	}
-	return reader, nil
+
+	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
+	if _, err := io.Copy(buf, io.LimitReader(reader, HTTPMessageSizeMax)); err != nil {
+		recycleHTTPBodyBuffer(buf)
+		return nil, err
+	}
+
+	return buf, nil
 }
 
 // getEventTime tries to guess the time format in our time header!
