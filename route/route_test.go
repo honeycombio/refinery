@@ -924,6 +924,7 @@ func TestProcessEventMetrics(t *testing.T) {
 				Config:               mockConfig,
 				Logger:               &logger.NullLogger{},
 				Metrics:              mockMetrics,
+				metricsMap:           metrics.NewComputedMetricNames(tt.incomingOrPeer, routerMetrics),
 				UpstreamTransmission: mockUpstream,
 				PeerTransmission:     mockPeer,
 				Collector:            collect.NewMockCollector(),
@@ -994,6 +995,7 @@ func newBatchRouter(t testing.TB) *Router {
 	return &Router{
 		Config:               mockConfig,
 		Metrics:              &mockMetrics,
+		metricsMap:           metrics.NewComputedMetricNames("incoming", routerMetrics),
 		UpstreamTransmission: mockTransmission,
 		Collector:            mockCollector,
 		Sharder:              mockSharder,
