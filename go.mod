@@ -51,7 +51,6 @@ require (
 	golang.org/x/sync v0.15.0
 	google.golang.org/grpc v1.73.0
 	google.golang.org/protobuf v1.36.6
-	gopkg.in/alexcesaro/statsd.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -73,6 +72,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 )
 
