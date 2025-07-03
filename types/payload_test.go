@@ -31,6 +31,10 @@ func TestPayload(t *testing.T) {
 		"meta.refinery.root":     true,
 		"meta.refinery.min_span": false,
 		"meta.annotation_type":   "span_event",
+
+		// This is the wrong type, it should just be ignored and dropped from the data.
+		// TODO enable on this is implemented.
+		// "meta.refinery.send_by": "never",
 	}
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames: []string{"trace.trace_id"},
@@ -60,6 +64,9 @@ func TestPayload(t *testing.T) {
 		assert.True(t, ph.Exists("meta.annotation_type"))
 		assert.Equal(t, "span_event", ph.Get("meta.annotation_type"))
 
+		assert.Nil(t, ph.Get("meta.refinery.send_by"))
+		assert.False(t, ph.Exists("meta.refinery.send_by"))
+
 		// Test dedicated fields - should be populated from initial data or unmarshal
 		assert.Equal(t, "test-trace-123", ph.MetaTraceID, "MetaTraceID should be populated")
 		assert.True(t, ph.MetaRefineryRoot.HasValue, "MetaRefineryRoot should be set")
@@ -67,6 +74,7 @@ func TestPayload(t *testing.T) {
 		assert.True(t, ph.MetaRefineryMinSpan.HasValue, "MetaRefineryMinSpan should be set")
 		assert.Equal(t, false, ph.MetaRefineryMinSpan.Value, "MetaRefineryMinSpan should be populated")
 		assert.Equal(t, "span_event", ph.MetaAnnotationType, "MetaAnnotationType should be populated")
+		assert.Equal(t, int64(0), ph.MetaRefinerySendBy)
 
 		ph.Set("key5", "newvalue")
 		assert.True(t, ph.Exists("key5"))
