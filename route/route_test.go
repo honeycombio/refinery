@@ -199,13 +199,13 @@ func TestUnmarshal(t *testing.T) {
 				{
 					Timestamp:  now.Format(time.RFC3339Nano),
 					SampleRate: 2,
-					Data:       types.NewPayload(testData, mockCfg),
+					Data:       types.NewPayload(mockCfg, testData),
 					cfg:        mockCfg,
 				},
 				{
 					Timestamp:  now.Add(time.Second).Format(time.RFC3339Nano),
 					SampleRate: 4,
-					Data:       types.NewPayload(testData, mockCfg),
+					Data:       types.NewPayload(mockCfg, testData),
 					cfg:        mockCfg,
 				},
 			}
@@ -765,44 +765,44 @@ func TestExtractMetadataTraceID(t *testing.T) {
 		{
 			name: "trace id from meta.trace_id",
 			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]interface{}{
 					"meta.trace_id": "trace123",
-				}, mockCfg),
+				}),
 			},
 			expected: "trace123",
 		},
 		{
 			name: "trace id from trace.trace_id field",
 			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]interface{}{
 					"trace.trace_id": "trace456",
-				}, mockCfg),
+				}),
 			},
 			expected: "trace456",
 		},
 		{
 			name: "trace id from traceId field",
 			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]interface{}{
 					"traceId": "trace789",
-				}, mockCfg),
+				}),
 			},
 			expected: "trace789",
 		},
 		{
 			name: "no trace id",
 			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{}, mockCfg),
+				Data: types.NewPayload(mockCfg, nil),
 			},
 			expected: "",
 		},
 		{
 			name: "prefer meta.trace_id over other fields",
 			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]interface{}{
 					"meta.trace_id":  "meta-trace",
 					"trace.trace_id": "field-trace",
-				}, mockCfg),
+				}),
 			},
 			expected: "meta-trace",
 		},
@@ -818,7 +818,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 
 func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("no incoming user agent", func(t *testing.T) {
-		payload := types.NewEmptyPayload(&config.MockConfig{})
+		payload := types.NewPayload(&config.MockConfig{}, nil)
 		event := &types.Event{
 			Data: payload,
 		}
@@ -828,9 +828,9 @@ func TestAddIncomingUserAgent(t *testing.T) {
 	})
 
 	t.Run("existing incoming user agent", func(t *testing.T) {
-		payload := types.NewPayload(map[string]interface{}{
+		payload := types.NewPayload(&config.MockConfig{}, map[string]interface{}{
 			"meta.refinery.incoming_user_agent": "test-agent",
-		}, &config.MockConfig{})
+		})
 		payload.ExtractMetadata()
 		event := &types.Event{
 			Data: payload,
@@ -938,12 +938,12 @@ func TestProcessEventMetrics(t *testing.T) {
 				APIHost:   "test.honeycomb.io",
 				Dataset:   "test-dataset",
 				Timestamp: time.Now(),
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(mockConfig, map[string]interface{}{
 					"trace.trace_id":    "trace-123",
 					"meta.signal_type":  tt.signalType,
 					"test_attribute":    "test_value",
 					"another_attribute": 123,
-				}, mockConfig),
+				}),
 			}
 			event.Data.ExtractMetadata()
 			span := &types.Span{
@@ -1010,7 +1010,7 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
 				"trace.trace_id":  "trace-1",
 				"trace.span_id":   "span-1",
 				"trace.parent_id": "",
@@ -1019,12 +1019,12 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 				"duration_ms":     100.0,
 				"int.field":       int64(1),
 				"bool.field":      true,
-			}, mockCfg),
+			}),
 		},
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
 				"trace.trace_id":  "trace-1",
 				"trace.span_id":   "span-2",
 				"trace.parent_id": "span-1",
@@ -1033,12 +1033,12 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 				"duration_ms":     50.0,
 				"int.field":       int64(2),
 				"bool.field":      false,
-			}, mockCfg),
+			}),
 		},
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 4,
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
 				"trace.trace_id":  "trace-2",
 				"trace.span_id":   "span-3",
 				"trace.parent_id": "",
@@ -1046,7 +1046,7 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 				"operation.name":  "another-operation",
 				"duration_ms":     200.0,
 				"int.field":       int64(3),
-			}, mockCfg),
+			}),
 		},
 	}
 	return batch
@@ -1201,7 +1201,7 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 		batchEvents.events[i] = batchedEvent{
 			MsgPackTimestamp: &ts,
 			SampleRate:       2,
-			Data:             types.NewPayload(data, cfg),
+			Data:             types.NewPayload(cfg, data),
 			cfg:              cfg,
 		}
 	}

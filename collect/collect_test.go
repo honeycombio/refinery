@@ -205,9 +205,9 @@ func TestAddRootSpan(t *testing.T) {
 		Event: types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}, coll.Config),
+			}),
 		},
 		IsRoot: true,
 	}
@@ -295,7 +295,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				Dataset:    "aoeu",
 				APIKey:     legacyAPIKey,
 				SampleRate: originalSampleRate,
-				Data:       types.NewPayload(make(map[string]interface{}), coll.Config),
+				Data:       types.NewPayload(coll.Config, make(map[string]interface{})),
 			},
 			IsRoot: true,
 		}
@@ -321,7 +321,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			Dataset:    "no-upstream-sampling",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // no upstream sampling
-			Data:       types.NewPayload(make(map[string]interface{}), coll.Config),
+			Data:       types.NewPayload(coll.Config, make(map[string]interface{})),
 		},
 		IsRoot: true,
 	})
@@ -387,7 +387,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 			Dataset:    "aoeu",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // This should get lifted to 1
-			Data:       types.NewPayload(make(map[string]interface{}), coll.Config),
+			Data:       types.NewPayload(coll.Config, nil),
 		},
 		IsRoot: true,
 	}
@@ -440,9 +440,9 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -461,11 +461,11 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
 				"meta.refinery.send_by":  sendBy,
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -486,7 +486,7 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}, coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -563,7 +563,7 @@ func TestDryRunMode(t *testing.T) {
 	span := &types.Span{
 		TraceID: traceID1,
 		Event: types.Event{
-			Data:   types.NewPayload(map[string]interface{}{}, coll.Config),
+			Data:   types.NewPayload(coll.Config, nil),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -584,9 +584,9 @@ func TestDryRunMode(t *testing.T) {
 		TraceID: traceID2,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -599,7 +599,7 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Data:   types.NewEmptyPayload(coll.Config),
+			Data:   types.NewPayload(coll.Config, nil),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -621,7 +621,7 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID3,
 		Event: types.Event{
-			Data:   types.NewEmptyPayload(coll.Config),
+			Data:   types.NewPayload(coll.Config, nil),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -772,7 +772,7 @@ func TestStableMaxAlloc(t *testing.T) {
 			TraceID: strconv.Itoa(i),
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data:    types.NewPayload(spandata[i], coll.Config),
+				Data:    types.NewPayload(coll.Config, spandata[i]),
 				APIKey:  legacyAPIKey,
 			},
 		}
@@ -974,9 +974,9 @@ func TestAddCountsToRoot(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
-				}, coll.Config),
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -998,7 +998,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1087,9 +1087,9 @@ func TestLateRootGetsCounts(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
-				}, coll.Config),
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -1119,7 +1119,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1178,9 +1178,9 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1189,10 +1189,10 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1211,7 +1211,7 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1269,9 +1269,9 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1286,7 +1286,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1343,9 +1343,9 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1355,7 +1355,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1413,9 +1413,9 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1426,7 +1426,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1473,9 +1473,9 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1502,7 +1502,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset:    "aoeu",
-			Data:       types.NewEmptyPayload(coll.Config),
+			Data:       types.NewPayload(coll.Config, nil),
 			APIKey:     legacyAPIKey,
 			SampleRate: 10,
 		},
@@ -1573,9 +1573,9 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1585,7 +1585,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1677,10 +1677,10 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		span := &types.Span{
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id":  "unused",
 					"http.status_code": 200,
-				}, coll.Config),
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -1712,9 +1712,9 @@ func TestSpanWithRuleReasons(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"http.status_code": 200,
-				}, coll.Config),
+				}),
 				APIKey: legacyAPIKey,
 			},
 			IsRoot: true,
@@ -1793,7 +1793,7 @@ func TestRedistributeTraces(t *testing.T) {
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 		},
 	}
 
@@ -1832,7 +1832,7 @@ func TestRedistributeTraces(t *testing.T) {
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			APIHost: "api1",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 		},
 		IsRoot: true,
 	}
@@ -1842,9 +1842,9 @@ func TestRedistributeTraces(t *testing.T) {
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}, coll.Config),
+			}),
 		},
 	}
 	decisionSpan.Data.ExtractMetadata()
@@ -2003,7 +2003,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace already has decision, should be sent",
 			traceID:              "traceID1",
-			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: types.NewEmptyPayload(coll.Config)}},
+			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: types.NewPayload(coll.Config, nil)}},
 			preRecordTrace:       true,
 			expectedSent:         1,
 			expectedForwarded:    0,
@@ -2012,7 +2012,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace cannot be decided yet, should be forwarded",
 			traceID:              "traceID2",
-			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: types.NewEmptyPayload(coll.Config)}},
+			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: types.NewPayload(coll.Config, nil)}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    1,
@@ -2023,9 +2023,9 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:    "decision spans that already has decision should be ignored and discarded",
 			traceID: "traceID3",
-			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: types.NewPayload(map[string]interface{}{
+			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}, coll.Config)}},
+			})}},
 			preRecordTrace:       true,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2034,9 +2034,9 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:    "decision spans that belongs to other peers should be ignored and discarded",
 			traceID: "traceID2",
-			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: types.NewPayload(map[string]interface{}{
+			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}, coll.Config)}},
+			})}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2140,10 +2140,10 @@ func TestBigTracesGoEarly(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
 					"index":           i,
-				}, coll.Config),
+				}),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -2159,7 +2159,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewEmptyPayload(coll.Config),
+			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -2217,12 +2217,12 @@ func TestCreateDecisionSpan(t *testing.T) {
 		TraceID: traceID1,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"http.status_code":       200,
 				"test":                   1,
 				"should-not-be-included": 123,
-			}, coll.Config),
+			}),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -2238,11 +2238,11 @@ func TestCreateDecisionSpan(t *testing.T) {
 		Dataset: "aoeu",
 		APIHost: peerShard.Addr,
 		APIKey:  legacyAPIKey,
-		Data: types.NewPayload(map[string]interface{}{
+		Data: types.NewPayload(coll.Config, map[string]interface{}{
 			"http.status_code": 200,
 			"trace.trace_id":   traceID1,
 			"test":             1,
-		}, coll.Config),
+		}),
 	}
 	// Set metadata fields directly
 	expected.Data.MetaAnnotationType = types.SpanAnnotationTypeUnknown.String()
@@ -2500,9 +2500,9 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 			TraceID: traceID,
 			Event: types.Event{
 				Dataset: "test-dataset",
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
-				}, coll.Config),
+				}),
 				APIKey: legacyAPIKey,
 			},
 		})
@@ -2720,7 +2720,7 @@ func createBenchmarkSpansWithLargeAttributes(traceID string, spanIdx int, cfg co
 			"key3": spanIdx + 100,
 		},
 	}
-	payload := types.NewPayload(data, cfg)
+	payload := types.NewPayload(cfg, data)
 	payload.ExtractMetadata()
 	return payload
 }

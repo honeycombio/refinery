@@ -860,9 +860,8 @@ func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
 }
 
 // ExtractMetadata populates the cached metadata fields from the payload data.
-// This MUST be called manually after creating or unmarshaling a non-empty Payload
-// to populate the metadata fields. The traceIdFieldNames and parentIdFieldNames parameters
-// are optional and used to extract trace ID and determine if the span is a root span.
+// This MUST be called manually after creating a non-empty Payload
+// to populate the metadata fields.
 func (p *Payload) ExtractMetadata() error {
 	if p.hasExtractedMetadata {
 		return nil
@@ -939,19 +938,13 @@ func (p *Payload) ExtractMetadata() error {
 
 // NewPayload creates a new Payload from a map of fields. This is not populate
 // metadata fields
-func NewPayload(data map[string]any, config config.Config) Payload {
+func NewPayload(config config.Config, data map[string]any) Payload {
 	p := Payload{
 		memoizedFields: data,
 	}
 
 	p.config = config
 	return p
-}
-
-func NewEmptyPayload(config config.Config) Payload {
-	return Payload{
-		config: config,
-	}
 }
 
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal. Instead it

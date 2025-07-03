@@ -453,7 +453,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		Environment: environment,
 		SampleRate:  uint(sampleRate),
 		Timestamp:   eventTime,
-		Data:        types.NewPayload(data, r.Config),
+		Data:        types.NewPayload(r.Config, data),
 	}, nil
 }
 
@@ -573,7 +573,7 @@ func (router *Router) processOTLPRequest(
 				Environment: environment,
 				SampleRate:  uint(ev.SampleRate),
 				Timestamp:   ev.Timestamp,
-				Data:        types.NewPayload(ev.Attributes, router.Config),
+				Data:        types.NewPayload(router.Config, ev.Attributes),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err = router.processEvent(event, requestID); err != nil {

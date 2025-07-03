@@ -251,7 +251,7 @@ func (sp *Span) ExtractDecisionContext(config config.Config) *Event {
 	dataSize := sp.Event.GetDataSize()
 
 	// Create a new empty payload and set metadata fields directly
-	decisionCtx.Data = NewPayload(map[string]interface{}{}, config)
+	decisionCtx.Data = NewPayload(config, nil)
 	// use the configured trace ID field name to set the trace ID
 	decisionCtx.Data.Set(config.GetTraceIdFieldNames()[0], sp.TraceID)
 	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)

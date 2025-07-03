@@ -34,7 +34,7 @@ func TestSpan_GetDataSize(t *testing.T) {
 			for i := 0; i < tt.numStrings; i++ {
 				data[tt.name+"str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 			}
-			payload := NewPayload(data, &config.MockConfig{})
+			payload := NewPayload(&config.MockConfig{}, data)
 			sp := &Span{
 				TraceID: tt.name,
 				Event: Event{
@@ -65,7 +65,7 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 			for i := range tt.num {
 				sliceData[i] = i
 			}
-			payload := NewPayload(map[string]any{"data": sliceData}, &config.MockConfig{})
+			payload := NewPayload(&config.MockConfig{}, map[string]any{"data": sliceData})
 			sp := &Span{
 				Event: Event{
 					Data: payload,
@@ -95,7 +95,7 @@ func TestSpan_GetDataSizeMap(t *testing.T) {
 			for i := range tt.num {
 				mapData[strconv.Itoa(i)] = i
 			}
-			payload := NewPayload(map[string]any{"data": mapData}, &config.MockConfig{})
+			payload := NewPayload(&config.MockConfig{}, map[string]any{"data": mapData})
 			sp := &Span{
 				Event: Event{
 					Data: payload,
@@ -120,7 +120,7 @@ func TestSpan_AnnotationType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload := NewPayload(tt.data, &config.MockConfig{})
+			payload := NewPayload(&config.MockConfig{}, tt.data)
 			payload.ExtractMetadata()
 			sp := &Span{
 				Event: Event{
@@ -138,10 +138,10 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	cfg := &config.MockConfig{
 		TraceIdFieldNames: []string{"trace.trace_id"},
 	}
-	payload := NewPayload(map[string]interface{}{
+	payload := NewPayload(cfg, map[string]interface{}{
 		"test":                 "test",
 		"meta.annotation_type": "span_event",
-	}, cfg)
+	})
 	payload.ExtractMetadata()
 	ev := Event{
 		APIHost:     "test.api.com",
@@ -193,7 +193,7 @@ func TestSpan_IsDecisionSpan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload := NewPayload(tt.data, &config.MockConfig{})
+			payload := NewPayload(&config.MockConfig{}, tt.data)
 			payload.ExtractMetadata()
 			sp := &Span{
 				Event: Event{
@@ -219,7 +219,7 @@ func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
 	for i := 0; i < 10; i++ {
 		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
-	payload := NewPayload(data, &config.MockConfig{})
+	payload := NewPayload(&config.MockConfig{}, data)
 	sp := &Span{
 		Event: Event{
 			Data: payload,
@@ -239,7 +239,7 @@ func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
 	for i := 0; i < 500; i++ {
 		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
-	payload := NewPayload(data, &config.MockConfig{})
+	payload := NewPayload(&config.MockConfig{}, data)
 	sp := &Span{
 		Event: Event{
 			Data: payload,

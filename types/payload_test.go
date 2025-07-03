@@ -33,8 +33,11 @@ func TestPayload(t *testing.T) {
 		"meta.refinery.min_span": false,
 		"meta.annotation_type":   "span_event",
 	}
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id"},
+	}
 
-	ph := NewEmptyPayload(&config.MockConfig{})
+	ph := NewPayload(mockCfg, data)
 	doTest := func(t *testing.T) {
 		assert.True(t, ph.Exists("key1"))
 		assert.Equal(t, "value1", ph.Get("key1"))
@@ -106,7 +109,7 @@ func TestPayload(t *testing.T) {
 		asJSON, err := json.Marshal(ph)
 		require.NoError(t, err)
 
-		fromJSON := NewEmptyPayload(&config.MockConfig{})
+		fromJSON := NewPayload(mockCfg, nil)
 		err = json.Unmarshal(asJSON, &fromJSON)
 		require.NoError(t, err)
 
@@ -117,15 +120,11 @@ func TestPayload(t *testing.T) {
 		assert.EqualValues(t, expectedFromJSON, maps.Collect(fromJSON.All()))
 	}
 
-	cfg := &config.MockConfig{
-		TraceIdFieldNames: []string{"trace.trace_id"},
-	}
-
-	ph = NewPayload(data, cfg)
+	ph = NewPayload(mockCfg, data)
 	ph.ExtractMetadata()
 	t.Run("from_map", doTest)
 
-	ph = NewEmptyPayload(cfg)
+	ph = NewPayload(mockCfg, nil)
 	msgpData, err := msgpack.Marshal(data)
 	require.NoError(t, err)
 	err = msgpack.Unmarshal(msgpData, &ph)
@@ -133,7 +132,7 @@ func TestPayload(t *testing.T) {
 	t.Run("from_msgpack", doTest)
 
 	// Test payload with other stuff (another payload) following.
-	ph = NewEmptyPayload(cfg)
+	ph = NewPayload(mockCfg, nil)
 	extendedMsgpData := append(msgpData, msgpData...)
 	remainder, err := ph.UnmarshalMsg(extendedMsgpData)
 	require.NoError(t, err)
@@ -143,7 +142,7 @@ func TestPayload(t *testing.T) {
 	// Test our own marshaler
 	msgpData, err = ph.MarshalMsg(nil)
 	require.NoError(t, err)
-	ph = NewEmptyPayload(cfg)
+	ph = NewPayload(mockCfg, nil)
 	remainder, err = ph.UnmarshalMsg(msgpData)
 	require.NoError(t, err)
 	assert.Empty(t, remainder)
@@ -156,9 +155,9 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			"trace.trace_id": "custom-trace-123",
 			"service.name":   "test-service",
 		}
-		ph := NewPayload(data, &config.MockConfig{
+		ph := NewPayload(&config.MockConfig{
 			TraceIdFieldNames: []string{"trace.trace_id"},
-		})
+		}, data)
 		ph.ExtractMetadata()
 
 		assert.Equal(t, "custom-trace-123", ph.MetaTraceID, "Should extract trace ID from custom field")
@@ -171,10 +170,10 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			"trace.trace_id": "trace-123",
 			"span.id":        "span-456",
 		}
-		ph := NewPayload(data, &config.MockConfig{
+		ph := NewPayload(&config.MockConfig{
 			TraceIdFieldNames:  []string{"trace.trace_id"},
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-		})
+		}, data)
 		ph.ExtractMetadata()
 
 		assert.Equal(t, "trace-123", ph.MetaTraceID)
@@ -187,10 +186,10 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			"trace.parent_id": "parent-123",
 			"span.id":         "span-789",
 		}
-		ph = NewPayload(data, &config.MockConfig{
+		ph = NewPayload(&config.MockConfig{
 			TraceIdFieldNames:  []string{"trace.trace_id"},
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-		})
+		}, data)
 		ph.ExtractMetadata()
 
 		assert.Equal(t, "trace-789", ph.MetaTraceID)
@@ -204,10 +203,10 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			"meta.signal_type":   "log",
 			"trace.trace_id":     "trace-123",
 		}
-		ph := NewPayload(data, &config.MockConfig{
+		ph := NewPayload(&config.MockConfig{
 			TraceIdFieldNames:  []string{"trace.trace_id"},
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-		})
+		}, data)
 		ph.ExtractMetadata()
 
 		assert.Equal(t, "log", ph.MetaSignalType)
@@ -237,9 +236,9 @@ func TestPayloadExtractMetadataError(t *testing.T) {
 
 func TestPayloadMetaAnnotationType(t *testing.T) {
 	t.Run("handles string values", func(t *testing.T) {
-		ph := NewPayload(map[string]any{
+		ph := NewPayload(&config.MockConfig{}, map[string]any{
 			"meta.annotation_type": "span_event",
-		}, &config.MockConfig{})
+		})
 		err := ph.ExtractMetadata()
 		require.NoError(t, err)
 
@@ -249,13 +248,13 @@ func TestPayloadMetaAnnotationType(t *testing.T) {
 
 	t.Run("marshaling preserves type", func(t *testing.T) {
 		// Test string marshaling
-		ph1 := NewEmptyPayload(&config.MockConfig{})
+		ph1 := NewPayload(&config.MockConfig{}, nil)
 		ph1.MetaAnnotationType = "span_event"
 
 		msgpData, err := ph1.MarshalMsg(nil)
 		require.NoError(t, err)
 
-		ph2 := NewEmptyPayload(&config.MockConfig{})
+		ph2 := NewPayload(&config.MockConfig{}, nil)
 		_, err = ph2.UnmarshalMsg(msgpData)
 		require.NoError(t, err)
 
@@ -338,7 +337,7 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 
 func TestPayloadGetSetMetadataSync(t *testing.T) {
 	t.Run("Set updates metadata fields", func(t *testing.T) {
-		ph := NewPayload(map[string]any{}, &config.MockConfig{})
+		ph := NewPayload(&config.MockConfig{}, nil)
 
 		// Test string fields
 		ph.Set("meta.signal_type", "trace")
@@ -371,7 +370,7 @@ func TestPayloadGetSetMetadataSync(t *testing.T) {
 	})
 
 	t.Run("Get returns from dedicated fields", func(t *testing.T) {
-		ph := NewPayload(map[string]any{}, &config.MockConfig{})
+		ph := NewPayload(&config.MockConfig{}, nil)
 
 		// Set fields directly
 		ph.MetaSignalType = "log"
@@ -389,7 +388,7 @@ func TestPayloadGetSetMetadataSync(t *testing.T) {
 	})
 
 	t.Run("Get returns nil for unset boolean fields", func(t *testing.T) {
-		ph := NewPayload(map[string]any{}, &config.MockConfig{})
+		ph := NewPayload(&config.MockConfig{}, nil)
 
 		// Boolean fields without values should return nil
 		assert.Nil(t, ph.Get("meta.refinery.probe"))
@@ -489,8 +488,8 @@ func BenchmarkPayload(b *testing.B) {
 	msgpData, err := msgpack.Marshal(data)
 	require.NoError(b, err)
 
-	phMap := NewPayload(data, &config.MockConfig{})
-	phMsgp := NewEmptyPayload(&config.MockConfig{})
+	phMap := NewPayload(&config.MockConfig{}, data)
+	phMsgp := NewPayload(&config.MockConfig{}, nil)
 	err = msgpack.Unmarshal(msgpData, &phMsgp)
 	require.NoError(b, err)
 
@@ -498,20 +497,20 @@ func BenchmarkPayload(b *testing.B) {
 		for b.Loop() {
 			var m map[string]any
 			_ = msgpack.Unmarshal(msgpData, &m)
-			_ = NewPayload(m, &config.MockConfig{})
+			_ = NewPayload(&config.MockConfig{}, m)
 		}
 	})
 
 	b.Run("create_msgpack", func(b *testing.B) {
 		for b.Loop() {
-			phMsgp := NewEmptyPayload(&config.MockConfig{})
+			phMsgp := NewPayload(&config.MockConfig{}, nil)
 			_ = phMsgp.UnmarshalMsgpack(msgpData)
 		}
 	})
 
 	b.Run("create_msgp", func(b *testing.B) {
 		for b.Loop() {
-			phMsgp := NewEmptyPayload(&config.MockConfig{})
+			phMsgp := NewPayload(&config.MockConfig{}, nil)
 			_, _ = phMsgp.UnmarshalMsg(msgpData)
 		}
 	})
@@ -543,7 +542,7 @@ func BenchmarkPayload(b *testing.B) {
 			modulo := len(keys) - num
 			for n := range b.N {
 				offset := n % modulo
-				phMsgpMemo := NewEmptyPayload(&config.MockConfig{})
+				phMsgpMemo := NewPayload(&config.MockConfig{}, nil)
 				_ = phMsgpMemo.UnmarshalMsgpack(msgpData)
 				phMsgpMemo.MemoizeFields(keys[offset : offset+num]...)
 				for _, key := range keys[offset : offset+num] {

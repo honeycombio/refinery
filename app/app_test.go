@@ -142,7 +142,7 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 			Timestamp:  timestamp,
 		}
 		if dataMap, ok := eventData["data"].(map[string]interface{}); ok {
-			event.Data = types.NewPayload(dataMap, t.cfg)
+			event.Data = types.NewPayload(t.cfg, dataMap)
 			event.Data.ExtractMetadata()
 		}
 

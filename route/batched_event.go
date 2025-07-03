@@ -51,7 +51,7 @@ func (b *batchedEvent) UnmarshalJSON(data []byte) error {
 	b.SampleRate = temp.SampleRate
 
 	// Initialize Data with config and then unmarshal the raw JSON into it
-	b.Data = types.NewEmptyPayload(b.cfg)
+	b.Data = types.NewPayload(b.cfg, nil)
 	err = json.Unmarshal(temp.Data, &b.Data)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case bytes.Equal(field, []byte("data")):
-			b.Data = types.NewEmptyPayload(b.cfg)
+			b.Data = types.NewPayload(b.cfg, nil)
 			bts, err = b.Data.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")

@@ -24,27 +24,27 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 		{
 			MsgPackTimestamp: &timestamp,
 			cfg:              mockCfg,
-			Data: types.NewPayload(map[string]any{
+			Data: types.NewPayload(mockCfg, map[string]any{
 				"string_field":    "test_value",
 				"trace.parent_id": "parent-123",
 				"int_field":       int64(42),
 				"float_field":     3.14159,
 				"bool_field":      true,
 				"nil_field":       nil,
-			}, mockCfg),
+			}),
 		},
 		{
 			MsgPackTimestamp: &timestamp,
 			SampleRate:       200,
 			cfg:              mockCfg,
-			Data: types.NewPayload(map[string]any{
+			Data: types.NewPayload(mockCfg, map[string]any{
 				"another_string":  "hello world",
 				"trace.parent_id": "parent-123",
 				"negative_int":    int64(-123),
 				"large_float":     1234.5678,
 				"false_bool":      false,
 				"nil_value":       nil,
-			}, mockCfg),
+			}),
 		},
 	}
 
