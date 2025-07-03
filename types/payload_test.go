@@ -334,39 +334,50 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.Empty(t, remainder2)
 	})
 }
-
-func TestPayloadGetSetMetadataSync(t *testing.T) {
+func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 	t.Run("Set updates metadata fields", func(t *testing.T) {
 		ph := NewPayload(&config.MockConfig{}, nil)
 
 		// Test string fields
+		assert.False(t, ph.Exists("meta.signal_type"))
 		ph.Set("meta.signal_type", "trace")
 		assert.Equal(t, "trace", ph.MetaSignalType)
 		assert.Equal(t, "trace", ph.Get("meta.signal_type"))
+		assert.True(t, ph.Exists("meta.signal_type"))
 
+		assert.False(t, ph.Exists("meta.trace_id"))
 		ph.Set("meta.trace_id", "test-trace-456")
 		assert.Equal(t, "test-trace-456", ph.MetaTraceID)
 		assert.Equal(t, "test-trace-456", ph.Get("meta.trace_id"))
+		assert.True(t, ph.Exists("meta.trace_id"))
 
 		// Test boolean fields
+		assert.False(t, ph.Exists("meta.refinery.probe"))
 		ph.Set("meta.refinery.probe", true)
 		assert.True(t, ph.MetaRefineryProbe.HasValue)
 		assert.True(t, ph.MetaRefineryProbe.Value)
 		assert.Equal(t, true, ph.Get("meta.refinery.probe"))
+		assert.True(t, ph.Exists("meta.refinery.probe"))
 
+		assert.False(t, ph.Exists("meta.refinery.root"))
 		ph.Set("meta.refinery.root", false)
 		assert.True(t, ph.MetaRefineryRoot.HasValue)
 		assert.False(t, ph.MetaRefineryRoot.Value)
 		assert.Equal(t, false, ph.Get("meta.refinery.root"))
+		assert.True(t, ph.Exists("meta.refinery.root"))
 
 		// Test int64 fields
+		assert.False(t, ph.Exists("meta.refinery.send_by"))
 		ph.Set("meta.refinery.send_by", int64(12345))
 		assert.Equal(t, int64(12345), ph.MetaRefinerySendBy)
 		assert.Equal(t, int64(12345), ph.Get("meta.refinery.send_by"))
+		assert.True(t, ph.Exists("meta.refinery.send_by"))
 
+		assert.False(t, ph.Exists("meta.refinery.span_data_size"))
 		ph.Set("meta.refinery.span_data_size", int64(67890))
 		assert.Equal(t, int64(67890), ph.MetaRefinerySpanDataSize)
 		assert.Equal(t, int64(67890), ph.Get("meta.refinery.span_data_size"))
+		assert.True(t, ph.Exists("meta.refinery.span_data_size"))
 	})
 
 	t.Run("Get returns from dedicated fields", func(t *testing.T) {
@@ -385,16 +396,30 @@ func TestPayloadGetSetMetadataSync(t *testing.T) {
 		assert.Equal(t, true, ph.Get("meta.refinery.probe"))
 		assert.Equal(t, false, ph.Get("meta.refinery.root"))
 		assert.Equal(t, int64(54321), ph.Get("meta.refinery.send_by"))
+
+		// Exists should also work when fields are set directly
+		assert.True(t, ph.Exists("meta.signal_type"))
+		assert.True(t, ph.Exists("meta.trace_id"))
+		assert.True(t, ph.Exists("meta.refinery.probe"))
+		assert.True(t, ph.Exists("meta.refinery.root"))
+		assert.True(t, ph.Exists("meta.refinery.send_by"))
 	})
 
 	t.Run("Get returns nil for unset boolean fields", func(t *testing.T) {
 		ph := NewPayload(&config.MockConfig{}, nil)
 
-		// Boolean fields without values should return nil
+		// Boolean fields without values should return nil and not exist
 		assert.Nil(t, ph.Get("meta.refinery.probe"))
+		assert.False(t, ph.Exists("meta.refinery.probe"))
+
 		assert.Nil(t, ph.Get("meta.refinery.root"))
+		assert.False(t, ph.Exists("meta.refinery.root"))
+
 		assert.Nil(t, ph.Get("meta.refinery.min_span"))
+		assert.False(t, ph.Exists("meta.refinery.min_span"))
+
 		assert.Nil(t, ph.Get("meta.refinery.expired_trace"))
+		assert.False(t, ph.Exists("meta.refinery.expired_trace"))
 	})
 }
 
