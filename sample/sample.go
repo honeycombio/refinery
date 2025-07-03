@@ -133,7 +133,7 @@ type dynsamplerMetricsRecorder struct {
 	// Stores the last recorded internal metrics produced by dynsampler-go
 	lastMetrics map[string]internalDysamplerMetric
 	met         metrics.Metrics
-	metricNames map[string]string
+	metricNames metrics.ComputedMetricNames
 }
 
 // RegisterMetrics registers the metrics that will be recorded by this package.
@@ -142,28 +142,16 @@ type dynsamplerMetricsRecorder struct {
 func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) {
 	// Register statistics this package will produce
 	d.dynPrefix = d.prefix + "_"
-	d.metricNames = make(map[string]string)
+	d.metricNames = metrics.NewComputedMetricNames(d.prefix, samplerMetrics)
 	d.lastMetrics = make(map[string]internalDysamplerMetric)
 	dynInternalMetrics := sampler.GetMetrics(d.dynPrefix)
 	for name, val := range dynInternalMetrics {
 		metricType := getMetricType(name)
-		d.met.Register(metrics.Metadata{
-			Name: name,
-			Type: metricType,
-		})
 		d.lastMetrics[name] = internalDysamplerMetric{
 			metricType: metricType,
 			val:        val,
 		}
 	}
-
-	for _, metric := range samplerMetrics {
-		fullname := d.prefix + metric.Name
-		d.metricNames[metric.Name] = fullname
-		metric.Name = fullname
-		d.met.Register(metric)
-	}
-
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
@@ -181,12 +169,12 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	}
 
 	if kept {
-		d.met.Increment(d.metricNames["_num_kept"])
+		d.met.Increment(d.metricNames.Get("_num_kept"))
 	} else {
-		d.met.Increment(d.metricNames["_num_dropped"])
+		d.met.Increment(d.metricNames.Get("_num_dropped"))
 	}
-	d.met.Histogram(d.metricNames["_sampler_key_cardinality"], float64(numTraceKey))
-	d.met.Histogram(d.metricNames["_sample_rate"], float64(rate))
+	d.met.Histogram(d.metricNames.Get("_sampler_key_cardinality"), float64(numTraceKey))
+	d.met.Histogram(d.metricNames.Get("_sample_rate"), float64(rate))
 }
 
 // getKeyFields returns the fields that should be used as keys for the sampler.
