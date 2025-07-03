@@ -167,8 +167,6 @@ func main() {
 	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
 	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
 	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
-	upstreamMetricsWrapper := &metrics.LibhoneyMetricsWrapper{MetricsPrefixer: upstreamMetricsRecorder}
-	peerMetricsWrapper := &metrics.LibhoneyMetricsWrapper{MetricsPrefixer: peerMetricsRecorder}
 
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDirectTransmission(
@@ -308,8 +306,8 @@ func main() {
 	// these have to be done after the injection (of metrics)
 	// these are the metrics that libhoney will emit; we preregister them so that they always appear
 	for _, metric := range libhoneyMetrics {
-		upstreamMetricsWrapper.Register(metric)
-		peerMetricsWrapper.Register(metric)
+		upstreamMetricsRecorder.Register(metric)
+		peerMetricsRecorder.Register(metric)
 	}
 
 	// Register metrics after the metrics object has been created
