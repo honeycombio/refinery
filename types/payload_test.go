@@ -10,13 +10,12 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
 func TestMetadataFieldsHaveMetaPrefix(t *testing.T) {
-	for _, field := range metadataFields {
-		assert.True(t, strings.HasPrefix(field.key, "meta."))
+	for key := range metadataFields {
+		assert.True(t, strings.HasPrefix(key, "meta."))
 	}
 }
 
@@ -32,6 +31,9 @@ func TestPayload(t *testing.T) {
 		"meta.refinery.root":     true,
 		"meta.refinery.min_span": false,
 		"meta.annotation_type":   "span_event",
+
+		// This is the wrong type, it should just be ignored and dropped from the data.
+		"meta.refinery.send_by": "never",
 	}
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames: []string{"trace.trace_id"},
@@ -61,6 +63,9 @@ func TestPayload(t *testing.T) {
 		assert.True(t, ph.Exists("meta.annotation_type"))
 		assert.Equal(t, "span_event", ph.Get("meta.annotation_type"))
 
+		assert.Nil(t, ph.Get("meta.refinery.send_by"))
+		assert.False(t, ph.Exists("meta.refinery.send_by"))
+
 		// Test dedicated fields - should be populated from initial data or unmarshal
 		assert.Equal(t, "test-trace-123", ph.MetaTraceID, "MetaTraceID should be populated")
 		assert.True(t, ph.MetaRefineryRoot.HasValue, "MetaRefineryRoot should be set")
@@ -68,6 +73,7 @@ func TestPayload(t *testing.T) {
 		assert.True(t, ph.MetaRefineryMinSpan.HasValue, "MetaRefineryMinSpan should be set")
 		assert.Equal(t, false, ph.MetaRefineryMinSpan.Value, "MetaRefineryMinSpan should be populated")
 		assert.Equal(t, "span_event", ph.MetaAnnotationType, "MetaAnnotationType should be populated")
+		assert.Equal(t, int64(0), ph.MetaRefinerySendBy)
 
 		ph.Set("key5", "newvalue")
 		assert.True(t, ph.Exists("key5"))
@@ -96,6 +102,7 @@ func TestPayload(t *testing.T) {
 		expected["key5"] = "newvalue"
 		expected["meta.refinery.span_data_size"] = int64(1234)
 		expected["meta.refinery.incoming_user_agent"] = "test-agent/1.0"
+		delete(expected, "meta.refinery.send_by")
 		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
@@ -116,7 +123,6 @@ func TestPayload(t *testing.T) {
 		// round-tripping through JSON turns our ints into floats
 		expectedFromJSON := maps.Collect(ph.All())
 		expectedFromJSON["key2"] = 42.0
-		expectedFromJSON["meta.refinery.span_data_size"] = 1234.0
 		assert.EqualValues(t, expectedFromJSON, maps.Collect(fromJSON.All()))
 	}
 
@@ -234,55 +240,54 @@ func TestPayloadExtractMetadataError(t *testing.T) {
 	})
 }
 
-func TestPayloadMetaAnnotationType(t *testing.T) {
-	t.Run("handles string values", func(t *testing.T) {
-		ph := NewPayload(&config.MockConfig{}, map[string]any{
-			"meta.annotation_type": "span_event",
-		})
-		err := ph.ExtractMetadata()
-		require.NoError(t, err)
-
-		assert.Equal(t, "span_event", ph.MetaAnnotationType)
-		assert.Equal(t, "span_event", ph.Get("meta.annotation_type"))
-	})
-
-	t.Run("marshaling preserves type", func(t *testing.T) {
-		// Test string marshaling
-		ph1 := NewPayload(&config.MockConfig{}, nil)
-		ph1.MetaAnnotationType = "span_event"
-
-		msgpData, err := ph1.MarshalMsg(nil)
-		require.NoError(t, err)
-
-		ph2 := NewPayload(&config.MockConfig{}, nil)
-		_, err = ph2.UnmarshalMsg(msgpData)
-		require.NoError(t, err)
-
-		assert.Equal(t, "span_event", ph2.MetaAnnotationType)
-	})
-}
-
 func TestPayloadUnmarshalMsg(t *testing.T) {
 	t.Run("extracts metadata during unmarshal", func(t *testing.T) {
-		// Create test data with metadata fields
+		// Create test data with all metadata fields
 		data := map[string]any{
-			"regular_field":        "value1",
+			// Regular fields
+			"regular_field": "value1",
+			"another_field": 42,
+
+			// Core metadata fields
 			"meta.signal_type":     "trace",
 			"meta.annotation_type": "span_event",
-			"meta.refinery.root":   true,
-			"meta.refinery.probe":  false,
-			"trace.trace_id":       "custom-trace-456", // Custom trace ID field
-			"span.parent_id":       "",                 // Empty parent ID should make it root
+
+			// Refinery boolean fields
+			"meta.refinery.probe":         true,
+			"meta.refinery.min_span":      true,
+			"meta.refinery.expired_trace": false,
+			"meta.refinery.shutdown_send": true,
+			"meta.stressed":               true,
+
+			// Refinery string fields
+			"meta.refinery.incoming_user_agent": "test-agent/1.0",
+			"meta.refinery.forwarded":           "192.168.1.1",
+			"meta.refinery.local_hostname":      "test-host",
+			"meta.refinery.reason":              "deterministic",
+			"meta.refinery.send_reason":         "trace_timeout",
+			"meta.refinery.sample_key":          "sample-key-123",
+
+			// Refinery int64 fields
+			"meta.refinery.send_by":              int64(1234567890),
+			"meta.refinery.span_data_size":       int64(2048),
+			"meta.span_event_count":              int64(5),
+			"meta.span_link_count":               int64(3),
+			"meta.span_count":                    int64(10),
+			"meta.event_count":                   int64(15),
+			"meta.refinery.original_sample_rate": int64(100),
+
+			// Custom trace/parent fields
+			"trace.trace_id": "custom-trace-456", // Custom trace ID field
+			"span.parent_id": "",                 // Empty parent ID should make it root
 		}
 
-		// Marshal to msgpack
 		msgpData, err := msgpack.Marshal(data)
 		require.NoError(t, err)
 
 		// Create payload and unmarshal with metadata extraction
 		p := Payload{
 			config: &config.MockConfig{
-				TraceIdFieldNames:  []string{"trace.trace_id"},
+				TraceIdFieldNames:  []string{"wrong", "trace.trace_id"},
 				ParentIdFieldNames: []string{"span.parent_id"},
 			},
 		}
@@ -290,17 +295,45 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, remainder)
 
-		// Verify metadata was extracted
+		// Verify core metadata was extracted
 		assert.Equal(t, "trace", p.MetaSignalType)
-		assert.Equal(t, "custom-trace-456", p.MetaTraceID) // Should use custom field
+		assert.Equal(t, "custom-trace-456", p.MetaTraceID) // Should use custom field over meta.trace_id
 		assert.Equal(t, "span_event", p.MetaAnnotationType)
-		assert.True(t, p.MetaRefineryRoot.HasValue)
-		assert.True(t, p.MetaRefineryRoot.Value)
+
+		// Verify boolean metadata fields
 		assert.True(t, p.MetaRefineryProbe.HasValue)
-		assert.False(t, p.MetaRefineryProbe.Value)
+		assert.True(t, p.MetaRefineryProbe.Value)
+		assert.True(t, p.MetaRefineryRoot.HasValue)
+		assert.True(t, p.MetaRefineryRoot.Value) // Should be true because empty parent ID
+		assert.True(t, p.MetaRefineryMinSpan.HasValue)
+		assert.True(t, p.MetaRefineryMinSpan.Value)
+		assert.True(t, p.MetaRefineryExpiredTrace.HasValue)
+		assert.False(t, p.MetaRefineryExpiredTrace.Value)
+		assert.True(t, p.MetaRefineryShutdownSend.HasValue)
+		assert.True(t, p.MetaRefineryShutdownSend.Value)
+		assert.True(t, p.MetaStressed.HasValue)
+		assert.True(t, p.MetaStressed.Value)
+
+		// Verify string metadata fields
+		assert.Equal(t, "test-agent/1.0", p.MetaRefineryIncomingUserAgent)
+		assert.Equal(t, "192.168.1.1", p.MetaRefineryForwarded)
+		assert.Equal(t, "test-host", p.MetaRefineryLocalHostname)
+		assert.Equal(t, "deterministic", p.MetaRefineryReason)
+		assert.Equal(t, "trace_timeout", p.MetaRefinerySendReason)
+		assert.Equal(t, "sample-key-123", p.MetaRefinerySampleKey)
+
+		// Verify int64 metadata fields
+		assert.Equal(t, int64(1234567890), p.MetaRefinerySendBy)
+		assert.Equal(t, int64(2048), p.MetaRefinerySpanDataSize)
+		assert.Equal(t, int64(5), p.MetaSpanEventCount)
+		assert.Equal(t, int64(3), p.MetaSpanLinkCount)
+		assert.Equal(t, int64(10), p.MetaSpanCount)
+		assert.Equal(t, int64(15), p.MetaEventCount)
+		assert.Equal(t, int64(100), p.MetaRefineryOriginalSampleRate)
 
 		// Verify regular fields are still accessible
 		assert.Equal(t, "value1", p.Get("regular_field"))
+		assert.Equal(t, int64(42), p.Get("another_field")) // should preserve int type
 	})
 
 	t.Run("handles remainder correctly", func(t *testing.T) {
@@ -334,6 +367,7 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.Empty(t, remainder2)
 	})
 }
+
 func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 	t.Run("Set updates metadata fields", func(t *testing.T) {
 		ph := NewPayload(&config.MockConfig{}, nil)
@@ -421,79 +455,6 @@ func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 		assert.Nil(t, ph.Get("meta.refinery.expired_trace"))
 		assert.False(t, ph.Exists("meta.refinery.expired_trace"))
 	})
-}
-
-func TestUnmarshalMsgWithMetadata(t *testing.T) {
-	// Create test data with metadata fields
-	data := map[string]interface{}{
-		"trace.trace_id":                    "test-trace-123",
-		"trace.parent_id":                   "parent-456",
-		"meta.signal_type":                  "span",
-		"meta.annotation_type":              "span_event",
-		"meta.refinery.probe":               true,
-		"meta.refinery.root":                false,
-		"meta.refinery.incoming_user_agent": "test-agent",
-		"meta.refinery.send_by":             int64(1234567890),
-		"meta.refinery.span_data_size":      int64(1024),
-		"meta.refinery.min_span":            true,
-		"meta.refinery.forwarded":           "192.168.1.1",
-		"meta.refinery.expired_trace":       false,
-		"regular_field":                     "value",
-		"another_field":                     42,
-	}
-
-	// Marshal the data to msgpack
-	var buf []byte
-	buf = msgp.AppendMapHeader(buf, uint32(len(data)))
-	for k, v := range data {
-		buf = msgp.AppendString(buf, k)
-		switch val := v.(type) {
-		case string:
-			buf = msgp.AppendString(buf, val)
-		case int64:
-			buf = msgp.AppendInt64(buf, val)
-		case int:
-			buf = msgp.AppendInt(buf, val)
-		case bool:
-			buf = msgp.AppendBool(buf, val)
-		}
-	}
-
-	// Test the optimized unmarshal
-	p := Payload{
-		config: &config.MockConfig{
-			TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
-			ParentIdFieldNames: []string{"span.parent_id", "parentId"},
-		},
-	}
-
-	remaining, err := p.UnmarshalMsg(buf)
-	require.NoError(t, err)
-	assert.Empty(t, remaining)
-
-	// Verify metadata was extracted correctly
-	assert.Equal(t, "test-trace-123", p.MetaTraceID)
-	assert.Equal(t, "span", p.MetaSignalType)
-	assert.Equal(t, "span_event", p.MetaAnnotationType)
-	assert.True(t, p.MetaRefineryProbe.HasValue)
-	assert.True(t, p.MetaRefineryProbe.Value)
-	assert.True(t, p.MetaRefineryRoot.HasValue)
-	assert.False(t, p.MetaRefineryRoot.Value)
-	assert.Equal(t, "test-agent", p.MetaRefineryIncomingUserAgent)
-	assert.Equal(t, int64(1234567890), p.MetaRefinerySendBy)
-	assert.Equal(t, int64(1024), p.MetaRefinerySpanDataSize)
-	assert.True(t, p.MetaRefineryMinSpan.HasValue)
-	assert.True(t, p.MetaRefineryMinSpan.Value)
-	assert.Equal(t, "192.168.1.1", p.MetaRefineryForwarded)
-	assert.True(t, p.MetaRefineryExpiredTrace.HasValue)
-	assert.False(t, p.MetaRefineryExpiredTrace.Value)
-
-	// Verify HasExtractedMetadata returns true
-	assert.True(t, p.hasExtractedMetadata)
-
-	// Verify we can still access regular fields
-	assert.Equal(t, "value", p.Get("regular_field"))
-	assert.Equal(t, int64(42), p.Get("another_field"))
 }
 
 func BenchmarkPayload(b *testing.B) {
