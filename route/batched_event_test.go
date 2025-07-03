@@ -15,7 +15,9 @@ import (
 
 func TestBatchedEventRoundTrip(t *testing.T) {
 	timestamp := time.Now()
-	mockCfg := &config.MockConfig{}
+	mockCfg := &config.MockConfig{
+		ParentIdFieldNames: []string{"trace.parent_id"},
+	}
 
 	// Create events slice
 	events := []batchedEvent{
@@ -23,11 +25,12 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 			MsgPackTimestamp: &timestamp,
 			cfg:              mockCfg,
 			Data: types.NewPayload(map[string]any{
-				"string_field": "test_value",
-				"int_field":    int64(42),
-				"float_field":  3.14159,
-				"bool_field":   true,
-				"nil_field":    nil,
+				"string_field":    "test_value",
+				"trace.parent_id": "parent-123",
+				"int_field":       int64(42),
+				"float_field":     3.14159,
+				"bool_field":      true,
+				"nil_field":       nil,
 			}, mockCfg),
 		},
 		{
@@ -35,11 +38,12 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 			SampleRate:       200,
 			cfg:              mockCfg,
 			Data: types.NewPayload(map[string]any{
-				"another_string": "hello world",
-				"negative_int":   int64(-123),
-				"large_float":    1234.5678,
-				"false_bool":     false,
-				"nil_value":      nil,
+				"another_string":  "hello world",
+				"trace.parent_id": "parent-123",
+				"negative_int":    int64(-123),
+				"large_float":     1234.5678,
+				"false_bool":      false,
+				"nil_value":       nil,
 			}, mockCfg),
 		},
 	}
@@ -157,6 +161,6 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	// Event 2: log (never root)
 	assert.Equal(t, "trace-3", batchEvents[2].Data.MetaTraceID)
 	assert.Equal(t, "log", batchEvents[2].Data.MetaSignalType)
-	assert.True(t, batchEvents[2].Data.MetaRefineryRoot.HasValue)
+	assert.False(t, batchEvents[2].Data.MetaRefineryRoot.HasValue)
 	assert.False(t, batchEvents[2].Data.MetaRefineryRoot.Value)
 }

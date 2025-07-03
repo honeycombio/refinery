@@ -1181,7 +1181,6 @@ func (p *Payload) Set(key string, value any) {
 			field.set(p, value)
 			break
 		}
-		return
 	}
 
 	if p.memoizedFields == nil {
@@ -1202,6 +1201,13 @@ func (p *Payload) All() iter.Seq2[string, any] {
 	return func(yield func(string, any) bool) {
 		// First yield metadata fields with non-default values
 		for _, field := range metadataFields {
+			if field.key == MetaTraceID {
+				continue
+			}
+			if field.key == MetaRefineryRoot && !p.MetaRefineryRoot.Value {
+				// Skip the root field if it's false, as it doesn't need to be yielded
+				continue
+			}
 			if value, ok := field.get(p); ok {
 				if !yield(field.key, value) {
 					return
