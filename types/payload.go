@@ -75,47 +75,38 @@ type metadataField struct {
 }
 
 var metadataFields = map[string]metadataField{
-	MetaSignalType:                stringField(MetaSignalType, func(p *Payload) any { return &p.MetaSignalType }),
-	MetaTraceID:                   stringField(MetaTraceID, func(p *Payload) any { return &p.MetaTraceID }),
-	MetaAnnotationType:            stringField(MetaAnnotationType, func(p *Payload) any { return &p.MetaAnnotationType }),
-	MetaRefineryProbe:             boolField(MetaRefineryProbe, func(p *Payload) any { return &p.MetaRefineryProbe }),
-	MetaRefineryRoot:              boolField(MetaRefineryRoot, func(p *Payload) any { return &p.MetaRefineryRoot }),
-	MetaRefineryIncomingUserAgent: stringField(MetaRefineryIncomingUserAgent, func(p *Payload) any { return &p.MetaRefineryIncomingUserAgent }),
-	MetaRefinerySendBy:            int64Field(MetaRefinerySendBy, func(p *Payload) any { return &p.MetaRefinerySendBy }),
-	MetaRefinerySpanDataSize:      int64Field(MetaRefinerySpanDataSize, func(p *Payload) any { return &p.MetaRefinerySpanDataSize }),
-	MetaRefineryMinSpan:           boolField(MetaRefineryMinSpan, func(p *Payload) any { return &p.MetaRefineryMinSpan }),
-	MetaRefineryForwarded:         stringField(MetaRefineryForwarded, func(p *Payload) any { return &p.MetaRefineryForwarded }),
-	MetaRefineryExpiredTrace:      boolField(MetaRefineryExpiredTrace, func(p *Payload) any { return &p.MetaRefineryExpiredTrace }),
+	MetaSignalType:                stringField(MetaSignalType, func(p *Payload) *string { return &p.MetaSignalType }),
+	MetaTraceID:                   stringField(MetaTraceID, func(p *Payload) *string { return &p.MetaTraceID }),
+	MetaAnnotationType:            stringField(MetaAnnotationType, func(p *Payload) *string { return &p.MetaAnnotationType }),
+	MetaRefineryProbe:             boolField(MetaRefineryProbe, func(p *Payload) *nullableBool { return &p.MetaRefineryProbe }),
+	MetaRefineryRoot:              boolField(MetaRefineryRoot, func(p *Payload) *nullableBool { return &p.MetaRefineryRoot }),
+	MetaRefineryIncomingUserAgent: stringField(MetaRefineryIncomingUserAgent, func(p *Payload) *string { return &p.MetaRefineryIncomingUserAgent }),
+	MetaRefinerySendBy:            int64Field(MetaRefinerySendBy, func(p *Payload) *int64 { return &p.MetaRefinerySendBy }),
+	MetaRefinerySpanDataSize:      int64Field(MetaRefinerySpanDataSize, func(p *Payload) *int64 { return &p.MetaRefinerySpanDataSize }),
+	MetaRefineryMinSpan:           boolField(MetaRefineryMinSpan, func(p *Payload) *nullableBool { return &p.MetaRefineryMinSpan }),
+	MetaRefineryForwarded:         stringField(MetaRefineryForwarded, func(p *Payload) *string { return &p.MetaRefineryForwarded }),
+	MetaRefineryExpiredTrace:      boolField(MetaRefineryExpiredTrace, func(p *Payload) *nullableBool { return &p.MetaRefineryExpiredTrace }),
 
-	MetaRefineryLocalHostname:      stringField(MetaRefineryLocalHostname, func(p *Payload) any { return &p.MetaRefineryLocalHostname }),
-	MetaStressed:                   boolField(MetaStressed, func(p *Payload) any { return &p.MetaStressed }),
-	MetaRefineryReason:             stringField(MetaRefineryReason, func(p *Payload) any { return &p.MetaRefineryReason }),
-	MetaRefinerySendReason:         stringField(MetaRefinerySendReason, func(p *Payload) any { return &p.MetaRefinerySendReason }),
-	MetaSpanEventCount:             int64Field(MetaSpanEventCount, func(p *Payload) any { return &p.MetaSpanEventCount }),
-	MetaSpanLinkCount:              int64Field(MetaSpanLinkCount, func(p *Payload) any { return &p.MetaSpanLinkCount }),
-	MetaSpanCount:                  int64Field(MetaSpanCount, func(p *Payload) any { return &p.MetaSpanCount }),
-	MetaEventCount:                 int64Field(MetaEventCount, func(p *Payload) any { return &p.MetaEventCount }),
-	MetaRefineryOriginalSampleRate: int64Field(MetaRefineryOriginalSampleRate, func(p *Payload) any { return &p.MetaRefineryOriginalSampleRate }),
-	MetaRefineryShutdownSend:       boolField(MetaRefineryShutdownSend, func(p *Payload) any { return &p.MetaRefineryShutdownSend }),
-	MetaRefinerySampleKey:          stringField(MetaRefinerySampleKey, func(p *Payload) any { return &p.MetaRefinerySampleKey }),
+	MetaRefineryLocalHostname:      stringField(MetaRefineryLocalHostname, func(p *Payload) *string { return &p.MetaRefineryLocalHostname }),
+	MetaStressed:                   boolField(MetaStressed, func(p *Payload) *nullableBool { return &p.MetaStressed }),
+	MetaRefineryReason:             stringField(MetaRefineryReason, func(p *Payload) *string { return &p.MetaRefineryReason }),
+	MetaRefinerySendReason:         stringField(MetaRefinerySendReason, func(p *Payload) *string { return &p.MetaRefinerySendReason }),
+	MetaSpanEventCount:             int64Field(MetaSpanEventCount, func(p *Payload) *int64 { return &p.MetaSpanEventCount }),
+	MetaSpanLinkCount:              int64Field(MetaSpanLinkCount, func(p *Payload) *int64 { return &p.MetaSpanLinkCount }),
+	MetaSpanCount:                  int64Field(MetaSpanCount, func(p *Payload) *int64 { return &p.MetaSpanCount }),
+	MetaEventCount:                 int64Field(MetaEventCount, func(p *Payload) *int64 { return &p.MetaEventCount }),
+	MetaRefineryOriginalSampleRate: int64Field(MetaRefineryOriginalSampleRate, func(p *Payload) *int64 { return &p.MetaRefineryOriginalSampleRate }),
+	MetaRefineryShutdownSend:       boolField(MetaRefineryShutdownSend, func(p *Payload) *nullableBool { return &p.MetaRefineryShutdownSend }),
+	MetaRefinerySampleKey:          stringField(MetaRefinerySampleKey, func(p *Payload) *string { return &p.MetaRefinerySampleKey }),
 }
 
-// fieldPtr provides a pointer to a specific field in the Payload struct.
-// Must be gauranteed to always return the expected type, and never return nil.
-// Hey, you might be saying, the whole point of all of this is to avoid
-// putting these field values into type any. Which is true, but this puts a
-// POINTER to the field into any, which is fine when the value is already
-// on the heap, which generally our Payloads will be.
-type fieldPtr func(p *Payload) any
-
 // Helpers to set up metadataField entries based on the supplied key and
-// fieldPtr function. This adds some extra type assertions but these are quite
-// cheap, and avoids quite a lot of repetitive code for each field.
-func stringField(key string, ptr fieldPtr) metadataField {
+// ptr function to get access to the correct field.
+func stringField(key string, ptr func(*Payload) *string) metadataField {
 	return metadataField{
 		expectedType: FieldTypeString,
 		get: func(p *Payload) (value any, ok bool) {
-			strPtr := ptr(p).(*string)
+			strPtr := ptr(p)
 			if *strPtr != "" {
 				return *strPtr, true
 			}
@@ -123,16 +114,16 @@ func stringField(key string, ptr fieldPtr) metadataField {
 		},
 		set: func(p *Payload, value any) {
 			if v, ok := value.(string); ok {
-				strPtr := ptr(p).(*string)
+				strPtr := ptr(p)
 				*strPtr = v
 			}
 		},
 		exist: func(p *Payload) bool {
-			strPtr := ptr(p).(*string)
+			strPtr := ptr(p)
 			return *strPtr != ""
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			strPtr := ptr(p).(*string)
+			strPtr := ptr(p)
 			if *strPtr != "" {
 				out = msgp.AppendString(in, key)
 				out = msgp.AppendString(out, *strPtr)
@@ -141,18 +132,18 @@ func stringField(key string, ptr fieldPtr) metadataField {
 			return in, false
 		},
 		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
-			strPtr := ptr(p).(*string)
+			strPtr := ptr(p)
 			*strPtr, out, err = msgp.ReadStringBytes(in)
 			return out, err
 		},
 	}
 }
 
-func boolField(key string, ptr fieldPtr) metadataField {
+func boolField(key string, ptr func(*Payload) *nullableBool) metadataField {
 	return metadataField{
 		expectedType: FieldTypeBool,
 		get: func(p *Payload) (value any, ok bool) {
-			boolPtr := ptr(p).(*nullableBool)
+			boolPtr := ptr(p)
 			if boolPtr.HasValue {
 				return boolPtr.Value, true
 			}
@@ -160,16 +151,16 @@ func boolField(key string, ptr fieldPtr) metadataField {
 		},
 		set: func(p *Payload, value any) {
 			if v, ok := value.(bool); ok {
-				boolPtr := ptr(p).(*nullableBool)
+				boolPtr := ptr(p)
 				boolPtr.Set(v)
 			}
 		},
 		exist: func(p *Payload) bool {
-			boolPtr := ptr(p).(*nullableBool)
+			boolPtr := ptr(p)
 			return boolPtr.HasValue
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			boolPtr := ptr(p).(*nullableBool)
+			boolPtr := ptr(p)
 			if boolPtr.HasValue {
 				out = msgp.AppendString(in, key)
 				out = msgp.AppendBool(out, boolPtr.Value)
@@ -181,7 +172,7 @@ func boolField(key string, ptr fieldPtr) metadataField {
 			var val bool
 			val, out, err = msgp.ReadBoolBytes(in)
 			if err == nil {
-				boolPtr := ptr(p).(*nullableBool)
+				boolPtr := ptr(p)
 				boolPtr.Set(val)
 			}
 			return out, err
@@ -189,11 +180,11 @@ func boolField(key string, ptr fieldPtr) metadataField {
 	}
 }
 
-func int64Field(key string, ptr fieldPtr) metadataField {
+func int64Field(key string, ptr func(*Payload) *int64) metadataField {
 	return metadataField{
 		expectedType: FieldTypeInt64,
 		get: func(p *Payload) (value any, ok bool) {
-			intPtr := ptr(p).(*int64)
+			intPtr := ptr(p)
 			if *intPtr != 0 {
 				return *intPtr, true
 			}
@@ -201,16 +192,16 @@ func int64Field(key string, ptr fieldPtr) metadataField {
 		},
 		set: func(p *Payload, value any) {
 			if v, ok := value.(int64); ok {
-				intPtr := ptr(p).(*int64)
+				intPtr := ptr(p)
 				*intPtr = v
 			}
 		},
 		exist: func(p *Payload) bool {
-			intPtr := ptr(p).(*int64)
+			intPtr := ptr(p)
 			return *intPtr != 0
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			intPtr := ptr(p).(*int64)
+			intPtr := ptr(p)
 			if *intPtr != 0 {
 				out = msgp.AppendString(in, key)
 				out = msgp.AppendInt64(out, *intPtr)
@@ -219,7 +210,7 @@ func int64Field(key string, ptr fieldPtr) metadataField {
 			return in, false
 		},
 		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
-			intPtr := ptr(p).(*int64)
+			intPtr := ptr(p)
 			*intPtr, out, err = msgp.ReadInt64Bytes(in)
 			return out, err
 		},
