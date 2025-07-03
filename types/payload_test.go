@@ -33,8 +33,7 @@ func TestPayload(t *testing.T) {
 		"meta.annotation_type":   "span_event",
 
 		// This is the wrong type, it should just be ignored and dropped from the data.
-		// TODO enable on this is implemented.
-		// "meta.refinery.send_by": "never",
+		"meta.refinery.send_by": "never",
 	}
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames: []string{"trace.trace_id"},
@@ -103,6 +102,7 @@ func TestPayload(t *testing.T) {
 		expected["key5"] = "newvalue"
 		expected["meta.refinery.span_data_size"] = int64(1234)
 		expected["meta.refinery.incoming_user_agent"] = "test-agent/1.0"
+		delete(expected, "meta.refinery.send_by")
 		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
@@ -123,7 +123,6 @@ func TestPayload(t *testing.T) {
 		// round-tripping through JSON turns our ints into floats
 		expectedFromJSON := maps.Collect(ph.All())
 		expectedFromJSON["key2"] = 42.0
-		expectedFromJSON["meta.refinery.span_data_size"] = 1234.0
 		assert.EqualValues(t, expectedFromJSON, maps.Collect(fromJSON.All()))
 	}
 

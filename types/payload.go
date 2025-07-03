@@ -540,7 +540,9 @@ func (p *Payload) MemoizeFields(keys ...string) {
 				break
 			}
 			key := string(keyBytes)
-			p.memoizedFields[key] = value
+
+			// Use Set here so we'll prefer metadata fields where appropriate.
+			p.Set(key, value)
 			keysFound++
 		}
 	}
@@ -598,9 +600,8 @@ func (p *Payload) Get(key string) any {
 	// Check if this is a metadata field and return from dedicated field
 	if strings.HasPrefix(key, "meta.") {
 		if field, ok := metadataFields[key]; ok {
-			if value, ok := field.get(p); ok {
-				return value
-			}
+			value, _ := field.get(p)
+			return value
 		}
 	}
 
@@ -643,6 +644,7 @@ func (p *Payload) Set(key string, value any) {
 	// Check if this is a metadata field and update dedicated field
 	if field, ok := metadataFields[key]; ok {
 		field.set(p, value)
+		return
 	}
 
 	if p.memoizedFields == nil {
@@ -680,6 +682,10 @@ func (p *Payload) All() iter.Seq2[string, any] {
 
 		// Then yield memoized fields
 		for key, value := range p.memoizedFields {
+			// Skip metadata fields.
+			if _, ok := metadataFields[key]; ok {
+				continue
+			}
 			if !yield(key, value) {
 				return
 			}
@@ -804,6 +810,11 @@ func (p Payload) MarshalMsg(buf []byte) ([]byte, error) {
 
 	// Serialize regular memoized fields
 	for key, value := range p.memoizedFields {
+		// Skip metadata fields as they're serialized separately
+		if _, ok := metadataFields[key]; ok {
+			continue
+		}
+
 		buf = msgp.AppendString(buf, key)
 		var err error
 		buf, err = msgp.AppendIntf(buf, value)
